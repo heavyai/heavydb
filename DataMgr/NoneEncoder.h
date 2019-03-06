@@ -42,14 +42,16 @@ class NoneEncoder : public Encoder {
                            const SQLTypeInfo&,
                            const bool replicating = false) override {
     T* unencodedData = reinterpret_cast<T*>(srcData);
-    std::unique_ptr<T> encodedData;
-    if (replicating)
-      encodedData.reset(new T[numAppendElems]);
+    std::vector<T> encoded_data;
+    if (replicating) {
+      encoded_data.resize(numAppendElems);
+    }
     for (size_t i = 0; i < numAppendElems; ++i) {
       size_t ri = replicating ? 0 : i;
       T data = unencodedData[ri];
-      if (replicating)
-        encodedData.get()[i] = data;
+      if (replicating) {
+        encoded_data[i] = data;
+      }
       if (data == none_encoded_null_value<T>())
         has_nulls = true;
       else {
@@ -59,8 +61,9 @@ class NoneEncoder : public Encoder {
       }
     }
     num_elems_ += numAppendElems;
-    buffer_->append(replicating ? (int8_t*)encodedData.get() : srcData,
-                    numAppendElems * sizeof(T));
+    buffer_->append(
+        replicating ? reinterpret_cast<int8_t*>(encoded_data.data()) : srcData,
+        numAppendElems * sizeof(T));
     ChunkMetadata chunkMetadata;
     getMetadata(chunkMetadata);
     if (!replicating)
