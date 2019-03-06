@@ -80,10 +80,12 @@ struct BadRowsTracker {
 
 enum class TableType { DELIMITED, POLYGON };
 
+enum class ImportHeaderRow { AUTODETECT, NO_HEADER, HAS_HEADER };
+
 struct CopyParams {
   char delimiter;
   std::string null_str;
-  bool has_header;
+  ImportHeaderRow has_header;
   bool quoted;  // does the input have any quoted fields, default to false
   char quote;
   char escape;
@@ -119,7 +121,7 @@ struct CopyParams {
   CopyParams()
       : delimiter(',')
       , null_str("\\N")
-      , has_header(true)
+      , has_header(ImportHeaderRow::AUTODETECT)
       , quoted(true)
       , quote('"')
       , escape('"')
@@ -147,7 +149,7 @@ struct CopyParams {
   CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
       : delimiter(d)
       , null_str(n)
-      , has_header(true)
+      , has_header(ImportHeaderRow::AUTODETECT)
       , quoted(true)
       , quote('"')
       , escape('"')
@@ -753,8 +755,6 @@ class Detector : public DataStreamSink {
       const std::vector<std::vector<std::string>>::const_iterator& row_end,
       const std::vector<SQLTypes>& best_types);
 
-  void detect_headers();
-  bool detect_headers(const std::vector<std::vector<std::string>>& raw_rows);
   bool detect_headers(const std::vector<SQLTypes>& first_types,
                       const std::vector<SQLTypes>& rest_types);
   void find_best_sqltypes_and_headers();

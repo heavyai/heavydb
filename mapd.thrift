@@ -65,6 +65,12 @@ enum TGeoFileLayerContents {
   UNSUPPORTED_GEO
 }
 
+enum TImportHeaderRow {
+  AUTODETECT,
+  NO_HEADER,
+  HAS_HEADER
+}
+
 /* union */ struct TDatumVal {
   1: i64 int_val,
   2: double real_val,
@@ -177,7 +183,7 @@ exception TMapDException {
 struct TCopyParams {
   1: string delimiter
   2: string null_str
-  3: bool has_header
+  3: TImportHeaderRow has_header=TImportHeaderRow.AUTODETECT
   4: bool quoted
   5: string quote
   6: string escape

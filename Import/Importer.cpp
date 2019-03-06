@@ -2687,8 +2687,22 @@ void Detector::find_best_sqltypes_and_headers() {
   best_encodings =
       find_best_encodings(raw_rows.begin() + 1, raw_rows.end(), best_sqltypes);
   std::vector<SQLTypes> head_types = detect_column_types(raw_rows.at(0));
-  has_headers = detect_headers(head_types, best_sqltypes);
-  copy_params.has_header = has_headers;
+  switch (copy_params.has_header) {
+    case Importer_NS::ImportHeaderRow::AUTODETECT:
+      has_headers = detect_headers(head_types, best_sqltypes);
+      if (has_headers) {
+        copy_params.has_header = Importer_NS::ImportHeaderRow::HAS_HEADER;
+      } else {
+        copy_params.has_header = Importer_NS::ImportHeaderRow::NO_HEADER;
+      }
+      break;
+    case Importer_NS::ImportHeaderRow::NO_HEADER:
+      has_headers = false;
+      break;
+    case Importer_NS::ImportHeaderRow::HAS_HEADER:
+      has_headers = true;
+      break;
+  }
 }
 
 void Detector::find_best_sqltypes() {
@@ -2774,20 +2788,6 @@ std::vector<EncodingType> Detector::find_best_encodings(
     }
   }
   return best_encodes;
-}
-
-void Detector::detect_headers() {
-  has_headers = detect_headers(raw_rows);
-}
-
-bool Detector::detect_headers(const std::vector<std::vector<std::string>>& raw_rows) {
-  if (raw_rows.size() < 3) {
-    return false;
-  }
-  std::vector<SQLTypes> head_types = detect_column_types(raw_rows.at(0));
-  std::vector<SQLTypes> tail_types =
-      find_best_sqltypes(raw_rows.begin() + 1, raw_rows.end(), copy_params);
-  return detect_headers(head_types, tail_types);
 }
 
 // detect_headers returns true if:
@@ -3242,8 +3242,8 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
             // so we need to skip header lines here instead in importDelimited.
             const char* buf2 = (const char*)buf;
             int size2 = size;
-            if (copy_params.has_header && just_saw_archive_header &&
-                (first_text_header_skipped || !is_detecting)) {
+            if (copy_params.has_header != Importer_NS::ImportHeaderRow::NO_HEADER &&
+                just_saw_archive_header && (first_text_header_skipped || !is_detecting)) {
               while (size2-- > 0) {
                 if (*buf2++ == copy_params.line_delim) {
                   break;

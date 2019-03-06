@@ -2427,7 +2427,21 @@ char MapDHandler::unescape_char(std::string str) {
 
 Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp) {
   Importer_NS::CopyParams copy_params;
-  copy_params.has_header = cp.has_header;
+  switch (cp.has_header) {
+    case TImportHeaderRow::AUTODETECT:
+      copy_params.has_header = Importer_NS::ImportHeaderRow::AUTODETECT;
+      break;
+    case TImportHeaderRow::NO_HEADER:
+      copy_params.has_header = Importer_NS::ImportHeaderRow::NO_HEADER;
+      break;
+    case TImportHeaderRow::HAS_HEADER:
+      copy_params.has_header = Importer_NS::ImportHeaderRow::HAS_HEADER;
+      break;
+    default:
+      THROW_MAPD_EXCEPTION("Invalid has_header in TCopyParams: " +
+                           std::to_string((int)cp.has_header));
+      break;
+  }
   copy_params.quoted = cp.quoted;
   if (cp.delimiter.length() > 0) {
     copy_params.delimiter = unescape_char(cp.delimiter);
@@ -2475,7 +2489,7 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
       copy_params.table_type = Importer_NS::TableType::DELIMITED;
       break;
     default:
-      THROW_MAPD_EXCEPTION("Invalid table_type in CopyParams: " +
+      THROW_MAPD_EXCEPTION("Invalid table_type in TCopyParams: " +
                            std::to_string((int)cp.table_type));
       break;
   }
@@ -2487,7 +2501,7 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
       copy_params.geo_coords_encoding = kENCODING_NONE;
       break;
     default:
-      THROW_MAPD_EXCEPTION("Invalid geo_coords_encoding in CopyParams: " +
+      THROW_MAPD_EXCEPTION("Invalid geo_coords_encoding in TCopyParams: " +
                            std::to_string((int)cp.geo_coords_encoding));
       break;
   }
@@ -2500,7 +2514,7 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
       copy_params.geo_coords_type = kGEOMETRY;
       break;
     default:
-      THROW_MAPD_EXCEPTION("Invalid geo_coords_type in CopyParams: " +
+      THROW_MAPD_EXCEPTION("Invalid geo_coords_type in TCopyParams: " +
                            std::to_string((int)cp.geo_coords_type));
       break;
   }
@@ -2511,7 +2525,7 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
       copy_params.geo_coords_srid = cp.geo_coords_srid;
       break;
     default:
-      THROW_MAPD_EXCEPTION("Invalid geo_coords_srid in CopyParams (" +
+      THROW_MAPD_EXCEPTION("Invalid geo_coords_srid in TCopyParams (" +
                            std::to_string((int)cp.geo_coords_srid));
       break;
   }
@@ -2524,7 +2538,20 @@ TCopyParams MapDHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp)
   TCopyParams copy_params;
   copy_params.delimiter = cp.delimiter;
   copy_params.null_str = cp.null_str;
-  copy_params.has_header = cp.has_header;
+  switch (cp.has_header) {
+    case Importer_NS::ImportHeaderRow::AUTODETECT:
+      copy_params.has_header = TImportHeaderRow::AUTODETECT;
+      break;
+    case Importer_NS::ImportHeaderRow::NO_HEADER:
+      copy_params.has_header = TImportHeaderRow::NO_HEADER;
+      break;
+    case Importer_NS::ImportHeaderRow::HAS_HEADER:
+      copy_params.has_header = TImportHeaderRow::HAS_HEADER;
+      break;
+    default:
+      CHECK(false);
+      break;
+  }
   copy_params.quoted = cp.quoted;
   copy_params.quote = cp.quote;
   copy_params.escape = cp.escape;

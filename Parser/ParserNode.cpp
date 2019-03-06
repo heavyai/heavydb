@@ -3267,9 +3267,9 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         }
         const std::string* s = str_literal->get_stringval();
         if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.has_header = true;
+          copy_params.has_header = Importer_NS::ImportHeaderRow::HAS_HEADER;
         } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.has_header = false;
+          copy_params.has_header = Importer_NS::ImportHeaderRow::NO_HEADER;
         } else {
           throw std::runtime_error("Invalid string for boolean " + *s);
         }
@@ -3971,9 +3971,9 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         }
         const std::string* s = str_literal->get_stringval();
         if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.has_header = true;
+          copy_params.has_header = Importer_NS::ImportHeaderRow::HAS_HEADER;
         } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.has_header = false;
+          copy_params.has_header = Importer_NS::ImportHeaderRow::NO_HEADER;
         } else {
           throw std::runtime_error("Invalid string for boolean " + *s);
         }
@@ -4026,9 +4026,9 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         }
         const std::string* s = str_literal->get_stringval();
         if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.has_header = true;
+          copy_params.has_header = Importer_NS::ImportHeaderRow::HAS_HEADER;
         } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.has_header = false;
+          copy_params.has_header = Importer_NS::ImportHeaderRow::NO_HEADER;
         } else {
           throw std::runtime_error("Invalid string for boolean " + *s);
         }
@@ -4061,7 +4061,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!outfile) {
     throw std::runtime_error("Cannot open file: " + *file_path);
   }
-  if (copy_params.has_header) {
+  if (copy_params.has_header == Importer_NS::ImportHeaderRow::HAS_HEADER) {
     bool not_first = false;
     size_t i = 0;
     for (const auto& target : targets) {
