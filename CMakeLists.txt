@@ -78,7 +78,7 @@ if(ENABLE_JAVA_REMOTE_DEBUG)
   add_definitions("-DENABLE_JAVA_REMOTE_DEBUG")
 endif()
 
-option(ENABLE_VARLEN_UPDATE "Enable varlen updates" OFF )
+option(ENABLE_VARLEN_UPDATE "Enable varlen updates" ON )
 if( ENABLE_VARLEN_UPDATE )
   add_definitions("-DENABLE_VARLEN_UPDATE")
 endif()

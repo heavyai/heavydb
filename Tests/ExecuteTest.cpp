@@ -9422,6 +9422,8 @@ TEST(Truncate, Count) {
 }
 
 TEST(Update, VarlenSmartSwitch) {
+  SKIP_ALL_ON_AGGREGATOR();
+
   if (!is_feature_enabled<VarlenUpdates>()) {
     return;
   }

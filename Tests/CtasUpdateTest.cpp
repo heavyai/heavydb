@@ -24,12 +24,16 @@
 #include "../Parser/parser.h"
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/Execute.h"
+#include "../Shared/file_delete.h"
 
 #ifndef ENABLE_VARLEN_UPDATE
 #define ENABLE_VARLEN_UPDATE
 #endif
 
 #include "../Shared/ConfigResolve.h"
+
+// uncomment to run full test suite
+// #define RUN_ALL_TEST
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -140,8 +144,7 @@ class BooleanColumnDescriptor : public TestColumnDescriptor {
       : column_definition(col_type), rs_type(sql_type){};
 
   bool skip_test(std::string name) override {
-    return "UpdateColumnByColumn" == name || "UpdateColumnByLiteral" == name ||
-           "Array.UpdateColumnByLiteral" == name;
+    return "UpdateColumnByLiteral" == name || "Array.UpdateColumnByLiteral" == name;
   }
 
   std::string get_column_definition() override { return column_definition; };
@@ -354,11 +357,11 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
   }
 
   std::string get_column_value(int row) override {
-    return make_column_value(row, "{", "}");
+    return make_column_value(row + 1, "{", "}");
   }
 
   std::string get_update_column_value(int row) override {
-    return make_column_value(row, "ARRAY[", "]");
+    return make_column_value(row + 1, "ARRAY[", "]");
   }
 
   bool check_column_value(const int row,
@@ -378,7 +381,7 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
     int elementIndex = 1;
 
     if (fixed_array_length) {
-      elementIndex += row;
+      elementIndex += row + 1;
     }
 
     const auto& vec = arrayValue->get();
@@ -976,6 +979,8 @@ const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =
                                              kTEXT,
                                              "STRING_NONE_BASE");
 
+#ifdef RUN_ALL_TEST
+
 #define INSTANTIATE_DATA_INGESTION_TEST(CDT)                                           \
   INSTANTIATE_TEST_CASE_P(                                                             \
       CDT,                                                                             \
@@ -995,6 +1000,12 @@ const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =
       Update,                                                                          \
       testing::Values(                                                                 \
           std::vector<std::shared_ptr<TestColumnDescriptor>>{CDT, STRING_NONE_BASE}))
+
+#else
+
+#define INSTANTIATE_DATA_INGESTION_TEST(CDT)
+
+#endif
 
 #define BOOLEAN_COLUMN_TEST(name, c_type, definition, sql_type, null)  \
   const std::shared_ptr<TestColumnDescriptor> name =                   \
@@ -1137,35 +1148,98 @@ const std::shared_ptr<TestColumnDescriptor> GEO_MULTI_POLYGON =
         new GeoMultiPolygonColumnDescriptor(kMULTIPOLYGON));
 INSTANTIATE_DATA_INGESTION_TEST(GEO_MULTI_POLYGON);
 
-INSTANTIATE_TEST_CASE_P(
-    MIXED_NO_GEO,
-    Ctas,
-    testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{BOOLEAN,
-                                                                       TINYINT,
-                                                                       SMALLINT,
-                                                                       INTEGER,
-                                                                       BIGINT,
-                                                                       FLOAT,
-                                                                       DOUBLE,
-                                                                       NUMERIC,
-                                                                       DECIMAL,
-                                                                       CHAR,
-                                                                       VARCHAR,
-                                                                       TEXT,
-                                                                       TIME,
-                                                                       DATE,
-                                                                       TIMESTAMP}));
+const std::vector<std::shared_ptr<TestColumnDescriptor>> ALL = {STRING_NONE_BASE,
+                                                                BOOLEAN,
+                                                                BOOLEAN_ARRAY,
+                                                                BOOLEAN_FIXED_LEN_ARRAY,
+                                                                TINYINT,
+                                                                TINYINT_ARRAY,
+                                                                TINYINT_FIXED_LEN_ARRAY,
+                                                                SMALLINT_8,
+                                                                SMALLINT,
+                                                                SMALLINT_ARRAY,
+                                                                SMALLINT_FIXED_LEN_ARRAY,
+                                                                INTEGER_8,
+                                                                INTEGER_16,
+                                                                INTEGER,
+                                                                INTEGER_ARRAY,
+                                                                INTEGER_FIXED_LEN_ARRAY,
+                                                                BIGINT_8,
+                                                                BIGINT_16,
+                                                                BIGINT_32,
+                                                                BIGINT,
+                                                                BIGINT_ARRAY,
+                                                                BIGINT_FIXED_LEN_ARRAY,
+                                                                FLOAT,
+                                                                FLOAT_ARRAY,
+                                                                FLOAT_FIXED_LEN_ARRAY,
+                                                                DOUBLE,
+                                                                DOUBLE_ARRAY,
+                                                                DOUBLE_FIXED_LEN_ARRAY,
+                                                                NUMERIC_16,
+                                                                NUMERIC_32,
+                                                                NUMERIC,
+                                                                NUMERIC_ARRAY,
+                                                                NUMERIC_FIXED_LEN_ARRAY,
+                                                                DECIMAL_16,
+                                                                DECIMAL_32,
+                                                                DECIMAL,
+                                                                DECIMAL_ARRAY,
+                                                                DECIMAL_FIXED_LEN_ARRAY,
+                                                                TEXT_NONE,
+                                                                TEXT_DICT,
+                                                                TEXT_DICT_8,
+                                                                TEXT_DICT_16,
+                                                                TEXT,
+                                                                TEXT_ARRAY,
+                                                                TEXT_FIXED_LEN_ARRAY,
+                                                                TIME_32,
+                                                                TIME,
+                                                                TIME_ARRAY,
+                                                                TIME_FIXED_LEN_ARRAY,
+                                                                DATE_16,
+                                                                DATE,
+                                                                DATE_ARRAY,
+                                                                DATE_FIXED_LEN_ARRAY,
+                                                                TIMESTAMP_32,
+                                                                TIMESTAMP,
+                                                                TIMESTAMP_ARRAY,
+                                                                TIMESTAMP_FIXED_LEN_ARRAY,
+                                                                GEO_POINT,
+                                                                GEO_LINESTRING,
+                                                                GEO_POLYGON,
+                                                                GEO_MULTI_POLYGON};
+
+INSTANTIATE_TEST_CASE_P(MIXED_ALL, Ctas, testing::Values(ALL));
+
+INSTANTIATE_TEST_CASE_P(MIXED_ALL, Update, testing::Values(ALL));
 
 INSTANTIATE_TEST_CASE_P(
-    MIXED_WITH_GEO,
+    MIXED_VARLEN_WITHOUT_GEO,
     Update,
-    testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{TEXT,
-                                                                       INTEGER,
-                                                                       DOUBLE,
-                                                                       GEO_POINT,
-                                                                       GEO_LINESTRING,
-                                                                       GEO_POLYGON,
-                                                                       GEO_MULTI_POLYGON
+    testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{
+        STRING_NONE_BASE,
+        BOOLEAN_ARRAY,
+        BOOLEAN_FIXED_LEN_ARRAY,
+        TINYINT_ARRAY,
+        TINYINT_FIXED_LEN_ARRAY,
+        SMALLINT_ARRAY,
+        SMALLINT_FIXED_LEN_ARRAY,
+        INTEGER_ARRAY,
+        INTEGER_FIXED_LEN_ARRAY,
+        BIGINT_ARRAY,
+        BIGINT_FIXED_LEN_ARRAY,
+        NUMERIC_ARRAY,
+        NUMERIC_FIXED_LEN_ARRAY,
+        TEXT_NONE,
+        TEXT_ARRAY,
+        TEXT_FIXED_LEN_ARRAY,
+        TIME_ARRAY,
+        TIME_FIXED_LEN_ARRAY,
+        DATE_ARRAY,
+        DATE_FIXED_LEN_ARRAY,
+        TIMESTAMP_ARRAY,
+        TIMESTAMP_FIXED_LEN_ARRAY
 
     }));
 
