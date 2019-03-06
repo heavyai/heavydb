@@ -265,7 +265,7 @@ static const char* get_row(const char* buf,
           std::string s = trim_space(field, p - field);
           row.push_back(s);
         } else {
-          auto field_buf = std::unique_ptr<char[]>(new char[p - field + 1]);
+          auto field_buf = std::make_unique<char[]>(p - field + 1);
           int j = 0, i = 0;
           for (; i < p - field; i++, j++) {
             if (has_escape && field[i] == copy_params.escape &&
@@ -1614,7 +1614,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
 static ImportStatus import_thread_delimited(
     int thread_id,
     Importer* importer,
-    std::shared_ptr<const char[]> sbuffer,
+    std::unique_ptr<char[]> scratch_buffer,
     size_t begin_pos,
     size_t end_pos,
     size_t total_size,
@@ -1623,7 +1623,8 @@ static ImportStatus import_thread_delimited(
   ImportStatus import_status;
   int64_t total_get_row_time_us = 0;
   int64_t total_str_to_val_time_us = 0;
-  auto buffer = sbuffer.get();
+  CHECK(scratch_buffer);
+  auto buffer = scratch_buffer.get();
   auto load_ms = measure<>::execution([]() {});
   auto ms = measure<>::execution([&]() {
     const CopyParams& copy_params = importer->get_copy_params();
@@ -3405,14 +3406,15 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     }
   }
 
-  std::shared_ptr<char[]> sbuffer(new char[alloc_size]);
+  auto scratch_buffer = std::make_unique<char[]>(alloc_size);
   size_t current_pos = 0;
   size_t end_pos;
   bool eof_reached = false;
   size_t begin_pos = 0;
 
   (void)fseek(p_file, current_pos, SEEK_SET);
-  size_t size = fread((void*)sbuffer.get(), 1, alloc_size, p_file);
+  size_t size =
+      fread(reinterpret_cast<void*>(scratch_buffer.get()), 1, alloc_size, p_file);
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
@@ -3443,16 +3445,18 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     size_t first_row_index_this_buffer = 0;
 
     while (size > 0) {
+      CHECK(scratch_buffer);
       if (eof_reached) {
         end_pos = size;
       } else {
-        end_pos = find_end(sbuffer.get(), size, copy_params);
+        end_pos = find_end(scratch_buffer.get(), size, copy_params);
       }
       // unput residual
       int nresidual = size - end_pos;
-      std::unique_ptr<char[]> unbuf(nresidual > 0 ? new char[nresidual] : nullptr);
-      if (unbuf) {
-        memcpy(unbuf.get(), sbuffer.get() + end_pos, nresidual);
+      std::unique_ptr<char[]> unbuf;
+      if (nresidual > 0) {
+        unbuf = std::make_unique<char[]>(nresidual);
+        memcpy(unbuf.get(), scratch_buffer.get() + end_pos, nresidual);
       }
 
       // added for true row index on error
@@ -3462,8 +3466,8 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
         // additional cost here is ~1.4ms per chunk and
         // probably free because this thread will spend
         // most of its time waiting for the child threads
-        char* p = sbuffer.get() + begin_pos;
-        char* pend = sbuffer.get() + end_pos;
+        char* p = scratch_buffer.get() + begin_pos;
+        char* pend = scratch_buffer.get() + end_pos;
         char d = copy_params.line_delim;
         while (p < pend) {
           if (*p++ == d) {
@@ -3481,7 +3485,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
                                    import_thread_delimited,
                                    thread_id,
                                    this,
-                                   sbuffer,
+                                   std::move(scratch_buffer),
                                    begin_pos,
                                    end_pos,
                                    end_pos,
@@ -3491,9 +3495,10 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
       first_row_index_this_buffer += num_rows_this_buffer;
 
       current_pos += end_pos;
-      sbuffer.reset(new char[alloc_size]);
-      memcpy(sbuffer.get(), unbuf.get(), nresidual);
-      size = nresidual + fread(sbuffer.get() + nresidual,
+      scratch_buffer = std::make_unique<char[]>(alloc_size);
+      CHECK(scratch_buffer);
+      memcpy(scratch_buffer.get(), unbuf.get(), nresidual);
+      size = nresidual + fread(scratch_buffer.get() + nresidual,
                                1,
                                IMPORT_FILE_BUFFER_SIZE - nresidual,
                                p_file);
