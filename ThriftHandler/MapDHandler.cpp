@@ -1976,24 +1976,14 @@ void MapDHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
 void MapDHandler::get_databases(std::vector<TDBInfo>& dbinfos,
                                 const TSessionId& session) {
   const auto session_info = get_session(session);
-  if (SysCatalog::instance().arePrivilegesOn() &&
-      !session_info.get_currentUser().isSuper) {
-    THROW_MAPD_EXCEPTION("Only a superuser is authorized to get list of databases.");
-  }
-  std::list<Catalog_Namespace::DBMetadata> db_list =
-      SysCatalog::instance().getAllDBMetadata();
-  std::list<Catalog_Namespace::UserMetadata> user_list =
-      SysCatalog::instance().getAllUserMetadata();
-  for (auto d : db_list) {
+  const auto& user = session_info.get_currentUser();
+  Catalog_Namespace::DBSummaryList dbs =
+      SysCatalog::instance().getDatabaseListForUser(user);
+  for (auto& db : dbs) {
     TDBInfo dbinfo;
-    dbinfo.db_name = d.dbName;
-    for (auto u : user_list) {
-      if (d.dbOwner == u.userId) {
-        dbinfo.db_owner = u.userName;
-        break;
-      }
-    }
-    dbinfos.push_back(dbinfo);
+    dbinfo.db_name = std::move(db.dbName);
+    dbinfo.db_owner = std::move(db.dbOwnerName);
+    dbinfos.push_back(std::move(dbinfo));
   }
 }
 

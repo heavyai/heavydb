@@ -209,6 +209,7 @@ class DBObject {
   int32_t getOwner() const { return ownerId_; }
   void setOwner(int32_t userId) { ownerId_ = userId; }
   std::vector<std::string> toString() const;
+  void loadKey();
   void loadKey(const Catalog_Namespace::Catalog& catalog);
 
  private:

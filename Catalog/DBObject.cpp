@@ -160,28 +160,29 @@ std::vector<std::string> DBObject::toString() const {
   return objectKey;
 }
 
+void DBObject::loadKey() {
+  CHECK(objectType_ == DatabaseDBObjectType);
+  if (!getName().empty()) {
+    Catalog_Namespace::DBMetadata db;
+    if (!Catalog_Namespace::SysCatalog::instance().getMetadataForDB(getName(), db)) {
+      throw std::runtime_error("Failure generating DB object key. Database " + getName() +
+                               " does not exist.");
+    }
+    objectKey_.dbId = db.dbId;
+    ownerId_ = db.dbOwner;
+  } else {
+    objectKey_.dbId = 0;  // very special case only used for initialisation of a role
+  }
+}
+
 void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
   switch (objectType_) {
     case DatabaseDBObjectType: {
-      // permissions at DB level
-
-      if (!getName().empty()) {
-        Catalog_Namespace::DBMetadata db;
-        if (!Catalog_Namespace::SysCatalog::instance().getMetadataForDB(getName(), db)) {
-          throw std::runtime_error("Failure generating DB object key. Database " +
-                                   getName() + " does not exist.");
-        }
-        objectKey_.dbId = db.dbId;
-        ownerId_ = db.dbOwner;
-      } else {
-        objectKey_.dbId = 0;  // very special case only used for initialisation of a role
-      }
+      loadKey();
       break;
     }
     case ViewDBObjectType:
     case TableDBObjectType: {
-      // permissions on tables
-
       objectKey_.dbId = catalog.getCurrentDB().dbId;
 
       if (!getName().empty()) {
@@ -194,14 +195,12 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
         objectKey_.objectId = table->tableId;
         ownerId_ = table->userId;
       } else {
-        // table permission at db level
         ownerId_ = catalog.getCurrentDB().dbOwner;
       }
 
       break;
     }
     case DashboardDBObjectType: {
-      // permissions on dashboards
       objectKey_.dbId = catalog.getCurrentDB().dbId;
 
       if (objectKey_.objectId > 0) {
@@ -214,7 +213,6 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
         objectName_ = dashboard->viewName;
         ownerId_ = dashboard->userId;
       } else {
-        // dashboard permission at DB level
         ownerId_ = catalog.getCurrentDB().dbOwner;
       }
 

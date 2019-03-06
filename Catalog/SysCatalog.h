@@ -102,6 +102,16 @@ struct DBMetadata {
 };
 
 /*
+ * @type DBSummary
+ * @brief summary info for a mapd database
+ */
+struct DBSummary {
+  std::string dbName;
+  std::string dbOwnerName;
+};
+using DBSummaryList = std::list<DBSummary>;
+
+/*
  * @type SysCatalog
  * @brief class for the system-wide catalog, currently containing user and database
  * metadata
@@ -157,6 +167,7 @@ class SysCatalog {
    * return the users associated with the given DB
    */
   std::list<UserMetadata> getAllUserMetadata(long dbId);
+  DBSummaryList getDatabaseListForUser(const UserMetadata& user);
   void createDBObject(const UserMetadata& user,
                       const std::string& objectName,
                       DBObjectType type,

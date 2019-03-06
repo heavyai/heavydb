@@ -1131,6 +1131,35 @@ bool SysCatalog::getMetadataForDBById(const int32_t idIn, DBMetadata& db) {
   return true;
 }
 
+DBSummaryList SysCatalog::getDatabaseListForUser(const UserMetadata& user) {
+  DBSummaryList ret;
+
+  std::list<Catalog_Namespace::DBMetadata> db_list =
+      SysCatalog::instance().getAllDBMetadata();
+  std::list<Catalog_Namespace::UserMetadata> user_list =
+      SysCatalog::instance().getAllUserMetadata();
+
+  for (auto d : db_list) {
+    if (SysCatalog::instance().arePrivilegesOn() && !user.isSuper) {
+      DBObject dbObject(d.dbName, DatabaseDBObjectType);
+      dbObject.loadKey();
+      dbObject.setPrivileges(AccessPrivileges::ACCESS);
+      if (!SysCatalog::instance().checkPrivileges(user,
+                                                  std::vector<DBObject>{dbObject})) {
+        continue;
+      }
+    }
+    for (auto u : user_list) {
+      if (d.dbOwner == u.userId) {
+        ret.emplace_back(DBSummary{d.dbName, u.userName});
+        break;
+      }
+    }
+  }
+
+  return ret;
+}
+
 // Note (max): I wonder why this one is necessary
 void SysCatalog::grantDefaultPrivilegesToRole_unsafe(const std::string& name,
                                                      bool issuper) {

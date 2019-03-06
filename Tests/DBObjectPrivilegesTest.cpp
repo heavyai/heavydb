@@ -3,6 +3,7 @@
 #include <boost/filesystem/operations.hpp>
 #include <csignal>
 #include <thread>
+#include <tuple>
 #include "../Catalog/Catalog.h"
 #include "../Catalog/DBObject.h"
 #include "../DataMgr/DataMgr.h"
@@ -1473,17 +1474,115 @@ TEST(Catalog, Concurrency) {
   run_ddl_statement("DROP USER bob;");
 }
 
-TEST(SysCatalog, LoginWithDefaultDatabase) {
-  const std::string username{"test_user"};
-  const std::string dbname{"test_db"};
-  const std::string dbnamex{dbname + "x"};
+TEST(DBObject, LoadKey) {
+  static const std::string tbname{"test_tb"};
+  static const std::string vwname{"test_vw"};
+
+  // cleanup
+  struct CleanupGuard {
+    ~CleanupGuard() {
+      run_ddl_statement("DROP VIEW IF EXISTS " + vwname + ";");
+      run_ddl_statement("DROP TABLE IF EXISTS " + tbname + ";");
+    }
+  } cleanupGuard;
 
   // setup
-  ASSERT_NO_THROW(run_ddl_statement("CREATE DATABASE " + dbname + ";"));
-  ASSERT_NO_THROW(run_ddl_statement("CREATE DATABASE " + dbnamex + ";"));
-  ASSERT_NO_THROW(run_ddl_statement("CREATE USER " + username +
-                                    " (password = 'password', default_db = '" + dbnamex +
-                                    "');"));
+  run_ddl_statement("CREATE TABLE IF NOT EXISTS " + tbname + "(id integer);");
+  run_ddl_statement("CREATE VIEW IF NOT EXISTS " + vwname + " AS SELECT id FROM " +
+                    tbname + ";");
+
+  // test the LoadKey() function
+  auto cat = Catalog_Namespace::Catalog::get(MAPD_DEFAULT_DB);
+
+  DBObject dbo1(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject dbo2(tbname, DBObjectType::TableDBObjectType);
+  DBObject dbo3(vwname, DBObjectType::ViewDBObjectType);
+
+  ASSERT_NO_THROW(dbo1.loadKey());
+  ASSERT_NO_THROW(dbo2.loadKey(*cat));
+  ASSERT_NO_THROW(dbo3.loadKey(*cat));
+}
+
+TEST(SysCatalog, GetDatabaseList) {
+  static const std::string username{"test_user"};
+  static const std::string username2{username + "2"};
+  static const std::string dbname{"test_db"};
+  static const std::string dbname2{dbname + "2"};
+  static const std::string dbname3{dbname + "3"};
+  static const std::string dbname4{dbname + "4"};
+
+  // cleanup
+  struct CleanupGuard {
+    ~CleanupGuard() {
+      run_ddl_statement("DROP DATABASE " + dbname4 + ";");
+      run_ddl_statement("DROP DATABASE " + dbname3 + ";");
+      run_ddl_statement("DROP DATABASE " + dbname2 + ";");
+      run_ddl_statement("DROP DATABASE " + dbname + ";");
+      run_ddl_statement("DROP USER " + username2 + ";");
+      run_ddl_statement("DROP USER " + username + ";");
+    }
+  } cleanupGuard;
+
+  // setup
+  run_ddl_statement("CREATE USER " + username + " (password = 'password');");
+  run_ddl_statement("CREATE USER " + username2 + " (password = 'password');");
+  run_ddl_statement("CREATE DATABASE " + dbname + "(owner='" + username + "');");
+  run_ddl_statement("CREATE DATABASE " + dbname2 + "(owner='" + username2 + "');");
+  run_ddl_statement("CREATE DATABASE " + dbname3 + "(owner='" + username2 + "');");
+  run_ddl_statement("CREATE DATABASE " + dbname4 + "(owner='" + username + "');");
+  run_ddl_statement("GRANT ACCESS ON DATABASE " + dbname + " TO " + username2 + ";");
+  run_ddl_statement("GRANT ACCESS ON DATABASE " + dbname3 + " TO " + username + ";");
+
+  Catalog_Namespace::UserMetadata user_meta, user_meta2;
+  CHECK(sys_cat.getMetadataForUser(username, user_meta));
+  CHECK(sys_cat.getMetadataForUser(username2, user_meta2));
+
+  // test database list for arbitrary user #1
+  auto dblist = sys_cat.getDatabaseListForUser(user_meta);
+  EXPECT_EQ(dblist.front().dbName, dbname);
+  EXPECT_EQ(dblist.front().dbOwnerName, username);
+
+  dblist.pop_front();
+  EXPECT_EQ(dblist.front().dbName, dbname3);
+  EXPECT_EQ(dblist.front().dbOwnerName, username2);
+
+  dblist.pop_front();
+  EXPECT_EQ(dblist.front().dbName, dbname4);
+  EXPECT_EQ(dblist.front().dbOwnerName, username);
+
+  // test database list for arbitrary user #2
+  dblist = sys_cat.getDatabaseListForUser(user_meta2);
+  EXPECT_EQ(dblist.front().dbName, dbname);
+  EXPECT_EQ(dblist.front().dbOwnerName, username);
+
+  dblist.pop_front();
+  EXPECT_EQ(dblist.front().dbName, dbname2);
+  EXPECT_EQ(dblist.front().dbOwnerName, username2);
+
+  dblist.pop_front();
+  EXPECT_EQ(dblist.front().dbName, dbname3);
+  EXPECT_EQ(dblist.front().dbOwnerName, username2);
+}
+
+TEST(SysCatalog, LoginWithDefaultDatabase) {
+  static const std::string username{"test_user"};
+  static const std::string dbname{"test_db"};
+  static const std::string dbnamex{dbname + "x"};
+
+  // cleanup
+  struct CleanupGuard {
+    ~CleanupGuard() {
+      run_ddl_statement("DROP DATABASE " + dbname + ";");
+      run_ddl_statement("DROP DATABASE " + dbnamex + ";");
+      run_ddl_statement("DROP USER " + username + ";");
+    }
+  } cleanupGuard;
+
+  // setup
+  run_ddl_statement("CREATE DATABASE " + dbname + ";");
+  run_ddl_statement("CREATE DATABASE " + dbnamex + ";");
+  run_ddl_statement("CREATE USER " + username +
+                    " (password = 'password', default_db = '" + dbnamex + "');");
   Catalog_Namespace::UserMetadata user_meta;
 
   // test the user's default database
@@ -1515,11 +1614,6 @@ TEST(SysCatalog, LoginWithDefaultDatabase) {
   dbname2.clear();
   ASSERT_NO_THROW(sys_cat.login(dbname2, username2, "password", user_meta, false));
   EXPECT_EQ(dbname2, MAPD_DEFAULT_DB);  // correctly fell back to system default database
-
-  // cleanup
-  ASSERT_NO_THROW(run_ddl_statement("DROP DATABASE " + dbname + ";"));
-  ASSERT_NO_THROW(run_ddl_statement("DROP DATABASE " + dbnamex + ";"));
-  ASSERT_NO_THROW(run_ddl_statement("DROP USER " + username + ";"));
 }
 
 int main(int argc, char* argv[]) {
