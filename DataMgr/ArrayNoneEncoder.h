@@ -254,6 +254,11 @@ class ArrayNoneEncoder : public Encoder {
     }
     switch (buffer_->sqlType.get_subtype()) {
       case kBOOLEAN: {
+        if (!initialized && array.length == 0) {
+          elem_min.boolval = true;
+          elem_max.boolval = false;
+          break;
+        }
         const bool* bool_array = (bool*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(bool); i++) {
           if ((int8_t)bool_array[i] == NULL_BOOLEAN)
@@ -269,6 +274,11 @@ class ArrayNoneEncoder : public Encoder {
         }
       } break;
       case kINT: {
+        if (!initialized && array.length == 0) {
+          elem_min.intval = 1;
+          elem_max.intval = 0;
+          break;
+        }
         const int32_t* int_array = (int32_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int32_t); i++) {
           if (int_array[i] == NULL_INT)
@@ -284,6 +294,11 @@ class ArrayNoneEncoder : public Encoder {
         }
       } break;
       case kSMALLINT: {
+        if (!initialized && array.length == 0) {
+          elem_min.smallintval = 1;
+          elem_max.smallintval = 0;
+          break;
+        }
         const int16_t* int_array = (int16_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int16_t); i++) {
           if (int_array[i] == NULL_SMALLINT)
@@ -299,6 +314,11 @@ class ArrayNoneEncoder : public Encoder {
         }
       } break;
       case kTINYINT: {
+        if (!initialized && array.length == 0) {
+          elem_min.tinyintval = 1;
+          elem_max.tinyintval = 0;
+          break;
+        }
         const int8_t* int_array = (int8_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int8_t); i++) {
           if (int_array[i] == NULL_TINYINT)
@@ -316,6 +336,11 @@ class ArrayNoneEncoder : public Encoder {
       case kBIGINT:
       case kNUMERIC:
       case kDECIMAL: {
+        if (!initialized && array.length == 0) {
+          elem_min.bigintval = 1;
+          elem_max.bigintval = 0;
+          break;
+        }
         const int64_t* int_array = (int64_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int64_t); i++) {
           if (int_array[i] == NULL_BIGINT)
@@ -331,6 +356,11 @@ class ArrayNoneEncoder : public Encoder {
         }
       } break;
       case kFLOAT: {
+        if (!initialized && array.length == 0) {
+          elem_min.floatval = 1.0;
+          elem_max.floatval = 0.0;
+          break;
+        }
         const float* flt_array = (float*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(float); i++) {
           if (flt_array[i] == NULL_FLOAT)
@@ -346,6 +376,11 @@ class ArrayNoneEncoder : public Encoder {
         }
       } break;
       case kDOUBLE: {
+        if (!initialized && array.length == 0) {
+          elem_min.doubleval = 1.0;
+          elem_max.doubleval = 0.0;
+          break;
+        }
         const double* dbl_array = (double*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(double); i++) {
           if (dbl_array[i] == NULL_DOUBLE)
@@ -363,6 +398,11 @@ class ArrayNoneEncoder : public Encoder {
       case kTIME:
       case kTIMESTAMP:
       case kDATE: {
+        if (!initialized && array.length == 0) {
+          elem_min.bigintval = 1;
+          elem_max.bigintval = 0;
+          break;
+        }
         const auto tm_array = reinterpret_cast<int64_t*>(array.pointer);
         for (size_t i = 0; i < array.length / sizeof(int64_t); i++) {
           if (tm_array[i] == NULL_BIGINT)
@@ -381,6 +421,11 @@ class ArrayNoneEncoder : public Encoder {
       case kVARCHAR:
       case kTEXT: {
         assert(buffer_->sqlType.get_compression() == kENCODING_DICT);
+        if (!initialized && array.length == 0) {
+          elem_min.intval = 1;
+          elem_max.intval = 0;
+          break;
+        }
         const int32_t* int_array = (int32_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int32_t); i++) {
           if (int_array[i] == NULL_INT)

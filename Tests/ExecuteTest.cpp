@@ -511,11 +511,10 @@ TEST(Insert, NullArrayNullEmpty) {
     run_ddl_statement("DROP TABLE IF EXISTS table_array_empty;");
     EXPECT_NO_THROW(run_ddl_statement("create table table_array_empty (val int[]);"));
     EXPECT_NO_THROW(run_multiple_agg("INSERT INTO table_array_empty VALUES({});", dt));
+    EXPECT_NO_THROW(run_simple_agg("SELECT * from table_array_empty;", dt));
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg(
                   "SELECT CARDINALITY(val) from table_array_empty limit 1;", dt)));
-    // TODO: Need to sort out expression range calculations
-    // EXPECT_NO_THROW(run_simple_agg("SELECT * from table_array_empty;", dt));
 
     run_ddl_statement("DROP TABLE IF EXISTS table_array_with_nulls;");
     EXPECT_NO_THROW(run_ddl_statement(create_table_array_with_nulls));
