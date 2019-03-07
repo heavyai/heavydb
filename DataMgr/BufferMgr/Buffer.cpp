@@ -89,6 +89,9 @@ void Buffer::read(int8_t* const dst,
                   const size_t offset,
                   const MemoryLevel dstBufferType,
                   const int dstDeviceId) {
+  if (numBytes == 0) {
+    return;
+  }
   assert(dst && mem_);
 #ifdef BUFFER_MUTEX
   boost::shared_lock<boost::shared_mutex> readLock(readWriteMutex_);
