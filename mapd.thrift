@@ -257,8 +257,8 @@ struct TPixel {
 struct TPixelTableRowResult {
   1: TPixel pixel
   2: string vega_table_name
-  3: i64 table_id
-  4: i64 row_id
+  3: list<i64> table_id
+  4: list<i64> row_id
   5: TRowSet row_set
   6: string nonce
 }
