@@ -1179,8 +1179,10 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
         if (ad.is_null) {
           return ArrayTargetValue(boost::optional<std::vector<ScalarTargetValue>>{});
         }
-        CHECK(ad.pointer);
         CHECK_GE(ad.length, 0);
+        if (ad.length > 0) {
+          CHECK(ad.pointer);
+        }
         return build_array_target_value(target_info.sql_type,
                                         ad.pointer,
                                         ad.length,

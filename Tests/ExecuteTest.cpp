@@ -503,11 +503,20 @@ TEST(Create, PageSize) {
 //  (page_size=2147483648);"), std::runtime_error);
 //}
 
-TEST(Insert, NullArrayNulls) {
+TEST(Insert, NullArrayNullEmpty) {
   const char* create_table_array_with_nulls =
       R"(create table table_array_with_nulls (i smallint, sia smallint[], fa2 float[2]);)";
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS table_array_empty;");
+    EXPECT_NO_THROW(run_ddl_statement("create table table_array_empty (val int[]);"));
+    EXPECT_NO_THROW(run_multiple_agg("INSERT INTO table_array_empty VALUES({});", dt));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "SELECT CARDINALITY(val) from table_array_empty limit 1;", dt)));
+    // TODO: Need to sort out expression range calculations
+    // EXPECT_NO_THROW(run_simple_agg("SELECT * from table_array_empty;", dt));
+
     run_ddl_statement("DROP TABLE IF EXISTS table_array_with_nulls;");
     EXPECT_NO_THROW(run_ddl_statement(create_table_array_with_nulls));
     EXPECT_NO_THROW(
