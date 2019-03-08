@@ -126,7 +126,7 @@ int main(int argc, char* argv[]) {
         std::make_shared<Data_Namespace::DataMgr>(data_path, mapd_parms, false, 0);
     auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path, 1024);
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-    sys_cat.init(base_path, dummy, {}, calcite, true, false, false, {});
+    sys_cat.init(base_path, dummy, {}, calcite, true, false, {});
 
     if (!skip_geo) {
       // Add geo samples to the system database using the root user

@@ -69,8 +69,7 @@ std::shared_ptr<ResultSet> Executor::execute(
       dbObject.setPrivileges(AccessPrivileges::INSERT_INTO_TABLE);
       std::vector<DBObject> privObjects;
       privObjects.push_back(dbObject);
-      if (Catalog_Namespace::SysCatalog::instance().arePrivilegesOn() &&
-          !sys_cat.checkPrivileges(user_metadata, privObjects)) {
+      if (!sys_cat.checkPrivileges(user_metadata, privObjects)) {
         throw std::runtime_error(
             "Violation of access privileges: user " + user_metadata.userName +
             " has no insert privileges for table " + td->tableName + ".");

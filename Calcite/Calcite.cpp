@@ -304,7 +304,7 @@ TPlanResult Calcite::process(
 
   AccessPrivileges NOOP;
 
-  if (!is_explain && Catalog_Namespace::SysCatalog::instance().arePrivilegesOn()) {
+  if (!is_explain) {
     // check the individual tables
     checkPermissionForTables(session_info,
                              result.primary_accessed_objects.tables_selected_from,

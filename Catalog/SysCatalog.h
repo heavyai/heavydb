@@ -54,12 +54,6 @@
 #include "../Calcite/Calcite.h"
 #include "../Shared/mapd_shared_mutex.h"
 
-struct Privileges {
-  bool super_;
-  bool select_;
-  bool insert_;
-};
-
 const std::string MAPD_SYSTEM_CATALOG = "omnisci_system_catalog";
 const std::string MAPD_DEFAULT_DB = "mapd";
 const std::string MAPD_ROOT_USER = "mapd";
@@ -123,7 +117,6 @@ class SysCatalog {
             AuthMetadata authMetadata,
             std::shared_ptr<Calcite> calcite,
             bool is_new_db,
-            bool check_privileges,
             bool aggregator,
             const std::vector<LeafHostInfo>& string_dict_hosts);
 
@@ -146,8 +139,6 @@ class SysCatalog {
                  const std::string* passwd,
                  bool* issuper,
                  const std::string* dbname);
-  void grantPrivileges(const int32_t userid, const int32_t dbid, const Privileges& privs);
-  bool checkPrivileges(UserMetadata& user, DBMetadata& db, const Privileges& wants_privs);
   void createDatabase(const std::string& dbname, int owner);
   void dropDatabase(const DBMetadata& db);
   bool getMetadataForUser(const std::string& name, UserMetadata& user);
@@ -223,7 +214,6 @@ class SysCatalog {
   std::vector<std::string> getRoles(const std::string& userName, const int32_t dbId);
   void revokeDashboardSystemRole(const std::string roleName,
                                  const std::vector<std::string> grantees);
-  bool arePrivilegesOn() const { return check_privileges_; }
   bool isAggregator() const { return aggregator_; }
   static SysCatalog& instance() {
     static SysCatalog sys_cat{};
@@ -307,7 +297,6 @@ class SysCatalog {
   template <typename F, typename... Args>
   void execInTransaction(F&& f, Args&&... args);
 
-  bool check_privileges_;
   std::string basePath_;
   GranteeMap granteeMap_;
   ObjectRoleDescriptorMap objectDescriptorMap_;

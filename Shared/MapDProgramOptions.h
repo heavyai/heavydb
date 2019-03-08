@@ -57,9 +57,8 @@ class MapDProgramOptions : public boost::program_options::options_description {
   int num_gpus = -1;  // Can be used to override number of gpus detected on system - -1
                       // means do not override
   int start_gpu = 0;
-  size_t num_reader_threads = 0;         // number of threads used when loading data
-  std::string db_query_file = {""};      // path to file containing warmup queries list
-  bool enable_access_priv_check = true;  // enable DB objects access privileges checking
+  size_t num_reader_threads = 0;     // number of threads used when loading data
+  std::string db_query_file = {""};  // path to file containing warmup queries list
   int idle_session_duration =
       MINSPERHOUR;  // Inactive session tolerance in mins (60 mins)
   int max_session_duration =

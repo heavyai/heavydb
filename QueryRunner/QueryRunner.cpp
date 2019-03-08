@@ -168,7 +168,6 @@ Catalog_Namespace::SessionInfo* get_session(
                {},
                g_calcite,
                false,
-               false,
                mapd_parms.aggregator,
                string_servers);
 

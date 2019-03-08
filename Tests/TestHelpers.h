@@ -32,7 +32,7 @@ void compare_array(const TargetValue& r,
   auto array_tv = boost::get<ArrayTargetValue>(&r);
   CHECK(array_tv);
   if (!array_tv->is_initialized()) {
-    ASSERT_EQ(0, arr.size());
+    ASSERT_EQ(0UL, arr.size());
   }
   const auto& scalar_tv_vector = array_tv->get();
   ASSERT_EQ(scalar_tv_vector.size(), arr.size());
@@ -54,7 +54,7 @@ void compare_array(const TargetValue& r,
   auto array_tv = boost::get<ArrayTargetValue>(&r);
   CHECK(array_tv);
   if (!array_tv->is_initialized()) {
-    ASSERT_EQ(0, arr.size());
+    ASSERT_EQ(0UL, arr.size());
   }
   const auto& scalar_tv_vector = array_tv->get();
   ASSERT_EQ(scalar_tv_vector.size(), arr.size());

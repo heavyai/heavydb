@@ -479,10 +479,6 @@ void Catalog::updateDictionarySchema() {
 }
 
 void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
-  // check if migration needs to be performed (privs check)
-  if (!SysCatalog::instance().arePrivilegesOn()) {
-    return;
-  }
   cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   std::vector<DBObject> objects;
@@ -721,9 +717,6 @@ void Catalog::checkDateInDaysColumnMigration() {
 }
 
 void Catalog::createDashboardSystemRoles() {
-  if (!SysCatalog::instance().arePrivilegesOn()) {
-    return;
-  }
   std::unordered_map<std::string, std::pair<int, std::string>> dashboards;
   std::vector<std::string> dashboard_ids;
   static const std::string migration_name{"dashboard_roles_migration"};
@@ -1454,10 +1447,8 @@ void Catalog::deleteMetadataForDashboard(const int32_t id) {
   }
   if (found) {
     // TODO: transactionally unsafe
-    if (SysCatalog::instance().arePrivilegesOn()) {
-      SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
-          DBObject(id, DashboardDBObjectType), this);
-    }
+    SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
+        DBObject(id, DashboardDBObjectType), this);
     deleteMetadataForFrontendView(userId, name);
   }
 }
@@ -2456,11 +2447,8 @@ void Catalog::removeChunks(const int table_id) {
 }
 
 void Catalog::dropTable(const TableDescriptor* td) {
-  if (SysCatalog::instance().arePrivilegesOn()) {
-    SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
-        DBObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType), this);
-  }
-
+  SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
+      DBObject(td->tableName, td->isView ? ViewDBObjectType : TableDBObjectType), this);
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
   const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
@@ -2568,23 +2556,21 @@ void Catalog::renameTable(const TableDescriptor* td, const string& newTableName)
   renamePhysicalTable(td, newTableName);
 
   // update table name in direct and effective priv map
-  if (SysCatalog::instance().arePrivilegesOn()) {
-    DBObject object(newTableName, TableDBObjectType);
-    DBObjectKey key;
-    key.dbId = currentDB_.dbId;
-    key.objectId = td->tableId;
-    key.permissionType = static_cast<int>(DBObjectType::TableDBObjectType);
-    object.setObjectKey(key);
-    auto objdescs = SysCatalog::instance().getMetadataForObject(
-        currentDB_.dbId, static_cast<int>(DBObjectType::TableDBObjectType), td->tableId);
-    for (auto obj : objdescs) {
-      Grantee* grnt = SysCatalog::instance().getGrantee(obj->roleName);
-      if (grnt) {
-        grnt->renameDbObject(object);
-      }
+  DBObject object(newTableName, TableDBObjectType);
+  DBObjectKey key;
+  key.dbId = currentDB_.dbId;
+  key.objectId = td->tableId;
+  key.permissionType = static_cast<int>(DBObjectType::TableDBObjectType);
+  object.setObjectKey(key);
+  auto objdescs = SysCatalog::instance().getMetadataForObject(
+      currentDB_.dbId, static_cast<int>(DBObjectType::TableDBObjectType), td->tableId);
+  for (auto obj : objdescs) {
+    Grantee* grnt = SysCatalog::instance().getGrantee(obj->roleName);
+    if (grnt) {
+      grnt->renameDbObject(object);
     }
-    SysCatalog::instance().renameObjectsInDescriptorMap(object, *this);
   }
+  SysCatalog::instance().renameObjectsInDescriptorMap(object, *this);
 }
 
 void Catalog::renameColumn(const TableDescriptor* td,
@@ -2679,10 +2665,8 @@ int32_t Catalog::createFrontendView(FrontendViewDescriptor& vd) {
   vd.viewSystemRoleName = generate_dash_system_rolename(std::to_string(currentDB_.dbId),
                                                         std::to_string(vd.viewId));
   addFrontendViewToMap(vd);
-  if (SysCatalog::instance().arePrivilegesOn()) {
-    // NOTE(wamsi): Transactionally unsafe
-    createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId, vd.viewSystemRoleName);
-  }
+  // NOTE(wamsi): Transactionally unsafe
+  createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId, vd.viewSystemRoleName);
   return vd.viewId;
 }
 
@@ -2753,10 +2737,8 @@ void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
   vd.viewSystemRoleName = generate_dash_system_rolename(std::to_string(currentDB_.dbId),
                                                         std::to_string(vd.viewId));
   addFrontendViewToMapNoLock(vd);
-  if (SysCatalog::instance().arePrivilegesOn()) {
-    // NOTE(wamsi): Transactionally unsafe
-    createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId, vd.viewSystemRoleName);
-  }
+  // NOTE(wamsi): Transactionally unsafe
+  createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId, vd.viewSystemRoleName);
 }
 
 std::string Catalog::calculateSHA1(const std::string& data) {

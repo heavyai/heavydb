@@ -123,7 +123,6 @@ class MapDHandler : public MapDIf {
               const AuthMetadata authMetadata,
               const MapDParameters& mapd_parameters,
               const bool legacy_syntax,
-              const bool access_priv_check,
               const int idle_session_duration,
               const int max_session_duration);
 
@@ -633,7 +632,6 @@ class MapDHandler : public MapDIf {
 
   bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks
                             // in "connect(..)" method
-  const bool access_priv_check_;
   const int idle_session_duration_;  // max duration of idle session
   const int max_session_duration_;   // max duration of session
 

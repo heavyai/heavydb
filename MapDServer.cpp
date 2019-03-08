@@ -335,11 +335,6 @@ void MapDProgramOptions::fillOptions(po::options_description& desc) {
                          ->implicit_value(true),
                      "Allow the queries which failed on GPU to retry on CPU, even "
                      "when watchdog is enabled");
-  desc.add_options()("enable-access-priv-check",
-                     po::value<bool>(&enable_access_priv_check)
-                         ->default_value(enable_access_priv_check)
-                         ->implicit_value(true),
-                     "Check user access privileges to database objects");
   desc.add_options()("from-table-reordering",
                      po::value<bool>(&g_from_table_reordering)
                          ->default_value(g_from_table_reordering)
@@ -642,8 +637,6 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
     LOG(INFO) << " Dynamic Watchdog timeout is set to " << dynamic_watchdog_time_limit;
   }
 
-  LOG(INFO) << " Enable access priv check  is set to " << enable_access_priv_check;
-
   LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
 
   LOG(INFO) << " Maximum Idle session duration " << idle_session_duration;
@@ -743,7 +736,6 @@ int main(int argc, char** argv) {
                                                   desc_all.authMetadata,
                                                   desc_all.mapd_parameters,
                                                   desc_all.enable_legacy_syntax,
-                                                  desc_all.enable_access_priv_check,
                                                   desc_all.idle_session_duration,
                                                   desc_all.max_session_duration);
 

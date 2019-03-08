@@ -149,7 +149,6 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const AuthMetadata authMetadata,
                          const MapDParameters& mapd_parameters,
                          const bool legacy_syntax,
-                         const bool access_priv_check,
                          const int idle_session_duration,
                          const int max_session_duration)
     : leaf_aggregator_(db_leaves)
@@ -164,7 +163,6 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , mapd_parameters_(mapd_parameters)
     , legacy_syntax_(legacy_syntax)
     , super_user_rights_(false)
-    , access_priv_check_(access_priv_check)
     , idle_session_duration_(idle_session_duration * 60)
     , max_session_duration_(max_session_duration * 60)
     , _was_geo_copy_from(false) {
@@ -227,7 +225,6 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                               authMetadata,
                               calcite_,
                               false,
-                              access_priv_check,
                               !db_leaves.empty(),
                               string_leaves_);
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
@@ -300,16 +297,14 @@ void MapDHandler::internal_connect(TSessionId& session,
     THROW_MAPD_EXCEPTION(e.what());
   }
 
-  if (SysCatalog::instance().arePrivilegesOn()) {
-    DBObject dbObject(dbname2, DatabaseDBObjectType);
-    dbObject.loadKey(*cat);
-    dbObject.setPrivileges(AccessPrivileges::ACCESS);
-    std::vector<DBObject> dbObjects;
-    dbObjects.push_back(dbObject);
-    if (!SysCatalog::instance().checkPrivileges(user_meta, dbObjects)) {
-      THROW_MAPD_EXCEPTION("Unauthorized Access: user " + username +
-                           " is not allowed to access database " + dbname2 + ".");
-    }
+  DBObject dbObject(dbname2, DatabaseDBObjectType);
+  dbObject.loadKey(*cat);
+  dbObject.setPrivileges(AccessPrivileges::ACCESS);
+  std::vector<DBObject> dbObjects;
+  dbObjects.push_back(dbObject);
+  if (!SysCatalog::instance().checkPrivileges(user_meta, dbObjects)) {
+    THROW_MAPD_EXCEPTION("Unauthorized Access: user " + username +
+                         " is not allowed to access database " + dbname2 + ".");
   }
   connect_impl(session, std::string(""), dbname2, user_meta, cat);
 }
@@ -329,16 +324,15 @@ void MapDHandler::connect(TSessionId& session,
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
-  if (SysCatalog::instance().arePrivilegesOn()) {
-    DBObject dbObject(dbname2, DatabaseDBObjectType);
-    dbObject.loadKey(*cat);
-    dbObject.setPrivileges(AccessPrivileges::ACCESS);
-    std::vector<DBObject> dbObjects;
-    dbObjects.push_back(dbObject);
-    if (!SysCatalog::instance().checkPrivileges(user_meta, dbObjects)) {
-      THROW_MAPD_EXCEPTION("Unauthorized Access: user " + username +
-                           " is not allowed to access database " + dbname2 + ".");
-    }
+
+  DBObject dbObject(dbname2, DatabaseDBObjectType);
+  dbObject.loadKey(*cat);
+  dbObject.setPrivileges(AccessPrivileges::ACCESS);
+  std::vector<DBObject> dbObjects;
+  dbObjects.push_back(dbObject);
+  if (!SysCatalog::instance().checkPrivileges(user_meta, dbObjects)) {
+    THROW_MAPD_EXCEPTION("Unauthorized Access: user " + username +
+                         " is not allowed to access database " + dbname2 + ".");
   }
   connect_impl(session, passwd, dbname2, user_meta, cat);
 }
@@ -1147,14 +1141,7 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
   }
 }
 
-static void check_privileges_on(const std::string& api_name) {
-  if (!SysCatalog::instance().arePrivilegesOn()) {
-    THROW_MAPD_EXCEPTION(api_name + " API requires database privileges turned on");
-  }
-}
-
 void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& session) {
-  check_privileges_on("get_roles");
   auto session_info = get_session(session);
   if (!session_info.get_currentUser().isSuper) {
     roles =
@@ -1293,7 +1280,6 @@ bool MapDHandler::has_object_privilege(const TSessionId& sessionId,
                                        const std::string& objectName,
                                        const TDBObjectType::type objectType,
                                        const TDBObjectPermissions& permissions) {
-  check_privileges_on("has_object_privilege");
   auto session = get_session(sessionId);
   auto& cat = session.getCatalog();
   auto current_user = session.get_currentUser();
@@ -1351,7 +1337,6 @@ bool MapDHandler::has_object_privilege(const TSessionId& sessionId,
 void MapDHandler::get_db_objects_for_grantee(std::vector<TDBObject>& TDBObjectsForRole,
                                              const TSessionId& sessionId,
                                              const std::string& roleName) {
-  check_privileges_on("get_db_objects_for_grantee");
   auto session = get_session(sessionId);
   auto user = session.get_currentUser();
   if (!user.isSuper &&
@@ -1379,7 +1364,6 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
                                       const TSessionId& sessionId,
                                       const std::string& objectName,
                                       const TDBObjectType::type type) {
-  check_privileges_on("get_db_object_privs");
   auto session = get_session(sessionId);
   DBObjectType object_type;
   switch (type) {
@@ -1455,7 +1439,6 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
 void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
                                          const TSessionId& sessionId,
                                          const std::string& granteeName) {
-  check_privileges_on("get_all_roles_for_user");
   auto session = get_session(sessionId);
   auto* grantee = SysCatalog::instance().getGrantee(granteeName);
   if (grantee) {
@@ -1625,8 +1608,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
   }
   if (td->isView) {
     try {
-      if (!SysCatalog::instance().arePrivilegesOn() ||
-          hasTableAccessPrivileges(td, session)) {
+      if (hasTableAccessPrivileges(td, session)) {
         session_info.make_superuser();
         const auto query_ra = parse_to_ra(td->viewSQL, {}, session_info);
         TQueryResult result;
@@ -1652,8 +1634,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
     }
   } else {
     try {
-      if (!SysCatalog::instance().arePrivilegesOn() ||
-          hasTableAccessPrivileges(td, session)) {
+      if (hasTableAccessPrivileges(td, session)) {
         const auto col_descriptors =
             cat.getAllColumnMetadataForTable(td->tableId, get_system, true, get_physical);
         const auto deleted_cd = cat.getDeletedColumn(td);
@@ -1767,8 +1748,7 @@ void MapDHandler::get_tables_impl(std::vector<std::string>& table_names,
       }
       default: { break; }
     }
-    if (SysCatalog::instance().arePrivilegesOn() &&
-        !hasTableAccessPrivileges(td, session)) {
+    if (!hasTableAccessPrivileges(td, session)) {
       // skip table, as there are no privileges to access it
       continue;
     }
@@ -1803,8 +1783,7 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
       // skip shards, they're not standalone tables
       continue;
     }
-    if (SysCatalog::instance().arePrivilegesOn() &&
-        !hasTableAccessPrivileges(td, session)) {
+    if (!hasTableAccessPrivileges(td, session)) {
       // skip table, as there are no privileges to access it
       continue;
     }
@@ -1847,8 +1826,7 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
       }
     } else {
       try {
-        if (!SysCatalog::instance().arePrivilegesOn() ||
-            hasTableAccessPrivileges(td, session)) {
+        if (hasTableAccessPrivileges(td, session)) {
           const auto col_descriptors =
               cat.getAllColumnMetadataForTable(td->tableId, false, true, false);
           const auto deleted_cd = cat.getDeletedColumn(td);
@@ -1881,8 +1859,7 @@ void MapDHandler::get_users(std::vector<std::string>& user_names,
   std::list<Catalog_Namespace::UserMetadata> user_list;
   const auto session_info = get_session(session);
 
-  if (SysCatalog::instance().arePrivilegesOn() &&
-      !session_info.get_currentUser().isSuper) {
+  if (!session_info.get_currentUser().isSuper) {
     user_list = SysCatalog::instance().getAllUserMetadata(
         session_info.getCatalog().getCurrentDB().dbId);
   } else {
@@ -2945,8 +2922,7 @@ static bool is_allowed_on_dashboard(const Catalog_Namespace::SessionInfo& sessio
   object.loadKey(catalog);
   object.setPrivileges(requestedPermissions);
   std::vector<DBObject> privs = {object};
-  return (!SysCatalog::instance().arePrivilegesOn() ||
-          SysCatalog::instance().checkPrivileges(user, privs));
+  return SysCatalog::instance().checkPrivileges(user, privs);
 }
 
 // dashboards
@@ -3030,8 +3006,7 @@ int32_t MapDHandler::create_dashboard(const TSessionId& session,
   const auto session_info = get_session(session);
   auto& cat = session_info.getCatalog();
 
-  if (SysCatalog::instance().arePrivilegesOn() &&
-      !session_info.checkDBAccessPrivileges(DBObjectType::DashboardDBObjectType,
+  if (!session_info.checkDBAccessPrivileges(DBObjectType::DashboardDBObjectType,
                                             AccessPrivileges::CREATE_DASHBOARD)) {
     THROW_MAPD_EXCEPTION("Not enough privileges to create a dashboard.");
   }
@@ -3108,11 +3083,9 @@ void MapDHandler::delete_dashboard(const TSessionId& session,
     THROW_MAPD_EXCEPTION("Dashboard with id" + std::to_string(dashboard_id) +
                          " doesn't exist, so cannot delete it");
   }
-  if (SysCatalog::instance().arePrivilegesOn()) {
-    if (!is_allowed_on_dashboard(
-            session_info, dash->viewId, AccessPrivileges::DELETE_DASHBOARD)) {
-      THROW_MAPD_EXCEPTION("Not enough privileges to delete a dashboard.");
-    }
+  if (!is_allowed_on_dashboard(
+          session_info, dash->viewId, AccessPrivileges::DELETE_DASHBOARD)) {
+    THROW_MAPD_EXCEPTION("Not enough privileges to delete a dashboard.");
   }
   try {
     cat.deleteMetadataForDashboard(dashboard_id);
@@ -3301,11 +3274,8 @@ void MapDHandler::create_frontend_view(const TSessionId& session,
 
   try {
     auto id = cat.createFrontendView(vd);
-
-    if (SysCatalog::instance().arePrivilegesOn()) {
-      SysCatalog::instance().createDBObject(
-          session_info.get_currentUser(), view_name, DashboardDBObjectType, cat, id);
-    }
+    SysCatalog::instance().createDBObject(
+        session_info.get_currentUser(), view_name, DashboardDBObjectType, cat, id);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
@@ -4250,17 +4220,15 @@ void MapDHandler::check_table_load_privileges(
     const std::string& table_name) {
   auto user_metadata = session_info.get_currentUser();
   auto& cat = session_info.getCatalog();
-  if (SysCatalog::instance().arePrivilegesOn()) {
-    DBObject dbObject(table_name, TableDBObjectType);
-    dbObject.loadKey(cat);
-    dbObject.setPrivileges(AccessPrivileges::INSERT_INTO_TABLE);
-    std::vector<DBObject> privObjects;
-    privObjects.push_back(dbObject);
-    if (!SysCatalog::instance().checkPrivileges(user_metadata, privObjects)) {
-      THROW_MAPD_EXCEPTION("Violation of access privileges: user " +
-                           user_metadata.userName +
-                           " has no insert privileges for table " + table_name + ".");
-    }
+  DBObject dbObject(table_name, TableDBObjectType);
+  dbObject.loadKey(cat);
+  dbObject.setPrivileges(AccessPrivileges::INSERT_INTO_TABLE);
+  std::vector<DBObject> privObjects;
+  privObjects.push_back(dbObject);
+  if (!SysCatalog::instance().checkPrivileges(user_metadata, privObjects)) {
+    THROW_MAPD_EXCEPTION("Violation of access privileges: user " +
+                         user_metadata.userName + " has no insert privileges for table " +
+                         table_name + ".");
   }
 }
 
@@ -4641,19 +4609,13 @@ bool MapDHandler::user_can_access_table(
     const AccessPrivileges access_priv) {
   CHECK(td);
   auto& cat = session_info.getCatalog();
-
-  if (SysCatalog::instance().arePrivilegesOn()) {
-    std::vector<DBObject> privObjects;
-    DBObject dbObject(td->tableName, TableDBObjectType);
-    dbObject.loadKey(cat);
-    dbObject.setPrivileges(access_priv);
-    privObjects.push_back(dbObject);
-    if (!SysCatalog::instance().checkPrivileges(session_info.get_currentUser(),
-                                                privObjects)) {
-      return false;
-    }
-  }
-  return true;
+  std::vector<DBObject> privObjects;
+  DBObject dbObject(td->tableName, TableDBObjectType);
+  dbObject.loadKey(cat);
+  dbObject.setPrivileges(access_priv);
+  privObjects.push_back(dbObject);
+  return SysCatalog::instance().checkPrivileges(session_info.get_currentUser(),
+                                                privObjects);
 };
 
 void MapDHandler::sql_execute_impl(TQueryResult& _return,

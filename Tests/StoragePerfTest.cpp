@@ -109,7 +109,6 @@ class SQLTestEnv : public ::testing::Environment {
                    {},
                    g_calcite,
                    !boost::filesystem::exists(system_db_file),
-                   false,
                    mapd_parms.aggregator,
                    {});
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
