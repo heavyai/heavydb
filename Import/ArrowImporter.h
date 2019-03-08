@@ -49,9 +49,12 @@ inline void arrow_throw_if(const bool cond, const std::string& message) {
 #include <parquet/exception.h>
 #endif  // ENABLE_IMPORT_PARQUET
 
+#include "arrow/util/decimal.h"
+
 namespace {
 
-using VarValue = boost::variant<bool, float, double, int64_t, std::string, void*>;
+using VarValue =
+    boost::variant<bool, float, double, int64_t, std::string, void*, Decimal128>;
 
 template <typename T>
 using enable_if_integral = typename std::enable_if_t<std::is_integral<T>::value, T>;
@@ -64,6 +67,14 @@ using enable_if_floating = typename std::enable_if_t<std::is_floating_point<T>::
 
 #define exprtype(expr) std::decay_t<decltype(expr)>
 
+inline std::string error_context(const ColumnDescriptor* cd,
+                                 Importer_NS::BadRowsTracker* const bad_rows_tracker) {
+  return bad_rows_tracker ? "File " + bad_rows_tracker->file_name + ", row-group " +
+                                std::to_string(bad_rows_tracker->row_group) +
+                                (cd ? ", column " + cd->columnName + ": " : "")
+                          : std::string();
+}
+
 template <typename SrcType, typename DstType>
 inline VarValue get_numeric_value(const Array& array, const int64_t idx) {
   using ArrayType = typename TypeTraits<SrcType>::ArrayType;
@@ -74,14 +85,6 @@ template <typename SrcType>
 inline VarValue get_string_value(const Array& array, const int64_t idx) {
   using ArrayType = typename TypeTraits<SrcType>::ArrayType;
   return static_cast<const ArrayType&>(array).GetString(idx);
-}
-
-inline std::string error_context(const ColumnDescriptor* cd,
-                                 Importer_NS::BadRowsTracker* const bad_rows_tracker) {
-  return bad_rows_tracker ? "File " + bad_rows_tracker->file_name + ", row-group " +
-                                std::to_string(bad_rows_tracker->row_group) +
-                                ", column " + cd->columnName + ": "
-                          : std::string();
 }
 
 #define NUMERIC_CASE(tid, src_type, var_type) \
@@ -111,6 +114,7 @@ inline auto value_getter(const Array& array,
     NUMERIC_CASE(TIME64, Time64Type, int64_t)
     NUMERIC_CASE(TIME32, Time32Type, int64_t)
     NUMERIC_CASE(TIMESTAMP, TimestampType, int64_t)
+    NUMERIC_CASE(DECIMAL, Decimal128Type, Decimal128)
     STRING_CASE(STRING, StringType)
     STRING_CASE(BINARY, BinaryType)
     default:
@@ -154,10 +158,30 @@ struct DataBufferBase {
   const ColumnDescriptor* cd;
   const Array& array;
   Importer_NS::BadRowsTracker* const bad_rows_tracker;
+  // in case of arrow-decimal to omni-decimal conversion
+  // dont get/set these info on every row of arrow array
+  const DataType& arrow_type;
+  const int arrow_decimal_scale;
+  const SQLTypeInfo old_type;
+  const SQLTypeInfo new_type;
   DataBufferBase(const ColumnDescriptor* cd,
                  const Array& array,
                  Importer_NS::BadRowsTracker* const bad_rows_tracker)
-      : cd(cd), array(array), bad_rows_tracker(bad_rows_tracker) {}
+      : cd(cd)
+      , array(array)
+      , bad_rows_tracker(bad_rows_tracker)
+      , arrow_type(*array.type())
+      , arrow_decimal_scale(arrow_type.id() == Type::DECIMAL
+                                ? static_cast<const Decimal128Type&>(arrow_type).scale()
+                                : 0)
+      , old_type(cd->columnType.get_type(),
+                 cd->columnType.get_dimension(),
+                 arrow_decimal_scale,
+                 true)
+      , new_type(cd->columnType.get_type(),
+                 cd->columnType.get_dimension(),
+                 cd->columnType.get_scale(),
+                 true) {}
 };
 
 template <typename DATA_TYPE>
@@ -206,10 +230,9 @@ struct ArrowValueBase {
                       : 0) {}
   template <bool enabled = std::is_integral<VALUE_TYPE>::value>
   int64_t resolve_time(const VALUE_TYPE& v, std::enable_if_t<enabled>* = 0) const {
-    const auto& type = *data.array.type();
-    const auto& type_id = type.id();
+    const auto& type_id = data.arrow_type.id();
     if (type_id == Type::DATE32 || type_id == Type::DATE64) {
-      auto& date_type = static_cast<const DateType&>(type);
+      auto& date_type = static_cast<const DateType&>(data.arrow_type);
       switch (date_type.unit()) {
         case DateUnit::DAY:
           return date_in_days ? v : v * kSecondsInDay;
@@ -219,7 +242,7 @@ struct ArrowValueBase {
       }
     } else if (type_id == Type::TIME32 || type_id == Type::TIME64 ||
                type_id == Type::TIMESTAMP) {
-      auto& time_type = static_cast<const TimeType&>(type);
+      auto& time_type = static_cast<const TimeType&>(data.arrow_type);
       const auto result =
           _precision_scale_lookup.find(std::make_pair(dimension, time_type.unit()));
       if (result != _precision_scale_lookup.end()) {
@@ -229,7 +252,7 @@ struct ArrowValueBase {
         return v;
       }
     }
-    UNREACHABLE() << type << " is not a valid Arrow time or date type";
+    UNREACHABLE() << data.arrow_type << " is not a valid Arrow time or date type";
     return 0;
   }
   template <bool enabled = std::is_integral<VALUE_TYPE>::value>
@@ -286,7 +309,7 @@ struct ArrowValue<float> : ArrowValueBase<float> {
   explicit operator const DATA_TYPE() const {
     const auto ti = data.cd->columnType;
     DATA_TYPE v = ti.is_decimal() ? this->v * pow(10, ti.get_scale()) : this->v;
-    if (!(std::numeric_limits<DATA_TYPE>::min() < v &&
+    if (!(std::numeric_limits<DATA_TYPE>::lowest() < v &&
           v <= std::numeric_limits<DATA_TYPE>::max())) {
       data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
     }
@@ -308,7 +331,7 @@ struct ArrowValue<double> : ArrowValueBase<double> {
   explicit operator const DATA_TYPE() const {
     const auto ti = data.cd->columnType;
     DATA_TYPE v = ti.is_decimal() ? this->v * pow(10, ti.get_scale()) : this->v;
-    if (!(std::numeric_limits<DATA_TYPE>::min() < v &&
+    if (!(std::numeric_limits<DATA_TYPE>::lowest() < v &&
           v <= std::numeric_limits<DATA_TYPE>::max())) {
       data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
     }
@@ -317,7 +340,7 @@ struct ArrowValue<double> : ArrowValueBase<double> {
   template <typename DATA_TYPE, typename = enable_if_floating<DATA_TYPE>>
   explicit operator DATA_TYPE() const {
     if (std::is_same<DATA_TYPE, float>::value) {
-      if (!(std::numeric_limits<float>::min() < v &&
+      if (!(std::numeric_limits<float>::lowest() < v &&
             v <= std::numeric_limits<float>::max())) {
         data_conversion_error<float>(v, data.cd, data.bad_rows_tracker);
       }
@@ -334,9 +357,9 @@ struct ArrowValue<int64_t> : ArrowValueBase<int64_t> {
       : ArrowValueBase<VALUE_TYPE>(data, v) {}
   template <typename DATA_TYPE, typename = enable_if_integral<DATA_TYPE>>
   explicit operator const DATA_TYPE() const {
-    DATA_TYPE v = this->v;
+    int64_t v = this->v;
     if (std::is_same<int64_t, DATA_TYPE>::value) {
-    } else if (std::numeric_limits<DATA_TYPE>::min() < v &&
+    } else if (std::numeric_limits<DATA_TYPE>::lowest() < v &&
                v <= std::numeric_limits<DATA_TYPE>::max()) {
     } else {
       data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
@@ -350,7 +373,41 @@ struct ArrowValue<int64_t> : ArrowValueBase<int64_t> {
   explicit operator DATA_TYPE() const {
     return v;
   }
-  explicit operator const std::string() const { return std::to_string(v); }
+  explicit operator const std::string() const {
+    const auto& type_id = data.arrow_type.id();
+    if (type_id == Type::DATE32 || type_id == Type::DATE64) {
+      auto& date_type = static_cast<const DateType&>(data.arrow_type);
+      switch (date_type.unit()) {
+        case DateUnit::DAY: {
+          SQLTypeInfo ti(kDATE, false, kENCODING_DATE_IN_DAYS);
+          Datum datum{.bigintval = v};
+          return DatumToString(datum, ti);
+        }
+        case DateUnit::MILLI: {
+          SQLTypeInfo ti(kDATE);
+          Datum datum{.bigintval = v / kMillisecondsInSecond};
+          return DatumToString(datum, ti);
+        }
+      }
+    } else if (type_id == Type::TIME32 || type_id == Type::TIME64 ||
+               type_id == Type::TIMESTAMP) {
+      auto& time_type = static_cast<const TimeType&>(data.arrow_type);
+      const auto result =
+          _precision_scale_lookup.find(std::make_pair(0, time_type.unit()));
+      int64_t divisor{1};
+      if (result != _precision_scale_lookup.end()) {
+        divisor = result->second.second;
+      }
+      SQLTypeInfo ti(kTIMESTAMP);
+      Datum datum{.bigintval = v / divisor};
+      auto time_str = DatumToString(datum, ti);
+      if (divisor != 1 && v % divisor) {
+        time_str += "." + std::to_string(v % divisor);
+      }
+      return time_str;
+    }
+    return std::to_string(v);
+  }
 };
 
 template <>
@@ -392,14 +449,52 @@ struct ArrowValue<std::string> : ArrowValueBase<std::string> {
   explicit operator const std::string() const { return v; }
 };
 
+template <>
+struct ArrowValue<Decimal128> : ArrowValueBase<Decimal128> {
+  using VALUE_TYPE = Decimal128;
+  ArrowValue(const DataBufferBase& data, const VALUE_TYPE& v)
+      : ArrowValueBase<VALUE_TYPE>(data, v) {
+    // omni decimal has only 64 bits
+    arrow_throw_if(!(v.high_bits() == 0 || v.high_bits() == -1),
+                   error_context(data.cd, data.bad_rows_tracker) +
+                       "Truncation error on Arrow Decimal128 value");
+  }
+  template <typename DATA_TYPE, typename = enable_if_integral<DATA_TYPE>>
+  explicit operator const DATA_TYPE() const {
+    int64_t v = static_cast<int64_t>(this->v);
+    if (data.cd->columnType.is_decimal()) {
+      return convert_decimal_value_to_scale(v, data.old_type, data.new_type);
+    }
+    if (data.arrow_decimal_scale) {
+      v = std::llround(v / pow(10, data.arrow_decimal_scale));
+    }
+    if (std::is_same<int64_t, DATA_TYPE>::value) {
+    } else if (std::numeric_limits<DATA_TYPE>::lowest() < v &&
+               v <= std::numeric_limits<DATA_TYPE>::max()) {
+    } else {
+      data_conversion_error<DATA_TYPE>(v, data.cd, data.bad_rows_tracker);
+    }
+    return v;
+  }
+  template <typename DATA_TYPE, typename = enable_if_floating<DATA_TYPE>>
+  explicit operator DATA_TYPE() const {
+    int64_t v = static_cast<int64_t>(this->v);
+    return data.arrow_decimal_scale ? v / pow(10, data.arrow_decimal_scale) : v;
+  }
+  explicit operator const std::string() const {
+    return v.ToString(data.arrow_decimal_scale);
+  }
+};
+
 // appends a converted RHS value to LHS data block
 template <typename DATA_TYPE>
-inline void operator<<(DataBuffer<DATA_TYPE>& data, const VarValue& var) {
+inline auto& operator<<(DataBuffer<DATA_TYPE>& data, const VarValue& var) {
   boost::apply_visitor(
       [&data](const auto& v) {
         data.buffer.push_back(DATA_TYPE(ArrowValue<exprtype(v)>(data, v)));
       },
       var);
+  return data;
 }
 
 // appends (streams) a Arrow array of values (RHS) to TypedImportBuffer (LHS)

@@ -78,7 +78,14 @@ struct BadRowsTracker {
   ThreadController_NS::SimpleRunningThreadController<void>* running_thread_controller;
 };
 
-enum class TableType { DELIMITED, POLYGON };
+enum class TableType {
+  DELIMITED,
+  POLYGON
+#ifdef ENABLE_IMPORT_PARQUET
+  ,
+  PARQUET
+#endif
+};
 
 enum class ImportHeaderRow { AUTODETECT, NO_HEADER, HAS_HEADER };
 

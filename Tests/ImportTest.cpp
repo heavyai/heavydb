@@ -652,7 +652,7 @@ class ImportTest : public ::testing::Test {
 TEST_F(ImportTest, One_parquet_file) {
   EXPECT_TRUE(import_test_local_parquet(
       "trip.parquet",
-      "part-00000-17c77b5c-93e7-4456-bf6c-ac63f180653c-c000.snappy.parquet",
+      "part-00000-027865e6-e4d9-40b9-97ff-83c5c5531154-c000.snappy.parquet",
       100,
       1.0));
   EXPECT_TRUE(import_test_parquet_with_null(100));

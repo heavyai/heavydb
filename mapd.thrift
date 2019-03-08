@@ -48,7 +48,8 @@ enum TDeviceType {
 
 enum TTableType {
   DELIMITED,
-  POLYGON
+  POLYGON,
+  PARQUET /* is "parquet table type" semantically proper :-? */
 }
 
 enum TPartitionDetail {
@@ -202,6 +203,7 @@ struct TCopyParams {
   19: i32 geo_coords_srid=4326
   20: bool sanitize_column_names=true
   21: string geo_layer_name
+  22: bool is_parquet=false /* consistent with COPY FROM WITH parameter */
 }
 
 struct TCreateParams {

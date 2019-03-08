@@ -2899,9 +2899,76 @@ ImportStatus DataStreamSink::archivePlumber() {
 }
 
 #ifdef ENABLE_IMPORT_PARQUET
+inline auto open_parquet_table(const std::string& file_path,
+                               std::shared_ptr<arrow::io::ReadableFile>& infile,
+                               std::unique_ptr<parquet::arrow::FileReader>& reader,
+                               std::shared_ptr<arrow::Table>& table) {
+  using namespace parquet::arrow;
+  using ReadableFile = arrow::io::ReadableFile;
+  auto mempool = arrow::default_memory_pool();
+  PARQUET_THROW_NOT_OK(ReadableFile::Open(file_path, mempool, &infile));
+  PARQUET_THROW_NOT_OK(OpenFile(infile, mempool, &reader));
+  PARQUET_THROW_NOT_OK(reader->ReadTable(&table));
+  const auto num_row_groups = reader->num_row_groups();
+  const auto num_columns = table->num_columns();
+  const auto num_rows = table->num_rows();
+  LOG(INFO) << "File " << file_path << " has " << num_rows << " rows and " << num_columns
+            << " columns in " << num_row_groups << " groups.";
+  return std::tie(num_row_groups, num_columns, num_rows);
+}
+
 void Detector::import_local_parquet(const std::string& file_path) {
-  // TODO: support detect on local parquet files
-  CHECK(false);
+  std::shared_ptr<arrow::io::ReadableFile> infile;
+  std::unique_ptr<parquet::arrow::FileReader> reader;
+  std::shared_ptr<arrow::Table> table;
+  int num_row_groups, num_columns;
+  int64_t num_rows;
+  std::tie(num_row_groups, num_columns, num_rows) =
+      open_parquet_table(file_path, infile, reader, table);
+  // make up header line if not yet
+  if (0 == raw_data.size()) {
+    copy_params.has_header = ImportHeaderRow::HAS_HEADER;
+    copy_params.line_delim = '\n';
+    copy_params.delimiter = ',';
+    for (int c = 0; c < num_columns; ++c) {
+      if (c) {
+        raw_data += copy_params.delimiter;
+      }
+      raw_data += table->column(c)->name();
+    }
+    raw_data += copy_params.line_delim;
+  }
+  // make up raw data... rowwize...
+  const ColumnDescriptor cd;
+  for (int g = 0; g < num_row_groups; ++g) {
+    // data is columnwise
+    std::vector<std::shared_ptr<arrow::Array>> arrays;
+    std::vector<VarValue (*)(const Array&, const int64_t)> getters;
+    arrays.resize(num_columns);
+    for (int c = 0; c < num_columns; ++c) {
+      PARQUET_THROW_NOT_OK(reader->RowGroup(g)->Column(c)->Read(&arrays[c]));
+      getters.push_back(value_getter(*arrays[c], nullptr, nullptr));
+    }
+    for (int r = 0; r < num_rows; ++r) {
+      for (int c = 0; c < num_columns; ++c) {
+        std::vector<std::string> buffer;
+        DataBuffer<std::string> data(&cd, *arrays[c], buffer, nullptr);
+        if (c) {
+          raw_data += copy_params.delimiter;
+        }
+        if (!arrays[c]->IsNull(r)) {
+          raw_data += (data << getters[c](*arrays[c], r)).buffer.front();
+        }
+      }
+      raw_data += copy_params.line_delim;
+      if (++import_status.rows_completed >= 10000) {
+        // as if load truncated
+        import_status.load_truncated = true;
+        load_failed = true;
+        return;
+      }
+    }
+  }
 }
 
 void Importer::import_local_parquet(const std::string& file_path) {
@@ -2909,20 +2976,13 @@ void Importer::import_local_parquet(const std::string& file_path) {
   max_threads = copy_params.threads ? copy_params.threads : cpu_threads();
 
   std::shared_ptr<arrow::io::ReadableFile> infile;
-  PARQUET_THROW_NOT_OK(
-      arrow::io::ReadableFile::Open(file_path, arrow::default_memory_pool(), &infile));
   std::unique_ptr<parquet::arrow::FileReader> reader;
-  PARQUET_THROW_NOT_OK(
-      parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader));
   std::shared_ptr<arrow::Table> table;
-  PARQUET_THROW_NOT_OK(reader->ReadTable(&table));
+  int num_row_groups, num_columns;
+  int64_t num_rows;
+  std::tie(num_row_groups, num_columns, num_rows) =
+      open_parquet_table(file_path, infile, reader, table);
 
-  const auto metadata = reader->parquet_reader()->metadata();
-  const auto num_row_groups = reader->num_row_groups();
-  const auto num_columns = table->num_columns();
-  const auto num_rows = table->num_rows();
-  LOG(INFO) << "File " << file_path << " has " << num_rows << " rows and " << num_columns
-            << " columns in " << num_row_groups << " groups.";
   // column_list has no $deleted
   CHECK_EQ(num_columns, column_list.size());
   std::vector<const ColumnDescriptor*> cds;
@@ -3092,6 +3152,9 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
             us3arch->vacuum(objkey);
           }
           throw;
+        }
+        if (import_status.load_truncated) {
+          break;
         }
       }
     }

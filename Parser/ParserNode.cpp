@@ -3276,6 +3276,9 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         }
         const std::string* s = str_literal->get_stringval();
         if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
+          // not sure a parquet "table" type is proper, but to make code
+          // look consistent in some places, let's set "table" type too
+          copy_params.table_type = Importer_NS::TableType::PARQUET;
           copy_params.is_parquet = true;
         } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
           copy_params.is_parquet = false;

@@ -1355,6 +1355,12 @@ int main(int argc, char** argv) {
     } else if (!strncmp(line, "\\detect", 7)) {
       char* filepath = strtok(line + 8, " ");
       TCopyParams copy_params;
+      // users may give only a directory name which has no obvious connection to parquet.
+      // need users to explicitly specify that they want to detect cols in parquet files
+      if (boost::iequals(filepath, "parquet")) {
+        copy_params.is_parquet = true;
+        filepath = strtok(0, " ");
+      }
       copy_params.delimiter = ",";
       char* env;
       if (nullptr != (env = getenv("AWS_REGION"))) {

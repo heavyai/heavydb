@@ -2509,6 +2509,9 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
       break;
   }
   copy_params.quoted = cp.quoted;
+#ifdef ENABLE_IMPORT_PARQUET
+  copy_params.is_parquet = cp.is_parquet;
+#endif
   if (cp.delimiter.length() > 0) {
     copy_params.delimiter = unescape_char(cp.delimiter);
   } else {
@@ -2859,7 +2862,12 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
     }
   }
   try {
-    if (copy_params.table_type == Importer_NS::TableType::DELIMITED) {
+    if (copy_params.table_type == Importer_NS::TableType::DELIMITED
+#ifdef ENABLE_IMPORT_PARQUET
+        || (copy_params.table_type == Importer_NS::TableType::PARQUET ||
+            copy_params.is_parquet)
+#endif
+    ) {
       Importer_NS::Detector detector(file_path, copy_params);
       std::vector<SQLTypes> best_types = detector.best_sqltypes;
       std::vector<EncodingType> best_encodings = detector.best_encodings;
