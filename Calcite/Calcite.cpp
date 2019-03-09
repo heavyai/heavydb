@@ -403,6 +403,10 @@ TPlanResult Calcite::processImpl(
       return ret;
     } catch (InvalidParseRequest& e) {
       throw std::invalid_argument(e.whyUp);
+    } catch (const std::exception& ex) {
+      LOG(FATAL)
+          << "Error occurred trying to communicate with calcite server, the error was: '"
+          << ex.what() << "', omnisci_server restart will be required";
     }
   } else {
     LOG(INFO) << "Not routing to Calcite, server is not up";
