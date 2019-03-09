@@ -62,7 +62,7 @@ class ColSlotContext {
   size_t getColCount() const;
   size_t getSlotCount() const;
 
-  const SlotSize getSlotInfo(const size_t slot_idx) const {
+  const SlotSize& getSlotInfo(const size_t slot_idx) const {
     CHECK_LT(slot_idx, slot_sizes_.size());
     return slot_sizes_[slot_idx];
   }

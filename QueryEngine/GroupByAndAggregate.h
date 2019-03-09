@@ -119,7 +119,6 @@ struct ColRangeInfo {
 struct KeylessInfo {
   const bool keyless;
   const int32_t target_index;
-  const int64_t init_val;
   const bool shared_mem_support;  // TODO(Saman) remove, all aggregate operations should
                                   // eventually be potentially done with shared memory.
                                   // The decision will be made when the query memory

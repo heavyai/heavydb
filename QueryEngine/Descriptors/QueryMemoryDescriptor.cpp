@@ -199,7 +199,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         false,
         false,
         -1,
-        0,
         ColRangeInfo{ra_exe_unit.estimator ? QueryDescriptionType::Estimator
                                            : QueryDescriptionType::NonGroupedAggregate,
                      0,
@@ -228,7 +227,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
   bool shared_mem_for_group_by = false;
   int8_t group_col_compact_width = 0;
   int32_t idx_target_as_key = -1;
-  int64_t init_val = 0;
   std::vector<ssize_t> target_groupby_indices;
 
   switch (col_range_info.hash_type_) {
@@ -244,7 +242,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       } else {
         // single column perfect hash
         idx_target_as_key = keyless_info.target_index;
-        init_val = keyless_info.init_val;
 
         keyless_hash =
             (!sort_on_gpu_hint ||
@@ -364,7 +361,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       keyless_hash,
       interleaved_bins_on_gpu,
       idx_target_as_key,
-      init_val,
       actual_col_range_info,
       col_slot_context,
       group_col_widths,
@@ -388,7 +384,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     const bool keyless_hash,
     const bool interleaved_bins_on_gpu,
     const int32_t idx_target_as_key,
-    const int64_t init_val,
     const ColRangeInfo& col_range_info,
     const ColSlotContext& col_slot_context,
     const std::vector<int8_t>& group_col_widths,
@@ -408,7 +403,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , keyless_hash_(keyless_hash)
     , interleaved_bins_on_gpu_(interleaved_bins_on_gpu)
     , idx_target_as_key_(idx_target_as_key)
-    , init_val_(init_val)
     , group_col_widths_(group_col_widths)
     , group_col_compact_width_(group_col_compact_width)
     , target_groupby_indices_(target_groupby_indices)
@@ -488,7 +482,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor()
     , keyless_hash_(false)
     , interleaved_bins_on_gpu_(false)
     , idx_target_as_key_(0)
-    , init_val_(0)
     , group_col_compact_width_(0)
     , entry_count_(0)
     , min_val_(0)
@@ -511,7 +504,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , keyless_hash_(false)
     , interleaved_bins_on_gpu_(false)
     , idx_target_as_key_(0)
-    , init_val_(0)
     , group_col_compact_width_(0)
     , entry_count_(entry_count)
     , min_val_(0)
@@ -536,7 +528,6 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_de
     , keyless_hash_(false)
     , interleaved_bins_on_gpu_(false)
     , idx_target_as_key_(0)
-    , init_val_(0)
     , group_col_widths_(group_col_widths)
     , group_col_compact_width_(0)
     , entry_count_(0)
@@ -564,9 +555,6 @@ bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const
     return false;
   }
   if (idx_target_as_key_ != other.idx_target_as_key_) {
-    return false;
-  }
-  if (init_val_ != other.init_val_) {
     return false;
   }
   if (force_4byte_float_ != other.force_4byte_float_) {

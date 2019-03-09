@@ -84,7 +84,6 @@ class QueryMemoryDescriptor {
                         const bool keyless_hash,
                         const bool interleaved_bins_on_gpu,
                         const int32_t idx_target_as_key,
-                        const int64_t init_val,
                         const ColRangeInfo& col_range_info,
                         const ColSlotContext& col_slot_context,
                         const std::vector<int8_t>& group_col_widths,
@@ -185,8 +184,6 @@ class QueryMemoryDescriptor {
 
   int32_t getTargetIdxForKey() const { return idx_target_as_key_; }
   void setTargetIdxForKey(const int32_t val) { idx_target_as_key_ = val; }
-
-  int64_t getInitVal() const { return init_val_; }
 
   size_t groupColWidthsSize() const { return group_col_widths_.size(); }
   int8_t groupColWidth(const size_t key_idx) const {
@@ -324,7 +321,6 @@ class QueryMemoryDescriptor {
   bool keyless_hash_;
   bool interleaved_bins_on_gpu_;
   int32_t idx_target_as_key_;
-  int64_t init_val_;
   std::vector<int8_t> group_col_widths_;
   int8_t group_col_compact_width_;  // compact width for all group
                                     // cols if able to be consistent
