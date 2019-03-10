@@ -56,17 +56,20 @@ class WindowFunctionContext {
   // Returns a pointer to the output buffer of the window function result.
   const int8_t* output() const;
 
-  // Returns a pointer to the multiplicities buffer used to store peer rows information.
-  const uint32_t* multiplicities() const;
-
   // Returns a pointer to the value field of the aggregation state.
   const int64_t* aggregateState() const;
 
   // Returns a pointer to the count field of the aggregation state.
   const int64_t* aggregateStateCount() const;
 
+  // Returns a handle to the pending outputs for the aggregate window function.
+  int64_t aggregateStatePendingOutputs() const;
+
   // Returns a pointer to the partition start bitmap.
   const int8_t* partitionStart() const;
+
+  // Returns a pointer to the partition end bitmap.
+  const int8_t* partitionEnd() const;
 
   // Returns the element count in the columns used by the window function.
   size_t elementCount() const;
@@ -84,6 +87,7 @@ class WindowFunctionContext {
   struct AggregateState {
     int64_t val;
     int64_t count;
+    std::vector<void*> outputs;
     llvm::Value* row_number = nullptr;
   };
 
@@ -100,6 +104,8 @@ class WindowFunctionContext {
       const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator);
 
   void fillPartitionStart();
+
+  void fillPartitionEnd();
 
   const int32_t* payload() const;
 
@@ -123,10 +129,11 @@ class WindowFunctionContext {
   // Markers for partition start used to reinitialize state for aggregate window
   // functions.
   int8_t* partition_start_;
+  // Markers for partition start used to reinitialize state for aggregate window
+  // functions.
+  int8_t* partition_end_;
   // State for aggregate function over a window.
   AggregateState aggregate_state_;
-  // The multiplicities for peers, to be used by aggregate functions.
-  std::vector<unsigned> multiplicities_;
   const ExecutorDeviceType device_type_;
 };
 
@@ -173,4 +180,4 @@ class WindowProjectNodeContext {
 
 bool window_function_is_aggregate(const SqlWindowFunctionKind kind);
 
-bool window_function_requires_multiplicity(const SqlWindowFunctionKind kind);
+bool window_function_requires_peer_handling(const Analyzer::WindowFunction* window_func);

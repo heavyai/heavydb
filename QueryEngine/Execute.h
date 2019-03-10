@@ -705,56 +705,32 @@ class Executor {
                                    const CompilationOptions&);
 
   // Generate code for a window function target.
-  llvm::Value* codegenWindowFunction(const Analyzer::WindowFunction* window_func,
-                                     const size_t target_index,
+  llvm::Value* codegenWindowFunction(const size_t target_index,
                                      const CompilationOptions& co);
 
   // Generate code for an aggregate window function target.
-  llvm::Value* codegenWindowFunctionAggregate(
-      const Analyzer::WindowFunction* window_func,
-      const WindowFunctionContext* window_func_context,
-      const CompilationOptions& co);
+  llvm::Value* codegenWindowFunctionAggregate(const CompilationOptions& co);
 
   // The aggregate state requires a state reset when starting a new partition. Generate
   // the new partition check and return the continuation basic block.
-  llvm::BasicBlock* codegenWindowResetStateControlFlow(
-      const WindowFunctionContext* window_func_context);
+  llvm::BasicBlock* codegenWindowResetStateControlFlow();
 
   // Generate code for initializing the state of a window aggregate.
-  void codegenWindowFunctionStateInit(const SqlWindowFunctionKind kind,
-                                      llvm::Value* aggregate_state,
-                                      llvm::Value* window_func_null_val,
-                                      const SQLTypeInfo& window_func_ti);
+  void codegenWindowFunctionStateInit(llvm::Value* aggregate_state);
 
   // Generates the required calls for an aggregate window function and returns the final
   // result.
-  llvm::Value* codegenWindowFunctionAggregateCalls(
-      const Analyzer::WindowFunction* window_func,
-      const WindowFunctionContext* window_func_context,
-      const CompilationOptions& co,
-      llvm::Value* aggregate_state,
-      llvm::Value* window_func_null_val,
-      const SQLTypeInfo& window_func_ti);
-
-  // Certain aggregate window functions (SUM, AVG, COUNT) require the same value across
-  // all peer rows. This is implemented with a multiplicity buffer: the positions of the
-  // first element in a peer group contain the number of peers, the rest contain 0. The
-  // aggregate runtime functions execute a number of repetitions equals to this
-  // multiplicity.
-  llvm::Value* codegenWindowAggregateCallWithMultiplicity(
-      const std::string& agg_name,
-      llvm::Value* window_func_null_val,
-      const std::vector<llvm::Value*>& args,
-      const WindowFunctionContext* window_func_context);
+  llvm::Value* codegenWindowFunctionAggregateCalls(llvm::Value* aggregate_state,
+                                                   const CompilationOptions& co);
 
   // The AVG window function requires some post-processing: the sum is divided by count
   // and the result is stored back for the current row.
-  llvm::Value* codegenWindowAvgEpilogue(const WindowFunctionContext* window_func_context,
-                                        llvm::Value* crt_val,
-                                        llvm::Value* aggregate_state,
-                                        llvm::Value* window_func_null_val,
-                                        llvm::Value* multiplicity_lv,
-                                        const SQLTypeInfo& window_func_ti);
+  void codegenWindowAvgEpilogue(llvm::Value* crt_val,
+                                llvm::Value* window_func_null_val,
+                                llvm::Value* multiplicity_lv);
+
+  // Generates code which loads the current aggregate value for the window context.
+  llvm::Value* codegenAggregateWindowState();
 
   struct ArgNullcheckBBs {
     llvm::BasicBlock* args_null_bb;

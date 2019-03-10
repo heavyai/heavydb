@@ -34,12 +34,13 @@ WindowFunctionContext::WindowFunctionContext(
     , elem_count_(elem_count)
     , output_(nullptr)
     , partition_start_(nullptr)
+    , partition_end_(nullptr)
     , device_type_(device_type) {}
 
 WindowFunctionContext::~WindowFunctionContext() {
   free(output_);
   free(partition_start_);
-  decltype(multiplicities_)().swap(multiplicities_);
+  free(partition_end_);
 }
 
 void WindowFunctionContext::addOrderColumn(
@@ -259,25 +260,20 @@ void apply_last_value_to_partition(const int32_t* original_indices,
       original_indices, original_indices + partition_size, output_for_partition_buff);
 }
 
-// Computes the multiplicities for an order by column. The first element in a peer group
-// gets a multiplicity equal to the size of the group, the remaining ones get 0.
-void index_to_multiplicities(
-    unsigned* partition_multiplicities,
+void index_to_partition_end(
+    const int8_t* partition_end,
+    const size_t off,
     const int64_t* index,
     const size_t index_size,
     const std::function<bool(const int64_t lhs, const int64_t rhs)>& comparator) {
-  size_t multiplicity = 0;
-  size_t sequence_start_idx = 0;
+  int64_t partition_end_handle = reinterpret_cast<int64_t>(partition_end);
   for (size_t i = 0; i < index_size; ++i) {
     if (advance_current_rank(comparator, index, i)) {
-      partition_multiplicities[sequence_start_idx] = multiplicity;
-      multiplicity = 1;
-      sequence_start_idx = i;
-    } else {
-      ++multiplicity;
+      agg_count_distinct_bitmap(&partition_end_handle, off + i - 1, 0);
     }
   }
-  partition_multiplicities[sequence_start_idx] = multiplicity;
+  CHECK(index_size);
+  agg_count_distinct_bitmap(&partition_end_handle, off + index_size - 1, 0);
 }
 
 }  // namespace
@@ -312,8 +308,14 @@ bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
 
 // Returns true iff the aggregate window function requires special multiplicity handling
 // to ensure that peer rows have the same value for the window function.
-bool window_function_requires_multiplicity(const SqlWindowFunctionKind kind) {
-  switch (kind) {
+bool window_function_requires_peer_handling(const Analyzer::WindowFunction* window_func) {
+  if (!window_function_is_aggregate(window_func->getKind())) {
+    return false;
+  }
+  if (window_func->getOrderKeys().empty()) {
+    return true;
+  }
+  switch (window_func->getKind()) {
     case SqlWindowFunctionKind::MIN:
     case SqlWindowFunctionKind::MAX: {
       return false;
@@ -328,9 +330,8 @@ void WindowFunctionContext::compute() {
       elem_count_ * window_function_buffer_element_size(window_func_->getKind())));
   if (window_function_is_aggregate(window_func_->getKind())) {
     fillPartitionStart();
-    CHECK(multiplicities_.empty());
-    if (window_function_requires_multiplicity(window_func_->getKind())) {
-      multiplicities_.resize(elem_count_);
+    if (window_function_requires_peer_handling(window_func_)) {
+      fillPartitionEnd();
     }
   }
   std::unique_ptr<int64_t[]> scratchpad(new int64_t[elem_count_]);
@@ -411,10 +412,6 @@ const int8_t* WindowFunctionContext::output() const {
   return output_;
 }
 
-const uint32_t* WindowFunctionContext::multiplicities() const {
-  return multiplicities_.data();
-}
-
 const int64_t* WindowFunctionContext::aggregateState() const {
   CHECK(window_function_is_aggregate(window_func_->getKind()));
   return &aggregate_state_.val;
@@ -425,8 +422,17 @@ const int64_t* WindowFunctionContext::aggregateStateCount() const {
   return &aggregate_state_.count;
 }
 
+int64_t WindowFunctionContext::aggregateStatePendingOutputs() const {
+  CHECK(window_function_is_aggregate(window_func_->getKind()));
+  return reinterpret_cast<int64_t>(&aggregate_state_.outputs);
+}
+
 const int8_t* WindowFunctionContext::partitionStart() const {
   return partition_start_;
+}
+
+const int8_t* WindowFunctionContext::partitionEnd() const {
+  return partition_end_;
 }
 
 size_t WindowFunctionContext::elementCount() const {
@@ -625,11 +631,9 @@ void WindowFunctionContext::computePartition(
     case SqlWindowFunctionKind::SUM:
     case SqlWindowFunctionKind::COUNT: {
       const auto partition_row_offsets = payload() + off;
-      if (window_function_requires_multiplicity(window_func->getKind())) {
-        index_to_multiplicities(multiplicities_.data() + off,
-                                output_for_partition_buff,
-                                partition_size,
-                                comparator);
+      if (window_function_requires_peer_handling(window_func)) {
+        index_to_partition_end(
+            partitionEnd(), off, output_for_partition_buff, partition_size, comparator);
       }
       apply_permutation_to_partition(
           output_for_partition_buff, partition_row_offsets, partition_size);
@@ -656,9 +660,31 @@ void WindowFunctionContext::fillPartitionStart() {
   std::partial_sum(counts(), counts() + partition_count, partition_offsets.begin());
   auto partition_start_handle = reinterpret_cast<int64_t>(partition_start_);
   agg_count_distinct_bitmap(&partition_start_handle, 0, 0);
-  for (ssize_t i = 0; i < partition_count - 1; ++i) {
+  for (ssize_t i = 0; i < partition_count - 2; ++i) {
     agg_count_distinct_bitmap(&partition_start_handle, partition_offsets[i], 0);
   }
+}
+
+void WindowFunctionContext::fillPartitionEnd() {
+  CountDistinctDescriptor partition_start_bitmap{CountDistinctImplType::Bitmap,
+                                                 0,
+                                                 static_cast<int64_t>(elem_count_),
+                                                 false,
+                                                 ExecutorDeviceType::CPU,
+                                                 1};
+  partition_end_ = static_cast<int8_t*>(
+      checked_calloc(partition_start_bitmap.bitmapPaddedSizeBytes(), 1));
+  ssize_t partition_count = partitionCount();
+  std::vector<size_t> partition_offsets(partition_count);
+  std::partial_sum(counts(), counts() + partition_count, partition_offsets.begin());
+  auto partition_end_handle = reinterpret_cast<int64_t>(partition_end_);
+  for (ssize_t i = 0; i < partition_count - 2; ++i) {
+    if (partition_offsets[i] == 0) {
+      continue;
+    }
+    agg_count_distinct_bitmap(&partition_end_handle, partition_offsets[i] - 1, 0);
+  }
+  agg_count_distinct_bitmap(&partition_end_handle, elem_count_ - 1, 0);
 }
 
 const int32_t* WindowFunctionContext::payload() const {

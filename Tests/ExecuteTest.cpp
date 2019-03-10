@@ -13849,6 +13849,19 @@ TEST(Select, WindowFunctionTestAggregate) {
     dt);
 }
 
+TEST(Select, WindowFunctionTestAggregateNoOrder) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  c("SELECT x, y, AVG(x) OVER (PARTITION BY y) a, MIN(x) OVER (PARTITION BY y) m1, "
+    "MAX(x) OVER (PARTITION BY y) m2, SUM(x) OVER (PARTITION BY y) s, COUNT(x) OVER "
+    "(PARTITION BY y) c FROM test_window_func ORDER BY x ASC, y ASC, a ASC, m1 ASC, m2 "
+    "ASC, s ASC;",
+    dt);
+  c("SELECT y, COUNT(t) OVER (PARTITION BY y) s FROM test_window_func ORDER BY y ASC, s "
+    "ASC;",
+    dt);
+}
+
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,

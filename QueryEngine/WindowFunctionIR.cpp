@@ -17,11 +17,51 @@
 #include "Execute.h"
 #include "WindowContext.h"
 
-llvm::Value* Executor::codegenWindowFunction(const Analyzer::WindowFunction* window_func,
-                                             const size_t target_index,
+namespace {
+
+bool pos_is_set(const int64_t bitset, const int64_t pos) {
+  return (reinterpret_cast<const int8_t*>(bitset))[pos >> 3] & (1 << (pos & 7));
+}
+
+}  // namespace
+
+extern "C" void apply_window_pending_outputs_int(const int64_t handle,
+                                                 const int64_t value,
+                                                 const int64_t bitset,
+                                                 const int64_t pos) {
+  if (!pos_is_set(bitset, pos)) {
+    return;
+  }
+  auto& pending_output_slots = *reinterpret_cast<std::vector<void*>*>(handle);
+  for (auto pending_output_slot : pending_output_slots) {
+    *reinterpret_cast<int64_t*>(pending_output_slot) = value;
+  }
+  pending_output_slots.clear();
+}
+
+extern "C" void apply_window_pending_outputs_double(const int64_t handle,
+                                                    const double value,
+                                                    const int64_t bitset,
+                                                    const int64_t pos) {
+  if (!pos_is_set(bitset, pos)) {
+    return;
+  }
+  auto& pending_output_slots = *reinterpret_cast<std::vector<void*>*>(handle);
+  for (auto pending_output_slot : pending_output_slots) {
+    *reinterpret_cast<double*>(pending_output_slot) = value;
+  }
+  pending_output_slots.clear();
+}
+
+extern "C" void add_window_pending_output(void* pending_output, const int64_t handle) {
+  reinterpret_cast<std::vector<void*>*>(handle)->push_back(pending_output);
+}
+
+llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
                                              const CompilationOptions& co) {
   const auto window_func_context =
       WindowProjectNodeContext::get()->activateWindowFunctionContext(target_index);
+  const auto window_func = window_func_context->getWindowFunction();
   switch (window_func->getKind()) {
     case SqlWindowFunctionKind::ROW_NUMBER:
     case SqlWindowFunctionKind::RANK:
@@ -55,7 +95,7 @@ llvm::Value* Executor::codegenWindowFunction(const Analyzer::WindowFunction* win
     case SqlWindowFunctionKind::MAX:
     case SqlWindowFunctionKind::SUM:
     case SqlWindowFunctionKind::COUNT: {
-      return codegenWindowFunctionAggregate(window_func, window_func_context, co);
+      return codegenWindowFunctionAggregate(co);
     }
     default: { LOG(FATAL) << "Invalid window function kind"; }
   }
@@ -101,52 +141,48 @@ std::string get_window_agg_name(const SqlWindowFunctionKind kind,
   return agg_name;
 }
 
+SQLTypeInfo get_adjusted_window_type_info(const Analyzer::WindowFunction* window_func) {
+  const auto& args = window_func->getArgs();
+  return ((window_func->getKind() == SqlWindowFunctionKind::COUNT && !args.empty()) ||
+          window_func->getKind() == SqlWindowFunctionKind::AVG)
+             ? args.front()->get_type_info()
+             : window_func->get_type_info();
+}
+
 }  // namespace
 
-llvm::Value* Executor::codegenWindowFunctionAggregate(
-    const Analyzer::WindowFunction* window_func,
-    const WindowFunctionContext* window_func_context,
-    const CompilationOptions& co) {
-  const auto reset_state_false_bb =
-      codegenWindowResetStateControlFlow(window_func_context);
+llvm::Value* Executor::codegenWindowFunctionAggregate(const CompilationOptions& co) {
+  const auto window_func_context =
+      WindowProjectNodeContext::getActiveWindowFunctionContext();
+  const auto window_func = window_func_context->getWindowFunction();
+  const auto reset_state_false_bb = codegenWindowResetStateControlFlow();
   const auto pi64_type =
       llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
   const auto aggregate_state_i64 =
       ll_int(reinterpret_cast<const int64_t>(window_func_context->aggregateState()));
   auto aggregate_state =
       cgen_state_->ir_builder_.CreateIntToPtr(aggregate_state_i64, pi64_type);
-  const auto& args = window_func->getArgs();
-  const auto& window_func_ti =
-      ((window_func->getKind() == SqlWindowFunctionKind::COUNT && !args.empty()) ||
-       window_func->getKind() == SqlWindowFunctionKind::AVG)
-          ? args.front()->get_type_info()
-          : window_func->get_type_info();
-  const auto window_func_null_val = window_func_ti.is_fp()
-                                        ? inlineFpNull(window_func_ti)
-                                        : castToTypeIn(inlineIntNull(window_func_ti), 64);
-  codegenWindowFunctionStateInit(
-      window_func->getKind(), aggregate_state, window_func_null_val, window_func_ti);
+  llvm::Value* aggregate_state_count = nullptr;
   if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
-    const auto count_zero = ll_int(int64_t(0));
     const auto aggregate_state_count_i64 = ll_int(
         reinterpret_cast<const int64_t>(window_func_context->aggregateStateCount()));
-    auto aggregate_state_count =
+    aggregate_state_count =
         cgen_state_->ir_builder_.CreateIntToPtr(aggregate_state_count_i64, pi64_type);
+  }
+  codegenWindowFunctionStateInit(aggregate_state);
+  if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
+    const auto count_zero = ll_int(int64_t(0));
     cgen_state_->emitCall("agg_id", {aggregate_state_count, count_zero});
   }
   cgen_state_->ir_builder_.CreateBr(reset_state_false_bb);
   cgen_state_->ir_builder_.SetInsertPoint(reset_state_false_bb);
   CHECK(WindowProjectNodeContext::get());
-  return codegenWindowFunctionAggregateCalls(window_func,
-                                             window_func_context,
-                                             co,
-                                             aggregate_state,
-                                             window_func_null_val,
-                                             window_func_ti);
+  return codegenWindowFunctionAggregateCalls(aggregate_state, co);
 }
 
-llvm::BasicBlock* Executor::codegenWindowResetStateControlFlow(
-    const WindowFunctionContext* window_func_context) {
+llvm::BasicBlock* Executor::codegenWindowResetStateControlFlow() {
+  const auto window_func_context =
+      WindowProjectNodeContext::getActiveWindowFunctionContext();
   const auto bitset =
       ll_int(reinterpret_cast<const int64_t>(window_func_context->partitionStart()));
   const auto min_val = ll_int(int64_t(0));
@@ -166,12 +202,22 @@ llvm::BasicBlock* Executor::codegenWindowResetStateControlFlow(
   return reset_state_false_bb;
 }
 
-void Executor::codegenWindowFunctionStateInit(const SqlWindowFunctionKind kind,
-                                              llvm::Value* aggregate_state,
-                                              llvm::Value* window_func_null_val,
-                                              const SQLTypeInfo& window_func_ti) {
+void Executor::codegenWindowFunctionStateInit(llvm::Value* aggregate_state) {
+  const auto window_func_context =
+      WindowProjectNodeContext::getActiveWindowFunctionContext();
+  const auto window_func = window_func_context->getWindowFunction();
+  const auto& args = window_func->getArgs();
+  const auto& window_func_ti =
+      ((window_func->getKind() == SqlWindowFunctionKind::COUNT && !args.empty()) ||
+       window_func->getKind() == SqlWindowFunctionKind::AVG)
+          ? args.front()->get_type_info()
+          : window_func->get_type_info();
+  const auto window_func_null_val = window_func_ti.is_fp()
+                                        ? inlineFpNull(window_func_ti)
+                                        : castToTypeIn(inlineIntNull(window_func_ti), 64);
   llvm::Value* window_func_init_val;
-  if (kind == SqlWindowFunctionKind::COUNT) {
+  if (window_func_context->getWindowFunction()->getKind() ==
+      SqlWindowFunctionKind::COUNT) {
     switch (window_func_ti.get_type()) {
       case kFLOAT: {
         window_func_init_val = ll_fp(float(0));
@@ -209,13 +255,15 @@ void Executor::codegenWindowFunctionStateInit(const SqlWindowFunctionKind kind,
   }
 }
 
-llvm::Value* Executor::codegenWindowFunctionAggregateCalls(
-    const Analyzer::WindowFunction* window_func,
-    const WindowFunctionContext* window_func_context,
-    const CompilationOptions& co,
-    llvm::Value* aggregate_state,
-    llvm::Value* window_func_null_val,
-    const SQLTypeInfo& window_func_ti) {
+llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregate_state,
+                                                           const CompilationOptions& co) {
+  const auto window_func_context =
+      WindowProjectNodeContext::getActiveWindowFunctionContext();
+  const auto window_func = window_func_context->getWindowFunction();
+  const auto window_func_ti = get_adjusted_window_type_info(window_func);
+  const auto window_func_null_val = window_func_ti.is_fp()
+                                        ? inlineFpNull(window_func_ti)
+                                        : castToTypeIn(inlineIntNull(window_func_ti), 64);
   const auto& args = window_func->getArgs();
   llvm::Value* crt_val;
   if (args.empty()) {
@@ -232,61 +280,22 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(
   if (args.empty()) {
     cgen_state_->emitCall(agg_name, {aggregate_state, crt_val});
   } else {
-    std::vector<llvm::Value*> args{aggregate_state, crt_val, window_func_null_val};
-    if (window_function_requires_multiplicity(window_func->getKind())) {
-      multiplicity_lv = codegenWindowAggregateCallWithMultiplicity(
-          agg_name, window_func_null_val, args, window_func_context);
-    } else {
-      cgen_state_->emitCall(agg_name + "_skip_val", args);
-    }
+    cgen_state_->emitCall(agg_name + "_skip_val",
+                          {aggregate_state, crt_val, window_func_null_val});
   }
   if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
-    return codegenWindowAvgEpilogue(window_func_context,
-                                    crt_val,
-                                    aggregate_state,
-                                    window_func_null_val,
-                                    multiplicity_lv,
-                                    window_func_ti);
+    codegenWindowAvgEpilogue(crt_val, window_func_null_val, multiplicity_lv);
   }
-  if (window_func->getKind() == SqlWindowFunctionKind::COUNT) {
-    return cgen_state_->ir_builder_.CreateLoad(aggregate_state);
-  }
-  switch (window_func_ti.get_type()) {
-    case kFLOAT: {
-      return cgen_state_->emitCall("load_float", {aggregate_state});
-    }
-    case kDOUBLE: {
-      return cgen_state_->emitCall("load_double", {aggregate_state});
-    }
-    default: { return cgen_state_->ir_builder_.CreateLoad(aggregate_state); }
-  }
+  return codegenAggregateWindowState();
 }
 
-llvm::Value* Executor::codegenWindowAggregateCallWithMultiplicity(
-    const std::string& agg_name,
-    llvm::Value* window_func_null_val,
-    const std::vector<llvm::Value*>& args,
-    const WindowFunctionContext* window_func_context) {
-  const auto pi32_type =
-      llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
-  const auto multiplicities_lv = cgen_state_->ir_builder_.CreateIntToPtr(
-      ll_int(reinterpret_cast<const uint64_t>(window_func_context->multiplicities())),
-      pi32_type);
-  llvm::Value* multiplicity_lv = cgen_state_->ir_builder_.CreateLoad(
-      cgen_state_->ir_builder_.CreateGEP(multiplicities_lv, posArg(nullptr)));
-  auto args_with_multiplicity = args;
-  args_with_multiplicity.push_back(multiplicity_lv);
-  cgen_state_->emitCall(agg_name + "_skip_val_rep", args_with_multiplicity);
-  return multiplicity_lv;
-}
-
-llvm::Value* Executor::codegenWindowAvgEpilogue(
-    const WindowFunctionContext* window_func_context,
-    llvm::Value* crt_val,
-    llvm::Value* aggregate_state,
-    llvm::Value* window_func_null_val,
-    llvm::Value* multiplicity_lv,
-    const SQLTypeInfo& window_func_ti) {
+void Executor::codegenWindowAvgEpilogue(llvm::Value* crt_val,
+                                        llvm::Value* window_func_null_val,
+                                        llvm::Value* multiplicity_lv) {
+  const auto window_func_context =
+      WindowProjectNodeContext::getActiveWindowFunctionContext();
+  const auto window_func = window_func_context->getWindowFunction();
+  const auto window_func_ti = get_adjusted_window_type_info(window_func);
   const auto pi32_type =
       llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
   const auto pi64_type =
@@ -309,23 +318,55 @@ llvm::Value* Executor::codegenWindowAvgEpilogue(
     }
     default: { break; }
   }
-  agg_count_func_name += "_skip_val_rep";
-  cgen_state_->emitCall(
-      agg_count_func_name,
-      {aggregate_state_count, crt_val, window_func_null_val, multiplicity_lv});
-  const auto double_null_lv = inlineFpNull(SQLTypeInfo(kDOUBLE));
+  cgen_state_->emitCall(agg_count_func_name, {aggregate_state_count, crt_val});
+}
+
+llvm::Value* Executor::codegenAggregateWindowState() {
+  const auto pi32_type =
+      llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0);
+  const auto pi64_type =
+      llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
+  const auto window_func_context =
+      WindowProjectNodeContext::getActiveWindowFunctionContext();
+  const Analyzer::WindowFunction* window_func = window_func_context->getWindowFunction();
+  const auto window_func_ti = get_adjusted_window_type_info(window_func);
+  const auto aggregate_state_type =
+      window_func_ti.get_type() == kFLOAT ? pi32_type : pi64_type;
+  const auto aggregate_state_i64 =
+      ll_int(reinterpret_cast<const int64_t>(window_func_context->aggregateState()));
+  auto aggregate_state =
+      cgen_state_->ir_builder_.CreateIntToPtr(aggregate_state_i64, pi64_type);
+  if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
+    const auto aggregate_state_count_i64 = ll_int(
+        reinterpret_cast<const int64_t>(window_func_context->aggregateStateCount()));
+    auto aggregate_state_count = cgen_state_->ir_builder_.CreateIntToPtr(
+        aggregate_state_count_i64, aggregate_state_type);
+    const auto double_null_lv = inlineFpNull(SQLTypeInfo(kDOUBLE));
+    switch (window_func_ti.get_type()) {
+      case kFLOAT: {
+        return cgen_state_->emitCall(
+            "load_avg_float", {aggregate_state, aggregate_state_count, double_null_lv});
+      }
+      case kDOUBLE: {
+        return cgen_state_->emitCall(
+            "load_avg_double", {aggregate_state, aggregate_state_count, double_null_lv});
+      }
+      default: {
+        return cgen_state_->emitCall(
+            "load_avg_int", {aggregate_state, aggregate_state_count, double_null_lv});
+      }
+    }
+  }
+  if (window_func->getKind() == SqlWindowFunctionKind::COUNT) {
+    return cgen_state_->ir_builder_.CreateLoad(aggregate_state);
+  }
   switch (window_func_ti.get_type()) {
     case kFLOAT: {
-      return cgen_state_->emitCall(
-          "load_avg_float", {aggregate_state, aggregate_state_count, double_null_lv});
+      return cgen_state_->emitCall("load_float", {aggregate_state});
     }
     case kDOUBLE: {
-      return cgen_state_->emitCall(
-          "load_avg_double", {aggregate_state, aggregate_state_count, double_null_lv});
+      return cgen_state_->emitCall("load_double", {aggregate_state});
     }
-    default: {
-      return cgen_state_->emitCall(
-          "load_avg_int", {aggregate_state, aggregate_state_count, double_null_lv});
-    }
+    default: { return cgen_state_->ir_builder_.CreateLoad(aggregate_state); }
   }
 }

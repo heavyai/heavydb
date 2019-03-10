@@ -97,11 +97,10 @@ void TargetExprCodegen::codegen(
   const auto agg_fn_names = agg_fn_base_names(target_info);
   const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
   WindowProjectNodeContext::resetWindowFunctionContext();
-  auto target_lvs = window_func
-                        ? std::vector<llvm::Value*>{executor->codegenWindowFunction(
-                              window_func, target_idx, co)}
-                        : group_by_and_agg->codegenAggArg(target_expr, co);
-  ;
+  auto target_lvs =
+      window_func
+          ? std::vector<llvm::Value*>{executor->codegenWindowFunction(target_idx, co)}
+          : group_by_and_agg->codegenAggArg(target_expr, co);
   const auto window_row_ptr = window_func
                                   ? group_by_and_agg->codegenWindowRowPointer(
                                         window_func, query_mem_desc, co, diamond_codegen)
@@ -365,6 +364,40 @@ void TargetExprCodegen::codegen(
         group_by_and_agg->emitCall(agg_fname, agg_args);
       }
     }
+    if (window_func && window_function_requires_peer_handling(window_func)) {
+      const auto window_func_context =
+          WindowProjectNodeContext::getActiveWindowFunctionContext();
+      const auto pending_outputs =
+          LL_INT(window_func_context->aggregateStatePendingOutputs());
+      executor->cgen_state_->emitExternalCall("add_window_pending_output",
+                                              llvm::Type::getVoidTy(LL_CONTEXT),
+                                              {agg_args.front(), pending_outputs});
+      const auto& window_func_ti = window_func->get_type_info();
+      std::string apply_window_pending_outputs_name = "apply_window_pending_outputs";
+      switch (window_func_ti.get_type()) {
+        case kFLOAT: {
+          apply_window_pending_outputs_name += "_float";
+          break;
+        }
+        case kDOUBLE: {
+          apply_window_pending_outputs_name += "_double";
+          break;
+        }
+        default: {
+          apply_window_pending_outputs_name += "_int";
+          break;
+        }
+      }
+      const auto partition_end =
+          LL_INT(reinterpret_cast<int64_t>(window_func_context->partitionEnd()));
+      executor->cgen_state_->emitExternalCall(apply_window_pending_outputs_name,
+                                              llvm::Type::getVoidTy(LL_CONTEXT),
+                                              {pending_outputs,
+                                               target_lvs.front(),
+                                               partition_end,
+                                               executor->posArg(nullptr)});
+    }
+
     ++slot_index;
     ++target_lv_idx;
   }
