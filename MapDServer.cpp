@@ -34,7 +34,6 @@
 #include "Shared/MapDProgramOptions.h"
 #include "Shared/file_delete.h"
 #include "Shared/mapd_shared_ptr.h"
-#include "Shared/measure.h"
 #include "Shared/scope.h"
 
 #include <boost/algorithm/string.hpp>
@@ -52,6 +51,7 @@ using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::server;
 using namespace ::apache::thrift::transport;
 
+extern bool g_cache_string_hash;
 extern size_t g_leaf_count;
 
 TableGenerations table_generations_from_thrift(
@@ -392,6 +392,11 @@ void MapDProgramOptions::fillOptions(po::options_description& desc) {
   desc.add_options()("db-query-list",
                      po::value<std::string>(&db_query_file),
                      "Path to file containing OmniSci queries");
+  desc.add_options()("cache-string-hash",
+                     po::value<bool>(&g_cache_string_hash)
+                         ->default_value(g_cache_string_hash)
+                         ->implicit_value(true),
+                     "Enable chache to store hashes in string dictionary server");
 }
 
 void MapDProgramOptions::fillAdvancedOptions(po::options_description& desc_adv) {

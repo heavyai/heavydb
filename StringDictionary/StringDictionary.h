@@ -47,6 +47,7 @@ class StringDictionary {
   StringDictionary(const std::string& folder,
                    const bool isTemp,
                    const bool recover,
+                   const bool materializeHashes = false,
                    size_t initial_capacity = 256);
   StringDictionary(const LeafHostInfo& host, const DictRef dict_ref);
   ~StringDictionary() noexcept;
@@ -103,7 +104,7 @@ class StringDictionary {
   };
 
   void processDictionaryFutures(
-      std::vector<std::future<std::vector<std::pair<unsigned int, unsigned int>>>>&
+      std::vector<std::future<std::vector<std::pair<uint32_t, unsigned int>>>>&
           dictionary_futures);
   bool fillRateIsHigh() const noexcept;
   void increaseCapacity() noexcept;
@@ -114,11 +115,11 @@ class StringDictionary {
   std::string getStringUnlocked(int32_t string_id) const noexcept;
   std::string getStringChecked(const int string_id) const noexcept;
   std::pair<char*, size_t> getStringBytesChecked(const int string_id) const noexcept;
-  uint32_t computeBucket(const size_t hash,
+  uint32_t computeBucket(const uint32_t hash,
                          const std::string str,
                          const std::vector<int32_t>& data,
                          const bool unique) const noexcept;
-  uint32_t computeUniqueBucketWithHash(const size_t hash,
+  uint32_t computeUniqueBucketWithHash(const uint32_t hash,
                                        const std::vector<int32_t>& data) const noexcept;
   void appendToStorage(const std::string& str) noexcept;
   PayloadString getStringFromStorage(const int string_id) const noexcept;
@@ -138,8 +139,10 @@ class StringDictionary {
 
   size_t str_count_;
   std::vector<int32_t> str_ids_;
+  std::vector<uint32_t> rk_hashes_;
   std::vector<int32_t> sorted_cache;
   bool isTemp_;
+  bool materialize_hashes_;
   std::string offsets_path_;
   int payload_fd_;
   int offset_fd_;

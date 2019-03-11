@@ -69,6 +69,7 @@ using std::string;
 using std::vector;
 
 int g_test_against_columnId_gap = 0;
+extern bool g_cache_string_hash;
 
 namespace Catalog_Namespace {
 
@@ -1288,11 +1289,11 @@ const DictDescriptor* Catalog::getMetadataForDict(const int dictId,
       auto time_ms = measure<>::execution([&]() {
         if (string_dict_hosts_.empty()) {
           if (dd->dictIsTemp) {
-            dd->stringDict =
-                std::make_shared<StringDictionary>(dd->dictFolderPath, true, true);
+            dd->stringDict = std::make_shared<StringDictionary>(
+                dd->dictFolderPath, true, true, g_cache_string_hash);
           } else {
-            dd->stringDict =
-                std::make_shared<StringDictionary>(dd->dictFolderPath, false, true);
+            dd->stringDict = std::make_shared<StringDictionary>(
+                dd->dictFolderPath, false, true, g_cache_string_hash);
           }
         } else {
           dd->stringDict =

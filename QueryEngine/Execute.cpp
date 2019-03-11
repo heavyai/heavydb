@@ -78,6 +78,7 @@ float g_filter_push_down_high_frac{-1.0f};
 size_t g_filter_push_down_passing_row_ubound{0};
 bool g_enable_columnar_output{false};
 bool g_enable_overlaps_hashjoin{false};
+bool g_cache_string_hash{false};
 double g_overlaps_hashjoin_bucket_threshold{0.1};
 bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
@@ -159,7 +160,7 @@ StringDictionaryProxy* Executor::getStringDictionaryProxy(
   CHECK_EQ(0, dict_id);
   if (!lit_str_dict_proxy_) {
     std::shared_ptr<StringDictionary> tsd =
-        std::make_shared<StringDictionary>("", false, true);
+        std::make_shared<StringDictionary>("", false, true, g_cache_string_hash);
     lit_str_dict_proxy_.reset(new StringDictionaryProxy(tsd, 0));
   }
   return lit_str_dict_proxy_.get();
