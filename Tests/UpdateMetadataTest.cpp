@@ -1335,6 +1335,94 @@ TEST_F(MetadataUpdate, MetadataStringDict32Null) {
   });
 }
 
+TEST_F(MetadataUpdate, MetadataSmallIntEncodedNull) {
+  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
+    return;
+  }
+
+  make_table_cycler("small_ints_null", "smallint encoding fixed(8)")([&] {
+    query("insert into small_ints_null values (10);");
+    query("insert into small_ints_null values (90);");
+
+    auto pre_metadata = get_metadata_vec("small_ints_null");
+    ASSERT_EQ(pre_metadata.size(), 1U);
+    auto pre_metadata_chunk = pre_metadata[0].second;
+
+    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+
+    query("update small_ints_null set x = NULL where x < 50;");
+
+    auto post_metadata = get_metadata_vec("small_ints_null");
+    ASSERT_EQ(post_metadata.size(), 1U);
+    auto post_metadata_chunk = post_metadata[0].second;
+
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.smallintval,
+              post_metadata_chunk.chunkStats.min.smallintval);
+    ASSERT_EQ(post_metadata_chunk.chunkStats.max.smallintval,
+              post_metadata_chunk.chunkStats.max.smallintval);
+    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+
+    auto smallint_minval = post_metadata_chunk.chunkStats.min.smallintval;
+    ASSERT_EQ(smallint_minval, 10);
+    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+
+    query("update small_ints_null set x=-127 where x is NULL;");
+    query("update small_ints_null set x=127;");
+
+    post_metadata = get_metadata_vec("small_ints_null");
+    ASSERT_EQ(post_metadata.size(), 1U);
+    post_metadata_chunk = post_metadata[0].second;
+
+    ASSERT_EQ(post_metadata_chunk.chunkStats.max.smallintval, 127);
+    ASSERT_EQ(post_metadata_chunk.chunkStats.min.smallintval, -127);
+    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
+    ASSERT_GT(post_metadata_chunk.chunkStats.max.smallintval,
+              pre_metadata_chunk.chunkStats.max.smallintval);
+    ASSERT_LT(post_metadata_chunk.chunkStats.min.smallintval,
+              pre_metadata_chunk.chunkStats.min.smallintval);
+  });
+};
+
+TEST_F(MetadataUpdate, MetadataSmallIntEncodedNotNull) {
+  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
+    return;
+  }
+
+  make_table_cycler("small_ints_not_null", "smallint not null encoding fixed(8)")([&] {
+    query("insert into small_ints_not_null values (10);");
+    query("insert into small_ints_not_null values (90);");
+
+    auto pre_metadata = get_metadata_vec("small_ints_not_null");
+    ASSERT_EQ(pre_metadata.size(), 1U);
+    auto pre_metadata_chunk = pre_metadata[0].second;
+
+    ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+
+    EXPECT_THROW(query("update small_ints_not_null set x = NULL where x < 50;"),
+                 std::runtime_error);
+    auto post_metadata = get_metadata_vec("small_ints_not_null");
+    ASSERT_EQ(post_metadata.size(), 1U);
+    auto post_metadata_chunk = post_metadata[0].second;
+
+    // This should never flip to true if it's a not-null table
+    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+
+    query("update small_ints_not_null set x=-127 where x < 50;");
+    query("update small_ints_not_null set x=127 where x > 50;");
+
+    post_metadata = get_metadata_vec("small_ints_not_null");
+    ASSERT_EQ(post_metadata.size(), 1U);
+    post_metadata_chunk = post_metadata[0].second;
+
+    auto post_smallint_minval = post_metadata_chunk.chunkStats.min.smallintval;
+    auto post_smallint_maxval = post_metadata_chunk.chunkStats.max.smallintval;
+    ASSERT_EQ(post_smallint_minval, -127);
+    ASSERT_EQ(post_smallint_maxval, 127);
+  });
+};
+
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
