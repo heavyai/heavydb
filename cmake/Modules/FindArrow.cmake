@@ -63,15 +63,20 @@ find_library(Arrow_GPU_LIBRARY
 
 get_filename_component(Arrow_LIBRARY_DIR ${Arrow_LIBRARY} DIRECTORY)
 
-if(Arrow_USE_STATIC_LIBS)
-  set(CMAKE_FIND_LIBRARY_SUFFIXES ${_CMAKE_FIND_LIBRARY_SUFFIXES})
-endif()
-
 # Set standard CMake FindPackage variables if found.
 set(Arrow_LIBRARIES ${Arrow_LIBRARY})
 set(Arrow_GPU_LIBRARIES ${Arrow_GPU_LIBRARY})
 set(Arrow_LIBRARY_DIRS ${Arrow_LIBRARY_DIR})
 set(Arrow_INCLUDE_DIRS ${Arrow_LIBRARY_DIR}/../include)
+
+find_package(Snappy)
+if(Snappy_FOUND)
+  list(APPEND Arrow_LIBRARIES ${Snappy_LIBRARIES})
+endif()
+
+if(Arrow_USE_STATIC_LIBS)
+  set(CMAKE_FIND_LIBRARY_SUFFIXES ${_CMAKE_FIND_LIBRARY_SUFFIXES})
+endif()
 
 try_compile(HAVE_ARROW_STATIC_RECORDBATCH_CTOR
   ${CMAKE_CURRENT_BINARY_DIR}
