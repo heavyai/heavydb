@@ -491,6 +491,7 @@ TEST(Create, PageSize) {
     }
   }
 }
+
 // Code is commented out while we resolve the leak in parser
 // TEST(Create, PageSize_NegativeCase) {
 //  run_ddl_statement("DROP TABLE IF EXISTS test1;");
@@ -612,6 +613,21 @@ TEST(Insert, DictBoundary) {
     ASSERT_EQ(25,
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM table_with_small_dict WHERE t IS NULL;", dt)));
+  }
+}
+
+TEST(Select, NullGroupBy) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS table_null_group_by;");
+    run_ddl_statement("CREATE TABLE table_null_group_by (val TEXT);");
+    run_multiple_agg("INSERT INTO table_null_group_by VALUES( NULL );", dt);
+    run_simple_agg("SELECT val FROM table_null_group_by GROUP BY val;", dt);
+
+    run_ddl_statement("DROP TABLE IF EXISTS table_null_group_by;");
+    run_ddl_statement("CREATE TABLE table_null_group_by (val DOUBLE);");
+    run_multiple_agg("INSERT INTO table_null_group_by VALUES( NULL );", dt);
+    run_simple_agg("SELECT val FROM table_null_group_by GROUP BY val;", dt);
   }
 }
 
