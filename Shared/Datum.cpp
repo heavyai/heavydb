@@ -268,9 +268,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       }
       if (!tp) {
         try {
-          d.bigintval = ti.is_date_in_days()
-                            ? DateConverters::get_epoch_days_from_seconds(std::stoll(s))
-                            : static_cast<int64_t>(std::stoll(s));
+          d.bigintval = static_cast<int64_t>(std::stoll(s));
           break;
         } catch (const std::invalid_argument& ia) {
           throw std::runtime_error("Invalid date string " + s);
@@ -279,10 +277,7 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       tm_struct.tm_sec = tm_struct.tm_min = tm_struct.tm_hour = 0;
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff =
           0;
-      d.bigintval =
-          ti.is_date_in_days()
-              ? static_cast<int64_t>(TimeGM::instance().my_timegm_days(&tm_struct))
-              : static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_struct));
+      d.bigintval = static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_struct));
       break;
     }
     case kPOINT:

@@ -17,6 +17,7 @@
 #ifndef ENCODER_H
 #define ENCODER_H
 
+#include "../Shared/DateConverters.h"
 #include "../Shared/sqltypes.h"
 #include "../Shared/types.h"
 #include "ChunkMetadata.h"
@@ -102,6 +103,43 @@ class NullAwareValidator {
   INNER_VALIDATOR* inner_validator_;
 };
 
+class DateDaysOverflowValidator {
+ public:
+  DateDaysOverflowValidator(SQLTypeInfo type) {
+    is_date_in_days_ =
+        type.is_array() ? type.get_elem_type().is_date_in_days() : type.is_date_in_days();
+    const bool is_date_16_ = is_date_in_days_ ? type.get_comp_param() == 16 : false;
+    max_ = is_date_16_ ? static_cast<int64_t>(std::numeric_limits<int16_t>::max())
+                       : static_cast<int64_t>(std::numeric_limits<int32_t>::max());
+    min_ = is_date_16_ ? static_cast<int64_t>(std::numeric_limits<int16_t>::min())
+                       : static_cast<int64_t>(std::numeric_limits<int32_t>::min());
+  }
+
+  template <typename T>
+  void validate(T value) {
+    if (!is_date_in_days_ || !std::is_integral<T>::value) {
+      return;
+    }
+    const int64_t days =
+        DateConverters::get_epoch_days_from_seconds(static_cast<int64_t>(value));
+    if (days > max_) {
+      throw std::runtime_error("Date encoding overflow: Epoch days " +
+                               std::to_string(days) + " greater than maximum capacity " +
+                               std::to_string(max_));
+    }
+    if (days < min_) {
+      throw std::runtime_error("Date encoding underflow: Epoch days " +
+                               std::to_string(value) + " less than minumum capacity " +
+                               std::to_string(min_));
+    }
+  }
+
+ private:
+  bool is_date_in_days_;
+  int64_t max_;
+  int64_t min_;
+};
+
 class Encoder {
  public:
   static Encoder* Create(Data_Namespace::AbstractBuffer* buffer,
@@ -141,6 +179,7 @@ class Encoder {
   // ChunkMetadata metadataTemplate_;
 
   DecimalOverflowValidator decimal_overflow_validator_;
+  DateDaysOverflowValidator date_days_overflow_validator_;
 };
 
 #endif  // Encoder_h

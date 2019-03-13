@@ -17,6 +17,7 @@
 #include "Encoder.h"
 #include <glog/logging.h>
 #include "ArrayNoneEncoder.h"
+#include "DateDaysEncoder.h"
 #include "FixedLengthArrayNoneEncoder.h"
 #include "FixedLengthEncoder.h"
 #include "NoneEncoder.h"
@@ -86,10 +87,10 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
           switch (sqlType.get_comp_param()) {
             case 0:
             case 32:
-              return new FixedLengthEncoder<int64_t, int32_t>(buffer);
+              return new DateDaysEncoder<int64_t, int32_t>(buffer);
               break;
             case 16:
-              return new FixedLengthEncoder<int64_t, int16_t>(buffer);
+              return new DateDaysEncoder<int64_t, int16_t>(buffer);
               break;
             default:
               return 0;
@@ -212,7 +213,8 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
 Encoder::Encoder(Data_Namespace::AbstractBuffer* buffer)
     : num_elems_(0)
     , buffer_(buffer)
-    , decimal_overflow_validator_(buffer ? buffer->sqlType : SQLTypeInfo()){};
+    , decimal_overflow_validator_(buffer ? buffer->sqlType : SQLTypeInfo())
+    , date_days_overflow_validator_(buffer ? buffer->sqlType : SQLTypeInfo()){};
 
 void Encoder::getMetadata(ChunkMetadata& chunkMetadata) {
   // chunkMetadata = metadataTemplate_; // invoke copy constructor
