@@ -388,7 +388,7 @@ void process_backslash_commands(char* command, ClientContext& context) {
   ( "\\o", 2, 2, GetOptimizedSchemaCmd<>( context ), "Usage: \\o <table>" )
   ( "\\t", 1, 1, ListTablesCmd<>( context ) )
   ( "\\v", 1, 1, ListViewsCmd<>( context ) )
-  ( "\\c", 4, 4, ConnectToDBCmd<>( context ), "Usage: \\c <database> <user> <password>." )
+  ( "\\c", 4, 4, ConnectToDBCmd<>( context ), "Usage: \\c <database> <user> <password>" )
   ( "\\u", 1, 1, ListUsersCmd<>( context ) )
   ( "\\l", 1, 1, ListDatabasesCmd<>( context ) )
   .is_resolved();
@@ -1431,6 +1431,7 @@ int main(int argc, char** argv) {
         ( "\\keycodes", 1, 1, [&](Params const&) { linenoisePrintKeyCodes(); } )
         ( "\\timing", 1, 1, [&](Params const&) { print_timing = true; } )
         ( "\\notiming", 1, 1, [&](Params const&) { print_timing = false; } )
+        ( "\\db", 1, 2, SwitchDatabaseCmd<>( context ), "Usage: \\db [database|...]" )
         .is_resolved();
 
       if (resolution_status == false) {

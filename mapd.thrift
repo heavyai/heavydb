@@ -516,6 +516,7 @@ service MapD {
   # connection, admin
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e)
   void disconnect(1: TSessionId session) throws (1: TMapDException e)
+  void switch_database(1: TSessionId session, 2: string dbname) throws(1: TMapDException e)
   TServerStatus get_server_status(1: TSessionId session) throws (1: TMapDException e)
   list<TServerStatus> get_status(1: TSessionId session) throws (1: TMapDException e)
   TClusterHardwareInfo get_hardware_info(1: TSessionId session) throws (1: TMapDException e)

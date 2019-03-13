@@ -33,6 +33,10 @@ build_release/
 build3.6/
 !docker/build/
 
+# history files
+omnisql_history.txt
+.gdb_history
+
 # Eclipse build files
 Debug/
 .settings/
@@ -46,6 +50,7 @@ Debug/
 # Thrift-generated files
 java/src/gen/
 gen-js/
+gen-py/
 java/target/
 java/**/mapd_log/
 

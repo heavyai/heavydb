@@ -27,6 +27,7 @@ class CoreMockClient {
  public:
   MockMethod(connect)
   MockMethod(disconnect)
+  MockMethod(switch_database)
   MockMethod(interrupt)
   MockMethod(sql_execute)
   MockMethod(get_tables)

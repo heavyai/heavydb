@@ -141,6 +141,7 @@ class MapDHandler : public MapDIf {
                const std::string& passwd,
                const std::string& dbname) override;
   void disconnect(const TSessionId& session) override;
+  void switch_database(const TSessionId& session, const std::string& dbname) override;
   void get_server_status(TServerStatus& _return, const TSessionId& session) override;
   void get_status(std::vector<TServerStatus>& _return,
                   const TSessionId& session) override;
@@ -418,7 +419,6 @@ class MapDHandler : public MapDIf {
                         const std::string& dbname);
 
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
-  std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> sessions_;
 
   LeafAggregator leaf_aggregator_;
   const std::vector<LeafHostInfo> string_leaves_;
@@ -441,7 +441,9 @@ class MapDHandler : public MapDIf {
   std::unique_ptr<MapDLeafHandler> leaf_handler_;
   std::shared_ptr<Calcite> calcite_;
   const bool legacy_syntax_;
-  Catalog_Namespace::SessionInfo get_session(const TSessionId& session);
+  Catalog_Namespace::SessionInfo get_session_copy(const TSessionId& session);
+  std::shared_ptr<Catalog_Namespace::SessionInfo> get_session_copy_ptr(
+      const TSessionId& session);
 
  private:
   void connect_impl(TSessionId& session,
@@ -463,8 +465,8 @@ class MapDHandler : public MapDIf {
                               const bool get_system,
                               const bool get_physical);
   void check_read_only(const std::string& str);
-  void check_session_exp(const SessionMap::iterator& session_it);
-  SessionMap::iterator get_session_it(const TSessionId& session);
+  void check_session_exp_unsafe(const SessionMap::iterator& session_it);
+  SessionMap::iterator get_session_it_unsafe(const TSessionId& session);
   static void value_to_thrift_column(const TargetValue& tv,
                                      const SQLTypeInfo& ti,
                                      TColumn& column);
@@ -629,6 +631,8 @@ class MapDHandler : public MapDIf {
       const std::unordered_set<std::string>& uc_column_names,
       const std::vector<std::string>& table_names,
       const TSessionId& session);
+
+  SessionMap sessions_;
 
   bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks
                             // in "connect(..)" method

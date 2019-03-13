@@ -130,6 +130,8 @@ class SysCatalog {
                                  const std::string& password,
                                  UserMetadata& user_meta,
                                  bool check_password = true);
+  std::shared_ptr<Catalog> switchDatabase(std::string& dbname,
+                                          const std::string& username);
   void createUser(const std::string& name,
                   const std::string& passwd,
                   bool issuper,
@@ -146,6 +148,10 @@ class SysCatalog {
   bool checkPasswordForUser(const std::string& passwd,
                             std::string& name,
                             UserMetadata& user);
+  void getMetadataWithDefault(std::string& dbname,
+                              const std::string& username,
+                              Catalog_Namespace::DBMetadata& db_meta,
+                              UserMetadata& user_meta);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
   bool getMetadataForDBById(const int32_t idIn, DBMetadata& db);
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }

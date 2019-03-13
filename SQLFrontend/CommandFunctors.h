@@ -231,6 +231,8 @@ StandardCommand(Help, {
   std::cout << "\\v [regex] List all views, optionally matching regex.\n";
   std::cout << "\\d <table> List all columns of a table or a view.\n";
   std::cout << "\\c <database> <user> <password>.\n";
+  std::cout
+      << "\\db [database|...] Switch database. Use ... to switch to your default.\n";
   std::cout << "\\dash List all dashboards accessible by user.\n";
   std::cout << "\\o <table> Return a memory optimized schema based on current data "
                "distribution in table.\n";
@@ -285,6 +287,25 @@ StandardCommand(ConnectToDB, {
     output_stream << "User " << lambda_context.user_name << " connected to database "
                   << lambda_context.db_name << std::endl;
   });
+});
+
+StandardCommand(SwitchDatabase, {
+  if (p.size() == 2) {
+    if (p[1] == std::string("...")) {
+      cmdContext().db_name.clear();
+    } else {
+      cmdContext().db_name = p[1];
+    }
+    thrift_op<kSWITCH_DATABASE>(cmdContext(), [&](ContextType& lambda_context) {
+      output_stream << "User " << lambda_context.user_name << " switched to database "
+                    << lambda_context.db_name << std::endl;
+    });
+  } else if (p.size() == 1) {
+    thrift_op<kREPORT_DATABASE>(cmdContext(), [&](ContextType& lambda_context) {
+      output_stream << "User " << lambda_context.user_name << " is using database "
+                    << lambda_context.db_name << std::endl;
+    });
+  }
 });
 
 StandardCommand(ListColumns, {

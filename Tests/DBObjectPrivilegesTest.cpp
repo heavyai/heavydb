@@ -1610,6 +1610,36 @@ TEST(SysCatalog, LoginWithDefaultDatabase) {
   EXPECT_EQ(dbname2, MAPD_DEFAULT_DB);  // correctly fell back to system default database
 }
 
+TEST(SysCatalog, SwitchDatabase) {
+  static const std::string username{"test_user"};
+  static std::string dbname{"test_db"};
+  static std::string dbname2{dbname + "2"};
+  static std::string dbname3{dbname + "3"};
+
+  // cleanup
+  struct CleanupGuard {
+    ~CleanupGuard() {
+      run_ddl_statement("DROP DATABASE " + dbname3 + ";");
+      run_ddl_statement("DROP DATABASE " + dbname2 + ";");
+      run_ddl_statement("DROP DATABASE " + dbname + ";");
+      run_ddl_statement("DROP USER " + username + ";");
+    }
+  } cleanupGuard;
+
+  // setup
+  run_ddl_statement("CREATE USER " + username + " (password = 'password');");
+  run_ddl_statement("CREATE DATABASE " + dbname + "(owner='" + username + "');");
+  run_ddl_statement("CREATE DATABASE " + dbname2 + "(owner='" + username + "');");
+  run_ddl_statement("CREATE DATABASE " + dbname3 + "(owner='" + username + "');");
+  run_ddl_statement("REVOKE ACCESS ON DATABASE " + dbname3 + " FROM " + username + ";");
+
+  // test some attempts to switch database
+  ASSERT_NO_THROW(sys_cat.switchDatabase(dbname, username));
+  ASSERT_NO_THROW(sys_cat.switchDatabase(dbname, username));
+  ASSERT_NO_THROW(sys_cat.switchDatabase(dbname2, username));
+  ASSERT_THROW(sys_cat.switchDatabase(dbname3, username), std::runtime_error);
+}
+
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   google::InitGoogleLogging(argv[0]);

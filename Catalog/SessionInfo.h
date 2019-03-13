@@ -87,6 +87,7 @@ class SessionInfo {
   MapDHandler* get_mapdHandler() const { return mapdHandler_.get(); }
   Catalog& getCatalog() const { return *catalog_; }
   std::shared_ptr<Catalog> get_catalog_ptr() const { return catalog_; }
+  void set_catalog_ptr(std::shared_ptr<Catalog> c) { catalog_ = c; }
   const UserMetadata& get_currentUser() const { return currentUser_; }
   const ExecutorDeviceType get_executor_device_type() const {
     return executor_device_type_;

@@ -599,49 +599,49 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
                                            const std::string& password,
                                            UserMetadata& user_meta,
                                            bool check_password) {
+  // NOTE: The dbname can be reset by getMetadataWithDefault(). The username can be reset
+  // by SamlServer's login()/authenticate_user().
+
   sys_write_lock write_lock(this);
 
   Catalog_Namespace::DBMetadata db_meta;
-  if (!dbname.empty()) {
-    if (!getMetadataForDB(dbname, db_meta)) {
-      throw std::runtime_error("Database name " + dbname + " does not exist.");
-    }
-    // loaded the requested database
-  } else {
-    if (getMetadataForUser(username, user_meta) && user_meta.defaultDbId != -1) {
-      if (!getMetadataForDBById(user_meta.defaultDbId, db_meta)) {
-        throw std::runtime_error(
-            "Server error: User #" + std::to_string(user_meta.userId) + " " +
-            user_meta.userName + " has invalid default_db #" +
-            std::to_string(user_meta.defaultDbId) + " which does not exist.");
-      }
-      dbname = db_meta.dbName;
-      // loaded the user's default database
-    } else {
-      if (!getMetadataForDB(MAPD_DEFAULT_DB, db_meta)) {
-        throw std::runtime_error(std::string("Database ") + MAPD_DEFAULT_DB +
-                                 " does not exist.");
-      }
-      dbname = MAPD_DEFAULT_DB;
-      // loaded the mapd database by default
-    }
-  }
+
+  getMetadataWithDefault(dbname, username, db_meta, user_meta);
+
   // NOTE(max): register database in Catalog that early to allow ldap
   // and saml create default user and role privileges on databases
   auto cat =
       Catalog::get(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
 
-  if (!check_password) {
-    if (!getMetadataForUser(username, user_meta)) {
-      throw std::runtime_error("Invalid credentials.");
-    }
-  } else {
+  if (check_password) {
     {
       if (!checkPasswordForUser(password, username, user_meta)) {
         throw std::runtime_error("Invalid credentials.");
       }
     }
   }
+  return cat;
+}
+
+std::shared_ptr<Catalog> SysCatalog::switchDatabase(std::string& dbname,
+                                                    const std::string& username) {
+  DBMetadata db_meta;
+  UserMetadata user_meta;
+
+  getMetadataWithDefault(dbname, username, db_meta, user_meta);
+
+  // NOTE(max): register database in Catalog that early to allow ldap
+  // and saml create default user and role privileges on databases
+  auto cat =
+      Catalog::get(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
+
+  DBObject dbObject(dbname, DatabaseDBObjectType);
+  dbObject.loadKey();
+  dbObject.setPrivileges(AccessPrivileges::ACCESS);
+  if (!checkPrivileges(user_meta, std::vector<DBObject>{dbObject})) {
+    throw std::runtime_error("Invalid credentials.");
+  }
+
   return cat;
 }
 
@@ -1019,6 +1019,40 @@ list<UserMetadata> SysCatalog::getAllUserMetadata() {
   return getAllUserMetadata(-1);
 }
 
+void SysCatalog::getMetadataWithDefault(std::string& dbname,
+                                        const std::string& username,
+                                        Catalog_Namespace::DBMetadata& db_meta,
+                                        UserMetadata& user_meta) {
+  if (!getMetadataForUser(username, user_meta)) {
+    throw std::runtime_error("Invalid credentials.");
+  }
+
+  if (!dbname.empty()) {
+    if (!getMetadataForDB(dbname, db_meta)) {
+      throw std::runtime_error("Database name " + dbname + " does not exist.");
+    }
+    // loaded the requested database
+  } else {
+    if (user_meta.defaultDbId != -1) {
+      if (!getMetadataForDBById(user_meta.defaultDbId, db_meta)) {
+        throw std::runtime_error(
+            "Server error: User #" + std::to_string(user_meta.userId) + " " +
+            user_meta.userName + " has invalid default_db #" +
+            std::to_string(user_meta.defaultDbId) + " which does not exist.");
+      }
+      dbname = db_meta.dbName;
+      // loaded the user's default database
+    } else {
+      if (!getMetadataForDB(MAPD_DEFAULT_DB, db_meta)) {
+        throw std::runtime_error(std::string("Database ") + MAPD_DEFAULT_DB +
+                                 " does not exist.");
+      }
+      dbname = MAPD_DEFAULT_DB;
+      // loaded the mapd database by default
+    }
+  }
+}
+
 bool SysCatalog::getMetadataForDB(const string& name, DBMetadata& db) {
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
@@ -1051,16 +1085,14 @@ bool SysCatalog::getMetadataForDBById(const int32_t idIn, DBMetadata& db) {
 DBSummaryList SysCatalog::getDatabaseListForUser(const UserMetadata& user) {
   DBSummaryList ret;
 
-  std::list<Catalog_Namespace::DBMetadata> db_list =
-      SysCatalog::instance().getAllDBMetadata();
-  std::list<Catalog_Namespace::UserMetadata> user_list =
-      SysCatalog::instance().getAllUserMetadata();
+  std::list<Catalog_Namespace::DBMetadata> db_list = getAllDBMetadata();
+  std::list<Catalog_Namespace::UserMetadata> user_list = getAllUserMetadata();
 
   for (auto d : db_list) {
     DBObject dbObject(d.dbName, DatabaseDBObjectType);
     dbObject.loadKey();
     dbObject.setPrivileges(AccessPrivileges::ACCESS);
-    if (!SysCatalog::instance().checkPrivileges(user, std::vector<DBObject>{dbObject})) {
+    if (!checkPrivileges(user, std::vector<DBObject>{dbObject})) {
       continue;
     }
     for (auto u : user_list) {
