@@ -2509,9 +2509,6 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
       break;
   }
   copy_params.quoted = cp.quoted;
-#ifdef ENABLE_IMPORT_PARQUET
-  copy_params.is_parquet = cp.is_parquet;
-#endif
   if (cp.delimiter.length() > 0) {
     copy_params.delimiter = unescape_char(cp.delimiter);
   } else {
@@ -2550,16 +2547,21 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
   if (cp.s3_region.length() > 0) {
     copy_params.s3_region = cp.s3_region;
   }
-  switch (cp.table_type) {
-    case TTableType::POLYGON:
-      copy_params.table_type = Importer_NS::TableType::POLYGON;
+  switch (cp.file_type) {
+    case TFileType::POLYGON:
+      copy_params.file_type = Importer_NS::FileType::POLYGON;
       break;
-    case TTableType::DELIMITED:
-      copy_params.table_type = Importer_NS::TableType::DELIMITED;
+    case TFileType::DELIMITED:
+      copy_params.file_type = Importer_NS::FileType::DELIMITED;
       break;
+#ifdef ENABLE_IMPORT_PARQUET
+    case TFileType::PARQUET:
+      copy_params.file_type = Importer_NS::FileType::PARQUET;
+      break;
+#endif
     default:
-      THROW_MAPD_EXCEPTION("Invalid table_type in TCopyParams: " +
-                           std::to_string((int)cp.table_type));
+      THROW_MAPD_EXCEPTION("Invalid file_type in TCopyParams: " +
+                           std::to_string((int)cp.file_type));
       break;
   }
   switch (cp.geo_coords_encoding) {
@@ -2632,12 +2634,12 @@ TCopyParams MapDHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp)
   copy_params.s3_access_key = cp.s3_access_key;
   copy_params.s3_secret_key = cp.s3_secret_key;
   copy_params.s3_region = cp.s3_region;
-  switch (cp.table_type) {
-    case Importer_NS::TableType::POLYGON:
-      copy_params.table_type = TTableType::POLYGON;
+  switch (cp.file_type) {
+    case Importer_NS::FileType::POLYGON:
+      copy_params.file_type = TFileType::POLYGON;
       break;
     default:
-      copy_params.table_type = TTableType::DELIMITED;
+      copy_params.file_type = TFileType::DELIMITED;
       break;
   }
   switch (cp.geo_coords_encoding) {
@@ -2816,7 +2818,7 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
   }
 
   // if it's a geo table, handle alternative paths (S3, HTTP, archive etc.)
-  if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
+  if (copy_params.file_type == Importer_NS::FileType::POLYGON) {
     if (is_a_supported_geo_file(file_name, true)) {
       // prepare to detect geo file directly
       add_vsi_network_prefix(file_name);
@@ -2849,7 +2851,7 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
       file_name = file_path.string();
     }
 
-    if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
+    if (copy_params.file_type == Importer_NS::FileType::POLYGON) {
       // check for geo file
       if (!Importer_NS::Importer::gdalFileOrDirectoryExists(file_name, copy_params)) {
         THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
@@ -2862,10 +2864,9 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
     }
   }
   try {
-    if (copy_params.table_type == Importer_NS::TableType::DELIMITED
+    if (copy_params.file_type == Importer_NS::FileType::DELIMITED
 #ifdef ENABLE_IMPORT_PARQUET
-        || (copy_params.table_type == Importer_NS::TableType::PARQUET ||
-            copy_params.is_parquet)
+        || (copy_params.file_type == Importer_NS::FileType::PARQUET)
 #endif
     ) {
       Importer_NS::Detector detector(file_path, copy_params);
@@ -2913,7 +2914,7 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
         }
         _return.row_set.rows.push_back(sample_row);
       }
-    } else if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
+    } else if (copy_params.file_type == Importer_NS::FileType::POLYGON) {
       // @TODO simon.eves get this from somewhere!
       const std::string geoColumnName(OMNISCI_GEO_PREFIX);
 
@@ -3450,7 +3451,7 @@ void MapDHandler::check_geospatial_files(const boost::filesystem::path file_path
 void MapDHandler::create_table(const TSessionId& session,
                                const std::string& table_name,
                                const TRowDescriptor& rd,
-                               const TTableType::type table_type,
+                               const TFileType::type file_type,
                                const TCreateParams& create_params) {
   check_read_only("create_table");
 
@@ -3462,9 +3463,9 @@ void MapDHandler::create_table(const TSessionId& session,
 
   auto rds = rd;
 
-  // no longer need to manually add the poly column for a TTableType::POLYGON table
+  // no longer need to manually add the poly column for a TFileType::POLYGON table
   // a column of the correct geo type has already been added
-  // @TODO simon.eves rename TTableType::POLYGON to TTableType::GEO or something!
+  // @TODO simon.eves rename TFileType::POLYGON to TFileType::GEO or something!
 
   std::string stmt{"CREATE TABLE " + table_name};
   std::vector<std::string> col_stmts;
@@ -3844,7 +3845,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
       TDetectResult cds;
       TCopyParams cp_copy = cp;  // retain S3 auth tokens
       cp_copy.geo_layer_name = layer_name;
-      cp_copy.table_type = TTableType::POLYGON;
+      cp_copy.file_type = TFileType::POLYGON;
       try {
         detect_column_types(cds, session, file_name_in, cp_copy);
       } catch (const std::exception& e) {
@@ -3859,7 +3860,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
       const TableDescriptor* td = cat.getMetadataForTable(this_table_name);
       if (!td) {
         try {
-          create_table(session, this_table_name, rd, TTableType::POLYGON, create_params);
+          create_table(session, this_table_name, rd, TFileType::POLYGON, create_params);
         } catch (const std::exception& e) {
           // capture the error and abort this layer
           caught_exception_messages.emplace_back("Failed to create table for Layer '" +

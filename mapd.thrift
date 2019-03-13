@@ -46,10 +46,10 @@ enum TDeviceType {
   GPU
 }
 
-enum TTableType {
+enum TFileType {
   DELIMITED,
   POLYGON,
-  PARQUET /* is "parquet table type" semantically proper :-? */
+  PARQUET
 }
 
 enum TPartitionDetail {
@@ -193,7 +193,7 @@ struct TCopyParams {
   9: string array_begin
   10: string array_end
   11: i32 threads
-  12: TTableType table_type=TTableType.DELIMITED
+  12: TFileType file_type=TFileType.DELIMITED
   13: string s3_access_key
   14: string s3_secret_key
   15: string s3_region
@@ -203,7 +203,6 @@ struct TCopyParams {
   19: i32 geo_coords_srid=4326
   20: bool sanitize_column_names=true
   21: string geo_layer_name
-  22: bool is_parquet=false /* consistent with COPY FROM WITH parameter */
 }
 
 struct TCreateParams {
@@ -576,7 +575,7 @@ service MapD {
   void load_table_binary_arrow(1: TSessionId session, 2: string table_name, 3: binary arrow_stream) throws (1: TMapDException e)
   void load_table(1: TSessionId session, 2: string table_name, 3: list<TStringRow> rows) throws (1: TMapDException e)
   TDetectResult detect_column_types(1: TSessionId session, 2: string file_name, 3: TCopyParams copy_params) throws (1: TMapDException e)
-  void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc, 4: TTableType table_type=TTableType.DELIMITED, 5: TCreateParams create_params) throws (1: TMapDException e)
+  void create_table(1: TSessionId session, 2: string table_name, 3: TRowDescriptor row_desc, 4: TFileType file_type=TFileType.DELIMITED, 5: TCreateParams create_params) throws (1: TMapDException e)
   void import_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params) throws (1: TMapDException e)
   void import_geo_table(1: TSessionId session, 2: string table_name, 3: string file_name, 4: TCopyParams copy_params, 5: TRowDescriptor row_desc, 6: TCreateParams create_params) throws (1: TMapDException e)
   TImportStatus import_table_status(1: TSessionId session, 2: string import_id) throws (1: TMapDException e)

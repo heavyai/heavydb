@@ -3278,10 +3278,8 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
           // not sure a parquet "table" type is proper, but to make code
           // look consistent in some places, let's set "table" type too
-          copy_params.table_type = Importer_NS::TableType::PARQUET;
-          copy_params.is_parquet = true;
+          copy_params.file_type = Importer_NS::FileType::PARQUET;
         } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.is_parquet = false;
         } else {
           throw std::runtime_error("Invalid string for boolean " + *s);
         }
@@ -3404,9 +3402,9 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         }
         const std::string* s = str_literal->get_stringval();
         if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.table_type = Importer_NS::TableType::POLYGON;
+          copy_params.file_type = Importer_NS::FileType::POLYGON;
         } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.table_type = Importer_NS::TableType::DELIMITED;
+          copy_params.file_type = Importer_NS::FileType::DELIMITED;
         } else {
           throw std::runtime_error("Invalid string for boolean " + *s);
         }
@@ -3475,7 +3473,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           throw std::runtime_error("Invalid value for 'geo_layer_name' option");
         }
       } else if (boost::iequals(*p->get_name(), "partitions")) {
-        if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
+        if (copy_params.file_type == Importer_NS::FileType::POLYGON) {
           const auto partitions =
               static_cast<const StringLiteral*>(p->get_value())->get_stringval();
           CHECK(partitions);
@@ -3495,7 +3493,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   }
 
   std::string tr;
-  if (copy_params.table_type == Importer_NS::TableType::POLYGON) {
+  if (copy_params.file_type == Importer_NS::FileType::POLYGON) {
     // geo import
     // we do nothing here, except stash the parameters so we can
     // do the import when we unwind to the top of the handler

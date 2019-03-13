@@ -78,7 +78,7 @@ struct BadRowsTracker {
   ThreadController_NS::SimpleRunningThreadController<void>* running_thread_controller;
 };
 
-enum class TableType {
+enum class FileType {
   DELIMITED,
   POLYGON
 #ifdef ENABLE_IMPORT_PARQUET
@@ -103,12 +103,9 @@ struct CopyParams {
   int threads;
   size_t
       max_reject;  // maximum number of records that can be rejected before copy is failed
-  TableType table_type;
+  FileType file_type;
   bool plain_text = false;
   // s3/parquet related params
-#ifdef ENABLE_IMPORT_PARQUET
-  bool is_parquet;
-#endif
   std::string s3_access_key;  // per-query credentials to override the
   std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
   std::string s3_region;
@@ -138,10 +135,7 @@ struct CopyParams {
       , array_end('}')
       , threads(0)
       , max_reject(100000)
-      , table_type(TableType::DELIMITED)
-#ifdef ENABLE_IMPORT_PARQUET
-      , is_parquet(false)
-#endif
+      , file_type(FileType::DELIMITED)
       , retry_count(100)
       , retry_wait(5)
       , batch_size(1000)
@@ -150,8 +144,7 @@ struct CopyParams {
       , geo_coords_comp_param(32)
       , geo_coords_type(kGEOMETRY)
       , geo_coords_srid(4326)
-      , sanitize_column_names(true) {
-  }
+      , sanitize_column_names(true) {}
 
   CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
       : delimiter(d)
@@ -166,7 +159,7 @@ struct CopyParams {
       , array_end('}')
       , threads(0)
       , max_reject(100000)
-      , table_type(TableType::DELIMITED)
+      , file_type(FileType::DELIMITED)
       , retry_count(retries)
       , retry_wait(wait)
       , batch_size(b)

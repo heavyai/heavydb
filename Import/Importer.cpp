@@ -2888,7 +2888,7 @@ ImportStatus DataStreamSink::archivePlumber() {
   //                  .parquet("s3://bucket/folder/parquet/mydata")
   //       without the parameter, it means plain or compressed csv files.
   // note: .ORC and AVRO files should follow a similar path to Parquet?
-  if (copy_params.is_parquet) {
+  if (copy_params.file_type == FileType::PARQUET) {
     import_parquet(file_paths);
   } else
 #endif
