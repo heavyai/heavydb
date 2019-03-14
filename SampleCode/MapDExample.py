@@ -61,9 +61,9 @@ def main():
 
     client = get_client(hostname, portno, False)
     session = client.connect(user_name, passwd, db_name)
-    print 'Connection complete'
+    print('Connection complete')
     query = 'select a,b from table1 limit 25;'
-    print 'Query is : ' + query
+    print('Query is : ' + query)
 
     # always use True for is columnar
     results = client.sql_execute(session, query, True, None, -1, -1)
