@@ -39,9 +39,9 @@ import (
 var (
 	port                int
 	httpsRedirectPort   int
-	backendUrl          *url.URL
+	backendURL          *url.URL
 	frontend            string
-	serversJson         string
+	serversJSON         string
 	dataDir             string
 	tmpDir              string
 	certFile            string
@@ -50,15 +50,15 @@ var (
 	docsDir             string
 	readOnly            bool
 	verbose             bool
-	enableHttps         bool
-	enableHttpsAuth     bool
-	enableHttpsRedirect bool
+	enableHTTPS         bool
+	enableHTTPSAuth     bool
+	enableHTTPSRedirect bool
 	profile             bool
 	compress            bool
 	enableMetrics       bool
 	connTimeout         time.Duration
 	version             string
-	proxies             []ReverseProxy
+	proxies             []reverseProxy
 )
 
 var (
@@ -67,7 +67,7 @@ var (
 	serversJSONParams []string
 )
 
-type Server struct {
+type server struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Port     int    `json:"port"`
@@ -76,20 +76,20 @@ type Server struct {
 	Master   bool   `json:"master"`
 }
 
-type ThriftMethodTimings struct {
+type thriftMethodTimings struct {
 	Regex  *regexp.Regexp
 	Start  string
 	Units  string
 	Labels []string
 }
 
-type ReverseProxy struct {
+type reverseProxy struct {
 	Path   string
 	Target *url.URL
 }
 
 var (
-	thriftMethodMap map[string]ThriftMethodTimings
+	thriftMethodMap map[string]thriftMethodTimings
 )
 
 const (
@@ -126,6 +126,7 @@ func init() {
 	pflag.StringP("tmpdir", "", "", "path for temporary file storage [/tmp]")
 	pflag.StringP("config", "c", "", "path to OmniSci configuration file")
 	pflag.StringP("docs", "", "docs", "path to documentation directory")
+
 	pflag.BoolP("read-only", "r", false, "enable read-only mode")
 	pflag.BoolP("quiet", "q", true, "suppress non-error messages")
 	pflag.BoolP("verbose", "v", false, "print all log messages to stdout")
@@ -203,7 +204,7 @@ func init() {
 	httpsRedirectPort = viper.GetInt("web.http-to-https-redirect-port")
 	frontend = viper.GetString("web.frontend")
 	docsDir = viper.GetString("web.docs")
-	serversJson = viper.GetString("web.servers-json")
+	serversJSON = viper.GetString("web.servers-json")
 
 	if viper.IsSet("quiet") && !viper.IsSet("verbose") {
 		log.Println("Option --quiet is deprecated and has been replaced by --verbose=false, which is enabled by default.")
@@ -218,12 +219,12 @@ func init() {
 	compress = viper.GetBool("web.compress")
 	enableMetrics = viper.GetBool("web.metrics")
 
-	backendUrlStr := viper.GetString("web.backend-url")
-	if backendUrlStr == "" {
-		backendUrlStr = "http://localhost:" + strconv.Itoa(viper.GetInt("http-port"))
+	backendURLStr := viper.GetString("web.backend-url")
+	if backendURLStr == "" {
+		backendURLStr = "http://localhost:" + strconv.Itoa(viper.GetInt("http-port"))
 	}
 
-	backendUrl, err = url.Parse(backendUrlStr)
+	backendURL, err = url.Parse(backendURLStr)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -247,7 +248,7 @@ func init() {
 		if target.Scheme == "" {
 			log.Fatalln("Missing URL scheme, need full URL including http/https:", target)
 		}
-		proxies = append(proxies, ReverseProxy{path, target})
+		proxies = append(proxies, reverseProxy{path, target})
 	}
 
 	if os.Getenv("TMPDIR") != "" {
@@ -264,9 +265,9 @@ func init() {
 		os.Setenv("TMPDIR", tmpDir)
 	}
 
-	enableHttps = viper.GetBool("web.enable-https")
-	enableHttpsAuth = viper.GetBool("web.enable-https-authentication")
-	enableHttpsRedirect = viper.GetBool("web.enable-https-redirect")
+	enableHTTPS = viper.GetBool("web.enable-https")
+	enableHTTPSAuth = viper.GetBool("web.enable-https-authentication")
+	enableHTTPSRedirect = viper.GetBool("web.enable-https-redirect")
 	certFile = viper.GetString("web.cert")
 	keyFile = viper.GetString("web.key")
 	peerCertFile = viper.GetString("web.peer-cert")
@@ -274,14 +275,14 @@ func init() {
 	registry = metrics.NewRegistry()
 
 	// TODO(andrew): this should be auto-gen'd by Thrift
-	thriftMethodMap = make(map[string]ThriftMethodTimings)
-	thriftMethodMap["render"] = ThriftMethodTimings{
+	thriftMethodMap = make(map[string]thriftMethodTimings)
+	thriftMethodMap["render"] = thriftMethodTimings{
 		Regex:  regexp.MustCompile(`"?":{"i64":(\d+)`),
 		Start:  `"3":{"i64":`,
 		Units:  "ms",
 		Labels: []string{"execution_time_ms", "render_time_ms", "total_time_ms"},
 	}
-	thriftMethodMap["sql_execute"] = ThriftMethodTimings{
+	thriftMethodMap["sql_execute"] = thriftMethodTimings{
 		Regex:  regexp.MustCompile(`"?":{"i64":(\d+)`),
 		Start:  `"2":{"i64":`,
 		Units:  "ms",
@@ -320,7 +321,7 @@ func uploadHandler(rw http.ResponseWriter, r *http.Request) {
 
 	if readOnly {
 		status = http.StatusUnauthorized
-		err = errors.New("Uploads disabled: server running in read-only mode.")
+		err = errors.New("Uploads disabled: server running in read-only mode")
 		return
 	}
 
@@ -332,9 +333,9 @@ func uploadHandler(rw http.ResponseWriter, r *http.Request) {
 		sid = r.FormValue("sessionid")
 	}
 
-	sessionId_ := sha256.Sum256([]byte(filepath.Base(filepath.Clean(sid))))
-	sessionId := hex.EncodeToString(sessionId_[:])
-	uploadDir = dataDir + "/mapd_import/" + sessionId + "/"
+	sessionIDSha256 := sha256.Sum256([]byte(filepath.Base(filepath.Clean(sid))))
+	sessionID := hex.EncodeToString(sessionIDSha256[:])
+	uploadDir = dataDir + "/mapd_import/" + sessionID + "/"
 
 	for _, fhs := range r.MultipartForm.File {
 		for _, fh := range fhs {
@@ -388,13 +389,9 @@ type ResponseMultiWriter struct {
 	http.ResponseWriter
 }
 
-func (w *ResponseMultiWriter) WriteHeader(c int) {
+func (w *ResponseMultiWriter) writeHeader(c int) {
 	w.ResponseWriter.Header().Del("Content-Length")
 	w.ResponseWriter.WriteHeader(c)
-}
-
-func (w *ResponseMultiWriter) Header() http.Header {
-	return w.ResponseWriter.Header()
 }
 
 func (w *ResponseMultiWriter) Write(b []byte) (int, error) {
@@ -544,7 +541,7 @@ func samlPostHandler(rw http.ResponseWriter, r *http.Request) {
 		// isn't exactly "best practices", but it beats importing a whole Thrift lib for just this.
 		var jsonString = []byte(`[1,"connect",1,0,{"2":{"str":"` + b64ResponseXML + `"},"3":{"str":""}}]`)
 
-		resp, err := http.Post(backendUrl.String(), "application/vnd.apache.thrift.json", bytes.NewBuffer(jsonString))
+		resp, err := http.Post(backendURL.String(), "application/vnd.apache.thrift.json", bytes.NewBuffer(jsonString))
 		if err != nil {
 			return
 		}
@@ -603,7 +600,7 @@ func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	h := http.StripPrefix("/", http.FileServer(http.Dir(frontend)))
 
 	if r.Method == "POST" {
-		h = httputil.NewSingleHostReverseProxy(backendUrl)
+		h = httputil.NewSingleHostReverseProxy(backendURL)
 		rw.Header().Del("Access-Control-Allow-Origin")
 
 		// If the thriftSessionCookieName is present, it holds the real session ID, while the Thrift
@@ -652,7 +649,7 @@ func httpToHTTPSRedirectHandler(rw http.ResponseWriter, r *http.Request) {
 	http.Redirect(rw, r, redirectURL.String(), http.StatusTemporaryRedirect)
 }
 
-func (rp *ReverseProxy) proxyHandler(rw http.ResponseWriter, r *http.Request) {
+func (rp *reverseProxy) proxyHandler(rw http.ResponseWriter, r *http.Request) {
 	h := http.StripPrefix(rp.Path, httputil.NewSingleHostReverseProxy(rp.Target))
 	h.ServeHTTP(rw, r)
 }
@@ -694,8 +691,8 @@ func serversHandler(rw http.ResponseWriter, r *http.Request) {
 	var j []byte
 	servers := ""
 	subDir := filepath.Dir(r.URL.Path)
-	if len(serversJson) > 0 {
-		servers = serversJson
+	if len(serversJSON) > 0 {
+		servers = serversJSON
 	} else {
 		servers = frontend + subDir + "/servers.json"
 		if _, err := os.Stat(servers); os.IsNotExist(err) {
@@ -704,7 +701,7 @@ func serversHandler(rw http.ResponseWriter, r *http.Request) {
 	}
 	j, err := ioutil.ReadFile(servers)
 	if err != nil {
-		s := Server{}
+		s := server{}
 		s.Master = true
 		s.Username = "mapd"
 		s.Password = "HyperInteractive"
@@ -719,7 +716,7 @@ func serversHandler(rw http.ResponseWriter, r *http.Request) {
 			s.Host = "[" + h + "]"
 		}
 
-		ss := []Server{s}
+		ss := []server{s}
 		j, _ = json.Marshal(ss)
 	}
 
@@ -799,7 +796,7 @@ func main() {
 		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
 	}
 
-	for k, _ := range proxies {
+	for k := range proxies {
 		rp := proxies[k]
 		log.Infoln("Proxy:", rp.Path, "to", rp.Target)
 		mux.HandleFunc(rp.Path, rp.proxyHandler)
@@ -816,7 +813,7 @@ func main() {
 	}
 
 	tlsConfig := &tls.Config{}
-	if enableHttpsAuth {
+	if enableHTTPSAuth {
 		caCert, err := ioutil.ReadFile(peerCertFile)
 		if err != nil {
 			log.Fatalln("Errors opening peer file:", err, peerCertFile)
@@ -842,7 +839,7 @@ func main() {
 		},
 	}
 
-	if enableHttps {
+	if enableHTTPS {
 		if _, err := os.Stat(certFile); err != nil {
 			log.Fatalln("Error opening certificate:", err)
 		}
@@ -850,7 +847,7 @@ func main() {
 			log.Fatalln("Error opening keyfile:", err)
 		}
 
-		if enableHttpsRedirect {
+		if enableHTTPSRedirect {
 			go func() {
 				err := http.ListenAndServe(":"+strconv.Itoa(httpsRedirectPort), http.HandlerFunc(httpToHTTPSRedirectHandler))
 
