@@ -40,7 +40,7 @@ class DateDaysEncoder : public Encoder {
                            const bool replicating = false) override {
     CHECK(ti.is_date_in_days());
     T* unencodedData = reinterpret_cast<T*>(srcData);
-    auto encodedData = std::unique_ptr<V[]>(new V[numAppendElems]);
+    auto encodedData = std::make_unique<V[]>(numAppendElems);
     for (size_t i = 0; i < numAppendElems; ++i) {
       size_t ri = replicating ? 0 : i;
       if (unencodedData[ri] == std::numeric_limits<V>::min()) {

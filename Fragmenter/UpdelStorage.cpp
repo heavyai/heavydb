@@ -394,6 +394,13 @@ void InsertOrderFragmenter::updateColumns(
         chunkConverters.push_back(std::move(converter));
 
       } else if (chunk_cd->columnType.is_date_in_days()) {
+        /* Q: Why do we need this?
+           A: In variable length updates path we move the chunk content of column
+           without decoding. Since it again passes through DateDaysEncoder
+           the expected value should be in seconds, but here it will be in days.
+           Therefore, using DateChunkConverter chunk values are being scaled to
+           seconds which then ultimately encoded in days in DateDaysEncoder.
+        */
         std::unique_ptr<ChunkToInsertDataConverter> converter;
         const size_t physical_size = chunk_cd->columnType.get_size();
         if (physical_size == 2) {
@@ -654,6 +661,9 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
           DecimalOverflowValidator decimalOverflowValidator(lhs_type);
           NullAwareValidator<DecimalOverflowValidator> nullAwareDecimalOverflowValidator(
               lhs_type, &decimalOverflowValidator);
+          DateDaysOverflowValidator dateDaysOverflowValidator(lhs_type);
+          NullAwareValidator<DateDaysOverflowValidator> nullAwareDateOverflowValidator(
+              lhs_type, &dateDaysOverflowValidator);
 
           StringDictionary* stringDict{nullptr};
           if (lhs_type.is_string()) {
@@ -727,6 +737,11 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
               } else if (is_integral(lhs_type)) {
                 if (lhs_type.is_date_in_days()) {
                   // Store meta values in seconds
+                  if (lhs_type.get_size() == 2) {
+                    nullAwareDateOverflowValidator.validate<int16_t>(v);
+                  } else {
+                    nullAwareDateOverflowValidator.validate<int32_t>(v);
+                  }
                   int64_t days;
                   get_scalar<int64_t>(data_ptr, lhs_type, days);
                   const auto seconds = DateConverters::get_epoch_seconds_from_days(days);

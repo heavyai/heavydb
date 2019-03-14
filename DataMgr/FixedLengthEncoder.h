@@ -39,7 +39,7 @@ class FixedLengthEncoder : public Encoder {
                            const SQLTypeInfo& ti,
                            const bool replicating = false) override {
     T* unencodedData = reinterpret_cast<T*>(srcData);
-    auto encodedData = std::unique_ptr<V[]>(new V[numAppendElems]);
+    auto encodedData = std::make_unique<V[]>(numAppendElems);
     for (size_t i = 0; i < numAppendElems; ++i) {
       size_t ri = replicating ? 0 : i;
       encodedData.get()[i] = static_cast<V>(unencodedData[ri]);
@@ -54,17 +54,8 @@ class FixedLengthEncoder : public Encoder {
           has_nulls = true;
         else {
           decimal_overflow_validator_.validate(data);
-          if (ti.is_date_in_days()) {
-            // convert days -> seconds for metadata
-            auto convert_days_to_seconds = [](const int64_t days) {
-              return days * SECSPERDAY;
-            };
-            dataMin = std::min(dataMin, static_cast<T>(convert_days_to_seconds(data)));
-            dataMax = std::max(dataMax, static_cast<T>(convert_days_to_seconds(data)));
-          } else {
-            dataMin = std::min(dataMin, data);
-            dataMax = std::max(dataMax, data);
-          }
+          dataMin = std::min(dataMin, data);
+          dataMax = std::max(dataMax, data);
         }
       }
     }
