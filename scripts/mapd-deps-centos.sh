@@ -283,7 +283,7 @@ mv go $PREFIX
 install_awscpp -j $(nproc)
 
 # glslang (with spirv-tools)
-VERS=7.9.2888 # 8/13/18
+VERS=7.11.3113 # 2/8/19
 rm -rf glslang
 mkdir -p glslang
 pushd glslang
@@ -304,7 +304,7 @@ popd # glslang-$VERS
 popd # glslang
 
 # Vulkan
-VERS=1.1.82.1 # 8/20/18
+VERS=1.1.101 # 3/1/19
 rm -rf vulkan
 mkdir -p vulkan
 pushd vulkan
