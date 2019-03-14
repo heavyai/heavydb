@@ -18,4 +18,5 @@ minor = int(version[4:6], 16)
 patch = int(version[6:8], 16)
 version = '.'.join(str(item) for item in (major, minor, patch))
 
-print version
+print(version)
+
