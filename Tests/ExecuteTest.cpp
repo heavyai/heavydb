@@ -9469,7 +9469,10 @@ TEST(Update, VarlenSmartSwitch) {
     return;
   }
 
-  auto save_watchdog = g_enable_watchdog;
+  const auto save_watchdog = g_enable_watchdog;
+  ScopeGuard reset_watchdog_state = [&save_watchdog] {
+    g_enable_watchdog = save_watchdog;
+  };
   g_enable_watchdog = false;
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -9592,8 +9595,6 @@ TEST(Update, VarlenSmartSwitch) {
 
     run_ddl_statement("drop table smartswitch;");
   }
-
-  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Update, Text) {
@@ -9633,7 +9634,10 @@ TEST(Update, TextINVariant) {
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
-  auto save_watchdog = g_enable_watchdog;
+  const auto save_watchdog = g_enable_watchdog;
+  ScopeGuard reset_watchdog_state = [&save_watchdog] {
+    g_enable_watchdog = save_watchdog;
+  };
   g_enable_watchdog = false;
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -9655,8 +9659,6 @@ TEST(Update, TextINVariant) {
               v<int64_t>(run_simple_agg(
                   "select count(t) from text_default where t='pizza';", dt)));
   }
-
-  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Update, TextEncodingDict16) {
@@ -9665,7 +9667,10 @@ TEST(Update, TextEncodingDict16) {
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
-  auto save_watchdog = g_enable_watchdog;
+  const auto save_watchdog = g_enable_watchdog;
+  ScopeGuard reset_watchdog_state = [&save_watchdog] {
+    g_enable_watchdog = save_watchdog;
+  };
   g_enable_watchdog = false;
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -9691,8 +9696,6 @@ TEST(Update, TextEncodingDict16) {
 
     run_ddl_statement("drop table textenc16_default;");
   }
-
-  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Update, TextEncodingDict8) {
@@ -9701,7 +9704,10 @@ TEST(Update, TextEncodingDict8) {
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
-  auto save_watchdog = g_enable_watchdog;
+  const auto save_watchdog = g_enable_watchdog;
+  ScopeGuard reset_watchdog_state = [&save_watchdog] {
+    g_enable_watchdog = save_watchdog;
+  };
   g_enable_watchdog = false;
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -9726,7 +9732,6 @@ TEST(Update, TextEncodingDict8) {
 
     run_ddl_statement("drop table textenc8_default;");
   }
-  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Update, MultiColumnInteger) {
@@ -9739,6 +9744,7 @@ TEST(Update, MultiColumnInteger) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists multicoltable;");
     run_ddl_statement(
         "create table multicoltable (x integer, y integer, z integer) with "
         "(vacuum='delayed');");
@@ -9770,6 +9776,7 @@ TEST(Update, TimestampUpdate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists timestamp_default;");
     run_ddl_statement(
         "create table timestamp_default (t timestamp) with (vacuum='delayed');");
 
@@ -9803,6 +9810,7 @@ TEST(Update, TimeUpdate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists time_default;");
     run_ddl_statement("create table time_default (t time) with (vacuum='delayed');");
 
     run_multiple_agg("insert into time_default values('00:00:01');", dt);
@@ -9868,6 +9876,7 @@ TEST(Update, FloatUpdate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists float_default;");
     run_ddl_statement("create table float_default (f float) with (vacuum='delayed');");
 
     run_multiple_agg("insert into float_default values(-0.01);", dt);
@@ -9897,6 +9906,7 @@ TEST(Update, IntegerUpdate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists integer_default;");
     run_ddl_statement(
         "create table integer_default (i integer) with (vacuum='delayed');");
 
@@ -9926,6 +9936,7 @@ TEST(Update, DoubleUpdate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists double_default;");
     run_ddl_statement("create table double_default (d double) with (vacuum='delayed');");
 
     run_multiple_agg("insert into double_default values(-0.01);", dt);
@@ -9956,6 +9967,7 @@ TEST(Update, SmallIntUpdate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists smallint_default;");
     run_ddl_statement(
         "create table smallint_default (s smallint) with (vacuum='delayed');");
 
@@ -9984,6 +9996,7 @@ TEST(Update, BigIntUpdate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists bigint_default;");
     run_ddl_statement("create table bigint_default (b bigint) with (vacuum='delayed');");
     run_multiple_agg("insert into bigint_default values(-1);", dt);
     run_multiple_agg("insert into bigint_default values( 2);", dt);
@@ -10008,6 +10021,7 @@ TEST(Update, DecimalUpdate) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists decimal_default;");
     run_ddl_statement(
         "create table decimal_default (d decimal(5)) with (vacuum='delayed');");
     run_multiple_agg("insert into decimal_default values(-1);", dt);
@@ -10034,6 +10048,8 @@ TEST(Update, JoinCacheInvalidationTest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists string_join1");
+    run_ddl_statement("drop table if exists string_join2");
     run_ddl_statement("create table string_join1 ( t text ) with (vacuum='delayed')");
     run_ddl_statement("create table string_join2 ( t text ) with (vacuum='delayed')");
 
@@ -10075,6 +10091,7 @@ TEST(Delete, WithoutVacuumAttribute) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists no_deletes;");
     run_ddl_statement("create table no_deletes (x integer) with (vacuum='immediate');");
     run_multiple_agg("insert into no_deletes values (10);", dt);
     run_multiple_agg("insert into no_deletes values (11);", dt);
@@ -10095,6 +10112,7 @@ TEST(Update, ImplicitCastToDate4) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists datetab;");
     run_ddl_statement("create table datetab ( d1 date ) with ( vacuum='delayed' );");
     run_multiple_agg("insert into datetab values ('2001-04-05');", dt);
 
@@ -10154,6 +10172,7 @@ TEST(Update, ImplicitCastToDate2) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists datetab4;");
     run_ddl_statement(
         "create table datetab4 ( d1 date encoding fixed(16)) with ( vacuum='delayed' );");
     run_multiple_agg("insert into datetab4 values ('2001-04-05');", dt);
@@ -10400,6 +10419,7 @@ TEST(Update, ImplicitCastToNoneEncodedString) {
           expected);
     };
 
+    run_ddl_statement("drop table if exists none_str;");
     run_ddl_statement(
         "create table none_str ( str text encoding none ) with (vacuum='delayed');");
 
@@ -10785,6 +10805,7 @@ TEST(Update, ImplicitCastToTime4) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists time4;");
     run_ddl_statement(
         "create table time4 ( t1 time encoding fixed(32) ) with ( vacuum='delayed' );");
     run_multiple_agg("insert into time4 values ('01:23:45');", dt);
@@ -10835,6 +10856,7 @@ TEST(Update, ImplicitCastToTime8) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists timetab;");
     run_ddl_statement("create table timetab ( t1 time ) with ( vacuum='delayed' );");
     run_multiple_agg("insert into timetab values ('01:23:45');", dt);
 
@@ -10881,6 +10903,7 @@ TEST(Update, ImplicitCastToTimestamp8) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists tstamp;");
     run_ddl_statement("create table tstamp ( t1 timestamp ) with ( vacuum='delayed' );");
     run_multiple_agg("insert into tstamp values ('2000-01-01 00:00:00');", dt);
 
@@ -10931,6 +10954,7 @@ TEST(Update, ImplicitCastToTimestamp4) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists tstamp4;");
     run_ddl_statement(
         "create table tstamp4 ( t1 timestamp encoding fixed(32) ) with ( "
         "vacuum='delayed' );");
@@ -10987,6 +11011,7 @@ TEST(Update, ShardedTableShardKeyTest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists updateshardkey;");
     run_ddl_statement(
         "create table updateshardkey ( x integer, y integer, shard key (x) ) with "
         "(vacuum='delayed', shard_count=4);");
@@ -11111,6 +11136,8 @@ TEST(Delete, JoinCacheInvalidationTest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    run_ddl_statement("drop table if exists string_join1;");
+    run_ddl_statement("drop table if exists string_join2;");
     run_ddl_statement("create table string_join1 ( t text ) with (vacuum='delayed')");
     run_ddl_statement("create table string_join2 ( t text ) with (vacuum='delayed')");
 
@@ -11243,7 +11270,10 @@ TEST(Delete, Joins_InnerJoin_AtLeastThreeTables) {
     return;
   }
 
-  auto save_watchdog = g_enable_watchdog;
+  const auto save_watchdog = g_enable_watchdog;
+  ScopeGuard reset_watchdog_state = [&save_watchdog] {
+    g_enable_watchdog = save_watchdog;
+  };
   g_enable_watchdog = false;
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -11309,8 +11339,6 @@ TEST(Delete, Joins_InnerJoin_AtLeastThreeTables) {
       "test_inner d ON b.x = d.x ORDER BY a.x, b.str;",
       dt);
   }
-
-  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Delete, Joins_InnerJoin_Filters) {
@@ -11366,7 +11394,10 @@ TEST(Delete, Joins_LeftOuterJoin) {
     return;
   }
 
-  auto save_watchdog = g_enable_watchdog;
+  const auto save_watchdog = g_enable_watchdog;
+  ScopeGuard reset_watchdog_state = [&save_watchdog] {
+    g_enable_watchdog = save_watchdog;
+  };
   g_enable_watchdog = false;
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -11513,8 +11544,6 @@ TEST(Delete, Joins_LeftOuterJoin) {
       "test.x = test_inner.x;",
       dt);
   }
-
-  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Delete, Joins_LeftJoin_Filters) {
@@ -11771,7 +11800,10 @@ TEST(Delete, Joins_ImplicitJoins) {
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
-  auto save_watchdog = g_enable_watchdog;
+  const auto save_watchdog = g_enable_watchdog;
+  ScopeGuard reset_watchdog_state = [&save_watchdog] {
+    g_enable_watchdog = save_watchdog;
+  };
   g_enable_watchdog = false;
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -11840,7 +11872,6 @@ TEST(Delete, Joins_ImplicitJoins) {
                                         "test.x = test_inner.x AND test.rowid = 20;",
                                         dt)));
   }
-  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Create, Delete) {
