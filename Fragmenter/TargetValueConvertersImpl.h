@@ -51,23 +51,33 @@ struct NumericValueConverter : public TargetValueConverter {
 
   ~NumericValueConverter() override {}
 
-  auto&& takeColumnarData() { return std::move(column_data_); }
-
   void allocateColumnarData(size_t num_rows) override {
     CHECK(num_rows > 0);
     column_data_ = ColumnDataPtr(
         reinterpret_cast<TARGET_TYPE*>(checked_malloc(num_rows * sizeof(TARGET_TYPE))));
   }
 
-  void convertToColumnarFormat(size_t row, const ScalarTargetValue* scalarValue) {
+  ColumnDataPtr allocateArrayData(size_t num_rows) {
+    CHECK(num_rows > 0);
+    return ColumnDataPtr(
+        reinterpret_cast<TARGET_TYPE*>(checked_malloc(num_rows * sizeof(TARGET_TYPE))));
+  }
+
+  void convertElementToColumnarFormat(size_t row,
+                                      typename ColumnDataPtr::pointer columnData,
+                                      const ScalarTargetValue* scalarValue) {
     auto mapd_p = checked_get<SOURCE_TYPE>(row, scalarValue, SOURCE_TYPE_ACCESSOR);
     auto val = *mapd_p;
 
     if (do_null_check_ && null_check_value_ == val) {
-      column_data_.get()[row] = null_value_;
+      columnData[row] = null_value_;
     } else {
-      column_data_.get()[row] = static_cast<TARGET_TYPE>(val);
+      columnData[row] = static_cast<TARGET_TYPE>(val);
     }
+  }
+
+  void convertToColumnarFormat(size_t row, const ScalarTargetValue* scalarValue) {
+    convertElementToColumnarFormat(row, column_data_.get(), scalarValue);
   }
 
   void convertToColumnarFormat(size_t row, const TargetValue* value) override {
@@ -86,6 +96,9 @@ struct NumericValueConverter : public TargetValueConverter {
 
 template <typename TARGET_TYPE>
 struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_TYPE> {
+  using ElementsDataColumnPtr =
+      typename NumericValueConverter<int64_t, TARGET_TYPE>::ColumnDataPtr;
+
   const DictDescriptor* source_dict_desc_;
   const DictDescriptor* target_dict_desc_;
 
@@ -120,40 +133,50 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
 
   ~DictionaryValueConverter() override {}
 
-  void convertToColumnarFormatFromDict(size_t row, const ScalarTargetValue* scalarValue) {
+  void convertToColumnarFormatFromDict(size_t row,
+                                       typename ElementsDataColumnPtr::pointer columnData,
+                                       const ScalarTargetValue* scalarValue) {
     auto mapd_p = checked_get<int64_t>(row, scalarValue, this->SOURCE_TYPE_ACCESSOR);
     auto val = *mapd_p;
 
     if (this->do_null_check_ && this->null_check_value_ == val) {
-      this->column_data_.get()[row] = this->null_value_;
+      columnData[row] = this->null_value_;
     } else {
       std::string strVal = source_dict_->getString(val);
       auto newVal = target_dict_desc_->stringDict->getOrAdd(strVal);
-      this->column_data_.get()[row] = (TARGET_TYPE)newVal;
+      columnData[row] = (TARGET_TYPE)newVal;
     }
   }
 
-  virtual void convertToColumnarFormatFromString(size_t row,
-                                                 const ScalarTargetValue* scalarValue) {
+  virtual void convertToColumnarFormatFromString(
+      size_t row,
+      typename ElementsDataColumnPtr::pointer columnData,
+      const ScalarTargetValue* scalarValue) {
     auto mapd_p =
         checked_get<NullableString>(row, scalarValue, this->NULLABLE_STRING_ACCESSOR);
 
     const auto mapd_str_p = checked_get<std::string>(row, mapd_p, this->STRING_ACCESSOR);
 
     if (this->do_null_check_ && (nullptr == mapd_str_p || *mapd_str_p == "")) {
-      this->column_data_.get()[row] = this->null_value_;
+      columnData[row] = this->null_value_;
     } else {
       auto newVal = target_dict_desc_->stringDict->getOrAdd(*mapd_str_p);
-      this->column_data_.get()[row] = (TARGET_TYPE)newVal;
+      columnData[row] = (TARGET_TYPE)newVal;
+    }
+  }
+
+  void convertElementToColumnarFormat(size_t row,
+                                      typename ElementsDataColumnPtr::pointer columnData,
+                                      const ScalarTargetValue* scalarValue) {
+    if (source_dict_) {
+      convertToColumnarFormatFromDict(row, columnData, scalarValue);
+    } else {
+      convertToColumnarFormatFromString(row, columnData, scalarValue);
     }
   }
 
   void convertToColumnarFormat(size_t row, const ScalarTargetValue* scalarValue) {
-    if (source_dict_) {
-      convertToColumnarFormatFromDict(row, scalarValue);
-    } else {
-      convertToColumnarFormatFromString(row, scalarValue);
-    }
+    convertElementToColumnarFormat(row, this->column_data_.get(), scalarValue);
   }
 
   void convertToColumnarFormat(size_t row, const TargetValue* value) override {
@@ -273,16 +296,16 @@ struct ArrayValueConverter : public TargetValueConverter {
       const auto& vec = arrayValue->get();
       bool is_null = false;
       if (vec.size()) {
-        element_converter_->allocateColumnarData(vec.size());
+        typename ELEMENT_CONVERTER::ColumnDataPtr elementData =
+            element_converter_->allocateArrayData(vec.size());
 
         int elementIndex = 0;
         for (const auto& scalarValue : vec) {
-          element_converter_->convertToColumnarFormat(elementIndex++, &scalarValue);
+          element_converter_->convertElementToColumnarFormat(
+              elementIndex++, elementData.get(), &scalarValue);
         }
 
-        typename ELEMENT_CONVERTER::ColumnDataPtr ptr =
-            element_converter_->takeColumnarData();
-        int8_t* arrayData = reinterpret_cast<int8_t*>(ptr.release());
+        int8_t* arrayData = reinterpret_cast<int8_t*>(elementData.release());
         (*column_data_)[row] =
             ArrayDatum(vec.size() * element_type_info_.get_size(), arrayData, is_null);
       } else {
