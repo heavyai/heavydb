@@ -30,7 +30,6 @@
 #include <Analyzer/Analyzer.h>
 #include <Shared/SqlTypesLayout.h>
 
-
 #include <numeric>
 
 ColSlotContext::ColSlotContext(const std::vector<Analyzer::Expr*>& col_expr_list,
@@ -82,7 +81,6 @@ ColSlotContext::ColSlotContext(const std::vector<Analyzer::Expr*>& col_expr_list
     ++col_expr_idx;
   }
 }
-
 
 void ColSlotContext::setAllSlotsSize(const int8_t slot_width_size) {
   const SlotSize ss{slot_width_size, slot_width_size};

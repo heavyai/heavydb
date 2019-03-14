@@ -29,7 +29,6 @@
 #include <algorithm>
 #include <vector>
 
-
 struct SlotSize {
   int8_t padded_size;   // size of the slot
   int8_t logical_size;  // size of the element in the slot
@@ -49,7 +48,6 @@ class ColSlotContext {
 
   ColSlotContext(const std::vector<Analyzer::Expr*>& col_expr_list,
                  const std::vector<ssize_t>& col_exprs_to_not_project);
-
 
   void setAllSlotsSize(const int8_t slot_width_size);
 
