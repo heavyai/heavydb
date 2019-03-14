@@ -1071,10 +1071,6 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
   } else if (new_type_info.is_string()) {
     cast_to_string(new_type_info);
   } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kDATE) {
-    if (new_type_info.is_date_in_days()) {
-      constval.bigintval =
-          DateConverters::get_epoch_days_from_seconds(constval.bigintval);
-    }
     type_info = new_type_info;
   } else if (new_type_info.get_type() == kDATE && type_info.get_type() == kTIMESTAMP) {
     constval.bigintval =
@@ -1083,10 +1079,6 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
                   constval.bigintval,
                   get_timestamp_precision_scale(type_info.get_dimension()))
             : DateTruncate(dtDAY, constval.bigintval);
-    if (new_type_info.is_date_in_days()) {
-      constval.bigintval =
-          DateConverters::get_epoch_days_from_seconds(constval.bigintval);
-    }
     type_info = new_type_info;
   } else if ((type_info.get_type() == kTIMESTAMP || type_info.get_type() == kDATE) &&
              new_type_info.get_type() == kTIMESTAMP) {

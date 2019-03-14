@@ -134,29 +134,6 @@ struct TextConverterFactory {
   }
 };
 
-struct DateConverterFactory {
-  std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
-    if (param.target->columnType.is_date_in_days() && param.type.get_size() == 4) {
-      return std::make_unique<DateValueConverter>(
-          param.target,
-          param.num_rows,
-          static_cast<int64_t>(inline_int_null_value<int32_t>()),
-          NULL_BIGINT,
-          param.can_be_null);
-    } else if (param.target->columnType.is_date_in_days() && param.type.get_size() == 2) {
-      return std::make_unique<DateValueConverter>(
-          param.target,
-          param.num_rows,
-          static_cast<int64_t>(inline_int_null_value<int16_t>()),
-          NULL_BIGINT,
-          param.can_be_null);
-    } else {
-      NumericConverterFactory<int64_t, int64_t> factory;
-      return factory.create(param);
-    }
-  }
-};
-
 template <typename ELEMENT_FACTORY>
 struct ArrayConverterFactory {
   ELEMENT_FACTORY element_factory_;
@@ -250,7 +227,7 @@ std::unique_ptr<TargetValueConverter> TargetValueConverterFactory::create(
                 {kDECIMAL, NumericConverterFactory<int64_t, int64_t>()},
                 {kNUMERIC, NumericConverterFactory<int64_t, int64_t>()},
                 {kTIMESTAMP, NumericConverterFactory<int64_t, int64_t>()},
-                {kDATE, DateConverterFactory()},
+                {kDATE, NumericConverterFactory<int64_t, int64_t>()},
                 {kTIME, NumericConverterFactory<int64_t, int64_t>()},
                 {kBOOLEAN, NumericConverterFactory<int64_t, int8_t>()},
                 {kDOUBLE, NumericConverterFactory<double, double>()},

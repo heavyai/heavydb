@@ -17,7 +17,6 @@
 #ifndef TARGET_VALUE_CONVERTERS_IMPL_H_
 #define TARGET_VALUE_CONVERTERS_IMPL_H_
 
-#include "../Shared/DateConverters.h"
 #include "TargetValueConverters.h"
 
 namespace Importer_NS {
@@ -223,39 +222,6 @@ struct StringValueConverter : public TargetValueConverter {
     dataBlock.stringsPtr = column_data_.get();
     insertData.data.push_back(dataBlock);
     insertData.columnIds.push_back(column_descriptor_->columnId);
-  }
-};
-
-struct DateValueConverter : public NumericValueConverter<int64_t, int64_t> {
-  DateValueConverter(const ColumnDescriptor* targetDescriptor,
-                     size_t num_rows,
-                     int64_t nullValue,
-                     int64_t nullCheckValue,
-                     bool doNullCheck)
-      : NumericValueConverter<int64_t, int64_t>(targetDescriptor,
-                                                num_rows,
-                                                nullValue,
-                                                nullCheckValue,
-                                                doNullCheck) {}
-
-  ~DateValueConverter() override {}
-
-  void convertToColumnarFormat(size_t row, const ScalarTargetValue* scalarValue) {
-    auto mapd_p = checked_get<int64_t>(row, scalarValue, this->SOURCE_TYPE_ACCESSOR);
-    auto val = *mapd_p;
-
-    if (this->do_null_check_ && this->null_check_value_ == val) {
-      this->column_data_.get()[row] = this->null_value_;
-    } else {
-      this->column_data_.get()[row] =
-          DateConverters::get_epoch_days_from_seconds(static_cast<int64_t>(val));
-    }
-  }
-
-  void convertToColumnarFormat(size_t row, const TargetValue* value) override {
-    auto scalarValue =
-        checked_get<ScalarTargetValue>(row, value, this->SCALAR_TARGET_VALUE_ACCESSOR);
-    convertToColumnarFormat(row, scalarValue);
   }
 };
 

@@ -385,11 +385,7 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
     }
     case kDATE: {
       std::tm tm_struct;
-      time_t ntimeval =
-          ti.is_date_in_days()
-              ? static_cast<time_t>(
-                    DateConverters::get_epoch_seconds_from_days(d.bigintval))
-              : static_cast<time_t>(d.bigintval);
+      time_t ntimeval = static_cast<time_t>(d.bigintval);
       gmtime_r(&ntimeval, &tm_struct);
       char buf[11];
       strftime(buf, 11, "%F", &tm_struct);

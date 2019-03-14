@@ -95,26 +95,10 @@ void scan_chunk(const ChunkMetadata& chunk_metadata,
         }
         break;
       case kTIME:
-      case kTIMESTAMP: {
-        int d = cd->columnType.get_dimension();
-        if (d == 0 || d == 3 || d == 6 || d == 9) {  // add support for timestamp(0,3,6,9)
-          {
-            boost::hash_combine(hash, *(int64_t*)vd.pointer);
-          }
-        } else {
-          {
-            assert(false);  // not supported yet
-          }
-        }
+      case kDATE:
+      case kTIMESTAMP:
+        boost::hash_combine(hash, *(int64_t*)vd.pointer);
         break;
-      }
-      case kDATE: {
-        if (cd->columnType.is_date_in_days()) {
-          boost::hash_combine(hash, *(int32_t*)vd.pointer);
-        } else {
-          boost::hash_combine(hash, *(int64_t*)vd.pointer);
-        }
-      } break;
       default:
         assert(false);
     }

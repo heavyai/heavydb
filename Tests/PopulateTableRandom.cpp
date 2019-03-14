@@ -38,6 +38,7 @@
 #include "../Catalog/Catalog.h"
 #include "../DataMgr/DataMgr.h"
 #include "../Fragmenter/Fragmenter.h"
+#include "../Shared/DateConverters.h"
 #include "../Shared/measure.h"
 #include "../Shared/sqltypes.h"
 
@@ -196,6 +197,20 @@ size_t random_fill_int32array(std::vector<std::vector<int32_t>>& stringVec,
   return hash;
 }
 
+size_t random_fill_dates(int8_t* buf, size_t num_elems) {
+  constexpr int64_t kDateMin = -185542587187200;
+  constexpr int64_t kDateMax = 185542587100800;
+  std::default_random_engine gen;
+  std::uniform_int_distribution<int64_t> dist(kDateMin, kDateMax);
+  auto p = reinterpret_cast<int64_t*>(buf);
+  size_t hash = 0;
+  for (size_t i = 0; i < num_elems; i++) {
+    p[i] = dist(gen);
+    boost::hash_combine(hash, DateConverters::get_epoch_days_from_seconds(p[i]));
+  }
+  return hash;
+}
+
 #define MAX_TEXT_LEN 255
 
 size_t random_fill(const ColumnDescriptor* cd,
@@ -247,28 +262,12 @@ size_t random_fill(const ColumnDescriptor* cd,
         }
       }
       break;
-    case kTIME:
-    case kTIMESTAMP: {
-      const int dimen = cd->columnType.get_dimension();
-      if (dimen == 0 || dimen == 3 || dimen == 6 ||
-          dimen == 9) {  // add timestamp(0,3,6,9) support
-        hash = random_fill_int64(p.numbersPtr, num_elems);
-        data_volumn += num_elems * sizeof(int64_t);
-      } else {
-        {
-          assert(false);  // not supported yet
-        }
-      }
-      break;
-    }
     case kDATE:
-      if (cd->columnType.is_date_in_days()) {
-        const int64_t min = INT32_MIN;
-        const int64_t max = INT32_MAX;
-        hash = random_fill_int64(p.numbersPtr, num_elems, min, max);
-      } else {
-        hash = random_fill_int64(p.numbersPtr, num_elems);
-      }
+    case kTIME:
+    case kTIMESTAMP:
+      hash = cd->columnType.get_type() == kDATE
+                 ? random_fill_dates(p.numbersPtr, num_elems)
+                 : random_fill_int64(p.numbersPtr, num_elems);
       data_volumn += num_elems * sizeof(int64_t);
       break;
     default:

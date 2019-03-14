@@ -120,6 +120,7 @@ DEVICE static void decompress(const SQLTypeInfo& ti,
               assert(false);
               break;
           }
+          break;
         case kENCODING_RL:
         case kENCODING_DIFF:
         case kENCODING_DICT:
@@ -158,10 +159,7 @@ DEVICE void ChunkIter_get_next(ChunkIter* it,
 
   if (it->skip_size > 0) {
     // for fixed-size
-    if (uncompress && (it->type_info.get_compression() != kENCODING_NONE &&
-                       !(it->type_info.get_type() == kDATE &&
-                         it->type_info.get_compression() == kENCODING_DATE_IN_DAYS &&
-                         it->type_info.get_comp_param() == 0))) {
+    if (uncompress && (it->type_info.get_compression() != kENCODING_NONE)) {
       decompress(it->type_info, it->current_pos, result, &it->datum);
     } else {
       result->length = static_cast<size_t>(it->skip_size);
@@ -197,10 +195,7 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it,
   if (it->skip_size > 0) {
     // for fixed-size
     int8_t* current_pos = it->start_pos + n * it->skip_size;
-    if (uncompress && (it->type_info.get_compression() != kENCODING_NONE &&
-                       !(it->type_info.get_type() == kDATE &&
-                         it->type_info.get_compression() == kENCODING_DATE_IN_DAYS &&
-                         it->type_info.get_comp_param() == 0))) {
+    if (uncompress && (it->type_info.get_compression() != kENCODING_NONE)) {
       decompress(it->type_info, current_pos, result, &it->datum);
     } else {
       result->length = static_cast<size_t>(it->skip_size);

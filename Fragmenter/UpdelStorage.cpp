@@ -257,6 +257,38 @@ struct StringChunkConverter : public ChunkToInsertDataConverter {
   }
 };
 
+template <typename BUFFER_DATA_TYPE>
+struct DateChunkConverter : public ChunkToInsertDataConverter {
+  using ColumnDataPtr = std::unique_ptr<int64_t, CheckedMallocDeleter<int64_t>>;
+
+  const Chunk_NS::Chunk* chunk_;
+  ColumnDataPtr column_data_;
+  const ColumnDescriptor* column_descriptor_;
+  const BUFFER_DATA_TYPE* data_buffer_addr_;
+
+  DateChunkConverter(const size_t num_rows, const Chunk_NS::Chunk* chunk)
+      : chunk_(chunk), column_descriptor_(chunk->get_column_desc()) {
+    column_data_ = ColumnDataPtr(
+        reinterpret_cast<int64_t*>(checked_malloc(num_rows * sizeof(int64_t))));
+    data_buffer_addr_ = (BUFFER_DATA_TYPE*)chunk->get_buffer()->getMemoryPtr();
+  }
+
+  ~DateChunkConverter() override {}
+
+  void convertToColumnarFormat(size_t row, size_t indexInFragment) override {
+    auto buffer_value = data_buffer_addr_[indexInFragment];
+    auto insert_value = static_cast<int64_t>(buffer_value);
+    column_data_.get()[row] = DateConverters::get_epoch_seconds_from_days(insert_value);
+  }
+
+  void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
+    DataBlockPtr dataBlock;
+    dataBlock.numbersPtr = reinterpret_cast<int8_t*>(column_data_.get());
+    insertData.data.push_back(dataBlock);
+    insertData.columnIds.push_back(column_descriptor_->columnId);
+  }
+};
+
 void InsertOrderFragmenter::updateColumns(
     const Catalog_Namespace::Catalog* catalog,
     const TableDescriptor* td,
@@ -361,6 +393,19 @@ void InsertOrderFragmenter::updateColumns(
 
         chunkConverters.push_back(std::move(converter));
 
+      } else if (chunk_cd->columnType.is_date_in_days()) {
+        std::unique_ptr<ChunkToInsertDataConverter> converter;
+        const size_t physical_size = chunk_cd->columnType.get_size();
+        if (physical_size == 2) {
+          converter =
+              std::make_unique<DateChunkConverter<int16_t>>(num_rows, chunk.get());
+        } else if (physical_size == 4) {
+          converter =
+              std::make_unique<DateChunkConverter<int32_t>>(num_rows, chunk.get());
+        } else {
+          CHECK(false);
+        }
+        chunkConverters.push_back(std::move(converter));
       } else {
         std::unique_ptr<ChunkToInsertDataConverter> converter;
         SQLTypeInfo logical_type = get_logical_type_info(chunk_cd->columnType);

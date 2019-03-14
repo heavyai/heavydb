@@ -43,14 +43,14 @@ class DateDaysEncoder : public Encoder {
     auto encodedData = std::unique_ptr<V[]>(new V[numAppendElems]);
     for (size_t i = 0; i < numAppendElems; ++i) {
       size_t ri = replicating ? 0 : i;
-      T data = unencodedData[ri];
-      if (data == std::numeric_limits<V>::min()) {
+      if (unencodedData[ri] == std::numeric_limits<V>::min()) {
         has_nulls = true;
         encodedData.get()[i] = static_cast<V>(unencodedData[ri]);
       } else {
         date_days_overflow_validator_.validate(unencodedData[ri]);
         encodedData.get()[i] =
             DateConverters::get_epoch_days_from_seconds(unencodedData[ri]);
+        const T data = DateConverters::get_epoch_seconds_from_days(encodedData.get()[i]);
         dataMax = std::max(dataMax, data);
         dataMin = std::min(dataMin, data);
       }
