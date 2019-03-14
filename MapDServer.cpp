@@ -267,7 +267,9 @@ void MapDProgramOptions::fillOptions(po::options_description& desc) {
   desc.add_options()(
       "res-gpu-mem",
       po::value<size_t>(&reserved_gpu_mem)->default_value(reserved_gpu_mem),
-      "Reserved memory for GPU, not use OmniSci allocator");
+      "Reduces GPU memory available to the OmniSci allocator by this amount. Used for "
+      "compiled code cache and ancillary GPU functions and other processes that may also "
+      "be using the GPU concurrent with OmniSci Core");
   desc.add_options()("gpu-input-mem-limit",
                      po::value<double>(&mapd_parameters.gpu_input_mem_limit)
                          ->default_value(mapd_parameters.gpu_input_mem_limit),

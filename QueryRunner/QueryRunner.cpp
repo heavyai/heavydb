@@ -158,8 +158,9 @@ Catalog_Namespace::SessionInfo* get_session(
   MapDParameters mapd_parms;
   mapd_parms.aggregator = !leaf_servers.empty();
 
+  const auto reserved_gpu_mem = 256 << 20;
   auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
-      data_dir.string(), mapd_parms, uses_gpus, -1);
+      data_dir.string(), mapd_parms, uses_gpus, -1, 0, reserved_gpu_mem);
 
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 
