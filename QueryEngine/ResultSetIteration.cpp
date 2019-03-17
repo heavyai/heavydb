@@ -1117,6 +1117,9 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
   if (separate_varlen_storage_valid_ && !target_info.is_agg) {
     if (varlen_ptr < 0) {
       CHECK_EQ(-1, varlen_ptr);
+      if (target_info.sql_type.get_type() == kARRAY) {
+        return ArrayTargetValue(boost::optional<std::vector<ScalarTargetValue>>{});
+      }
       return TargetValue(nullptr);
     }
     const auto storage_idx = getStorageIndex(entry_buff_idx);
