@@ -588,6 +588,16 @@ TEST(Insert, NullArrayNullEmpty) {
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM table_array_with_nulls WHERE CARDINALITY(sia) IS NULL;",
             dt)));
+
+    // Simple lazy projection
+    compare_array(
+        run_simple_agg("SELECT sia FROM table_array_with_nulls WHERE i = 5;", dt),
+        std::vector<int64_t>({}));
+
+    // Simple non-lazy projection
+    compare_array(
+        run_simple_agg("SELECT sia FROM table_array_with_nulls WHERE sia IS NULL;", dt),
+        std::vector<int64_t>({}));
   }
 }
 

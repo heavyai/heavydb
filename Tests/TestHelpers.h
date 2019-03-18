@@ -33,6 +33,7 @@ void compare_array(const TargetValue& r,
   CHECK(array_tv);
   if (!array_tv->is_initialized()) {
     ASSERT_EQ(size_t(0), arr.size());
+    return;
   }
   const auto& scalar_tv_vector = array_tv->get();
   ASSERT_EQ(scalar_tv_vector.size(), arr.size());
@@ -55,6 +56,7 @@ void compare_array(const TargetValue& r,
   CHECK(array_tv);
   if (!array_tv->is_initialized()) {
     ASSERT_EQ(size_t(0), arr.size());
+    return;
   }
   const auto& scalar_tv_vector = array_tv->get();
   ASSERT_EQ(scalar_tv_vector.size(), arr.size());
