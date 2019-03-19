@@ -50,5 +50,9 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it,
                               VarlenDatum* vd,
                               bool* is_end);
 DEVICE void ChunkIter_get_nth(ChunkIter* it, int nth, ArrayDatum* vd, bool* is_end);
+DEVICE void ChunkIter_get_nth_varlen(ChunkIter* it,
+                                     int nth,
+                                     ArrayDatum* vd,
+                                     bool* is_end);
 
 #endif  // _CHUNK_ITER_H_

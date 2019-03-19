@@ -248,3 +248,32 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it, int n, ArrayDatum* result, bool* is
     }
   }
 }
+
+// @brief get nth varlen array element in Chunk.  Does not change ChunkIter state
+DEVICE void ChunkIter_get_nth_varlen(ChunkIter* it,
+                                     int n,
+                                     ArrayDatum* result,
+                                     bool* is_end) {
+  *is_end = (static_cast<size_t>(n) >= it->num_elems || n < 0);
+
+  if (!*is_end) {
+    int8_t* current_pos = it->start_pos + n * sizeof(ArrayOffsetT);
+    int8_t* next_pos = current_pos + sizeof(ArrayOffsetT);
+    ArrayOffsetT offset = *(ArrayOffsetT*)current_pos;
+    ArrayOffsetT next_offset = *(ArrayOffsetT*)next_pos;
+
+    if (next_offset >= 0) {
+      // Previous array may have been NULL, remove offset negativity without branching
+      auto mask = offset >> (8 * sizeof(ArrayOffsetT) - 1);
+      offset = (offset + mask) ^ mask;
+      result->length = static_cast<size_t>(next_offset - offset);
+      result->pointer = it->second_buf + offset;
+      result->is_null = false;
+      return;
+    }
+  }
+  // Encoded NULL array or out of bounds
+  result->length = 0;
+  result->pointer = NULL;
+  result->is_null = true;
+}

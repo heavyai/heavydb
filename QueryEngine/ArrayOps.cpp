@@ -77,6 +77,25 @@ ARRAY_AT(double)
 
 #undef ARRAY_AT
 
+#define VARLEN_ARRAY_AT(type)                                                 \
+  extern "C" DEVICE type varlen_array_at_##type(                              \
+      int8_t* chunk_iter_, const uint64_t row_pos, const uint32_t elem_idx) { \
+    ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);        \
+    ArrayDatum ad;                                                            \
+    bool is_end;                                                              \
+    ChunkIter_get_nth_varlen(chunk_iter, row_pos, &ad, &is_end);              \
+    return reinterpret_cast<type*>(ad.pointer)[elem_idx];                     \
+  }
+
+VARLEN_ARRAY_AT(int8_t)
+VARLEN_ARRAY_AT(int16_t)
+VARLEN_ARRAY_AT(int32_t)
+VARLEN_ARRAY_AT(int64_t)
+VARLEN_ARRAY_AT(float)
+VARLEN_ARRAY_AT(double)
+
+#undef VARLEN_ARRAY_AT
+
 #define ARRAY_ANY(type, needle_type, oper_name, oper)                    \
   extern "C" DEVICE bool array_any_##oper_name##_##type##_##needle_type( \
       int8_t* chunk_iter_,                                               \
