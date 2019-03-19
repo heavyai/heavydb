@@ -2,4 +2,5 @@
 deadlock:gdal
 race:boost::*::saved_single_repeat
 race:boost::*::saved_state
+race:boost::*::perl_matcher
 thread:libcuda.so
