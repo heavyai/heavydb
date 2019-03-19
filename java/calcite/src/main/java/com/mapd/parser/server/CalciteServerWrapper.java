@@ -40,7 +40,7 @@ public class CalciteServerWrapper implements Runnable {
   private boolean shutdown = false;
 
   public CalciteServerWrapper() {
-    handler = new CalciteServerHandler(mapDPort, dataDir, null, null);
+    handler = new CalciteServerHandler(mapDPort, dataDir, null, null, "");
     processor = new com.mapd.thrift.calciteserver.CalciteServer.Processor(handler);
   }
 
@@ -49,7 +49,21 @@ public class CalciteServerWrapper implements Runnable {
           String dataDir,
           String extensionFunctionsAstFile,
           SockTransportProperties skT) {
-    handler = new CalciteServerHandler(mapDPort, dataDir, extensionFunctionsAstFile, skT);
+    handler = new CalciteServerHandler(
+            mapDPort, dataDir, extensionFunctionsAstFile, skT, "");
+    processor = new com.mapd.thrift.calciteserver.CalciteServer.Processor(handler);
+    this.calcitePort = calcitePort;
+    this.mapDPort = mapDPort;
+  }
+
+  public CalciteServerWrapper(int calcitePort,
+          int mapDPort,
+          String dataDir,
+          String extensionFunctionsAstFile,
+          SockTransportProperties skT,
+          String userDefinedFunctionsFile) {
+    handler = new CalciteServerHandler(
+            mapDPort, dataDir, extensionFunctionsAstFile, skT, userDefinedFunctionsFile);
     processor = new com.mapd.thrift.calciteserver.CalciteServer.Processor(handler);
     this.calcitePort = calcitePort;
     this.mapDPort = mapDPort;

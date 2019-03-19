@@ -68,13 +68,23 @@ class ExtensionFunctionsWhitelist {
  public:
   static void add(const std::string& json_func_sigs);
 
+  static void addUdfs(const std::string& json_func_sigs);
+
   static std::vector<ExtensionFunction>* get(const std::string& name);
+
+  static std::vector<ExtensionFunction>* get_udf(const std::string& name);
 
   static std::vector<std::string> getLLVMDeclarations();
 
  private:
+  static void addCommon(
+      std::unordered_map<std::string, std::vector<ExtensionFunction>>& sigs,
+      const std::string& json_func_sigs);
+
+ private:
   // Function overloading not supported, they're uniquely identified by name.
   static std::unordered_map<std::string, std::vector<ExtensionFunction>> functions_;
+  static std::unordered_map<std::string, std::vector<ExtensionFunction>> udf_functions_;
 };
 
 #endif  // QUERYENGINE_EXTENSIONFUNCTIONSWHITELIST_H

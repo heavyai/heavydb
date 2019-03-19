@@ -1467,7 +1467,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     return translateArrayFunction(rex_function);
   }
 
-  if (!ExtensionFunctionsWhitelist::get(rex_function->getName())) {
+  if (!ExtensionFunctionsWhitelist::get(rex_function->getName()) &&
+      !ExtensionFunctionsWhitelist::get_udf(rex_function->getName())) {
     throw QueryNotSupported("Function " + rex_function->getName() + " not supported");
   }
   return makeExpr<Analyzer::FunctionOper>(rex_function->getType(),

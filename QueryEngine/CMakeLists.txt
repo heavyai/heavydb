@@ -83,6 +83,7 @@ set(query_engine_source_files
     StringDictionaryGenerations.cpp
     TableGenerations.cpp
     TableOptimizer.cpp
+    UDFCompiler.cpp
     StringFunctions.cpp
     StringOpsIR.cpp
     RegexpFunctions.cpp
@@ -190,7 +191,22 @@ endif()
 
 set(ARROW_LIBS ${Arrow_LIBRARIES})
 
-target_link_libraries(QueryEngine Planner StringDictionary Utils ${ARROW_LIBS})
+target_link_libraries(QueryEngine Planner StringDictionary Utils ${ARROW_LIBS}
+  clangFrontend
+  clangSerialization
+  clangDriver
+  clangTooling
+  clangParse
+  clangSema
+  clangAnalysis
+  clangEdit
+  clangAST
+  clangLex
+  clangBasic
+  clangRewrite
+  clangRewriteFrontend
+  ${LLVM_LINKER_FLAGS}
+)
 
 add_custom_command(
     DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o

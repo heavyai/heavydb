@@ -86,13 +86,14 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("int8_t") || type_name.equals("char")) {
       return ExtensionFunction.ExtArgumentType.Int8;
     }
-    if (type_name.equals("int16_t")) {
+    if (type_name.equals("int16_t") || type_name.equals("short")) {
       return ExtensionFunction.ExtArgumentType.Int16;
     }
-    if (type_name.equals("int32_t")) {
+    if (type_name.equals("int32_t") || type_name.equals("int")) {
       return ExtensionFunction.ExtArgumentType.Int32;
     }
-    if (type_name.equals("int64_t") || type_name.equals("size_t")) {
+    if (type_name.equals("int64_t") || type_name.equals("size_t")
+            || type_name.equals("long")) {
       return ExtensionFunction.ExtArgumentType.Int64;
     }
     if (type_name.equals("float")) {

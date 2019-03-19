@@ -64,6 +64,7 @@ class MapDProgramOptions : public boost::program_options::options_description {
   int max_session_duration =
       MINSPERMONTH;  // maximum session life in days (30 Days)
                      // (https://pages.nist.gov/800-63-3/sp800-63b.html#aal3reauth)
+  std::string udf_file_name = {""};
 
  private:
   void fillOptions(boost::program_options::options_description& desc);

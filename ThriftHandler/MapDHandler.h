@@ -128,7 +128,8 @@ class MapDHandler : public MapDIf {
               const MapDParameters& mapd_parameters,
               const bool legacy_syntax,
               const int idle_session_duration,
-              const int max_session_duration);
+              const int max_session_duration,
+              const std::string& udf_filename);
 
   ~MapDHandler() override;
 

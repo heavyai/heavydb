@@ -66,11 +66,15 @@ extern "C" void register_buffer_with_executor_rsm(int64_t exec, int8_t* buffer) 
 
 llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* function_oper,
                                            const CompilationOptions& co) {
-  const auto ext_func_sigs = ExtensionFunctionsWhitelist::get(function_oper->getName());
+  auto ext_func_sigs = ExtensionFunctionsWhitelist::get(function_oper->getName());
   if (!ext_func_sigs) {
-    throw std::runtime_error("Runtime function " + function_oper->getName() +
-                             " not supported");
+    ext_func_sigs = ExtensionFunctionsWhitelist::get_udf(function_oper->getName());
+    if (!ext_func_sigs) {
+      throw std::runtime_error("Runtime function " + function_oper->getName() +
+                               " not supported");
+    }
   }
+
   CHECK(!ext_func_sigs->empty());
   const auto& ext_func_sig = bind_function(function_oper, *ext_func_sigs);
   const auto& ret_ti = function_oper->get_type_info();

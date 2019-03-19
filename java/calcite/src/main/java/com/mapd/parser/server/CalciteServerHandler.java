@@ -64,23 +64,52 @@ class CalciteServerHandler implements CalciteServer.Iface {
 
   private final String extSigsJson;
 
+  private String udfSigsJson = "";
+
   // TODO MAT we need to merge this into common code base for these funictions with
   // CalciteDirect since we are not deprecating this stuff yet
   CalciteServerHandler(int mapdPort,
           String dataDir,
           String extensionFunctionsAstFile,
-          SockTransportProperties skT) {
+          SockTransportProperties skT,
+          String udfAstFile) {
     this.parserPool = new GenericObjectPool();
     this.mapdPort = mapdPort;
 
     Map<String, ExtensionFunction> extSigs = null;
+    Map<String, ExtensionFunction> udfSigs = null;
+
     try {
       extSigs = ExtensionFunctionSignatureParser.parse(extensionFunctionsAstFile);
     } catch (IOException ex) {
       MAPDLOGGER.error(
               "Could not load extension function signatures: " + ex.getMessage());
     }
+
+    try {
+      if (!udfAstFile.isEmpty()) {
+        udfSigs = ExtensionFunctionSignatureParser.parse(udfAstFile);
+        udfSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(udfSigs);
+      }
+    } catch (IOException ex) {
+      MAPDLOGGER.error("Could not load udf function signatures: " + ex.getMessage());
+    }
+
     this.extSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(extSigs);
+
+    // Put all the udf functions signatures in extSigs so Calcite has a view of
+    // extendsion functions and udf functions
+
+    if (!udfAstFile.isEmpty()) {
+      extSigs.putAll(udfSigs);
+    }
+
+    // Put all the udf functions signatures in extSigs so Calcite has a view of
+    // extendsion functions and udf functions
+
+    if (!udfAstFile.isEmpty()) {
+      extSigs.putAll(udfSigs);
+    }
 
     PoolableObjectFactory parserFactory =
             new CalciteParserFactory(dataDir, extSigs, mapdPort, skT);
@@ -208,6 +237,11 @@ class CalciteServerHandler implements CalciteServer.Iface {
   @Override
   public String getExtensionFunctionWhitelist() {
     return this.extSigsJson;
+  }
+
+  @Override
+  public String getUserDefinedFunctionWhitelist() {
+    return this.udfSigsJson;
   }
 
   void setServer(TServer s) {

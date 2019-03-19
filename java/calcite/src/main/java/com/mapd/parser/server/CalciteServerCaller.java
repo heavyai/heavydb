@@ -16,6 +16,7 @@
 package com.mapd.parser.server;
 
 import java.io.IOException;
+import java.nio.file.FileSystemNotFoundException;
 import static java.lang.System.exit;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -83,12 +84,19 @@ public class CalciteServerCaller {
                                 .longOpt("extensions")
                                 .build();
 
+    Option udf_file = Option.builder("u")
+                              .hasArg()
+                              .desc("User Defined Functions file path")
+                              .longOpt("udf")
+                              .build();
+
     options.addOption(port);
     options.addOption(data);
     options.addOption(extensions);
     options.addOption(mapdPort);
     options.addOption(ssl_trust_store);
     options.addOption(ssl_trust_passwd);
+    options.addOption(udf_file);
 
     CommandLineParser parser = new DefaultParser();
 
@@ -106,8 +114,11 @@ public class CalciteServerCaller {
     String extensionsDir = cmd.getOptionValue("extensions", "build/QueryEngine");
     String trust_store = cmd.getOptionValue("trust_store", "");
     String trust_store_pw = cmd.getOptionValue("trust_store_pw", "");
+    String udfName = cmd.getOptionValue("udf", "");
+
     final Path extensionFunctionsAstFile =
             Paths.get(extensionsDir, "ExtensionFunctions.ast");
+
     // Add logging to our log files directories
     Properties p = new Properties();
     try {
@@ -127,8 +138,22 @@ public class CalciteServerCaller {
               "Supplied java trust stored could not be opened " + ex.getMessage());
     }
 
-    calciteServerWrapper = new CalciteServerWrapper(
-            portNum, mapdPortNum, dataDir, extensionFunctionsAstFile.toString(), skT);
+    Path udfPath;
+
+    try {
+      if (!udfName.isEmpty()) {
+        udfPath = Paths.get(udfName);
+      }
+    } catch (FileSystemNotFoundException ex1) {
+      MAPDLOGGER.error("Could not load udf file " + ex1.getMessage());
+    }
+
+    calciteServerWrapper = new CalciteServerWrapper(portNum,
+            mapdPortNum,
+            dataDir,
+            extensionFunctionsAstFile.toString(),
+            skT,
+            udfName);
 
     while (true) {
       try {

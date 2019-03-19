@@ -22,15 +22,15 @@
  */
 
 #include "Calcite.h"
-#include "Shared/ConfigResolve.h"
-#include "Shared/mapd_shared_ptr.h"
-#include "Shared/mapdpath.h"
-#include "Shared/measure.h"
-
 #include <glog/logging.h>
 #include <thread>
 #include <utility>
 #include "Catalog/Catalog.h"
+#include "Shared/ConfigResolve.h"
+#include "Shared/mapd_shared_ptr.h"
+#include "Shared/mapdpath.h"
+#include "Shared/measure.h"
+#include "Shared/unreachable.h"
 
 #include "Shared/fixautotools.h"
 
@@ -68,7 +68,8 @@ static void start_calcite_server_as_daemon(const int mapd_port,
                                            const std::string& data_dir,
                                            const size_t calcite_max_mem,
                                            const std::string& ssl_trust_store,
-                                           const std::string& ssl_trust_password) {
+                                           const std::string& ssl_trust_password,
+                                           const std::string& udf_filename) {
   std::string const xDebug = "-Xdebug";
   std::string const remoteDebug =
       "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005";
@@ -87,29 +88,64 @@ static void start_calcite_server_as_daemon(const int mapd_port,
   std::string mapdTrustStoreD = "-T";
   std::string mapdTrustPasswd = "-P";
   std::string mapdLogDirectory = "-DMAPD_LOG_DIR=" + data_dir;
+  std::string userDefinedFunctionsP = "";
+  std::string userDefinedFunctionsD = "";
+
+  if (!udf_filename.empty()) {
+    userDefinedFunctionsP += "-u";
+    userDefinedFunctionsD += udf_filename;
+  }
 
   int pid = fork();
   if (pid == 0) {
-    int i = wrapped_execlp("java",
-                           xDebug.c_str(),
-                           remoteDebug.c_str(),
-                           xmxP.c_str(),
-                           mapdLogDirectory.c_str(),
-                           jarP.c_str(),
-                           jarD.c_str(),
-                           extensionsP.c_str(),
-                           extensionsD.c_str(),
-                           dataP.c_str(),
-                           dataD.c_str(),
-                           localPortP.c_str(),
-                           localPortD.c_str(),
-                           mapdPortP.c_str(),
-                           mapdPortD.c_str(),
-                           mapdTrustStoreD.c_str(),
-                           ssl_trust_store.c_str(),
-                           mapdTrustPasswd.c_str(),
-                           ssl_trust_password.c_str(),
-                           (char*)0);
+    int i;
+
+    if (udf_filename.empty()) {
+      i = wrapped_execlp("java",
+                         xDebug.c_str(),
+                         remoteDebug.c_str(),
+                         xmxP.c_str(),
+                         mapdLogDirectory.c_str(),
+                         jarP.c_str(),
+                         jarD.c_str(),
+                         extensionsP.c_str(),
+                         extensionsD.c_str(),
+                         dataP.c_str(),
+                         dataD.c_str(),
+                         localPortP.c_str(),
+                         localPortD.c_str(),
+                         mapdPortP.c_str(),
+                         mapdPortD.c_str(),
+                         mapdTrustStoreD.c_str(),
+                         ssl_trust_store.c_str(),
+                         mapdTrustPasswd.c_str(),
+                         ssl_trust_password.c_str(),
+                         (char*)0);
+    } else {
+      i = wrapped_execlp("java",
+                         xDebug.c_str(),
+                         remoteDebug.c_str(),
+                         xmxP.c_str(),
+                         mapdLogDirectory.c_str(),
+                         jarP.c_str(),
+                         jarD.c_str(),
+                         extensionsP.c_str(),
+                         extensionsD.c_str(),
+                         dataP.c_str(),
+                         dataD.c_str(),
+                         localPortP.c_str(),
+                         localPortD.c_str(),
+                         mapdPortP.c_str(),
+                         mapdPortD.c_str(),
+                         mapdTrustStoreD.c_str(),
+                         ssl_trust_store.c_str(),
+                         mapdTrustPasswd.c_str(),
+                         ssl_trust_password.c_str(),
+                         userDefinedFunctionsP.c_str(),
+                         userDefinedFunctionsD.c_str(),
+                         (char*)0);
+    }
+
     if (i) {
       int errsv = errno;
       LOG(FATAL) << "Failed to start Calcite server [errno=" << errsv
@@ -140,7 +176,8 @@ std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> g
 void Calcite::runServer(const int mapd_port,
                         const int port,
                         const std::string& data_dir,
-                        const size_t calcite_max_mem) {
+                        const size_t calcite_max_mem,
+                        const std::string& udf_filename) {
   LOG(INFO) << "Running calcite server as a daemon";
 
   // ping server to see if for any reason there is an orphaned one
@@ -164,8 +201,13 @@ void Calcite::runServer(const int mapd_port,
   }
 
   // start the calcite server as a seperate process
-  start_calcite_server_as_daemon(
-      mapd_port, port, data_dir, calcite_max_mem, ssl_trust_store_, ssl_trust_password_);
+  start_calcite_server_as_daemon(mapd_port,
+                                 port,
+                                 data_dir,
+                                 calcite_max_mem,
+                                 ssl_trust_store_,
+                                 ssl_trust_password_,
+                                 udf_filename);
 
   // check for new server for 5 seconds max
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
@@ -206,15 +248,17 @@ Calcite::Calcite(const int mapd_port,
                  const int calcite_port,
                  const std::string& data_dir,
                  const size_t calcite_max_mem,
-                 const std::string& session_prefix)
+                 const std::string& session_prefix,
+                 const std::string& udf_filename)
     : server_available_(false), session_prefix_(session_prefix) {
-  init(mapd_port, calcite_port, data_dir, calcite_max_mem);
+  init(mapd_port, calcite_port, data_dir, calcite_max_mem, udf_filename);
 }
 
 void Calcite::init(const int mapd_port,
                    const int calcite_port,
                    const std::string& data_dir,
-                   const size_t calcite_max_mem) {
+                   const size_t calcite_max_mem,
+                   const std::string& udf_filename) {
   LOG(INFO) << "Creating Calcite Handler,  Calcite Port is " << calcite_port
             << " base data dir is " << data_dir;
   if (calcite_port < 0) {
@@ -226,21 +270,23 @@ void Calcite::init(const int mapd_port,
     server_available_ = false;
   } else {
     remote_calcite_port_ = calcite_port;
-    runServer(mapd_port, calcite_port, data_dir, calcite_max_mem);
+    runServer(mapd_port, calcite_port, data_dir, calcite_max_mem, udf_filename);
     server_available_ = true;
   }
 }
 
 Calcite::Calcite(const MapDParameters& mapd_parameter,
                  const std::string& data_dir,
-                 const std::string& session_prefix)
+                 const std::string& session_prefix,
+                 const std::string& udf_filename)
     : ssl_trust_store_(mapd_parameter.ssl_trust_store)
     , ssl_trust_password_(mapd_parameter.ssl_trust_password)
     , session_prefix_(session_prefix) {
   init(mapd_parameter.omnisci_server_port,
        mapd_parameter.calcite_port,
        data_dir,
-       mapd_parameter.calcite_max_mem);
+       mapd_parameter.calcite_max_mem,
+       udf_filename);
 }
 
 void Calcite::updateMetadata(std::string catalog, std::string table) {
@@ -435,10 +481,29 @@ std::string Calcite::getExtensionFunctionWhitelist() {
     VLOG(1) << whitelist;
     return whitelist;
   } else {
-    LOG(INFO) << "Not routing to Calcite, server is not up";
+    LOG(FATAL) << "Not routing to Calcite, server is not up";
     return "";
   }
   CHECK(false);
+  return "";
+}
+
+std::string Calcite::getUserDefinedFunctionWhitelist() {
+  if (server_available_) {
+    TPlanResult ret;
+    std::string whitelist;
+
+    std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
+        clientP = get_client(remote_calcite_port_);
+    clientP.first->getUserDefinedFunctionWhitelist(whitelist);
+    clientP.second->close();
+    VLOG(1) << "User defined functions whitelist loaded from Calcite: " << whitelist;
+    return whitelist;
+  } else {
+    LOG(FATAL) << "Not routing to Calcite, server is not up";
+    return "";
+  }
+  UNREACHABLE();
   return "";
 }
 

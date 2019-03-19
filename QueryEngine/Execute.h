@@ -98,6 +98,10 @@ using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescript
 class QueryMemoryDescriptor;
 using QueryMemoryDescriptorOwned = std::unique_ptr<QueryMemoryDescriptor>;
 
+extern void read_udf_gpu_module(std::string& udf_ir_filename);
+extern void read_udf_cpu_module(std::string& udf_ir_filename);
+extern bool is_udf_module_present();
+
 class ExecutionResult;
 
 class WatchdogException : public std::runtime_error {

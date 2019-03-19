@@ -58,6 +58,13 @@
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
 #include <llvm/Transforms/Utils.h>
 #endif
+#include <llvm/IRReader/IRReader.h>
+#include <llvm/Linker/Linker.h>
+#include <llvm/Support/SourceMgr.h>
+#include <llvm/Support/raw_ostream.h>
+
+std::unique_ptr<llvm::Module> udf_gpu_module;
+std::unique_ptr<llvm::Module> udf_cpu_module;
 
 namespace {
 
@@ -474,6 +481,18 @@ void legalize_nvvm_ir(llvm::Function* query_func) {
 
 }  // namespace
 
+llvm::StringRef getGPUTargetTripleString() {
+  return llvm::StringRef("nvptx64-nvidia-cuda");
+}
+
+llvm::StringRef getGPUDataLayout() {
+  return llvm::StringRef(
+      "e-p:64:64:64-i1:8:8-i8:8:8-"
+      "i16:16:16-i32:32:32-i64:64:64-"
+      "f32:32:32-f64:64:64-v16:16:16-"
+      "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
+}
+
 std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
     llvm::Function* query_func,
     llvm::Function* multifrag_query_func,
@@ -525,6 +544,28 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
       "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
   module->setTargetTriple("nvptx64-nvidia-cuda");
 
+  if (is_udf_module_present()) {
+    auto udf_module_copy = llvm::CloneModule(
+#if LLVM_VERSION_MAJOR >= 7
+        *udf_gpu_module.get(),
+#else
+        udf_gpu_module.get(),
+#endif
+        cgen_state_->vmap_);
+
+    udf_module_copy->setDataLayout(getGPUDataLayout());
+    udf_module_copy->setTargetTriple(getGPUTargetTripleString());
+
+    llvm::Linker ld(*module);
+    bool link_error = false;
+
+    link_error = ld.linkInModule(std::move(udf_module_copy));
+
+    if (link_error) {
+      LOG(FATAL) << "optimizeAndCodegenGPU: *** error linking module ***";
+    }
+  }
+
   // run optimizations
   optimize_ir(query_func, module, live_funcs, co, "", "");
   legalize_nvvm_ir(query_func);
@@ -553,6 +594,19 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
   if (row_func_not_inlined) {
     clear_function_attributes(cgen_state_->row_func_);
     roots.insert(cgen_state_->row_func_);
+  }
+
+  // Prevent the udf function(s) from being removed the way the runtime functions are
+
+  if (is_udf_module_present()) {
+    for (auto& f : udf_gpu_module->getFunctionList()) {
+      llvm::Function* udf_function = module->getFunction(f.getName());
+
+      if (udf_function) {
+        legalize_nvvm_ir(udf_function);
+        roots.insert(udf_function);
+      }
+    }
   }
 
   std::vector<llvm::Function*> rt_funcs;
@@ -994,6 +1048,32 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
 
 std::unique_ptr<llvm::Module> g_rt_module(read_template_module(getGlobalLLVMContext()));
 
+bool is_udf_module_present() {
+  return (udf_gpu_module != nullptr) && (udf_cpu_module != nullptr);
+}
+
+void read_udf_gpu_module(std::string& udf_ir_filename) {
+  llvm::SMDiagnostic parse_error;
+
+  llvm::StringRef file_name_arg(udf_ir_filename);
+
+  udf_gpu_module = llvm::parseIRFile(file_name_arg, parse_error, getGlobalLLVMContext());
+  if (!udf_gpu_module) {
+    parse_error.print(udf_ir_filename.c_str(), llvm::errs());
+  }
+}
+
+void read_udf_cpu_module(std::string& udf_ir_filename) {
+  llvm::SMDiagnostic parse_error;
+
+  llvm::StringRef file_name_arg(udf_ir_filename);
+
+  udf_cpu_module = llvm::parseIRFile(file_name_arg, parse_error, getGlobalLLVMContext());
+  if (!udf_cpu_module) {
+    parse_error.print(udf_ir_filename.c_str(), llvm::errs());
+  }
+}
+
 std::unordered_set<llvm::Function*> Executor::markDeadRuntimeFuncs(
     llvm::Module& module,
     const std::vector<llvm::Function*>& roots,
@@ -1361,11 +1441,41 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
         if (!func) {
           return true;
         }
+
         return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
                 func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage ||
                 always_clone_runtime_function(func));
       });
+
+  if (is_udf_module_present() && (co.device_type_ == ExecutorDeviceType::CPU)) {
+    std::unique_ptr<llvm::Module> udf_module_copy;
+
+    udf_module_copy = llvm::CloneModule(
+#if LLVM_VERSION_MAJOR >= 7
+        *udf_cpu_module.get(),
+#else
+        udf_cpu_module.get(),
+#endif
+        cgen_state_->vmap_);
+
+    // Initialize linker with module for RuntimeFunctions.bc
+    llvm::Linker ld(*rt_module_copy);
+    bool link_error = false;
+
+    link_error = ld.linkInModule(std::move(udf_module_copy));
+
+    if (link_error) {
+      LOG(INFO) << "read_udf_module: *** error linking module ***";
+    }
+  }
+
   cgen_state_->module_ = rt_module_copy.release();
+
+  // LOG(INFO) << "g_rt_module after linking with udf module";
+  // g_rt_module->print(llvm::errs(), nullptr);
+
+  // LOG(INFO) << "cgen_state module after linking with udf module";
+  // cgen_state_->module_->print(llvm::errs(), nullptr);
 
   auto agg_fnames =
       get_agg_fnames(ra_exe_unit.target_exprs, !ra_exe_unit.groupby_exprs.empty());

@@ -31,6 +31,15 @@ std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get(
   return &it->second;
 }
 
+std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get_udf(
+    const std::string& name) {
+  const auto it = udf_functions_.find(to_upper(name));
+  if (it == udf_functions_.end()) {
+    return nullptr;
+  }
+  return &it->second;
+}
+
 namespace {
 
 // Returns the LLVM name for `type`.
@@ -148,22 +157,10 @@ std::string drop_suffix(const std::string& str) {
 
 }  // namespace
 
-// Calcite loads the available extensions from `ExtensionFunctions.ast`, adds
-// them to its operator table and shares the list with the execution layer in
-// JSON format. Build an in-memory representation of that list here so that it
-// can be used by getLLVMDeclarations(), when the LLVM IR codegen asks for it.
-void ExtensionFunctionsWhitelist::add(const std::string& json_func_sigs) {
-  // Valid json_func_sigs example:
-  // [
-  //    {
-  //       "name":"sum",
-  //       "ret":"i32",
-  //       "args":[
-  //          "i32",
-  //          "i32"
-  //       ]
-  //    }
-  // ]
+using SignatureMap = std::unordered_map<std::string, std::vector<ExtensionFunction>>;
+
+void ExtensionFunctionsWhitelist::addCommon(SignatureMap& signatures,
+                                            const std::string& json_func_sigs) {
   rapidjson::Document func_sigs;
   func_sigs.Parse(json_func_sigs.c_str());
   CHECK(func_sigs.IsArray());
@@ -180,9 +177,38 @@ void ExtensionFunctionsWhitelist::add(const std::string& json_func_sigs) {
          ++args_serialized_it) {
       args.push_back(deserialize_type(json_str(*args_serialized_it)));
     }
-    functions_[to_upper(drop_suffix(name))].emplace_back(name, args, ret);
+    signatures[to_upper(drop_suffix(name))].emplace_back(name, args, ret);
+  }
+}
+
+// Calcite loads the available extensions from `ExtensionFunctions.ast`, adds
+// them to its operator table and shares the list with the execution layer in
+// JSON format. Build an in-memory representation of that list here so that it
+// can be used by getLLVMDeclarations(), when the LLVM IR codegen asks for it.
+void ExtensionFunctionsWhitelist::add(const std::string& json_func_sigs) {
+  // Valid json_func_sigs example:
+  // [
+  //    {
+  //       "name":"sum",
+  //       "ret":"i32",
+  //       "args":[
+  //          "i32",
+  //          "i32"
+  //       ]
+  //    }
+  // ]
+
+  addCommon(functions_, json_func_sigs);
+}
+
+void ExtensionFunctionsWhitelist::addUdfs(const std::string& json_func_sigs) {
+  if (!json_func_sigs.empty()) {
+    addCommon(udf_functions_, json_func_sigs);
   }
 }
 
 std::unordered_map<std::string, std::vector<ExtensionFunction>>
     ExtensionFunctionsWhitelist::functions_;
+
+std::unordered_map<std::string, std::vector<ExtensionFunction>>
+    ExtensionFunctionsWhitelist::udf_functions_;

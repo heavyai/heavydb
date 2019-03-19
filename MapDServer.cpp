@@ -211,6 +211,10 @@ MapDProgramOptions::MapDProgramOptions() {
 
 void MapDProgramOptions::fillOptions(po::options_description& desc) {
   desc.add_options()("help,h", "Print help messages");
+  desc.add_options()("udf",
+                     po::value<std::string>(&udf_file_name),
+                     "Path to User Defined Function c++ file.");
+
   desc.add_options()("config", po::value<std::string>(&config_file), "Path to mapd.conf");
   desc.add_options()(
       "data",
@@ -662,6 +666,10 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
     LOG(INFO) << " Filter push down for JOIN is enabled";
   }
 
+  if (vm.count("udf")) {
+    LOG(INFO) << "User provided extension functions loaded from " << udf_file_name;
+  }
+
   boost::algorithm::trim_if(mapd_parameters.ha_brokers, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(mapd_parameters.ha_group_id, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(mapd_parameters.ha_shared_data, boost::is_any_of("\"'"));
@@ -750,7 +758,8 @@ int main(int argc, char** argv) {
                                                   desc_all.mapd_parameters,
                                                   desc_all.enable_legacy_syntax,
                                                   desc_all.idle_session_duration,
-                                                  desc_all.max_session_duration);
+                                                  desc_all.max_session_duration,
+                                                  desc_all.udf_file_name);
 
   mapd::shared_ptr<TServerSocket> serverSocket;
   if (!desc_all.mapd_parameters.ssl_cert_file.empty() &&

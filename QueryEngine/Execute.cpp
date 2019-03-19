@@ -72,6 +72,8 @@ bool g_from_table_reordering{true};
 bool g_inner_join_fragment_skipping{false};
 extern bool g_enable_smem_group_by;
 extern std::unique_ptr<llvm::Module> g_rt_module;
+extern std::unique_ptr<llvm::Module> udf_gpu_module;
+extern std::unique_ptr<llvm::Module> udf_cpu_module;
 bool g_enable_filter_push_down{false};
 float g_filter_push_down_low_frac{-1.0f};
 float g_filter_push_down_high_frac{-1.0f};

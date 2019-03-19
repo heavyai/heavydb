@@ -44,16 +44,19 @@ class Calcite {
   Calcite(const int mapd_port,
           const int port,
           const std::string& data_dir,
-          const size_t calcite_max_mem)
-      : Calcite(mapd_port, port, data_dir, calcite_max_mem, ""){};
+          const size_t calcite_max_mem,
+          const std::string& udf_filename = "")
+      : Calcite(mapd_port, port, data_dir, calcite_max_mem, "", udf_filename){};
   Calcite(const int mapd_port,
           const int port,
           const std::string& data_dir,
           const size_t calcite_max_mem,
-          const std::string& session_prefix);
+          const std::string& session_prefix,
+          const std::string& udf_filename = "");
   Calcite(const MapDParameters& mapd_parameter,
           const std::string& data_dir,
-          const std::string& session_prefix);
+          const std::string& session_prefix,
+          const std::string& udf_filename = "");
   TPlanResult process(const Catalog_Namespace::SessionInfo& session_info,
                       const std::string sql_string,
                       const std::vector<TFilterPushDownInfo>& filter_push_down_info,
@@ -66,6 +69,7 @@ class Calcite {
       const std::string sql_string,
       const int cursor);
   std::string getExtensionFunctionWhitelist();
+  std::string getUserDefinedFunctionWhitelist();
   void updateMetadata(std::string catalog, std::string table);
   void close_calcite_server();
   virtual ~Calcite();
@@ -76,11 +80,13 @@ class Calcite {
   void init(const int mapd_port,
             const int port,
             const std::string& data_dir,
-            const size_t calcite_max_mem);
+            const size_t calcite_max_mem,
+            const std::string& udf_filename);
   void runServer(const int mapd_port,
                  const int port,
                  const std::string& data_dir,
-                 const size_t calcite_max_mem);
+                 const size_t calcite_max_mem,
+                 const std::string& udf_filename);
   TPlanResult processImpl(const Catalog_Namespace::SessionInfo& session_info,
                           const std::string sql_string,
                           const std::vector<TFilterPushDownInfo>& filter_push_down_info,
