@@ -39,7 +39,8 @@ class MapDAggHandler {
                        const bool column_format,
                        const std::string& nonce,
                        const int32_t first_n,
-                       const int32_t at_most_n) {
+                       const int32_t at_most_n,
+                       const MapDParameters& mapd_parameters) {
     CHECK(false);
   }
   friend class MapDHandler;

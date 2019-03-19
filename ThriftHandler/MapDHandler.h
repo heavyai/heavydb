@@ -77,6 +77,8 @@
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/make_shared.hpp>
+#include <boost/none_t.hpp>
+#include <boost/optional.hpp>
 #include <boost/program_options.hpp>
 #include <boost/regex.hpp>
 #include <boost/tokenizer.hpp>
@@ -103,6 +105,8 @@ enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIE
 
 using SessionMap = std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>>;
 using permissionFuncPtr = bool (*)(const AccessPrivileges&, const TDBObjectPermissions&);
+using TableMap = std::map<std::string, bool>;
+using OptionalTableMap = boost::optional<TableMap>;
 
 class MapDHandler : public MapDIf {
  public:
@@ -476,7 +480,8 @@ class MapDHandler : public MapDIf {
   std::string parse_to_ra(const std::string& query_str,
                           const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                           const Catalog_Namespace::SessionInfo& session_info,
-                          std::map<std::string, bool>* tableNames = nullptr);
+                          OptionalTableMap tableNames,
+                          const MapDParameters mapd_parameters);
 
   void sql_execute_impl(TQueryResult& _return,
                         const Catalog_Namespace::SessionInfo& session_info,

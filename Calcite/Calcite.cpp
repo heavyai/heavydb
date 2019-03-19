@@ -298,9 +298,14 @@ TPlanResult Calcite::process(
     const std::string sql_string,
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
-    const bool is_explain) {
-  TPlanResult result = processImpl(
-      session_info, sql_string, filter_push_down_info, legacy_syntax, is_explain);
+    const bool is_explain,
+    const bool is_view_optimize) {
+  TPlanResult result = processImpl(session_info,
+                                   sql_string,
+                                   filter_push_down_info,
+                                   legacy_syntax,
+                                   is_explain,
+                                   is_view_optimize);
 
   AccessPrivileges NOOP;
 
@@ -367,7 +372,8 @@ TPlanResult Calcite::processImpl(
     const std::string sql_string,
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
-    const bool is_explain) {
+    const bool is_explain,
+    const bool is_view_optimize) {
   auto& cat = session_info.getCatalog();
   std::string user = session_info.get_currentUser().userName;
   std::string session = session_info.get_session_id();
@@ -391,7 +397,8 @@ TPlanResult Calcite::processImpl(
                                sql_string,
                                filter_push_down_info,
                                legacy_syntax,
-                               is_explain);
+                               is_explain,
+                               is_view_optimize);
         clientP.second->close();
       });
 

@@ -35,7 +35,7 @@ service CalciteServer {
    void shutdown(),
    TPlanResult process(1:string user 2:string passwd 3:string catalog 4:string sql_text
                        5:list<TFilterPushDownInfo> filterPushDownInfo 6:bool legacySyntax
-                       7:bool isexplain) throws (1:InvalidParseRequest parseErr),
+                       7:bool isexplain 8:bool isViewOptimize) throws (1:InvalidParseRequest parseErr),
    string getExtensionFunctionWhitelist()
    void updateMetadata(1: string catalog, 2:string table),
    list<completion_hints.TCompletionHint> getCompletionHints(1:string user, 2:string passwd, 3:string catalog,

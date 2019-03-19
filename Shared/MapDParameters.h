@@ -45,6 +45,8 @@ struct MapDParameters {
   std::string ssl_trust_store = "";  // file path to java jks version of ssl_key_fle
   std::string ssl_trust_password = "";  // pass phrae for java jks trust store.
   bool aggregator = false;
+  bool enable_calcite_view_optimize =
+      false;  // allow calcite to optimize the relalgebra for a view query
   MapDParameters() : cuda_block_size(0), cuda_grid_size(0), calcite_max_mem(1024) {}
 };
 

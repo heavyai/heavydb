@@ -197,6 +197,17 @@ public class SqlIdentifierCapturer {
     return methods;
   }
 
+  public String toString() {
+    String out = "";
+    out += " Selects: " + selects + "\n";
+    out += " Inserts: " + inserts + "\n";
+    out += " Updates: " + updates + "\n";
+    out += " Deletes: " + deletes + "\n";
+    out += " Ignore : " + ignore + "\n";
+
+    return out;
+  }
+
   public static void main(String[] args) throws Exception {
     String sql = "UPDATE sales set f=(SELECT max(r.num) from report as r)";
     sql = "INSER INTO sales (a, b, c ) VALUES(10, (SELECT max(foo) from bob), 0)";

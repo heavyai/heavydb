@@ -23,7 +23,7 @@ import com.google.common.collect.Sets;
 import java.util.List;
 import java.util.ArrayList;
 
-import com.mapd.calcite.parser.MapDParser;
+import com.mapd.calcite.parser.MapDParserOptions;
 
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptUtil;
@@ -45,12 +45,12 @@ public class DynamicFilterJoinRule extends FilterJoinRule.FilterIntoJoinRule {
   public DynamicFilterJoinRule(boolean smart,
           RelBuilderFactory relBuilderFactory,
           Predicate predicate,
-          final List<MapDParser.FilterPushDownInfo> filter_push_down_info) {
+          final List<MapDParserOptions.FilterPushDownInfo> filter_push_down_info) {
     super(smart, relBuilderFactory, predicate);
     this.filter_push_down_info = filter_push_down_info;
     this.smart = smart;
   }
-  private final List<MapDParser.FilterPushDownInfo> filter_push_down_info;
+  private final List<MapDParserOptions.FilterPushDownInfo> filter_push_down_info;
   private final boolean smart;
 
   @Override
@@ -78,7 +78,7 @@ public class DynamicFilterJoinRule extends FilterJoinRule.FilterIntoJoinRule {
       ImmutableBitSet filterRefs = RelOptUtil.InputFinder.bits(each_filter);
       if (filterRefs.cardinality() == 1) {
         Integer ref_index = filterRefs.toList().get(0);
-        for (final MapDParser.FilterPushDownInfo cand : filter_push_down_info) {
+        for (final MapDParserOptions.FilterPushDownInfo cand : filter_push_down_info) {
           if (ref_index >= cand.input_start && ref_index < cand.input_next) {
             filtersToBePushedDown.add(each_filter);
             filtersAboveRemained.remove(each_filter);

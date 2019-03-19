@@ -16,6 +16,7 @@
 package com.mapd.parser.server;
 
 import com.mapd.calcite.parser.MapDParser;
+import com.mapd.calcite.parser.MapDParserOptions;
 import com.mapd.calcite.parser.MapDUser;
 import com.mapd.thrift.calciteserver.InvalidParseRequest;
 import com.mapd.thrift.calciteserver.TAccessedQueryObjects;
@@ -99,7 +100,8 @@ class CalciteServerHandler implements CalciteServer.Iface {
           String sqlText,
           java.util.List<TFilterPushDownInfo> thriftFilterPushDownInfo,
           boolean legacySyntax,
-          boolean isExplain) throws InvalidParseRequest, TException {
+          boolean isExplain,
+          boolean isViewOptimize) throws InvalidParseRequest, TException {
     long timer = System.currentTimeMillis();
     callCount++;
     MapDParser parser;
@@ -128,14 +130,16 @@ class CalciteServerHandler implements CalciteServer.Iface {
     TAccessedQueryObjects resolvedAccessedObjects = new TAccessedQueryObjects();
 
     try {
-      final List<MapDParser.FilterPushDownInfo> filterPushDownInfo = new ArrayList<>();
+      final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
+              new ArrayList<>();
       for (final TFilterPushDownInfo req : thriftFilterPushDownInfo) {
-        filterPushDownInfo.add(new MapDParser.FilterPushDownInfo(
+        filterPushDownInfo.add(new MapDParserOptions.FilterPushDownInfo(
                 req.input_prev, req.input_start, req.input_next));
       }
       try {
-        relAlgebra = parser.getRelAlgebra(
-                sqlText, filterPushDownInfo, legacySyntax, mapDUser, isExplain);
+        MapDParserOptions parserOptions = new MapDParserOptions(
+                filterPushDownInfo, legacySyntax, isExplain, isViewOptimize);
+        relAlgebra = parser.getRelAlgebra(sqlText, parserOptions, mapDUser);
       } catch (ValidationException ex) {
         String msg = "Validation: " + ex.getMessage();
         MAPDLOGGER.error(msg);

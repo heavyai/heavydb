@@ -65,6 +65,7 @@ import org.apache.calcite.util.Util;
 
 import com.google.common.collect.ImmutableList;
 import com.mapd.calcite.parser.MapDParser;
+import com.mapd.calcite.parser.MapDParserOptions;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -105,7 +106,8 @@ public class MapDPlanner implements Planner {
   // set in STATE_5_CONVERT
   private RelRoot root;
 
-  private List<MapDParser.FilterPushDownInfo> filterPushDownInfo = new ArrayList<>();
+  private List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
+          new ArrayList<>();
 
   /**
    * Creates a planner. Not a public API; call
@@ -309,7 +311,7 @@ public class MapDPlanner implements Planner {
   }
 
   public void setFilterPushDownInfo(
-          final List<MapDParser.FilterPushDownInfo> filterPushDownInfo) {
+          final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo) {
     this.filterPushDownInfo = filterPushDownInfo;
   }
 

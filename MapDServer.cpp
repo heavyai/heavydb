@@ -301,6 +301,10 @@ void MapDProgramOptions::fillOptions(po::options_description& desc) {
           ->default_value(g_hll_precision_bits)
           ->implicit_value(g_hll_precision_bits),
       "Number of bits used from the hash value used to specify the bucket number.");
+  desc.add_options()("enable-calcite-view-optimize",
+                     po::value<bool>(&mapd_parameters.enable_calcite_view_optimize)
+                         ->default_value(mapd_parameters.enable_calcite_view_optimize),
+                     "Enable calcite to optimize when a view is part of the query");
   desc.add_options()("enable-watchdog",
                      po::value<bool>(&enable_watchdog)
                          ->default_value(enable_watchdog)
@@ -692,6 +696,8 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
   LOG(INFO) << " calcite JVM max memory  " << mapd_parameters.calcite_max_mem;
   LOG(INFO) << " OmniSci Server Port  " << mapd_parameters.omnisci_server_port;
   LOG(INFO) << " OmniSci Calcite Port  " << mapd_parameters.calcite_port;
+  LOG(INFO) << " Enable Calcite view optimize "
+            << mapd_parameters.enable_calcite_view_optimize;
 
   boost::algorithm::trim_if(authMetadata.distinguishedName, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.uri, boost::is_any_of("\"'"));

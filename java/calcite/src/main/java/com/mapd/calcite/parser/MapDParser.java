@@ -26,6 +26,7 @@ import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
+import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.schema.SchemaPlus;
@@ -56,8 +57,26 @@ import org.apache.calcite.util.ConversionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.calcite.tools.Program;
+import org.apache.calcite.tools.Programs;
+import org.apache.calcite.rel.rules.FilterMergeRule;
+import org.apache.calcite.rel.rules.FilterProjectTransposeRule;
+import org.apache.calcite.rel.rules.JoinProjectTransposeRule;
+import org.apache.calcite.rel.rules.ProjectCalcMergeRule;
+import org.apache.calcite.rel.rules.ProjectFilterTransposeRule;
+import org.apache.calcite.rel.rules.ProjectMergeRule;
+import org.apache.calcite.rel.rules.ProjectRemoveRule;
+import org.apache.calcite.rel.rules.PruneEmptyRules;
+import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
+import org.apache.calcite.plan.RelOptMaterialization;
+import org.apache.calcite.plan.RelOptLattice;
+import com.google.common.collect.ImmutableList;
+import org.apache.calcite.sql.SqlExplainFormat;
+import org.apache.calcite.sql.SqlExplainLevel;
+
 import com.mapd.parser.server.ExtensionFunction;
 import com.mapd.common.SockTransportProperties;
+
 /**
  *
  * @author michael
@@ -67,17 +86,19 @@ public final class MapDParser {
 
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDParser.class);
 
-  //    private SqlTypeFactoryImpl typeFactory;
-  //    private MapDCatalogReader catalogReader;
-  //    private SqlValidatorImpl validator;
-  //    private SqlToRelConverter converter;
+  // private SqlTypeFactoryImpl typeFactory;
+  // private MapDCatalogReader catalogReader;
+  // private SqlValidatorImpl validator;
+  // private SqlToRelConverter converter;
   private final Map<String, ExtensionFunction> extSigs;
   private final String dataDir;
 
   private int callCount = 0;
   private final int mapdPort;
   private MapDUser mapdUser;
+  SqlNode sqlNode_;
   private SockTransportProperties sock_transport_properties = null;
+
   public MapDParser(String dataDir,
           final Map<String, ExtensionFunction> extSigs,
           int mapdPort,
@@ -115,31 +136,15 @@ public final class MapDParser {
     this.mapdUser = mapdUser;
   }
 
-  public static class FilterPushDownInfo {
-    public FilterPushDownInfo(
-            final int input_prev, final int input_start, final int input_next) {
-      this.input_prev = input_prev;
-      this.input_start = input_start;
-      this.input_next = input_next;
-    }
-
-    public int input_prev;
-    public int input_start;
-    public int input_next;
-  }
-
-  public String getRelAlgebra(String sql,
-          final List<FilterPushDownInfo> filterPushDownInfo,
-          final boolean legacy_syntax,
-          final MapDUser mapDUser,
-          final boolean isExplain)
+  public String getRelAlgebra(
+          String sql, final MapDParserOptions parserOptions, final MapDUser mapDUser)
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
-    final RelRoot sqlRel = queryToSqlNode(sql, filterPushDownInfo, legacy_syntax);
+    final RelRoot sqlRel = queryToSqlNode(sql, parserOptions);
 
     RelNode project = sqlRel.project();
 
-    if (isExplain) {
+    if (parserOptions.isExplain()) {
       return RelOptUtil.toString(sqlRel.project());
     }
 
@@ -175,28 +180,13 @@ public final class MapDParser {
     return resolved;
   }
 
-  public SqlIdentifierCapturer captureIdentifiers(String sql, boolean legacy_syntax)
-          throws SqlParseException {
-    try {
-      Planner planner = getPlanner();
-      SqlNode node = processSQL(sql, legacy_syntax, planner);
-      SqlIdentifierCapturer capturer = new SqlIdentifierCapturer();
-      capturer.scan(node);
-      return capturer;
-    } catch (Exception | Error e) {
-      MAPDLOGGER.error("Error parsing sql: " + sql, e);
-      return new SqlIdentifierCapturer();
-    }
-  }
-
-  RelRoot queryToSqlNode(final String sql,
-          final List<FilterPushDownInfo> filterPushDownInfo,
-          final boolean legacy_syntax)
+  RelRoot queryToSqlNode(final String sql, final MapDParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
     MapDPlanner planner = getPlanner();
 
-    SqlNode node = processSQL(sql, legacy_syntax, planner);
-    if (legacy_syntax) {
+    SqlNode node = processSQL(sql, parserOptions.isLegacySyntax(), planner);
+
+    if (parserOptions.isLegacySyntax()) {
       // close original planner
       planner.close();
       // create a new one
@@ -210,7 +200,7 @@ public final class MapDParser {
     SqlSelect validate_select = getSelectChild(validateR);
 
     // Hide rowid from select * queries
-    if (legacy_syntax && is_select_star && validate_select != null) {
+    if (parserOptions.isLegacySyntax() && is_select_star && validate_select != null) {
       SqlNodeList proj_exprs = ((SqlSelect) validateR).getSelectList();
       SqlNodeList new_proj_exprs = new SqlNodeList(proj_exprs.getParserPosition());
       for (SqlNode proj_expr : proj_exprs) {
@@ -235,10 +225,61 @@ public final class MapDParser {
       validateR = planner.validate(validateR);
     }
 
-    planner.setFilterPushDownInfo(filterPushDownInfo);
+    planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
     RelRoot relR = planner.rel(validateR);
     planner.close();
-    return relR;
+
+    if (!parserOptions.isViewOptimizeEnabled()) {
+      return relR;
+    } else {
+      // check to see if a view is involved in the query
+      boolean foundView = false;
+      MapDSchema schema = new MapDSchema(
+              dataDir, this, mapdPort, mapdUser, sock_transport_properties);
+      SqlIdentifierCapturer capturer =
+              captureIdentifiers(sql, parserOptions.isLegacySyntax());
+      for (String name : capturer.selects) {
+        MapDTable table = (MapDTable) schema.getTable(name);
+        if (null == table) {
+          throw new RuntimeException("table/view not found: " + name);
+        }
+        if (table instanceof MapDView) {
+          foundView = true;
+        }
+      }
+
+      if (!foundView) {
+        return relR;
+      }
+
+      // do some calcite based optimization
+      // will allow duplicate projects to merge
+      ProjectMergeRule projectMergeRule =
+              new ProjectMergeRule(true, RelFactories.LOGICAL_BUILDER);
+      final Program program =
+              Programs.hep(ImmutableList.of(FilterProjectTransposeRule.INSTANCE,
+                                   projectMergeRule,
+                                   ProjectRemoveRule.INSTANCE,
+                                   FilterMergeRule.INSTANCE,
+                                   JoinProjectTransposeRule.BOTH_PROJECT_INCLUDE_OUTER),
+                      true,
+                      DefaultRelMetadataProvider.INSTANCE);
+
+      RelNode oldRel;
+      RelNode newRel = relR.project();
+
+      do {
+        oldRel = newRel;
+        newRel = program.run(null,
+                oldRel,
+                null,
+                ImmutableList.<RelOptMaterialization>of(),
+                ImmutableList.<RelOptLattice>of());
+        // there must be a better way to compare these
+      } while (!RelOptUtil.toString(oldRel).equals(RelOptUtil.toString(newRel)));
+      RelRoot optRel = RelRoot.of(newRel, relR.kind);
+      return optRel;
+    }
   }
 
   private static SqlNode getUnaliasedExpression(final SqlNode node) {
@@ -492,22 +533,24 @@ public final class MapDParser {
           boolean flt,
           RelDataTypeFactory typeFactory) {
     // stddev_pop(x) ==>
-    //   power(
-    //     (sum(x * x) - sum(x) * sum(x) / (case count(x) when 0 then NULL else count(x)
-    //     end)) / (case count(x) when 0 then NULL else count(x) end), .5)
+    // power(
+    // (sum(x * x) - sum(x) * sum(x) / (case count(x) when 0 then NULL else count(x)
+    // end)) / (case count(x) when 0 then NULL else count(x) end), .5)
     //
     // stddev_samp(x) ==>
-    //   power(
-    //     (sum(x * x) - sum(x) * sum(x) / (case count(x) when 0 then NULL else count(x)
-    //     )) / ((case count(x) when 1 then NULL else count(x) - 1 end)), .5)
+    // power(
+    // (sum(x * x) - sum(x) * sum(x) / (case count(x) when 0 then NULL else count(x)
+    // )) / ((case count(x) when 1 then NULL else count(x) - 1 end)), .5)
     //
     // var_pop(x) ==>
-    //     (sum(x * x) - sum(x) * sum(x) / ((case count(x) when 0 then NULL else count(x)
-    //     end))) / ((case count(x) when 0 then NULL else count(x) end))
+    // (sum(x * x) - sum(x) * sum(x) / ((case count(x) when 0 then NULL else
+    // count(x)
+    // end))) / ((case count(x) when 0 then NULL else count(x) end))
     //
     // var_samp(x) ==>
-    //     (sum(x * x) - sum(x) * sum(x) / ((case count(x) when 0 then NULL else count(x)
-    //     end))) / ((case count(x) when 1 then NULL else count(x) - 1 end))
+    // (sum(x * x) - sum(x) * sum(x) / ((case count(x) when 0 then NULL else
+    // count(x)
+    // end))) / ((case count(x) when 1 then NULL else count(x) - 1 end))
     //
     final SqlNode arg = SqlStdOperatorTable.CAST.createCall(pos,
             operand,
@@ -606,7 +649,7 @@ public final class MapDParser {
           RelDataTypeFactory typeFactory) {
     // covar_pop(x, y) ==> avg(x * y) - avg(x) * avg(y)
     // covar_samp(x, y) ==> (sum(x * y) - sum(x) * avg(y))
-    //                      ((case count(x) when 1 then NULL else count(x) - 1 end))
+    // ((case count(x) when 1 then NULL else count(x) - 1 end))
     final SqlNode arg0 = SqlStdOperatorTable.CAST.createCall(operand0.getParserPosition(),
             operand0,
             SqlTypeUtil.convertTypeToSpec(typeFactory.createSqlType(
@@ -675,8 +718,9 @@ public final class MapDParser {
     } else {
       return null;
     }
-    // corr(x, y) ==> (avg(x * y) - avg(x) * avg(y)) / (stddev_pop(x) * stddev_pop(y))
-    //            ==> covar_pop(x, y) / (stddev_pop(x) * stddev_pop(y))
+    // corr(x, y) ==> (avg(x * y) - avg(x) * avg(y)) / (stddev_pop(x) *
+    // stddev_pop(y))
+    // ==> covar_pop(x, y) / (stddev_pop(x) * stddev_pop(y))
     final SqlNode operand0 = proj_call.operand(0);
     final SqlNode operand1 = proj_call.operand(1);
     final SqlParserPos pos = proj_call.getParserPosition();
@@ -717,6 +761,20 @@ public final class MapDParser {
     // Example of how to add custom function
     MapDSqlOperatorTable.addUDF(tempOpTab, extSigs);
     return tempOpTab;
+  }
+
+  public SqlIdentifierCapturer captureIdentifiers(String sql, boolean legacy_syntax)
+          throws SqlParseException {
+    try {
+      Planner planner = getPlanner();
+      SqlNode node = processSQL(sql, legacy_syntax, planner);
+      SqlIdentifierCapturer capturer = new SqlIdentifierCapturer();
+      capturer.scan(node);
+      return capturer;
+    } catch (Exception | Error e) {
+      MAPDLOGGER.error("Error parsing sql: " + sql, e);
+      return new SqlIdentifierCapturer();
+    }
   }
 
   public int getCallCount() {

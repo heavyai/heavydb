@@ -50,6 +50,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import com.mapd.common.SockTransportProperties;
+
 /**
  *
  * @author michael
@@ -92,6 +93,7 @@ public class MetaConnect {
   private static volatile Map<List<String>, Table> MAPD_TABLE_DETAILS =
           new ConcurrentHashMap<>();
   private final SockTransportProperties sock_transport_properties;
+
   public MetaConnect(int mapdPort,
           String dataDir,
           MapDUser currentMapDUser,
@@ -601,6 +603,18 @@ public class MetaConnect {
               + table.toUpperCase());
       MAPD_TABLE_DETAILS.remove(
               ImmutableList.of(schema.toUpperCase(), table.toUpperCase()));
+    }
+    // Invalidate views
+    Set<List<String>> all = new HashSet<>(MAPD_TABLE_DETAILS.keySet());
+    for (List<String> keys : all) {
+      if (keys.get(0).equals(schema.toUpperCase())) {
+        Table ttable = MAPD_TABLE_DETAILS.get(keys);
+        if (ttable instanceof MapDView) {
+          MAPDLOGGER.debug(
+                  "removing view in schema " + keys.get(0) + " view " + keys.get(1));
+          MAPD_TABLE_DETAILS.remove(keys);
+        }
+      }
     }
     // now remove schema
     MAPDLOGGER.debug("removing schema " + schema.toUpperCase());

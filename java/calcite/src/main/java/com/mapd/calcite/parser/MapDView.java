@@ -16,6 +16,7 @@
 package com.mapd.calcite.parser;
 
 import static com.mapd.calcite.parser.MapDParser.CURRENT_PARSER;
+import com.mapd.calcite.parser.MapDParserOptions;
 import java.util.ArrayList;
 
 import org.apache.calcite.plan.RelOptTable;
@@ -38,16 +39,27 @@ public class MapDView extends MapDTable implements TranslatableTable {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDView.class);
   private final String viewSql;
   private SqlIdentifierCapturer accessObjects;
+  private RelRoot viewRelRoot;
 
   public MapDView(String view_sql, TTableDetails ri, MapDParser mp) {
     super(ri);
     this.viewSql = view_sql;
     try {
-      accessObjects = mp.captureIdentifiers(view_sql, true);
+      MapDParserOptions parserOptions = new MapDParserOptions();
+      viewRelRoot = mp.queryToSqlNode(viewSql, parserOptions);
+      accessObjects = mp.captureIdentifiers(viewSql, parserOptions.isLegacySyntax());
     } catch (SqlParseException e) {
       MAPDLOGGER.error("error parsing view SQL: " + view_sql, e);
-      accessObjects = new SqlIdentifierCapturer();
+    } catch (ValidationException ex) {
+      MAPDLOGGER.error("error validating view SQL: " + view_sql, ex);
+    } catch (RelConversionException ex) {
+      MAPDLOGGER.error("error doing Rel Conversion view SQL: " + view_sql, ex);
     }
+  }
+
+  public String toString() {
+    return "View SQL: " + viewSql + "\n"
+            + "Accessed Objects\n" + accessObjects;
   }
 
   public SqlIdentifierCapturer getAccessedObjects() {
@@ -65,35 +77,11 @@ public class MapDView extends MapDTable implements TranslatableTable {
 
   @Override
   public RelNode toRel(RelOptTable.ToRelContext context, RelOptTable relOptTable) {
-    try {
-      return CURRENT_PARSER.get().queryToSqlNode(viewSql, new ArrayList<>(), true).rel;
-    } catch (SqlParseException ex) {
-      assert false;
-      return null;
-    } catch (ValidationException ex) {
-      assert false;
-      return null;
-    } catch (RelConversionException ex) {
-      assert false;
-      return null;
-    }
+    return viewRelRoot.rel;
   }
 
   @Override
   public RelDataType getRowType(RelDataTypeFactory rdtf) {
-    try {
-      final RelRoot relAlg =
-              CURRENT_PARSER.get().queryToSqlNode(viewSql, new ArrayList<>(), true);
-      return relAlg.validatedRowType;
-    } catch (SqlParseException e) {
-      assert false;
-      return null;
-    } catch (ValidationException ex) {
-      assert false;
-      return null;
-    } catch (RelConversionException ex) {
-      assert false;
-      return null;
-    }
+    return viewRelRoot.validatedRowType;
   }
 }

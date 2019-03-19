@@ -25,6 +25,7 @@
 #define MAPDRENDERHANDLER_H_
 
 #include "../MapDHandler.h"
+#include "Shared/MapDParameters.h"
 
 class MapDRenderHandler {
  public:
@@ -34,7 +35,8 @@ class MapDRenderHandler {
   MapDRenderHandler(MapDHandler* mapd_handler,
                     const size_t render_mem_bytes,
                     const int num_gpus,
-                    const int start_gpu) {
+                    const int start_gpu,
+                    const MapDParameters mapd_parameters) {
     throw std::runtime_error(
         "Rendering is only supported in the Enterprise and Community Editions");
   }

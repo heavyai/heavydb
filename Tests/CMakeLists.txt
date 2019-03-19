@@ -51,6 +51,7 @@ add_executable(GeoTypesTest Shared/GeoTypesTest.cpp)
 add_executable(CtasUpdateTest CtasUpdateTest.cpp)
 add_executable(DateTimeUtilsTest Shared/DateTimeUtilsTest.cpp)
 add_executable(UpdateMetadataTest UpdateMetadataTest.cpp)
+add_executable(CalciteOptimizeTest CalciteOptimizeTest.cpp)
 
 target_link_libraries(ProfileTest gtest Shared Calcite QueryEngine ${MAPD_RENDERING_LIBRARIES} CsvImport QueryRunner Parser ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROF_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 target_link_libraries(ResultSetTest gtest QueryEngine ${MAPD_RENDERING_LIBRARIES} ${Boost_LIBRARIES} CsvImport QueryRunner Parser DataMgr Chunk ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
@@ -79,6 +80,7 @@ target_link_libraries(DBObjectPrivilegesTest gtest ${EXECUTE_TEST_LIBS} ${Boost_
 target_link_libraries(GeoTypesTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CtasUpdateTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(DateTimeUtilsTest gtest ${EXECUTE_TEST_LIBS})
+target_link_libraries(CalciteOptimizeTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
 
 set(TEST_ARGS "--gtest_output=xml:../")
 add_test(PlanTest PlanTest ${TEST_ARGS})
@@ -102,6 +104,7 @@ add_test(GeoTypesTest GeoTypesTest ${TEST_ARGS})
 add_test(CtasUpdateTest CtasUpdateTest ${TEST_ARGS})
 add_test(DateTimeUtilsTest DateTimeUtilsTest ${TEST_ARGS})
 add_test(UpdateMetadataTest UpdateMetadataTest ${TEST_ARGS})
+add_test(CalciteOptimizeTest CalciteOptimizeTest ${TEST_ARGS})
 
 # parse s3 credentials
 file(READ aws/s3client.conf S3CLIENT_CONF)

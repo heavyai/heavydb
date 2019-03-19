@@ -4,6 +4,7 @@
 package com.mapd.calcite.planner;
 
 import com.mapd.calcite.parser.MapDParser;
+import com.mapd.calcite.parser.MapDParserOptions;
 import com.mapd.calcite.parser.MapDSchema;
 import com.mapd.calcite.parser.MapDSerializer;
 import com.mapd.calcite.parser.MapDUser;
@@ -77,13 +78,12 @@ public class tester {
     mp.setUser(mdu);
 
     try {
+      MapDParserOptions mdpo = new MapDParserOptions();
       MAPDLOGGER.error("MapDParser result: \n"
               + mp.getRelAlgebra(
                         "select * from customer where c_custkey = 1.345000 limit 5",
-                        new ArrayList<>(),
-                        true,
-                        mdu,
-                        false));
+                        mdpo,
+                        mdu));
     } catch (SqlParseException ex) {
       Logger.getLogger(tester.class.getName()).log(Level.SEVERE, null, ex);
     } catch (ValidationException ex) {
@@ -93,31 +93,31 @@ public class tester {
     }
   }
 
-  //     /** User-defined aggregate function. */
-  //  public static class MyCountAggFunction extends SqlAggFunction {
-  //    public MyCountAggFunction() {
-  //      super("MY_COUNT", null, SqlKind.OTHER_FUNCTION, ReturnTypes.BIGINT, null,
-  //          OperandTypes.ANY, SqlFunctionCategory.NUMERIC, false, false);
-  //    }
+  // /** User-defined aggregate function. */
+  // public static class MyCountAggFunction extends SqlAggFunction {
+  // public MyCountAggFunction() {
+  // super("MY_COUNT", null, SqlKind.OTHER_FUNCTION, ReturnTypes.BIGINT, null,
+  // OperandTypes.ANY, SqlFunctionCategory.NUMERIC, false, false);
+  // }
   //
-  //    @SuppressWarnings("deprecation")
-  //    public List<RelDataType> getParameterTypes(RelDataTypeFactory typeFactory) {
-  //      return ImmutableList.of(typeFactory.createSqlType(SqlTypeName.ANY));
-  //    }
+  // @SuppressWarnings("deprecation")
+  // public List<RelDataType> getParameterTypes(RelDataTypeFactory typeFactory) {
+  // return ImmutableList.of(typeFactory.createSqlType(SqlTypeName.ANY));
+  // }
   //
-  //    @SuppressWarnings("deprecation")
-  //    public RelDataType getReturnType(RelDataTypeFactory typeFactory) {
-  //      return typeFactory.createSqlType(SqlTypeName.BIGINT);
-  //    }
+  // @SuppressWarnings("deprecation")
+  // public RelDataType getReturnType(RelDataTypeFactory typeFactory) {
+  // return typeFactory.createSqlType(SqlTypeName.BIGINT);
+  // }
   //
-  //    public RelDataType deriveType(SqlValidator validator,
-  //        SqlValidatorScope scope, SqlCall call) {
-  //      // Check for COUNT(*) function.  If it is we don't
-  //      // want to try and derive the "*"
-  //      if (call.isCountStar()) {
-  //        return validator.getTypeFactory().createSqlType(SqlTypeName.BIGINT);
-  //      }
-  //      return super.deriveType(validator, scope, call);
-  //    }
-  //  }
+  // public RelDataType deriveType(SqlValidator validator,
+  // SqlValidatorScope scope, SqlCall call) {
+  // // Check for COUNT(*) function. If it is we don't
+  // // want to try and derive the "*"
+  // if (call.isCountStar()) {
+  // return validator.getTypeFactory().createSqlType(SqlTypeName.BIGINT);
+  // }
+  // return super.deriveType(validator, scope, call);
+  // }
+  // }
 }

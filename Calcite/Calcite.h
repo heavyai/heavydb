@@ -58,7 +58,8 @@ class Calcite {
                       const std::string sql_string,
                       const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                       const bool legacy_syntax,
-                      const bool is_explain);
+                      const bool is_explain,
+                      const bool is_view_optimize);
   std::vector<TCompletionHint> getCompletionHints(
       const Catalog_Namespace::SessionInfo& session_info,
       const std::vector<std::string>& visible_tables,
@@ -84,7 +85,8 @@ class Calcite {
                           const std::string sql_string,
                           const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                           const bool legacy_syntax,
-                          const bool is_explain);
+                          const bool is_explain,
+                          const bool is_view_optimize);
   std::vector<std::string> get_db_objects(const std::string ra);
 
   std::thread calcite_server_thread_;

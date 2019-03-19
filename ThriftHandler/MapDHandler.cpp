@@ -232,8 +232,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
 
   if (is_rendering_enabled) {
     try {
-      render_handler_.reset(
-          new MapDRenderHandler(this, render_mem_bytes, num_gpus, start_gpu));
+      render_handler_.reset(new MapDRenderHandler(
+          this, render_mem_bytes, num_gpus, start_gpu, mapd_parameters_));
     } catch (const std::exception& e) {
       LOG(ERROR) << "Backend rendering disabled: " << e.what();
     }
@@ -767,8 +767,14 @@ void MapDHandler::sql_execute(TQueryResult& _return,
     }
     _return.total_time_ms = measure<>::execution([&]() {
       try {
-        agg_handler_->cluster_execute(
-            _return, session_info, query_str, column_format, nonce, first_n, at_most_n);
+        agg_handler_->cluster_execute(_return,
+                                      session_info,
+                                      query_str,
+                                      column_format,
+                                      nonce,
+                                      first_n,
+                                      at_most_n,
+                                      mapd_parameters_);
       } catch (std::exception& e) {
         const auto mapd_exception = dynamic_cast<const TMapDException*>(&e);
         THROW_MAPD_EXCEPTION(mapd_exception ? mapd_exception->error_msg
@@ -852,16 +858,18 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
       ParserWrapper pw{query_str};
       if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
         std::string query_ra;
-        std::map<std::string, bool> tableNames;
-        execution_time_ms += measure<>::execution(
-            [&]() { query_ra = parse_to_ra(query_str, {}, session_info, &tableNames); });
+        OptionalTableMap tableNames;
+        execution_time_ms += measure<>::execution([&]() {
+          query_ra =
+              parse_to_ra(query_str, {}, session_info, tableNames, mapd_parameters_);
+        });
 
         // COPY_TO/SELECT: get read ExecutorOuterLock >> read UpdateDeleteLock locks
         mapd_shared_lock<mapd_shared_mutex> executeReadLock(
             *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
         std::vector<std::shared_ptr<VLock>> upddelLocks;
         getTableLocks<mapd_shared_mutex>(session_info.getCatalog(),
-                                         tableNames,
+                                         tableNames.value(),
                                          upddelLocks,
                                          LockType::UpdateDeleteLock);
 
@@ -1131,7 +1139,8 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                    const std::string& query_str,
                                    const Catalog_Namespace::SessionInfo& session_info) {
   try {
-    const auto query_ra = parse_to_ra(query_str, {}, session_info);
+    const auto query_ra =
+        parse_to_ra(query_str, {}, session_info, boost::none, mapd_parameters_);
     TQueryResult result;
     MapDHandler::execute_rel_alg(result,
                                  query_ra,
@@ -1624,7 +1633,8 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
     try {
       if (hasTableAccessPrivileges(td, session)) {
         session_info.make_superuser();
-        const auto query_ra = parse_to_ra(td->viewSQL, {}, session_info);
+        const auto query_ra =
+            parse_to_ra(td->viewSQL, {}, session_info, boost::none, mapd_parameters_);
         TQueryResult result;
         execute_rel_alg(result,
                         query_ra,
@@ -1814,7 +1824,8 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
     size_t num_cols = 0;
     if (td->isView) {
       try {
-        const auto query_ra = parse_to_ra(td->viewSQL, {}, session_info);
+        const auto query_ra =
+            parse_to_ra(td->viewSQL, {}, session_info, boost::none, mapd_parameters_);
         TQueryResult result;
         execute_rel_alg(result,
                         query_ra,
@@ -4681,12 +4692,12 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
 
   try {
     ParserWrapper pw{query_str};
-    std::map<std::string, bool> tableNames;
+    OptionalTableMap tableNames = TableMap{};
     if (is_calcite_path_permissable(pw, read_only_)) {
       std::string query_ra;
       _return.execution_time_ms += measure<>::execution([&]() {
         // query_ra = TIME_WRAP(parse_to_ra)(query_str, session_info);
-        query_ra = parse_to_ra(query_str, {}, session_info, &tableNames);
+        query_ra = parse_to_ra(query_str, {}, session_info, tableNames, mapd_parameters_);
       });
 
       std::string query_ra_calcite_explain;
@@ -4698,11 +4709,12 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         // removing the "explain calcite " from the beginning of the "query_str":
         std::string temp_query_str =
             query_str.substr(std::string("explain calcite ").length());
-        query_ra_calcite_explain = parse_to_ra(temp_query_str, {}, session_info);
+        query_ra_calcite_explain =
+            parse_to_ra(temp_query_str, {}, session_info, boost::none, mapd_parameters_);
       }
 
       // UPDATE/DELETE needs to get a checkpoint lock as the first lock
-      for (const auto& table : tableNames) {
+      for (const auto& table : tableNames.value()) {
         if (table.second) {
           chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
               session_info.getCatalog(), table.first, LockType::CheckpointLock);
@@ -4711,8 +4723,10 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       // COPY_TO/SELECT: read ExecutorOuterLock >> read UpdateDeleteLock locks
       executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
           *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
-      getTableLocks<mapd_shared_mutex>(
-          session_info.getCatalog(), tableNames, upddelLocks, LockType::UpdateDeleteLock);
+      getTableLocks<mapd_shared_mutex>(session_info.getCatalog(),
+                                       tableNames.value(),
+                                       upddelLocks,
+                                       LockType::UpdateDeleteLock);
       const auto filter_push_down_requests = execute_rel_alg(
           _return,
           pw.is_select_calcite_explain ? query_ra_calcite_explain : query_ra,
@@ -4748,7 +4762,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
         // no filter push down so we continue with the initial (unchanged) query's calcite
         // explanation.
-        query_ra = parse_to_ra(query_str, {}, session_info);
+        query_ra =
+            parse_to_ra(query_str, {}, session_info, boost::none, mapd_parameters_);
         convert_explain(_return, ResultSet(query_ra), true);
         return;
       }
@@ -4762,7 +4777,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
         // no filter push down so we continue with the initial (unchanged) query's calcite
         // explanation.
-        query_ra = parse_to_ra(query_str, {}, session_info);
+        query_ra =
+            parse_to_ra(query_str, {}, session_info, boost::none, mapd_parameters_);
         convert_explain(_return, ResultSet(query_ra), true);
         return;
       }
@@ -4944,11 +4960,14 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     // Check for DDL statements requiring locking and get locks
     auto export_stmt = dynamic_cast<Parser::ExportQueryStmt*>(ddl);
     if (export_stmt) {
-      std::map<std::string, bool> tableNames;
+      OptionalTableMap tableNames = TableMap{};
       const auto query_string = export_stmt->get_select_stmt();
-      const auto query_ra = parse_to_ra(query_string, {}, session_info, &tableNames);
-      getTableLocks<mapd_shared_mutex>(
-          session_info.getCatalog(), tableNames, upddelLocks, LockType::UpdateDeleteLock);
+      const auto query_ra =
+          parse_to_ra(query_string, {}, session_info, tableNames, mapd_parameters_);
+      getTableLocks<mapd_shared_mutex>(session_info.getCatalog(),
+                                       tableNames.value(),
+                                       upddelLocks,
+                                       LockType::UpdateDeleteLock);
     }
     auto truncate_stmt = dynamic_cast<Parser::TruncateTableStmt*>(ddl);
     if (truncate_stmt) {
@@ -5005,11 +5024,12 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
             session_info.getCatalog(), *stmtp->get_table(), LockType::CheckpointLock);
         // >> read UpdateDeleteLock locks
-        std::map<std::string, bool> tableNames;
+        OptionalTableMap tableNames = TableMap{};
         const auto query_string = stmtp->get_query()->to_string();
-        const auto query_ra = parse_to_ra(query_str, {}, session_info, &tableNames);
+        const auto query_ra =
+            parse_to_ra(query_str, {}, session_info, tableNames, mapd_parameters_);
         getTableLocks<mapd_shared_mutex>(session_info.getCatalog(),
-                                         tableNames,
+                                         tableNames.value(),
                                          upddelLocks,
                                          LockType::UpdateDeleteLock);
         // [ write UpdateDeleteLocks ] lock is deferred in
@@ -5066,8 +5086,10 @@ void MapDHandler::execute_rel_alg_with_filter_push_down(
     filter_push_down_info.push_back(filter_push_down_info_for_request);
   }
   // deriving the new relational algebra plan with respect to the pushed down filters
-  _return.execution_time_ms += measure<>::execution(
-      [&]() { query_ra = parse_to_ra(query_str, filter_push_down_info, session_info); });
+  _return.execution_time_ms += measure<>::execution([&]() {
+    query_ra = parse_to_ra(
+        query_str, filter_push_down_info, session_info, boost::none, mapd_parameters_);
+  });
 
   if (just_calcite_explain) {
     // return the new ra as the result
@@ -5121,7 +5143,8 @@ Planner::RootPlan* MapDHandler::parse_to_plan(
                       legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                       {},
                       legacy_syntax_,
-                      pw.is_select_calcite_explain)
+                      pw.is_select_calcite_explain,
+                      mapd_parameters_.enable_calcite_view_optimize)
             .plan_result;
     auto root_plan = translate_query(query_ra, cat);
     CHECK(root_plan);
@@ -5137,7 +5160,8 @@ std::string MapDHandler::parse_to_ra(
     const std::string& query_str,
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const Catalog_Namespace::SessionInfo& session_info,
-    std::map<std::string, bool>* tableNames) {
+    OptionalTableMap tableNames,
+    const MapDParameters mapd_parameters) {
   INJECT_TIMER(parse_to_ra);
   ParserWrapper pw{query_str};
   const std::string actual_query{
@@ -5147,10 +5171,11 @@ std::string MapDHandler::parse_to_ra(
                                     legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                                     filter_push_down_info,
                                     legacy_syntax_,
-                                    pw.is_select_calcite_explain);
+                                    pw.is_select_calcite_explain,
+                                    mapd_parameters.enable_calcite_view_optimize);
     if (tableNames) {
       for (const auto& table : result.resolved_accessed_objects.tables_selected_from) {
-        (*tableNames)[table] = false;
+        (tableNames.value())[table] = false;
       }
       for (const auto& tables :
            std::vector<decltype(result.resolved_accessed_objects.tables_inserted_into)>{
@@ -5158,7 +5183,7 @@ std::string MapDHandler::parse_to_ra(
                result.resolved_accessed_objects.tables_updated_in,
                result.resolved_accessed_objects.tables_deleted_from}) {
         for (const auto& table : tables) {
-          (*tableNames)[table] = true;
+          (tableNames.value())[table] = true;
         }
       }
     }
