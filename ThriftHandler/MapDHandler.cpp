@@ -858,7 +858,7 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
       ParserWrapper pw{query_str};
       if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
         std::string query_ra;
-        OptionalTableMap tableNames;
+        OptionalTableMap tableNames = TableMap{};
         execution_time_ms += measure<>::execution([&]() {
           query_ra =
               parse_to_ra(query_str, {}, session_info, tableNames, mapd_parameters_);
