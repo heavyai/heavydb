@@ -21,6 +21,18 @@
 
 namespace Catalog_Namespace {
 
+/*
+ *  The locking sequence for the locks below is as follows:
+ *
+ *  inter catalog / syscatalog it is always
+ *
+ *    read or write lock, then the sqlite_lock (if required)
+ *
+ *  intra catalog and syscatalog
+ *
+ *    always syscatalog locks (if required), then catalog locks
+ */
+
 template <typename T>
 class read_lock {
   const T* catalog;
@@ -50,6 +62,9 @@ class read_lock {
 
 template <typename T>
 class sqlite_lock {
+  // always obtain a read lock on catalog first
+  // to ensure correct locking order
+  read_lock<T> cat_read_lock;
   const T* catalog;
   std::unique_lock<std::mutex> lock;
   bool holds_lock;
@@ -66,7 +81,9 @@ class sqlite_lock {
   }
 
  public:
-  sqlite_lock(const T* cat) : catalog(cat), holds_lock(false) { lock_catalog(cat); }
+  sqlite_lock(const T* cat) : cat_read_lock(cat), catalog(cat), holds_lock(false) {
+    lock_catalog(cat);
+  }
 
   ~sqlite_lock() {
     if (holds_lock) {

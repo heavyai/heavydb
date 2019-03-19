@@ -2538,40 +2538,43 @@ void Catalog::renamePhysicalTable(const TableDescriptor* td, const string& newTa
 }
 
 void Catalog::renameTable(const TableDescriptor* td, const string& newTableName) {
-  cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(this);
-  // rename all corresponding physical tables if this is a logical table
-  const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
-  if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
-    const auto physicalTables = physicalTableIt->second;
-    CHECK(!physicalTables.empty());
-    for (size_t i = 0; i < physicalTables.size(); i++) {
-      int32_t physical_tb_id = physicalTables[i];
-      const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
-      CHECK(phys_td);
-      std::string newPhysTableName =
-          generatePhysicalTableName(newTableName, static_cast<int32_t>(i + 1));
-      renamePhysicalTable(phys_td, newPhysTableName);
+  {
+    cat_write_lock write_lock(this);
+    cat_sqlite_lock sqlite_lock(this);
+    // rename all corresponding physical tables if this is a logical table
+    const auto physicalTableIt = logicalToPhysicalTableMapById_.find(td->tableId);
+    if (physicalTableIt != logicalToPhysicalTableMapById_.end()) {
+      const auto physicalTables = physicalTableIt->second;
+      CHECK(!physicalTables.empty());
+      for (size_t i = 0; i < physicalTables.size(); i++) {
+        int32_t physical_tb_id = physicalTables[i];
+        const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
+        CHECK(phys_td);
+        std::string newPhysTableName =
+            generatePhysicalTableName(newTableName, static_cast<int32_t>(i + 1));
+        renamePhysicalTable(phys_td, newPhysTableName);
+      }
     }
+    renamePhysicalTable(td, newTableName);
   }
-  renamePhysicalTable(td, newTableName);
-
-  // update table name in direct and effective priv map
-  DBObject object(newTableName, TableDBObjectType);
-  DBObjectKey key;
-  key.dbId = currentDB_.dbId;
-  key.objectId = td->tableId;
-  key.permissionType = static_cast<int>(DBObjectType::TableDBObjectType);
-  object.setObjectKey(key);
-  auto objdescs = SysCatalog::instance().getMetadataForObject(
-      currentDB_.dbId, static_cast<int>(DBObjectType::TableDBObjectType), td->tableId);
-  for (auto obj : objdescs) {
-    Grantee* grnt = SysCatalog::instance().getGrantee(obj->roleName);
-    if (grnt) {
-      grnt->renameDbObject(object);
+  {
+    DBObject object(newTableName, TableDBObjectType);
+    // update table name in direct and effective priv map
+    DBObjectKey key;
+    key.dbId = currentDB_.dbId;
+    key.objectId = td->tableId;
+    key.permissionType = static_cast<int>(DBObjectType::TableDBObjectType);
+    object.setObjectKey(key);
+    auto objdescs = SysCatalog::instance().getMetadataForObject(
+        currentDB_.dbId, static_cast<int>(DBObjectType::TableDBObjectType), td->tableId);
+    for (auto obj : objdescs) {
+      Grantee* grnt = SysCatalog::instance().getGrantee(obj->roleName);
+      if (grnt) {
+        grnt->renameDbObject(object);
+      }
     }
+    SysCatalog::instance().renameObjectsInDescriptorMap(object, *this);
   }
-  SysCatalog::instance().renameObjectsInDescriptorMap(object, *this);
 }
 
 void Catalog::renameColumn(const TableDescriptor* td,
@@ -2614,58 +2617,61 @@ void Catalog::renameColumn(const TableDescriptor* td,
 }
 
 int32_t Catalog::createFrontendView(FrontendViewDescriptor& vd) {
-  cat_write_lock write_lock(this);
-  cat_sqlite_lock sqlite_lock(this);
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    // TODO(andrew): this should be an upsert
-    sqliteConnector_.query_with_text_params(
-        "SELECT id FROM mapd_dashboards WHERE name = ? and userid = ?",
-        std::vector<std::string>{vd.viewName, std::to_string(vd.userId)});
-    if (sqliteConnector_.getNumRows() > 0) {
+  {
+    cat_write_lock write_lock(this);
+    cat_sqlite_lock sqlite_lock(this);
+    sqliteConnector_.query("BEGIN TRANSACTION");
+    try {
+      // TODO(andrew): this should be an upsert
       sqliteConnector_.query_with_text_params(
-          "UPDATE mapd_dashboards SET state = ?, image_hash = ?, metadata = ?, "
-          "update_time = "
-          "datetime('now') where name = ? "
-          "and userid = ?",
-          std::vector<std::string>{vd.viewState,
-                                   vd.imageHash,
-                                   vd.viewMetadata,
-                                   vd.viewName,
-                                   std::to_string(vd.userId)});
-    } else {
-      sqliteConnector_.query_with_text_params(
-          "INSERT INTO mapd_dashboards (name, state, image_hash, metadata, update_time, "
-          "userid) "
-          "VALUES "
-          "(?,?,?,?, "
-          "datetime('now'), ?)",
-          std::vector<std::string>{vd.viewName,
-                                   vd.viewState,
-                                   vd.imageHash,
-                                   vd.viewMetadata,
-                                   std::to_string(vd.userId)});
+          "SELECT id FROM mapd_dashboards WHERE name = ? and userid = ?",
+          std::vector<std::string>{vd.viewName, std::to_string(vd.userId)});
+      if (sqliteConnector_.getNumRows() > 0) {
+        sqliteConnector_.query_with_text_params(
+            "UPDATE mapd_dashboards SET state = ?, image_hash = ?, metadata = ?, "
+            "update_time = "
+            "datetime('now') where name = ? "
+            "and userid = ?",
+            std::vector<std::string>{vd.viewState,
+                                     vd.imageHash,
+                                     vd.viewMetadata,
+                                     vd.viewName,
+                                     std::to_string(vd.userId)});
+      } else {
+        sqliteConnector_.query_with_text_params(
+            "INSERT INTO mapd_dashboards (name, state, image_hash, metadata, "
+            "update_time, "
+            "userid) "
+            "VALUES "
+            "(?,?,?,?, "
+            "datetime('now'), ?)",
+            std::vector<std::string>{vd.viewName,
+                                     vd.viewState,
+                                     vd.imageHash,
+                                     vd.viewMetadata,
+                                     std::to_string(vd.userId)});
+      }
+    } catch (std::exception& e) {
+      sqliteConnector_.query("ROLLBACK TRANSACTION");
+      throw;
     }
-  } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
-    throw;
-  }
-  sqliteConnector_.query("END TRANSACTION");
+    sqliteConnector_.query("END TRANSACTION");
 
-  // now get the auto generated viewid
-  try {
-    sqliteConnector_.query_with_text_params(
-        "SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ', update_time) FROM mapd_dashboards "
-        "WHERE name = ? and userid = ?",
-        std::vector<std::string>{vd.viewName, std::to_string(vd.userId)});
-    vd.viewId = sqliteConnector_.getData<int>(0, 0);
-    vd.updateTime = sqliteConnector_.getData<std::string>(0, 1);
-  } catch (std::exception& e) {
-    throw;
+    // now get the auto generated viewid
+    try {
+      sqliteConnector_.query_with_text_params(
+          "SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ', update_time) FROM mapd_dashboards "
+          "WHERE name = ? and userid = ?",
+          std::vector<std::string>{vd.viewName, std::to_string(vd.userId)});
+      vd.viewId = sqliteConnector_.getData<int>(0, 0);
+      vd.updateTime = sqliteConnector_.getData<std::string>(0, 1);
+    } catch (std::exception& e) {
+      throw;
+    }
+    vd.viewSystemRoleName = generate_dash_system_rolename(std::to_string(currentDB_.dbId),
+                                                          std::to_string(vd.viewId));
+    addFrontendViewToMap(vd);
   }
-  vd.viewSystemRoleName = generate_dash_system_rolename(std::to_string(currentDB_.dbId),
-                                                        std::to_string(vd.viewId));
-  addFrontendViewToMap(vd);
   // NOTE(wamsi): Transactionally unsafe
   createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId, vd.viewSystemRoleName);
   return vd.viewId;

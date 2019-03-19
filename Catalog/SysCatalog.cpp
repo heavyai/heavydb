@@ -1858,6 +1858,7 @@ void SysCatalog::buildObjectDescriptorMap() {
 
 template <typename F, typename... Args>
 void SysCatalog::execInTransaction(F&& f, Args&&... args) {
+  sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
