@@ -15,6 +15,8 @@
  */
 
 #include "SessionInfo.h"
+#include <iomanip>
+#include <sstream>
 #include "Catalog.h"
 
 namespace Catalog_Namespace {
@@ -35,14 +37,23 @@ bool SessionInfo::checkDBAccessPrivileges(const DBObjectType& permissionType,
   return SysCatalog::instance().checkPrivileges(get_currentUser(), privObjects);
 }
 
-SessionInfo::operator std::string() const {
-  return get_currentUser().userName + "_" + session_id.substr(0, 3);
+// start_time(3)-session_id(4) Example: 819-4RDo
+// This shows 4 chars of the secret session key,
+// leaving (32-4)*log2(62) > 166 bits secret.
+std::string SessionInfo::public_session_id() const {
+  const time_t start_time = get_start_time();
+  struct tm st;
+  localtime_r(&start_time, &st);
+  std::ostringstream ss;
+  ss << (st.tm_min % 10) << std::setfill('0') << std::setw(2) << st.tm_sec << '-'
+     << session_id.substr(0, 4);
+  return ss.str();
 }
 
 }  // namespace Catalog_Namespace
 
 std::ostream& operator<<(std::ostream& os,
                          const Catalog_Namespace::SessionInfo& session_info) {
-  os << std::string(session_info);
+  os << session_info.get_public_session_id();
   return os;
 }

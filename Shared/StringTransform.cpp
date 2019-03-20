@@ -71,3 +71,13 @@ void apply_shim(std::string& result,
     }
   }
 }
+
+template <>
+std::string to_string(char const*&& v) {
+  return std::string(v);
+}
+
+template <>
+std::string to_string(std::string&& v) {
+  return v;
+}

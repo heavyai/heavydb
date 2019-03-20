@@ -306,6 +306,7 @@ endif()
 
 # RapidJSON
 include_directories(ThirdParty/rapidjson)
+add_definitions(-DRAPIDJSON_HAS_STDSTRING)
 
 # Linenoise
 include_directories(ThirdParty/linenoise)

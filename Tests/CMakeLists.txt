@@ -7,6 +7,7 @@ add_definitions("-DBASE_PATH=\"${TEST_BASE_PATH}\"")
 add_executable(ExecuteTest ExecuteTest.cpp)
 add_executable(RunQueryLoop RunQueryLoop.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
+add_executable(StringTransformTest StringTransformTest.cpp)
 add_executable(PlanTest PlanTest.cpp)
 add_executable(ProfileTest ProfileTest.cpp)
 add_executable(ExperimentalTest ExperimentalTest.cpp)
@@ -58,6 +59,7 @@ target_link_libraries(ResultSetTest gtest QueryEngine ${MAPD_RENDERING_LIBRARIES
 target_link_libraries(ResultSetBaselineRadixSortTest gtest QueryEngine ${MAPD_RENDERING_LIBRARIES} CsvImport QueryRunner Parser DataMgr Chunk ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 target_link_libraries(UtilTest Utils gtest ${Glog_LIBRARIES} ${Boost_LIBRARIES})
 target_link_libraries(StringDictionaryTest StringDictionary gtest ${Glog_LIBRARIES} ${Boost_LIBRARIES})
+target_link_libraries(StringTransformTest Shared gtest ${Glog_LIBRARIES} ${Boost_LIBRARIES})
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift ${Glog_LIBRARIES} ${Boost_LIBRARIES})
 set(EXECUTE_TEST_LIBS gtest QueryRunner ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 list(APPEND EXECUTE_TEST_LIBS Calcite)
@@ -93,6 +95,7 @@ add_test(ResultSetTest ResultSetTest ${TEST_ARGS})
 add_test(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest ${TEST_ARGS})
 add_test(RunQueryLoop RunQueryLoop ${TEST_ARGS})
 add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
+add_test(StringTransformTest StringTransformTest ${TEST_ARGS})
 add_test(StorageTest StorageTest ${TEST_ARGS})
 add_test(ComputeMetadataTest ComputeMetadataTest ${TEST_ARGS})
 add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
@@ -156,7 +159,7 @@ add_custom_target(all_tests
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS ${SANITY_TESTS} ProfileTest UtilTest RunQueryLoop StringDictionaryTest StoragePerfTest
+    DEPENDS ${SANITY_TESTS} ProfileTest UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StoragePerfTest
     USES_TERMINAL)
 
 add_custom_target(storage_perf_tests

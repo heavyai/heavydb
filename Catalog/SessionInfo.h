@@ -72,7 +72,8 @@ class SessionInfo {
       , executor_device_type_(t)
       , session_id(sid)
       , last_used_time(time(0))
-      , start_time(time(0)) {}
+      , start_time(time(0))
+      , public_session_id_(public_session_id()) {}
   SessionInfo(std::shared_ptr<Catalog> cat,
               const UserMetadata& user,
               const ExecutorDeviceType t,
@@ -83,7 +84,8 @@ class SessionInfo {
       , catalog_(s.catalog_)
       , currentUser_(s.currentUser_)
       , executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_))
-      , session_id(s.session_id) {}
+      , session_id(s.session_id)
+      , public_session_id_(s.public_session_id_) {}
   MapDHandler* get_mapdHandler() const { return mapdHandler_.get(); }
   Catalog& getCatalog() const { return *catalog_; }
   std::shared_ptr<Catalog> get_catalog_ptr() const { return catalog_; }
@@ -102,8 +104,8 @@ class SessionInfo {
                                const AccessPrivileges& privs,
                                const std::string& objectName = "") const;
   time_t get_start_time() const { return start_time; }
-
-  operator std::string() const;
+  std::string const& get_public_session_id() const { return public_session_id_; }
+  operator std::string() const { return public_session_id_; }
 
  private:
   std::shared_ptr<MapDHandler> mapdHandler_;
@@ -113,6 +115,8 @@ class SessionInfo {
   const std::string session_id;
   std::atomic<time_t> last_used_time;  // for cleaning up SessionInfo after client dies
   std::atomic<time_t> start_time;      // for invalidating session after tolerance period
+  const std::string public_session_id_;
+  std::string public_session_id() const;
 };
 
 }  // namespace Catalog_Namespace

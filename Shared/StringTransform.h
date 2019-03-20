@@ -19,10 +19,13 @@
 
 #include <glog/logging.h>
 #include <algorithm>
+#include <array>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/regex.hpp>
+#include <iomanip>
 #include <set>
+#include <sstream>
 #include <string>
 
 inline std::string to_upper(const std::string& str) {
@@ -41,5 +44,18 @@ ssize_t inside_string_literal(
 void apply_shim(std::string& result,
                 const boost::regex& reg_expr,
                 const std::function<void(std::string&, const boost::smatch&)>& shim_fn);
+
+template <typename T>
+std::string to_string(T&& v) {
+  std::ostringstream oss;
+  oss << v;
+  return oss.str();
+}
+
+template <>
+std::string to_string(char const*&& v);
+
+template <>
+std::string to_string(std::string&& v);
 
 #endif  // SHARED_STRINGTRANSFORM_H
