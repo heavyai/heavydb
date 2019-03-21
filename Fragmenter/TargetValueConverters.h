@@ -19,6 +19,7 @@
 
 #include "../Catalog/Catalog.h"
 #include "../Import/Importer.h"
+#include "../QueryEngine/TargetMetaInfo.h"
 #include "../QueryEngine/TargetValue.h"
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"

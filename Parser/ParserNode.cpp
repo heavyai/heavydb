@@ -2637,7 +2637,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
   size_t leaf_count = leafs_connector_->leafCount();
 
-  size_t max_number_of_rows_per_package = std::min(num_rows / leaf_count, 128UL * 1024UL);
+  size_t max_number_of_rows_per_package = std::min(num_rows / leaf_count, 64UL * 1024UL);
 
   size_t current_leaf = 0;
   size_t start_row = 0;
@@ -2667,7 +2667,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     const size_t end = thread_end_idx[thread_id];
     size_t idx = 0;
     for (idx = start; idx < end; ++idx) {
-      const auto result_row = result_rows->getRowAt(idx);
+      const auto result_row = result_rows->getRowAtNoTranslations(idx);
       if (!result_row.empty()) {
         size_t target_row = row_idx.fetch_add(1);
 
@@ -2706,18 +2706,22 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     try {
       value_converters.clear();
       row_idx = 0;
-
+      int colNum = 0;
       for (const auto& cd : column_descriptors) {
-        const ColumnDescriptor* sourceDescriptor = &cd;
         const ColumnDescriptor* targetDescriptor =
             catalog.getMetadataForColumn(created_td->tableId, cd.columnName);
 
-        ConverterCreateParameter param{num_rows_to_process,
-                                       catalog,
-                                       sourceDescriptor,
-                                       targetDescriptor,
-                                       targetDescriptor->columnType,
-                                       !targetDescriptor->columnType.get_notnull()};
+        auto sourceDataMetaInfo = res.targets_meta[colNum++];
+
+        ConverterCreateParameter param{
+            num_rows_to_process,
+            catalog,
+            sourceDataMetaInfo,
+            targetDescriptor,
+            targetDescriptor->columnType,
+            !targetDescriptor->columnType.get_notnull(),
+            result_rows->getRowSetMemOwner()->getLiteralStringDictProxy(),
+            leafs_connector_->get_sds_host_info()};
         auto converter = factory.create(param);
         value_converters.push_back(std::move(converter));
       }

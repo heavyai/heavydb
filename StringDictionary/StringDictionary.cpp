@@ -1113,6 +1113,18 @@ void StringDictionary::mergeSortedCache(std::vector<int32_t>& temp_sorted_cache)
   sorted_cache.swap(updated_cache);
 }
 
+void populate_string_ids(std::vector<int32_t>& dest_ids,
+                         const LeafHostInfo& dict_server_host,
+                         const DictRef dest_dict_ref,
+                         const std::vector<int32_t>& source_ids,
+                         const DictRef source_dict_ref,
+                         const int32_t dest_generation) {
+  DictRef temp_dict_ref(-1, -1);
+  StringDictionaryClient string_client(dict_server_host, temp_dict_ref, false);
+  string_client.populate_string_ids(
+      dest_ids, dest_dict_ref, source_ids, source_dict_ref, dest_generation);
+}
+
 void translate_string_ids(std::vector<int32_t>& dest_ids,
                           const LeafHostInfo& dict_server_host,
                           const DictRef dest_dict_ref,

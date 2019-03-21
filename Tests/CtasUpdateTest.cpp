@@ -26,10 +26,6 @@
 #include "../QueryEngine/Execute.h"
 #include "../Shared/file_delete.h"
 
-#ifndef ENABLE_VARLEN_UPDATE
-#define ENABLE_VARLEN_UPDATE
-#endif
-
 #include "../Shared/ConfigResolve.h"
 
 // uncomment to run full test suite

@@ -129,6 +129,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   void updateColumns(const Catalog_Namespace::Catalog* catalog,
                      const TableDescriptor* td,
                      const int fragmentId,
+                     const std::vector<TargetMetaInfo> sourceMetaInfo,
                      const std::vector<const ColumnDescriptor*> columnDescriptors,
                      const RowDataProvider& sourceDataProvider,
                      const size_t indexOffFragmentOffsetColumn,

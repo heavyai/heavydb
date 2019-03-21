@@ -297,7 +297,9 @@ class UpdateLogForFragment : public RowDataProvider {
   std::vector<TargetValue> getTranslatedEntryAt(const size_t index) const override;
 
   size_t count() const override;
-
+  StringDictionaryProxy* getLiteralDictionary() const override {
+    return rs_->getRowSetMemOwner()->getLiteralStringDictProxy();
+  }
   size_t const getEntryCount() const;
   size_t const getFragmentIndex() const;
   FragmentInfoType const& getFragmentInfo() const;

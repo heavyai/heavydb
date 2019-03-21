@@ -293,6 +293,7 @@ void InsertOrderFragmenter::updateColumns(
     const Catalog_Namespace::Catalog* catalog,
     const TableDescriptor* td,
     const int fragmentId,
+    const std::vector<TargetMetaInfo> sourceMetaInfo,
     const std::vector<const ColumnDescriptor*> columnDescriptors,
     const RowDataProvider& sourceDataProvider,
     const size_t indexOffFragmentOffsetColumn,
@@ -342,15 +343,16 @@ void InsertOrderFragmenter::updateColumns(
     if (targetColumnIt != columnDescriptors.end()) {
       auto indexOfTargetColumn = std::distance(columnDescriptors.begin(), targetColumnIt);
 
-      auto sourceDescriptor = columnDescriptors[indexOfTargetColumn];
+      auto sourceDataMetaInfo = sourceMetaInfo[indexOfTargetColumn];
       auto targetDescriptor = columnDescriptors[indexOfTargetColumn];
 
       ConverterCreateParameter param{num_rows,
                                      *catalog,
-                                     sourceDescriptor,
+                                     sourceDataMetaInfo,
                                      targetDescriptor,
                                      targetDescriptor->columnType,
-                                     !targetDescriptor->columnType.get_notnull()};
+                                     !targetDescriptor->columnType.get_notnull(),
+                                     sourceDataProvider.getLiteralDictionary()};
       auto converter = factory.create(param);
       sourceDataConverters[indexOfTargetColumn] = std::move(converter);
 
@@ -486,7 +488,7 @@ void InsertOrderFragmenter::updateColumns(
                         &chunkConverters,
                         &deletedChunkBuffer](size_t indexOfRow) -> void {
     // convert the source data
-    const auto row = sourceDataProvider.getTranslatedEntryAt(indexOfRow);
+    const auto row = sourceDataProvider.getEntryAt(indexOfRow);
 
     for (size_t col = 0; col < sourceDataConverters.size(); col++) {
       if (sourceDataConverters[col]) {

@@ -96,13 +96,16 @@ struct DictionaryConverterFactory {
         CHECK(false);
     }
 
-    return std::make_unique<DictionaryValueConverter<TARGET_TYPE>>(param.cat,
-                                                                   param.source,
-                                                                   param.target,
-                                                                   param.num_rows,
-                                                                   target_null_value,
-                                                                   NULL_INT,
-                                                                   param.can_be_null);
+    return std::make_unique<DictionaryValueConverter<TARGET_TYPE>>(
+        param.cat,
+        param.source.get_type_info().get_comp_param(),
+        param.target,
+        param.num_rows,
+        target_null_value,
+        NULL_INT,
+        param.can_be_null,
+        param.literals_dictionary,
+        param.sds_server);
   }
 
   std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
@@ -113,7 +116,15 @@ struct DictionaryConverterFactory {
 struct TextConverterFactory {
   std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
     if (param.target->columnType.get_compression() == kENCODING_NONE) {
-      return std::make_unique<StringValueConverter>(param.target, param.num_rows);
+      bool dictEncodedSource =
+          param.source.get_type_info().get_compression() == kENCODING_DICT;
+      auto sourceDictId = param.source.get_type_info().get_comp_param();
+      return std::make_unique<StringValueConverter>(param.cat,
+                                                    param.target,
+                                                    param.num_rows,
+                                                    dictEncodedSource,
+                                                    sourceDictId,
+                                                    param.literals_dictionary);
     } else if (param.target->columnType.get_compression() == kENCODING_DICT) {
       auto size = param.target->columnType.get_size();
       if (4 == size) {
@@ -139,8 +150,14 @@ struct ArrayConverterFactory {
   std::unique_ptr<ArrayValueConverter<typename ELEMENT_FACTORY::ConverterType>> create(
       ConverterCreateParameter param) {
     auto elem_type = param.target->columnType.get_elem_type();
-    ConverterCreateParameter elementConverterFactoryParam{
-        0, param.cat, param.source, param.target, elem_type, false};
+    ConverterCreateParameter elementConverterFactoryParam{0,
+                                                          param.cat,
+                                                          param.source,
+                                                          param.target,
+                                                          elem_type,
+                                                          true,
+                                                          param.literals_dictionary,
+                                                          param.sds_server};
 
     auto elementConverter = element_factory_.create(elementConverterFactoryParam);
     return std::make_unique<ArrayValueConverter<typename ELEMENT_FACTORY::ConverterType>>(

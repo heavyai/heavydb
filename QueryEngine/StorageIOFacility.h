@@ -206,12 +206,14 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
     auto callback = [this,
                      &update_parameters](FragmentUpdaterType const& update_log) -> void {
       std::vector<const ColumnDescriptor*> columnDescriptors;
+      std::vector<TargetMetaInfo> sourceMetaInfos;
 
       for (size_t idx = 0; idx < update_parameters.getUpdateColumnNames().size(); idx++) {
         auto& column_name = update_parameters.getUpdateColumnNames()[idx];
         auto target_column =
             catalog_.getMetadataForColumn(update_log.getPhysicalTableId(), column_name);
         columnDescriptors.push_back(target_column);
+        sourceMetaInfos.push_back(update_parameters.getTargetsMetaInfo()[idx]);
       }
 
       auto td = catalog_.getMetadataForTable(update_log.getPhysicalTableId());
@@ -222,6 +224,7 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
           &catalog_,
           td,
           update_log.getFragmentId(),
+          sourceMetaInfos,
           columnDescriptors,
           update_log,
           update_parameters.getUpdateColumnCount(),  // last column of result set

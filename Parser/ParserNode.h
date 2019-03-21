@@ -1069,6 +1069,7 @@ class CreateTableAsSelectStmt : public DDLStmt {
         Fragmenter_Namespace::InsertData& insert_data) = 0;
     virtual void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
                             int tableId) = 0;
+    virtual const LeafHostInfo* get_sds_host_info() { return nullptr; }
   };
 
   DistributedConnector* leafs_connector_ = nullptr;

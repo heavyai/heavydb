@@ -22,10 +22,12 @@
 struct ConverterCreateParameter {
   size_t num_rows;
   const Catalog_Namespace::Catalog& cat;
-  const ColumnDescriptor* source;
+  const TargetMetaInfo source;
   const ColumnDescriptor* target;
   const SQLTypeInfo& type;
   bool can_be_null;
+  StringDictionaryProxy* literals_dictionary;
+  const LeafHostInfo* sds_server;
 };
 
 struct TargetValueConverterFactory {

@@ -25,10 +25,11 @@
 #include <boost/variant.hpp>
 #include <string>
 #include <vector>
+#include "../QueryEngine/TargetMetaInfo.h"
 #include "../QueryEngine/TargetValue.h"
 #include "../Shared/UpdelRoll.h"
 #include "../Shared/sqltypes.h"
-#include "../StringDictionary/StringDictionary.h"
+#include "../StringDictionary/StringDictionaryProxy.h"
 #include "Fragmenter.h"
 
 // Should the ColumnInfo and FragmentInfo structs be in
@@ -61,6 +62,7 @@ namespace Fragmenter_Namespace {
 class RowDataProvider {
  public:
   virtual size_t count() const = 0;
+  virtual StringDictionaryProxy* getLiteralDictionary() const = 0;
   virtual std::vector<TargetValue> getEntryAt(const size_t index) const = 0;
   virtual std::vector<TargetValue> getTranslatedEntryAt(const size_t index) const = 0;
 };
@@ -148,6 +150,7 @@ class AbstractFragmenter {
   virtual void updateColumns(const Catalog_Namespace::Catalog* catalog,
                              const TableDescriptor* td,
                              const int fragmentId,
+                             const std::vector<TargetMetaInfo> sourceMetaInfo,
                              const std::vector<const ColumnDescriptor*> columnDescriptors,
                              const RowDataProvider& sourceDataProvider,
                              const size_t indexOffFragmentOffsetColumn,
