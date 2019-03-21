@@ -604,23 +604,25 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
 
   sys_write_lock write_lock(this);
 
-  Catalog_Namespace::DBMetadata db_meta;
-
-  getMetadataWithDefault(dbname, username, db_meta, user_meta);
-
-  // NOTE(max): register database in Catalog that early to allow ldap
-  // and saml create default user and role privileges on databases
-  auto cat =
-      Catalog::get(basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
-
   if (check_password) {
     {
       if (!checkPasswordForUser(password, username, user_meta)) {
         throw std::runtime_error("Invalid credentials.");
       }
     }
+  } else {  // not checking for password so user must exist
+    if (!getMetadataForUser(username, user_meta)) {
+      throw std::runtime_error("Invalid credentials.");
+    }
   }
-  return cat;
+  // we should have a user and user_meta by now
+
+  Catalog_Namespace::DBMetadata db_meta;
+
+  getMetadataWithDefault(dbname, username, db_meta, user_meta);
+
+  return Catalog::get(
+      basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
 }
 
 std::shared_ptr<Catalog> SysCatalog::switchDatabase(std::string& dbname,
