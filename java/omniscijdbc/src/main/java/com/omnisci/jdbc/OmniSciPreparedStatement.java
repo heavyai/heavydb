@@ -351,12 +351,16 @@ class OmniSciPreparedStatement implements PreparedStatement {
     if (isInsert) {
       // take the values and use stream inserter to add them
       if (isNewBatch) {
-        // check for columns names 
+        // check for columns names
         Matcher matcher = REGEX_LOF_PATTERN.matcher(currentSQL);
         if (matcher.find()) {
           String listOfFields[] = matcher.group(1).trim().split("\\s*,+\\s*,*\\s*");
-          if (listOfFields.length != parmCount) throw new SQLException("Exception: too many or too few values");
-          else if (Arrays.stream(listOfFields).distinct().toArray().length != listOfFields.length) throw new SQLException("Exception: duplicated column name");
+          if (listOfFields.length != parmCount) {
+            throw new SQLException("Too many or too few values");
+          }
+          else if (Arrays.stream(listOfFields).distinct().toArray().length != listOfFields.length) {
+            throw new SQLException("Duplicated column name");
+          }
           fieldsOrder = new int[listOfFields.length];
           List<String> listOfColumns = new ArrayList<String>();
           try {
@@ -364,13 +368,15 @@ class OmniSciPreparedStatement implements PreparedStatement {
             for (TColumnType column : tableDetails.row_desc) {
               listOfColumns.add(column.col_name.toLowerCase());
             }
-          } 
+          }
           catch (TException ex) {
             throw new SQLException(ex.toString());
           }
-          for (int i=0; i<fieldsOrder.length; i++) {
-            fieldsOrder[i]=listOfColumns.indexOf(listOfFields[i].toLowerCase());
-            if (fieldsOrder[i] == -1) throw new SQLException("Exception: column "+listOfFields[i].toLowerCase()+" does not exist");
+          for (int i = 0; i < fieldsOrder.length; i++) {
+            fieldsOrder[i] = listOfColumns.indexOf(listOfFields[i].toLowerCase());
+            if (fieldsOrder[i] == -1) {
+              throw new SQLException("Column " + listOfFields[i].toLowerCase() + " does not exist");
+            }
           }
         }
 
@@ -378,16 +384,15 @@ class OmniSciPreparedStatement implements PreparedStatement {
         isNewBatch = false;
       }
       // add data to stream
-      int o;
       TStringRow tsr = new TStringRow();
       for (int i = 0; i < parmCount; i++) {
         // place string in rows array
         TStringValue tsv = new TStringValue();
-        if (fieldsOrder != null) o=fieldsOrder[i]; else o=i;
-        tsv.str_val = this.parmRep[o];
-        if (parmIsNull[o]) {
+        int colID = fieldsOrder == null ? i : fieldsOrder[i];
+        if (parmIsNull[colID]) {
           tsv.is_null = true;
         } else {
+          tsv.str_val = this.parmRep[colID];
           tsv.is_null = false;
         }
         tsr.addToCols(tsv);
