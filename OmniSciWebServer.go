@@ -4,10 +4,8 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/xml"
 	"errors"
 	"fmt"
 	"io"
@@ -88,6 +86,17 @@ type ReverseProxy struct {
 
 var (
 	thriftMethodMap map[string]ThriftMethodTimings
+)
+
+const (
+	// The name of the cookie that holds the real session ID from SAML login
+	thriftSessionCookieName = "omnisci_session"
+	// The name of the JavaScript visible cookie indicating SAML auth has succeeded
+	samlAuthCookieName = "omnisci_saml_authorized"
+	// The magic value used as the "fake" session ID when Immerse is operating in SAML mode
+	samlPlaceholderSessionID = "8f61e7d0-b515-49d9-ad77-37ed6e2868ea"
+	// The page to redirect the user to when there are errors with SAML auth
+	samlErrorPage = "/saml-error.html"
 )
 
 func getLogName(lvl string) string {
@@ -503,18 +512,6 @@ func docsHandler(rw http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(rw, r)
 }
 
-// SAMLResponse represents the minimum number of XML fields required
-// to extract the username from the SAML response
-type SAMLResponse struct {
-	Assertion struct {
-		Subject struct {
-			NameID struct {
-				Text string `xml:",chardata"`
-			} `xml:"NameID"`
-		} `xml:"Subject"`
-	} `xml:"Assertion"`
-}
-
 // samlPostHandler receives a XML SAML payload from a provider (e.g. Okta) and
 // then makes a connect call to Core with the base64'd payload. If the call succeeds
 // we then set a session cookie (`omnisci_session`) for Immerse to use for login, as well
@@ -522,43 +519,17 @@ type SAMLResponse struct {
 func samlPostHandler(rw http.ResponseWriter, r *http.Request) {
 	var err error
 	ok := false
-
-	defer func() {
-		if ok {
-			http.Redirect(rw, r, "/", 301)
-		} else {
-			var errorString string
-			if err != nil {
-				errorString = err.Error()
-			} else {
-				errorString = "invalid credentials"
-			}
-			rw.Write([]byte("An error has occurred during SAML login. Please contact your administrator."))
-			log.Infoln("Error logging user in via SAML: ", errorString)
-		}
-	}()
+	targetPage := "/"
 
 	if r.Method == "POST" {
 		var sessionToken string
 
-		requestedDatabase := r.URL.Query().Get("db")
 		b64ResponseXML := r.FormValue("SAMLResponse")
-		decodedResponseXML, err := base64.StdEncoding.DecodeString(b64ResponseXML)
-		if err != nil {
-			return
-		}
 
-		var unmarshalledResponseXML SAMLResponse
-		err = xml.Unmarshal(decodedResponseXML, &unmarshalledResponseXML)
-		if err != nil {
-			return
-		}
-		userName := unmarshalledResponseXML.Assertion.Subject.NameID.Text
-
-		// This is what a Thrift connect call to Core looks like. Note we should generally
-		// never hard code stuff like this, but it's probably fine for this specific use case.
-		// TODO: perhaps add in a real Thrift client to avoid this.
-		var jsonString = []byte(`[1,"connect",1,0,{"2":{"str":"` + b64ResponseXML + `"},"3":{"str":"` + requestedDatabase + `"}}]`)
+		// This is what a Thrift connect call to Core looks like. Here, the username and database
+		// name are left blank, per SAML login conventions. Hand-crafting Thrift messages like this
+		// isn't exactly "best practices", but it beats importing a whole Thrift lib for just this.
+		var jsonString = []byte(`[1,"connect",1,0,{"2":{"str":"` + b64ResponseXML + `"},"3":{"str":""}}]`)
 
 		resp, err := http.Post(backendUrl.String(), "application/vnd.apache.thrift.json", bytes.NewBuffer(jsonString))
 		if err != nil {
@@ -573,22 +544,46 @@ func samlPostHandler(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		relayState := r.FormValue("RelayState")
+		if relayState != "" {
+			targetPage = relayState
+		}
+
 		// We should have one of the two following payloads at this point:
 		// 		Success => [1,"connect",2,0,{"0":{"str":"5h6KW9NTv1ef1kOfOlAGN9q63usKOg0i"}}]
 		// 		Failure => [1,"connect",2,0,{"1":{"rec":{"1":{"str":"Invalid credentials."}}}}]
 		// Only set the cookie if we can parse a success payload.
 		sessionToken, ok = jsonParsed.Index(4).Search("0", "str").Data().(string)
 		if ok {
-			cookie := http.Cookie{Name: "omnisci_session", Value: sessionToken}
-			http.SetCookie(rw, &cookie)
+			sessionIDCookie := http.Cookie{
+				Name:     thriftSessionCookieName,
+				Value:    sessionToken,
+				HttpOnly: true,
+			}
+			http.SetCookie(rw, &sessionIDCookie)
 
-			cookie = http.Cookie{Name: "omnisci_username", Value: userName}
-			http.SetCookie(rw, &cookie)
-
-			cookie = http.Cookie{Name: "omnisci_db", Value: requestedDatabase}
-			http.SetCookie(rw, &cookie)
+			samlFlagCookie := http.Cookie{
+				Name:  samlAuthCookieName,
+				Value: "true",
+			}
+			http.SetCookie(rw, &samlFlagCookie)
 		}
 	}
+
+	defer func() {
+		if ok {
+			http.Redirect(rw, r, targetPage, 301)
+		} else {
+			var errorString string
+			if err != nil {
+				errorString = err.Error()
+			} else {
+				errorString = "invalid credentials"
+			}
+			http.Redirect(rw, r, samlErrorPage, 303)
+			log.Infoln("Error logging user in via SAML: ", errorString)
+		}
+	}()
 }
 
 func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
@@ -597,6 +592,34 @@ func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		h = httputil.NewSingleHostReverseProxy(backendUrl)
 		rw.Header().Del("Access-Control-Allow-Origin")
+
+		// If the thriftSessionCookieName is present, it holds the real session ID, while the Thrift
+		// call is using a placeholder. This code replaces the fake session ID in the Thrift call
+		// with the real one from the cookie.
+		sessionIDCookie, _ := r.Cookie(thriftSessionCookieName)
+		if sessionIDCookie != nil {
+			bodyBytes, _ := ioutil.ReadAll(r.Body)
+			defer r.Body.Close()
+
+			// In general, if we encounter any errors, we want to make this session code a noop
+			jsonParsed, err := gabs.ParseJSON(bodyBytes)
+			if err == nil {
+				// Grab the session ID from the thrift call
+				sessionToken, ok := jsonParsed.Index(4).Search("1", "str").Data().(string)
+
+				// If the session ID is our known placeholder ID, replace it with the real one
+				if ok && sessionToken == samlPlaceholderSessionID {
+					jsonParsed.Index(4).Set(sessionIDCookie.Value, "1", "str")
+
+					r.Body = ioutil.NopCloser(bytes.NewReader([]byte(jsonParsed.String())))
+					r.ContentLength = int64(len(jsonParsed.String()))
+				} else {
+					r.Body = ioutil.NopCloser(bytes.NewReader(bodyBytes))
+				}
+			} else {
+				r.Body = ioutil.NopCloser(bytes.NewReader(bodyBytes))
+			}
+		}
 	}
 
 	if r.Method == "GET" && r.URL.Path == "/" {
