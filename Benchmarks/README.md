@@ -1,10 +1,10 @@
 # MapD Benchmark Script
 
-Python script that leverages [pymapd](https://github.com/omnisci/pymapd) to query a mapd database and reports performance of the queries.
+Python scripts that leverages [pymapd](https://github.com/omnisci/pymapd) to query a mapd database and reports performance of queries or data import.
 
 ## Setup
 
-Script is intended for use on Python3
+Scripts are intended for use on Python3
 
 All required python packages can be installed with `pip` using the `requirements.txt` file:
 ```
@@ -39,7 +39,7 @@ Running the script requies a few components:
 2) Query(ies) to run against the dataset. These can be provided as files with the following syntax: `query_<query_id>.sql` (where query_id is a unique query ID). The script will find all queries from files that match the syntax in the directory passed in to the script at runtime.
 3) Destination. Depending on the type of destination, a connection to a mapd db, or destination file location may be required.
 
-### Running the script
+#### Running the script
 
 Usage can be printed at any time by running: `./run-benchmark.py -h` or `--help`
 
@@ -155,3 +155,119 @@ Example 2:
 ```
 python ./run-benchmark.py -u user -p password -s mapd-server.example.com -n mapd_db -t flights_2008_10k -l TestLabel -d /home/mapd/queries/flights -i 10 -g 4 -e mapd_db,file_json -U dest_user -P password -S mapd-dest-server.mapd.com -N mapd_dest_db -T benchmark_results -j /home/mapd/benchmark_results/example.json
 ```
+
+## Import Benchmark
+
+The import benchmark script `./run-benchmark-import.py` is used to run a data import from a file local to the benchmarking machine, and report various times associated with the import of that data.
+
+### Usage
+
+#### Required components
+
+Running the script requies a few components:
+
+1) Connection to a db, can be local or remote.
+2) Data source file(s) on the machine with the database.
+3) Schemas associates with each data source file to create the table before performing the import. These must be executable .sql files kept in the `./import_table_schemas` directory.
+3) Destination for the results. Depending on the type of destination, a connection to a mapd db, or destination file location may be required.
+
+#### Running the script
+
+Usage can be printed at any time by running: `./run-benchmark-import.py -h` or `--help`
+
+Currently, usage is:
+
+```
+usage: run-benchmark-import.py [-h] [-v] [-q] [-u USER] [-p PASSWD]
+                               [-s SERVER] [-o PORT] [-n NAME] -l LABEL -f
+                               IMPORT_FILE -c TABLE_SCHEMA_FILE
+                               [-t IMPORT_TABLE_NAME]
+                               [-F IMPORT_QUERY_TEMPLATE_FILE]
+                               [--no-drop-table-before]
+                               [--no-drop-table-after] [-A IMPORT_TEST_NAME]
+                               [-m MACHINE_NAME] [-a MACHINE_UNAME]
+                               [-e DESTINATION] [-U DEST_USER]
+                               [-P DEST_PASSWD] [-S DEST_SERVER]
+                               [-O DEST_PORT] [-N DEST_NAME] [-T DEST_TABLE]
+                               [-C DEST_TABLE_SCHEMA_FILE]
+                               [-j OUTPUT_FILE_JSON] [-J OUTPUT_FILE_JENKINS]
+
+required arguments:
+  -u USER, --user USER  Source database user
+  -p PASSWD, --passwd PASSWD
+                        Source database password
+  -s SERVER, --server SERVER
+                        Source database server hostname
+  -n NAME, --name NAME  Source database name
+  -l LABEL, --label LABEL
+                        Benchmark run label
+  -f IMPORT_FILE, --import-file IMPORT_FILE
+                        Absolute path to file on omnisci_server machine with
+                        data for import test
+  -c TABLE_SCHEMA_FILE, --table-schema-file TABLE_SCHEMA_FILE
+                        Path to local file with CREATE TABLE sql statement for
+                        the import table
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -v, --verbose         Turn on debug logging
+  -q, --quiet           Suppress script outuput (except warnings and errors)
+  -o PORT, --port PORT  Source database server port
+  -t IMPORT_TABLE_NAME, --import-table-name IMPORT_TABLE_NAME
+                        Name of table to import data to. NOTE: This table will
+                        be dropped before and after the import test, unless
+                        --no-drop-table-[before/after] is specified.
+  -F IMPORT_QUERY_TEMPLATE_FILE, --import-query-template-file IMPORT_QUERY_TEMPLATE_FILE
+                        Path to file containing template for import query. The
+                        script will replace "##TAB##" with the value of
+                        import_table_name and "##FILE##" with the value of
+                        table_schema_file. By default, the script will use the
+                        COPY FROM command with the default default delimiter
+                        (,).
+  --no-drop-table-before
+                        Do not drop the import table and recreate it before
+                        import NOTE: Make sure existing table schema matches
+                        import .csv file schema
+  --no-drop-table-after
+                        Do not drop the import table after import
+  -A IMPORT_TEST_NAME, --import-test-name IMPORT_TEST_NAME
+                        Name of import test (ex: "ips"). Required when using
+                        jenkins_bench_json as output.
+  -m MACHINE_NAME, --machine-name MACHINE_NAME
+                        Name of source machine
+  -a MACHINE_UNAME, --machine-uname MACHINE_UNAME
+                        Uname info from source machine
+  -e DESTINATION, --destination DESTINATION
+                        Destination type: [mapd_db, file_json, output,
+                        jenkins_bench] Multiple values can be input seperated
+                        by commas, ex: "mapd_db,file_json"
+  -U DEST_USER, --dest-user DEST_USER
+                        Destination mapd_db database user
+  -P DEST_PASSWD, --dest-passwd DEST_PASSWD
+                        Destination mapd_db database password
+  -S DEST_SERVER, --dest-server DEST_SERVER
+                        Destination mapd_db database server hostname (required
+                        if destination = "mapd_db")
+  -O DEST_PORT, --dest-port DEST_PORT
+                        Destination mapd_db database server port
+  -N DEST_NAME, --dest-name DEST_NAME
+                        Destination mapd_db database name
+  -T DEST_TABLE, --dest-table DEST_TABLE
+                        Destination mapd_db table name
+  -C DEST_TABLE_SCHEMA_FILE, --dest-table-schema-file DEST_TABLE_SCHEMA_FILE
+                        Destination table schema file. This must be an
+                        executable CREATE TABLE statement that matches the
+                        output of this script. It is required when creating
+                        the results table. Default location is in
+                        "./results_table_schemas/query-results.sql"
+  -j OUTPUT_FILE_JSON, --output-file-json OUTPUT_FILE_JSON
+                        Absolute path of .json output file (required if
+                        destination = "file_json")
+  -J OUTPUT_FILE_JENKINS, --output-file-jenkins OUTPUT_FILE_JENKINS
+                        Absolute path of jenkins benchmark .json output file
+                        (required if destination = "jenkins_bench")
+```
+
+### Additional details
+
+1) Import query template file: If the import command needs to be customized - for example, to use a delimiter other than comma - an import query template file can be used. This file must contain an executable query with two variables that will be replaced by the script: a) ##TAB## will be replaced with the import table name, and b) ##FILE## will be replaced with the import data file.
