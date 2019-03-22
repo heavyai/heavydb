@@ -57,7 +57,6 @@ import com.mapd.common.SockTransportProperties;
  */
 public class MetaConnect {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MetaConnect.class);
-  private SockTransportProperties sockTransportProperties = null;
   private final String dataDir;
   private final String db;
   private final MapDUser currentUser;
@@ -183,8 +182,8 @@ public class MetaConnect {
     // use thrift direct to local server
     try {
       TProtocol protocol = null;
-      TTransport transport = SockTransportProperties.openClientTransport(
-              "localhost", mapdPort, sock_transport_properties);
+      TTransport transport =
+              sock_transport_properties.openClientTransport("localhost", mapdPort);
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
@@ -253,8 +252,8 @@ public class MetaConnect {
     try {
       TProtocol protocol = null;
 
-      TTransport transport = SockTransportProperties.openClientTransport(
-              "localhost", mapdPort, sock_transport_properties);
+      TTransport transport =
+              sock_transport_properties.openClientTransport("localhost", mapdPort);
       if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
@@ -476,8 +475,8 @@ public class MetaConnect {
       try {
         TProtocol protocol = null;
 
-        TTransport transport = SockTransportProperties.openClientTransport(
-                "localhost", mapdPort, sock_transport_properties);
+        TTransport transport =
+                sock_transport_properties.openClientTransport("localhost", mapdPort);
         if (!transport.isOpen()) transport.open();
         protocol = new TBinaryProtocol(transport);
 

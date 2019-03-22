@@ -30,25 +30,270 @@ import static java.lang.System.exit;
 import java.math.BigDecimal;
 import java.sql.*;
 import java.util.ArrayList;
+import com.mapd.utility.db_vendors.Db_vendor_types;
 import java.util.List;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.Options;
-import org.apache.commons.cli.ParseException;
+
+import org.apache.commons.cli.*;
+
+import java.time.*;
+import java.security.KeyStore;
+
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.protocol.TJSONProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.mapd.common.SockTransportProperties;
 
 interface DateTimeUtils {
   long getSecondsFromMilliseconds(long milliseconds);
+}
+
+class MutuallyExlusiveOptionsException extends ParseException {
+  protected MutuallyExlusiveOptionsException(String message) {
+    super(message);
+  }
+  public static MutuallyExlusiveOptionsException create(String errMsg, String[] strings) {
+    StringBuffer sb = new StringBuffer(
+            "Mutually exclusive options used. " + errMsg + ". Options provided [");
+    for (String s : strings) {
+      sb.append(s);
+      sb.append(" ");
+    }
+    sb.setCharAt(sb.length() - 1, ']');
+    return new MutuallyExlusiveOptionsException(sb.toString());
+  }
+}
+
+class SQLImporter_args {
+  private Options options = new Options();
+  void printVersion() {
+    System.out.println("SQLImporter Version 4.6.0");
+  }
+  void printHelpMessage() {
+    StringBuffer sb = new StringBuffer("\nSQLImporter ");
+    // Ready for PKI auth
+    // sb.append("(-u <userid> -p <password> | --client-cert <key store filename>
+    sb.append("-u <userid> -p <password> [(--binary|--http|--https [--insecure])]\n");
+    sb.append("-s <omnisci server host> -db <omnsci db> --port <omnisci server port>\n");
+    // sb.append("([--ca-trust-store <ca trust store file name>] --ca-trust-store-password
+    // <trust store password> | --insecure)\n");
+    sb.append(
+            "[-d <other database JDBC drive class>] -c <other database JDBC connection string>\n");
+    sb.append(
+            "-su <other database user> -sp <other database user password> -su <other database sql statement>\n");
+    sb.append(
+            "-t <OmniSci target table> -b <transfer buffer size> -f <table fragment size>\n");
+    sb.append("[-tr] -i <init commands file>\n");
+    sb.append("\nSQLImporter -h | --help\n\n");
+
+    HelpFormatter formatter = new HelpFormatter();
+    // Forces help to print out options in order they were added rather
+    // than in alphabetical order
+    formatter.setOptionComparator(null);
+    int help_width = 100;
+    formatter.printHelp(help_width, sb.toString(), "", options, "");
+  }
+  SQLImporter_args() {
+    options.addOption("r", true, "Row Load Limit");
+
+    // OmniSci authentication options
+    options.addOption(Option.builder("h").desc("help message").longOpt("help").build());
+    options.addOption(
+            Option.builder("u").hasArg().desc("OmniSci User").longOpt("user").build());
+    options.addOption(Option.builder("p")
+                              .hasArg()
+                              .desc("OmniSci Password")
+                              .longOpt("passwd")
+                              .build());
+    // OmniSci transport options
+    OptionGroup transport_grp = new OptionGroup();
+    transport_grp.addOption(Option.builder()
+                                    .desc("use binary transport to connect to OmniSci ")
+                                    .longOpt("binary")
+                                    .build());
+    transport_grp.addOption(Option.builder()
+                                    .desc("use http transport to connect to OmniSci ")
+                                    .longOpt("http")
+                                    .build());
+    transport_grp.addOption(Option.builder()
+                                    .desc("use https transport to connect to OmniSci ")
+                                    .longOpt("https")
+                                    .build());
+    options.addOptionGroup(transport_grp);
+
+    // OmniSci database server details
+    options.addOption(Option.builder("s")
+                              .hasArg()
+                              .desc("OmniSci Server")
+                              .longOpt("server")
+                              .build());
+    options.addOption(Option.builder("db")
+                              .hasArg()
+                              .desc("OmniSci Database")
+                              .longOpt("database")
+                              .build());
+    options.addOption(
+            Option.builder().hasArg().desc("OmniSci Port").longOpt("port").build());
+
+    // OmniSci server authentication options
+    options.addOption(Option.builder()
+                              .hasArg()
+                              .desc("CA certificate trust store")
+                              .longOpt("ca-trust-store")
+                              .build());
+    options.addOption(Option.builder()
+                              .hasArg()
+                              .desc("CA certificate trust store password")
+                              .longOpt("ca-trust-store-passwd")
+                              .build());
+    options.addOption(
+            Option.builder()
+                    .desc("Inseure TLS - do not validate server OmniSci server credentials")
+                    .longOpt("insecure")
+                    .build());
+
+    // Other database connection details
+    options.addOption(Option.builder("d")
+                              .hasArg()
+                              .desc("JDBC driver class")
+                              .longOpt("driver")
+                              .build());
+    options.addOption(Option.builder("c")
+                              .hasArg()
+                              .desc("JDBC Connection string")
+                              .longOpt("jdbcConnect")
+                              .required()
+                              .build());
+    options.addOption(Option.builder("su")
+                              .hasArg()
+                              .desc("Source User")
+                              .longOpt("sourceUser")
+                              .required()
+                              .build());
+    options.addOption(Option.builder("sp")
+                              .hasArg()
+                              .desc("Source Password")
+                              .longOpt("sourcePasswd")
+                              .required()
+                              .build());
+    options.addOption(Option.builder("ss")
+                              .hasArg()
+                              .desc("SQL Select statement")
+                              .longOpt("sqlStmt")
+                              .required()
+                              .build());
+
+    options.addOption(Option.builder("t")
+                              .hasArg()
+                              .desc("OmniSci Target Table")
+                              .longOpt("targetTable")
+                              .required()
+                              .build());
+
+    options.addOption(Option.builder("b")
+                              .hasArg()
+                              .desc("transfer buffer size")
+                              .longOpt("bufferSize")
+                              .build());
+    options.addOption(Option.builder("f")
+                              .hasArg()
+                              .desc("table fragment size")
+                              .longOpt("fragmentSize")
+                              .build());
+
+    options.addOption(Option.builder("tr")
+                              .desc("Truncate table if it exists")
+                              .longOpt("truncate")
+                              .build());
+    options.addOption(Option.builder("i")
+                              .hasArg()
+                              .desc("File containing init command for DB")
+                              .longOpt("initializeFile")
+                              .build());
+  }
+  private Option setOptionRequired(Option option) {
+    option.setRequired(true);
+    return option;
+  }
+
+  public CommandLine parse(String[] args) throws ParseException {
+    CommandLineParser clp = new DefaultParser() {
+      public CommandLine parse(Options options, String[] strings) throws ParseException {
+        Options helpOptions = new Options();
+        helpOptions.addOption(
+                Option.builder("h").desc("help message").longOpt("help").build());
+        try {
+          CommandLine cmd = super.parse(helpOptions, strings);
+        } catch (UnrecognizedOptionException uE) {
+        }
+        if (cmd.hasOption("help")) {
+          printHelpMessage();
+          exit(0);
+        }
+        if (cmd.hasOption("version")) {
+          printVersion();
+          exit(0);
+        }
+        cmd = super.parse(options, strings);
+        if (!cmd.hasOption("user") && !cmd.hasOption("client-cert")) {
+          throw new MissingArgumentException(
+                  "Must supply either an OmniSci db user or a user certificate");
+        }
+        // if user supplied must have password and visa versa
+        if (cmd.hasOption("user") || cmd.hasOption("passwd")) {
+          options.addOption(setOptionRequired(options.getOption("user")));
+          options.addOption(setOptionRequired(options.getOption("passwd")));
+          super.parse(options, strings);
+        }
+
+        // FUTURE USE FOR USER Auth if user client-cert supplied must have client-key and
+        // visa versa
+        if (false) {
+          if (cmd.hasOption("client-cert") || cmd.hasOption("client-key")) {
+            options.addOption(setOptionRequired(options.getOption("ca-trust-store")));
+            options.addOption(
+                    setOptionRequired(options.getOption("ca-trust-store-password")));
+            super.parse(options, strings);
+          }
+          if (options.getOption("user").isRequired()
+                  && options.getOption("client-key").isRequired()) {
+            MutuallyExlusiveOptionsException meo =
+                    MutuallyExlusiveOptionsException.create(
+                            "user/password can not be use with client-cert/client-key",
+                            strings);
+            throw meo;
+          }
+
+          if (cmd.hasOption("http")
+                  || cmd.hasOption("binary")
+                          && (cmd.hasOption("client-cert")
+                                     || cmd.hasOption("client-key"))) {
+            MutuallyExlusiveOptionsException meo = MutuallyExlusiveOptionsException.create(
+                    "http|binary can not be use with ca-cert|client-cert|client-key",
+                    strings);
+          }
+        }
+
+        if (cmd.hasOption("insecure") && !cmd.hasOption("https")) {
+          MutuallyExlusiveOptionsException meo = MutuallyExlusiveOptionsException.create(
+                  "insecure can only be use with https", strings);
+          throw meo;
+        }
+
+        return cmd;
+      }
+      public CommandLine parse(Options options, String[] strings, boolean b)
+              throws ParseException {
+        return null;
+      }
+    };
+    return clp.parse(options, args);
+  }
 }
 
 public class SQLImporter {
@@ -60,6 +305,7 @@ public class SQLImporter {
     return milliseconds / 1000;
   };
 
+  Db_vendor_types vendor_types = null;
   public static void main(String[] args) {
     SQLImporter sq = new SQLImporter();
     sq.doWork(args);
@@ -67,118 +313,14 @@ public class SQLImporter {
 
   void doWork(String[] args) {
     // create Options object
-    Options options = new Options();
 
-    // add r option
-    options.addOption("r", true, "Row Load Limit");
-
-    Option driver = Option.builder("d")
-                            .hasArg()
-                            .desc("JDBC driver class")
-                            .longOpt("driver")
-                            .build();
-
-    Option sqlStmt = Option.builder("ss")
-                             .hasArg()
-                             .desc("SQL Select statement")
-                             .longOpt("sqlStmt")
-                             .required()
-                             .build();
-
-    Option jdbcConnect = Option.builder("c")
-                                 .hasArg()
-                                 .desc("JDBC Connection string")
-                                 .longOpt("jdbcConnect")
-                                 .required()
-                                 .build();
-
-    Option user =
-            Option.builder("u").hasArg().desc("OmniSci User").longOpt("user").build();
-
-    Option sourceUser = Option.builder("su")
-                                .hasArg()
-                                .desc("Source User")
-                                .longOpt("sourceUser")
-                                .required()
-                                .build();
-
-    Option sourcePasswd = Option.builder("sp")
-                                  .hasArg()
-                                  .desc("Source Password")
-                                  .longOpt("sourcePasswd")
-                                  .required()
-                                  .build();
-
-    Option passwd = Option.builder("p")
-                            .hasArg()
-                            .desc("OmniSci Password")
-                            .longOpt("passwd")
-                            .build();
-
-    Option server =
-            Option.builder("s").hasArg().desc("OmniSci Server").longOpt("server").build();
-
-    Option targetTable = Option.builder("t")
-                                 .hasArg()
-                                 .desc("OmniSci Target Table")
-                                 .longOpt("targetTable")
-                                 .required()
-                                 .build();
-
-    Option port = Option.builder().hasArg().desc("OmniSci Port").longOpt("port").build();
-
-    Option bufferSize = Option.builder("b")
-                                .hasArg()
-                                .desc("transfer buffer size")
-                                .longOpt("bufferSize")
-                                .build();
-
-    Option fragmentSize = Option.builder("f")
-                                  .hasArg()
-                                  .desc("table fragment size")
-                                  .longOpt("fragmentSize")
-                                  .build();
-
-    Option database = Option.builder("db")
-                              .hasArg()
-                              .desc("OmniSci Database")
-                              .longOpt("database")
-                              .build();
-
-    Option truncate = Option.builder("tr")
-                              .desc("Truncate table if it exists")
-                              .longOpt("truncate")
-                              .build();
-
-    Option initFile = Option.builder("i")
-                              .hasArg()
-                              .desc("File containing init command for DB")
-                              .longOpt("initializeFile")
-                              .build();
-
-    options.addOption(driver);
-    options.addOption(sqlStmt);
-    options.addOption(jdbcConnect);
-    options.addOption(user);
-    options.addOption(server);
-    options.addOption(passwd);
-    options.addOption(port);
-    options.addOption(sourceUser);
-    options.addOption(sourcePasswd);
-    options.addOption(targetTable);
-    options.addOption(database);
-    options.addOption(bufferSize);
-    options.addOption(fragmentSize);
-    options.addOption(truncate);
-    options.addOption(initFile);
-
-    CommandLineParser parser = new DefaultParser();
+    SQLImporter_args s_args = new SQLImporter_args();
 
     try {
-      cmd = parser.parse(options, args);
+      cmd = s_args.parse(args);
     } catch (ParseException ex) {
       LOGGER.error(ex.getLocalizedMessage());
-      help(options);
+      s_args.printHelpMessage();
       exit(0);
     }
     executeQuery();
@@ -196,7 +338,7 @@ public class SQLImporter {
       conn = DriverManager.getConnection(cmd.getOptionValue("jdbcConnect"),
               cmd.getOptionValue("sourceUser"),
               cmd.getOptionValue("sourcePasswd"));
-
+      vendor_types = Db_vendor_types.Db_vendor_factory(cmd.getOptionValue("jdbcConnect"));
       long startTime = System.currentTimeMillis();
 
       // run init file script on targe DB if present
@@ -227,7 +369,7 @@ public class SQLImporter {
       // check if table already exists and is compatible in OmniSci with the query
       // metadata
       ResultSetMetaData md = rs.getMetaData();
-      checkMapDTable(md);
+      checkMapDTable(conn, md);
 
       timer = System.currentTimeMillis();
 
@@ -244,7 +386,12 @@ public class SQLImporter {
       // read data from old DB
       while (rs.next()) {
         for (int i = 1; i <= md.getColumnCount(); i++) {
-          setColValue(rs, cols.get(i - 1), md.getColumnType(i), i, md.getScale(i));
+          setColValue(rs,
+                  cols.get(i - 1),
+                  md.getColumnType(i),
+                  i,
+                  md.getScale(i),
+                  md.getColumnTypeName(i));
         }
         resultCount++;
         bufferCount++;
@@ -336,10 +483,12 @@ public class SQLImporter {
   private void help(Options options) {
     // automatically generate the help statement
     HelpFormatter formatter = new HelpFormatter();
+    formatter.setOptionComparator(null); // get options in the order they are created
     formatter.printHelp("SQLImporter", options);
   }
 
-  private void checkMapDTable(ResultSetMetaData md) throws SQLException {
+  private void checkMapDTable(Connection otherdb_conn, ResultSetMetaData md)
+          throws SQLException {
     createMapDConnection();
     String tName = cmd.getOptionValue("targetTable");
 
@@ -347,7 +496,7 @@ public class SQLImporter {
       // check if we want to truncate
       if (cmd.hasOption("truncate")) {
         executeMapDCommand("Drop table " + tName);
-        createMapDTable(md);
+        createMapDTable(otherdb_conn, md);
       } else {
         List<TColumnType> columnInfo = getColumnInfo(tName);
         // table exists lets check it has same number of columns
@@ -373,11 +522,11 @@ public class SQLImporter {
         }
       }
     } else {
-      createMapDTable(md);
+      createMapDTable(otherdb_conn, md);
     }
   }
 
-  private void createMapDTable(ResultSetMetaData metaData) {
+  private void createMapDTable(Connection otherdb_conn, ResultSetMetaData metaData) {
     StringBuilder sb = new StringBuilder();
     sb.append("Create table ").append(cmd.getOptionValue("targetTable")).append("(");
 
@@ -392,10 +541,16 @@ public class SQLImporter {
         LOGGER.debug("Column type is " + metaData.getColumnType(i));
 
         sb.append(metaData.getColumnName(i)).append(" ");
-
-        sb.append(getColType(metaData.getColumnType(i),
-                metaData.getPrecision(i),
-                metaData.getScale(i)));
+        int col_type = metaData.getColumnType(i);
+        if (col_type == java.sql.Types.OTHER) {
+          sb.append(vendor_types.find_gis_type(otherdb_conn,
+                  metaData.getColumnName(i),
+                  metaData.getColumnTypeName(i)));
+        } else {
+          sb.append(getColType(metaData.getColumnType(i),
+                  metaData.getPrecision(i),
+                  metaData.getScale(i)));
+        }
       }
       sb.append(")");
 
@@ -414,21 +569,37 @@ public class SQLImporter {
   }
 
   private void createMapDConnection() {
-    TTransport transport;
+    TTransport transport = null;
+    TProtocol protocol = new TBinaryProtocol(transport);
+    int port = Integer.valueOf(cmd.getOptionValue("port", "6274"));
+    String server = cmd.getOptionValue("server", "localhost");
     try {
-      transport = new TSocket(cmd.getOptionValue("server", "localhost"),
-              Integer.valueOf(cmd.getOptionValue("port", "6274")));
-
-      transport.open();
-
-      TProtocol protocol = new TBinaryProtocol(transport);
+      // Uses default certificate stores.
+      boolean load_trust_store = cmd.hasOption("https");
+      SockTransportProperties skT = null;
+      if (cmd.hasOption("https")) {
+        skT = new SockTransportProperties(load_trust_store & !cmd.hasOption("insecure"));
+        transport = skT.openHttpsClientTransport(server, port);
+        transport.open();
+        protocol = new TJSONProtocol(transport);
+      } else if (cmd.hasOption("http")) {
+        skT = new SockTransportProperties(load_trust_store);
+        transport = skT.openHttpClientTransport(server, port);
+        protocol = new TJSONProtocol(transport);
+      } else {
+        skT = new SockTransportProperties(load_trust_store);
+        transport = skT.openClientTransport(server, port);
+        transport.open();
+        protocol = new TBinaryProtocol(transport);
+      }
 
       client = new MapD.Client(protocol);
-
-      session = client.connect(cmd.getOptionValue("user", "mapd"),
-              cmd.getOptionValue("passwd", "HyperInteractive"),
-              cmd.getOptionValue("database", "mapd"));
-
+      // This if will be useless until PKI signon
+      if (cmd.hasOption("user")) {
+        session = client.connect(cmd.getOptionValue("user", "mapd"),
+                cmd.getOptionValue("passwd", "HyperInteractive"),
+                cmd.getOptionValue("database", "mapd"));
+      }
       LOGGER.debug("Connected session is " + session);
 
     } catch (TTransportException ex) {
@@ -440,6 +611,9 @@ public class SQLImporter {
     } catch (TException ex) {
       LOGGER.error("Connection failed - " + ex.toString());
       exit(3);
+    } catch (Exception ex) {
+      LOGGER.error("General exception - " + ex.toString());
+      exit(4);
     }
   }
 
@@ -493,6 +667,8 @@ public class SQLImporter {
   }
 
   private String getColType(int cType, int precision, int scale) {
+    // Note - if cType is OTHER a earlier call will have been made
+    // to try and work out the db vendors specific type.
     if (precision > 19) {
       precision = 19;
     }
@@ -576,6 +752,7 @@ public class SQLImporter {
       case java.sql.Types.CHAR:
       case java.sql.Types.LONGVARCHAR:
       case java.sql.Types.LONGNVARCHAR:
+      case java.sql.Types.OTHER:
         col.data.str_col = new ArrayList<String>(bufferSize);
         break;
 
@@ -585,9 +762,12 @@ public class SQLImporter {
     return col;
   }
 
-  private void setColValue(
-          ResultSet rs, TColumn col, int columnType, int colNum, int scale)
-          throws SQLException {
+  private void setColValue(ResultSet rs,
+          TColumn col,
+          int columnType,
+          int colNum,
+          int scale,
+          String colTypeName) throws SQLException {
     switch (columnType) {
       case java.sql.Types
               .BIT: // deal with postgress treating boolean as bit... this will bite me
@@ -693,7 +873,15 @@ public class SQLImporter {
           col.nulls.add(Boolean.FALSE);
         }
         break;
-
+      case java.sql.Types.OTHER:
+        if (rs.wasNull()) {
+          col.nulls.add(Boolean.TRUE);
+          col.data.str_col.add("");
+        } else {
+          col.data.str_col.add(vendor_types.get_wkt(rs, colNum, colTypeName));
+          col.nulls.add(Boolean.FALSE);
+        }
+        break;
       default:
         throw new AssertionError("Column type " + columnType + " not Supported");
     }

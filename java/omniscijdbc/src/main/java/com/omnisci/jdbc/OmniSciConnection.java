@@ -140,19 +140,20 @@ public class OmniSciConnection implements java.sql.Connection {
       }
       Integer port_num = Integer.parseInt((String) (this.get(Connection_enums.port_num)));
       this.put(Connection_enums.port_num, port_num);
+      // Default to binary of no protocol specified
       String protocol = "binary";
       if (this.containsKey(Connection_enums.protocol)) {
         protocol = (String) this.get(Connection_enums.protocol);
         protocol.toLowerCase();
         if (!protocol.equals("binary") && !protocol.equals("http")
-                && !protocol.equals("https")) {
+                && !protocol.equals("https") && !protocol.equals("https_insecure")) {
           logger.warn("Incorrect protcol [" + protocol
-                  + "] supplied. Possible values are [binary | http | https]. Using binary as default");
+                  + "] supplied. Possible values are [binary |  http | https | https_insecure]. Using binary as default");
           protocol = "binary";
           parm_warning = true;
         }
-        this.put(Connection_enums.protocol, protocol);
       }
+      this.put(Connection_enums.protocol, protocol);
       if (this.containsKey(Connection_enums.key_store)
               && !this.containsKey(Connection_enums.key_store_pwd)) {
         logger.warn("key store [" + (String) this.get(Connection_enums.key_store)
@@ -169,6 +170,10 @@ public class OmniSciConnection implements java.sql.Connection {
     boolean isHttpProtocol() {
       return (this.containsKey(Connection_enums.protocol)
               && this.get(Connection_enums.protocol).equals("http"));
+    }
+    boolean isHttpsProtocol_insecure() {
+      return (this.containsKey(Connection_enums.protocol)
+              && this.get(Connection_enums.protocol).equals("https_insecure"));
     }
     boolean isHttpsProtocol() {
       return (this.containsKey(Connection_enums.protocol)
@@ -195,35 +200,71 @@ public class OmniSciConnection implements java.sql.Connection {
     this.url = url;
     this.cP = new Connection_properties(info, url);
     SockTransportProperties skT = null;
+    String key_store = null;
+    if (cP.get(Connection_enums.key_store) != null
+            && !cP.get(Connection_enums.key_store).toString().isEmpty()) {
+      key_store = cP.get(Connection_enums.key_store).toString();
+    }
+    String key_store_pwd = null;
+    if (cP.get(Connection_enums.key_store_pwd) != null
+            && !cP.get(Connection_enums.key_store_pwd).toString().isEmpty()) {
+      key_store_pwd = cP.get(Connection_enums.key_store_pwd).toString();
+    }
     try {
-      if (this.cP.containsTrustStore()) {
-        skT = new SockTransportProperties(
-                (String) this.cP.get(Connection_enums.key_store),
-                (String) cP.get(Connection_enums.key_store_pwd));
-      }
+      // cP extends hashtable.  hashtable get returns null when the
+      // key isn't present.  If key_store and keys_store_pwd are not present
+      // skT should then load the default java certs file ca-cert.
       TProtocol protocol = null;
       if (this.cP.isHttpProtocol()) {
-        transport = SockTransportProperties.openHttpClientTransport(
+        // HTTP
+        boolean load_trustinfo = false;
+        skT = new SockTransportProperties(load_trustinfo);
+        transport = skT.openHttpClientTransport(
                 (String) this.cP.get(Connection_enums.host_name),
-                ((Integer) this.cP.get(Connection_enums.port_num)).intValue(),
-                skT);
+                ((Integer) this.cP.get(Connection_enums.port_num)).intValue());
         transport.open();
         protocol = new TJSONProtocol(transport);
       } else if (this.cP.isHttpsProtocol()) {
-        transport = SockTransportProperties.openHttpsClientTransport(
+        // HTTPS - use CA cert to validate server cert and validate server name
+        skT = new SockTransportProperties(key_store, key_store_pwd);
+        transport = skT.openHttpsClientTransport(
                 (String) this.cP.get(Connection_enums.host_name),
-                ((Integer) this.cP.get(Connection_enums.port_num)).intValue(),
-                skT);
+                ((Integer) this.cP.get(Connection_enums.port_num)).intValue());
         transport.open();
         protocol = new TJSONProtocol(transport);
-      } else {
-        transport = SockTransportProperties.openClientTransport(
+      } else if (this.cP.isHttpsProtocol_insecure()) {
+        // HTTPS_INSECURE - trust all server names and certs but still encrypt pipe
+        boolean load_trustinfo = false;
+        skT = new SockTransportProperties(load_trustinfo);
+        transport = skT.openHttpsClientTransport(
                 (String) this.cP.get(Connection_enums.host_name),
-                ((Integer) this.cP.get(Connection_enums.port_num)).intValue(),
-                skT);
+                ((Integer) this.cP.get(Connection_enums.port_num)).intValue());
+        transport.open();
+        protocol = new TJSONProtocol(transport);
+      } else if (cP.isBinary()) {
+        // jdbc binary was implmented first.  It will currently look for a
+        // specified trust file, but doesn't look
+        // for any of the default java trust stores
+        if (key_store == null || key_store.isEmpty()) {
+          // un encryoted
+          boolean load_trustinfo = false;
+          skT = new SockTransportProperties(load_trustinfo);
+          transport = skT.openClientTransport(
+                  (String) this.cP.get(Connection_enums.host_name),
+                  ((Integer) this.cP.get(Connection_enums.port_num)).intValue());
+        } else {
+          // encryoted
+          skT = new SockTransportProperties(key_store, key_store_pwd);
+          transport = skT.openClientTransport_encryted(
+                  (String) this.cP.get(Connection_enums.host_name),
+                  ((Integer) this.cP.get(Connection_enums.port_num)).intValue());
+        }
         if (!transport.isOpen()) transport.open();
         protocol = new TBinaryProtocol(transport);
+      } else {
+        throw new RuntimeException("Invalid protocol supplied");
       }
+
       client = new MapD.Client(protocol);
       session = client.connect((String) this.cP.get(Connection_enums.user),
               (String) this.cP.get(Connection_enums.user_passwd),

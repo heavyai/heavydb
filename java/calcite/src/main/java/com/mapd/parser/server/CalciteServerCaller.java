@@ -131,8 +131,12 @@ public class CalciteServerCaller {
     PropertyConfigurator.configure(p);
 
     try {
-      if (!trust_store.isEmpty())
+      if (trust_store == null || trust_store.isEmpty()) {
+        boolean load_trust_store = false;
+        skT = new SockTransportProperties(load_trust_store);
+      } else {
         skT = new SockTransportProperties(trust_store, trust_store_pw);
+      }
     } catch (Exception ex) {
       MAPDLOGGER.error(
               "Supplied java trust stored could not be opened " + ex.getMessage());

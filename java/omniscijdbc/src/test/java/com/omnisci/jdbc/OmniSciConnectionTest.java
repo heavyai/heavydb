@@ -30,7 +30,30 @@ public class OmniSciConnectionTest {
       fail(err);
     }
   }
-
+  @Test
+  public void tst1a_binary_encrypted() {
+    try {
+      String url = PROPERTIES.getProperty("binary_connection_url") + ":"
+              + PROPERTIES.getProperty("default_db") + ":binary_tls";
+      String key_store = PROPERTIES.getProperty("server_key_store");
+      ClassLoader cl = getClass().getClassLoader();
+      key_store = cl.getResource(key_store).getPath();
+      Properties pt = new Properties();
+      pt.setProperty("user", user);
+      pt.setProperty("password", password);
+      pt.setProperty("key_store", key_store);
+      pt.setProperty(
+              "key_store_pwd", PROPERTIES.getProperty("server_key_store_password"));
+      Connection conn = DriverManager.getConnection(url, pt);
+      assertNotEquals(null, conn);
+      conn.close();
+      boolean closed = conn.isClosed();
+      assertEquals(true, closed);
+    } catch (SQLException sq) {
+      String err = "Connection test failed " + sq.toString();
+      fail(err);
+    }
+  }
   @Test
   public void tst2_http_unencrypted() {
     try {
@@ -52,7 +75,7 @@ public class OmniSciConnectionTest {
       Properties pt = new Properties();
       pt.setProperty("user", user);
       pt.setProperty("password", password);
-      pt.setProperty("protocol", "https");
+      pt.setProperty("protocol", "https_insecure");
       String url = PROPERTIES.getProperty("https_connection_url") + ":"
               + PROPERTIES.getProperty("default_db");
       Connection conn = DriverManager.getConnection(url, pt);
@@ -70,12 +93,12 @@ public class OmniSciConnectionTest {
     try {
       String key_store = PROPERTIES.getProperty("server_key_store");
       ClassLoader cl = getClass().getClassLoader();
-      key_store = cl.getResource(key_store).getPath();
 
       Properties pt = new Properties();
       pt.setProperty("user", user);
       pt.setProperty("password", password);
       pt.setProperty("protocol", "https");
+      key_store = cl.getResource(key_store).getPath();
       pt.setProperty("key_store", key_store);
       pt.setProperty(
               "key_store_pwd", PROPERTIES.getProperty("server_key_store_password"));
