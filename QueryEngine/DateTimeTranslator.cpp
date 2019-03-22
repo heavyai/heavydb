@@ -78,7 +78,7 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::generateExtractExpr(
   }
   const SQLTypeInfo ti(kBIGINT, 0, 0, expr_ti.get_notnull());
   auto constant = std::dynamic_pointer_cast<Analyzer::Constant>(from_expr);
-  if (constant) {
+  if (constant != nullptr) {
     Datum d;
     d.bigintval = field == kEPOCH
                       ? constant->get_constval().bigintval
@@ -88,38 +88,8 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::generateExtractExpr(
     constant->set_type_info(ti);
     return constant;
   }
-  if (field != kEPOCH) {
-    if (expr_ti.is_high_precision_timestamp()) {
-      if (is_subsecond_extract_field(field)) {
-        const auto result =
-            get_extract_high_precision_adjusted_scale(field, expr_ti.get_dimension());
-        if (result.second) {
-          const auto from_expr_rewritten =
-              makeExpr<Analyzer::BinOper>(expr_ti.get_type(),
-                                          result.first,
-                                          kONE,
-                                          from_expr->add_cast(ti),
-                                          getNumericConstant(result.second));
-          return makeExpr<Analyzer::ExtractExpr>(ti,
-                                                 from_expr_rewritten->get_contains_agg(),
-                                                 field,
-                                                 from_expr_rewritten->decompress());
-        }
-      } else {
-        auto from_expr_rewritten = makeExpr<Analyzer::BinOper>(
-            expr_ti.get_type(),
-            kDIVIDE,
-            kONE,
-            from_expr->add_cast(ti),
-            getNumericConstant(get_timestamp_precision_scale(expr_ti.get_dimension())));
-        return makeExpr<Analyzer::ExtractExpr>(ti,
-                                               from_expr_rewritten->get_contains_agg(),
-                                               field,
-                                               from_expr_rewritten->decompress());
-      }
-    } else if (expr_ti.is_timestamp() && is_subsecond_extract_field(field)) {
-      return makeExpr<Analyzer::Constant>(ti, false, Datum{0});
-    }
+  if (!expr_ti.is_high_precision_timestamp() && is_subsecond_extract_field(field)) {
+    return makeExpr<Analyzer::Constant>(ti, false, Datum{0});
   }
   return makeExpr<Analyzer::ExtractExpr>(
       ti, from_expr->get_contains_agg(), field, from_expr->decompress());
@@ -193,52 +163,6 @@ std::shared_ptr<Analyzer::Expr> DateTruncExpr::generateDatetruncExpr(
     constant->set_constval(d);
     constant->set_type_info(ti);
     return constant;
-  }
-  if (expr_ti.is_high_precision_timestamp()) {
-    if (is_subsecond_datetrunc_field(field)) {
-      const auto result =
-          get_datetrunc_high_precision_scale(field, expr_ti.get_dimension());
-      if (result != -1) {
-        const SQLTypeInfo bigint_ti = SQLTypeInfo(kBIGINT, false);
-        const auto expr_down_scaled =
-            makeExpr<Analyzer::BinOper>(expr_ti.get_type(),
-                                        kDIVIDE,
-                                        kONE,
-                                        from_expr->add_cast(bigint_ti),
-                                        getNumericConstant(result));
-        const auto datetrunc_expr =
-            makeExpr<Analyzer::DatetruncExpr>(ti,
-                                              expr_down_scaled->get_contains_agg(),
-                                              field,
-                                              expr_down_scaled->decompress());
-        return makeExpr<Analyzer::BinOper>(ti,
-                                           datetrunc_expr->get_contains_agg(),
-                                           kMULTIPLY,
-                                           kONE,
-                                           datetrunc_expr->add_cast(bigint_ti),
-                                           getNumericConstant(result));
-      }
-    } else {
-      const SQLTypeInfo bigint_ti = SQLTypeInfo(kBIGINT, false);
-      const int64_t scale = get_timestamp_precision_scale(ti.get_dimension());
-      const auto expr_down_scaled =
-          makeExpr<Analyzer::BinOper>(expr_ti.get_type(),
-                                      kDIVIDE,
-                                      kONE,
-                                      from_expr->add_cast(bigint_ti),
-                                      getNumericConstant(scale));
-      const auto datetrunc_expr =
-          makeExpr<Analyzer::DatetruncExpr>(ti,
-                                            expr_down_scaled->get_contains_agg(),
-                                            field,
-                                            expr_down_scaled->decompress());
-      return makeExpr<Analyzer::BinOper>(ti,
-                                         datetrunc_expr->get_contains_agg(),
-                                         kMULTIPLY,
-                                         kONE,
-                                         datetrunc_expr->add_cast(bigint_ti),
-                                         getNumericConstant(scale));
-    }
   }
   return makeExpr<Analyzer::DatetruncExpr>(
       ti, from_expr->get_contains_agg(), field, from_expr->decompress());

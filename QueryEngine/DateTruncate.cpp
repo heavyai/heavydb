@@ -95,7 +95,6 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
     case dtMICROSECOND:
     case dtMILLISECOND:
     case dtSECOND:
-      // precision in seconds
       return timeval;
     case dtMINUTE: {
       int64_t ret = (timeval / kSecsPerMin) * kSecsPerMin;
