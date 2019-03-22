@@ -190,7 +190,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
 
   if (!is_group_by) {
     CHECK(!must_use_baseline_sort);
-    CHECK(!render_info || !render_info->isPotentialInSituRender());
 
     return std::make_unique<QueryMemoryDescriptor>(
         executor,
@@ -217,7 +216,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         count_distinct_descriptors,
         false,
         output_columnar_hint,
-        false,
+        render_info && render_info->isPotentialInSituRender(),
         must_use_baseline_sort);
   }
 
@@ -227,7 +226,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
   bool interleaved_bins_on_gpu = false;
   bool keyless_hash = false;
   bool shared_mem_for_group_by = false;
-  bool render_output = false;
   int8_t group_col_compact_width = 0;
   int32_t idx_target_as_key = -1;
   int64_t init_val = 0;
@@ -235,7 +233,9 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
 
   switch (col_range_info.hash_type_) {
     case QueryDescriptionType::GroupByPerfectHash: {
-      CHECK(!render_info || !render_info->isPotentialInSituRender());
+      if (render_info) {
+        render_info->setInSituDataIfUnset(false);
+      }
 
       if (group_col_widths.size() > 1) {
         // col range info max contains the expected cardinality of the output
@@ -316,7 +316,9 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       }
     } break;
     case QueryDescriptionType::GroupByBaselineHash: {
-      CHECK(!render_info || !render_info->isPotentialInSituRender());
+      if (render_info) {
+        render_info->setInSituDataIfUnset(false);
+      }
       entry_count = shard_count
                         ? (max_groups_buffer_entry_count + shard_count - 1) / shard_count
                         : max_groups_buffer_entry_count;
@@ -334,8 +336,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     } break;
     case QueryDescriptionType::Projection: {
       CHECK(!must_use_baseline_sort);
-
-      render_output = render_info && render_info->isPotentialInSituRender();
 
       if (use_streaming_top_n(ra_exe_unit, output_columnar_hint)) {
         entry_count = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
@@ -355,27 +355,29 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     default:
       UNREACHABLE() << "Unknown query type";
   }
-  return std::make_unique<QueryMemoryDescriptor>(executor,
-                                                 ra_exe_unit,
-                                                 query_infos,
-                                                 allow_multifrag,
-                                                 keyless_hash,
-                                                 interleaved_bins_on_gpu,
-                                                 idx_target_as_key,
-                                                 init_val,
-                                                 actual_col_range_info,
-                                                 col_slot_context,
-                                                 group_col_widths,
-                                                 group_col_compact_width,
-                                                 target_groupby_indices,
-                                                 entry_count,
-                                                 sharing,
-                                                 shared_mem_for_group_by,
-                                                 count_distinct_descriptors,
-                                                 sort_on_gpu_hint,
-                                                 output_columnar_hint,
-                                                 render_output,
-                                                 must_use_baseline_sort);
+
+  return std::make_unique<QueryMemoryDescriptor>(
+      executor,
+      ra_exe_unit,
+      query_infos,
+      allow_multifrag,
+      keyless_hash,
+      interleaved_bins_on_gpu,
+      idx_target_as_key,
+      init_val,
+      actual_col_range_info,
+      col_slot_context,
+      group_col_widths,
+      group_col_compact_width,
+      target_groupby_indices,
+      entry_count,
+      sharing,
+      shared_mem_for_group_by,
+      count_distinct_descriptors,
+      sort_on_gpu_hint,
+      output_columnar_hint,
+      render_info && render_info->isPotentialInSituRender(),
+      must_use_baseline_sort);
 }
 
 QueryMemoryDescriptor::QueryMemoryDescriptor(
