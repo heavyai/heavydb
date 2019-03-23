@@ -159,14 +159,16 @@ StringDictionary::StringDictionary(const std::string& folder,
       }
       unsigned string_id = 0;
       mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
-      const uint32_t items_per_thread = 1000;
+
       uint32_t thread_inits = 0;
       const auto thread_count = std::thread::hardware_concurrency();
+      const uint32_t items_per_thread = std::max<uint32_t>(
+          2000, std::min<uint32_t>(200000, (str_count / thread_count) + 1));
       std::vector<std::future<std::vector<std::pair<uint32_t, unsigned int>>>>
           dictionary_futures;
       for (string_id = 0; string_id < str_count; string_id += items_per_thread) {
-        dictionary_futures.emplace_back(
-            std::async(std::launch::async, [string_id, str_count, this] {
+        dictionary_futures.emplace_back(std::async(
+            std::launch::async, [string_id, str_count, items_per_thread, this] {
               std::vector<std::pair<uint32_t, unsigned int>> hashVec;
               for (uint32_t curr_id = string_id;
                    curr_id < string_id + items_per_thread && curr_id < str_count;
