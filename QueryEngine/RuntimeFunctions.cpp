@@ -1089,6 +1089,13 @@ extern "C" ALWAYS_INLINE double load_avg_int(const int64_t* sum,
   return *count != 0 ? static_cast<double>(*sum) / *count : null_val;
 }
 
+extern "C" ALWAYS_INLINE double load_avg_decimal(const int64_t* sum,
+                                                 const int64_t* count,
+                                                 const double null_val,
+                                                 const uint32_t scale) {
+  return *count != 0 ? (static_cast<double>(*sum) / pow(10, scale)) / *count : null_val;
+}
+
 extern "C" ALWAYS_INLINE double load_avg_double(const int64_t* agg,
                                                 const int64_t* count,
                                                 const double null_val) {

@@ -53,6 +53,20 @@ extern "C" void apply_window_pending_outputs_double(const int64_t handle,
   pending_output_slots.clear();
 }
 
+extern "C" void apply_window_pending_outputs_float(const int64_t handle,
+                                                   const float value,
+                                                   const int64_t bitset,
+                                                   const int64_t pos) {
+  if (!pos_is_set(bitset, pos)) {
+    return;
+  }
+  auto& pending_output_slots = *reinterpret_cast<std::vector<void*>*>(handle);
+  for (auto pending_output_slot : pending_output_slots) {
+    *reinterpret_cast<double*>(pending_output_slot) = value;
+  }
+  pending_output_slots.clear();
+}
+
 extern "C" void add_window_pending_output(void* pending_output, const int64_t handle) {
   reinterpret_cast<std::vector<void*>*>(handle)->push_back(pending_output);
 }
@@ -151,21 +165,33 @@ SQLTypeInfo get_adjusted_window_type_info(const Analyzer::WindowFunction* window
 
 }  // namespace
 
-llvm::Value* Executor::codegenWindowFunctionAggregate(const CompilationOptions& co) {
+llvm::Value* Executor::aggregateWindowStatePtr() {
   const auto window_func_context =
       WindowProjectNodeContext::getActiveWindowFunctionContext();
   const auto window_func = window_func_context->getWindowFunction();
-  const auto reset_state_false_bb = codegenWindowResetStateControlFlow();
-  const auto pi64_type =
-      llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
+  const auto arg_ti = get_adjusted_window_type_info(window_func);
+  llvm::Type* aggregate_state_type =
+      arg_ti.get_type() == kFLOAT
+          ? llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0)
+          : llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
   const auto aggregate_state_i64 =
       ll_int(reinterpret_cast<const int64_t>(window_func_context->aggregateState()));
-  auto aggregate_state =
-      cgen_state_->ir_builder_.CreateIntToPtr(aggregate_state_i64, pi64_type);
+  return cgen_state_->ir_builder_.CreateIntToPtr(aggregate_state_i64,
+                                                 aggregate_state_type);
+}
+
+llvm::Value* Executor::codegenWindowFunctionAggregate(const CompilationOptions& co) {
+  const auto reset_state_false_bb = codegenWindowResetStateControlFlow();
+  auto aggregate_state = aggregateWindowStatePtr();
   llvm::Value* aggregate_state_count = nullptr;
+  const auto window_func_context =
+      WindowProjectNodeContext::getActiveWindowFunctionContext();
+  const auto window_func = window_func_context->getWindowFunction();
   if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
     const auto aggregate_state_count_i64 = ll_int(
         reinterpret_cast<const int64_t>(window_func_context->aggregateStateCount()));
+    const auto pi64_type =
+        llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0);
     aggregate_state_count =
         cgen_state_->ir_builder_.CreateIntToPtr(aggregate_state_count_i64, pi64_type);
   }
@@ -332,10 +358,7 @@ llvm::Value* Executor::codegenAggregateWindowState() {
   const auto window_func_ti = get_adjusted_window_type_info(window_func);
   const auto aggregate_state_type =
       window_func_ti.get_type() == kFLOAT ? pi32_type : pi64_type;
-  const auto aggregate_state_i64 =
-      ll_int(reinterpret_cast<const int64_t>(window_func_context->aggregateState()));
-  auto aggregate_state =
-      cgen_state_->ir_builder_.CreateIntToPtr(aggregate_state_i64, pi64_type);
+  auto aggregate_state = aggregateWindowStatePtr();
   if (window_func->getKind() == SqlWindowFunctionKind::AVG) {
     const auto aggregate_state_count_i64 = ll_int(
         reinterpret_cast<const int64_t>(window_func_context->aggregateStateCount()));
@@ -350,6 +373,13 @@ llvm::Value* Executor::codegenAggregateWindowState() {
       case kDOUBLE: {
         return cgen_state_->emitCall(
             "load_avg_double", {aggregate_state, aggregate_state_count, double_null_lv});
+      }
+      case kDECIMAL: {
+        return cgen_state_->emitCall("load_avg_decimal",
+                                     {aggregate_state,
+                                      aggregate_state_count,
+                                      double_null_lv,
+                                      ll_int<int32_t>(window_func_ti.get_scale())});
       }
       default: {
         return cgen_state_->emitCall(

@@ -420,7 +420,7 @@ class SQLiteComparator {
     if (mapd_ti.is_integer()) {
       CHECK_EQ(SQLITE_INTEGER, ref_col_type);
     } else if (mapd_ti.is_fp() || mapd_ti.is_decimal()) {
-      CHECK_EQ(SQLITE_FLOAT, ref_col_type);
+      CHECK(ref_col_type == SQLITE_FLOAT || ref_col_type == SQLITE_INTEGER);
     } else {
       CHECK_EQ(SQLITE_TEXT, ref_col_type);
     }
@@ -13842,10 +13842,41 @@ TEST(Select, WindowFunctionTestAggregate) {
   c("SELECT x, y, AVG(x) OVER (PARTITION BY y ORDER BY x ASC) a, MIN(x) OVER (PARTITION "
     "BY y ORDER BY x ASC) m1, MAX(x) OVER (PARTITION BY y ORDER BY x DESC) m2, SUM(x) "
     "OVER (PARTITION BY y ORDER BY x ASC) s, COUNT(x) OVER (PARTITION BY y ORDER BY x "
-    "ASC) c FROM test_window_func ORDER BY x ASC, y ASC, a ASC, m1 ASC, m2 ASC, s ASC;",
+    "ASC) c FROM test_window_func ORDER BY x ASC, y ASC, a ASC, m1 ASC, m2 ASC, s ASC, c "
+    "ASC;",
+    dt);
+  c("SELECT x, y, AVG(CAST(x AS FLOAT)) OVER (PARTITION BY y ORDER BY x ASC) a, "
+    "MIN(CAST(x AS FLOAT)) OVER (PARTITION BY y ORDER BY x ASC) m1, MAX(CAST(x AS "
+    "FLOAT)) OVER (PARTITION BY y ORDER BY x DESC) m2, SUM(CAST(x AS FLOAT)) OVER "
+    "(PARTITION BY y ORDER BY x ASC) s, COUNT(CAST(x AS FLOAT)) OVER (PARTITION BY y "
+    "ORDER BY x ASC) c FROM test_window_func ORDER BY x ASC, y ASC, a ASC, m1 ASC, m2 "
+    "ASC, s ASC, c ASC;",
+    dt);
+  c("SELECT x, y, AVG(CAST(x AS DOUBLE)) OVER (PARTITION BY y ORDER BY x ASC) a, "
+    "MIN(CAST(x AS DOUBLE)) OVER (PARTITION BY y ORDER BY x ASC) m1, MAX(CAST(x AS "
+    "DOUBLE)) OVER (PARTITION BY y ORDER BY x DESC) m2, SUM(CAST(x AS DOUBLE)) OVER "
+    "(PARTITION BY y ORDER BY x ASC) s, COUNT(CAST(x AS DOUBLE)) OVER (PARTITION BY y "
+    "ORDER BY x ASC) c FROM test_window_func ORDER BY x ASC, y ASC, a ASC, m1 ASC, m2 "
+    "ASC, s ASC, c ASC;",
+    dt);
+  c("SELECT x, y, AVG(CAST(x AS DECIMAL(10, 2))) OVER (PARTITION BY y ORDER BY x ASC) a, "
+    "MIN(CAST(x AS DECIMAL(10, 2))) OVER (PARTITION BY y ORDER BY x ASC) m1, MAX(CAST(x "
+    "AS DECIMAL(10, 2))) OVER (PARTITION BY y ORDER BY x DESC) m2, SUM(CAST(x AS "
+    "DECIMAL(10, 2))) OVER (PARTITION BY y ORDER BY x ASC) s, COUNT(CAST(x AS "
+    "DECIMAL(10, 2))) OVER (PARTITION BY y ORDER BY x ASC) c FROM test_window_func ORDER "
+    "BY x ASC, y ASC, a ASC, m1 ASC, m2 ASC, s ASC, c ASC;",
     dt);
   c("SELECT y, COUNT(t) OVER (PARTITION BY y ORDER BY x ASC) s FROM test_window_func "
     "ORDER BY y ASC, s ASC;",
+    dt);
+  c("SELECT y, COUNT(CAST(t AS FLOAT)) OVER (PARTITION BY y ORDER BY x ASC) s FROM "
+    "test_window_func ORDER BY y ASC, s ASC;",
+    dt);
+  c("SELECT y, COUNT(CAST(t AS DOUBLE)) OVER (PARTITION BY y ORDER BY x ASC) s FROM "
+    "test_window_func ORDER BY y ASC, s ASC;",
+    dt);
+  c("SELECT y, COUNT(CAST(t AS DECIMAL(10, 2))) OVER (PARTITION BY y ORDER BY x ASC) s "
+    "FROM test_window_func ORDER BY y ASC, s ASC;",
     dt);
 }
 
@@ -13855,10 +13886,37 @@ TEST(Select, WindowFunctionTestAggregateNoOrder) {
   c("SELECT x, y, AVG(x) OVER (PARTITION BY y) a, MIN(x) OVER (PARTITION BY y) m1, "
     "MAX(x) OVER (PARTITION BY y) m2, SUM(x) OVER (PARTITION BY y) s, COUNT(x) OVER "
     "(PARTITION BY y) c FROM test_window_func ORDER BY x ASC, y ASC, a ASC, m1 ASC, m2 "
-    "ASC, s ASC;",
+    "ASC, s ASC, c ASC;",
     dt);
-  c("SELECT y, COUNT(t) OVER (PARTITION BY y) s FROM test_window_func ORDER BY y ASC, s "
+  c("SELECT x, y, AVG(CAST(x AS FLOAT)) OVER (PARTITION BY y) a, MIN(CAST(x AS FLOAT)) "
+    "OVER (PARTITION BY y) m1, MAX(CAST(x AS FLOAT)) OVER (PARTITION BY y) m2, "
+    "SUM(CAST(x AS FLOAT)) OVER (PARTITION BY y) s, COUNT(CAST(x AS FLOAT)) OVER "
+    "(PARTITION BY y) c FROM test_window_func ORDER BY x ASC, y ASC, a ASC, m1 ASC, m2 "
+    "ASC, s ASC, c ASC;",
+    dt);
+  c("SELECT x, y, AVG(CAST(x AS DOUBLE)) OVER (PARTITION BY y) a, MIN(CAST(x AS DOUBLE)) "
+    "OVER (PARTITION BY y) m1, MAX(CAST(x AS DOUBLE)) OVER (PARTITION BY y) m2, "
+    "SUM(CAST(x AS DOUBLE)) OVER (PARTITION BY y) s, COUNT(CAST(x AS DOUBLE)) OVER "
+    "(PARTITION BY y) c FROM test_window_func ORDER BY x ASC, y ASC, a ASC, m1 ASC, m2 "
+    "ASC, s ASC, c ASC;",
+    dt);
+  c("SELECT x, y, AVG(CAST(x AS DECIMAL(10, 2))) OVER (PARTITION BY y) a, MIN(CAST(x AS "
+    "DECIMAL(10, 2))) OVER (PARTITION BY y) m1, MAX(CAST(x AS DECIMAL(10, 2))) OVER "
+    "(PARTITION BY y) m2, SUM(CAST(x AS DECIMAL(10, 2))) OVER (PARTITION BY y) s, "
+    "COUNT(CAST(x AS DECIMAL(10, 2))) OVER (PARTITION BY y) c FROM test_window_func "
+    "ORDER BY x ASC, y ASC, a ASC, m1 ASC, m2 ASC, s ASC, c ASC;",
+    dt);
+  c("SELECT y, COUNT(t) OVER (PARTITION BY y) c FROM test_window_func ORDER BY y ASC, c "
     "ASC;",
+    dt);
+  c("SELECT y, COUNT(CAST(t AS FLOAT)) OVER (PARTITION BY y) c FROM test_window_func "
+    "ORDER BY y ASC, c ASC;",
+    dt);
+  c("SELECT y, COUNT(CAST(t AS DOUBLE)) OVER (PARTITION BY y) c FROM test_window_func "
+    "ORDER BY y ASC, c ASC;",
+    dt);
+  c("SELECT y, COUNT(CAST(t AS DECIMAL(10, 2))) OVER (PARTITION BY y) c FROM "
+    "test_window_func ORDER BY y ASC, c ASC;",
     dt);
 }
 

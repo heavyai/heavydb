@@ -732,6 +732,8 @@ class Executor {
   // Generates code which loads the current aggregate value for the window context.
   llvm::Value* codegenAggregateWindowState();
 
+  llvm::Value* aggregateWindowStatePtr();
+
   struct ArgNullcheckBBs {
     llvm::BasicBlock* args_null_bb;
     llvm::BasicBlock* args_notnull_bb;
