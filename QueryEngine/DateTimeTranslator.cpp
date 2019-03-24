@@ -16,7 +16,11 @@
 
 #include "DateTimeTranslator.h"
 
-std::string ExtractExpr::from_extract_field(const ExtractField& fieldno) {
+#include <boost/algorithm/string.hpp>
+
+namespace {
+
+std::string from_extract_field(const ExtractField& fieldno) {
   switch (fieldno) {
     case kYEAR:
       return "year";
@@ -56,46 +60,7 @@ std::string ExtractExpr::from_extract_field(const ExtractField& fieldno) {
   return "";
 }
 
-std::shared_ptr<Analyzer::Expr> ExtractExpr::generateExtractExpr(
-    const std::shared_ptr<Analyzer::Expr> from_expr,
-    const std::string& field_name) {
-  const auto field = to_extract_field(field_name);
-  return ExtractExpr::generateExtractExpr(from_expr, field);
-}
-
-std::shared_ptr<Analyzer::Expr> ExtractExpr::generateExtractExpr(
-    const std::shared_ptr<Analyzer::Expr> from_expr,
-    const ExtractField& field) {
-  const auto expr_ti = from_expr->get_type_info();
-  if (!expr_ti.is_time()) {
-    throw std::runtime_error(
-        "Only TIME, TIMESTAMP and DATE types can be in EXTRACT function.");
-  }
-  if (expr_ti.get_type() == kTIME && field != kHOUR && field != kMINUTE &&
-      field != kSECOND) {
-    throw std::runtime_error("Cannot EXTRACT " + from_extract_field(field) +
-                             " from TIME.");
-  }
-  const SQLTypeInfo ti(kBIGINT, 0, 0, expr_ti.get_notnull());
-  auto constant = std::dynamic_pointer_cast<Analyzer::Constant>(from_expr);
-  if (constant != nullptr) {
-    Datum d;
-    d.bigintval = field == kEPOCH
-                      ? constant->get_constval().bigintval
-                      : getExtractFromTimeConstantValue(
-                            constant->get_constval().bigintval, field, expr_ti);
-    constant->set_constval(d);
-    constant->set_type_info(ti);
-    return constant;
-  }
-  if (!expr_ti.is_high_precision_timestamp() && is_subsecond_extract_field(field)) {
-    return makeExpr<Analyzer::Constant>(ti, false, Datum{0});
-  }
-  return makeExpr<Analyzer::ExtractExpr>(
-      ti, from_expr->get_contains_agg(), field, from_expr->decompress());
-}
-
-std::string DateTruncExpr::from_datetrunc_field(const DatetruncField& fieldno) {
+std::string from_datetrunc_field(const DatetruncField& fieldno) {
   switch (fieldno) {
     case dtYEAR:
       return "year";
@@ -134,14 +99,133 @@ std::string DateTruncExpr::from_datetrunc_field(const DatetruncField& fieldno) {
   return "";
 }
 
-std::shared_ptr<Analyzer::Expr> DateTruncExpr::generateDatetruncExpr(
+}  // namespace
+
+ExtractField ExtractExpr::to_extract_field(const std::string& field) {
+  ExtractField fieldno;
+  if (boost::iequals(field, "year")) {
+    fieldno = kYEAR;
+  } else if (boost::iequals(field, "quarter")) {
+    fieldno = kQUARTER;
+  } else if (boost::iequals(field, "month")) {
+    fieldno = kMONTH;
+  } else if (boost::iequals(field, "day")) {
+    fieldno = kDAY;
+  } else if (boost::iequals(field, "quarterday")) {
+    fieldno = kQUARTERDAY;
+  } else if (boost::iequals(field, "hour")) {
+    fieldno = kHOUR;
+  } else if (boost::iequals(field, "minute")) {
+    fieldno = kMINUTE;
+  } else if (boost::iequals(field, "second")) {
+    fieldno = kSECOND;
+  } else if (boost::iequals(field, "millisecond")) {
+    fieldno = kMILLISECOND;
+  } else if (boost::iequals(field, "microsecond")) {
+    fieldno = kMICROSECOND;
+  } else if (boost::iequals(field, "nanosecond")) {
+    fieldno = kNANOSECOND;
+  } else if (boost::iequals(field, "dow")) {
+    fieldno = kDOW;
+  } else if (boost::iequals(field, "isodow")) {
+    fieldno = kISODOW;
+  } else if (boost::iequals(field, "doy")) {
+    fieldno = kDOY;
+  } else if (boost::iequals(field, "epoch")) {
+    fieldno = kEPOCH;
+  } else if (boost::iequals(field, "week")) {
+    fieldno = kWEEK;
+  } else {
+    throw std::runtime_error("Unsupported field in EXTRACT function " + field);
+  }
+  return fieldno;
+}
+
+std::shared_ptr<Analyzer::Expr> ExtractExpr::generate(
+    const std::shared_ptr<Analyzer::Expr> from_expr,
+    const std::string& field_name) {
+  const auto field = to_extract_field(field_name);
+  return ExtractExpr::generate(from_expr, field);
+}
+
+std::shared_ptr<Analyzer::Expr> ExtractExpr::generate(
+    const std::shared_ptr<Analyzer::Expr> from_expr,
+    const ExtractField& field) {
+  const auto expr_ti = from_expr->get_type_info();
+  if (!expr_ti.is_time()) {
+    throw std::runtime_error(
+        "Only TIME, TIMESTAMP and DATE types can be in EXTRACT function.");
+  }
+  if (expr_ti.get_type() == kTIME && field != kHOUR && field != kMINUTE &&
+      field != kSECOND) {
+    throw std::runtime_error("Cannot EXTRACT " + from_extract_field(field) +
+                             " from TIME.");
+  }
+  const SQLTypeInfo ti(kBIGINT, 0, 0, expr_ti.get_notnull());
+  auto constant = std::dynamic_pointer_cast<Analyzer::Constant>(from_expr);
+  if (constant != nullptr) {
+    Datum d;
+    d.bigintval = field == kEPOCH
+                      ? constant->get_constval().bigintval
+                      : getExtractFromTimeConstantValue(
+                            constant->get_constval().bigintval, field, expr_ti);
+    constant->set_constval(d);
+    constant->set_type_info(ti);
+    return constant;
+  }
+  if (!expr_ti.is_high_precision_timestamp() && is_subsecond_extract_field(field)) {
+    return makeExpr<Analyzer::Constant>(ti, false, Datum{0});
+  }
+  return makeExpr<Analyzer::ExtractExpr>(
+      ti, from_expr->get_contains_agg(), field, from_expr->decompress());
+}
+
+DatetruncField DateTruncExpr::to_datetrunc_field(const std::string& field) {
+  DatetruncField fieldno;
+  if (boost::iequals(field, "year")) {
+    fieldno = dtYEAR;
+  } else if (boost::iequals(field, "quarter")) {
+    fieldno = dtQUARTER;
+  } else if (boost::iequals(field, "month")) {
+    fieldno = dtMONTH;
+  } else if (boost::iequals(field, "quarterday")) {
+    fieldno = dtQUARTERDAY;
+  } else if (boost::iequals(field, "day")) {
+    fieldno = dtDAY;
+  } else if (boost::iequals(field, "hour")) {
+    fieldno = dtHOUR;
+  } else if (boost::iequals(field, "minute")) {
+    fieldno = dtMINUTE;
+  } else if (boost::iequals(field, "second")) {
+    fieldno = dtSECOND;
+  } else if (boost::iequals(field, "millennium")) {
+    fieldno = dtMILLENNIUM;
+  } else if (boost::iequals(field, "century")) {
+    fieldno = dtCENTURY;
+  } else if (boost::iequals(field, "decade")) {
+    fieldno = dtDECADE;
+  } else if (boost::iequals(field, "millisecond")) {
+    fieldno = dtMILLISECOND;
+  } else if (boost::iequals(field, "microsecond")) {
+    fieldno = dtMICROSECOND;
+  } else if (boost::iequals(field, "nanosecond")) {
+    fieldno = dtNANOSECOND;
+  } else if (boost::iequals(field, "week")) {
+    fieldno = dtWEEK;
+  } else {
+    throw std::runtime_error("Invalid field in DATE_TRUNC function " + field);
+  }
+  return fieldno;
+}
+
+std::shared_ptr<Analyzer::Expr> DateTruncExpr::generate(
     const std::shared_ptr<Analyzer::Expr> from_expr,
     const std::string& field_name) {
   const auto field = to_datetrunc_field(field_name);
-  return DateTruncExpr::generateDatetruncExpr(from_expr, field);
+  return DateTruncExpr::generate(from_expr, field);
 }
 
-std::shared_ptr<Analyzer::Expr> DateTruncExpr::generateDatetruncExpr(
+std::shared_ptr<Analyzer::Expr> DateTruncExpr::generate(
     const std::shared_ptr<Analyzer::Expr> from_expr,
     const DatetruncField& field) {
   const auto& expr_ti = from_expr->get_type_info();

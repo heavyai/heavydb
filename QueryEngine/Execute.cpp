@@ -3024,6 +3024,18 @@ int Executor::getLocalColumnId(const Analyzer::ColumnVar* col_var,
   return it->second;
 }
 
+namespace {
+
+int64_t get_hpt_scaled_value(const int64_t& val,
+                             const int32_t& ldim,
+                             const int32_t& rdim) {
+  CHECK(ldim != rdim);
+  return ldim > rdim ? val / DateTimeUtils::get_timestamp_precision_scale(ldim - rdim)
+                     : val * DateTimeUtils::get_timestamp_precision_scale(rdim - ldim);
+}
+
+}  // namespace
+
 std::pair<bool, int64_t> Executor::skipFragment(
     const InputDescriptor& table_desc,
     const Fragmenter_Namespace::FragmentInfo& fragment,
@@ -3063,15 +3075,6 @@ std::pair<bool, int64_t> Executor::skipFragment(
     if (!lhs->get_type_info().is_integer() && !lhs->get_type_info().is_time()) {
       continue;
     }
-    if (lhs->get_type_info().is_timestamp() &&
-        (lhs_col->get_type_info() != rhs_const->get_type_info()) &&
-        (lhs_col->get_type_info().is_high_precision_timestamp() ||
-         rhs_const->get_type_info().is_high_precision_timestamp())) {
-      // Original lhs col has different precision so
-      // column metadata holds value in original dimension scale
-      // therefore skip meta value comparison check
-      continue;
-    }
     const int col_id = lhs_col->get_column_id();
     auto chunk_meta_it = fragment.getChunkMetadataMap().find(col_id);
     int64_t chunk_min{0};
@@ -3092,6 +3095,19 @@ std::pair<bool, int64_t> Executor::skipFragment(
       const auto& chunk_type = lhs_col->get_type_info();
       chunk_min = extract_min_stat(chunk_meta_it->second.chunkStats, chunk_type);
       chunk_max = extract_max_stat(chunk_meta_it->second.chunkStats, chunk_type);
+    }
+    if (lhs->get_type_info().is_timestamp() &&
+        (lhs_col->get_type_info().get_dimension() !=
+         rhs_const->get_type_info().get_dimension()) &&
+        (lhs_col->get_type_info().is_high_precision_timestamp() ||
+         rhs_const->get_type_info().is_high_precision_timestamp())) {
+      // If original timestamp lhs col has different precision,
+      // column metadata holds value in original precision
+      // therefore adjust value to match rhs precision
+      const auto lhs_dimen = lhs_col->get_type_info().get_dimension();
+      const auto rhs_dimen = rhs_const->get_type_info().get_dimension();
+      chunk_min = get_hpt_scaled_value(chunk_min, lhs_dimen, rhs_dimen);
+      chunk_max = get_hpt_scaled_value(chunk_max, lhs_dimen, rhs_dimen);
     }
     const auto rhs_val = codegenIntConst(rhs_const)->getSExtValue();
     switch (comp_expr->get_optype()) {

@@ -25,7 +25,7 @@
 #include <ctime>
 #include <iostream>
 
-extern "C" NEVER_INLINE DEVICE int64_t create_epoch(int64_t year) {
+extern "C" NEVER_INLINE DEVICE int64_t create_epoch(int32_t year) {
   // Note this is not general purpose
   // it has a final assumption that the year being passed can never be a leap
   // year
@@ -163,21 +163,21 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
         uint32_t year_seconds_past_4year_period =
             (seconds_past_4year_period / kSecondsPerNonLeapYear) * kSecondsPerNonLeapYear;
         if (seconds_past_4year_period >=
-            kSecondsPer4YearCycle - kSecsPerDay) {  // if we are in Feb 29th
+            kSecondsPer4YearCycle - kUSecsPerDay) {  // if we are in Feb 29th
           year_seconds_past_4year_period -= kSecondsPerNonLeapYear;
         }
         uint32_t seconds_past_march =
             seconds_past_4year_period - year_seconds_past_4year_period;
         uint32_t month = seconds_past_march /
-                         (30 * kSecsPerDay);  // Will make the correct month either be
-                                              // the guessed month or month before
+                         (30 * kUSecsPerDay);  // Will make the correct month either be
+                                               // the guessed month or month before
         month = month <= 11 ? month : 11;
         if (cumulative_month_epoch_starts[month] > seconds_past_march) {
           month--;
         }
-        return (four_year_period_seconds + year_seconds_past_4year_period +
-                cumulative_month_epoch_starts[month] - kEpochOffsetYear1900 +
-                kSecsJanToMar1900);
+        return (static_cast<int64_t>(four_year_period_seconds) +
+                year_seconds_past_4year_period + cumulative_month_epoch_starts[month] -
+                kEpochOffsetYear1900 + kSecsJanToMar1900);
       }
       break;
     }
@@ -186,16 +186,16 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
         uint32_t seconds_1900 = timeval + kEpochOffsetYear1900;
         uint32_t leap_years = (seconds_1900 - kSecsJanToMar1900) / kSecondsPer4YearCycle;
         uint32_t year =
-            (seconds_1900 - leap_years * kSecsPerDay) / kSecondsPerNonLeapYear;
+            (seconds_1900 - leap_years * kUSecsPerDay) / kSecondsPerNonLeapYear;
         uint32_t base_year_leap_years = (year - 1) / 4;
         uint32_t base_year_seconds =
-            year * kSecondsPerNonLeapYear + base_year_leap_years * kSecsPerDay;
+            year * kSecondsPerNonLeapYear + base_year_leap_years * kUSecsPerDay;
         bool is_leap_year = year % 4 == 0 && year != 0;
         const uint32_t* quarter_offsets = is_leap_year
                                               ? cumulative_quarter_epoch_starts_leap_year
                                               : cumulative_quarter_epoch_starts;
         uint32_t partial_year_seconds = seconds_1900 % base_year_seconds;
-        uint32_t quarter = partial_year_seconds / (90 * kSecsPerDay);
+        uint32_t quarter = partial_year_seconds / (90 * kUSecsPerDay);
         quarter = quarter <= 3 ? quarter : 3;
         if (quarter_offsets[quarter] > partial_year_seconds) {
           quarter--;
@@ -207,13 +207,13 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
     }
     case dtYEAR: {
       if (timeval >= 0L && timeval <= UINT32_MAX - kEpochOffsetYear1900) {
-        uint32_t seconds_1900 = static_cast<int64_t>(timeval) + kEpochOffsetYear1900;
+        uint32_t seconds_1900 = static_cast<uint32_t>(timeval) + kEpochOffsetYear1900;
         uint32_t leap_years = (seconds_1900 - kSecsJanToMar1900) / kSecondsPer4YearCycle;
         uint32_t year =
-            (seconds_1900 - leap_years * kSecsPerDay) / kSecondsPerNonLeapYear;
+            (seconds_1900 - leap_years * kUSecsPerDay) / kSecondsPerNonLeapYear;
         uint32_t base_year_leap_years = (year - 1) / 4;
         return (static_cast<int64_t>(year) * kSecondsPerNonLeapYear +
-                base_year_leap_years * kSecsPerDay - kEpochOffsetYear1900);
+                base_year_leap_years * kUSecsPerDay - kEpochOffsetYear1900);
       }
       break;
     }

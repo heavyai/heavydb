@@ -109,14 +109,14 @@ DEVICE int32_t extract_month_fast(const int64_t* tim_p) {
   uint32_t year_seconds_past_4year_period =
       (seconds_past_4year_period / kSecondsPerNonLeapYear) * kSecondsPerNonLeapYear;
   if (seconds_past_4year_period >=
-      kSecondsPer4YearCycle - kSecsPerDay) {  // if we are in Feb 29th
+      kSecondsPer4YearCycle - kUSecsPerDay) {  // if we are in Feb 29th
     year_seconds_past_4year_period -= kSecondsPerNonLeapYear;
   }
   uint32_t seconds_past_march =
       seconds_past_4year_period - year_seconds_past_4year_period;
   uint32_t month =
-      seconds_past_march / (30 * kSecsPerDay);  // Will make the correct month either be
-                                                // the guessed month or month before
+      seconds_past_march / (30 * kUSecsPerDay);  // Will make the correct month either be
+                                                 // the guessed month or month before
   month = month <= 11 ? month : 11;
   if (cumulative_month_epoch_starts[month] > seconds_past_march) {
     month--;
@@ -135,13 +135,13 @@ DEVICE int32_t extract_quarter_fast(const int64_t* tim_p) {
   uint32_t year = (seconds_1900 - leap_years * kSecsPerDay) / kSecondsPerNonLeapYear;
   uint32_t base_year_leap_years = (year - 1) / 4;
   uint32_t base_year_seconds =
-      year * kSecondsPerNonLeapYear + base_year_leap_years * kSecsPerDay;
+      year * kSecondsPerNonLeapYear + base_year_leap_years * kUSecsPerDay;
   bool is_leap_year = year % 4 == 0 && year != 0;
   const uint32_t* quarter_offsets = is_leap_year
                                         ? cumulative_quarter_epoch_starts_leap_year
                                         : cumulative_quarter_epoch_starts;
   uint32_t partial_year_seconds = seconds_1900 % base_year_seconds;
-  uint32_t quarter = partial_year_seconds / (90 * kSecsPerDay);
+  uint32_t quarter = partial_year_seconds / (90 * kUSecsPerDay);
   quarter = quarter <= 3 ? quarter : 3;
   if (quarter_offsets[quarter] > partial_year_seconds) {
     quarter--;
@@ -154,7 +154,7 @@ DEVICE int32_t extract_year_fast(const int64_t* tim_p) {
   uint32_t seconds_1900 = lcltime + kEpochOffsetYear1900;
   uint32_t leap_years = (seconds_1900 - kSecsJanToMar1900) / kSecondsPer4YearCycle;
   uint32_t year =
-      (seconds_1900 - leap_years * kSecsPerDay) / kSecondsPerNonLeapYear + 1900;
+      (seconds_1900 - leap_years * kUSecsPerDay) / kSecondsPerNonLeapYear + 1900;
   return year;
 }
 
@@ -189,7 +189,7 @@ DEVICE tm* gmtime_r_newlib(const int64_t* tim_p, tm* res) {
   res->tm_wday = weekday;
 
   /* compute year & day of year */
-  years400 = days / kDaysPer400Years;
+  years400 = static_cast<int32_t>(days / kDaysPer400Years);
   days -= years400 * kDaysPer400Years;
   /* simplify by making the values positive */
   if (days < 0) {
@@ -197,7 +197,7 @@ DEVICE tm* gmtime_r_newlib(const int64_t* tim_p, tm* res) {
     --years400;
   }
 
-  years100 = days / kDaysPer100Years;
+  years100 = static_cast<int32_t>(days / kDaysPer100Years);
   if (years100 == 4) { /* required for proper day of year calculation */
     --years100;
   }

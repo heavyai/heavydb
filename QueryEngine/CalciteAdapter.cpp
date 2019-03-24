@@ -386,11 +386,11 @@ class CalciteAdapter {
         translateTypedLiteral(timeunit_lit));
     const auto from_expr = getExprFromNode(operands[1], scan_targets);
     if (is_date_trunc) {
-      return DateTruncExpr::generateDatetruncExpr(
-          from_expr, *timeunit_lit_expr->get_constval().stringval);
+      return DateTruncExpr::generate(from_expr,
+                                     *timeunit_lit_expr->get_constval().stringval);
     } else {
-      return ExtractExpr::generateExtractExpr(
-          from_expr, *timeunit_lit_expr->get_constval().stringval);
+      return ExtractExpr::generate(from_expr,
+                                   *timeunit_lit_expr->get_constval().stringval);
     }
   }
 
@@ -446,7 +446,7 @@ class CalciteAdapter {
     const auto timeunit_lit_expr = std::dynamic_pointer_cast<const Analyzer::Constant>(
         translateTypedLiteral(timeunit_lit));
     const auto from_expr = getExprFromNode(operands[1], scan_targets);
-    return ExtractExpr::generateExtractExpr(
+    return ExtractExpr::generate(
         from_expr, to_datepart_field(*timeunit_lit_expr->get_constval().stringval));
   }
 

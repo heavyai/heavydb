@@ -189,10 +189,6 @@ DateaddField to_dateadd_field(const std::string&);
 
 DatetruncField to_datediff_field(const std::string&);
 
-ExtractField to_extract_field(const std::string&);
-
-DatetruncField to_datetrunc_field(const std::string&);
-
 std::shared_ptr<Analyzer::Constant> make_fp_constant(const int64_t val,
                                                      const SQLTypeInfo& ti);
 

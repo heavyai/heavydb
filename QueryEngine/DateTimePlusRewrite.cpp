@@ -172,5 +172,5 @@ std::shared_ptr<Analyzer::Expr> rewrite_to_date_trunc(
   if (dt_field == dtINVALID) {
     return nullptr;
   }
-  return DateTruncExpr::generateDatetruncExpr(ts, dt_field);
+  return DateTruncExpr::generate(ts, dt_field);
 }

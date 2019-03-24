@@ -18,7 +18,6 @@
 
 #include "../Analyzer/Analyzer.h"
 
-#include "CalciteDeserializerUtils.h"
 #include "DateTimeUtils.h"
 
 #include <memory>
@@ -88,19 +87,17 @@ class ExtractExpr : protected DateTimeTranslator {
   ExtractExpr(const std::shared_ptr<Analyzer::Expr> expr, const std::string& field)
       : from_expr_(expr), field_(to_extract_field(field)) {}
 
-  static std::shared_ptr<Analyzer::Expr> generateExtractExpr(
-      const std::shared_ptr<Analyzer::Expr>,
-      const std::string&);
-  static std::shared_ptr<Analyzer::Expr> generateExtractExpr(
-      const std::shared_ptr<Analyzer::Expr>,
-      const ExtractField&);
+  static std::shared_ptr<Analyzer::Expr> generate(const std::shared_ptr<Analyzer::Expr>,
+                                                  const std::string&);
+  static std::shared_ptr<Analyzer::Expr> generate(const std::shared_ptr<Analyzer::Expr>,
+                                                  const ExtractField&);
 
-  const std::shared_ptr<Analyzer::Expr> generateExtractExpr() const {
-    return generateExtractExpr(from_expr_, field_);
+  const std::shared_ptr<Analyzer::Expr> generate() const {
+    return generate(from_expr_, field_);
   }
 
  private:
-  static std::string from_extract_field(const ExtractField& fieldno);
+  static ExtractField to_extract_field(const std::string& field);
 
   std::shared_ptr<Analyzer::Expr> from_expr_;
   ExtractField field_;
@@ -113,19 +110,17 @@ class DateTruncExpr : protected DateTimeTranslator {
   DateTruncExpr(const std::shared_ptr<Analyzer::Expr> expr, const std::string& field)
       : from_expr_(expr), field_(to_datetrunc_field(field)) {}
 
-  static std::shared_ptr<Analyzer::Expr> generateDatetruncExpr(
-      const std::shared_ptr<Analyzer::Expr>,
-      const std::string&);
-  static std::shared_ptr<Analyzer::Expr> generateDatetruncExpr(
-      const std::shared_ptr<Analyzer::Expr>,
-      const DatetruncField&);
+  static std::shared_ptr<Analyzer::Expr> generate(const std::shared_ptr<Analyzer::Expr>,
+                                                  const std::string&);
+  static std::shared_ptr<Analyzer::Expr> generate(const std::shared_ptr<Analyzer::Expr>,
+                                                  const DatetruncField&);
 
-  const std::shared_ptr<Analyzer::Expr> generateDatetruncExpr() const {
-    return generateDatetruncExpr(from_expr_, field_);
+  const std::shared_ptr<Analyzer::Expr> generate() const {
+    return generate(from_expr_, field_);
   }
 
  private:
-  static std::string from_datetrunc_field(const DatetruncField& fieldno);
+  static DatetruncField to_datetrunc_field(const std::string& field);
 
   std::shared_ptr<Analyzer::Expr> from_expr_;
   DatetruncField field_;

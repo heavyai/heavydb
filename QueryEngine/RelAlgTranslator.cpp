@@ -17,7 +17,6 @@
 #include "RelAlgTranslator.h"
 #include "Shared/SqlTypesLayout.h"
 
-#include "CalciteAdapter.h"
 #include "CalciteDeserializerUtils.h"
 #include "DateTimePlusRewrite.h"
 #include "DateTimeTranslator.h"
@@ -916,11 +915,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
   const bool is_date_trunc = rex_function->getName() == std::string("PG_DATE_TRUNC");
   if (is_date_trunc) {
-    return DateTruncExpr::generateDatetruncExpr(from_expr,
-                                                *timeunit_lit->get_constval().stringval);
+    return DateTruncExpr::generate(from_expr, *timeunit_lit->get_constval().stringval);
   } else {
-    return ExtractExpr::generateExtractExpr(from_expr,
-                                            *timeunit_lit->get_constval().stringval);
+    return ExtractExpr::generate(from_expr, *timeunit_lit->get_constval().stringval);
   }
 }
 
@@ -1139,7 +1136,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatepart(
     throw std::runtime_error("The time unit parameter must be a literal.");
   }
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
-  return ExtractExpr::generateExtractExpr(
+  return ExtractExpr::generate(
       from_expr, to_datepart_field(*timeunit_lit->get_constval().stringval));
 }
 
