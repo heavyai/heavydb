@@ -13762,7 +13762,7 @@ TEST(Select, DatesDaysEncodingTest) {
   }
 }
 
-TEST(Select, WindowFunctionTestRank) {
+TEST(Select, WindowFunctionRank) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   c("SELECT x, y, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC) r1, RANK() OVER "
@@ -13771,7 +13771,7 @@ TEST(Select, WindowFunctionTestRank) {
     dt);
 }
 
-TEST(Select, WindowFunctionTestPercentRank) {
+TEST(Select, WindowFunctionPercentRank) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   c("SELECT x, y, PERCENT_RANK() OVER (PARTITION BY y ORDER BY x ASC) p FROM "
@@ -13779,7 +13779,7 @@ TEST(Select, WindowFunctionTestPercentRank) {
     dt);
 }
 
-TEST(Select, WindowFunctionTestTile) {
+TEST(Select, WindowFunctionTile) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   c("SELECT x, y, NTILE(2) OVER (PARTITION BY y ORDER BY x ASC) n FROM test_window_func "
@@ -13787,7 +13787,7 @@ TEST(Select, WindowFunctionTestTile) {
     dt);
 }
 
-TEST(Select, WindowFunctionTestCumeDist) {
+TEST(Select, WindowFunctionCumeDist) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   c("SELECT x, y, CUME_DIST() OVER (PARTITION BY y ORDER BY x ASC) c FROM "
@@ -13795,7 +13795,7 @@ TEST(Select, WindowFunctionTestCumeDist) {
     dt);
 }
 
-TEST(Select, WindowFunctionTestLag) {
+TEST(Select, WindowFunctionLag) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   for (int lag = -5; lag <= 5; ++lag) {
@@ -13807,7 +13807,7 @@ TEST(Select, WindowFunctionTestLag) {
   }
 }
 
-TEST(Select, WindowFunctionTestFirst) {
+TEST(Select, WindowFunctionFirst) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   c("SELECT x, y, FIRST_VALUE(x + 5) OVER (PARTITION BY y ORDER BY x ASC) f FROM "
@@ -13815,7 +13815,7 @@ TEST(Select, WindowFunctionTestFirst) {
     dt);
 }
 
-TEST(Select, WindowFunctionTestLead) {
+TEST(Select, WindowFunctionLead) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   for (int lead = -5; lead <= 5; ++lead) {
@@ -13827,7 +13827,7 @@ TEST(Select, WindowFunctionTestLead) {
   }
 }
 
-TEST(Select, WindowFunctionTestLast) {
+TEST(Select, WindowFunctionLast) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   c("SELECT x, y, FIRST_VALUE(x + 5) OVER (PARTITION BY y ORDER BY x ASC) f, "
@@ -13836,7 +13836,7 @@ TEST(Select, WindowFunctionTestLast) {
     dt);
 }
 
-TEST(Select, WindowFunctionTestAggregate) {
+TEST(Select, WindowFunctionAggregate) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   c("SELECT x, y, AVG(x) OVER (PARTITION BY y ORDER BY x ASC) a, MIN(x) OVER (PARTITION "
@@ -13878,9 +13878,18 @@ TEST(Select, WindowFunctionTestAggregate) {
   c("SELECT y, COUNT(CAST(t AS DECIMAL(10, 2))) OVER (PARTITION BY y ORDER BY x ASC) s "
     "FROM test_window_func ORDER BY y ASC, s ASC;",
     dt);
+  c("SELECT y, MAX(d) OVER (PARTITION BY y ORDER BY x ASC) m FROM test_window_func ORDER "
+    "BY y ASC, m ASC;",
+    dt);
+  c("SELECT y, MIN(d) OVER (PARTITION BY y ORDER BY x ASC) m FROM test_window_func ORDER "
+    "BY y ASC, m ASC;",
+    dt);
+  c("SELECT y, COUNT(d) OVER (PARTITION BY y ORDER BY x ASC) m FROM test_window_func "
+    "ORDER BY y ASC, m ASC;",
+    dt);
 }
 
-TEST(Select, WindowFunctionTestAggregateNoOrder) {
+TEST(Select, WindowFunctionAggregateNoOrder) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   c("SELECT x, y, AVG(x) OVER (PARTITION BY y) a, MIN(x) OVER (PARTITION BY y) m1, "
@@ -13917,6 +13926,15 @@ TEST(Select, WindowFunctionTestAggregateNoOrder) {
     dt);
   c("SELECT y, COUNT(CAST(t AS DECIMAL(10, 2))) OVER (PARTITION BY y) c FROM "
     "test_window_func ORDER BY y ASC, c ASC;",
+    dt);
+  c("SELECT y, MAX(d) OVER (PARTITION BY y) m FROM test_window_func ORDER BY y ASC, m "
+    "ASC;",
+    dt);
+  c("SELECT y, MIN(d) OVER (PARTITION BY y) m FROM test_window_func ORDER BY y ASC, m "
+    "ASC;",
+    dt);
+  c("SELECT y, COUNT(d) OVER (PARTITION BY y) m FROM test_window_func ORDER BY y ASC, m "
+    "ASC;",
     dt);
 }
 
@@ -13975,61 +13993,66 @@ int create_and_populate_window_func_table() {
     run_ddl_statement(drop_test_table);
     g_sqlite_comparator.query(drop_test_table);
     const std::string create_test_table{
-        "CREATE TABLE test_window_func(x INTEGER, y TEXT, t INTEGER);"};
+        "CREATE TABLE test_window_func(x INTEGER, y TEXT, t INTEGER, d DATE);"};
     run_ddl_statement(create_test_table);
     g_sqlite_comparator.query(create_test_table);
     {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(1, 'aaa', 4);"};
-      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
-      g_sqlite_comparator.query(insert_query);
-    }
-    {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(0, 'aaa', 5);"};
-      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
-      g_sqlite_comparator.query(insert_query);
-    }
-    {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(2, 'ccc', 6);"};
+      const std::string insert_query{
+          "INSERT INTO test_window_func VALUES(1, 'aaa', 4, '2019-03-02');"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(10, 'bbb', 7);"};
-      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
-      g_sqlite_comparator.query(insert_query);
-    }
-    {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(3, 'bbb', 8);"};
-      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
-      g_sqlite_comparator.query(insert_query);
-    }
-    {
-      const std::string insert_query{"INSERT INTO test_window_func VALUES(6, 'bbb', 9);"};
+          "INSERT INTO test_window_func VALUES(0, 'aaa', 5, '2019-03-01');"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(9, 'bbb', 10);"};
+          "INSERT INTO test_window_func VALUES(2, 'ccc', 6, '2019-03-03');"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(6, 'bbb', 11);"};
+          "INSERT INTO test_window_func VALUES(10, 'bbb', 7, '2019-03-11');"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(9, 'bbb', 12);"};
+          "INSERT INTO test_window_func VALUES(3, 'bbb', 8, '2019-03-04');"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(9, 'bbb', 13);"};
+          "INSERT INTO test_window_func VALUES(6, 'bbb', 9, '2019-03-07');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const std::string insert_query{
+          "INSERT INTO test_window_func VALUES(9, 'bbb', 10, '2019-03-10');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const std::string insert_query{
+          "INSERT INTO test_window_func VALUES(6, 'bbb', 11, '2019-03-07');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const std::string insert_query{
+          "INSERT INTO test_window_func VALUES(9, 'bbb', 12, '2019-03-10');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+    {
+      const std::string insert_query{
+          "INSERT INTO test_window_func VALUES(9, 'bbb', 13, '2019-03-10');"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
