@@ -13857,8 +13857,10 @@ TEST(Select, WindowFunctionAggregate) {
         "(PARTITION BY y ORDER BY x ASC) m1, MAX(x) OVER (PARTITION BY y ORDER BY x "
         "DESC) m2, SUM(x) OVER (PARTITION BY y ORDER BY x ASC) s, COUNT(x) OVER "
         "(PARTITION BY y ORDER BY x ASC) c FROM test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
-    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+    std::string part2 = "a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, " + part2,
+      dt);
   }
   {
     std::string part1 =
@@ -13867,8 +13869,10 @@ TEST(Select, WindowFunctionAggregate) {
         "FLOAT)) OVER (PARTITION BY y ORDER BY x DESC) m2, SUM(CAST(x AS FLOAT)) OVER "
         "(PARTITION BY y ORDER BY x ASC) s, COUNT(CAST(x AS FLOAT)) OVER (PARTITION BY y "
         "ORDER BY x ASC) c FROM test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
-    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+    std::string part2 = "a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, " + part2,
+      dt);
   }
   {
     std::string part1 =
@@ -13877,8 +13881,10 @@ TEST(Select, WindowFunctionAggregate) {
         "DOUBLE)) OVER (PARTITION BY y ORDER BY x DESC) m2, SUM(CAST(x AS DOUBLE)) OVER "
         "(PARTITION BY y ORDER BY x ASC) s, COUNT(CAST(x AS DOUBLE)) OVER (PARTITION BY "
         "y ORDER BY x ASC) c FROM test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
-    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+    std::string part2 = "a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, " + part2,
+      dt);
   }
   {
     std::string part1 =
@@ -13888,30 +13894,53 @@ TEST(Select, WindowFunctionAggregate) {
         "SUM(CAST(x AS DECIMAL(10, 2))) OVER (PARTITION BY y ORDER BY x ASC) s, "
         "COUNT(CAST(x AS DECIMAL(10, 2))) OVER (PARTITION BY y ORDER BY x ASC) c FROM "
         "test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
-    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+    std::string part2 = "a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, " + part2,
+      dt);
   }
-  c("SELECT y, COUNT(t) OVER (PARTITION BY y ORDER BY x ASC) s FROM test_window_func "
-    "ORDER BY y ASC, s ASC;",
-    dt);
-  c("SELECT y, COUNT(CAST(t AS FLOAT)) OVER (PARTITION BY y ORDER BY x ASC) s FROM "
-    "test_window_func ORDER BY y ASC, s ASC;",
-    dt);
-  c("SELECT y, COUNT(CAST(t AS DOUBLE)) OVER (PARTITION BY y ORDER BY x ASC) s FROM "
-    "test_window_func ORDER BY y ASC, s ASC;",
-    dt);
-  c("SELECT y, COUNT(CAST(t AS DECIMAL(10, 2))) OVER (PARTITION BY y ORDER BY x ASC) s "
-    "FROM test_window_func ORDER BY y ASC, s ASC;",
-    dt);
-  c("SELECT y, MAX(d) OVER (PARTITION BY y ORDER BY x ASC) m FROM test_window_func ORDER "
-    "BY y ASC, m ASC;",
-    dt);
-  c("SELECT y, MIN(d) OVER (PARTITION BY y ORDER BY x ASC) m FROM test_window_func ORDER "
-    "BY y ASC, m ASC;",
-    dt);
-  c("SELECT y, COUNT(d) OVER (PARTITION BY y ORDER BY x ASC) m FROM test_window_func "
-    "ORDER BY y ASC, m ASC;",
-    dt);
+  {
+    std::string query =
+        "SELECT y, COUNT(t) OVER (PARTITION BY y ORDER BY x ASC) s FROM test_window_func "
+        "ORDER BY s ASC, y ASC";
+    c(query + " NULLS FIRST;", query + ";", dt);
+  }
+  {
+    std::string query =
+        "SELECT y, COUNT(CAST(t AS FLOAT)) OVER (PARTITION BY y ORDER BY x ASC) s FROM "
+        "test_window_func ORDER BY s ASC, y ASC";
+    c(query + " NULLS FIRST;", query + ";", dt);
+  }
+  {
+    std::string query =
+        "SELECT y, COUNT(CAST(t AS DOUBLE)) OVER (PARTITION BY y ORDER BY x ASC) s FROM "
+        "test_window_func ORDER BY s ASC, y ASC";
+    c(query + " NULLS FIRST;", query + ";", dt);
+  }
+  {
+    std::string query =
+        "SELECT y, COUNT(CAST(t AS DECIMAL(10, 2))) OVER (PARTITION BY y ORDER BY x ASC) "
+        "s FROM test_window_func ORDER BY s ASC, y ASC";
+    c(query + " NULLS FIRST;", query + ";", dt);
+  }
+  {
+    std::string query =
+        "SELECT y, MAX(d) OVER (PARTITION BY y ORDER BY x ASC) m FROM test_window_func "
+        "ORDER BY y ASC";
+    c(query + " NULLS FIRST, m ASC NULLS FIRST;", query + ", m ASC;", dt);
+  }
+  {
+    std::string query =
+        "SELECT y, MIN(d) OVER (PARTITION BY y ORDER BY x ASC) m FROM test_window_func "
+        "ORDER BY y ASC";
+    c(query + " NULLS FIRST, m ASC NULLS FIRST;", query + ", m ASC;", dt);
+  }
+  {
+    std::string query =
+        "SELECT y, COUNT(d) OVER (PARTITION BY y ORDER BY x ASC) m FROM test_window_func "
+        "ORDER BY y ASC";
+    c(query + " NULLS FIRST, m ASC NULLS FIRST;", query + ", m ASC;", dt);
+  }
 }
 
 TEST(Select, WindowFunctionAggregateNoOrder) {
@@ -13922,8 +13951,10 @@ TEST(Select, WindowFunctionAggregateNoOrder) {
         "SELECT x, y, AVG(x) OVER (PARTITION BY y) a, MIN(x) OVER (PARTITION BY y) m1, "
         "MAX(x) OVER (PARTITION BY y) m2, SUM(x) OVER (PARTITION BY y) s, COUNT(x) OVER "
         "(PARTITION BY y) c FROM test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
-    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+    std::string part2 = "a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, " + part2,
+      dt);
   }
   {
     std::string part1 =
@@ -13931,8 +13962,10 @@ TEST(Select, WindowFunctionAggregateNoOrder) {
         "FLOAT)) OVER (PARTITION BY y) m1, MAX(CAST(x AS FLOAT)) OVER (PARTITION BY y) "
         "m2, SUM(CAST(x AS FLOAT)) OVER (PARTITION BY y) s, COUNT(CAST(x AS FLOAT)) OVER "
         "(PARTITION BY y) c FROM test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
-    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+    std::string part2 = "a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, " + part2,
+      dt);
   }
   {
     std::string part1 =
@@ -13940,8 +13973,10 @@ TEST(Select, WindowFunctionAggregateNoOrder) {
         "DOUBLE)) OVER (PARTITION BY y) m1, MAX(CAST(x AS DOUBLE)) OVER (PARTITION BY y) "
         "m2, SUM(CAST(x AS DOUBLE)) OVER (PARTITION BY y) s, COUNT(CAST(x AS DOUBLE)) "
         "OVER (PARTITION BY y) c FROM test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
-    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+    std::string part2 = "a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, " + part2,
+      dt);
   }
   {
     std::string part1 =
@@ -13950,30 +13985,50 @@ TEST(Select, WindowFunctionAggregateNoOrder) {
         "OVER (PARTITION BY y) m2, SUM(CAST(x AS DECIMAL(10, 2))) OVER (PARTITION BY y) "
         "s, COUNT(CAST(x AS DECIMAL(10, 2))) OVER (PARTITION BY y) c FROM "
         "test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
-    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+    std::string part2 = "a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, " + part2,
+      dt);
   }
-  c("SELECT y, COUNT(t) OVER (PARTITION BY y) c FROM test_window_func ORDER BY y ASC, c "
-    "ASC;",
-    dt);
-  c("SELECT y, COUNT(CAST(t AS FLOAT)) OVER (PARTITION BY y) c FROM test_window_func "
-    "ORDER BY y ASC, c ASC;",
-    dt);
-  c("SELECT y, COUNT(CAST(t AS DOUBLE)) OVER (PARTITION BY y) c FROM test_window_func "
-    "ORDER BY y ASC, c ASC;",
-    dt);
-  c("SELECT y, COUNT(CAST(t AS DECIMAL(10, 2))) OVER (PARTITION BY y) c FROM "
-    "test_window_func ORDER BY y ASC, c ASC;",
-    dt);
-  c("SELECT y, MAX(d) OVER (PARTITION BY y) m FROM test_window_func ORDER BY y ASC, m "
-    "ASC;",
-    dt);
-  c("SELECT y, MIN(d) OVER (PARTITION BY y) m FROM test_window_func ORDER BY y ASC, m "
-    "ASC;",
-    dt);
-  c("SELECT y, COUNT(d) OVER (PARTITION BY y) m FROM test_window_func ORDER BY y ASC, m "
-    "ASC;",
-    dt);
+  {
+    std::string query =
+        "SELECT y, COUNT(t) OVER (PARTITION BY y) c FROM test_window_func ORDER BY c "
+        "ASC, y ASC";
+    c(query + " NULLS FIRST;", query + ";", dt);
+  }
+  {
+    std::string query =
+        "SELECT y, COUNT(CAST(t AS FLOAT)) OVER (PARTITION BY y) c FROM test_window_func "
+        "ORDER BY c ASC, y ASC";
+    c(query + " NULLS FIRST;", query + ";", dt);
+  }
+  {
+    std::string query =
+        "SELECT y, COUNT(CAST(t AS DOUBLE)) OVER (PARTITION BY y) c FROM "
+        "test_window_func ORDER BY c ASC, y ASC";
+    c(query + " NULLS FIRST;", query + ";", dt);
+  }
+  {
+    std::string query =
+        "SELECT y, COUNT(CAST(t AS DECIMAL(10, 2))) OVER (PARTITION BY y) c FROM "
+        "test_window_func ORDER BY c ASC, y ASC";
+    c(query + " NULLS FIRST;", query + ";", dt);
+  }
+  {
+    std::string query =
+        "SELECT y, MAX(d) OVER (PARTITION BY y) m FROM test_window_func ORDER BY y ASC";
+    c(query + " NULLS FIRST, m ASC NULLS FIRST;", query + ", m ASC;", dt);
+  }
+  {
+    std::string query =
+        "SELECT y, MIN(d) OVER (PARTITION BY y) m FROM test_window_func ORDER BY y ASC";
+    c(query + " NULLS FIRST, m ASC NULLS FIRST;", query + ", m ASC;", dt);
+  }
+  {
+    std::string query =
+        "SELECT y, COUNT(d) OVER (PARTITION BY y) m FROM test_window_func ORDER BY y ASC";
+    c(query + " NULLS FIRST, m ASC NULLS FIRST;", query + ", m ASC;", dt);
+  }
 }
 
 namespace {
@@ -14096,7 +14151,7 @@ int create_and_populate_window_func_table() {
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(NULL, 'ddd', 14, NULL);"};
+          "INSERT INTO test_window_func VALUES(NULL, NULL, 14, NULL);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }

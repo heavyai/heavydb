@@ -660,7 +660,7 @@ void WindowFunctionContext::fillPartitionStart() {
   std::partial_sum(counts(), counts() + partition_count, partition_offsets.begin());
   auto partition_start_handle = reinterpret_cast<int64_t>(partition_start_);
   agg_count_distinct_bitmap(&partition_start_handle, 0, 0);
-  for (ssize_t i = 0; i < partition_count - 2; ++i) {
+  for (ssize_t i = 0; i < partition_count - 1; ++i) {
     agg_count_distinct_bitmap(&partition_start_handle, partition_offsets[i], 0);
   }
 }
@@ -678,7 +678,7 @@ void WindowFunctionContext::fillPartitionEnd() {
   std::vector<size_t> partition_offsets(partition_count);
   std::partial_sum(counts(), counts() + partition_count, partition_offsets.begin());
   auto partition_end_handle = reinterpret_cast<int64_t>(partition_end_);
-  for (ssize_t i = 0; i < partition_count - 2; ++i) {
+  for (ssize_t i = 0; i < partition_count - 1; ++i) {
     if (partition_offsets[i] == 0) {
       continue;
     }
