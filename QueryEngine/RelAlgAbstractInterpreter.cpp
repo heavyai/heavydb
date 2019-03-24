@@ -655,7 +655,7 @@ std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
   auto operands = parse_expr_array(operators_json_arr, cat, ra_executor);
   const auto type_it = expr.FindMember("type");
   CHECK(type_it != expr.MemberEnd());
-  const auto ti = parse_type(type_it->value);
+  auto ti = parse_type(type_it->value);
   if (op == kIN && expr.HasMember("subquery")) {
     auto subquery = parse_subquery(expr, cat, ra_executor);
     operands.emplace_back(std::move(subquery));
@@ -672,6 +672,7 @@ std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
     const auto upper_bound =
         parse_window_bound(field(expr, "upper_bound"), cat, ra_executor);
     bool is_rows = json_bool(field(expr, "is_rows"));
+    ti.set_notnull(false);
     return std::make_unique<RexWindowFunctionOperator>(kind,
                                                        operands,
                                                        partition_keys,

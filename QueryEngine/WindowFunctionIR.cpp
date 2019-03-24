@@ -344,7 +344,9 @@ void Executor::codegenWindowAvgEpilogue(llvm::Value* crt_val,
     }
     default: { break; }
   }
-  cgen_state_->emitCall(agg_count_func_name, {aggregate_state_count, crt_val});
+  agg_count_func_name += "_skip_val";
+  cgen_state_->emitCall(agg_count_func_name,
+                        {aggregate_state_count, crt_val, window_func_null_val});
 }
 
 llvm::Value* Executor::codegenAggregateWindowState() {
