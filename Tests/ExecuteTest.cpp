@@ -13900,6 +13900,17 @@ TEST(Select, WindowFunctionAggregate) {
       dt);
   }
   {
+    std::string part1 =
+        "SELECT x, y, AVG(x) OVER (PARTITION BY y ORDER BY d ASC) a, MIN(x) OVER "
+        "(PARTITION BY y ORDER BY f ASC) m1, MAX(x) OVER (PARTITION BY y ORDER BY dd "
+        "DESC) m2, SUM(x) OVER (PARTITION BY y ORDER BY d ASC) s, COUNT(x) OVER "
+        "(PARTITION BY y ORDER BY f ASC) c FROM test_window_func ORDER BY x ASC";
+    std::string part2 = "a ASC, m1 ASC, m2 ASC, s ASC, c ASC;";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, " + part2,
+      dt);
+  }
+  {
     std::string query =
         "SELECT y, COUNT(t) OVER (PARTITION BY y ORDER BY x ASC) s FROM test_window_func "
         "ORDER BY s ASC, y ASC";
@@ -14086,72 +14097,73 @@ int create_and_populate_window_func_table() {
     run_ddl_statement(drop_test_table);
     g_sqlite_comparator.query(drop_test_table);
     const std::string create_test_table{
-        "CREATE TABLE test_window_func(x INTEGER, y TEXT, t INTEGER, d DATE);"};
+        "CREATE TABLE test_window_func(x INTEGER, y TEXT, t INTEGER, d DATE, f FLOAT, dd "
+        "DOUBLE);"};
     run_ddl_statement(create_test_table);
     g_sqlite_comparator.query(create_test_table);
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(1, 'aaa', 4, '2019-03-02');"};
+          "INSERT INTO test_window_func VALUES(1, 'aaa', 4, '2019-03-02', 1, 1);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(0, 'aaa', 5, '2019-03-01');"};
+          "INSERT INTO test_window_func VALUES(0, 'aaa', 5, '2019-03-01', 0, 0);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(2, 'ccc', 6, '2019-03-03');"};
+          "INSERT INTO test_window_func VALUES(2, 'ccc', 6, '2019-03-03', 2, 2);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(10, 'bbb', 7, '2019-03-11');"};
+          "INSERT INTO test_window_func VALUES(10, 'bbb', 7, '2019-03-11', 10, 10);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(3, 'bbb', 8, '2019-03-04');"};
+          "INSERT INTO test_window_func VALUES(3, 'bbb', 8, '2019-03-04', 3, 3);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(6, 'bbb', 9, '2019-03-07');"};
+          "INSERT INTO test_window_func VALUES(6, 'bbb', 9, '2019-03-07', 6, 6);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(9, 'bbb', 10, '2019-03-10');"};
+          "INSERT INTO test_window_func VALUES(9, 'bbb', 10, '2019-03-10', 9, 9);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(6, 'bbb', 11, '2019-03-07');"};
+          "INSERT INTO test_window_func VALUES(6, 'bbb', 11, '2019-03-07', 6, 6);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(9, 'bbb', 12, '2019-03-10');"};
+          "INSERT INTO test_window_func VALUES(9, 'bbb', 12, '2019-03-10', 9, 9);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(9, 'bbb', 13, '2019-03-10');"};
+          "INSERT INTO test_window_func VALUES(9, 'bbb', 13, '2019-03-10', 9, 9);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }
     {
       const std::string insert_query{
-          "INSERT INTO test_window_func VALUES(NULL, NULL, 14, NULL);"};
+          "INSERT INTO test_window_func VALUES(NULL, NULL, 14, NULL, NULL, NULL);"};
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
       g_sqlite_comparator.query(insert_query);
     }

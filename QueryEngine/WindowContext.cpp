@@ -459,7 +459,7 @@ bool integer_comparator(const int8_t* order_column_buffer,
   const auto values = reinterpret_cast<const T*>(order_column_buffer);
   const auto lhs_val = values[partition_indices[lhs]];
   const auto rhs_val = values[partition_indices[rhs]];
-  const auto null_val = inline_int_null_val(ti);
+  const auto null_val = inline_fixed_encoding_null_val(ti);
   if (lhs_val == null_val && rhs_val == null_val) {
     return false;
   }
@@ -507,53 +507,59 @@ WindowFunctionContext::makeComparator(const Analyzer::ColumnVar* col_var,
                                       const int32_t* partition_indices,
                                       const bool nulls_first) {
   const auto& ti = col_var->get_type_info();
-  switch (ti.get_type()) {
-    case kTIMESTAMP:
-    case kBIGINT: {
-      return [order_column_buffer, nulls_first, partition_indices, &ti](
-                 const int64_t lhs, const int64_t rhs) {
-        return integer_comparator<int64_t>(
-            order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
-      };
+  if (ti.is_integer() || ti.is_decimal() || ti.is_time() || ti.is_boolean()) {
+    switch (ti.get_size()) {
+      case 8: {
+        return [order_column_buffer, nulls_first, partition_indices, &ti](
+                   const int64_t lhs, const int64_t rhs) {
+          return integer_comparator<int64_t>(
+              order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
+        };
+      }
+      case 4: {
+        return [order_column_buffer, nulls_first, partition_indices, &ti](
+                   const int64_t lhs, const int64_t rhs) {
+          return integer_comparator<int32_t>(
+              order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
+        };
+      }
+      case 2: {
+        return [order_column_buffer, nulls_first, partition_indices, &ti](
+                   const int64_t lhs, const int64_t rhs) {
+          return integer_comparator<int16_t>(
+              order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
+        };
+      }
+      case 1: {
+        return [order_column_buffer, nulls_first, partition_indices, &ti](
+                   const int64_t lhs, const int64_t rhs) {
+          return integer_comparator<int8_t>(
+              order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
+        };
+      }
+      default: { LOG(FATAL) << "Invalid type size: " << ti.get_size(); }
     }
-    case kINT: {
-      return [order_column_buffer, nulls_first, partition_indices, &ti](
-                 const int64_t lhs, const int64_t rhs) {
-        return integer_comparator<int32_t>(
-            order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
-      };
-    }
-    case kSMALLINT: {
-      return [order_column_buffer, nulls_first, partition_indices, &ti](
-                 const int64_t lhs, const int64_t rhs) {
-        return integer_comparator<int16_t>(
-            order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
-      };
-    }
-    case kTINYINT: {
-      return [order_column_buffer, nulls_first, partition_indices, &ti](
-                 const int64_t lhs, const int64_t rhs) {
-        return integer_comparator<int8_t>(
-            order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
-      };
-    }
-    case kFLOAT: {
-      return [order_column_buffer, nulls_first, partition_indices, &ti](
-                 const int64_t lhs, const int64_t rhs) {
-        return fp_comparator<float, int32_t>(
-            order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
-      };
-    }
-    case kDOUBLE: {
-      return [order_column_buffer, nulls_first, partition_indices, &ti](
-                 const int64_t lhs, const int64_t rhs) {
-        return fp_comparator<double, int64_t>(
-            order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
-      };
-    }
-    default: { LOG(FATAL) << "Type not supported yet"; }
   }
-  return nullptr;
+  if (ti.is_fp()) {
+    switch (ti.get_type()) {
+      case kFLOAT: {
+        return [order_column_buffer, nulls_first, partition_indices, &ti](
+                   const int64_t lhs, const int64_t rhs) {
+          return fp_comparator<float, int32_t>(
+              order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
+        };
+      }
+      case kDOUBLE: {
+        return [order_column_buffer, nulls_first, partition_indices, &ti](
+                   const int64_t lhs, const int64_t rhs) {
+          return fp_comparator<double, int64_t>(
+              order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
+        };
+      }
+      default: { LOG(FATAL) << "Invalid float type"; }
+    }
+  }
+  throw std::runtime_error("Type not supported yet");
 }
 
 void WindowFunctionContext::computePartition(
