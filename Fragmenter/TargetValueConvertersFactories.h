@@ -27,7 +27,6 @@ struct ConverterCreateParameter {
   const SQLTypeInfo& type;
   bool can_be_null;
   StringDictionaryProxy* literals_dictionary;
-  const LeafHostInfo* sds_server;
 };
 
 struct TargetValueConverterFactory {

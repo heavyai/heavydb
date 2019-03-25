@@ -79,8 +79,12 @@ class StringDictionaryClient {
   void populate_string_ids(std::vector<int32_t>& dest_ids,
                            const DictRef dest_dict_ref,
                            const std::vector<int32_t>& source_ids,
-                           const DictRef source_dict_ref,
-                           const int32_t dest_generation);
+                           const DictRef source_dict_ref);
+  void populate_string_array_ids(
+      std::vector<std::vector<int32_t>>& dest_array_ids,
+      const DictRef dest_dict_ref,
+      const std::vector<std::vector<int32_t>>& source_array_ids,
+      const DictRef source_dict_ref);
   void translate_string_ids(std::vector<int32_t>& dest_ids,
                             const DictRef dest_dict_ref,
                             const std::vector<int32_t>& source_ids,

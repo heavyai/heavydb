@@ -92,8 +92,20 @@ struct NumericValueConverter : public TargetValueConverter {
     convertToColumnarFormat(row, scalarValue);
   }
 
-  ElementsBufferColumnPtr processArrayBuffer(ElementsBufferColumnPtr buffer) {
-    return std::move(buffer);
+  void processArrayBuffer(
+      std::unique_ptr<std::vector<std::pair<size_t, ElementsBufferColumnPtr>>>&
+          array_buffer,
+      std::unique_ptr<std::vector<ArrayDatum>>::pointer arrayData) {
+    for (size_t row = 0; row < array_buffer->size(); row++) {
+      auto& element = (array_buffer->at(row));
+      bool is_null = false;
+      if (element.second) {
+        ColumnDataPtr& data = element.second;
+        int8_t* arrayDataPtr = reinterpret_cast<int8_t*>(data.release());
+        (*arrayData)[row] =
+            ArrayDatum(element.first * sizeof(TARGET_TYPE), arrayDataPtr, is_null);
+      }
+    }
   }
 
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
@@ -120,8 +132,6 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
 
   const StringDictionaryProxy* literals_dict_;
 
-  const LeafHostInfo* dict_server_host_;
-
   std::unordered_map<int32_t, int32_t> literals_lookup_;
   bool use_literals_;
 
@@ -132,15 +142,13 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
                            TARGET_TYPE nullValue,
                            int64_t nullCheckValue,
                            bool doNullCheck,
-                           StringDictionaryProxy* literals_dict,
-                           const LeafHostInfo* dict_server_host)
+                           StringDictionaryProxy* literals_dict)
       : NumericValueConverter<int64_t, TARGET_TYPE>(targetDescriptor,
                                                     num_rows,
                                                     nullValue,
                                                     nullCheckValue,
                                                     doNullCheck) {
     literals_dict_ = literals_dict;
-    dict_server_host_ = dict_server_host;
     target_dict_desc_ =
         cat.getMetadataForDict(targetDescriptor->columnType.get_comp_param(), true);
 
@@ -201,7 +209,7 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
     convertToColumnarFormat(row, scalarValue);
   }
 
-  typename NumericValueConverter<int64_t, TARGET_TYPE>::ColumnDataPtr processArrayBuffer(
+  typename NumericValueConverter<int64_t, TARGET_TYPE>::ColumnDataPtr processBuffer(
       ElementsBufferColumnPtr buffer) {
     typename NumericValueConverter<int64_t, TARGET_TYPE>::ColumnDataPtr data =
         typename NumericValueConverter<int64_t, TARGET_TYPE>::ColumnDataPtr(
@@ -233,17 +241,16 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
           }
         }
 
-      } else if (dict_server_host_) {
+      } else {
         std::vector<int32_t> dest_ids;
         dest_ids.resize(bufferPtr->size());
 
-        populate_string_ids(dest_ids,
-                            *dict_server_host_,
-                            target_dict_desc_->dictRef,
-                            *bufferPtr,
-                            source_dict_desc_->dictRef,
-                            std::numeric_limits<int32_t>::max());
+        StringDictionary::populate_string_ids(dest_ids,
+                                              target_dict_desc_->stringDict.get(),
+                                              *bufferPtr,
+                                              source_dict_desc_->stringDict.get());
 
+        // fixup NULL sentinel
         for (size_t i = 0; i < dest_ids.size(); i++) {
           auto id = dest_ids[i];
           if (id == buffer_null_sentinal_) {
@@ -253,29 +260,63 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
             columnDataPtr[i] = static_cast<TARGET_TYPE>(id);
           }
         }
-      } else {
-        auto src_dict = source_dict_desc_->stringDict;
-        auto dst_dict = target_dict_desc_->stringDict;
-        for (size_t i = 0; i < bufferPtr->size(); i++) {
-          auto src_id = (*bufferPtr)[i];
-          if (src_id == buffer_null_sentinal_) {
-            columnDataPtr[i] = this->null_value_;
-          } else {
-            auto str = src_dict->getString(src_id);
-            auto newId = dst_dict->getOrAdd(str);
-            CHECK(std::numeric_limits<TARGET_TYPE>::max() >= newId);
-            columnDataPtr[i] = static_cast<TARGET_TYPE>(newId);
-          }
-        }
       }
     }
 
     return std::move(data);
   }
 
+  void processArrayBuffer(
+      std::unique_ptr<std::vector<std::pair<size_t, ElementsBufferColumnPtr>>>&
+          array_buffer,
+      std::unique_ptr<std::vector<ArrayDatum>>::pointer arrayData) {
+    if (use_literals_) {
+      for (size_t row = 0; row < array_buffer->size(); row++) {
+        auto& element = (array_buffer->at(row));
+        bool is_null = false;
+        if (element.second) {
+          typename NumericValueConverter<int64_t, TARGET_TYPE>::ColumnDataPtr data =
+              processBuffer(std::move(element.second));
+          int8_t* arrayDataPtr = reinterpret_cast<int8_t*>(data.release());
+          (*arrayData)[row] =
+              ArrayDatum(element.first * sizeof(TARGET_TYPE), arrayDataPtr, is_null);
+        }
+      }
+    } else {
+      std::vector<std::vector<int32_t>> srcArrayIds(array_buffer->size());
+      std::vector<std::vector<int32_t>> destArrayIds(0);
+
+      for (size_t row = 0; row < array_buffer->size(); row++) {
+        auto& element = (array_buffer->at(row));
+        if (element.second) {
+          srcArrayIds[row] = *(element.second.get());
+        }
+      }
+
+      StringDictionary::populate_string_array_ids(destArrayIds,
+                                                  target_dict_desc_->stringDict.get(),
+                                                  srcArrayIds,
+                                                  source_dict_desc_->stringDict.get());
+
+      for (size_t row = 0; row < array_buffer->size(); row++) {
+        auto& element = (array_buffer->at(row));
+        bool is_null = false;
+        if (element.second) {
+          *(element.second.get()) = destArrayIds[row];
+          int8_t* arrayDataPtr = reinterpret_cast<int8_t*>(&(element.second->at(0)));
+          (*arrayData)[row] = ArrayDatum(element.first * sizeof(TARGET_TYPE),
+                                         arrayDataPtr,
+                                         is_null,
+                                         DoNothingDeleter());
+        }
+      }
+    }
+  }
+
   void finalizeDataBlocksForInsertData() override {
     if (column_buffer_) {
-      this->column_data_ = processArrayBuffer(std::move(column_buffer_));
+      this->column_data_ = processBuffer(std::move(column_buffer_));
+      column_buffer_ = nullptr;
     }
   }
 
@@ -386,6 +427,7 @@ struct ArrayValueConverter : public TargetValueConverter {
   std::unique_ptr<ELEMENT_CONVERTER> element_converter_;
   SQLTypeInfo element_type_info_;
   bool do_check_null_;
+  bool data_finalized_ = false;
 
   boost_variant_accessor<ArrayTargetValue> ARRAY_VALUE_ACCESSOR;
 
@@ -445,45 +487,9 @@ struct ArrayValueConverter : public TargetValueConverter {
   }
 
   void finalizeDataBlocksForInsertData() override {
-    if (column_buffer_) {
-      std::atomic<size_t> row_idx{0};
-      auto row_buffer_finalizer = [this, &row_idx](int tid) {
-        for (;;) {
-          auto row = row_idx.fetch_add(1);
-
-          if (row >= column_buffer_->size()) {
-            return;
-          }
-
-          auto& element = (column_buffer_->at(row));
-          bool is_null = false;
-          if (element.second) {
-            typename ELEMENT_CONVERTER::ColumnDataPtr data =
-                element_converter_->processArrayBuffer(std::move(element.second));
-            int8_t* arrayData = reinterpret_cast<int8_t*>(data.release());
-            (*column_data_)[row] = ArrayDatum(
-                element.first * element_type_info_.get_size(), arrayData, is_null);
-          }
-        }
-      };
-
-      const int num_worker_threads = std::thread::hardware_concurrency();
-
-      if (column_buffer_->size() / num_worker_threads > 10) {
-        std::vector<std::future<void>> worker_threads;
-        for (int i = 0; i < num_worker_threads; ++i) {
-          worker_threads.push_back(
-              std::async(std::launch::async, row_buffer_finalizer, i));
-        }
-
-        for (auto& child : worker_threads) {
-          child.wait();
-        }
-      } else {
-        row_buffer_finalizer(0);
-      }
-
-      column_buffer_ = nullptr;
+    if (!data_finalized_) {
+      element_converter_->processArrayBuffer(column_buffer_, column_data_.get());
+      data_finalized_ = true;
     }
   }
 

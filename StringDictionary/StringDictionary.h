@@ -78,6 +78,17 @@ class StringDictionary {
 
   bool checkpoint() noexcept;
 
+  static void populate_string_ids(std::vector<int32_t>& dest_ids,
+                                  StringDictionary* dest_dict,
+                                  const std::vector<int32_t>& source_ids,
+                                  const StringDictionary* source_dict);
+
+  static void populate_string_array_ids(
+      std::vector<std::vector<int32_t>>& dest_array_ids,
+      StringDictionary* dest_dict,
+      const std::vector<std::vector<int32_t>>& source_array_ids,
+      const StringDictionary* source_dict);
+
   static const int32_t INVALID_STR_ID;
   static const size_t MAX_STRLEN = (1 << 15) - 1;
   static const size_t MAX_STRCOUNT = (1U << 31) - 1;
@@ -165,13 +176,6 @@ class StringDictionary {
 };
 
 int32_t truncate_to_generation(const int32_t id, const size_t generation);
-
-void populate_string_ids(std::vector<int32_t>& dest_ids,
-                         const LeafHostInfo& dict_server_host,
-                         const DictRef dest_dict_ref,
-                         const std::vector<int32_t>& source_ids,
-                         const DictRef source_dict_ref,
-                         const int32_t dest_generation);
 
 void translate_string_ids(std::vector<int32_t>& dest_ids,
                           const LeafHostInfo& dict_server_host,

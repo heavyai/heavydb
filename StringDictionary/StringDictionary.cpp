@@ -1113,16 +1113,62 @@ void StringDictionary::mergeSortedCache(std::vector<int32_t>& temp_sorted_cache)
   sorted_cache.swap(updated_cache);
 }
 
-void populate_string_ids(std::vector<int32_t>& dest_ids,
-                         const LeafHostInfo& dict_server_host,
-                         const DictRef dest_dict_ref,
-                         const std::vector<int32_t>& source_ids,
-                         const DictRef source_dict_ref,
-                         const int32_t dest_generation) {
-  DictRef temp_dict_ref(-1, -1);
-  StringDictionaryClient string_client(dict_server_host, temp_dict_ref, false);
-  string_client.populate_string_ids(
-      dest_ids, dest_dict_ref, source_ids, source_dict_ref, dest_generation);
+void StringDictionary::populate_string_ids(std::vector<int32_t>& dest_ids,
+                                           StringDictionary* dest_dict,
+                                           const std::vector<int32_t>& source_ids,
+                                           const StringDictionary* source_dict) {
+  std::vector<std::string> strings;
+
+  for (const int32_t source_id : source_ids) {
+    if (source_id == std::numeric_limits<int32_t>::min()) {
+      strings.emplace_back("");
+    } else if (source_id < 0) {
+      throw std::runtime_error("Unexpected negative source ID");
+    } else {
+      strings.push_back(source_dict->getString(source_id));
+    }
+  }
+
+  dest_ids.resize(strings.size());
+  dest_dict->getOrAddBulk(strings, &dest_ids[0]);
+}
+
+void StringDictionary::populate_string_array_ids(
+    std::vector<std::vector<int32_t>>& dest_array_ids,
+    StringDictionary* dest_dict,
+    const std::vector<std::vector<int32_t>>& source_array_ids,
+    const StringDictionary* source_dict) {
+  dest_array_ids.resize(source_array_ids.size());
+
+  std::atomic<size_t> row_idx{0};
+  auto processor = [&row_idx, &dest_array_ids, dest_dict, &source_array_ids, source_dict](
+                       int thread_id) {
+    for (;;) {
+      auto row = row_idx.fetch_add(1);
+
+      if (row >= dest_array_ids.size()) {
+        return;
+      }
+      const auto& source_ids = source_array_ids[row];
+      auto& dest_ids = dest_array_ids[row];
+      populate_string_ids(dest_ids, dest_dict, source_ids, source_dict);
+    }
+  };
+
+  const int num_worker_threads = std::thread::hardware_concurrency();
+
+  if (source_array_ids.size() / num_worker_threads > 10) {
+    std::vector<std::future<void>> worker_threads;
+    for (int i = 0; i < num_worker_threads; ++i) {
+      worker_threads.push_back(std::async(std::launch::async, processor, i));
+    }
+
+    for (auto& child : worker_threads) {
+      child.wait();
+    }
+  } else {
+    processor(0);
+  }
 }
 
 void translate_string_ids(std::vector<int32_t>& dest_ids,
@@ -1132,7 +1178,7 @@ void translate_string_ids(std::vector<int32_t>& dest_ids,
                           const DictRef source_dict_ref,
                           const int32_t dest_generation) {
   DictRef temp_dict_ref(-1, -1);
-  StringDictionaryClient string_client(dict_server_host, temp_dict_ref, true);
+  StringDictionaryClient string_client(dict_server_host, temp_dict_ref, false);
   string_client.translate_string_ids(
       dest_ids, dest_dict_ref, source_ids, source_dict_ref, dest_generation);
 }

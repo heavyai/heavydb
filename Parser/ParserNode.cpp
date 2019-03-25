@@ -2720,8 +2720,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
             targetDescriptor,
             targetDescriptor->columnType,
             !targetDescriptor->columnType.get_notnull(),
-            result_rows->getRowSetMemOwner()->getLiteralStringDictProxy(),
-            leafs_connector_->get_sds_host_info()};
+            result_rows->getRowSetMemOwner()->getLiteralStringDictProxy()};
         auto converter = factory.create(param);
         value_converters.push_back(std::move(converter));
       }

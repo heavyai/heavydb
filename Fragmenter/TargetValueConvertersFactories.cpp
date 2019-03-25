@@ -104,8 +104,7 @@ struct DictionaryConverterFactory {
         target_null_value,
         NULL_INT,
         param.can_be_null,
-        param.literals_dictionary,
-        param.sds_server);
+        param.literals_dictionary);
   }
 
   std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {
@@ -156,8 +155,7 @@ struct ArrayConverterFactory {
                                                           param.target,
                                                           elem_type,
                                                           true,
-                                                          param.literals_dictionary,
-                                                          param.sds_server};
+                                                          param.literals_dictionary};
 
     auto elementConverter = element_factory_.create(elementConverterFactoryParam);
     return std::make_unique<ArrayValueConverter<typename ELEMENT_FACTORY::ConverterType>>(
