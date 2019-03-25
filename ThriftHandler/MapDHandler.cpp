@@ -130,11 +130,6 @@ SessionMap::iterator get_session_from_map(const TSessionId& session,
   return session_it;
 }
 
-bool on_search_path(const std::string file) {
-  boost::filesystem::path p = boost::process::search_path(file);
-  return boost::filesystem::exists(p);
-}
-
 }  // namespace
 
 MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
@@ -208,53 +203,11 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
   std::string udf_ast_filename("");
 
   if (!udf_filename.empty()) {
-    // Only attempt to compile udfs if clang++ is present
+    UdfCompiler compiler(udf_filename);
+    int compile_result = compiler.compileUdf();
 
-    if (on_search_path("clang++")) {
-      LOG(INFO) << "MapdHandler::MapdHandler udf filename = " << udf_filename
-                << std::endl;
-
-      auto ast_result = parseToAst(udf_filename.c_str());
-      udf_ast_filename = udf_filename;
-      replaceExtn(udf_ast_filename, "ast");
-
-      if (ast_result == 0) {
-        LOG(INFO) << "MapdHandler::MapdHandler udf filename for parseTo LLVMByteCode = "
-                  << udf_filename << std::endl;
-        // Compile udf file to generate cpu and gpu bytecode files
-        int cpu_compile_result = compileToCpuByteCode(udf_filename.c_str());
-        int gpu_compile_result = 1;
-
-        if (cpu_compile_result == 0) {
-          // Use presence or absence of nvcc on search path as presence of CUDA toolkit
-
-          if (on_search_path("nvcc")) {
-            gpu_compile_result = compileToGpuByteCode(udf_filename.c_str(), false);
-          }
-
-          // If gpu compilation fails but cpu compilation has succeeded, try compiling
-          // for the cpu with the assumption the user does not have the CUDA toolkit
-          // installed
-          if (gpu_compile_result != 0) {
-            gpu_compile_result = compileToGpuByteCode(udf_filename.c_str(), true);
-          }
-        }
-
-        if (gpu_compile_result == 0) {
-          std::string cpu_ir_file(gen_cpu_ir_filename(udf_filename.c_str()));
-          std::string gpu_ir_file(gen_gpu_ir_filename(udf_filename.c_str()));
-
-          VLOG(1) << "MapdHandler::MapdHandler udf cpu bc file = " << cpu_ir_file
-                  << std::endl;
-          VLOG(1) << "MapdHandler::MapdHandler udf cpu bc file = " << gpu_ir_file
-                  << std::endl;
-
-          read_udf_cpu_module(cpu_ir_file);
-          read_udf_gpu_module(gpu_ir_file);
-        }
-      }
-    } else {
-      VLOG(1) << "Unable to compile udfs due to absence of clang++" << std::endl;
+    if (compile_result == 0) {
+      udf_ast_filename = compiler.getAstFileName();
     }
   }
 

@@ -26,12 +26,29 @@
 #define UDF_COMPILER_H
 
 #include <string>
+#include <vector>
 
-extern int parseToAst(const char* fileName);
-extern std::string gen_gpu_ir_filename(const char* udf_fileName);
-extern std::string gen_cpu_ir_filename(const char* udf_fileName);
-extern int compileToGpuByteCode(const char* udf_fileNamem, bool cpu_mode);
-extern int compileToCpuByteCode(const char* udf_fileName);
-extern void replaceExtn(std::string& s, const std::string& newExt);
+class UdfCompiler {
+ public:
+  UdfCompiler(const std::string&);
+  int compileUdf();
+  const std::string& getAstFileName() const;
 
+ private:
+  std::string removeFileExtension(const std::string& path);
+  std::string getFileExt(std::string& s);
+  int parseToAst(const char* file_name);
+  std::string genGpuIrFilename(const char* udf_file_name);
+  std::string genCpuIrFilename(const char* udf_file_name);
+  int compileToGpuByteCode(const char* udf_file_name, bool cpu_mode);
+  int compileToCpuByteCode(const char* udf_file_name);
+  void replaceExtn(std::string& s, const std::string& new_ext);
+  int compileFromCommandLine(std::vector<const char*>& command_line);
+  void readCompiledModules();
+  int compileForGpu();
+
+ private:
+  std::string udf_file_name_;
+  std::string udf_ast_file_name_;
+};
 #endif

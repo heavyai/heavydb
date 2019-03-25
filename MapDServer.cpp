@@ -667,6 +667,14 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
   }
 
   if (vm.count("udf")) {
+    boost::algorithm::trim_if(udf_file_name, boost::is_any_of("\"'"));
+
+    if (!boost::filesystem::exists(udf_file_name)) {
+      LOG(ERROR) << "User defined function file " << udf_file_name << " does not exist.";
+      return_code = 1;
+      return false;
+    }
+
     LOG(INFO) << "User provided extension functions loaded from " << udf_file_name;
   }
 

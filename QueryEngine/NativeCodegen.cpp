@@ -478,11 +478,11 @@ void legalize_nvvm_ir(llvm::Function* query_func) {
 
 }  // namespace
 
-llvm::StringRef getGPUTargetTripleString() {
+llvm::StringRef get_gpu_target_triple_string() {
   return llvm::StringRef("nvptx64-nvidia-cuda");
 }
 
-llvm::StringRef getGPUDataLayout() {
+llvm::StringRef get_gpu_data_layout() {
   return llvm::StringRef(
       "e-p:64:64:64-i1:8:8-i8:8:8-"
       "i16:16:16-i32:32:32-i64:64:64-"
@@ -550,8 +550,8 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
 #endif
         cgen_state_->vmap_);
 
-    udf_module_copy->setDataLayout(getGPUDataLayout());
-    udf_module_copy->setTargetTriple(getGPUTargetTripleString());
+    udf_module_copy->setDataLayout(get_gpu_data_layout());
+    udf_module_copy->setTargetTriple(get_gpu_target_triple_string());
 
     llvm::Linker ld(*module);
     bool link_error = false;
