@@ -366,15 +366,23 @@ class TypedImportBuffer : boost::noncopyable {
   void addDictEncodedStringArray(
       const std::vector<std::vector<std::string>>& string_array_vec) {
     CHECK(string_dict_);
+
+    // first check data is ok
     for (auto& p : string_array_vec) {
-      size_t len = p.size() * sizeof(int32_t);
-      auto a = static_cast<int32_t*>(checked_malloc(len));
       for (const auto& str : p) {
         if (str.size() > StringDictionary::MAX_STRLEN) {
           throw std::runtime_error("String too long for dictionary encoding.");
         }
       }
-      string_dict_->getOrAddBulk(p, a);
+    }
+
+    std::vector<std::vector<int32_t>> ids_array(0);
+    string_dict_->getOrAddBulkArray(string_array_vec, ids_array);
+
+    for (auto& p : ids_array) {
+      size_t len = p.size() * sizeof(int32_t);
+      auto a = static_cast<int32_t*>(checked_malloc(len));
+      memcpy(a, &p[0], len);
       // TODO: distinguish between empty and NULL
       string_array_dict_buffer_->push_back(
           ArrayDatum(len, reinterpret_cast<int8_t*>(a), len == 0));

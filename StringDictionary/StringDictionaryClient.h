@@ -76,6 +76,9 @@ class StringDictionaryClient {
     CHECK(false);
   };
 
+  void get_or_add_bulk_array(std::vector<std::vector<int32_t>>& string_ids_array,
+                             const std::vector<std::vector<std::string>>& strings_array);
+
   void populate_string_ids(std::vector<int32_t>& dest_ids,
                            const DictRef dest_dict_ref,
                            const std::vector<int32_t>& source_ids,

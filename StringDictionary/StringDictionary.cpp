@@ -263,6 +263,18 @@ void log_encoding_error(const std::string& str) {
 
 }  // namespace
 
+void StringDictionary::getOrAddBulkArray(
+    const std::vector<std::vector<std::string>>& string_array_vec,
+    std::vector<std::vector<int32_t>>& ids_array_vec) {
+  ids_array_vec.resize(string_array_vec.size());
+  for (size_t i = 0; i < string_array_vec.size(); i++) {
+    auto& strings = string_array_vec[i];
+    auto& ids = ids_array_vec[i];
+    ids.resize(strings.size());
+    getOrAddBulk(strings, &ids[0]);
+  }
+}
+
 template <class T>
 void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec,
                                     T* encoded_vec) {

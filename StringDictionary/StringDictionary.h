@@ -55,6 +55,8 @@ class StringDictionary {
   int32_t getOrAdd(const std::string& str) noexcept;
   template <class T>
   void getOrAddBulk(const std::vector<std::string>& string_vec, T* encoded_vec);
+  void getOrAddBulkArray(const std::vector<std::vector<std::string>>& string_array_vec,
+                         std::vector<std::vector<int32_t>>& ids_array_vec);
   int32_t getIdOfString(const std::string& str) const;
   std::string getString(int32_t string_id) const;
   std::pair<char*, size_t> getStringBytes(int32_t string_id) const noexcept;
