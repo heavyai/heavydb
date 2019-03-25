@@ -80,18 +80,6 @@ inline std::vector<int64_t> init_agg_val_vec(
   return agg_init_vals;
 }
 
-void set_compact_type(TargetInfo& target, const SQLTypeInfo& new_type) {
-  if (target.is_agg) {
-    const auto agg_type = target.agg_kind;
-    auto& agg_arg = target.agg_arg_type;
-    if (agg_type != kCOUNT || agg_arg.get_type() != kNULLT) {
-      agg_arg = new_type;
-      return;
-    }
-  }
-  target.sql_type = new_type;
-}
-
 }  // namespace
 
 std::pair<int64_t, int64_t> inline_int_max_min(const size_t byte_width) {
@@ -259,7 +247,7 @@ std::vector<int64_t> init_agg_val_vec(
        target_idx < targets.size() && agg_col_idx < agg_col_count;
        ++target_idx, ++agg_col_idx) {
     const auto target_expr = targets[target_idx];
-    auto target = target_info(target_expr);
+    auto target = get_target_info(target_expr, g_bigint_count);
     auto arg_expr = agg_arg(target_expr);
     if (arg_expr) {
       if (query_mem_desc.getQueryDescriptionType() ==
@@ -302,11 +290,4 @@ bool constrained_not_null(const Analyzer::Expr* expr,
     }
   }
   return false;
-}
-
-void set_notnull(TargetInfo& target, const bool not_null) {
-  target.skip_null_val = !not_null;
-  auto new_type = get_compact_type(target);
-  new_type.set_notnull(not_null);
-  set_compact_type(target, new_type);
 }

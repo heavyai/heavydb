@@ -114,7 +114,7 @@ class Scan : public Plan {
        int r,
        const std::list<int>& cl)
       : Plan(t, q, c, p), simple_quals(sq), table_id(r), col_list(cl) {}
-  Scan(const Analyzer::RangeTblEntry& rte);
+  Scan(const Analyzer::RangeTableEntry& rte);
   const std::list<std::shared_ptr<Analyzer::Expr>>& get_simple_quals() const {
     return simple_quals;
   };

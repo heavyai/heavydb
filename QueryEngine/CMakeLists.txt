@@ -84,6 +84,7 @@ set(query_engine_source_files
     StringDictionaryGenerations.cpp
     TableGenerations.cpp
     TableOptimizer.cpp
+    TargetExprBuilder.cpp
     UDFCompiler.cpp
     StringFunctions.cpp
     StringOpsIR.cpp

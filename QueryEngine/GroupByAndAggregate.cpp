@@ -27,6 +27,7 @@
 #include "LLVMFunctionAttributesUtil.h"
 #include "MaxwellCodegenPatch.h"
 #include "OutputBufferInitialization.h"
+#include "TargetExprBuilder.h"
 
 #include "../CudaMgr/CudaMgr.h"
 #include "../Shared/checked_alloc.h"
@@ -94,7 +95,7 @@ bool expr_is_rowid(const Analyzer::Expr* expr, const Catalog_Namespace::Catalog&
 
 bool has_count_distinct(const RelAlgExecutionUnit& ra_exe_unit) {
   for (const auto& target_expr : ra_exe_unit.target_exprs) {
-    const auto agg_info = target_info(target_expr);
+    const auto agg_info = get_target_info(target_expr, g_bigint_count);
     if (agg_info.is_agg && is_distinct_target(agg_info)) {
       return true;
     }
@@ -472,7 +473,7 @@ void GroupByAndAggregate::addTransientStringLiterals(
 CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
   CountDistinctDescriptors count_distinct_descriptors;
   for (const auto target_expr : ra_exe_unit_.target_exprs) {
-    auto agg_info = target_info(target_expr);
+    auto agg_info = get_target_info(target_expr, g_bigint_count);
     if (is_distinct_target(agg_info)) {
       CHECK(agg_info.is_agg);
       CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
@@ -571,7 +572,7 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
   int32_t index{0};
   int64_t init_val{0};
   for (const auto target_expr : target_expr_list) {
-    const auto agg_info = target_info(target_expr);
+    const auto agg_info = get_target_info(target_expr, g_bigint_count);
     const auto& chosen_type = get_compact_type(agg_info);
     // TODO(Saman): should be eventually removed, once I make sure what data types can
     // be used in this shared memory setting.
@@ -1085,13 +1086,13 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
   // TODO(Saman): move this logic outside of this function.
   if (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
     if (query_mem_desc.didOutputColumnar()) {
-      return std::tuple<llvm::Value*, llvm::Value*>{
+      return std::make_tuple(
           &*groups_buffer,
-          codegenOutputSlot(&*groups_buffer, query_mem_desc, co, diamond_codegen)};
+          codegenOutputSlot(&*groups_buffer, query_mem_desc, co, diamond_codegen));
     } else {
-      return std::tuple<llvm::Value*, llvm::Value*>{
+      return std::make_tuple(
           codegenOutputSlot(&*groups_buffer, query_mem_desc, co, diamond_codegen),
-          nullptr};
+          nullptr);
     }
   }
 
@@ -1359,42 +1360,6 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
   return key_hash_func;
 }
 
-namespace {
-
-std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
-  const auto& chosen_type = get_compact_type(target_info);
-  if (!target_info.is_agg || target_info.agg_kind == kSAMPLE) {
-    if (chosen_type.is_geometry()) {
-      return std::vector<std::string>(2 * chosen_type.get_physical_coord_cols(),
-                                      "agg_id");
-    }
-    if (chosen_type.is_varlen()) {
-      return {"agg_id", "agg_id"};
-    }
-    return {"agg_id"};
-  }
-  switch (target_info.agg_kind) {
-    case kAVG:
-      return {"agg_sum", "agg_count"};
-    case kCOUNT:
-      return {target_info.is_distinct ? "agg_count_distinct" : "agg_count"};
-    case kMAX:
-      return {"agg_max"};
-    case kMIN:
-      return {"agg_min"};
-    case kSUM:
-      return {"agg_sum"};
-    case kAPPROX_COUNT_DISTINCT:
-      return {"agg_approximate_count_distinct"};
-    case kSAMPLE:
-      return {"agg_id"};
-    default:
-      abort();
-  }
-}
-
-}  // namespace
-
 llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
                                                    const SQLTypeInfo& agg_type,
                                                    const size_t chosen_bytes,
@@ -1479,15 +1444,6 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
   return codegenOutputSlot(&*groups_buffer, query_mem_desc, co, diamond_codegen);
 }
 
-namespace {
-
-bool is_columnar_projection(const QueryMemoryDescriptor& query_mem_desc) {
-  return query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection &&
-         query_mem_desc.didOutputColumnar();
-}
-
-}  // namespace
-
 bool GroupByAndAggregate::codegenAggCalls(
     const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx_in,
     const std::vector<llvm::Value*>& agg_out_vec,
@@ -1521,314 +1477,25 @@ bool GroupByAndAggregate::codegenAggCalls(
     out_row_idx->setName("out_row_idx");
   }
 
-  int32_t agg_out_off{0};
+  TargetExprCodegenBuilder target_builder(query_mem_desc, ra_exe_unit_, is_group_by);
   for (size_t target_idx = 0; target_idx < ra_exe_unit_.target_exprs.size();
        ++target_idx) {
     auto target_expr = ra_exe_unit_.target_exprs[target_idx];
     CHECK(target_expr);
-    if (query_mem_desc.getPaddedColumnWidthBytes(agg_out_off) == 0) {
-      CHECK(!dynamic_cast<const Analyzer::AggExpr*>(target_expr));
-      ++agg_out_off;
-      continue;
-    }
-    if (dynamic_cast<Analyzer::UOper*>(target_expr) &&
-        static_cast<Analyzer::UOper*>(target_expr)->get_optype() == kUNNEST) {
-      throw std::runtime_error("UNNEST not supported in the projection list yet.");
-    }
-    auto agg_info = target_info(target_expr);
-    auto arg_expr = agg_arg(target_expr);
-    if (arg_expr) {
-      if (agg_info.agg_kind == kSAMPLE) {
-        agg_info.skip_null_val = false;
-      } else if (query_mem_desc.getQueryDescriptionType() ==
-                 QueryDescriptionType::NonGroupedAggregate) {
-        agg_info.skip_null_val = true;
-      } else if (constrained_not_null(arg_expr, ra_exe_unit_.quals)) {
-        agg_info.skip_null_val = false;
-      }
-    }
-    const auto agg_fn_names = agg_fn_base_names(agg_info);
-    const auto window_func = dynamic_cast<const Analyzer::WindowFunction*>(target_expr);
-    WindowProjectNodeContext::resetWindowFunctionContext();
-    auto target_lvs = window_func
-                          ? std::vector<llvm::Value*>{executor_->codegenWindowFunction(
-                                window_func, target_idx, co)}
-                          : codegenAggArg(target_expr, co);
-    const auto window_row_ptr =
-        window_func
-            ? codegenWindowRowPointer(window_func, query_mem_desc, co, diamond_codegen)
-            : nullptr;
-    if (window_row_ptr) {
-      agg_out_ptr_w_idx =
-          std::make_tuple(window_row_ptr, std::get<1>(agg_out_ptr_w_idx_in));
-      if (window_function_is_aggregate(window_func->getKind())) {
-        out_row_idx = window_row_ptr;
-      }
-    }
-    if ((executor_->plan_state_->isLazyFetchColumn(target_expr) || !is_group_by) &&
-        (static_cast<size_t>(query_mem_desc.getPaddedColumnWidthBytes(agg_out_off)) <
-         sizeof(int64_t)) &&
-        !is_columnar_projection(query_mem_desc)) {
-      // TODO(miyu): enable different byte width in the layout w/o padding
-      throw CompilationRetryNoCompaction();
-    }
-    llvm::Value* str_target_lv{nullptr};
-    const bool agg_has_geo = agg_info.is_agg ? agg_info.agg_arg_type.is_geometry()
-                                             : agg_info.sql_type.is_geometry();
-    if (target_lvs.size() == 3 && !agg_has_geo) {
-      // none encoding string, pop the packed pointer + length since
-      // it's only useful for IS NULL checks and assumed to be only
-      // two components (pointer and length) for the purpose of projection
-      str_target_lv = target_lvs.front();
-      target_lvs.erase(target_lvs.begin());
-    }
-    if (agg_info.sql_type.is_geometry()) {
-      // Geo cols are expanded to the physical coord cols. Each physical coord col is an
-      // array. Ensure that the target values generated match the number of agg
-      // functions before continuing
-      if (target_lvs.size() < agg_fn_names.size()) {
-        CHECK_EQ(target_lvs.size(), agg_fn_names.size() / 2);
-        std::vector<llvm::Value*> new_target_lvs;
-        new_target_lvs.reserve(agg_fn_names.size());
-        for (const auto& target_lv : target_lvs) {
-          new_target_lvs.push_back(target_lv);
-          new_target_lvs.push_back(target_lv);
-        }
-        target_lvs = new_target_lvs;
-      }
-    }
-    if (target_lvs.size() < agg_fn_names.size()) {
-      CHECK_EQ(size_t(1), target_lvs.size());
-      CHECK_EQ(size_t(2), agg_fn_names.size());
-      for (size_t i = 1; i < agg_fn_names.size(); ++i) {
-        target_lvs.push_back(target_lvs.front());
-      }
-    } else {
-      if (agg_has_geo) {
-        if (!agg_info.is_agg) {
-          CHECK_EQ(static_cast<size_t>(2 * agg_info.sql_type.get_physical_coord_cols()),
-                   target_lvs.size());
-          CHECK_EQ(agg_fn_names.size(), target_lvs.size());
-        }
-      } else {
-        CHECK(str_target_lv || (agg_fn_names.size() == target_lvs.size()));
-        CHECK(target_lvs.size() == 1 || target_lvs.size() == 2);
-      }
-    }
-    uint32_t col_off{0};
-    const bool is_simple_count =
-        agg_info.is_agg && agg_info.agg_kind == kCOUNT && !agg_info.is_distinct;
-    if (co.device_type_ == ExecutorDeviceType::GPU &&
-        query_mem_desc.threadsShareMemory() && is_simple_count &&
-        (!arg_expr || arg_expr->get_type_info().get_notnull())) {
-      CHECK_EQ(size_t(1), agg_fn_names.size());
-      const auto chosen_bytes = query_mem_desc.getPaddedColumnWidthBytes(agg_out_off);
-      llvm::Value* agg_col_ptr{nullptr};
-      if (is_group_by) {
-        if (outputColumnar()) {
-          col_off = query_mem_desc.getColOffInBytes(agg_out_off);
-          CHECK_EQ(size_t(0), col_off % chosen_bytes);
-          col_off /= chosen_bytes;
-          CHECK(std::get<1>(agg_out_ptr_w_idx));
-          auto offset =
-              LL_BUILDER.CreateAdd(std::get<1>(agg_out_ptr_w_idx), LL_INT(col_off));
-          agg_col_ptr = LL_BUILDER.CreateGEP(
-              LL_BUILDER.CreateBitCast(
-                  std::get<0>(agg_out_ptr_w_idx),
-                  llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT),
-                                         0)),
-              offset);
-        } else {
-          col_off = query_mem_desc.getColOnlyOffInBytes(agg_out_off);
-          CHECK_EQ(size_t(0), col_off % chosen_bytes);
-          col_off /= chosen_bytes;
-          agg_col_ptr = LL_BUILDER.CreateGEP(
-              LL_BUILDER.CreateBitCast(
-                  std::get<0>(agg_out_ptr_w_idx),
-                  llvm::PointerType::get(get_int_type((chosen_bytes << 3), LL_CONTEXT),
-                                         0)),
-              LL_INT(col_off));
-        }
-      }
 
-      if (chosen_bytes != sizeof(int32_t)) {
-        CHECK_EQ(8, chosen_bytes);
-        if (g_bigint_count) {
-          const auto acc_i64 = LL_BUILDER.CreateBitCast(
-              is_group_by ? agg_col_ptr : agg_out_vec[agg_out_off],
-              llvm::PointerType::get(get_int_type(64, LL_CONTEXT), 0));
-          LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
-                                     acc_i64,
-                                     LL_INT(int64_t(1)),
-                                     llvm::AtomicOrdering::Monotonic);
-        } else {
-          const auto acc_i32 = LL_BUILDER.CreateBitCast(
-              is_group_by ? agg_col_ptr : agg_out_vec[agg_out_off],
-              llvm::PointerType::get(get_int_type(32, LL_CONTEXT), 0));
-          LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
-                                     acc_i32,
-                                     LL_INT(1),
-                                     llvm::AtomicOrdering::Monotonic);
-        }
-      } else {
-        const auto acc_i32 = (is_group_by ? agg_col_ptr : agg_out_vec[agg_out_off]);
-        if (query_mem_desc.getGpuMemSharing() ==
-            GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
-          // Atomic operation on address space level 3 (Shared):
-          const auto shared_acc_i32 = LL_BUILDER.CreatePointerCast(
-              acc_i32, llvm::Type::getInt32PtrTy(LL_CONTEXT, 3));
-          LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
-                                     shared_acc_i32,
-                                     LL_INT(1),
-                                     llvm::AtomicOrdering::Monotonic);
-        } else {
-          LL_BUILDER.CreateAtomicRMW(llvm::AtomicRMWInst::Add,
-                                     acc_i32,
-                                     LL_INT(1),
-                                     llvm::AtomicOrdering::Monotonic);
-        }
-      }
-      ++agg_out_off;
-      continue;
-    }
-    size_t target_lv_idx = 0;
-    const bool lazy_fetched{executor_->plan_state_->isLazyFetchColumn(target_expr)};
-    for (const auto& agg_base_name : agg_fn_names) {
-      if (agg_info.is_distinct && arg_expr->get_type_info().is_array()) {
-        CHECK_EQ(
-            static_cast<size_t>(query_mem_desc.getLogicalColumnWidthBytes(agg_out_off)),
-            sizeof(int64_t));
-        // TODO(miyu): check if buffer may be columnar here
-        CHECK(!outputColumnar());
-        const auto& elem_ti = arg_expr->get_type_info().get_elem_type();
-        if (is_group_by) {
-          col_off = query_mem_desc.getColOnlyOffInBytes(agg_out_off);
-          CHECK_EQ(size_t(0), col_off % sizeof(int64_t));
-          col_off /= sizeof(int64_t);
-        }
-        executor_->cgen_state_->emitExternalCall(
-            "agg_count_distinct_array_" + numeric_type_name(elem_ti),
-            llvm::Type::getVoidTy(LL_CONTEXT),
-            {is_group_by
-                 ? LL_BUILDER.CreateGEP(std::get<0>(agg_out_ptr_w_idx), LL_INT(col_off))
-                 : agg_out_vec[agg_out_off],
-             target_lvs[target_lv_idx],
-             executor_->posArg(arg_expr),
-             elem_ti.is_fp()
-                 ? static_cast<llvm::Value*>(executor_->inlineFpNull(elem_ti))
-                 : static_cast<llvm::Value*>(executor_->inlineIntNull(elem_ti))});
-        ++agg_out_off;
-        ++target_lv_idx;
-        continue;
-      }
-
-      llvm::Value* agg_col_ptr{nullptr};
-      const auto chosen_bytes =
-          static_cast<size_t>(query_mem_desc.getPaddedColumnWidthBytes(agg_out_off));
-      const auto& chosen_type = get_compact_type(agg_info);
-      const auto& arg_type =
-          ((arg_expr && arg_expr->get_type_info().get_type() != kNULLT) &&
-           !agg_info.is_distinct)
-              ? agg_info.agg_arg_type
-              : agg_info.sql_type;
-      const bool is_fp_arg =
-          !lazy_fetched && arg_type.get_type() != kNULLT && arg_type.is_fp();
-      if (is_group_by) {
-        agg_col_ptr = codegenAggColumnPtr(output_buffer_byte_stream,
-                                          out_row_idx,
-                                          agg_out_ptr_w_idx,
-                                          query_mem_desc,
-                                          chosen_bytes,
-                                          agg_out_off,
-                                          target_idx);
-      }
-
-      const bool float_argument_input = takes_float_argument(agg_info);
-      const bool is_count_in_avg = agg_info.agg_kind == kAVG && target_lv_idx == 1;
-      // The count component of an average should never be compacted.
-      const auto agg_chosen_bytes =
-          float_argument_input && !is_count_in_avg ? sizeof(float) : chosen_bytes;
-      if (float_argument_input) {
-        CHECK_GE(chosen_bytes, sizeof(float));
-      }
-
-      auto target_lv = target_lvs[target_lv_idx];
-      const auto needs_unnest_double_patch = needsUnnestDoublePatch(
-          target_lv, agg_base_name, query_mem_desc.threadsShareMemory(), co);
-      const auto need_skip_null = !needs_unnest_double_patch && agg_info.skip_null_val;
-      if (!needs_unnest_double_patch) {
-        if (need_skip_null && agg_info.agg_kind != kCOUNT) {
-          target_lv = convertNullIfAny(
-              arg_expr->get_type_info(), arg_type, agg_chosen_bytes, target_lv);
-        } else if (is_fp_arg) {
-          target_lv = executor_->castToFP(target_lv);
-        }
-        if (!dynamic_cast<const Analyzer::AggExpr*>(target_expr) || arg_expr) {
-          target_lv = executor_->castToTypeIn(target_lv, (agg_chosen_bytes << 3));
-        }
-      }
-
-      std::vector<llvm::Value*> agg_args{
-          executor_->castToIntPtrTyIn(
-              (is_group_by ? agg_col_ptr : agg_out_vec[agg_out_off]),
-              (agg_chosen_bytes << 3)),
-          (is_simple_count && !arg_expr)
-              ? (agg_chosen_bytes == sizeof(int32_t) ? LL_INT(int32_t(0))
-                                                     : LL_INT(int64_t(0)))
-              : (is_simple_count && arg_expr && str_target_lv ? str_target_lv
-                                                              : target_lv)};
-      std::string agg_fname{agg_base_name};
-      if (is_fp_arg) {
-        if (!lazy_fetched) {
-          if (agg_chosen_bytes == sizeof(float)) {
-            CHECK_EQ(arg_type.get_type(), kFLOAT);
-            agg_fname += "_float";
-          } else {
-            CHECK_EQ(agg_chosen_bytes, sizeof(double));
-            agg_fname += "_double";
-          }
-        }
-      } else if (agg_chosen_bytes == sizeof(int32_t)) {
-        agg_fname += "_int32";
-      } else if (agg_chosen_bytes == sizeof(int16_t) &&
-                 query_mem_desc.didOutputColumnar()) {
-        agg_fname += "_int16";
-      } else if (agg_chosen_bytes == sizeof(int8_t) &&
-                 query_mem_desc.didOutputColumnar()) {
-        agg_fname += "_int8";
-      }
-
-      if (is_distinct_target(agg_info)) {
-        CHECK_EQ(agg_chosen_bytes, sizeof(int64_t));
-        CHECK(!chosen_type.is_fp());
-        codegenCountDistinct(
-            target_idx, target_expr, agg_args, query_mem_desc, co.device_type_);
-      } else {
-        const auto& arg_ti = agg_info.agg_arg_type;
-        if (need_skip_null && !arg_ti.is_geometry()) {
-          agg_fname += "_skip_val";
-          auto null_lv = executor_->castToTypeIn(
-              arg_ti.is_fp()
-                  ? static_cast<llvm::Value*>(executor_->inlineFpNull(arg_ti))
-                  : static_cast<llvm::Value*>(executor_->inlineIntNull(arg_ti)),
-              (agg_chosen_bytes << 3));
-          agg_args.push_back(null_lv);
-        }
-        if (!agg_info.is_distinct) {
-          if (co.device_type_ == ExecutorDeviceType::GPU &&
-              query_mem_desc.threadsShareMemory()) {
-            agg_fname += "_shared";
-            if (needs_unnest_double_patch) {
-              agg_fname = patch_agg_fname(agg_fname);
-            }
-          }
-          emitCall(agg_fname, agg_args);
-        }
-      }
-      ++agg_out_off;
-      ++target_lv_idx;
-    }
+    target_builder(target_expr, executor_);
   }
+
+  target_builder.codegen(this,
+                         executor_,
+                         query_mem_desc,
+                         co,
+                         agg_out_ptr_w_idx,
+                         agg_out_vec,
+                         output_buffer_byte_stream,
+                         out_row_idx,
+                         diamond_codegen);
+
   for (auto target_expr : ra_exe_unit_.target_exprs) {
     CHECK(target_expr);
     executor_->plan_state_->isLazyFetchColumn(target_expr);
@@ -1951,7 +1618,7 @@ void GroupByAndAggregate::codegenCountDistinct(
     std::vector<llvm::Value*>& agg_args,
     const QueryMemoryDescriptor& query_mem_desc,
     const ExecutorDeviceType device_type) {
-  const auto agg_info = target_info(target_expr);
+  const auto agg_info = get_target_info(target_expr, g_bigint_count);
   const auto& arg_ti =
       static_cast<const Analyzer::AggExpr*>(target_expr)->get_arg()->get_type_info();
   if (arg_ti.is_fp()) {

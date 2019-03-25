@@ -23,17 +23,20 @@
  **/
 
 #include "Analyzer.h"
-#include <glog/logging.h>
-#include <algorithm>
-#include <cstring>
-#include <iostream>
-#include <stdexcept>
 #include "../Catalog/Catalog.h"
+#include "../QueryEngine/DateTimeUtils.h"
 #include "../Shared/DateConverters.h"
 #include "../Shared/sql_type_to_string.h"
 #include "../Shared/sql_window_function_to_string.h"
 #include "../Shared/sqltypes.h"
 #include "../Shared/unreachable.h"
+#include "RangeTableEntry.h"
+
+#include <glog/logging.h>
+#include <algorithm>
+#include <cstring>
+#include <iostream>
+#include <stdexcept>
 
 namespace Analyzer {
 
@@ -45,12 +48,6 @@ Constant::~Constant() {
 
 Subquery::~Subquery() {
   delete parsetree;
-}
-
-RangeTblEntry::~RangeTblEntry() {
-  if (view_query != nullptr) {
-    delete view_query;
-  }
 }
 
 Query::~Query() {
@@ -1230,40 +1227,6 @@ std::shared_ptr<Analyzer::Expr> Subquery::add_cast(const SQLTypeInfo& new_type_i
   return nullptr;
 }
 
-void RangeTblEntry::add_all_column_descs(const Catalog_Namespace::Catalog& catalog) {
-  column_descs =
-      catalog.getAllColumnMetadataForTable(table_desc->tableId, true, true, true);
-}
-
-void RangeTblEntry::expand_star_in_targetlist(
-    const Catalog_Namespace::Catalog& catalog,
-    std::vector<std::shared_ptr<TargetEntry>>& tlist,
-    int rte_idx) {
-  column_descs =
-      catalog.getAllColumnMetadataForTable(table_desc->tableId, false, true, true);
-  for (auto col_desc : column_descs) {
-    auto cv = makeExpr<ColumnVar>(
-        col_desc->columnType, table_desc->tableId, col_desc->columnId, rte_idx);
-    auto tle = std::make_shared<TargetEntry>(col_desc->columnName, cv, false);
-    tlist.push_back(tle);
-  }
-}
-
-const ColumnDescriptor* RangeTblEntry::get_column_desc(
-    const Catalog_Namespace::Catalog& catalog,
-    const std::string& name) {
-  for (auto cd : column_descs) {
-    if (cd->columnName == name) {
-      return cd;
-    }
-  }
-  const ColumnDescriptor* cd = catalog.getMetadataForColumn(table_desc->tableId, name);
-  if (cd != nullptr) {
-    column_descs.push_back(cd);
-  }
-  return cd;
-}
-
 int Query::get_rte_idx(const std::string& name) const {
   int rte_idx = 0;
   for (auto rte : rangetable) {
@@ -1275,7 +1238,7 @@ int Query::get_rte_idx(const std::string& name) const {
   return -1;
 }
 
-void Query::add_rte(RangeTblEntry* rte) {
+void Query::add_rte(RangeTableEntry* rte) {
   rangetable.push_back(rte);
 }
 

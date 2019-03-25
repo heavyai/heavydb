@@ -41,6 +41,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <Shared/SqlTypesLayout.h>
+#include <Shared/TargetInfo.h>
 #include <Shared/unreachable.h>
 
 extern bool g_cluster;
@@ -355,5 +357,16 @@ class QueryMemoryDescriptor {
   template <typename META_CLASS_TYPE>
   friend class AggregateReductionEgress;
 };
+
+inline void set_notnull(TargetInfo& target, const bool not_null) {
+  target.skip_null_val = !not_null;
+  auto new_type = get_compact_type(target);
+  new_type.set_notnull(not_null);
+  set_compact_type(target, new_type);
+}
+
+std::vector<TargetInfo> target_exprs_to_infos(
+    const std::vector<Analyzer::Expr*>& targets,
+    const QueryMemoryDescriptor& query_mem_desc);
 
 #endif  // QUERYENGINE_QUERYMEMORYDESCRIPTOR_H

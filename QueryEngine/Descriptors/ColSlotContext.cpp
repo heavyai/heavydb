@@ -52,7 +52,7 @@ ColSlotContext::ColSlotContext(const std::vector<Analyzer::Expr*>& col_expr_list
       // row index
       addSlotForColumn(sizeof(int64_t), col_expr_idx);
     } else {
-      const auto agg_info = target_info(col_expr);
+      const auto agg_info = get_target_info(col_expr, g_bigint_count);
       const auto chosen_type = get_compact_type(agg_info);
       if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) ||
           chosen_type.is_array()) {

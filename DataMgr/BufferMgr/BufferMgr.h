@@ -29,9 +29,9 @@
 #include <list>
 #include <map>
 #include <mutex>
+#include "../../Shared/types.h"
 #include "../AbstractBuffer.h"
 #include "../AbstractBufferMgr.h"
-#include "../Shared/types.h"
 #include "BufferSeg.h"
 
 class OutOfMemory : public std::runtime_error {

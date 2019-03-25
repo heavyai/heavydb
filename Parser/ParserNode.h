@@ -33,6 +33,7 @@
 #include "../Distributed/AggregatedResult.h"
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
+#include "../Shared/unreachable.h"
 
 #include <Import/Importer.h>
 

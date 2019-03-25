@@ -1596,7 +1596,7 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
   RelAlgExecutionUnit ra_exe_unit = ra_exe_unit_in;
   for (size_t i = 0; i < ra_exe_unit.target_exprs.size(); ++i) {
     const auto target_expr = ra_exe_unit.target_exprs[i];
-    const auto agg_info = target_info(target_expr);
+    const auto agg_info = get_target_info(target_expr, g_bigint_count);
     if (agg_info.agg_kind != kAPPROX_COUNT_DISTINCT) {
       continue;
     }

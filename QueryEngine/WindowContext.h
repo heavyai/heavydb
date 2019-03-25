@@ -17,7 +17,11 @@
 #pragma once
 
 #include "../Analyzer/Analyzer.h"
+#include "../Chunk/Chunk.h"
 #include "JoinHashTableInterface.h"
+
+#include <functional>
+#include <unordered_map>
 
 // Per-window function context which encapsulates the logic for computing the various
 // window function kinds and keeps ownership of buffers which contain the results. For

@@ -79,7 +79,7 @@ size_t get_heap_key_slot_index(const std::vector<Analyzer::Expr*>& target_exprs,
                                const size_t target_idx) {
   size_t slot_idx = 0;
   for (size_t i = 0; i < target_idx; ++i) {
-    auto agg_info = target_info(target_exprs[i]);
+    auto agg_info = get_target_info(target_exprs[i], g_bigint_count);
     slot_idx = advance_slot(slot_idx, agg_info, false);
   }
   return slot_idx;
@@ -106,7 +106,7 @@ std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
       query_mem_desc.getColOffInBytes(key_slot_idx),
       static_cast<size_t>(query_mem_desc.getPaddedColumnWidthBytes(oe_col_idx)),
       query_mem_desc.getRowSize(),
-      target_info(ra_exe_unit.target_exprs[oe_col_idx]),
+      get_target_info(ra_exe_unit.target_exprs[oe_col_idx], g_bigint_count),
       -1};
   return pop_n_rows_from_merged_heaps_gpu(
       data_mgr,

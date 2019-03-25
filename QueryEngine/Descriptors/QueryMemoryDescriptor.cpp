@@ -1150,3 +1150,19 @@ std::string QueryMemoryDescriptor::toString() const {
   str += "\tUse Baseline Sort: " + boolToString(must_use_baseline_sort_) + "\n";
   return str;
 }
+
+std::vector<TargetInfo> target_exprs_to_infos(
+    const std::vector<Analyzer::Expr*>& targets,
+    const QueryMemoryDescriptor& query_mem_desc) {
+  std::vector<TargetInfo> target_infos;
+  for (const auto target_expr : targets) {
+    auto target = get_target_info(target_expr, g_bigint_count);
+    if (query_mem_desc.getQueryDescriptionType() ==
+        QueryDescriptionType::NonGroupedAggregate) {
+      set_notnull(target, false);
+      target.sql_type.set_notnull(false);
+    }
+    target_infos.push_back(target);
+  }
+  return target_infos;
+}

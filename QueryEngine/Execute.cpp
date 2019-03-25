@@ -832,7 +832,7 @@ ResultSetPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
     const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
     std::vector<TargetInfo> targets;
     for (const auto target_expr : ra_exe_unit.target_exprs) {
-      targets.push_back(target_info(target_expr));
+      targets.push_back(get_target_info(target_expr, g_bigint_count));
     }
     return std::make_shared<ResultSet>(
         targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor(), nullptr, nullptr);
@@ -861,7 +861,7 @@ ResultSetPtr Executor::reduceMultiDeviceResults(
   if (results_per_device.empty()) {
     std::vector<TargetInfo> targets;
     for (const auto target_expr : ra_exe_unit.target_exprs) {
-      targets.push_back(target_info(target_expr));
+      targets.push_back(get_target_info(target_expr, g_bigint_count));
     }
     return std::make_shared<ResultSet>(
         targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor(), nullptr, this);
@@ -1247,7 +1247,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         *error_code = ERR_OUT_OF_SLOTS;
         std::vector<TargetInfo> targets;
         for (const auto target_expr : ra_exe_unit.target_exprs) {
-          targets.push_back(target_info(target_expr));
+          targets.push_back(get_target_info(target_expr, g_bigint_count));
         }
         // TODO(adb): use move semantics to transfer QMD
         return std::make_shared<ResultSet>(
@@ -1334,7 +1334,7 @@ ExecutorDeviceType Executor::getDeviceTypeForTargets(
     const RelAlgExecutionUnit& ra_exe_unit,
     const ExecutorDeviceType requested_device_type) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
-    const auto agg_info = target_info(target_expr);
+    const auto agg_info = get_target_info(target_expr, g_bigint_count);
     if (!ra_exe_unit.groupby_exprs.empty() &&
         !isArchPascalOrLater(requested_device_type)) {
       if ((agg_info.agg_kind == kAVG || agg_info.agg_kind == kSUM) &&
@@ -1372,7 +1372,7 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
                                   const QueryMemoryDescriptor& query_mem_desc) {
   for (size_t target_idx = 0; target_idx < target_exprs.size(); ++target_idx) {
     const auto target_expr = target_exprs[target_idx];
-    const auto agg_info = target_info(target_expr);
+    const auto agg_info = get_target_info(target_expr, g_bigint_count);
     CHECK(agg_info.is_agg);
     target_infos.push_back(agg_info);
     if (g_cluster) {
@@ -2257,7 +2257,7 @@ int32_t Executor::executePlanWithoutGroupBy(
     size_t out_vec_idx = 0;
 
     for (const auto target_expr : target_exprs) {
-      const auto agg_info = target_info(target_expr);
+      const auto agg_info = get_target_info(target_expr, g_bigint_count);
       CHECK(agg_info.is_agg);
 
       auto meta_class(

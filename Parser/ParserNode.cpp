@@ -34,6 +34,7 @@
 #include <limits>
 #include <stdexcept>
 #include <typeinfo>
+#include "../Analyzer/RangeTableEntry.h"
 #include "../Catalog/Catalog.h"
 #include "../Catalog/SharedDictionaryValidator.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
@@ -696,7 +697,7 @@ std::shared_ptr<Analyzer::Expr> ColumnRef::analyze(
       throw std::runtime_error("range variable or table name " + *table +
                                " does not exist.");
     }
-    Analyzer::RangeTblEntry* rte = query.get_rte(rte_idx);
+    Analyzer::RangeTableEntry* rte = query.get_rte(rte_idx);
     cd = rte->get_column_desc(catalog, *column);
     if (cd == nullptr) {
       throw std::runtime_error("Column name " + *column + " does not exist.");
@@ -1098,7 +1099,7 @@ void QuerySpec::analyze_select_clause(const Catalog_Namespace::Catalog& catalog,
         if (rte_idx < 0) {
           throw std::runtime_error("invalid range variable name: " + *range_var_name);
         }
-        Analyzer::RangeTblEntry* rte = query.get_rte(rte_idx);
+        Analyzer::RangeTableEntry* rte = query.get_rte(rte_idx);
         rte->expand_star_in_targetlist(catalog, tlist, rte_idx);
       } else {
         auto e = select_expr->analyze(catalog, query);
@@ -1128,7 +1129,7 @@ void QuerySpec::analyze_select_clause(const Catalog_Namespace::Catalog& catalog,
 
 void QuerySpec::analyze_from_clause(const Catalog_Namespace::Catalog& catalog,
                                     Analyzer::Query& query) const {
-  Analyzer::RangeTblEntry* rte;
+  Analyzer::RangeTableEntry* rte;
   for (auto& p : from_clause) {
     const TableDescriptor* table_desc;
     table_desc = catalog.getMetadataForTable(*p->get_table_name());
@@ -1141,7 +1142,7 @@ void QuerySpec::analyze_from_clause(const Catalog_Namespace::Catalog& catalog,
     } else {
       range_var = *p->get_range_var();
     }
-    rte = new Analyzer::RangeTblEntry(range_var, table_desc, nullptr);
+    rte = new Analyzer::RangeTableEntry(range_var, table_desc, nullptr);
     query.add_rte(rte);
   }
 }

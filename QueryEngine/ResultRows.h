@@ -311,69 +311,6 @@ class RowSetMemoryOwner : boost::noncopyable {
   friend class ResultSet;
 };
 
-inline const Analyzer::AggExpr* cast_to_agg_expr(const Analyzer::Expr* target_expr) {
-  return dynamic_cast<const Analyzer::AggExpr*>(target_expr);
-}
-
-inline const Analyzer::AggExpr* cast_to_agg_expr(
-    const std::shared_ptr<Analyzer::Expr> target_expr) {
-  return dynamic_cast<const Analyzer::AggExpr*>(target_expr.get());
-}
-
-template <class PointerType>
-inline TargetInfo target_info(const PointerType target_expr) {
-  const auto agg_expr = cast_to_agg_expr(target_expr);
-  bool notnull = target_expr->get_type_info().get_notnull();
-  if (!agg_expr) {
-    auto target_ti = target_expr ? get_logical_type_info(target_expr->get_type_info())
-                                 : SQLTypeInfo(kBIGINT, notnull);
-    return {false, kMIN, target_ti, SQLTypeInfo(kNULLT, false), false, false};
-  }
-  const auto agg_type = agg_expr->get_aggtype();
-  const auto agg_arg = agg_expr->get_arg();
-  if (!agg_arg) {
-    CHECK_EQ(kCOUNT, agg_type);
-    CHECK(!agg_expr->get_is_distinct());
-    return {true,
-            kCOUNT,
-            SQLTypeInfo(g_bigint_count ? kBIGINT : kINT, notnull),
-            SQLTypeInfo(kNULLT, false),
-            false,
-            false};
-  }
-
-  const auto& agg_arg_ti = agg_arg->get_type_info();
-  bool is_distinct{false};
-  if (agg_expr->get_aggtype() == kCOUNT) {
-    is_distinct = agg_expr->get_is_distinct();
-  }
-
-  return {true,
-          agg_expr->get_aggtype(),
-          agg_type == kCOUNT
-              ? SQLTypeInfo((is_distinct || g_bigint_count) ? kBIGINT : kINT, notnull)
-              : (agg_type == kAVG ? agg_arg_ti : agg_expr->get_type_info()),
-          agg_arg_ti,
-          !agg_arg_ti.get_notnull(),
-          is_distinct};
-}
-
-inline std::vector<TargetInfo> target_exprs_to_infos(
-    const std::vector<Analyzer::Expr*>& targets,
-    const QueryMemoryDescriptor& query_mem_desc) {
-  std::vector<TargetInfo> target_infos;
-  for (const auto target_expr : targets) {
-    auto target = target_info(target_expr);
-    if (query_mem_desc.getQueryDescriptionType() ==
-        QueryDescriptionType::NonGroupedAggregate) {
-      set_notnull(target, false);
-      target.sql_type.set_notnull(false);
-    }
-    target_infos.push_back(target);
-  }
-  return target_infos;
-}
-
 class ResultRows {
  public:
   static bool reduceSingleRow(const int8_t* row_ptr,

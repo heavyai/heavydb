@@ -33,8 +33,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-#include "../Catalog/TableDescriptor.h"
-#include "../QueryEngine/DateTimeUtils.h"
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
 
@@ -430,7 +428,7 @@ class BinOper : public Expr {
       , left_operand(l)
       , right_operand(r) {}
   SQLOps get_optype() const { return optype; }
-  const bool is_overlaps_oper() const { return optype == kOVERLAPS; }
+  bool is_overlaps_oper() const { return optype == kOVERLAPS; }
   SQLQualifier get_qualifier() const { return qualifier; }
   const Expr* get_left_operand() const { return left_operand.get(); }
   const Expr* get_right_operand() const { return right_operand.get(); }
@@ -1372,44 +1370,7 @@ class TargetEntry {
   bool unnest;                           // unnest a collection type
 };
 
-/*
- * @type RangeTblEntry
- * @brief Range table contains all the information about the tables/views
- * and columns referenced in a query.  It is a list of RangeTblEntry's.
- */
-class RangeTblEntry {
- public:
-  RangeTblEntry(const std::string& r, const TableDescriptor* t, Query* v)
-      : rangevar(r), table_desc(t), view_query(v) {}
-  virtual ~RangeTblEntry();
-  /* @brief get_column_desc tries to find the column in column_descs and returns the
-   * column descriptor if found. otherwise, look up the column from Catalog, add the
-   * descriptor to column_descs and return the descriptor.  return nullptr if not found
-   * @param catalog the catalog for the current database
-   * @param name name of column to look up
-   */
-  const ColumnDescriptor* get_column_desc(const Catalog_Namespace::Catalog& catalog,
-                                          const std::string& name);
-  const std::list<const ColumnDescriptor*>& get_column_descs() const {
-    return column_descs;
-  }
-  const std::string& get_rangevar() const { return rangevar; }
-  int32_t get_table_id() const { return table_desc->tableId; }
-  const std::string& get_table_name() const { return table_desc->tableName; }
-  const TableDescriptor* get_table_desc() const { return table_desc; }
-  const Query* get_view_query() const { return view_query; }
-  void expand_star_in_targetlist(const Catalog_Namespace::Catalog& catalog,
-                                 std::vector<std::shared_ptr<TargetEntry>>& tlist,
-                                 int rte_idx);
-  void add_all_column_descs(const Catalog_Namespace::Catalog& catalog);
-
- private:
-  std::string rangevar;  // range variable name, e.g., FROM emp e, dept d
-  const TableDescriptor* table_desc;
-  std::list<const ColumnDescriptor*>
-      column_descs;   // column descriptors for all columns referenced in this query
-  Query* view_query;  // parse tree for the view query
-};
+class RangeTableEntry;
 
 /*
  * @type Query
@@ -1438,7 +1399,7 @@ class Query {
   std::vector<std::shared_ptr<TargetEntry>>& get_targetlist_nonconst() {
     return targetlist;
   }
-  const std::vector<RangeTblEntry*>& get_rangetable() const { return rangetable; }
+  const std::vector<RangeTableEntry*>& get_rangetable() const { return rangetable; }
   const Expr* get_where_predicate() const { return where_predicate.get(); }
   const std::list<std::shared_ptr<Analyzer::Expr>>& get_group_by() const {
     return group_by;
@@ -1462,8 +1423,8 @@ class Query {
   void set_stmt_type(SQLStmtType t) { stmt_type = t; }
   void set_num_aggs(int a) { num_aggs = a; }
   int get_rte_idx(const std::string& range_var_name) const;
-  RangeTblEntry* get_rte(int rte_idx) const { return rangetable[rte_idx]; }
-  void add_rte(RangeTblEntry* rte);
+  RangeTableEntry* get_rte(int rte_idx) const { return rangetable[rte_idx]; }
+  void add_rte(RangeTableEntry* rte);
   void add_tle(std::shared_ptr<TargetEntry> tle) { targetlist.push_back(tle); }
   int64_t get_limit() const { return limit; }
   void set_limit(int64_t l) { limit = l; }
@@ -1473,9 +1434,9 @@ class Query {
  private:
   bool is_distinct;                                      // true only if SELECT DISTINCT
   std::vector<std::shared_ptr<TargetEntry>> targetlist;  // represents the SELECT clause
-  std::vector<RangeTblEntry*> rangetable;  // represents the FROM clause for SELECT.  For
-                                           // INSERT, DELETE, UPDATE the result table is
-                                           // always the first entry in rangetable.
+  std::vector<RangeTableEntry*> rangetable;  // represents the FROM clause for SELECT. For
+                                             // INSERT, DELETE, UPDATE the result table is
+                                             // always the first entry in rangetable.
   std::shared_ptr<Analyzer::Expr> where_predicate;      // represents the WHERE clause
   std::list<std::shared_ptr<Analyzer::Expr>> group_by;  // represents the GROUP BY clause
   std::shared_ptr<Analyzer::Expr> having_predicate;     // represents the HAVING clause

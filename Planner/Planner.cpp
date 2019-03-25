@@ -27,11 +27,13 @@
 #include <iostream>
 #include <stdexcept>
 #include "../Analyzer/Analyzer.h"
+#include "../Analyzer/RangeTableEntry.h"
+#include "../Catalog/ColumnDescriptor.h"
 #include "gen-cpp/MapD.h"
 
 namespace Planner {
 
-Scan::Scan(const Analyzer::RangeTblEntry& rte) : Plan() {
+Scan::Scan(const Analyzer::RangeTableEntry& rte) : Plan() {
   table_id = rte.get_table_id();
   for (auto cd : rte.get_column_descs()) {
     col_list.push_back(cd->columnId);
@@ -131,7 +133,7 @@ void Optimizer::optimize_current_query() {
 }
 
 void Optimizer::optimize_scans() {
-  const std::vector<Analyzer::RangeTblEntry*>& rt = cur_query->get_rangetable();
+  const std::vector<Analyzer::RangeTableEntry*>& rt = cur_query->get_rangetable();
   for (auto rte : rt) {
     base_scans.push_back(new Scan(*rte));
   }

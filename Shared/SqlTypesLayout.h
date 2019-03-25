@@ -53,6 +53,18 @@ inline const SQLTypeInfo& get_compact_type(const TargetInfo& target) {
                                                                     : target.sql_type;
 }
 
+inline void set_compact_type(TargetInfo& target, const SQLTypeInfo& new_type) {
+  if (target.is_agg) {
+    const auto agg_type = target.agg_kind;
+    auto& agg_arg = target.agg_arg_type;
+    if (agg_type != kCOUNT || agg_arg.get_type() != kNULLT) {
+      agg_arg = new_type;
+      return;
+    }
+  }
+  target.sql_type = new_type;
+}
+
 inline int64_t inline_int_null_val(const SQLTypeInfo& ti) {
   auto type = ti.get_type();
   if (ti.is_string()) {

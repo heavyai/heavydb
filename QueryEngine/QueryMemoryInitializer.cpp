@@ -276,7 +276,7 @@ void QueryMemoryInitializer::initColumnarGroups(
     const Executor* executor) {
   CHECK(groups_buffer);
   for (const auto target_expr : executor->plan_state_->target_exprs_) {
-    const auto agg_info = target_info(target_expr);
+    const auto agg_info = get_target_info(target_expr, g_bigint_count);
     CHECK(!is_distinct_target(agg_info));
   }
   const int32_t agg_col_count = query_mem_desc.getSlotCount();
@@ -424,7 +424,7 @@ std::vector<ssize_t> QueryMemoryInitializer::allocateCountDistinctBuffers(
        agg_col_idx < agg_col_count;
        ++target_idx, ++agg_col_idx) {
     const auto target_expr = executor->plan_state_->target_exprs_[target_idx];
-    const auto agg_info = target_info(target_expr);
+    const auto agg_info = get_target_info(target_expr, g_bigint_count);
     if (is_distinct_target(agg_info)) {
       CHECK(agg_info.is_agg &&
             (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT));

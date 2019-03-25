@@ -249,6 +249,7 @@ class GroupByAndAggregate {
                                 const SQLTypeInfo& agg_type,
                                 const size_t chosen_bytes,
                                 llvm::Value* target);
+
   bool codegenAggCalls(const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
                        const std::vector<llvm::Value*>& agg_out_vec,
                        const QueryMemoryDescriptor& query_mem_desc,
@@ -303,6 +304,8 @@ class GroupByAndAggregate {
 
   friend class Executor;
   friend class QueryMemoryDescriptor;
+  friend struct TargetExprCodegen;
+  friend struct TargetExprCodegenBuilder;
 };
 
 inline int64_t extract_from_datum(const Datum datum, const SQLTypeInfo& ti) {
@@ -374,7 +377,7 @@ inline std::vector<int8_t> get_col_byte_widths(
       // row index
       col_widths.push_back(sizeof(int64_t));
     } else {
-      const auto agg_info = target_info(col_expr);
+      const auto agg_info = get_target_info(col_expr, g_bigint_count);
       const auto chosen_type = get_compact_type(agg_info);
       if ((chosen_type.is_string() && chosen_type.get_compression() == kENCODING_NONE) ||
           chosen_type.is_array()) {
