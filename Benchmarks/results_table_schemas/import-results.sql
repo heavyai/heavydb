@@ -8,6 +8,7 @@ CREATE TABLE ##TAB##
     run_driver TEXT ENCODING DICT(32),
     run_version TEXT ENCODING DICT(32),
     run_label TEXT ENCODING DICT(32),
+    import_test_name TEXT ENCODING DICT(32),
     import_elapsed_time_ms DOUBLE,
     import_execute_time_ms DOUBLE,
     import_conn_time_ms DOUBLE,

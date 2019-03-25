@@ -436,6 +436,7 @@ result = {
     "run_driver": run_driver,
     "run_version": run_version,
     "run_label": label,
+    "import_test_name": import_test_name,
     "import_elapsed_time_ms": query_elapsed_time,
     "import_execute_time_ms": execution_time,
     "import_conn_time_ms": connect_time,
