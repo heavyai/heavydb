@@ -2576,9 +2576,11 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         const SQLTypeInfo elem_ti = cd->columnType.get_elem_type();
         if (is_null) {
           if (size > 0) {
-            // NULL fixlen array: fill with scalar NULL sentinels
+            // NULL fixlen array: NULL_ARRAY sentinel followed by NULL sentinels
             int8_t* buf = (int8_t*)checked_malloc(size);
-            for (int8_t* p = buf; (p - buf) < size; p += elem_ti.get_size()) {
+            put_null_array(static_cast<void*>(buf), elem_ti, "");
+            for (int8_t* p = buf + elem_ti.get_size(); (p - buf) < size;
+                 p += elem_ti.get_size()) {
               put_null(static_cast<void*>(p), elem_ti, "");
             }
             arr_col_buffers[col_ids[col_idx]].emplace_back(size, buf, is_null);

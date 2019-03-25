@@ -228,21 +228,20 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it, int n, ArrayDatum* result, bool* is
     int8_t* current_pos = it->start_pos + n * it->skip_size;
     result->length = static_cast<size_t>(it->skip_size);
     result->pointer = current_pos;
-    bool is_null = it->type_info.is_null_array(result->pointer, result->length);
-    // Fixlen array filled with NULL sentinels is recognized as a NULL array.
-    result->is_null = is_null;
+    result->is_null = it->type_info.is_null_fixlen_array(result->pointer, result->length);
   } else {
     int8_t* current_pos = it->start_pos + n * sizeof(ArrayOffsetT);
     int8_t* next_pos = current_pos + sizeof(ArrayOffsetT);
     ArrayOffsetT offset = *(ArrayOffsetT*)current_pos;
     ArrayOffsetT next_offset = *(ArrayOffsetT*)next_pos;
     if (next_offset < 0) {  // Encoded NULL array
-      assert(std::abs(offset) == std::abs(next_offset));
       result->length = 0;
       result->pointer = NULL;
       result->is_null = true;
     } else {
-      offset = std::abs(offset);  // Previous array may have been NULL
+      if (offset < 0) {
+        offset = -offset;  // Previous array may have been NULL, remove negativity
+      }
       result->length = static_cast<size_t>(next_offset - offset);
       result->pointer = it->second_buf + offset;
       result->is_null = false;

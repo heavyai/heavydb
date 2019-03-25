@@ -654,7 +654,7 @@ TEST(Insert, NullArrayNullEmpty) {
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM table_array_with_nulls WHERE sia IS NULL;", dt)));
     ASSERT_EQ(
-        3,
+        5,
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM table_array_with_nulls WHERE fa2 IS NOT NULL;", dt)));
     ASSERT_EQ(1,

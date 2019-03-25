@@ -176,6 +176,14 @@ enum EncodingType {
 #define NULL_FLOAT FLT_MIN
 #define NULL_DOUBLE DBL_MIN
 
+#define NULL_ARRAY_BOOLEAN (INT8_MIN + 1)
+#define NULL_ARRAY_TINYINT (INT8_MIN + 1)
+#define NULL_ARRAY_SMALLINT (INT16_MIN + 1)
+#define NULL_ARRAY_INT (INT32_MIN + 1)
+#define NULL_ARRAY_BIGINT (INT64_MIN + 1)
+#define NULL_ARRAY_FLOAT (FLT_MIN * 2.0)
+#define NULL_ARRAY_DOUBLE (DBL_MIN * 2.0)
+
 #define TRANSIENT_DICT_ID 0
 #define TRANSIENT_DICT(ID) (-(ID))
 #define REGULAR_DICT(TRANSIENTID) (-(TRANSIENTID))
@@ -580,8 +588,8 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     }
     return false;
   }
-  HOST DEVICE inline bool is_null_array(const int8_t* val, int array_size) const {
-    // Check if fixed length array is filled with NULL sentinels
+  HOST DEVICE inline bool is_null_fixlen_array(const int8_t* val, int array_size) const {
+    // Check if fixed length array has a NULL_ARRAY sentinel as the first element
     if (type == kARRAY && val && array_size > 0 && array_size == size) {
       // Need to create element type to get the size, but can't call get_elem_type()
       // since this is a HOST DEVICE function. Going through copy constructor instead.
@@ -591,39 +599,24 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       auto elem_size = elem_ti.get_storage_size();
       if (elem_size < 1)
         return false;
-      for (auto p = val; p < val + array_size; p += elem_size) {
-        if (subtype == kFLOAT) {
-          if (*(float*)p != NULL_FLOAT)
-            return false;
-          continue;
-        }
-        if (subtype == kDOUBLE) {
-          if (*(double*)p != NULL_DOUBLE)
-            return false;
-          continue;
-        }
-        switch (elem_size) {
-          case 1:
-            if (*p != NULL_TINYINT)
-              return false;
-            break;
-          case 2:
-            if (*(int16_t*)p != NULL_SMALLINT)
-              return false;
-            break;
-          case 4:
-            if (*(int32_t*)p != NULL_INT)
-              return false;
-            break;
-          case 8:
-            if (*(int64_t*)p != NULL_BIGINT)
-              return false;
-            break;
-          default:
-            return false;
-        }
+      if (subtype == kFLOAT) {
+        return *(float*)val == NULL_ARRAY_FLOAT;
       }
-      return true;
+      if (subtype == kDOUBLE) {
+        return *(double*)val == NULL_ARRAY_DOUBLE;
+      }
+      switch (elem_size) {
+        case 1:
+          return *val == NULL_ARRAY_TINYINT;
+        case 2:
+          return *(int16_t*)val == NULL_ARRAY_SMALLINT;
+        case 4:
+          return *(int32_t*)val == NULL_ARRAY_INT;
+        case 8:
+          return *(int64_t*)val == NULL_ARRAY_BIGINT;
+        default:
+          return false;
+      }
     }
     return false;
   }
@@ -854,6 +847,14 @@ template <class T>
 constexpr inline int64_t inline_int_null_value() {
   return std::is_signed<T>::value ? std::numeric_limits<T>::min()
                                   : std::numeric_limits<T>::max();
+}
+
+template <class T>
+constexpr inline int64_t inline_int_null_array_value() {
+  return std::is_signed<T>::value ? std::numeric_limits<T>::min() + 1
+                                  : std::numeric_limits<T>::max() - 1;
+  // TODO: null_array values in signed types would step on max valid value
+  // in fixlen unsigned arrays, the max valid value may need to be lowered.
 }
 
 template <class T>

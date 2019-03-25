@@ -693,7 +693,20 @@ TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
       CHECK(!date_arr1->is_initialized());
     }
     const auto date_arr2 = boost::get<ArrayTargetValue>(&crt_row[2]);
-    CHECK(date_arr2 && !date_arr2->is_initialized());
+    CHECK(date_arr2);
+    if (i == 9) {
+      // Fixlen array - not NULL, filled with NULLs
+      CHECK(date_arr2->is_initialized());
+      const auto& vec = date_arr2->get();
+      for (size_t k = 0; k < vec.size(); k++) {
+        const auto date = v<int64_t>(vec[k]);
+        const auto date_str = convert_date_to_string(static_cast<int64_t>(date));
+        ASSERT_EQ("NULL", date_str);
+      }
+    } else {
+      // NULL fixlen array
+      CHECK(!date_arr2->is_initialized());
+    }
   }
 }
 
