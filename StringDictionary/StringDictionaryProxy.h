@@ -56,6 +56,10 @@ class StringDictionaryProxy {
 
   std::vector<int32_t> getRegexpLike(const std::string& pattern, const char escape) const;
 
+  const std::map<int32_t, std::string> getTransientMapping() const {
+    return transient_int_to_str_;
+  }
+
  private:
   std::shared_ptr<StringDictionary> string_dict_;
   std::map<int32_t, std::string> transient_int_to_str_;

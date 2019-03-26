@@ -664,6 +664,62 @@ TEST(Ctas, SyntaxCheck) {
   QueryRunner::run_ddl_statement(ddl, g_session);
 }
 
+TEST(Ctas, LiteralStringTest) {
+  std::string ddl = "DROP TABLE IF EXISTS CTAS_SOURCE;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  ddl = "DROP TABLE IF EXISTS CTAS_TARGET;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+
+  QueryRunner::run_ddl_statement("CREATE TABLE CTAS_SOURCE (id int, val int);",
+                                 g_session);
+
+  QueryRunner::run_multiple_agg("INSERT INTO CTAS_SOURCE VALUES(1,1); ",
+                                g_session,
+                                ExecutorDeviceType::CPU,
+                                true,
+                                true,
+                                nullptr);
+  QueryRunner::run_multiple_agg("INSERT INTO CTAS_SOURCE VALUES(2,2); ",
+                                g_session,
+                                ExecutorDeviceType::CPU,
+                                true,
+                                true,
+                                nullptr);
+  QueryRunner::run_multiple_agg("INSERT INTO CTAS_SOURCE VALUES(3,3); ",
+                                g_session,
+                                ExecutorDeviceType::CPU,
+                                true,
+                                true,
+                                nullptr);
+
+  ddl =
+      "CREATE TABLE CTAS_TARGET AS select id, val, (case when val=1 then 'aa' else 'bb' "
+      "end) as txt FROM CTAS_SOURCE;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+
+  auto check = [](int id, std::string txt) {
+    auto select_result = QueryRunner::run_multiple_agg(
+        "SELECT txt FROM CTAS_TARGET WHERE id=" + std::to_string(id) + ";",
+        g_session,
+        ExecutorDeviceType::CPU,
+        true,
+        true,
+        nullptr);
+
+    const auto select_crt_row = select_result->getNextRow(true, false);
+    const auto mapd_variant = select_crt_row[0];
+    const auto scalar_mapd_variant = boost::get<ScalarTargetValue>(&mapd_variant);
+    const auto mapd_as_str_p = boost::get<NullableString>(scalar_mapd_variant);
+    const auto mapd_str_p = boost::get<std::string>(mapd_as_str_p);
+    const auto mapd_val = *mapd_str_p;
+    ASSERT_EQ(txt, mapd_val);
+  };
+
+  check(1, "aa");
+  check(2, "bb");
+  check(3, "bb");
+}
+
 TEST_P(Ctas, CreateTableAsSelect) {
   QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE;", g_session);
   QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS CTAS_TARGET;", g_session);

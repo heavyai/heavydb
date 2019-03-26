@@ -160,11 +160,10 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
       CHECK(source_dict_desc_);
     } else {
       CHECK(literals_dict);
-      auto maxId = literals_dict->storageEntryCount();
-      for (size_t oldId = 0; oldId < maxId; oldId++) {
-        auto str = literals_dict->getString(oldId);
-        auto newId = target_dict_desc_->stringDict->getOrAdd(str);
-        literals_lookup_[oldId] = newId;
+
+      for (auto& entry : literals_dict->getTransientMapping()) {
+        auto newId = target_dict_desc_->stringDict->getOrAdd(entry.second);
+        literals_lookup_[entry.first] = newId;
       }
 
       literals_lookup_[buffer_null_sentinal_] = buffer_null_sentinal_;
