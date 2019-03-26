@@ -11,6 +11,12 @@ source $SCRIPTS_DIR/common-functions.sh
 sudo mkdir -p $PREFIX
 sudo chown -R $(id -u) $PREFIX
 
+apt install wget -y
+
+# add llvm 6 repository
+add-apt-repository -y 'deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial main'
+wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
+
 sudo apt update
 sudo apt install -y \
     build-essential \
