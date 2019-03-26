@@ -850,6 +850,23 @@ extern "C" __device__ void agg_max_double_skip_val_shared(int64_t* agg,
 
 #undef DEF_SKIP_AGG
 
+extern "C" __device__ bool slotEmptyKeyCAS(int64_t* slot,
+                                           int64_t new_val,
+                                           int64_t init_val) {
+  auto slot_address = reinterpret_cast<unsigned long long int*>(slot);
+  const auto empty_key =
+      static_cast<unsigned long long int*>(static_cast<void*>(&init_val));
+  const auto new_val_cast =
+      static_cast<unsigned long long int*>(static_cast<void*>(&new_val));
+
+  const auto old_val = atomicCAS(slot_address, *empty_key, *new_val_cast);
+  if (old_val == *empty_key) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
 #include "../Utils/ChunkIter.cpp"
 #include "DateTruncate.cpp"
 #include "ExtractFromTime.cpp"

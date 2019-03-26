@@ -50,7 +50,8 @@ struct TargetExprCodegen {
                const std::vector<llvm::Value*>& agg_out_vec,
                llvm::Value* output_buffer_byte_stream,
                llvm::Value* out_row_idx,
-               GroupByAndAggregate::DiamondCodegen& diamond_codegen) const;
+               GroupByAndAggregate::DiamondCodegen& diamond_codegen,
+               GroupByAndAggregate::DiamondCodegen* sample_cfg = nullptr) const;
 
   const Analyzer::Expr* target_expr;
   TargetInfo target_info;
@@ -79,7 +80,9 @@ struct TargetExprCodegenBuilder {
       , ra_exe_unit(ra_exe_unit)
       , is_group_by(is_group_by) {}
 
-  void operator()(const Analyzer::Expr* target_expr, const Executor* executor);
+  void operator()(const Analyzer::Expr* target_expr,
+                  const Executor* executor,
+                  const CompilationOptions& co);
 
   void codegen(GroupByAndAggregate* group_by_and_agg,
                Executor* executor,
@@ -89,26 +92,16 @@ struct TargetExprCodegenBuilder {
                const std::vector<llvm::Value*>& agg_out_vec,
                llvm::Value* output_buffer_byte_stream,
                llvm::Value* out_row_idx,
-               GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
-    for (const auto& target_expr_codegen : target_exprs_to_codegen) {
-      target_expr_codegen.codegen(group_by_and_agg,
-                                  executor,
-                                  query_mem_desc,
-                                  co,
-                                  agg_out_ptr_w_idx,
-                                  agg_out_vec,
-                                  output_buffer_byte_stream,
-                                  out_row_idx,
-                                  diamond_codegen);
-    }
-  }
+               GroupByAndAggregate::DiamondCodegen& diamond_codegen) const;
 
-  int32_t slot_index_counter{0};
+  size_t target_index_counter{0};
+  size_t slot_index_counter{0};
 
   const QueryMemoryDescriptor& query_mem_desc;
   const RelAlgExecutionUnit& ra_exe_unit;
 
   std::vector<TargetExprCodegen> target_exprs_to_codegen;
+  std::vector<TargetExprCodegen> sample_exprs_to_codegen;
 
   bool is_group_by;
 };

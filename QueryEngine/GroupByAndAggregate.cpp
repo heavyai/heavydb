@@ -1483,7 +1483,7 @@ bool GroupByAndAggregate::codegenAggCalls(
     auto target_expr = ra_exe_unit_.target_exprs[target_idx];
     CHECK(target_expr);
 
-    target_builder(target_expr, executor_);
+    target_builder(target_expr, executor_, co);
   }
 
   target_builder.codegen(this,

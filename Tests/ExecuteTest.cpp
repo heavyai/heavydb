@@ -13555,6 +13555,22 @@ TEST(Select, Sample) {
       const auto empty_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(0), empty_row.size());
     }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT x, SAMPLE(arr_i64), SAMPLE(real_str), COUNT(*) FROM array_test "
+          "WHERE x = 8 GROUP BY x;",
+          dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(4), crt_row.size());
+      compare_array(crt_row[1], std::vector<int64_t>{200, 300, 400});
+      const auto nullable_str = v<NullableString>(crt_row[2]);
+      const auto str_ptr = boost::get<std::string>(&nullable_str);
+      ASSERT_TRUE(str_ptr);
+      ASSERT_EQ("real_str1", boost::get<std::string>(*str_ptr));
+      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(crt_row[3]));
+      const auto empty_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(0), empty_row.size());
+    }
     SKIP_ON_AGGREGATOR({
       const auto rows = run_multiple_agg(
           "SELECT SAMPLE(arr3_i64), COUNT(*) FROM array_test WHERE x = 8;", dt);
