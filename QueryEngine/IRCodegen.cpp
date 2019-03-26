@@ -546,6 +546,9 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
         array_idx_ptr);
     auto array_at_fname = "array_at_" + numeric_type_name(elem_ti);
     if (array_ti.get_size() < 0) {
+      if (array_ti.get_notnull()) {
+        array_at_fname = "notnull_" + array_at_fname;
+      }
       array_at_fname = "varlen_" + array_at_fname;
     }
     const auto ar_ret_ty =
