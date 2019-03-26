@@ -5287,7 +5287,8 @@ std::string MapDHandler::parse_to_ra(
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const Catalog_Namespace::SessionInfo& session_info,
     OptionalTableMap tableNames,
-    const MapDParameters mapd_parameters) {
+    const MapDParameters mapd_parameters,
+    RenderInfo* render_info) {
   INJECT_TIMER(parse_to_ra);
   ParserWrapper pw{query_str};
   const std::string actual_query{
@@ -5312,6 +5313,15 @@ std::string MapDHandler::parse_to_ra(
           (tableNames.value())[table] = true;
         }
       }
+    }
+    if (render_info) {
+      // grabs all the selected-from tables, even views. This is used by the renderer to
+      // resolve view hit-testing.
+      // NOTE: the same table name could exist in both the primary and resolved tables.
+      auto selected_tables = &result.primary_accessed_objects.tables_selected_from;
+      render_info->table_names.insert(selected_tables->begin(), selected_tables->end());
+      selected_tables = &result.resolved_accessed_objects.tables_selected_from;
+      render_info->table_names.insert(selected_tables->begin(), selected_tables->end());
     }
     return result.plan_result;
   }

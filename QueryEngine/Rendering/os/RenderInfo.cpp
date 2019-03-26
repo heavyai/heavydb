@@ -18,7 +18,6 @@
 
 RenderInfo::RenderInfo(
     const std::shared_ptr<const ::QueryRenderer::RenderSession> in_render_session,
-    const std::string& render_vega,
     const bool force_non_in_situ_data)
     : render_session(in_render_session) {
   CHECK(false);

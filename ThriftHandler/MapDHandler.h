@@ -485,7 +485,8 @@ class MapDHandler : public MapDIf {
                           const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                           const Catalog_Namespace::SessionInfo& session_info,
                           OptionalTableMap tableNames,
-                          const MapDParameters mapd_parameters);
+                          const MapDParameters mapd_parameters,
+                          RenderInfo* render_info = nullptr);
 
   void sql_execute_impl(TQueryResult& _return,
                         const Catalog_Namespace::SessionInfo& session_info,

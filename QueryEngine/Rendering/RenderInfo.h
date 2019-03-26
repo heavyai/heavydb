@@ -30,19 +30,17 @@ class RenderInfo {
   std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
   const std::shared_ptr<const ::QueryRenderer::RenderSession> render_session;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner;
-  std::vector<std::shared_ptr<Analyzer::TargetEntry>>
-      targets;  // Info for all the column targets retrieved in
-                // in a query. Used to extract column/table info
-                // when rendering.
-  std::vector<std::string>
-      table_names;  // the names of all the tables used in a query in hierarchical order.
-                    // For example, for join queries, the outer join table will be the
-                    // first item in this list
+
+  // Info for all the column targets retrieved in in a query. Used to extract column/table
+  // info when rendering.
+  std::vector<std::shared_ptr<Analyzer::TargetEntry>> targets;
+
+  // All the "selected from" tables in a query. Includes resolved and un-resolved views.
+  std::unordered_set<std::string> table_names;
   bool disallow_in_situ_only_if_final_ED_is_aggregate;
 
   RenderInfo(
       const std::shared_ptr<const ::QueryRenderer::RenderSession> in_render_session,
-      const std::string& render_vega = "",
       const bool force_non_in_situ_data = false);
 
   const Catalog_Namespace::SessionInfo& getSessionInfo() const;

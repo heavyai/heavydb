@@ -43,74 +43,6 @@ bool node_is_aggregate(const RelAlgNode* ra) {
   return ((compound && compound->isAggregate()) || aggregate);
 }
 
-void scanForTablesAndAggsInRelAlgSeqForRender(std::vector<RaExecutionDesc>& exec_descs,
-                                              RenderInfo* render_info) {
-  CHECK(render_info);
-
-  std::vector<std::string>& rtn_table_names = render_info->table_names;
-  rtn_table_names.clear();
-  if (exec_descs.empty()) {
-    return;
-  }
-
-  std::unordered_set<std::string> table_names;
-  std::unordered_set<const RelAlgNode*> visited;
-  std::vector<const RelAlgNode*> work_set;
-  for (const auto& exec_desc : exec_descs) {
-    const auto body = exec_desc.getBody();
-    if (visited.count(body)) {
-      continue;
-    }
-    work_set.push_back(body);
-    while (!work_set.empty()) {
-      auto walker = work_set.back();
-      work_set.pop_back();
-      if (visited.count(walker)) {
-        continue;
-      }
-      visited.insert(walker);
-      if (walker->isNop()) {
-        CHECK_EQ(size_t(1), walker->inputCount());
-        work_set.push_back(walker->getInput(0));
-        continue;
-      }
-      if (const auto scan = dynamic_cast<const RelScan*>(walker)) {
-        auto td = scan->getTableDescriptor();
-        CHECK(td);
-        if (table_names.insert(td->tableName).second) {
-          // keeping the traversed table names in order
-          rtn_table_names.push_back(td->tableName);
-        }
-        continue;
-      }
-      if (node_is_aggregate(walker)) {
-        // see new logic in executeRelAlgQueryNoRetry
-        // if not using more relaxed logic, disallow if we find an aggregate *anywhere*
-        if (!render_info->disallow_in_situ_only_if_final_ED_is_aggregate) {
-          // set the render to be non in-situ if we have an
-          // aggregate node
-          render_info->setInSituDataIfUnset(false);
-        }
-      }
-      const auto compound = dynamic_cast<const RelCompound*>(walker);
-      const auto join = dynamic_cast<const RelJoin*>(walker);
-      const auto project = dynamic_cast<const RelProject*>(walker);
-      const auto aggregate = dynamic_cast<const RelAggregate*>(walker);
-      const auto filter = dynamic_cast<const RelFilter*>(walker);
-      const auto sort = dynamic_cast<const RelSort*>(walker);
-      const auto leftdeepinnerjoin = dynamic_cast<const RelLeftDeepInnerJoin*>(walker);
-      if (compound || join || project || aggregate || filter || sort ||
-          leftdeepinnerjoin) {
-        for (int i = walker->inputCount(); i > 0; --i) {
-          work_set.push_back(walker->getInput(i - 1));
-        }
-        continue;
-      }
-      CHECK(false);
-    }
-  }
-}
-
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
@@ -166,29 +98,17 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
   executor_->table_generations_ = computeTableGenerations(ra.get());
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   auto ed_list = get_execution_descriptors(ra.get());
-  if (render_info) {  // save the table names for render queries
-    // set whether the render will be done in-situ (in_situ_data = true) or
-    // set whether the query results will be transferred to the host and then
-    // back to the device for rendering (in_situ_data = false)
 
-    // if this is a potential in-situ poly render, we use more relaxed logic
-    // only disallow in-situ if the *final* ED is an aggregate
-    // this *should* be usable for point renders too, but not safe yet
-    if (render_info->disallow_in_situ_only_if_final_ED_is_aggregate) {
-      // new logic
-      CHECK(ed_list.size() > 0);
-      if (node_is_aggregate(ed_list.back().getBody())) {
-        render_info->setInSituDataIfUnset(false);
-      }
-    } else {
+  if (render_info) {
+    // set render to be non-insitu in certain situations.
+    if (!render_info->disallow_in_situ_only_if_final_ED_is_aggregate &&
+        ed_list.size() > 1) {
       // old logic
-      // disallow if more than one ED, and there's an aggregate *anywhere*
-      if (ed_list.size() != 1) {
-        render_info->setInSituDataIfUnset(false);
-      }
+      // disallow if more than one ED
+      render_info->setInSituDataIfUnset(false);
     }
-    scanForTablesAndAggsInRelAlgSeqForRender(ed_list, render_info);
   }
+
   if (eo.find_push_down_candidates) {
     // this extra logic is mainly due to current limitations on multi-step queries
     // and/or subqueries.
@@ -379,6 +299,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
   time(&now_);
   CHECK(!exec_descs.empty());
   const auto exec_desc_count = eo.just_explain ? size_t(1) : exec_descs.size();
+
   for (size_t i = 0; i < exec_desc_count; ++i) {
     // only render on the last step
     executeRelAlgStep(i,
@@ -419,15 +340,6 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
       eo.find_push_down_candidates,
       eo.just_calcite_explain,
       eo.gpu_input_mem_limit_percent};
-
-  if (render_info && !render_info->table_names.size() && leaf_results_.size()) {
-    // Save the table names for render queries for distributed aggregation queries.
-    // Doing this here as the aggregator calls executeRelAlgSeq() directly rather
-    // than going thru the executeRelAlg() path.
-    // TODO(croot): should we propagate these table names from the leaves instead
-    // of populating this here, or expose this api for the aggregator to call directly?
-    scanForTablesAndAggsInRelAlgSeqForRender(exec_descs, render_info);
-  }
 
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
