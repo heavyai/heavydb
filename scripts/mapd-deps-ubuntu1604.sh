@@ -46,7 +46,6 @@ sudo apt install -y \
     google-perftools \
     libdouble-conversion-dev \
     libevent-dev \
-    libgdal-dev \
     libgflags-dev \
     libgoogle-perftools-dev \
     libiberty-dev \
@@ -172,6 +171,9 @@ cmake \
 make -j $(nproc)
 make install
 popd
+
+# gdal
+download_make_install ${HTTP_DEPS}/gdal-2.3.2.tar.xz "" "--without-geos --with-libkml=$PREFIX --with-proj=$PREFIX"add-apt-repository -y ppa:ubuntugis/ppa
 
 # OpenSAML
 
