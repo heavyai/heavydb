@@ -1706,8 +1706,14 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   auto ra_exe_unit = decide_approx_count_distinct_implementation(
       work_unit.exe_unit, table_infos, executor_, co.device_type_, target_exprs_owned_);
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
-
-  if (!eo.just_explain && can_use_scan_limit(ra_exe_unit) && !isRowidLookup(work_unit)) {
+  if (is_window_execution_unit(ra_exe_unit)) {
+    CHECK_EQ(table_infos.size(), size_t(1));
+    CHECK_EQ(table_infos.front().info.fragments.size(), size_t(1));
+    max_groups_buffer_entry_guess =
+        table_infos.front().info.fragments.front().getNumTuples();
+    ra_exe_unit.scan_limit = max_groups_buffer_entry_guess;
+  } else if (!eo.just_explain && can_use_scan_limit(ra_exe_unit) &&
+             !isRowidLookup(work_unit)) {
     const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
     if (filter_count_all >= 0) {
       ra_exe_unit.scan_limit = std::max(filter_count_all, ssize_t(1));
