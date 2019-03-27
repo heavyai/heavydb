@@ -1055,6 +1055,13 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Append) {
   check_geo_num_rows("omnisci_geo, trip", 20);
 }
 
+TEST_F(GeoGDALImportTest, Geodatabase_Simple) {
+  const auto file_path =
+      boost::filesystem::path("geodatabase/S_USA.Experimental_Area_Locations.gdb.zip");
+  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  check_geo_num_rows("omnisci_geo, ESTABLISHED", 87);
+}
+
 #ifdef HAVE_AWS_S3
 // s3 compressed (non-parquet) test cases
 TEST_F(ImportTest, S3_One_csv_file) {
