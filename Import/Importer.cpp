@@ -4127,8 +4127,16 @@ void gdalGatherFilesInArchiveRecursive(const std::string& archive_path,
       }
 
       if (VSI_ISDIR(sb.st_mode)) {
-        // add subdirectory to be recursed into
-        subdirectories.push_back(entry_path);
+        // a directory that ends with .gdb could be a Geodatabase bundle
+        // arguably dangerous to decide this purely by name, but any further
+        // validation would be very complex especially at this scope
+        if (boost::iends_with(entry_path, ".gdb")) {
+          // add the directory as if it was a file and don't recurse into it
+          files.push_back(entry_path);
+        } else {
+          // add subdirectory to be recursed into
+          subdirectories.push_back(entry_path);
+        }
       } else {
         // add this file
         files.push_back(entry_path);
