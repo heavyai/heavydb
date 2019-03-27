@@ -67,7 +67,8 @@ sudo apt install -y \
     jq \
     python-yaml \
     libxmlsec1-dev \
-    libtool
+    libtool \
+    libpng12-dev
 
 # Install gcc6
 add-apt-repository ppa:ubuntu-toolchain-r/test -y
