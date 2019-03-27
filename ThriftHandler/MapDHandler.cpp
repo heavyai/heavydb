@@ -5652,16 +5652,20 @@ LogOnReturn::~LogOnReturn() {
     }
     ss << session_ptr_->get_public_session_id() << ' ';
   } else {
-    ss << "\"\" \"\" \"\" ";
+    ss << "   ";  // 3 spaces for 3 empty strings
   }
-  ss << '{';
-  for (size_t i = 0; i < name_value_pairs_.size(); i += 2) {  // names
-    ss << (i < 2 ? "" : ",") << std::quoted(name_value_pairs_[i], '"', '"');
+  if (name_value_pairs_.empty()) {
+    ss << ' ';  // 1 space for final empty names/values arrays
+  } else {
+    ss << '{';
+    for (size_t i = 0; i < name_value_pairs_.size(); i += 2) {  // names
+      ss << (i < 2 ? "" : ",") << std::quoted(name_value_pairs_[i], '"', '"');
+    }
+    ss << "} {";
+    for (size_t i = 1; i < name_value_pairs_.size(); i += 2) {  // values
+      ss << (i < 2 ? "" : ",") << std::quoted(name_value_pairs_[i], '"', '"');
+    }
+    ss << '}';
   }
-  ss << "} {";
-  for (size_t i = 1; i < name_value_pairs_.size(); i += 2) {  // values
-    ss << (i < 2 ? "" : ",") << std::quoted(name_value_pairs_[i], '"', '"');
-  }
-  ss << '}';
   LOG(INFO) << ss.rdbuf();
 }
