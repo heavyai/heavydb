@@ -177,7 +177,7 @@ popd
 download_make_install ${HTTP_DEPS}/proj-5.2.0.tar.gz
 
 # gdal
-download_make_install ${HTTP_DEPS}/gdal-2.3.2.tar.xz "" "--without-geos --with-libkml=$PREFIX --with-proj=$PREFIX"add-apt-repository -y ppa:ubuntugis/ppa
+download_make_install ${HTTP_DEPS}/gdal-2.3.2.tar.xz "" "--without-geos --with-libkml=$PREFIX --with-proj=$PREFIX"
 
 # OpenSAML
 
