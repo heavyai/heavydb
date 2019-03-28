@@ -52,6 +52,7 @@
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "MapDRelease.h"
 #include "MapDServer.h"
+#include "Shared/StringTransform.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/ThriftTypesConvert.h"
 #include "Shared/checked_alloc.h"
@@ -975,18 +976,6 @@ void get_license_claims(ClientContext& context) {
       }
     }
   }
-}
-
-std::string hide_sensitive_data_from_query(const std::string& query_str) {
-  auto result = query_str;
-  boost::regex passwd{R"(^(CREATE|ALTER)\s+?USER.+password\s*?=\s*?'(?<pwd>.+?)'.+)",
-                      boost::regex_constants::perl | boost::regex::icase};
-  boost::smatch matches;
-  if (boost::regex_search(query_str, matches, passwd)) {
-    result.replace(
-        matches["pwd"].first - query_str.begin(), matches["pwd"].length(), "XXXXXXXX");
-  }
-  return result;
 }
 
 std::string hide_sensitive_data_from_connect(const std::string& connect_str) {

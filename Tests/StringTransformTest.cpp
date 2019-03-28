@@ -38,6 +38,33 @@ TEST(StringTransform, CsvQuote) {
   }
 }
 
+TEST(StringTransform, HideSensitiveDataFromQuery) {
+  std::vector<std::pair<std::string, std::string>> const tests{
+      {"COPY testtable FROM 's3://example/*' WITH (header='true', geo='true', "
+       "s3_region='us-west-1', "
+       "s3_access_key='HelloWorldAccessKeys',s3_secret_key='abcxyz');",
+       "COPY testtable FROM 's3://example/*' WITH (header='true', geo='true', "
+       "s3_region='us-west-1', s3_access_key='XXXXXXXX',s3_secret_key='XXXXXXXX');"},
+      {"CREATE USER jason (password = 'OmniSciRocks!', is_super = 'true')",
+       "CREATE USER jason (password = 'XXXXXXXX', is_super = 'true')"},
+      {"ALTER USER omnisci (password = 'OmniSciIsFast!')",
+       "ALTER USER omnisci (password = 'XXXXXXXX')"},
+      {"ALTER USER jason (is_super = 'false', password = 'SilkySmooth')",
+       "ALTER USER jason (is_super = 'false', password = 'XXXXXXXX')"},
+      {"ALTER USER omnisci (password = 'short')",
+       "ALTER USER omnisci (password = 'XXXXXXXX')"},
+      {"ALTER USER omnisci (password='short', future_parameter = 3)",
+       "ALTER USER omnisci (password='XXXXXXXX', future_parameter = 3)"},
+      {"CREATE USER jason (password = 'OmniSciRocks!', is_super = 'true'); CREATE "
+       "USER omnisci (password = 'OmniSciIsFast!')",
+       "CREATE USER jason (password = 'XXXXXXXX', is_super = 'true'); CREATE USER "
+       "omnisci (password = 'XXXXXXXX')"}};
+  for (auto const& test : tests) {
+    std::string const safe = hide_sensitive_data_from_query(test.first);
+    ASSERT_EQ(safe, test.second);
+  }
+}
+
 int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);

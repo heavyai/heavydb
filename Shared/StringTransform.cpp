@@ -16,37 +16,7 @@
 
 #include "StringTransform.h"
 
-std::vector<std::pair<size_t, size_t>> find_string_literals(const std::string& query) {
-  boost::regex literal_string_regex{R"(([^']+)('(?:[^']+|'')+'))", boost::regex::perl};
-  boost::smatch what;
-  auto it = query.begin();
-  auto prev_it = it;
-  std::vector<std::pair<size_t, size_t>> positions;
-  while (true) {
-    if (!boost::regex_search(it, query.end(), what, literal_string_regex)) {
-      break;
-    }
-    CHECK_GT(what[1].length(), 0);
-    prev_it = it;
-    it += what.length();
-    positions.emplace_back(prev_it + what[1].length() - query.begin(),
-                           it - query.begin());
-  }
-  return positions;
-}
-
-ssize_t inside_string_literal(
-    const size_t start,
-    const size_t length,
-    const std::vector<std::pair<size_t, size_t>>& literal_positions) {
-  const auto end = start + length;
-  for (const auto& literal_position : literal_positions) {
-    if (literal_position.first <= start && end <= literal_position.second) {
-      return literal_position.second;
-    }
-  }
-  return -1;
-}
+#include <regex>
 
 void apply_shim(std::string& result,
                 const boost::regex& reg_expr,
@@ -70,6 +40,46 @@ void apply_shim(std::string& result,
       end_it = result.cend();
     }
   }
+}
+
+std::vector<std::pair<size_t, size_t>> find_string_literals(const std::string& query) {
+  boost::regex literal_string_regex{R"(([^']+)('(?:[^']+|'')+'))", boost::regex::perl};
+  boost::smatch what;
+  auto it = query.begin();
+  auto prev_it = it;
+  std::vector<std::pair<size_t, size_t>> positions;
+  while (true) {
+    if (!boost::regex_search(it, query.end(), what, literal_string_regex)) {
+      break;
+    }
+    CHECK_GT(what[1].length(), 0);
+    prev_it = it;
+    it += what.length();
+    positions.emplace_back(prev_it + what[1].length() - query.begin(),
+                           it - query.begin());
+  }
+  return positions;
+}
+
+std::string hide_sensitive_data_from_query(std::string const& query_str) {
+  constexpr std::regex::flag_type flags =
+      std::regex::ECMAScript | std::regex::icase | std::regex::optimize;
+  static const std::regex regex(
+      R"(\b((?:password|s3_access_key|s3_secret_key)\s*=\s*)'.+?')", flags);
+  return std::regex_replace(query_str, regex, "$1'XXXXXXXX'");
+}
+
+ssize_t inside_string_literal(
+    const size_t start,
+    const size_t length,
+    const std::vector<std::pair<size_t, size_t>>& literal_positions) {
+  const auto end = start + length;
+  for (const auto& literal_position : literal_positions) {
+    if (literal_position.first <= start && end <= literal_position.second) {
+      return literal_position.second;
+    }
+  }
+  return -1;
 }
 
 template <>

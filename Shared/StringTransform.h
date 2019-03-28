@@ -28,22 +28,19 @@
 #include <sstream>
 #include <string>
 
-inline std::string to_upper(const std::string& str) {
-  auto str_uc = str;
-  std::transform(str_uc.begin(), str_uc.end(), str_uc.begin(), ::toupper);
-  return str_uc;
-}
+void apply_shim(std::string& result,
+                const boost::regex& reg_expr,
+                const std::function<void(std::string&, const boost::smatch&)>& shim_fn);
 
 std::vector<std::pair<size_t, size_t>> find_string_literals(const std::string& query);
+
+// Replace passwords, keys, etc. in a sql query with 'XXXXXXXX'.
+std::string hide_sensitive_data_from_query(std::string const& query_str);
 
 ssize_t inside_string_literal(
     const size_t start,
     const size_t length,
     const std::vector<std::pair<size_t, size_t>>& literal_positions);
-
-void apply_shim(std::string& result,
-                const boost::regex& reg_expr,
-                const std::function<void(std::string&, const boost::smatch&)>& shim_fn);
 
 template <typename T>
 std::string to_string(T&& v) {
@@ -57,5 +54,11 @@ std::string to_string(char const*&& v);
 
 template <>
 std::string to_string(std::string&& v);
+
+inline std::string to_upper(const std::string& str) {
+  auto str_uc = str;
+  std::transform(str_uc.begin(), str_uc.end(), str_uc.begin(), ::toupper);
+  return str_uc;
+}
 
 #endif  // SHARED_STRINGTRANSFORM_H

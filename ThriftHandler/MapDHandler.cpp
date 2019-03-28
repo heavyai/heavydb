@@ -61,9 +61,7 @@
 #include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/TableOptimizer.h"
-#include "Shared/MapDParameters.h"
 #include "Shared/SQLTypeUtilities.h"
-#include "Shared/StringTransform.h"
 #include "Shared/geo_types.h"
 #include "Shared/geosupport.h"
 #include "Shared/import_helpers.h"
@@ -791,34 +789,6 @@ TDatum MapDHandler::value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti
   return datum;
 }
 
-namespace {
-
-std::string hide_sensitive_data(const std::string& query_str) {
-  auto result = query_str;
-  static const std::vector<std::string> patterns{
-      R"(^(?:CREATE|ALTER)\s+?USER.+password\s*?=\s*?'(.+?)'.+)",
-      R"(^COPY.+FROM.+WITH.+s3_access_key\s*?=\s*?'(.+?)'.+)",
-      R"(^COPY.+FROM.+WITH.+s3_secret_key\s*?=\s*?'(.+?)'.+)",
-  };
-  try {
-    for (const auto& pattern : patterns) {
-      std::regex passwd{pattern, std::regex::ECMAScript | std::regex::icase};
-      std::smatch matches;
-      if (std::regex_search(result, matches, passwd)) {
-        result.replace(
-            matches[1].first - result.begin(), matches[1].length(), "XXXXXXXX");
-      }
-    }
-    return result;
-  } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Error masking sensitive data: ") + e.what());
-  }
-  UNREACHABLE();
-  return "";
-}
-
-}  // namespace
-
 void MapDHandler::sql_execute(TQueryResult& _return,
                               const TSessionId& session,
                               const std::string& query_str,
@@ -826,7 +796,7 @@ void MapDHandler::sql_execute(TQueryResult& _return,
                               const std::string& nonce,
                               const int32_t first_n,
                               const int32_t at_most_n) {
-  LOG_ON_RETURN(session, "query_str", hide_sensitive_data(query_str));
+  LOG_ON_RETURN(session, "query_str", hide_sensitive_data_from_query(query_str));
   ScopeGuard reset_was_geo_copy_from = [&] { _was_geo_copy_from = false; };
   if (first_n >= 0 && at_most_n >= 0) {
     THROW_MAPD_EXCEPTION(std::string("At most one of first_n and at_most_n can be set"));
@@ -900,7 +870,7 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
                                  const TDeviceType::type device_type,
                                  const int32_t device_id,
                                  const int32_t first_n) {
-  LOG_ON_RETURN(session, "query_str", hide_sensitive_data(query_str));
+  LOG_ON_RETURN(session, "query_str", hide_sensitive_data_from_query(query_str));
   const auto session_info = get_session_copy(session);
   if (device_type == TDeviceType::GPU) {
     const auto executor_device_type = session_info.get_executor_device_type();
@@ -2984,7 +2954,7 @@ Planner::RootPlan* MapDHandler::parse_to_plan_legacy(
     const Catalog_Namespace::SessionInfo& session_info,
     const std::string& action /* render or validate */) {
   auto& cat = session_info.getCatalog();
-  LOG(INFO) << action << ": " << hide_sensitive_data(query_str);
+  LOG(INFO) << action << ": " << hide_sensitive_data_from_query(query_str);
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
