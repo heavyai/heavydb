@@ -17,60 +17,6 @@
 #include "Execute.h"
 #include "WindowContext.h"
 
-namespace {
-
-bool pos_is_set(const int64_t bitset, const int64_t pos) {
-  return (reinterpret_cast<const int8_t*>(bitset))[pos >> 3] & (1 << (pos & 7));
-}
-
-}  // namespace
-
-extern "C" void apply_window_pending_outputs_int(const int64_t handle,
-                                                 const int64_t value,
-                                                 const int64_t bitset,
-                                                 const int64_t pos) {
-  if (!pos_is_set(bitset, pos)) {
-    return;
-  }
-  auto& pending_output_slots = *reinterpret_cast<std::vector<void*>*>(handle);
-  for (auto pending_output_slot : pending_output_slots) {
-    *reinterpret_cast<int64_t*>(pending_output_slot) = value;
-  }
-  pending_output_slots.clear();
-}
-
-extern "C" void apply_window_pending_outputs_double(const int64_t handle,
-                                                    const double value,
-                                                    const int64_t bitset,
-                                                    const int64_t pos) {
-  if (!pos_is_set(bitset, pos)) {
-    return;
-  }
-  auto& pending_output_slots = *reinterpret_cast<std::vector<void*>*>(handle);
-  for (auto pending_output_slot : pending_output_slots) {
-    *reinterpret_cast<double*>(pending_output_slot) = value;
-  }
-  pending_output_slots.clear();
-}
-
-extern "C" void apply_window_pending_outputs_float(const int64_t handle,
-                                                   const float value,
-                                                   const int64_t bitset,
-                                                   const int64_t pos) {
-  if (!pos_is_set(bitset, pos)) {
-    return;
-  }
-  auto& pending_output_slots = *reinterpret_cast<std::vector<void*>*>(handle);
-  for (auto pending_output_slot : pending_output_slots) {
-    *reinterpret_cast<double*>(pending_output_slot) = value;
-  }
-  pending_output_slots.clear();
-}
-
-extern "C" void add_window_pending_output(void* pending_output, const int64_t handle) {
-  reinterpret_cast<std::vector<void*>*>(handle)->push_back(pending_output);
-}
-
 llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
                                              const CompilationOptions& co) {
   const auto window_func_context =
