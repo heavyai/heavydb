@@ -173,9 +173,6 @@ std::shared_ptr<Analyzer::Expr> ExtractExpr::generate(
     constant->set_type_info(ti);
     return constant;
   }
-  if (!expr_ti.is_high_precision_timestamp() && is_subsecond_extract_field(field)) {
-    return makeExpr<Analyzer::Constant>(ti, false, Datum{0});
-  }
   return makeExpr<Analyzer::ExtractExpr>(
       ti, from_expr->get_contains_agg(), field, from_expr->decompress());
 }

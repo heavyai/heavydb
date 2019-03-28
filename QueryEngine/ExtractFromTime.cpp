@@ -51,19 +51,19 @@ DEVICE int32_t extract_second(const int64_t* tim_p) {
   return static_cast<int32_t>(lcltime % kSecsPerMin);
 }
 
-DEVICE int32_t extract_millisecond(const int64_t* tim_p) {
+DEVICE int64_t extract_millisecond(const int64_t* tim_p) {
   const int64_t lcltime = *tim_p;
-  return static_cast<int32_t>(lcltime % kMilliSecsPerSec);
+  return lcltime % (kSecsPerMin * kMilliSecsPerSec);
 }
 
-DEVICE int32_t extract_microsecond(const int64_t* tim_p) {
+DEVICE int64_t extract_microsecond(const int64_t* tim_p) {
   const int64_t lcltime = *tim_p;
-  return static_cast<int32_t>(lcltime % kMicroSecsPerSec);
+  return lcltime % (kSecsPerMin * kMicroSecsPerSec);
 }
 
-DEVICE int32_t extract_nanosecond(const int64_t* tim_p) {
+DEVICE int64_t extract_nanosecond(const int64_t* tim_p) {
   const int64_t lcltime = *tim_p;
-  return static_cast<int32_t>(lcltime % kNanoSecsPerSec);
+  return lcltime % (kSecsPerMin * kNanoSecsPerSec);
 }
 
 DEVICE int32_t extract_dow(const int64_t* tim_p) {

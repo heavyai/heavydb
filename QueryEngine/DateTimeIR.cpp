@@ -40,6 +40,19 @@ llvm::Value* Executor::codegen(const Analyzer::ExtractExpr* extract_expr,
     from_expr = codegenExtractHighPrecisionTimestamps(
         from_expr, extract_expr_ti, extract_expr->get_field());
   }
+  if (!extract_expr_ti.is_high_precision_timestamp() &&
+      is_subsecond_extract_field(extract_expr->get_field())) {
+    from_expr = extract_expr_ti.get_notnull()
+                    ? cgen_state_->ir_builder_.CreateMul(
+                          from_expr,
+                          ll_int(get_extract_timestamp_precision_scale(
+                              extract_expr->get_field())))
+                    : cgen_state_->emitCall("mul_int64_t_nullable_lhs",
+                                            {from_expr,
+                                             ll_int(get_extract_timestamp_precision_scale(
+                                                 extract_expr->get_field())),
+                                             inlineIntNull(extract_expr_ti)});
+  }
   std::vector<llvm::Value*> extract_args{
       ll_int(static_cast<int32_t>(extract_expr->get_field())), from_expr};
   std::string extract_fname{"ExtractFromTime"};

@@ -49,8 +49,9 @@ class DateTimeTranslator {
         return ExtractFromTime(
             field, timeval / get_timestamp_precision_scale(ti.get_dimension()));
       }
-    } else if (ti.is_timestamp() && is_subsecond_extract_field(field)) {
-      return 0;
+    } else if (is_subsecond_extract_field(field)) {
+      return ExtractFromTime(field,
+                             timeval * get_extract_timestamp_precision_scale(field));
     }
     return ExtractFromTime(field, timeval);
   }
