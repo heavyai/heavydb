@@ -2820,7 +2820,11 @@ std::vector<std::vector<std::string>> Detector::get_sample_rows(size_t n) {
 std::vector<std::string> Detector::get_headers() {
   std::vector<std::string> headers(best_sqltypes.size());
   for (size_t i = 0; i < best_sqltypes.size(); i++) {
-    headers[i] = has_headers ? raw_rows[0][i] : "column_" + std::to_string(i + 1);
+    if (has_headers && i < raw_rows[0].size()) {
+      headers[i] = raw_rows[0][i];
+    } else {
+      headers[i] = "column_" + std::to_string(i + 1);
+    }
   }
   return headers;
 }
