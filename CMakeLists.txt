@@ -626,6 +626,7 @@ if(MAPD_IMMERSE_DOWNLOAD)
     UPDATE_COMMAND ""
     BUILD_COMMAND ""
     INSTALL_COMMAND ""
+    LOG_DOWNLOAD on
     )
   externalproject_get_property(frontend source_dir)
   install(DIRECTORY ${source_dir}/ DESTINATION "frontend/" PATTERN .git EXCLUDE PATTERN node_modules EXCLUDE)
@@ -664,6 +665,7 @@ if(MAPD_DOCS_DOWNLOAD)
     UPDATE_COMMAND ""
     BUILD_COMMAND ""
     INSTALL_COMMAND ""
+    LOG_DOWNLOAD on
     )
   externalproject_get_property(docs source_dir)
   install(DIRECTORY ${source_dir}/ DESTINATION "docs/" PATTERN .git EXCLUDE)
