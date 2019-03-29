@@ -49,6 +49,7 @@ extern int g_test_against_columnId_gap;
 extern bool g_enable_smem_group_by;
 extern bool g_allow_cpu_retry;
 extern bool g_enable_watchdog;
+extern bool g_skip_intermediate_count;
 
 extern unsigned g_trivial_loop_join_threshold;
 extern bool g_enable_overlaps_hashjoin;
@@ -1680,6 +1681,20 @@ TEST(Select, ComplexQueries) {
     }
     auto empty_row = rows->getNextRow(true, true);
     CHECK(empty_row.empty());
+  }
+}
+
+TEST(Select, MultiStepQueries) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    const auto skip_intermediate_count = g_skip_intermediate_count;
+    ScopeGuard reset_skip_intermediate_count = [&skip_intermediate_count] {
+      g_skip_intermediate_count = skip_intermediate_count;
+    };
+
+    c("SELECT z, (z * SUM(x)) / SUM(y) + 1 FROM test GROUP BY z ORDER BY z;", dt);
+    c("SELECT z,COUNT(*), AVG(x) / SUM(y) + 1 FROM test GROUP BY z ORDER BY z;", dt);
   }
 }
 

@@ -32,6 +32,8 @@
 
 #include "StorageIOFacility.h"
 
+extern bool g_skip_intermediate_count;
+
 enum class MergeType { Union, Reduce };
 
 struct FirstStepExecutionResult {
@@ -166,7 +168,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                  const CompilationOptions&,
                                  const ExecutionOptions&,
                                  RenderInfo*,
-                                 const int64_t queue_time_ms);
+                                 const int64_t queue_time_ms,
+                                 const ssize_t previous_count);
 
   // Computes the window function results to be used by the query.
   void computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
@@ -216,7 +219,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                   const CompilationOptions& co_in,
                                   const ExecutionOptions& eo,
                                   RenderInfo*,
-                                  const int64_t queue_time_ms);
+                                  const int64_t queue_time_ms,
+                                  const ssize_t previous_count = -1);
 
   size_t getNDVEstimation(const WorkUnit& work_unit,
                           const bool is_agg,

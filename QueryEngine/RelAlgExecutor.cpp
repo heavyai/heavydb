@@ -36,6 +36,7 @@
 #include <algorithm>
 #include <numeric>
 
+bool g_skip_intermediate_count{false};
 namespace {
 
 bool node_is_aggregate(const RelAlgNode* ra) {
@@ -365,8 +366,18 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
     } else if (project->isUpdateViaSelect()) {
       executeUpdateViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
     } else {
-      exec_desc.setResult(
-          executeProject(project, co, eo_work_unit, render_info, queue_time_ms));
+      ssize_t prev_count = -1;
+      if (g_skip_intermediate_count && i > 0 &&
+          dynamic_cast<const RelCompound*>(exec_descs[i - 1].getBody())) {
+        auto prev_desc = exec_descs[i - 1];
+        const auto& prev_exe_result = prev_desc.getResult();
+        const auto prev_result = prev_exe_result.getRows();
+        if (prev_result) {
+          prev_count = static_cast<ssize_t>(prev_result->rowCount());
+        }
+      }
+      exec_desc.setResult(executeProject(
+          project, co, eo_work_unit, render_info, queue_time_ms, prev_count));
       if (exec_desc.getResult().isFilterPushDownEnabled()) {
         return;
       }
@@ -1172,7 +1183,8 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                                                const CompilationOptions& co,
                                                const ExecutionOptions& eo,
                                                RenderInfo* render_info,
-                                               const int64_t queue_time_ms) {
+                                               const int64_t queue_time_ms,
+                                               const ssize_t previous_count) {
   auto work_unit =
       createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   CompilationOptions co_project = co;
@@ -1197,7 +1209,8 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                          co_project,
                          eo,
                          render_info,
-                         queue_time_ms);
+                         queue_time_ms,
+                         previous_count);
 }
 
 namespace {
@@ -1587,6 +1600,11 @@ bool can_use_scan_limit(const RelAlgExecutionUnit& ra_exe_unit) {
   return false;
 }
 
+inline bool exe_unit_has_quals(const RelAlgExecutionUnit ra_exe_unit) {
+  return !(ra_exe_unit.quals.empty() && ra_exe_unit.join_quals.empty() &&
+           ra_exe_unit.simple_quals.empty());
+}
+
 RelAlgExecutionUnit decide_approx_count_distinct_implementation(
     const RelAlgExecutionUnit& ra_exe_unit_in,
     const std::vector<InputTableInfo>& table_infos,
@@ -1666,7 +1684,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     const CompilationOptions& co_in,
     const ExecutionOptions& eo,
     RenderInfo* render_info,
-    const int64_t queue_time_ms) {
+    const int64_t queue_time_ms,
+    const ssize_t previous_count) {
   INJECT_TIMER(executeWorkUnit);
   auto co = co_in;
   if (is_window_execution_unit(work_unit.exe_unit)) {
@@ -1714,9 +1733,13 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     ra_exe_unit.scan_limit = max_groups_buffer_entry_guess;
   } else if (!eo.just_explain && can_use_scan_limit(ra_exe_unit) &&
              !isRowidLookup(work_unit)) {
-    const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
-    if (filter_count_all >= 0) {
-      ra_exe_unit.scan_limit = std::max(filter_count_all, ssize_t(1));
+    if (previous_count > 0 && !exe_unit_has_quals(ra_exe_unit)) {
+      ra_exe_unit.scan_limit = static_cast<size_t>(previous_count);
+    } else {
+      const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
+      if (filter_count_all >= 0) {
+        ra_exe_unit.scan_limit = std::max(filter_count_all, ssize_t(1));
+      }
     }
   }
 

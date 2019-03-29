@@ -53,6 +53,7 @@ using namespace ::apache::thrift::transport;
 
 extern bool g_cache_string_hash;
 extern size_t g_leaf_count;
+extern bool g_skip_intermediate_count;
 
 bool g_enable_thrift_logs{false};
 
@@ -474,6 +475,12 @@ void MapDProgramOptions::fillAdvancedOptions(po::options_description& desc_adv) 
                              ->default_value(g_enable_window_functions)
                              ->implicit_value(true),
                          "Enable experimental window function support");
+  desc_adv.add_options()(
+      "skip-intermediate-count",
+      po::value<bool>(&g_skip_intermediate_count)
+          ->default_value(g_skip_intermediate_count)
+          ->implicit_value(true),
+      "Skip pre-flight counts for intermediate projections with no filters.");
 };
 
 namespace {
