@@ -219,12 +219,10 @@ template <typename VALUE_TYPE>
 struct ArrowValueBase {
   const DataBufferBase& data;
   const VALUE_TYPE v;
-  const bool date_in_days;
   const int32_t dimension;
   ArrowValueBase(const DataBufferBase& data, const VALUE_TYPE& v)
       : data(data)
       , v(v)
-      , date_in_days(data.cd->columnType.is_date_in_days())
       , dimension(data.cd->columnType.is_high_precision_timestamp()
                       ? data.cd->columnType.get_dimension()
                       : 0) {}
@@ -235,10 +233,9 @@ struct ArrowValueBase {
       auto& date_type = static_cast<const DateType&>(data.arrow_type);
       switch (date_type.unit()) {
         case DateUnit::DAY:
-          return date_in_days ? v : v * kSecondsInDay;
+          return v * kSecondsInDay;
         case DateUnit::MILLI:
-          return date_in_days ? (v / kMillisecondsInSecond) / kSecondsInDay
-                              : v / kMillisecondsInSecond;
+          return v / kMillisecondsInSecond;
       }
     } else if (type_id == Type::TIME32 || type_id == Type::TIME64 ||
                type_id == Type::TIMESTAMP) {
@@ -377,18 +374,11 @@ struct ArrowValue<int64_t> : ArrowValueBase<int64_t> {
     const auto& type_id = data.arrow_type.id();
     if (type_id == Type::DATE32 || type_id == Type::DATE64) {
       auto& date_type = static_cast<const DateType&>(data.arrow_type);
-      switch (date_type.unit()) {
-        case DateUnit::DAY: {
-          SQLTypeInfo ti(kDATE, false, kENCODING_DATE_IN_DAYS);
-          Datum datum{.bigintval = v};
-          return DatumToString(datum, ti);
-        }
-        case DateUnit::MILLI: {
-          SQLTypeInfo ti(kDATE);
-          Datum datum{.bigintval = v / kMillisecondsInSecond};
-          return DatumToString(datum, ti);
-        }
-      }
+      SQLTypeInfo ti(kDATE);
+      Datum datum{.bigintval = date_type.unit() == DateUnit::MILLI
+                                   ? v / kMicrosecondsInSecond
+                                   : v};
+      return DatumToString(datum, ti);
     } else if (type_id == Type::TIME32 || type_id == Type::TIME64 ||
                type_id == Type::TIMESTAMP) {
       auto& time_type = static_cast<const TimeType&>(data.arrow_type);
