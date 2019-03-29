@@ -13,8 +13,8 @@ sudo chown -R $(id -u) $PREFIX
 
 apt install wget -y
 
-# add llvm 6 repository
-add-apt-repository -y 'deb http://apt.llvm.org/xenial/ llvm-toolchain-xenial main'
+# add llvm repository
+add-apt-repository -y 'deb https://apt.llvm.org/xenial/ llvm-toolchain-xenial main'
 wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key|sudo apt-key add -
 
 sudo apt update
