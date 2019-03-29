@@ -2212,8 +2212,6 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     create_table = true;
     if (!g_cluster) {
       populate_table = true;
-    } else {
-      //      throw std::runtime_error("CTAS in distributed mode not supported.");
     }
   }
 
@@ -2360,6 +2358,9 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   size_t current_leaf = 0;
   size_t start_row = 0;
   size_t num_rows_to_process = std::min(num_rows, max_number_of_rows_per_package);
+
+  // ensure that at least one row is being processed
+  num_rows_to_process = std::max(num_rows_to_process, 1UL);
 
   std::vector<std::unique_ptr<TargetValueConverter>> value_converters;
   const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
