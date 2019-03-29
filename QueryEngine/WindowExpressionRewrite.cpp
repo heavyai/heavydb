@@ -108,7 +108,11 @@ std::shared_ptr<Analyzer::WindowFunction> rewrite_sum_window(const Analyzer::Exp
   }
   const auto sum_window_expr = extract_sum_window(cast_sum_window_expr);
   CHECK(sum_window_expr);
-  return makeExpr<Analyzer::WindowFunction>(sum_window_expr->get_type_info(),
+  auto sum_ti = sum_window_expr->get_type_info();
+  if (sum_ti.is_integer()) {
+    sum_ti = SQLTypeInfo(kBIGINT, sum_ti.get_notnull());
+  }
+  return makeExpr<Analyzer::WindowFunction>(sum_ti,
                                             SqlWindowFunctionKind::SUM,
                                             sum_window_expr->getArgs(),
                                             sum_window_expr->getPartitionKeys(),

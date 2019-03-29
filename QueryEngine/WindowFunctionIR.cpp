@@ -239,8 +239,13 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
   } else {
     const auto arg_lvs = codegen(args.front().get(), true, co);
     CHECK_EQ(arg_lvs.size(), size_t(1));
-    crt_val = window_func_ti.get_type() == kFLOAT ? arg_lvs.front()
-                                                  : castToTypeIn(arg_lvs.front(), 64);
+    if (window_func->getKind() == SqlWindowFunctionKind::SUM && !window_func_ti.is_fp()) {
+      crt_val = codegenCastBetweenIntTypes(
+          arg_lvs.front(), args.front()->get_type_info(), window_func_ti, false);
+    } else {
+      crt_val = window_func_ti.get_type() == kFLOAT ? arg_lvs.front()
+                                                    : castToTypeIn(arg_lvs.front(), 64);
+    }
   }
   const auto agg_name = get_window_agg_name(window_func->getKind(), window_func_ti);
   llvm::Value* multiplicity_lv = nullptr;

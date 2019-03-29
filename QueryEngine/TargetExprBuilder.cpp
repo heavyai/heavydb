@@ -377,6 +377,9 @@ void TargetExprCodegen::codegen(
       switch (window_func_ti.get_type()) {
         case kFLOAT: {
           apply_window_pending_outputs_name += "_float";
+          if (group_by_and_agg->outputColumnar()) {
+            apply_window_pending_outputs_name += "_columnar";
+          }
           break;
         }
         case kDOUBLE: {

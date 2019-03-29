@@ -326,6 +326,20 @@ extern "C" void apply_window_pending_outputs_float(const int64_t handle,
   pending_output_slots.clear();
 }
 
+extern "C" void apply_window_pending_outputs_float_columnar(const int64_t handle,
+                                                            const float value,
+                                                            const int64_t bitset,
+                                                            const int64_t pos) {
+  if (!pos_is_set(bitset, pos)) {
+    return;
+  }
+  auto& pending_output_slots = *reinterpret_cast<std::vector<void*>*>(handle);
+  for (auto pending_output_slot : pending_output_slots) {
+    *reinterpret_cast<float*>(pending_output_slot) = value;
+  }
+  pending_output_slots.clear();
+}
+
 // Add a pending output slot to be written back at the end of a peer row group.
 extern "C" void add_window_pending_output(void* pending_output, const int64_t handle) {
   reinterpret_cast<std::vector<void*>*>(handle)->push_back(pending_output);
