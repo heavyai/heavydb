@@ -9474,6 +9474,124 @@ TEST(Select, TimestampPrecisionFormat) {
   }
 }
 
+namespace {
+
+void validate_timestamp_agg(const ResultSet& row,
+                            const int64_t expected_ts,
+                            const double expected_mean,
+                            const int64_t expected_count) {
+  const auto crt_row = row.getNextRow(true, true);
+  ASSERT_EQ(size_t(3), crt_row.size());
+  const auto actual_ts = v<int64_t>(crt_row[0]);
+  ASSERT_EQ(actual_ts, expected_ts);
+  const auto actual_mean = v<double>(crt_row[1]);
+  ASSERT_EQ(actual_mean, expected_mean);
+  const auto actual_count = v<int64_t>(crt_row[2]);
+  ASSERT_EQ(actual_count, expected_count);
+  const auto nrow = row.getNextRow(true, true);
+  ASSERT_TRUE(nrow.empty());
+}
+
+}  // namespace
+
+TEST(Select, TimestampCastAggregates) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP table if exists timestamp_agg;");
+    EXPECT_NO_THROW(
+        run_ddl_statement("create table timestamp_agg(val int, dt date, ts timestamp, "
+                          "ts3 timestamp(3), ts6 timestamp(6), ts9 timestamp(9));"));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into timestamp_agg values(100, '2014-12-13', "
+                         "'2014-12-13 22:23:15', '2014-12-13 22:23:15.123', '2014-12-13 "
+                         "22:23:15.123456', '2014-12-13 22:23:15.123456789');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into timestamp_agg values(150, '2014-12-13', "
+                         "'2014-12-13 22:23:15', '2014-12-13 22:23:15.123', '2014-12-13 "
+                         "22:23:15.123456', '2014-12-13 22:23:15.123456789');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into timestamp_agg values(200, '2014-12-14', "
+                         "'2014-12-14 22:23:14', '2014-12-13 22:23:15.120', '2014-12-13 "
+                         "22:23:15.123450', '2014-12-13 22:23:15.123456780');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into timestamp_agg values(600, '2014-12-14', "
+                         "'2014-12-14 22:23:14', '2014-12-13 22:23:15.120', '2014-12-13 "
+                         "22:23:15.123450', '2014-12-13 22:23:15.123456780');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into timestamp_agg values(600, '2014-12-14', "
+                         "'2014-12-14 22:23:14', '2014-12-14 22:23:15.120', '2014-12-14 "
+                         "22:23:15.123450', '2014-12-14 22:23:15.123456780');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into timestamp_agg values(180, '2014-12-14', "
+                         "'2014-12-14 22:23:14', '2014-12-13 22:23:15.120', '2014-12-14 "
+                         "22:23:15.123450', '2014-12-14 22:23:15.123456780');",
+                         dt));
+
+    const std::vector<std::tuple<std::string, int64_t, double, int64_t>> params_{
+        // Date
+        std::make_tuple("CAST(dt as timestamp(0))", 1418428800, 125.0, 2),
+        std::make_tuple("CAST(dt as timestamp(3))", 1418428800000, 125.0, 2),
+        std::make_tuple("CAST(dt as timestamp(6))", 1418428800000000, 125.0, 2),
+        std::make_tuple("CAST(dt as timestamp(9))", 1418428800000000000, 125.0, 2),
+        std::make_tuple("DATE_TRUNC(millisecond, dt)", 1418428800, 125.0, 2),
+        std::make_tuple("DATE_TRUNC(microsecond, dt)", 1418428800, 125.0, 2),
+        std::make_tuple("DATE_TRUNC(nanosecond, dt)", 1418428800, 125.0, 2),
+        // Timestamp(s)
+        std::make_tuple("CAST(ts as date)", 1418428800, 125.0, 2),
+        std::make_tuple("CAST(ts as timestamp(3))", 1418509395000, 125.0, 2),
+        std::make_tuple("CAST(ts as timestamp(6))", 1418509395000000, 125.0, 2),
+        std::make_tuple("CAST(ts as timestamp(9))", 1418509395000000000, 125.0, 2),
+        std::make_tuple("DATE_TRUNC(millisecond, ts)", 1418509395, 125.0, 2),
+        std::make_tuple("DATE_TRUNC(microsecond, ts)", 1418509395, 125.0, 2),
+        std::make_tuple("DATE_TRUNC(nanosecond, ts)", 1418509395, 125.0, 2),
+        // Timestamp(ms)
+        std::make_tuple("CAST(ts3 as date)", 1418428800, 246.0, 5),
+        std::make_tuple("CAST(ts3 as timestamp(0))", 1418509395, 246.0, 5),
+        std::make_tuple(
+            "CAST(ts3 as timestamp(6))", 1418509395120000, 326.6666666666667, 3),
+        std::make_tuple(
+            "CAST(ts3 as timestamp(9))", 1418509395120000000, 326.6666666666667, 3),
+        std::make_tuple(
+            "DATE_TRUNC(millisecond, ts3)", 1418509395120, 326.6666666666667, 3),
+        std::make_tuple(
+            "DATE_TRUNC(microsecond, ts3)", 1418509395120, 326.6666666666667, 3),
+        std::make_tuple(
+            "DATE_TRUNC(nanosecond, ts3)", 1418509395120, 326.6666666666667, 3),
+        // Timestamp(us)
+        std::make_tuple("CAST(ts6 as date)", 1418428800, 262.5, 4),
+        std::make_tuple("CAST(ts6 as timestamp(0))", 1418509395, 262.5, 4),
+        std::make_tuple("CAST(ts6 as timestamp(3))", 1418509395123, 262.5, 4),
+        std::make_tuple("CAST(ts6 as timestamp(9))", 1418509395123450000, 400.0, 2),
+        std::make_tuple("DATE_TRUNC(millisecond, ts6)", 1418509395123000, 262.5, 4),
+        std::make_tuple("DATE_TRUNC(microsecond, ts6)", 1418509395123450, 400.0, 2),
+        std::make_tuple("DATE_TRUNC(nanosecond, ts6)", 1418509395123450, 400.0, 2),
+        // Timestamp(ns)
+        std::make_tuple("CAST(ts9 as date)", 1418428800, 262.5, 4),
+        std::make_tuple("CAST(ts9 as timestamp(0))", 1418509395, 262.5, 4),
+        std::make_tuple("CAST(ts9 as timestamp(3))", 1418509395123, 262.5, 4),
+        std::make_tuple("CAST(ts9 as timestamp(6))", 1418509395123456, 262.5, 4),
+        std::make_tuple("DATE_TRUNC(millisecond, ts9)", 1418509395123000000, 262.5, 4),
+        std::make_tuple("DATE_TRUNC(microsecond, ts9)", 1418509395123456000, 262.5, 4),
+        std::make_tuple("DATE_TRUNC(nanosecond, ts9)", 1418509395123456780, 400.0, 2)};
+
+    for (auto& param : params_) {
+      const auto row =
+          run_multiple_agg("SELECT " + std::get<0>(param) +
+                               " as tg, avg(val), count(*) from timestamp_agg group by "
+                               "tg order by tg limit 1;",
+                           dt);
+      validate_timestamp_agg(
+          *row, std::get<1>(param), std::get<2>(param), std::get<3>(param));
+    }
+    run_ddl_statement("DROP table timestamp_agg;");
+  }
+}
+
 TEST(Truncate, Count) {
   run_ddl_statement("create table trunc_test (i1 integer, t1 text);");
   run_multiple_agg("insert into trunc_test values(1, '1');", ExecutorDeviceType::CPU);

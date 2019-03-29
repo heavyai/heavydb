@@ -223,6 +223,14 @@ class DateTimeFacilities {
     return false;
   }
 
+  constexpr auto is_date() const {
+    CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
+    if (is_member_of_typeset<kDATE>(*derived)) {
+      return true;
+    }
+    return false;
+  }
+
   constexpr auto is_high_precision_timestamp() const {
     CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
     if (is_member_of_typeset<kTIMESTAMP>(*derived)) {
