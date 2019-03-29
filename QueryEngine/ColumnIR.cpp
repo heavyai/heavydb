@@ -428,17 +428,17 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_nulls_bb);
   const auto& null_ti = col_var->get_type_info();
+  if ((null_ti.is_string() && null_ti.get_compression() == kENCODING_NONE) ||
+      null_ti.is_array() || null_ti.is_geometry()) {
+    throw std::runtime_error("Projection type " + null_ti.get_type_name() +
+                             " not supported for outer joins yet");
+  }
   const auto null_constant = makeExpr<Analyzer::Constant>(null_ti, true, Datum{0});
   const auto null_target_lvs =
       codegen(null_constant.get(),
               false,
               CompilationOptions{
                   ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false});
-  if ((null_ti.is_string() && null_ti.get_compression() == kENCODING_NONE) ||
-      null_ti.is_array()) {
-    throw std::runtime_error("Projection type " + null_ti.get_type_name() +
-                             " not supported for outer joins yet");
-  }
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   CHECK_EQ(orig_lvs.size(), null_target_lvs.size());
   cgen_state_->ir_builder_.SetInsertPoint(phi_bb);

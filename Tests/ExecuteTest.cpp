@@ -13287,6 +13287,15 @@ TEST(Select, GeoSpatial_GeoJoin) {
             dt,
             false),
         std::runtime_error);
+
+    // Geometry projection not supported for outer joins
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT b.poly FROM geospatial_test a LEFT JOIN geospatial_inner_join_test "
+            "b ON ST_Contains(b.poly, a.p);",
+            dt,
+            false),
+        std::runtime_error);
   }
 
   const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
