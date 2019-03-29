@@ -178,12 +178,7 @@ void Executor::codegenWindowFunctionStateInit(llvm::Value* aggregate_state) {
   const auto window_func_context =
       WindowProjectNodeContext::getActiveWindowFunctionContext();
   const auto window_func = window_func_context->getWindowFunction();
-  const auto& args = window_func->getArgs();
-  const auto& window_func_ti =
-      ((window_func->getKind() == SqlWindowFunctionKind::COUNT && !args.empty()) ||
-       window_func->getKind() == SqlWindowFunctionKind::AVG)
-          ? args.front()->get_type_info()
-          : window_func->get_type_info();
+  const auto window_func_ti = get_adjusted_window_type_info(window_func);
   const auto window_func_null_val = window_func_ti.is_fp()
                                         ? inlineFpNull(window_func_ti)
                                         : castToTypeIn(inlineIntNull(window_func_ti), 64);
