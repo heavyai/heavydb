@@ -66,6 +66,11 @@ class MapDRenderHandler {
     CHECK(false);
   }
 
+  static std::string dump_table_col_names(
+      const std::map<std::string, std::vector<std::string>>& table_col_names) {
+    CHECK(false);
+  }
+
   void get_result_row_for_pixel(
       TPixelTableRowResult& _return,
       const std::shared_ptr<Catalog_Namespace::SessionInfo> session_info,

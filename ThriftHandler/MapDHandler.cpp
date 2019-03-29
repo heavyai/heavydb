@@ -1529,18 +1529,6 @@ void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
   }
 }
 
-std::string dump_table_col_names(
-    const std::map<std::string, std::vector<std::string>>& table_col_names) {
-  std::ostringstream oss;
-  for (const auto table_col : table_col_names) {
-    oss << ":" << table_col.first;
-    for (const auto col : table_col.second) {
-      oss << "," << col;
-    }
-  }
-  return oss.str();
-}
-
 void MapDHandler::get_result_row_for_pixel(
     TPixelTableRowResult& _return,
     const TSessionId& session,
@@ -1562,7 +1550,7 @@ void MapDHandler::get_result_row_for_pixel(
                 "pixel_radius",
                 pixel_radius,
                 "table_col_names",
-                dump_table_col_names(table_col_names),
+                MapDRenderHandler::dump_table_col_names(table_col_names),
                 "nonce",
                 nonce);
   if (!render_handler_) {
@@ -3010,10 +2998,6 @@ void MapDHandler::render_vega(TRenderResult& _return,
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }
   });
-  LOG(INFO) << "render_vega-COMPLETED nonce: " << nonce
-            << " Total: " << _return.total_time_ms
-            << " (ms), Total Execution: " << _return.execution_time_ms
-            << " (ms), Total Render: " << _return.render_time_ms << " (ms)";
 }
 
 static bool is_allowed_on_dashboard(const Catalog_Namespace::SessionInfo& session_info,
