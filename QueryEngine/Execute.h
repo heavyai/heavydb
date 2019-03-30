@@ -1225,7 +1225,7 @@ class Executor {
       const std::vector<uint64_t>& frag_offsets,
       const size_t frag_idx);
 
-  typedef std::vector<std::string> CodeCacheKey;
+  using CodeCacheKey = std::vector<std::string>;
   typedef std::vector<std::tuple<void*,
                                  std::unique_ptr<llvm::ExecutionEngine>,
                                  std::unique_ptr<GpuCompilationContext>>>

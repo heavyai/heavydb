@@ -76,16 +76,19 @@ enum class CalciteDMLPathSelection : int {
 
 inline CalciteDMLPathSelection yield_dml_path_selector() {
   int selector = 0;
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorTrue>::value)
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorTrue>::value) {
     selector |= 0x02;
-  if (std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value)
+  }
+  if (std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     selector |= 0x01;
+  }
   return static_cast<CalciteDMLPathSelection>(selector);
 }
 
 inline bool is_calcite_permissable_dml(ParserWrapper const& pw, bool read_only_mode) {
-  if (read_only_mode)
+  if (read_only_mode) {
     return !pw.is_update_dml;  // If we're read-only rejected, no DML is permissable
+  }
 
   switch (yield_dml_path_selector()) {
     case CalciteDMLPathSelection::OnlyUpdates:

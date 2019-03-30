@@ -24,7 +24,7 @@
 #ifndef INPLACESORTIMPL_H
 #define INPLACESORTIMPL_H
 
-#include <stdint.h>
+#include <cstdint>
 
 class ThrustAllocator;
 

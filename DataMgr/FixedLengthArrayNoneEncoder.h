@@ -48,8 +48,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
                                        const size_t byteLimit,
                                        const bool replicating = false) {
     size_t dataSize = numAppendElems * array_size;
-    if (dataSize > byteLimit)
+    if (dataSize > byteLimit) {
       dataSize = byteLimit;
+    }
     return dataSize / array_size;
   }
 
@@ -82,8 +83,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     }
     // make sure buffer_ is flushed even if no new data is appended to it
     // (e.g. empty strings) because the metadata needs to be flushed.
-    if (!buffer_->isDirty())
+    if (!buffer_->isDirty()) {
       buffer_->setDirty();
+    }
 
     num_elems_ += numAppendElems;
     ChunkMetadata chunkMetadata;
@@ -158,9 +160,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kBOOLEAN: {
         const bool* bool_array = (bool*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(bool); i++) {
-          if ((int8_t)bool_array[i] == NULL_BOOLEAN)
+          if ((int8_t)bool_array[i] == NULL_BOOLEAN) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.boolval = std::min(elem_min.boolval, bool_array[i]);
             elem_max.boolval = std::max(elem_max.boolval, bool_array[i]);
           } else {
@@ -173,9 +175,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kINT: {
         const int32_t* int_array = (int32_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int32_t); i++) {
-          if (int_array[i] == NULL_INT)
+          if (int_array[i] == NULL_INT) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.intval = std::min(elem_min.intval, int_array[i]);
             elem_max.intval = std::max(elem_max.intval, int_array[i]);
           } else {
@@ -188,9 +190,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kSMALLINT: {
         const int16_t* int_array = (int16_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int16_t); i++) {
-          if (int_array[i] == NULL_SMALLINT)
+          if (int_array[i] == NULL_SMALLINT) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.smallintval = std::min(elem_min.smallintval, int_array[i]);
             elem_max.smallintval = std::max(elem_max.smallintval, int_array[i]);
           } else {
@@ -203,9 +205,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kTINYINT: {
         const int8_t* int_array = (int8_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int8_t); i++) {
-          if (int_array[i] == NULL_TINYINT)
+          if (int_array[i] == NULL_TINYINT) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.tinyintval = std::min(elem_min.tinyintval, int_array[i]);
             elem_max.tinyintval = std::max(elem_max.tinyintval, int_array[i]);
           } else {
@@ -237,9 +239,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kFLOAT: {
         const float* flt_array = (float*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(float); i++) {
-          if (flt_array[i] == NULL_FLOAT)
+          if (flt_array[i] == NULL_FLOAT) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.floatval = std::min(elem_min.floatval, flt_array[i]);
             elem_max.floatval = std::max(elem_max.floatval, flt_array[i]);
           } else {
@@ -252,9 +254,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kDOUBLE: {
         const double* dbl_array = (double*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(double); i++) {
-          if (dbl_array[i] == NULL_DOUBLE)
+          if (dbl_array[i] == NULL_DOUBLE) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.doubleval = std::min(elem_min.doubleval, dbl_array[i]);
             elem_max.doubleval = std::max(elem_max.doubleval, dbl_array[i]);
           } else {
@@ -269,9 +271,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kDATE: {
         const int64_t* tm_array = reinterpret_cast<int64_t*>(array.pointer);
         for (size_t i = 0; i < array.length / sizeof(int64_t); i++) {
-          if (tm_array[i] == NULL_BIGINT)
+          if (tm_array[i] == NULL_BIGINT) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.bigintval = std::min(elem_min.bigintval, tm_array[i]);
             elem_max.bigintval = std::max(elem_max.bigintval, tm_array[i]);
           } else {
@@ -287,9 +289,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
         assert(buffer_->sqlType.get_compression() == kENCODING_DICT);
         const int32_t* int_array = (int32_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int32_t); i++) {
-          if (int_array[i] == NULL_INT)
+          if (int_array[i] == NULL_INT) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.intval = std::min(elem_min.intval, int_array[i]);
             elem_max.intval = std::max(elem_max.intval, int_array[i]);
           } else {

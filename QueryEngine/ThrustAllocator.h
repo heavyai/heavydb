@@ -35,7 +35,7 @@ class AbstractBuffer;
 
 class ThrustAllocator {
  public:
-  typedef int8_t value_type;
+  using value_type = int8_t;
   ThrustAllocator(Data_Namespace::DataMgr* mgr, const int id)
       : data_mgr_(mgr), device_id_(id) {}
   ~ThrustAllocator();

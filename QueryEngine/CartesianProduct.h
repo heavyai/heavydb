@@ -47,9 +47,9 @@ class CartesianProductIterator
  private:
   //! Give types more descriptive names
   // \{
-  typedef T OuterContainer;
-  typedef typename T::value_type Container;
-  typedef typename T::value_type::value_type Content;
+  using OuterContainer = T;
+  using Container = typename T::value_type;
+  using Content = typename T::value_type::value_type;
   // \}
 
   //! Grant access to boost::iterator_facade

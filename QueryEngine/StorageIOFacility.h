@@ -237,8 +237,9 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
     auto callback = [this,
                      &update_parameters](FragmentUpdaterType const& update_log) -> void {
       auto rows_per_column = update_log.getEntryCount();
-      if (rows_per_column == 0)
+      if (rows_per_column == 0) {
         return;
+      }
 
       OffsetVector column_offsets(rows_per_column);
       ScalarTargetValueVector scalar_target_values(rows_per_column);
@@ -292,7 +293,7 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
         row_processing_futures.reserve(usable_threads);
 
         auto thread_launcher = [&](auto const& type_tag) {
-          for (unsigned i = 0; i < static_cast<unsigned>(usable_threads); i++)
+          for (unsigned i = 0; i < static_cast<unsigned>(usable_threads); i++) {
             row_processing_futures.emplace_back(
                 std::async(std::launch::async,
                            std::forward<decltype(process_rows)>(process_rows),
@@ -300,6 +301,7 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
                            column_index,
                            get_row_index(i),
                            complete_row_block_size));
+          }
           if (partial_row_block_size) {
             row_processing_futures.emplace_back(
                 std::async(std::launch::async,
@@ -346,8 +348,9 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
   auto callback = [this,
                    &delete_parameters](FragmentUpdaterType const& update_log) -> void {
     auto rows_per_column = update_log.getEntryCount();
-    if (rows_per_column == 0)
+    if (rows_per_column == 0) {
       return;
+    }
     DeleteVictimOffsetList victim_offsets(rows_per_column);
 
     auto complete_row_block_size = rows_per_column / normalized_cpu_threads();
@@ -388,18 +391,20 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
     RowProcessingFuturesVector row_processing_futures;
     row_processing_futures.reserve(usable_threads);
 
-    for (unsigned i = 0; i < (unsigned)usable_threads; i++)
+    for (unsigned i = 0; i < (unsigned)usable_threads; i++) {
       row_processing_futures.emplace_back(
           std::async(std::launch::async,
                      std::forward<decltype(process_rows)>(process_rows),
                      get_row_index(i),
                      complete_row_block_size));
-    if (partial_row_block_size)
+    }
+    if (partial_row_block_size) {
       row_processing_futures.emplace_back(
           std::async(std::launch::async,
                      std::forward<decltype(process_rows)>(process_rows),
                      get_row_index(usable_threads),
                      partial_row_block_size));
+    }
 
     uint64_t rows_processed(0);
     for (auto& t : row_processing_futures) {

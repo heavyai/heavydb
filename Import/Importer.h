@@ -230,8 +230,9 @@ class TypedImportBuffer : boost::noncopyable {
           CHECK(col_desc->columnType.get_compression() == kENCODING_DICT);
           string_array_buffer_ = new std::vector<std::vector<std::string>>();
           string_array_dict_buffer_ = new std::vector<ArrayDatum>();
-        } else
+        } else {
           array_buffer_ = new std::vector<ArrayDatum>();
+        }
         break;
       case kPOINT:
       case kLINESTRING:
@@ -296,8 +297,9 @@ class TypedImportBuffer : boost::noncopyable {
         if (IS_STRING(column_desc_->columnType.get_subtype())) {
           delete string_array_buffer_;
           delete string_array_dict_buffer_;
-        } else
+        } else {
           delete array_buffer_;
+        }
         break;
       case kPOINT:
       case kLINESTRING:
@@ -478,8 +480,9 @@ class TypedImportBuffer : boost::noncopyable {
   }
 
   bool stringDictCheckpoint() {
-    if (string_dict_ == nullptr)
+    if (string_dict_ == nullptr) {
       return true;
+    }
     return string_dict_->checkpoint();
   }
 
@@ -545,8 +548,9 @@ class TypedImportBuffer : boost::noncopyable {
         if (IS_STRING(column_desc_->columnType.get_subtype())) {
           string_array_buffer_->clear();
           string_array_dict_buffer_->clear();
-        } else
+        } else {
           array_buffer_->clear();
+        }
         break;
       }
       case kPOINT:
@@ -626,8 +630,9 @@ class Loader {
     if ((cd->columnType.get_type() != kARRAY ||
          !IS_STRING(cd->columnType.get_subtype())) &&
         (!cd->columnType.is_string() ||
-         cd->columnType.get_compression() != kENCODING_DICT))
+         cd->columnType.get_compression() != kENCODING_DICT)) {
       return nullptr;
+    }
     return dict_map.at(cd->columnId);
   }
   virtual bool load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
@@ -653,7 +658,7 @@ class Loader {
   Fragmenter_Namespace::InsertData insert_data;
   std::map<int, StringDictionary*> dict_map;
   void init();
-  typedef std::vector<std::unique_ptr<TypedImportBuffer>> OneShardBuffers;
+  using OneShardBuffers = std::vector<std::unique_ptr<TypedImportBuffer>>;
   void distributeToShards(std::vector<OneShardBuffers>& all_shard_import_buffers,
                           std::vector<size_t>& all_shard_row_counts,
                           const OneShardBuffers& import_buffers,
@@ -791,22 +796,24 @@ class ImporterUtils {
     for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos;
          i = s.find(copy_params.array_delim, last)) {
       if (i > last) {  // if not empty string - disallow empty strings for now
-        if (s.substr(last, i - last).length() > StringDictionary::MAX_STRLEN)
+        if (s.substr(last, i - last).length() > StringDictionary::MAX_STRLEN) {
           throw std::runtime_error("Array String too long : " +
                                    std::to_string(s.substr(last, i - last).length()) +
                                    " max is " +
                                    std::to_string(StringDictionary::MAX_STRLEN));
+        }
 
         string_vec.push_back(s.substr(last, i - last));
       }
       last = i + 1;
     }
     if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
-      if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN)
+      if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN) {
         throw std::runtime_error(
             "Array String too long : " +
             std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
             std::to_string(StringDictionary::MAX_STRLEN));
+      }
 
       string_vec.push_back(s.substr(last, s.size() - 1 - last));
     }

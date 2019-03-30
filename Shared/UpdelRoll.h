@@ -42,8 +42,9 @@ using MetaDataKey =
 // this roll records stuff that need to be roll back/forw after upd/del fails or finishes
 struct UpdelRoll {
   ~UpdelRoll() {
-    if (dirtyChunks.size())
+    if (dirtyChunks.size()) {
       cancelUpdate();
+    }
   }
   std::mutex mutex;
 

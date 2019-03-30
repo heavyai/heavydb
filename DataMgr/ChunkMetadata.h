@@ -17,7 +17,7 @@
 #ifndef CHUNKMETADATA_H
 #define CHUNKMETADATA_H
 
-#include <stddef.h>
+#include <cstddef>
 #include "../Shared/sqltypes.h"
 
 #include <glog/logging.h>

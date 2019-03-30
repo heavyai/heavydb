@@ -32,8 +32,9 @@ class Archive {
       : url(url), plain_text(plain_text) {
     parse_url(url, url_parts);
 
-    if (0 == (ar = archive_read_new()))
+    if (0 == (ar = archive_read_new())) {
       throw std::runtime_error(std::string("archive_read_new failed!"));
+    }
 
 //!! LIBARCHIVE_ENABLE_ALL may trigger exception "detect_column_types error: libarchive
 //! error: Missing type keyword in
@@ -77,10 +78,12 @@ class Archive {
   }
 
   virtual ~Archive() {
-    if (ar)
+    if (ar) {
       archive_read_close(ar);
-    if (ar)
+    }
+    if (ar) {
       archive_read_free(ar);
+    }
     ar = 0;
   }
 
@@ -166,13 +169,15 @@ class Archive {
     std::smatch sm;
     std::regex url_regex(R"(^(([^:\/?#]+):)?(//([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?)",
                          std::regex::extended);
-    if (!std::regex_match(url, sm, url_regex))
+    if (!std::regex_match(url, sm, url_regex)) {
       throw std::runtime_error(std::string("malformed url: ") + url);
+    }
 
     // sm is only an iterator over local 'url'
     // so have to copy out matched parts
-    for (size_t i = 0; i < sm.size(); i++)
+    for (size_t i = 0; i < sm.size(); i++) {
       url_parts[i] = sm[i].str();
+    }
   }
 
   const std::string url_part(const int i) { return url_parts[i]; }

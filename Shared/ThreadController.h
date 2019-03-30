@@ -109,10 +109,10 @@ class SimpleRunningThreadController : public SimpleThreadController<FutureReturn
                                 std::enable_if_t<!future_return_void>* = 0)
       : SimpleThreadController<FutureReturnType>(max_threads, future_getter)
       , n_running_threads_(0) {}
-  virtual ~SimpleRunningThreadController() {}
+  ~SimpleRunningThreadController() override {}
   int notify_thread_is_completed() { return --n_running_threads_; }
   int getRunningThreadCount() const override { return n_running_threads_; }
-  void checkThreadsStatus() {
+  void checkThreadsStatus() override {
     SimpleThreadController<FutureReturnType>::checkThreadsStatus();
   }
   template <typename FuncType, typename... Args>

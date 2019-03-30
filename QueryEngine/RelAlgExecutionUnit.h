@@ -56,7 +56,7 @@ struct JoinCondition {
   JoinType type;
 };
 
-typedef std::vector<JoinCondition> JoinQualsPerNestingLevel;
+using JoinQualsPerNestingLevel = std::vector<JoinCondition>;
 
 struct RelAlgExecutionUnit {
   const std::vector<InputDescriptor> input_descs;
@@ -73,6 +73,6 @@ struct RelAlgExecutionUnit {
 };
 
 class ResultSet;
-typedef std::shared_ptr<ResultSet> ResultSetPtr;
+using ResultSetPtr = std::shared_ptr<ResultSet>;
 
 #endif  // QUERYENGINE_RELALGEXECUTIONUNIT_H

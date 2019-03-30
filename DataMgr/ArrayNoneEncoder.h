@@ -56,8 +56,9 @@ class ArrayNoneEncoder : public Encoder {
     size_t n = start_idx;
     for (; n < start_idx + numAppendElems; n++) {
       size_t len = (*srcData)[replicating ? 0 : n].length;
-      if (dataSize + len > byteLimit)
+      if (dataSize + len > byteLimit) {
         break;
+      }
       dataSize += len;
     }
     return n - start_idx;
@@ -77,8 +78,9 @@ class ArrayNoneEncoder : public Encoder {
                            const bool replicating) {
     assert(index_buf != nullptr);  // index_buf must be set before this.
     size_t index_size = numAppendElems * sizeof(ArrayOffsetT);
-    if (num_elems_ == 0)
+    if (num_elems_ == 0) {
       index_size += sizeof(ArrayOffsetT);  // plus one for the initial offset
+    }
     index_buf->reserve(index_size);
 
     bool first_elem_is_null = false;
@@ -155,27 +157,31 @@ class ArrayNoneEncoder : public Encoder {
         size_t len = (*srcData)[replicating ? 0 : i].length;
         if (len > inbuf_size) {
           // for large strings, append on its own
-          if (size > 0)
+          if (size > 0) {
             buffer_->append(inbuf, size);
+          }
           size = 0;
           buffer_->append((*srcData)[replicating ? 0 : i].pointer, len);
           num_appended++;
           break;
-        } else if (size + len > inbuf_size)
+        } else if (size + len > inbuf_size) {
           break;
+        }
         char* dest = (char*)inbuf + size;
         if (len > 0) {
           std::memcpy((void*)dest, (void*)(*srcData)[replicating ? 0 : i].pointer, len);
           size += len;
         }
       }
-      if (size > 0)
+      if (size > 0) {
         buffer_->append(inbuf, size);
+      }
     }
     // make sure buffer_ is flushed even if no new data is appended to it
     // (e.g. empty strings) because the metadata needs to be flushed.
-    if (!buffer_->isDirty())
+    if (!buffer_->isDirty()) {
       buffer_->setDirty();
+    }
 
     // keep Chunk statistics with array elements
     for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {
@@ -261,9 +267,9 @@ class ArrayNoneEncoder : public Encoder {
         }
         const bool* bool_array = (bool*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(bool); i++) {
-          if ((int8_t)bool_array[i] == NULL_BOOLEAN)
+          if ((int8_t)bool_array[i] == NULL_BOOLEAN) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.boolval = std::min(elem_min.boolval, bool_array[i]);
             elem_max.boolval = std::max(elem_max.boolval, bool_array[i]);
           } else {
@@ -281,9 +287,9 @@ class ArrayNoneEncoder : public Encoder {
         }
         const int32_t* int_array = (int32_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int32_t); i++) {
-          if (int_array[i] == NULL_INT)
+          if (int_array[i] == NULL_INT) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.intval = std::min(elem_min.intval, int_array[i]);
             elem_max.intval = std::max(elem_max.intval, int_array[i]);
           } else {
@@ -301,9 +307,9 @@ class ArrayNoneEncoder : public Encoder {
         }
         const int16_t* int_array = (int16_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int16_t); i++) {
-          if (int_array[i] == NULL_SMALLINT)
+          if (int_array[i] == NULL_SMALLINT) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.smallintval = std::min(elem_min.smallintval, int_array[i]);
             elem_max.smallintval = std::max(elem_max.smallintval, int_array[i]);
           } else {
@@ -321,9 +327,9 @@ class ArrayNoneEncoder : public Encoder {
         }
         const int8_t* int_array = (int8_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int8_t); i++) {
-          if (int_array[i] == NULL_TINYINT)
+          if (int_array[i] == NULL_TINYINT) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.tinyintval = std::min(elem_min.tinyintval, int_array[i]);
             elem_max.tinyintval = std::max(elem_max.tinyintval, int_array[i]);
           } else {
@@ -343,9 +349,9 @@ class ArrayNoneEncoder : public Encoder {
         }
         const int64_t* int_array = (int64_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int64_t); i++) {
-          if (int_array[i] == NULL_BIGINT)
+          if (int_array[i] == NULL_BIGINT) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.bigintval = std::min(elem_min.bigintval, int_array[i]);
             elem_max.bigintval = std::max(elem_max.bigintval, int_array[i]);
           } else {
@@ -363,9 +369,9 @@ class ArrayNoneEncoder : public Encoder {
         }
         const float* flt_array = (float*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(float); i++) {
-          if (flt_array[i] == NULL_FLOAT)
+          if (flt_array[i] == NULL_FLOAT) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.floatval = std::min(elem_min.floatval, flt_array[i]);
             elem_max.floatval = std::max(elem_max.floatval, flt_array[i]);
           } else {
@@ -383,9 +389,9 @@ class ArrayNoneEncoder : public Encoder {
         }
         const double* dbl_array = (double*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(double); i++) {
-          if (dbl_array[i] == NULL_DOUBLE)
+          if (dbl_array[i] == NULL_DOUBLE) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.doubleval = std::min(elem_min.doubleval, dbl_array[i]);
             elem_max.doubleval = std::max(elem_max.doubleval, dbl_array[i]);
           } else {
@@ -405,9 +411,9 @@ class ArrayNoneEncoder : public Encoder {
         }
         const auto tm_array = reinterpret_cast<int64_t*>(array.pointer);
         for (size_t i = 0; i < array.length / sizeof(int64_t); i++) {
-          if (tm_array[i] == NULL_BIGINT)
+          if (tm_array[i] == NULL_BIGINT) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.bigintval = std::min(elem_min.bigintval, tm_array[i]);
             elem_max.bigintval = std::max(elem_max.bigintval, tm_array[i]);
           } else {
@@ -428,9 +434,9 @@ class ArrayNoneEncoder : public Encoder {
         }
         const int32_t* int_array = (int32_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int32_t); i++) {
-          if (int_array[i] == NULL_INT)
+          if (int_array[i] == NULL_INT) {
             has_nulls = true;
-          else if (initialized) {
+          } else if (initialized) {
             elem_min.intval = std::min(elem_min.intval, int_array[i]);
             elem_max.intval = std::max(elem_max.intval, int_array[i]);
           } else {

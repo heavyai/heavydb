@@ -60,8 +60,9 @@ class DateDaysEncoder : public Encoder {
     buffer_->append((int8_t*)(encodedData.get()), numAppendElems * sizeof(V));
     ChunkMetadata chunkMetadata;
     getMetadata(chunkMetadata);
-    if (!replicating)
+    if (!replicating) {
       srcData += numAppendElems * sizeof(T);
+    }
     return chunkMetadata;
   }
 

@@ -28,7 +28,7 @@
 
 #include "../Shared/funcannotations.h"
 
-#include <stdint.h>
+#include <cstdint>
 
 /*
  * @brief string_like performs the SQL LIKE and ILIKE operation

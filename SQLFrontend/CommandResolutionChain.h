@@ -66,8 +66,9 @@ class CommandResolutionChain {
                                      ParamCountType max_param_count,
                                      RESOLUTION_FUNCTOR resolution_op,
                                      std::string const& custom_help) {
-    if (m_resolved == true)
+    if (m_resolved == true) {
       return (*this);
+    }
     resolve_command(target_command,
                     min_param_count,
                     max_param_count,
@@ -82,8 +83,9 @@ class CommandResolutionChain {
                                      ParamCountType min_param_count,
                                      ParamCountType max_param_count,
                                      RESOLUTION_FUNCTOR resolution_op) {
-    if (m_resolved == true)
+    if (m_resolved == true) {
       return (*this);
+    }
     resolve_command(
         target_command,
         min_param_count,

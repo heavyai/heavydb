@@ -52,9 +52,9 @@ class NoneEncoder : public Encoder {
       if (replicating) {
         encoded_data[i] = data;
       }
-      if (data == none_encoded_null_value<T>())
+      if (data == none_encoded_null_value<T>()) {
         has_nulls = true;
-      else {
+      } else {
         decimal_overflow_validator_.validate(data);
         dataMin = std::min(dataMin, data);
         dataMax = std::max(dataMax, data);
@@ -66,8 +66,9 @@ class NoneEncoder : public Encoder {
         numAppendElems * sizeof(T));
     ChunkMetadata chunkMetadata;
     getMetadata(chunkMetadata);
-    if (!replicating)
+    if (!replicating) {
       srcData += numAppendElems * sizeof(T);
+    }
     return chunkMetadata;
   }
 

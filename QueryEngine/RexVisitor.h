@@ -135,7 +135,7 @@ class RexVisitor : public RexVisitorBase<T> {
 
 class RexDeepCopyVisitor : public RexVisitorBase<std::unique_ptr<const RexScalar>> {
  protected:
-  typedef std::unique_ptr<const RexScalar> RetType;
+  using RetType = std::unique_ptr<const RexScalar>;
 
   RetType visitInput(const RexInput* input) const override { return input->deepCopy(); }
 

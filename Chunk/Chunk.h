@@ -53,8 +53,9 @@ class Chunk {
   static void translateColumnDescriptorsToChunkVec(
       const std::list<const ColumnDescriptor*>& colDescs,
       std::vector<Chunk>& chunkVec) {
-    for (auto cd : colDescs)
-      chunkVec.push_back(Chunk(cd));
+    for (auto cd : colDescs) {
+      chunkVec.emplace_back(cd);
+    }
   }
   ChunkIter begin_iterator(const ChunkMetadata&, int start_idx = 0, int skip = 1) const;
   size_t getNumElemsForBytesInsertData(const DataBlockPtr& src_data,

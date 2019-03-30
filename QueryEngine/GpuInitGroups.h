@@ -23,7 +23,7 @@
 
 #ifndef GPUINITGROUPS_H
 #define GPUINITGROUPS_H
-#include <stdint.h>
+#include <cstdint>
 
 void init_group_by_buffer_on_device(int64_t* groups_buffer,
                                     const int64_t* init_vals,

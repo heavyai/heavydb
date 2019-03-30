@@ -17,7 +17,7 @@
 #ifndef ARCHIVE_S3ARCHIVE_H_
 #define ARCHIVE_S3ARCHIVE_H_
 
-#include <stdio.h>
+#include <cstdio>
 #include <exception>
 #include <map>
 #include <thread>
@@ -42,22 +42,27 @@ class S3Archive : public Archive {
 #ifdef HAVE_AWS_S3
     {
       std::unique_lock<std::mutex> lck(awsapi_mtx);
-      if (0 == awsapi_count++)
+      if (0 == awsapi_count++) {
         Aws::InitAPI(awsapi_options);
+      }
     }
 #endif  // HAVE_AWS_S3
 
     // these envs are on server side so are global settings
     // which make few senses in case of private s3 resources
     char* env;
-    if (0 != (env = getenv("AWS_REGION")))
+    if (0 != (env = getenv("AWS_REGION"))) {
       s3_region = env;
-    if (0 != (env = getenv("AWS_ACCESS_KEY_ID")))
+    }
+    if (0 != (env = getenv("AWS_ACCESS_KEY_ID"))) {
       s3_access_key = env;
-    if (0 != (env = getenv("AWS_SECRET_ACCESS_KEY")))
+    }
+    if (0 != (env = getenv("AWS_SECRET_ACCESS_KEY"))) {
       s3_secret_key = env;
-    if (0 != (env = getenv("AWS_ENDPOINT")))
+    }
+    if (0 != (env = getenv("AWS_ENDPOINT"))) {
       s3_endpoint = env;
+    }
   }
 
   S3Archive(const std::string& url,
@@ -80,12 +85,15 @@ class S3Archive : public Archive {
 
   ~S3Archive() override {
 #ifdef HAVE_AWS_S3
-    for (auto& thread : threads)
-      if (thread.joinable())
+    for (auto& thread : threads) {
+      if (thread.joinable()) {
         thread.join();
+      }
+    }
     std::unique_lock<std::mutex> lck(awsapi_mtx);
-    if (0 == --awsapi_count)
+    if (0 == --awsapi_count) {
       Aws::ShutdownAPI(awsapi_options);
+    }
 #endif  // HAVE_AWS_S3
   }
 

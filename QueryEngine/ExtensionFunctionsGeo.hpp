@@ -639,8 +639,9 @@ double ST_X_LineString(int8_t* l,
                        int32_t isr,
                        int32_t osr) {
   auto l_num_points = lsize / (2 * compression_unit_size(ic));
-  if (lindex < 0 || lindex > l_num_points)
+  if (lindex < 0 || lindex > l_num_points) {
     lindex = l_num_points;  // Endpoint
+  }
   return coord_x(l, 2 * (lindex - 1), ic, isr, osr);
 }
 
@@ -652,8 +653,9 @@ double ST_Y_LineString(int8_t* l,
                        int32_t isr,
                        int32_t osr) {
   auto l_num_points = lsize / (2 * compression_unit_size(ic));
-  if (lindex < 0 || lindex > l_num_points)
+  if (lindex < 0 || lindex > l_num_points) {
     lindex = l_num_points;  // Endpoint
+  }
   return coord_y(l, 2 * (lindex - 1) + 1, ic, isr, osr);
 }
 
@@ -663,8 +665,9 @@ double ST_XMin(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t os
   double xmin = 0.0;
   for (int32_t i = 0; i < num_coords; i += 2) {
     double x = coord_x(coords, i, ic, isr, osr);
-    if (i == 0 || x < xmin)
+    if (i == 0 || x < xmin) {
       xmin = x;
+    }
   }
   return xmin;
 }
@@ -675,8 +678,9 @@ double ST_YMin(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t os
   double ymin = 0.0;
   for (int32_t i = 1; i < num_coords; i += 2) {
     double y = coord_y(coords, i, ic, isr, osr);
-    if (i == 1 || y < ymin)
+    if (i == 1 || y < ymin) {
       ymin = y;
+    }
   }
   return ymin;
 }
@@ -687,8 +691,9 @@ double ST_XMax(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t os
   double xmax = 0.0;
   for (int32_t i = 0; i < num_coords; i += 2) {
     double x = coord_x(coords, i, ic, isr, osr);
-    if (i == 0 || x > xmax)
+    if (i == 0 || x > xmax) {
       xmax = x;
+    }
   }
   return xmax;
 }
@@ -699,8 +704,9 @@ double ST_YMax(int8_t* coords, int64_t size, int32_t ic, int32_t isr, int32_t os
   double ymax = 0.0;
   for (int32_t i = 1; i < num_coords; i += 2) {
     double y = coord_y(coords, i, ic, isr, osr);
-    if (i == 1 || y > ymax)
+    if (i == 1 || y > ymax) {
       ymax = y;
+    }
   }
   return ymax;
 }
@@ -1118,8 +1124,9 @@ double ST_Distance_Point_LineString_Geodesic(int8_t* p,
   double px = coord_x(p, 0, ic1, 4326, 4326);
   double py = coord_y(p, 1, ic1, 4326, 4326);
   auto lpoints = lsize / (2 * compression_unit_size(ic2));
-  if (lindex < 0 || lindex > lpoints)
+  if (lindex < 0 || lindex > lpoints) {
     lindex = lpoints;  // Endpoint
+  }
   double lx = coord_x(l, 2 * (lindex - 1), ic2, 4326, 4326);
   double ly = coord_y(l, 2 * (lindex - 1) + 1, ic2, 4326, 4326);
   return distance_in_meters(px, py, lx, ly);
@@ -1155,13 +1162,15 @@ double ST_Distance_LineString_LineString_Geodesic(int8_t* l1,
                                                   int32_t osr) {
   // Currently only statically indexed LineStrings are supported
   auto l1points = l1size / (2 * compression_unit_size(ic1));
-  if (l1index < 0 || l1index > l1points)
+  if (l1index < 0 || l1index > l1points) {
     l1index = l1points;  // Endpoint
+  }
   double l1x = coord_x(l1, 2 * (l1index - 1), ic1, 4326, 4326);
   double l1y = coord_y(l1, 2 * (l1index - 1) + 1, ic1, 4326, 4326);
   auto l2points = l2size / (2 * compression_unit_size(ic2));
-  if (l2index < 0 || l2index > l2points)
+  if (l2index < 0 || l2index > l2points) {
     l2index = l2points;  // Endpoint
+  }
   double l2x = coord_x(l2, 2 * (l2index - 1), ic2, 4326, 4326);
   double l2y = coord_y(l2, 2 * (l2index - 1) + 1, ic2, 4326, 4326);
   return distance_in_meters(l1x, l1y, l2x, l2y);
@@ -1184,8 +1193,9 @@ DEVICE ALWAYS_INLINE double distance_point_linestring(int8_t* p,
   auto l_num_coords = lsize / compression_unit_size(ic2);
   auto l_num_points = l_num_coords / 2;
   if (lindex != 0) {  // Statically indexed linestring
-    if (lindex < 0 || lindex > l_num_points)
+    if (lindex < 0 || lindex > l_num_points) {
       lindex = l_num_points;  // Endpoint
+    }
     double lx = coord_x(l, 2 * (lindex - 1), ic2, isr2, osr);
     double ly = coord_y(l, 2 * (lindex - 1) + 1, ic2, isr2, osr);
     return distance_point_point(px, py, lx, ly);
@@ -1203,16 +1213,18 @@ DEVICE ALWAYS_INLINE double distance_point_linestring(int8_t* p,
     l2x = coord_x(l, i, ic2, isr2, osr);
     l2y = coord_y(l, i + 1, ic2, isr2, osr);
     double ldist = distance_point_line(px, py, l1x, l1y, l2x, l2y);
-    if (dist > ldist)
+    if (dist > ldist) {
       dist = ldist;
+    }
   }
   if (l_num_coords > 4 && check_closed) {
     // Also check distance to the closing edge between the first and the last points
     l1x = coord_x(l, 0, ic2, isr2, osr);
     l1y = coord_y(l, 1, ic2, isr2, osr);
     double ldist = distance_point_line(px, py, l1x, l1y, l2x, l2y);
-    if (dist > ldist)
+    if (dist > ldist) {
       dist = ldist;
+    }
   }
   return dist;
 }
@@ -1246,8 +1258,9 @@ double ST_Distance_Point_LineString(int8_t* p,
   if (lindex != 0) {  // Statically indexed linestring
     auto l_num_coords = lsize / compression_unit_size(ic2);
     auto l_num_points = l_num_coords / 2;
-    if (lindex < 0 || lindex > l_num_points)
+    if (lindex < 0 || lindex > l_num_points) {
       lindex = l_num_points;  // Endpoint
+    }
     double px = coord_x(p, 0, ic1, isr1, osr);
     double py = coord_y(p, 1, ic1, isr1, osr);
     double lx = coord_x(l, 2 * (lindex - 1), ic2, isr2, osr);
@@ -1272,8 +1285,9 @@ double ST_Distance_Point_Polygon(int8_t* p,
                                  int32_t isr2,
                                  int32_t osr) {
   auto exterior_ring_num_coords = polysize / compression_unit_size(ic2);
-  if (poly_num_rings > 0)
+  if (poly_num_rings > 0) {
     exterior_ring_num_coords = poly_ring_sizes[0] * 2;
+  }
   auto exterior_ring_coords_size = exterior_ring_num_coords * compression_unit_size(ic2);
 
   double px = coord_x(p, 0, ic1, isr1, osr);
@@ -1389,8 +1403,9 @@ double ST_Distance_LineString_LineString(int8_t* l1,
   if (l1index != 0) {
     // l1 is a statically indexed linestring
     auto l1_num_points = l1_num_coords / 2;
-    if (l1index < 0 || l1index > l1_num_points)
+    if (l1index < 0 || l1index > l1_num_points) {
       l1index = l1_num_points;
+    }
     int8_t* p = l1 + 2 * (l1index - 1) * compression_unit_size(ic1);
     int64_t psize = 2 * compression_unit_size(ic1);
     return ST_Distance_Point_LineString(
@@ -1401,8 +1416,9 @@ double ST_Distance_LineString_LineString(int8_t* l1,
   if (l2index != 0) {
     // l2 is a statically indexed linestring
     auto l2_num_points = l2_num_coords / 2;
-    if (l2index < 0 || l2index > l2_num_points)
+    if (l2index < 0 || l2index > l2_num_points) {
       l2index = l2_num_points;
+    }
     int8_t* p = l2 + 2 * (l2index - 1) * compression_unit_size(ic2);
     int64_t psize = 2 * compression_unit_size(ic2);
     return ST_Distance_Point_LineString(
@@ -1423,10 +1439,11 @@ double ST_Distance_LineString_LineString(int8_t* l1,
       double l22y = coord_y(l2, i2 + 1, ic2, isr2, osr);
 
       double ldist = distance_line_line(l11x, l11y, l12x, l12y, l21x, l21y, l22x, l22y);
-      if (i1 == 2 && i2 == 2)
+      if (i1 == 2 && i2 == 2) {
         dist = ldist;  // initialize dist with distance between the first two segments
-      else if (dist > ldist)
+      } else if (dist > ldist) {
         dist = ldist;
+      }
       if (tol_zero(dist)) {
         return 0.0;  // segments touch
       }
@@ -1456,8 +1473,9 @@ double ST_Distance_LineString_Polygon(int8_t* l,
                                       int32_t osr) {
   auto lnum_coords = lsize / compression_unit_size(ic1);
   auto lnum_points = lnum_coords / 2;
-  if (lindex < 0 || lindex > lnum_points)
+  if (lindex < 0 || lindex > lnum_points) {
     lindex = lnum_points;
+  }
   auto p = l + lindex * compression_unit_size(ic1);
   auto psize = 2 * compression_unit_size(ic1);
   auto min_distance = ST_Distance_Point_Polygon(p,
@@ -1530,8 +1548,9 @@ double ST_Distance_LineString_MultiPolygon(int8_t* l,
   auto lnum_points = lnum_coords / 2;
   if (lindex != 0) {
     // Statically indexed linestring
-    if (lindex < 0 || lindex > lnum_points)
+    if (lindex < 0 || lindex > lnum_points) {
       lindex = lnum_points;
+    }
     auto p = l + lindex * compression_unit_size(ic1);
     auto psize = 2 * compression_unit_size(ic1);
     return ST_Distance_Point_MultiPolygon(p,
@@ -1969,8 +1988,9 @@ DEVICE ALWAYS_INLINE double max_distance_point_linestring(int8_t* p,
   auto l_num_coords = lsize / compression_unit_size(ic2);
   auto l_num_points = l_num_coords / 2;
   if (lindex != 0) {  // Statically indexed linestring
-    if (lindex < 0 || lindex > l_num_points)
+    if (lindex < 0 || lindex > l_num_points) {
       lindex = l_num_points;  // Endpoint
+    }
     double lx = coord_x(l, 2 * (lindex - 1), ic2, isr2, osr);
     double ly = coord_y(l, 2 * (lindex - 1) + 1, ic2, isr2, osr);
     return distance_point_point(px, py, lx, ly);
@@ -1988,16 +2008,18 @@ DEVICE ALWAYS_INLINE double max_distance_point_linestring(int8_t* p,
     l2x = coord_x(l, i, ic2, isr2, osr);
     l2y = coord_y(l, i + 1, ic2, isr2, osr);
     double ldist = max_distance_point_line(px, py, l1x, l1y, l2x, l2y);
-    if (max_dist < ldist)
+    if (max_dist < ldist) {
       max_dist = ldist;
+    }
   }
   if (l_num_coords > 4 && check_closed) {
     // Also check distance to the closing edge between the first and the last points
     l1x = coord_x(l, 0, ic2, isr2, osr);
     l1y = coord_y(l, 1, ic2, isr2, osr);
     double ldist = max_distance_point_line(px, py, l1x, l1y, l2x, l2y);
-    if (max_dist < ldist)
+    if (max_dist < ldist) {
       max_dist = ldist;
+    }
   }
   return max_dist;
 }
@@ -2104,8 +2126,9 @@ bool ST_Contains_Point_Polygon(int8_t* p,
                                int32_t isr2,
                                int32_t osr) {
   auto exterior_ring_num_coords = poly_coords_size / compression_unit_size(ic2);
-  if (poly_num_rings > 0)
+  if (poly_num_rings > 0) {
     exterior_ring_num_coords = poly_ring_sizes[0] * 2;
+  }
   auto exterior_ring_coords_size = exterior_ring_num_coords * compression_unit_size(ic2);
 
   return ST_Contains_Point_LineString(p,
@@ -2214,8 +2237,9 @@ bool ST_Contains_Polygon_Point(int8_t* poly_coords,
 
   auto poly_num_coords = poly_coords_size / compression_unit_size(ic1);
   auto exterior_ring_num_coords = poly_num_coords;
-  if (poly_num_rings > 0)
+  if (poly_num_rings > 0) {
     exterior_ring_num_coords = poly_ring_sizes[0] * 2;
+  }
 
   auto poly = poly_coords;
   if (polygon_contains_point(poly, exterior_ring_num_coords, px, py, ic1, isr1, osr)) {
@@ -2261,8 +2285,9 @@ bool ST_Contains_Polygon_LineString(int8_t* poly_coords,
   auto lnum_points = lnum_coords / 2;
   if (li != 0) {
     // Statically indexed linestring
-    if (li < 0 || li > lnum_points)
+    if (li < 0 || li > lnum_points) {
       li = lnum_points;
+    }
     double lx = coord_x(l, 2 * (li - 1), ic2, isr2, osr);
     double ly = coord_y(l, 2 * (li - 1) + 1, ic2, isr2, osr);
 
@@ -2317,9 +2342,10 @@ bool ST_Contains_Polygon_Polygon(int8_t* poly1_coords,
   }
 
   int64_t poly2_exterior_ring_coords_size = poly2_coords_size;
-  if (poly2_num_rings > 0)
+  if (poly2_num_rings > 0) {
     poly2_exterior_ring_coords_size =
         2 * poly2_ring_sizes[0] * compression_unit_size(ic2);
+  }
   return ST_Contains_Polygon_LineString(poly1_coords,
                                         poly1_coords_size,
                                         poly1_ring_sizes,
@@ -2432,8 +2458,9 @@ bool ST_Contains_MultiPolygon_LineString(int8_t* mpoly_coords,
   auto lnum_points = lnum_coords / 2;
   if (li != 0) {
     // Statically indexed linestring
-    if (li < 0 || li > lnum_points)
+    if (li < 0 || li > lnum_points) {
       li = lnum_points;
+    }
     double lx = coord_x(l, 2 * (li - 1), ic2, isr2, osr);
     double ly = coord_y(l, 2 * (li - 1) + 1, ic2, isr2, osr);
 
@@ -2544,8 +2571,9 @@ bool ST_Intersects_Point_LineString(int8_t* p,
   auto lnum_points = lnum_coords / 2;
   if (li != 0) {
     // Statically indexed linestring
-    if (li < 0 || li > lnum_points)
+    if (li < 0 || li > lnum_points) {
       li = lnum_points;
+    }
     auto p2 = l + li * compression_unit_size(ic2);
     auto p2size = 2 * compression_unit_size(ic2);
     return tol_zero(
@@ -2660,8 +2688,9 @@ bool ST_Intersects_LineString_Linestring(int8_t* l1,
   auto l2num_points = l2num_coords / 2;
   if (l2i != 0) {
     // Statically indexed linestring
-    if (l2i < 0 || l2i > l2num_points)
+    if (l2i < 0 || l2i > l2num_points) {
       l2i = l2num_points;
+    }
     auto p2 = l2 + l2i * compression_unit_size(ic2);
     auto p2size = 2 * compression_unit_size(ic2);
     return ST_Intersects_LineString_Point(
@@ -2671,8 +2700,9 @@ bool ST_Intersects_LineString_Linestring(int8_t* l1,
   auto l1num_points = l1num_coords / 2;
   if (l1i != 0) {
     // Statically indexed linestring
-    if (l1i < 0 || l1i > l1num_points)
+    if (l1i < 0 || l1i > l1num_points) {
       l1i = l1num_points;
+    }
     auto p1 = l1 + l1i * compression_unit_size(ic1);
     auto p1size = 2 * compression_unit_size(ic1);
     return ST_Intersects_LineString_Point(
@@ -2710,8 +2740,9 @@ bool ST_Intersects_LineString_Polygon(int8_t* l,
   auto lnum_points = lnum_coords / 2;
   if (li != 0) {
     // Statically indexed linestring
-    if (li < 0 || li > lnum_points)
+    if (li < 0 || li > lnum_points) {
       li = lnum_points;
+    }
     auto p = l + li * compression_unit_size(ic1);
     auto psize = 2 * compression_unit_size(ic1);
     return ST_Contains_Polygon_Point(poly,
@@ -2779,8 +2810,9 @@ bool ST_Intersects_LineString_MultiPolygon(int8_t* l,
   auto lnum_points = lnum_coords / 2;
   if (li != 0) {
     // Statically indexed linestring
-    if (li < 0 || li > lnum_points)
+    if (li < 0 || li > lnum_points) {
       li = lnum_points;
+    }
     auto p = l + li * compression_unit_size(ic1);
     auto psize = 2 * compression_unit_size(ic1);
     return ST_Contains_MultiPolygon_Point(mpoly_coords,

@@ -155,8 +155,9 @@ class CmdStringUtilities {
 
   static bool replace(std::string& str, const std::string& from, const std::string& to) {
     size_t start_pos = str.find(from);
-    if (start_pos == std::string::npos)
+    if (start_pos == std::string::npos) {
       return false;
+    }
     str.replace(start_pos, from.length(), to);
     return true;
   }
@@ -267,8 +268,9 @@ StandardCommand(Help, {
 StandardCommand(ListDatabases, {
   thrift_op<kGET_DATABASES>(cmdContext(), [&](ContextType& lambda_context) {
     output_stream << "Database | Owner" << std::endl;
-    for (auto p : lambda_context.dbinfos_return)
+    for (auto p : lambda_context.dbinfos_return) {
       output_stream << p.db_name << " | " << p.db_owner << '\n';
+    }
     output_stream.flush();
   });
 });

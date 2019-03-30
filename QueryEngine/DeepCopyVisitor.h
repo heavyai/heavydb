@@ -18,7 +18,7 @@
 
 class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>> {
  protected:
-  typedef std::shared_ptr<Analyzer::Expr> RetType;
+  using RetType = std::shared_ptr<Analyzer::Expr>;
   RetType visitColumnVar(const Analyzer::ColumnVar* col_var) const override {
     return col_var->deep_copy();
   }
@@ -94,7 +94,7 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
   RetType visitCaseExpr(const Analyzer::CaseExpr* case_expr) const override {
     std::list<std::pair<RetType, RetType>> new_list;
     for (auto p : case_expr->get_expr_pair_list()) {
-      new_list.push_back(std::make_pair(visit(p.first.get()), visit(p.second.get())));
+      new_list.emplace_back(visit(p.first.get()), visit(p.second.get()));
     }
     auto else_expr = case_expr->get_else_expr();
     return makeExpr<Analyzer::CaseExpr>(

@@ -24,7 +24,7 @@
 #ifndef QUERYENGINE_GROUPBYFASTIMPL_H
 #define QUERYENGINE_GROUPBYFASTIMPL_H
 
-#include <stdint.h>
+#include <cstdint>
 #include "../Shared/funcannotations.h"
 #include "../Shared/shard_key.h"
 

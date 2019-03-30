@@ -26,9 +26,9 @@
 
 #include "ConfigResolve.h"
 
-#include <stdint.h>
 #include <cassert>
 #include <cfloat>
+#include <cstdint>
 #include <ctime>
 #include <limits>
 #include <memory>
@@ -411,8 +411,9 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
   inline std::string get_type_name() const {
     if (IS_GEO(type)) {
       std::string srid_string = "";
-      if (get_output_srid() > 0)
+      if (get_output_srid() > 0) {
         srid_string = ", " + std::to_string(get_output_srid());
+      }
       return type_name[(int)subtype] + "(" + type_name[(int)type] + srid_string + ")";
     }
     std::string ps = "";
@@ -490,28 +491,29 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
 
   inline bool is_castable(const SQLTypeInfoCore& new_type_info) const {
     // can always cast between the same type but different precision/scale/encodings
-    if (type == new_type_info.get_type())
+    if (type == new_type_info.get_type()) {
       return true;
-    // can always cast from or to string
-    else if (is_string() || new_type_info.is_string())
+      // can always cast from or to string
+    } else if (is_string() || new_type_info.is_string()) {
       return true;
-    // can cast between numbers
-    else if (is_number() && new_type_info.is_number())
+      // can cast between numbers
+    } else if (is_number() && new_type_info.is_number()) {
       return true;
-    // can cast from timestamp or date to number (epoch)
-    else if ((type == kTIMESTAMP || type == kDATE) && new_type_info.is_number())
+      // can cast from timestamp or date to number (epoch)
+    } else if ((type == kTIMESTAMP || type == kDATE) && new_type_info.is_number()) {
       return true;
-    // can cast from date to timestamp
-    else if (type == kDATE && new_type_info.get_type() == kTIMESTAMP)
+      // can cast from date to timestamp
+    } else if (type == kDATE && new_type_info.get_type() == kTIMESTAMP) {
       return true;
-    else if (type == kTIMESTAMP && new_type_info.get_type() == kDATE)
+    } else if (type == kTIMESTAMP && new_type_info.get_type() == kDATE) {
       return true;
-    else if (type == kBOOLEAN && new_type_info.is_number())
+    } else if (type == kBOOLEAN && new_type_info.is_number()) {
       return true;
-    else if (type == kARRAY && new_type_info.get_type() == kARRAY)
+    } else if (type == kARRAY && new_type_info.get_type() == kARRAY) {
       return get_elem_type().is_castable(new_type_info.get_elem_type());
-    else
+    } else {
       return false;
+    }
   }
 
   HOST DEVICE inline bool is_null(const Datum& d) const {
@@ -712,8 +714,9 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       case kTEXT:
       case kVARCHAR:
       case kCHAR:
-        if (compression == kENCODING_DICT)
+        if (compression == kENCODING_DICT) {
           return sizeof(int32_t);  // @TODO(wei) must check DictDescriptor
+        }
         break;
       case kARRAY:
         // TODO: return size for fixlen arrays?
@@ -812,7 +815,7 @@ constexpr inline int64_t max_valid_int_value() {
 
 #include "InlineNullValues.h"
 
-typedef int32_t StringOffsetT;
-typedef int32_t ArrayOffsetT;
+using StringOffsetT = int32_t;
+using ArrayOffsetT = int32_t;
 
 #endif  // SQLTYPES_H

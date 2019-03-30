@@ -189,8 +189,9 @@ inline size_t get_bit_width(const SQLTypeInfo& ti) {
     case kCHAR:
       return 32;
     case kARRAY:
-      if (ti.get_size() == -1)
+      if (ti.get_size() == -1) {
         throw std::runtime_error("Projecting on unsized array column not supported.");
+      }
       return ti.get_size() * 8;
     case kPOINT:
     case kLINESTRING:

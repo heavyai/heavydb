@@ -22,8 +22,8 @@
 #ifndef SQLITE_CONNECTOR
 #define SQLITE_CONNECTOR
 
-#include <assert.h>
 #include <boost/lexical_cast.hpp>
+#include <cassert>
 #include <string>
 #include <vector>
 

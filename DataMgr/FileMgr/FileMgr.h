@@ -65,7 +65,7 @@ typedef std::multimap<size_t, int> PageSizeFileMMap;
  * The collection of pages is implemented as a FileBuffer object, which is composed of a
  * vector of MultiPage objects, one for each logical page of the file buffer.
  */
-typedef FileBuffer Chunk;
+using Chunk = FileBuffer;
 
 /**
  * @type ChunkKeyToChunkMap

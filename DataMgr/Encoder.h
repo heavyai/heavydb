@@ -58,8 +58,9 @@ class DecimalOverflowValidator {
   }
 
   void do_validate(int64_t value) {
-    if (!do_check_)
+    if (!do_check_) {
       return;
+    }
 
     if (value >= max_) {
       throw std::runtime_error("Decimal overflow: value is greater than 10^" +

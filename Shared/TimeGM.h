@@ -17,8 +17,8 @@
 
 #ifndef TIMEGM_H
 #define TIMEGM_H
-#include <string.h>
 #include <cmath>
+#include <cstring>
 #include <ctime>
 #include <sstream>
 #include "sqltypes.h"

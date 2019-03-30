@@ -17,8 +17,8 @@
 #ifndef QUERYENGINE_DATEADD_H
 #define QUERYENGINE_DATEADD_H
 
-#include <stdint.h>
-#include <time.h>
+#include <cstdint>
+#include <ctime>
 
 #include "../Shared/funcannotations.h"
 #include "ExtractFromTime.h"

@@ -75,17 +75,20 @@ struct MultiPage {
 
   /// Destructor -- purges all pages
   ~MultiPage() {
-    while (pageVersions.size() > 0)
+    while (pageVersions.size() > 0) {
       pop();
+    }
   }
 
   /// Returns a reference to the most recent version of the page (optionally, the epoch
   /// is returned via the parameter "epoch").
   inline Page current(int* epoch = NULL) const {
-    if (pageVersions.size() < 1)
+    if (pageVersions.size() < 1) {
       LOG(FATAL) << "No current version of the page exists in this MultiPage.";
-    if (epoch != NULL)
+    }
+    if (epoch != NULL) {
       *epoch = this->epochs.back();
+    }
     return pageVersions.back();
   }
 
@@ -98,8 +101,9 @@ struct MultiPage {
 
   /// Purges the oldest Page
   inline void pop() {
-    if (pageVersions.size() < 1)
+    if (pageVersions.size() < 1) {
       LOG(FATAL) << "No page to pop.";
+    }
     pageVersions.pop_front();
     epochs.pop_front();
     assert(pageVersions.size() == epochs.size());

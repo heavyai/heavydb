@@ -32,7 +32,7 @@
 #include <set>
 #include <vector>
 
-typedef std::vector<CountDistinctDescriptor> CountDistinctDescriptors;
+using CountDistinctDescriptors = std::vector<CountDistinctDescriptor>;
 
 inline size_t bitmap_set_size(const int8_t* bitmap, const size_t bitmap_byte_sz) {
   const auto bitmap_word_count = bitmap_byte_sz >> 3;

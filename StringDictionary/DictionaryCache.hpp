@@ -48,8 +48,9 @@ class DictionaryCache {
   bool is_empty() { return cache_items.empty(); }
 
   void invalidateInvertedIndex() noexcept {
-    if (!cache_items.empty())
+    if (!cache_items.empty()) {
       cache_items.clear();
+    }
   }
 
  private:

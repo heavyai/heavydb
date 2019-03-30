@@ -68,7 +68,6 @@
 
 #include <fcntl.h>
 #include <glog/logging.h>
-#include <signal.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -85,6 +84,7 @@
 #include <boost/regex.hpp>
 #include <boost/tokenizer.hpp>
 #include <cmath>
+#include <csignal>
 #include <fstream>
 #include <map>
 #include <memory>

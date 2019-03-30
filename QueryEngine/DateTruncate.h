@@ -17,7 +17,7 @@
 #ifndef QUERYENGINE_DATETRUNCATE_H
 #define QUERYENGINE_DATETRUNCATE_H
 
-#include <stdint.h>
+#include <cstdint>
 
 #include "../Shared/funcannotations.h"
 #include "ExtractFromTime.h"

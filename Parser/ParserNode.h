@@ -473,11 +473,11 @@ class CardinalityExpr : public Expr {
  public:
   CardinalityExpr(Expr* a) : arg(a) {}
   const Expr* get_arg() const { return arg.get(); }
-  virtual std::shared_ptr<Analyzer::Expr> analyze(
+  std::shared_ptr<Analyzer::Expr> analyze(
       const Catalog_Namespace::Catalog& catalog,
       Analyzer::Query& query,
-      TlistRefType allow_tlist_ref = TLIST_NONE) const;
-  virtual std::string to_string() const;
+      TlistRefType allow_tlist_ref = TLIST_NONE) const override;
+  std::string to_string() const override;
 
  private:
   std::unique_ptr<Expr> arg;
@@ -1174,8 +1174,9 @@ class AddColumnStmt : public DDLStmt {
  public:
   AddColumnStmt(std::string* tab, ColumnDef* coldef) : table(tab), coldef(coldef) {}
   AddColumnStmt(std::string* tab, std::list<ColumnDef*>* coldefs) : table(tab) {
-    for (const auto coldef : *coldefs)
+    for (const auto coldef : *coldefs) {
       this->coldefs.emplace_back(coldef);
+    }
     delete coldefs;
   }
   void execute(const Catalog_Namespace::SessionInfo& session) override;

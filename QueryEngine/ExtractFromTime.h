@@ -17,8 +17,8 @@
 #ifndef QUERYENGINE_EXTRACTFROMTIME_H
 #define QUERYENGINE_EXTRACTFROMTIME_H
 
-#include <stdint.h>
-#include <time.h>
+#include <cstdint>
+#include <ctime>
 #include "../Shared/funcannotations.h"
 
 static constexpr int64_t kNanoSecsPerSec = 1000000000;

@@ -16,8 +16,8 @@
 #ifndef H_TypedDataAccessors__
 #define H_TypedDataAccessors__
 
-#include <math.h>
-#include <string.h>
+#include <cmath>
+#include <cstring>
 #include "Shared/DateConverters.h"
 #include "Shared/InlineNullValues.h"
 #include "Shared/sqltypes.h"
@@ -41,8 +41,9 @@ inline void value_truncated(const LHT& lhs, const RHT& rhs) {
 
 template <typename T>
 inline bool is_null(const T& v, const SQLTypeInfo& t) {
-  if (std::is_floating_point<T>::value)
+  if (std::is_floating_point<T>::value) {
     return v == inline_fp_null_value<T>();
+  }
   switch (t.get_logical_size()) {
     case 1:
       return v == inline_int_null_value<int8_t>();
@@ -60,16 +61,19 @@ inline bool is_null(const T& v, const SQLTypeInfo& t) {
 template <typename LHT, typename RHT>
 inline bool integer_setter(LHT& lhs, const RHT& rhs, const SQLTypeInfo& t) {
   const int64_t r = is_null(rhs, t) ? inline_int_null_value<LHT>() : rhs;
-  if ((lhs = r) != r)
+  if ((lhs = r) != r) {
     value_truncated(lhs, r);
+  }
   return true;
 }
 
 inline int get_element_size(const SQLTypeInfo& t) {
-  if (t.is_string_array())
+  if (t.is_string_array()) {
     return sizeof(int32_t);
-  if (!t.is_array())
+  }
+  if (!t.is_array()) {
     return t.get_size();
+  }
   return SQLTypeInfo(t.get_subtype(),
                      t.get_dimension(),
                      t.get_scale(),
@@ -129,10 +133,12 @@ static void put_scalar(void* ndptr,
                        const T oval) {
   // round floating oval to nearest integer
   auto rval = oval;
-  if (std::is_floating_point<T>::value)
+  if (std::is_floating_point<T>::value) {
     if (etype.is_integer() || etype.is_time() || etype.is_timeinterval() ||
-        etype.is_decimal())
+        etype.is_decimal()) {
       rval = round(rval);
+    }
+  }
   switch (etype.get_type()) {
     case kBOOLEAN:
     case kTIME:
@@ -170,10 +176,11 @@ static void put_scalar(void* ndptr,
       *(double*)ndptr = rval;
       break;
     default:
-      if (etype.is_string() && !etype.is_varlen())
+      if (etype.is_string() && !etype.is_varlen()) {
         set_string_index(ndptr, etype, rval);
-      else
+      } else {
         abort();
+      }
       break;
   }
 }
@@ -198,24 +205,26 @@ inline void put_scalar(void* ndptr,
                                        : ntype;
   const auto esize = get_element_size(etype);
   const auto isnull = is_null(oval, etype);
-  if (etype.get_notnull() && isnull)
+  if (etype.get_notnull() && isnull) {
     throw std::runtime_error("NULL value on NOT NULL column '" + col_name + "'");
+  }
 
   switch (etype.get_type()) {
     case kNUMERIC:
     case kDECIMAL:
-      if (otype && otype->is_decimal())
+      if (otype && otype->is_decimal()) {
         put_scalar<int64_t>(ndptr,
                             etype,
                             esize,
                             isnull ? inline_int_null_value<int64_t>()
                                    : convert_decimal_value_to_scale(oval, *otype, etype));
-      else
+      } else {
         put_scalar<T>(ndptr,
                       etype,
                       esize,
                       isnull ? inline_int_null_value<int64_t>()
                              : oval * pow(10, etype.get_scale()));
+      }
       break;
     case kDATE:
       // For small dates, we store in days but decode in seconds
@@ -236,17 +245,19 @@ inline void put_scalar(void* ndptr,
       }
       break;
     default:
-      if (otype && otype->is_decimal())
+      if (otype && otype->is_decimal()) {
         put_scalar<double>(ndptr, etype, decimal_to_double(*otype, oval), col_name);
-      else
+      } else {
         put_scalar<T>(ndptr, etype, get_element_size(etype), oval);
+      }
       break;
   }
 }
 
 inline void put_null(void* ndptr, const SQLTypeInfo& ntype, const std::string col_name) {
-  if (ntype.get_notnull())
+  if (ntype.get_notnull()) {
     throw std::runtime_error("NULL value on NOT NULL column '" + col_name + "'");
+  }
 
   switch (ntype.get_type()) {
     case kBOOLEAN:

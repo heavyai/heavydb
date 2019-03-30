@@ -46,8 +46,9 @@ class QuotedInputSupportParser {
     // extract the portion sent to the tokenizer
     std::string second_half;
     std::getline(input_resolver, second_half);
-    if (!input_resolver)
+    if (!input_resolver) {
       return token_list;
+    }
 
     try {
       boost::escaped_list_separator<char> els("\\", " ", "\"");

@@ -64,8 +64,9 @@ std::shared_ptr<MutexType> LockMgr<MutexType, KeyType>::getMutex(const LockType 
 
   std::unique_lock<std::mutex> lck(aMutex_);
   auto mit = mutexMap_.find(lock_key);
-  if (mit != mutexMap_.end())
+  if (mit != mutexMap_.end()) {
     return mit->second;
+  }
 
   auto tMutex = std::make_shared<MutexType>();
   mutexMap_[lock_key] = tMutex;
@@ -109,8 +110,9 @@ void getTableMutexs(const Catalog_Namespace::Catalog& cat,
   getTableNames(tableNames, query_ra);
   // get a mutex<MutexType> for each involved table
   // mutexes already sorted like tableNames
-  for (const auto& tableName : tableNames)
+  for (const auto& tableName : tableNames) {
     tableMutexs.emplace_back(getTableMutex<MutexType>(cat, tableName, lockType));
+  }
 }
 
 template <typename MutexType>
@@ -118,13 +120,15 @@ void getTableLocks(const Catalog_Namespace::Catalog& cat,
                    const std::map<std::string, bool>& tableNames,
                    std::vector<std::shared_ptr<VLock>>& tableLocks,
                    const Lock_Namespace::LockType lockType) {
-  for (const auto& tableName : tableNames)
-    if (tableName.second)
+  for (const auto& tableName : tableNames) {
+    if (tableName.second) {
       tableLocks.emplace_back(std::make_shared<VLock>(
           getTableLock<MutexType, mapd_unique_lock>(cat, tableName.first, lockType)));
-    else
+    } else {
       tableLocks.emplace_back(std::make_shared<VLock>(
           getTableLock<MutexType, mapd_shared_lock>(cat, tableName.first, lockType)));
+    }
+  }
 }
 
 template <typename MutexType>

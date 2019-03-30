@@ -20,7 +20,7 @@
 #include "Execute.h"
 #include "RangeTableIndexVisitor.h"
 
-#include <stddef.h>
+#include <cstddef>
 #include <numeric>
 
 extern bool g_enable_filter_push_down;

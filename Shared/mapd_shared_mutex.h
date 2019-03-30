@@ -21,7 +21,7 @@
 #include <shared_mutex>
 #ifdef HAVE_FOLLY
 #include <folly/SharedMutex.h>
-typedef folly::SharedMutex mapd_shared_mutex;
+using mapd_shared_mutex = folly::SharedMutex;
 #else
 typedef std::shared_timed_mutex mapd_shared_mutex;
 #endif  // HAVE_FOLLY

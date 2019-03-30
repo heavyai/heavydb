@@ -24,8 +24,8 @@
 #ifndef QUERYENGINE_HASHJOINRUNTIME_H
 #define QUERYENGINE_HASHJOINRUNTIME_H
 
-#include <stddef.h>
-#include <stdint.h>
+#include <cstddef>
+#include <cstdint>
 #include <vector>
 #include "../Shared/SqlTypesLayout.h"
 #include "../Shared/sqltypes.h"

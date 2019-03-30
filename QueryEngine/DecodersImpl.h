@@ -24,7 +24,7 @@
 #ifndef QUERYENGINE_DECODERSIMPL_H
 #define QUERYENGINE_DECODERSIMPL_H
 
-#include <stdint.h>
+#include <cstdint>
 #include "../Shared/funcannotations.h"
 
 extern "C" DEVICE ALWAYS_INLINE int64_t

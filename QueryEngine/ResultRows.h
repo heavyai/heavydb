@@ -184,7 +184,7 @@ inline std::vector<std::vector<int64_t>> get_col_frag_offsets(
   return col_frag_offsets;
 }
 
-typedef std::vector<int64_t> ValueTuple;
+using ValueTuple = std::vector<int64_t>;
 
 class ChunkIter;
 class ResultSet;

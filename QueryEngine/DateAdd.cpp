@@ -53,8 +53,9 @@ int64_t skip_months(int64_t timeval, int64_t months_to_go) {
     }
     if (months_to_go > 0) {
       auto m = (mon + months_covered) % kMonsPerYear;
-      if (m == 1)
+      if (m == 1) {
         leap_year = is_leap(ExtractFromTime(kYEAR, month));
+      }
       month += (month_lengths[0 + leap_year][m] * kSecsPerDay);
       months_to_go--;
       months_covered++;
@@ -69,8 +70,9 @@ int64_t skip_months(int64_t timeval, int64_t months_to_go) {
     if (months_to_go < 0) {
       auto m =
           (((mon - 1 - months_covered) % kMonsPerYear) + kMonsPerYear) % kMonsPerYear;
-      if (m == 1)
+      if (m == 1) {
         leap_year = is_leap(ExtractFromTime(kYEAR, month));
+      }
       month -= (month_lengths[0 + leap_year][m] * kSecsPerDay);
       months_to_go++;
       months_covered++;

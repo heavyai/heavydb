@@ -16,10 +16,10 @@ template <typename key_t, typename value_t, class hash_t = std::hash<key_t>>
 class LruCache {
  private:
   typedef typename std::pair<key_t, value_t> key_value_pair_t;
-  typedef typename std::list<key_value_pair_t> cache_list_t;
-  typedef typename cache_list_t::iterator list_iterator_t;
+  using cache_list_t = typename std::list<key_value_pair_t>;
+  using list_iterator_t = typename cache_list_t::iterator;
   typedef typename std::unordered_map<key_t, list_iterator_t, hash_t> map_t;
-  typedef typename map_t::iterator map_t_iterator;
+  using map_t_iterator = typename map_t::iterator;
 
  public:
   LruCache(const size_t max_size) : max_size_(max_size) {}
@@ -44,7 +44,7 @@ class LruCache {
     cache_items_list_.splice(cache_items_list_.begin(), cache_items_list_, it->second);
     return &it->second->second;
   }
-  typedef typename cache_list_t::const_iterator const_list_iterator_t;
+  using const_list_iterator_t = typename cache_list_t::const_iterator;
 
   const_list_iterator_t find(const key_t& key) const {
     auto it = cache_items_map_.find(key);

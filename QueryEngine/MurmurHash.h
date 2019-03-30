@@ -17,7 +17,7 @@
 #ifndef QUERYENGINE_MURMURHASH_H
 #define QUERYENGINE_MURMURHASH_H
 
-#include <stdint.h>
+#include <cstdint>
 #include "../Shared/funcannotations.h"
 
 extern "C" NEVER_INLINE DEVICE uint32_t MurmurHash1(const void* key,

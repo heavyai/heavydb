@@ -13,8 +13,9 @@ class OnTypesetMember {
   template <typename SQL_INFO_TYPE, typename FUNCTOR_TYPE>
   OnTypesetMember(SQL_INFO_TYPE const& s, FUNCTOR_TYPE f)
       : resolved_(internalResolveType<SQL_INFO_TYPE, TYPE_SET...>(s)) {
-    if (resolved_)
+    if (resolved_) {
       f();
+    }
   }
 
   template <typename SQL_INFO_TYPE,
@@ -30,8 +31,9 @@ class OnTypesetMember {
   template <typename SQL_INFO_TYPE, typename FUNCTOR_TYPE>
   bool operator()(SQL_INFO_TYPE const& s, FUNCTOR_TYPE failure) const {
     bool resolved = internalResolveType<TYPE_SET...>(s);
-    if (resolved)
+    if (resolved) {
       failure();
+    }
     return resolved;
   }
 
@@ -51,8 +53,9 @@ class OnTypesetMember {
  private:
   template <typename SQL_INFO_TYPE, SQLTypes TYPE>
   bool internalResolveType(SQL_INFO_TYPE const& s) const {
-    if (s.get_type() == TYPE)
+    if (s.get_type() == TYPE) {
       return true;
+    }
     return false;
   }
 
@@ -61,8 +64,9 @@ class OnTypesetMember {
             SQLTypes SECOND_TYPE,
             SQLTypes... REMAINING_TYPES>
   bool internalResolveType(SQL_INFO_TYPE const& s) const {
-    if (s.get_type() == TYPE)
+    if (s.get_type() == TYPE) {
       return true;
+    }
     return internalResolveType<SQL_INFO_TYPE, SECOND_TYPE, REMAINING_TYPES...>(s);
   }
 

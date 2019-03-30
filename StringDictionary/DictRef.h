@@ -34,6 +34,6 @@ struct dict_ref_t {
   }
 };
 
-typedef struct dict_ref_t DictRef;
+using DictRef = struct dict_ref_t;
 
 #endif

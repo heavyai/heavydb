@@ -27,7 +27,7 @@
 
 #include "../Shared/funcannotations.h"
 
-#include <stdint.h>
+#include <cstdint>
 
 /*
  * @brief regexp_like performs the SQL REGEXP operation

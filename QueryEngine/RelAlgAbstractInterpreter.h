@@ -752,9 +752,11 @@ class ModifyManipulationTarget {
 
   template <typename VALIDATION_FUNCTOR>
   bool validateTargetColumns(VALIDATION_FUNCTOR validator) const {
-    for (auto const& column_name : target_columns_)
-      if (validator(column_name) == false)
+    for (auto const& column_name : target_columns_) {
+      if (validator(column_name) == false) {
         return false;
+      }
+    }
     return true;
   }
 
@@ -840,15 +842,16 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
  private:
   template <typename EXPR_VISITOR_FUNCTOR>
   void visitAndStealScalarExprs(EXPR_VISITOR_FUNCTOR expr_burglar) const {
-    for (int i = 0; i < static_cast<int>(scalar_exprs_.size()); i++)
+    for (int i = 0; i < static_cast<int>(scalar_exprs_.size()); i++) {
       expr_burglar(i, scalar_exprs_[i]);
+    }
   }
 
   void injectOffsetInFragmentExpr() const {
     RexFunctionOperator::ConstRexScalarPtrVector transient_vector;
     scalar_exprs_.emplace_back(boost::make_unique<RexFunctionOperator const>(
         std::string("OFFSET_IN_FRAGMENT"), transient_vector, SQLTypeInfo(kINT, false)));
-    fields_.push_back(std::string("EXPR$DELETE_OFFSET_IN_FRAGMENT"));
+    fields_.emplace_back("EXPR$DELETE_OFFSET_IN_FRAGMENT");
   }
 
   mutable std::vector<std::unique_ptr<const RexScalar>> scalar_exprs_;
@@ -1201,12 +1204,13 @@ class RelModify : public RelAlgNode {
   }
 
   static ModifyOperation yieldModifyOperationEnum(std::string const& op_string) {
-    if (op_string == "INSERT")
+    if (op_string == "INSERT") {
       return ModifyOperation::Insert;
-    else if (op_string == "DELETE")
+    } else if (op_string == "DELETE") {
       return ModifyOperation::Delete;
-    else if (op_string == "UPDATE")
+    } else if (op_string == "UPDATE") {
       return ModifyOperation::Update;
+    }
 
     throw std::runtime_error(
         std::string("Unsupported logical modify operation encountered " + op_string));
@@ -1403,7 +1407,7 @@ std::shared_ptr<const RelAlgNode> deserialize_ra_dag(
 
 std::string tree_string(const RelAlgNode*, const size_t indent = 0);
 
-typedef std::vector<RexInput> RANodeOutput;
+using RANodeOutput = std::vector<RexInput>;
 
 RANodeOutput get_node_output(const RelAlgNode* ra_node);
 

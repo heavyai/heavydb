@@ -66,7 +66,7 @@ struct BufferSeg {
       , lastTouched(lastTouched) {}
 };
 
-typedef std::list<BufferSeg> BufferList;
+using BufferList = std::list<BufferSeg>;
 }  // namespace Buffer_Namespace
 
 #endif

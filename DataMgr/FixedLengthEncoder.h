@@ -50,9 +50,9 @@ class FixedLengthEncoder : public Encoder {
                           " encoded: " + std::to_string(encodedData.get()[i]);
       } else {
         T data = unencodedData[ri];
-        if (data == std::numeric_limits<V>::min())
+        if (data == std::numeric_limits<V>::min()) {
           has_nulls = true;
-        else {
+        } else {
           decimal_overflow_validator_.validate(data);
           dataMin = std::min(dataMin, data);
           dataMax = std::max(dataMax, data);
@@ -65,8 +65,9 @@ class FixedLengthEncoder : public Encoder {
     buffer_->append((int8_t*)(encodedData.get()), numAppendElems * sizeof(V));
     ChunkMetadata chunkMetadata;
     getMetadata(chunkMetadata);
-    if (!replicating)
+    if (!replicating) {
       srcData += numAppendElems * sizeof(T);
+    }
     return chunkMetadata;
   }
 

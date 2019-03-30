@@ -35,43 +35,51 @@ class NullableValue {
   T getValue() const { return value_; }
 
   NullableValue<T> operator+(T v) const {
-    if (isInvalid())
+    if (isInvalid()) {
       return NullableValue<T>();
+    }
     return NullableValue<T>(value_ + v);
   }
   NullableValue<T> operator-(T v) const {
-    if (isInvalid())
+    if (isInvalid()) {
       return NullableValue<T>();
+    }
     return NullableValue<T>(value_ - v);
   }
   NullableValue<T> operator*(T v) const {
-    if (isInvalid())
+    if (isInvalid()) {
       return NullableValue<T>();
+    }
     return NullableValue<T>(value_ * v);
   }
   NullableValue<T> operator/(T v) const {
-    if (isInvalid())
+    if (isInvalid()) {
       return NullableValue<T>();
+    }
     return NullableValue<T>(value_ / v);
   }
   NullableValue<T> operator+(const NullableValue<T>& other) const {
-    if (isInvalid() && other.isInvalid())
+    if (isInvalid() && other.isInvalid()) {
       return NullableValue<T>();
+    }
     return NullableValue<T>(value_ + other.getValue());
   }
   NullableValue<T> operator-(const NullableValue<T>& other) const {
-    if (isInvalid() && other.isInvalid())
+    if (isInvalid() && other.isInvalid()) {
       return NullableValue<T>();
+    }
     return NullableValue<T>(value_ - other.getValue());
   }
   NullableValue<T> operator*(const NullableValue<T>& other) const {
-    if (isInvalid() && other.isInvalid())
+    if (isInvalid() && other.isInvalid()) {
       return NullableValue<T>();
+    }
     return NullableValue<T>(value_ * other.getValue());
   }
   NullableValue<T> operator/(const NullableValue<T>& other) const {
-    if (isInvalid() && other.isInvalid())
+    if (isInvalid() && other.isInvalid()) {
       return NullableValue<T>();
+    }
     return NullableValue<T>(value_ / other.getValue());
   }
   bool operator==(const T v) const { return isValid() ? (value_ == v) : false; }
@@ -89,13 +97,13 @@ class NullableValue {
   T value_;
 };
 
-typedef NullableValue<float> Likelihood;
+using Likelihood = NullableValue<float>;
 template <>
 float Likelihood::getDefaultValue() {
   return 0.5;
 };
 
-typedef NullableValue<uint64_t> Weight;
+using Weight = NullableValue<uint64_t>;
 template <>
 uint64_t Weight::getDefaultValue() {
   return 1;
