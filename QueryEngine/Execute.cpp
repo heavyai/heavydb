@@ -1467,7 +1467,7 @@ ResultSetPtr Executor::collectAllDeviceResults(
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
   const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   for (const auto& query_exe_context : execution_dispatch.getQueryContexts()) {
-    if (!query_exe_context || query_exe_context->hasNoFragments()) {
+    if (!query_exe_context) {
       continue;
     }
     auto rs = query_exe_context->getRowSet(ra_exe_unit, query_mem_desc);

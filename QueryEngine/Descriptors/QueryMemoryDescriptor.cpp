@@ -632,6 +632,9 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     const bool output_columnar,
     const bool sort_on_gpu,
     RenderInfo* render_info) const {
+  if (frag_offsets.empty()) {
+    return nullptr;
+  }
   return std::unique_ptr<QueryExecutionContext>(
       new QueryExecutionContext(ra_exe_unit,
                                 *this,

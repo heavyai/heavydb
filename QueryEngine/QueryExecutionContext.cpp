@@ -42,28 +42,25 @@ QueryExecutionContext::QueryExecutionContext(
     : query_mem_desc_(query_mem_desc)
     , executor_(executor)
     , device_type_(device_type)
-    , device_id_(device_id)
-    , col_buffers_(col_buffers)
-    , frag_offsets_(frag_offsets)
-    , consistent_frag_sizes_(get_consistent_frags_sizes(frag_offsets))
     , row_set_mem_owner_(row_set_mem_owner)
     , output_columnar_(output_columnar) {
   auto render_allocator_map = render_info && render_info->isPotentialInSituRender()
                                   ? render_info->render_allocator_map_ptr.get()
                                   : nullptr;
-  query_buffers_ = std::make_unique<QueryMemoryInitializer>(ra_exe_unit,
-                                                            query_mem_desc,
-                                                            device_id,
-                                                            device_type,
-                                                            output_columnar,
-                                                            sort_on_gpu,
-                                                            col_buffers,
-                                                            consistent_frag_sizes_,
-                                                            frag_offsets,
-                                                            render_allocator_map,
-                                                            render_info,
-                                                            row_set_mem_owner,
-                                                            executor);
+  query_buffers_ =
+      std::make_unique<QueryMemoryInitializer>(ra_exe_unit,
+                                               query_mem_desc,
+                                               device_id,
+                                               device_type,
+                                               output_columnar,
+                                               sort_on_gpu,
+                                               col_buffers,
+                                               get_consistent_frags_sizes(frag_offsets),
+                                               frag_offsets,
+                                               render_allocator_map,
+                                               render_info,
+                                               row_set_mem_owner,
+                                               executor);
 }
 
 ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(

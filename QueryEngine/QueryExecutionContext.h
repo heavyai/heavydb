@@ -86,8 +86,6 @@ class QueryExecutionContext : boost::noncopyable {
       const uint32_t num_tables,
       const std::vector<int64_t>& join_hash_tables);
 
-  bool hasNoFragments() const { return consistent_frag_sizes_.empty(); }
-
   int64_t getAggInitValForIndex(const size_t index) const;
 
  private:
@@ -134,16 +132,9 @@ class QueryExecutionContext : boost::noncopyable {
   const QueryMemoryDescriptor query_mem_desc_;
   const Executor* executor_;
   const ExecutorDeviceType device_type_;
-  const int device_id_;
-  const std::vector<std::vector<const int8_t*>>& col_buffers_;
-  const std::vector<std::vector<uint64_t>>& frag_offsets_;
-  const std::vector<int64_t> consistent_frag_sizes_;
-
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const bool output_columnar_;
-
   std::unique_ptr<QueryMemoryInitializer> query_buffers_;
-
   mutable std::unique_ptr<ResultSet> estimator_result_set_;
 
   friend class Executor;
