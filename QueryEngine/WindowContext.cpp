@@ -280,22 +280,51 @@ bool pos_is_set(const int64_t bitset, const int64_t pos) {
   return (reinterpret_cast<const int8_t*>(bitset))[pos >> 3] & (1 << (pos & 7));
 }
 
-}  // namespace
-
 // Write value to pending integer outputs collected for all the peer rows. The end of
 // groups is represented by the bitset.
-extern "C" void apply_window_pending_outputs_int(const int64_t handle,
-                                                 const int64_t value,
-                                                 const int64_t bitset,
-                                                 const int64_t pos) {
+template <class T>
+void apply_window_pending_outputs_int(const int64_t handle,
+                                      const int64_t value,
+                                      const int64_t bitset,
+                                      const int64_t pos) {
   if (!pos_is_set(bitset, pos)) {
     return;
   }
   auto& pending_output_slots = *reinterpret_cast<std::vector<void*>*>(handle);
   for (auto pending_output_slot : pending_output_slots) {
-    *reinterpret_cast<int64_t*>(pending_output_slot) = value;
+    *reinterpret_cast<T*>(pending_output_slot) = value;
   }
   pending_output_slots.clear();
+}
+
+}  // namespace
+
+extern "C" void apply_window_pending_outputs_int64(const int64_t handle,
+                                                   const int64_t value,
+                                                   const int64_t bitset,
+                                                   const int64_t pos) {
+  apply_window_pending_outputs_int<int64_t>(handle, value, bitset, pos);
+}
+
+extern "C" void apply_window_pending_outputs_int32(const int64_t handle,
+                                                   const int64_t value,
+                                                   const int64_t bitset,
+                                                   const int64_t pos) {
+  apply_window_pending_outputs_int<int32_t>(handle, value, bitset, pos);
+}
+
+extern "C" void apply_window_pending_outputs_int16(const int64_t handle,
+                                                   const int64_t value,
+                                                   const int64_t bitset,
+                                                   const int64_t pos) {
+  apply_window_pending_outputs_int<int16_t>(handle, value, bitset, pos);
+}
+
+extern "C" void apply_window_pending_outputs_int8(const int64_t handle,
+                                                  const int64_t value,
+                                                  const int64_t bitset,
+                                                  const int64_t pos) {
+  apply_window_pending_outputs_int<int8_t>(handle, value, bitset, pos);
 }
 
 extern "C" void apply_window_pending_outputs_double(const int64_t handle,

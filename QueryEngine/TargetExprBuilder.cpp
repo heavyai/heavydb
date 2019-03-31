@@ -388,6 +388,12 @@ void TargetExprCodegen::codegen(
         }
         default: {
           apply_window_pending_outputs_name += "_int";
+          if (group_by_and_agg->outputColumnar()) {
+            apply_window_pending_outputs_name +=
+                std::to_string(window_func_ti.get_size() * 8);
+          } else {
+            apply_window_pending_outputs_name += "64";
+          }
           break;
         }
       }
