@@ -49,7 +49,6 @@ class CoreMockClient {
   RetValMockMethod(get_table_epoch_by_name, int32_t)
   MockMethod(get_status)
   MockMethod(create_frontend_view)
-  MockMethod(get_frontend_view)
   MockMethod(get_roles)
   MockMethod(get_db_objects_for_grantee)
   MockMethod(get_db_object_privs)
@@ -59,6 +58,7 @@ class CoreMockClient {
   MockMethod(get_completion_hints)
   MockMethod(get_dashboards)
   MockMethod(get_session_info)
+  MockMethod(get_dashboard)
 };
 // clang-format on
 
@@ -871,7 +871,7 @@ TEST(OmniSQLTest, ExportDashboardCommandTest_SimpleDashSimpleFilename) {
       CommandResolutionChain<>(fake_input.c_str(),
                                "\\export_dashboard",
                                3,
-                               3,
+                               4,
                                UnitTestExportDashboardCmd(unit_test_context),
                                test_capture_stream)
           .is_resolved();
@@ -883,9 +883,10 @@ TEST(OmniSQLTest, ExportDashboardCommandTest_SimpleDashSimpleFilename) {
   EXPECT_EQ(unit_test_context.view_name, "simpledash");
   EXPECT_EQ(unit_test_context.view_state, "");
   EXPECT_EQ(unit_test_context.view_metadata, "");
+  EXPECT_EQ(unit_test_context.dashboard_owner, "");
 
-  // Whether call succeeds or fails, the file name is in the output
-  EXPECT_NE(std::strstr(test_capture_stream.str().c_str(), test_filename), nullptr);
+  // The file name is not in the output
+  EXPECT_EQ(std::strstr(test_capture_stream.str().c_str(), test_filename), nullptr);
 
   unlink(test_filename);
 }
@@ -907,7 +908,7 @@ TEST(OmniSQLTest, ExportDashboardCommandTest_SimpleDashComplexFilename) {
       CommandResolutionChain<>(fake_input.c_str(),
                                "\\export_dashboard",
                                3,
-                               3,
+                               4,
                                UnitTestExportDashboardCmd(unit_test_context),
                                test_capture_stream)
           .is_resolved();
@@ -916,9 +917,9 @@ TEST(OmniSQLTest, ExportDashboardCommandTest_SimpleDashComplexFilename) {
   EXPECT_EQ(unit_test_context.view_name, "simpledash");
   EXPECT_EQ(unit_test_context.view_state, "");
   EXPECT_EQ(unit_test_context.view_metadata, "");
+  EXPECT_EQ(unit_test_context.dashboard_owner, "");
 
-  // Whether call succeeds or fails, the file name is in the output
-  EXPECT_NE(std::strstr(test_capture_stream.str().c_str(), test_filename), nullptr);
+  EXPECT_EQ(std::strstr(test_capture_stream.str().c_str(), test_filename), nullptr);
   unlink(test_filename);
 }
 
@@ -940,7 +941,7 @@ TEST(OmniSQLTest, ExportDashboardCommandTest_ComplexDashSimpleFilename) {
       CommandResolutionChain<>(fake_input.c_str(),
                                "\\export_dashboard",
                                3,
-                               3,
+                               4,
                                UnitTestExportDashboardCmd(unit_test_context),
                                test_capture_stream)
           .is_resolved();
@@ -948,8 +949,9 @@ TEST(OmniSQLTest, ExportDashboardCommandTest_ComplexDashSimpleFilename) {
   EXPECT_EQ(unit_test_context.view_name, "\"Who uses spaces anyway?\"");
   EXPECT_EQ(unit_test_context.view_state, "");
   EXPECT_EQ(unit_test_context.view_metadata, "");
+  EXPECT_EQ(unit_test_context.dashboard_owner, "");
 
-  EXPECT_NE(std::strstr(test_capture_stream.str().c_str(), test_filename), nullptr);
+  EXPECT_EQ(std::strstr(test_capture_stream.str().c_str(), test_filename), nullptr);
   unlink(test_filename);
 }
 
@@ -971,7 +973,7 @@ TEST(OmniSQLTest, ExportDashboardCommandTest_ComplexDashComplexFilename) {
       CommandResolutionChain<>(fake_input.c_str(),
                                "\\export_dashboard",
                                3,
-                               3,
+                               4,
                                UnitTestExportDashboardCmd(unit_test_context),
                                test_capture_stream)
           .is_resolved();
@@ -979,8 +981,41 @@ TEST(OmniSQLTest, ExportDashboardCommandTest_ComplexDashComplexFilename) {
   EXPECT_EQ(unit_test_context.view_name, "\"Who uses spaces anyway?\"");
   EXPECT_EQ(unit_test_context.view_state, "");
   EXPECT_EQ(unit_test_context.view_metadata, "");
+  EXPECT_EQ(unit_test_context.dashboard_owner, "");
 
-  EXPECT_NE(std::strstr(test_capture_stream.str().c_str(), test_filename), nullptr);
+  EXPECT_EQ(std::strstr(test_capture_stream.str().c_str(), test_filename), nullptr);
+  unlink(test_filename);
+}
+
+TEST(OmniSQLTest, ExportDashboardCommandTest_ComplexDashComplexFilenameWithOwnerName) {
+  using Params = CommandResolutionChain<>::CommandTokenList;
+  using UnitTestExportDashboardCmd =
+      ExportDashboardCmd<ExportDashboardCommandContextOpsPolicy,
+                         ExportDashboardCommandMockupContextOperations>;
+  using TokenExtractor = UnitTestOutputTokenizer<std::vector<std::string>>;
+
+  static const char* test_filename = "Windows is Terrible.txt";
+  std::string fake_input =
+      std::string("\\export_dashboard \"\\\"Who uses spaces anyway?\\\"\" \"") +
+      test_filename + "\"" + " ChelseaF.C.";
+
+  std::ostringstream test_capture_stream;
+  ExportDashboardCommandMockupContext unit_test_context;
+  auto resolution =
+      CommandResolutionChain<>(fake_input.c_str(),
+                               "\\export_dashboard",
+                               3,
+                               4,
+                               UnitTestExportDashboardCmd(unit_test_context),
+                               test_capture_stream)
+          .is_resolved();
+  EXPECT_TRUE(resolution);
+  EXPECT_EQ(unit_test_context.view_name, "\"Who uses spaces anyway?\"");
+  EXPECT_EQ(unit_test_context.view_state, "");
+  EXPECT_EQ(unit_test_context.view_metadata, "");
+  EXPECT_EQ(unit_test_context.dashboard_owner, "ChelseaF.C.");
+
+  EXPECT_EQ(std::strstr(test_capture_stream.str().c_str(), test_filename), nullptr);
   unlink(test_filename);
 }
 

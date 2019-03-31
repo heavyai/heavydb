@@ -1416,7 +1416,7 @@ int main(int argc, char** argv) {
         ( "\\copy", 3, 3, [&](Params const& p) { copy_table(p[1].c_str() /* filepath */, p[2].c_str() /* table */, context); } )
         ( "\\ste", 2, 2, [&](Params const& p) { set_table_epoch(context, p[1] /* table_details */); } )
         ( "\\gte", 2, 2, [&](Params const& p) { get_table_epoch(context, p[1] /* table_details */); } )
-        ( "\\export_dashboard", 3, 3, ExportDashboardCmd<>( context ), "Usage \\export_dashboard <dash name> <file name>" )
+        ( "\\export_dashboard", 3, 4, ExportDashboardCmd<>( context ), "Usage \\export_dashboard <dash name> <file name> <optional:dash_owner>" )
         ( "\\import_dashboard", 3, 3, ImportDashboardCmd<>( context ), "Usage \\import_dashboard <dash name> <file name>"  )
         ( "\\role_list", 2, 2, RoleListCmd<>(context), "Usage: \\role_list <userName>")
         ( "\\roles", 1, 1, RolesCmd<>(context))("\\set_license", 2, 2, [&](Params const& p ) { set_license_key(context, p[1]); })

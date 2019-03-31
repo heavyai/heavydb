@@ -247,7 +247,8 @@ StandardCommand(Help, {
   std::cout << "\\version Print OmniSci Server version.\n";
   std::cout << "\\copy <file path> <table> Copy data from file to table.\n";
   std::cout << "\\status Get status of the server and the leaf nodes.\n";
-  std::cout << "\\export_dashboard <dashboard name> <filename> Exports a dashboard to a "
+  std::cout << "\\export_dashboard <dashboard name> <filename> <optional: dashboard "
+               "owner name> Exports a dashboard to a "
                "file.\n";
   std::cout << "\\import_dashboard <dashboard name> <filename> Imports a dashboard from "
                "a file\n";
@@ -447,22 +448,67 @@ StandardCommand(ExportDashboard, {
   decltype(p[2])& filename(p[2]);
 
   cmdContext().view_name = dashboard_name;
+  cmdContext().dashboard_owner = p.size() == 4 ? p[3] : "";
 
-  thrift_op<kEXPORT_DASHBOARD>(
+  thrift_op<kGET_DASHBOARDS>(
       cmdContext(),
       [&](ContextType& lambda_context) {
-        output_stream << "Exporting dashboard " << lambda_context.view_name << " to file "
-                      << filename << std::endl;  // create file and dump string to it
-        std::ofstream dashfile;
-        dashfile.open(filename);
-        if (dashfile.is_open()) {
-          dashfile << lambda_context.view_name << std::endl;
-          dashfile << lambda_context.view_return.view_metadata << std::endl;
-          dashfile << decode64(lambda_context.view_return.view_state);
-          dashfile.close();
-        } else {
-          output_stream << "Could not open file `" << filename << "`" << std::endl;
+        if (lambda_context.dash_names.size() == 0) {
+          output_stream << "No dashboards exist." << std::endl;
+          return;
         }
+        std::vector<TDashboard> dashboards;
+        for (auto& dash : lambda_context.dash_names) {
+          if (dash.dashboard_name == lambda_context.view_name) {
+            dashboards.push_back(dash);
+          }
+        }
+        if (dashboards.size() == 0) {
+          output_stream << "Dashboard " + lambda_context.view_name + " does not exist"
+                        << std::endl;
+          return;
+        }
+        int view_id;
+        if (dashboards.size() > 1 && p.size() == 3) {
+          output_stream
+              << "Multiple dashboards with name '" + lambda_context.view_name +
+                     "' exist. To help disambiguate identical dashboards please try  "
+                     "\\export_dashboard <dash_name> <exportfile> <dash_owner>."
+              << std::endl;
+          return;
+        } else if (dashboards.size() > 1 && p.size() == 4) {
+          bool found = false;
+          for (auto& dash : dashboards) {
+            if (dash.dashboard_owner == lambda_context.dashboard_owner) {
+              view_id = dash.dashboard_id;
+              found = true;
+            }
+          }
+          if (!found) {
+            output_stream << "No dashboard with owner name '" +
+                                 lambda_context.dashboard_owner + "' found."
+                          << std::endl;
+            return;
+          }
+        } else {
+          view_id = dashboards[0].dashboard_id;
+        }
+        cmdContext().dash_id = view_id;
+        thrift_op<kGET_DASHBOARD>(cmdContext(), [&](ContextType& lambda_context) {
+          output_stream << "Exporting dashboard "
+                        << lambda_context.dash_return.dashboard_name << " to file "
+                        << filename << std::endl;  // create file and dump string to it
+          std::ofstream dashfile;
+          dashfile.open(filename);
+          if (dashfile.is_open()) {
+            dashfile << lambda_context.dash_return.dashboard_name << std::endl;
+            dashfile << lambda_context.dash_return.dashboard_metadata << std::endl;
+            dashfile << decode64(lambda_context.dash_return.dashboard_state);
+            dashfile.close();
+          } else {
+            output_stream << "Could not open file `" << filename << "`" << std::endl;
+          }
+        });
       },
       [&](ContextType&) { output_stream << "Failed to export dashboard." << std::endl; });
 });

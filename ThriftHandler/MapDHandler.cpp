@@ -3027,7 +3027,9 @@ void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards,
       dash.dashboard_metadata = d->viewMetadata;
       dash.dashboard_id = d->viewId;
       dash.dashboard_owner = d->user;
-      // dash.is_dash_shared = !objects_list.empty();
+      // viewState is intentionally not populated here
+      // for payload reasons
+      // use get_dashboard call to get state
       if (objects_list.empty() ||
           (objects_list.size() == 1 && objects_list[0]->roleName == user_meta.userName)) {
         dash.is_dash_shared = false;

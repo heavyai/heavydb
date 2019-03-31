@@ -42,9 +42,11 @@ struct MetaClientContext {
   TClusterHardwareInfo cluster_hardware_info;
   std::vector<TServerStatus> cluster_status;
   std::string view_name;
+  std::string dashboard_owner;
+  int dash_id;
   std::string view_state;
   std::string view_metadata;
-  TFrontendView view_return;
+  TDashboard dash_return;
   std::string privs_role_name;
   std::string privs_user_name;
   std::string privs_object_name;

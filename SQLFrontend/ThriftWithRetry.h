@@ -115,10 +115,6 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
                                             "",
                                             context.view_metadata);
         break;
-      case kEXPORT_DASHBOARD:
-        context.client.get_frontend_view(
-            context.view_return, context.session, context.view_name);
-        break;
       case kGET_ROLES:
         context.client.get_roles(context.role_names, context.session);
         break;
@@ -149,6 +145,10 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
         break;
       case kGET_DASHBOARDS:
         context.client.get_dashboards(context.dash_names, context.session);
+        break;
+      case kGET_DASHBOARD:
+        context.client.get_dashboard(
+            context.dash_return, context.session, context.dash_id);
         break;
     }
   } catch (TMapDException& e) {
