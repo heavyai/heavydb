@@ -18,6 +18,7 @@
 
 #include "AggregateUtils.h"
 #include "BaselineJoinHashTable.h"
+#include "ColumnFetcher.h"
 #include "Descriptors/QueryCompilationDescriptor.h"
 #include "Descriptors/QueryFragmentDescriptor.h"
 #include "DynamicWatchdog.h"
@@ -1152,9 +1153,9 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                          cat,
                                          context_count,
                                          row_set_mem_owner,
-                                         column_cache,
                                          error_code,
                                          render_info);
+    ColumnFetcher column_fetcher(this, column_cache);
     std::unique_ptr<QueryCompilationDescriptor> query_comp_desc_owned;
     std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
     try {
@@ -1164,6 +1165,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
           crt_min_byte_width,
           {device_type, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_},
           eo,
+          column_fetcher,
           has_cardinality_estimation);
       CHECK(query_comp_desc_owned);
       crt_min_byte_width = query_comp_desc_owned->getMinByteWidth();
@@ -1179,7 +1181,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
       plan_state_->target_exprs_.push_back(target_expr);
     }
 
-    auto dispatch = [&execution_dispatch, &eo](
+    auto dispatch = [&execution_dispatch, &column_fetcher, &eo](
                         const ExecutorDeviceType chosen_device_type,
                         int chosen_device_id,
                         const QueryCompilationDescriptor& query_comp_desc,
@@ -1191,6 +1193,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
       execution_dispatch.run(chosen_device_type,
                              chosen_device_id,
                              eo,
+                             column_fetcher,
                              query_comp_desc,
                              query_mem_desc,
                              frag_list,
@@ -1291,13 +1294,13 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                                        cat,
                                        context_count,
                                        row_set_mem_owner_,
-                                       column_cache,
                                        &error_code,
                                        nullptr);
+  ColumnFetcher column_fetcher(this, column_cache);
   std::unique_ptr<QueryCompilationDescriptor> query_comp_desc_owned;
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
   std::tie(query_comp_desc_owned, query_mem_desc_owned) =
-      execution_dispatch.compile(0, 8, co, eo, false);
+      execution_dispatch.compile(0, 8, co, eo, column_fetcher, false);
   CHECK_EQ(size_t(1), ra_exe_unit.input_descs.size());
   const auto table_id = ra_exe_unit.input_descs[0].getTableId();
   const auto& outer_fragments = table_info.info.fragments;
@@ -1308,6 +1311,7 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
     execution_dispatch.run(co.device_type_,
                            0,
                            eo,
+                           column_fetcher,
                            *query_comp_desc_owned,
                            *query_mem_desc_owned,
                            {{table_id, {fragment_index}}},
@@ -1897,7 +1901,7 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
 }
 
 Executor::FetchResult Executor::fetchChunks(
-    const ExecutionDispatch& execution_dispatch,
+    const ColumnFetcher& column_fetcher,
     const RelAlgExecutionUnit& ra_exe_unit,
     const int device_id,
     const Data_Namespace::MemoryLevel memory_level,
@@ -1930,10 +1934,8 @@ Executor::FetchResult Executor::fetchChunks(
       CHECK(col_id);
       const int table_id = col_id->getScanDesc().getTableId();
       const auto cd = try_get_column_descriptor(col_id.get(), cat);
-      bool is_rowid = false;
       if (cd && cd->isVirtualCol) {
         CHECK_EQ("rowid", cd->columnName);
-        is_rowid = true;
         continue;
       }
       const auto fragments_it = all_tables_fragments.find(table_id);
@@ -1955,31 +1957,26 @@ Executor::FetchResult Executor::fetchChunks(
         memory_level_for_column = Data_Namespace::CPU_LEVEL;
       }
       if (col_id->getScanDesc().getSourceType() == InputSourceType::RESULT) {
-        frag_col_buffers[it->second] =
-            execution_dispatch.getColumn(col_id.get(),
-                                         frag_id,
-                                         all_tables_fragments,
-                                         memory_level_for_column,
-                                         device_id,
-                                         is_rowid);
+        frag_col_buffers[it->second] = column_fetcher.getResultSetColumn(
+            col_id.get(), memory_level_for_column, device_id);
       } else {
         if (needFetchAllFragments(*col_id, ra_exe_unit, selected_fragments)) {
           frag_col_buffers[it->second] =
-              execution_dispatch.getAllScanColumnFrags(table_id,
-                                                       col_id->getColId(),
-                                                       all_tables_fragments,
-                                                       memory_level_for_column,
-                                                       device_id);
+              column_fetcher.getAllTableColumnFragments(table_id,
+                                                        col_id->getColId(),
+                                                        all_tables_fragments,
+                                                        memory_level_for_column,
+                                                        device_id);
         } else {
           frag_col_buffers[it->second] =
-              execution_dispatch.getScanColumn(table_id,
-                                               frag_id,
-                                               col_id->getColId(),
-                                               all_tables_fragments,
-                                               chunks,
-                                               chunk_iterators,
-                                               memory_level_for_column,
-                                               device_id);
+              column_fetcher.getOneTableColumnFragment(table_id,
+                                                       frag_id,
+                                                       col_id->getColId(),
+                                                       all_tables_fragments,
+                                                       chunks,
+                                                       chunk_iterators,
+                                                       memory_level_for_column,
+                                                       device_id);
         }
       }
     }

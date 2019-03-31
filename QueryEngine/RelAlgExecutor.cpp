@@ -19,6 +19,7 @@
 
 #include "CalciteDeserializerUtils.h"
 #include "CardinalityEstimator.h"
+#include "ColumnFetcher.h"
 #include "EquiJoinCondition.h"
 #include "ExpressionRewrite.h"
 #include "FromTableReordering.h"
@@ -1300,14 +1301,13 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
     const int8_t* column;
     size_t join_col_elem_count;
     std::tie(column, join_col_elem_count) =
-        Executor::ExecutionDispatch::getColumnFragment(
-            executor_,
-            *order_col,
-            query_infos.front().info.fragments.front(),
-            memory_level,
-            0,
-            chunks_owner,
-            column_cache_map);
+        ColumnFetcher::getOneColumnFragment(executor_,
+                                            *order_col,
+                                            query_infos.front().info.fragments.front(),
+                                            memory_level,
+                                            0,
+                                            chunks_owner,
+                                            column_cache_map);
     CHECK_EQ(join_col_elem_count, elem_count);
     context->addOrderColumn(column, order_col.get(), chunks_owner);
   }

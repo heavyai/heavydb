@@ -23,6 +23,7 @@
 
 #pragma once
 
+#include "../ColumnFetcher.h"
 #include "../Execute.h"
 
 class QueryCompilationDescriptor {
@@ -38,11 +39,10 @@ class QueryCompilationDescriptor {
       const bool has_cardinality_estimation,
       const RelAlgExecutionUnit& ra_exe_unit,
       const std::vector<InputTableInfo>& table_infos,
+      const ColumnFetcher& column_fetcher,
       const CompilationOptions& co,
       const ExecutionOptions& eo,
-      const Catalog_Namespace::Catalog& cat,
       RenderInfo* render_info,
-      Executor::ExecutionDispatch* execution_dispatch,
       Executor* executor);
 
   auto getCompilationResult() const { return compilation_result_; }

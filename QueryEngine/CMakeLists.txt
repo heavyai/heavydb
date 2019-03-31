@@ -17,6 +17,7 @@ set(query_engine_source_files
     CastIR.cpp
     Codec.cpp
     ColumnarResults.cpp
+    ColumnFetcher.cpp
     ColumnIR.cpp
     CompareIR.cpp
     ConstantIR.cpp

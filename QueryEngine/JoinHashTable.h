@@ -143,7 +143,7 @@ class JoinHashTable : public JoinHashTableInterface {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
   }
 
-  std::pair<const int8_t*, size_t> getColumnFragment(
+  std::pair<const int8_t*, size_t> getOneColumnFragment(
       const Analyzer::ColumnVar& hash_col,
       const Fragmenter_Namespace::FragmentInfo& fragment,
       const Data_Namespace::MemoryLevel effective_mem_lvl,

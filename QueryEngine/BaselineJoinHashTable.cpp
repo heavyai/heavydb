@@ -15,6 +15,7 @@
  */
 
 #include "BaselineJoinHashTable.h"
+#include "ColumnFetcher.h"
 #include "Execute.h"
 #include "ExpressionRewrite.h"
 #include "HashJoinKeyHandlers.h"
@@ -405,13 +406,13 @@ JoinColumn BaselineJoinHashTable::fetchColumn(
     } else {
       try {
         std::tie(col_buff, elem_count) =
-            Executor::ExecutionDispatch::getColumnFragment(executor_,
-                                                           *inner_col,
-                                                           first_frag,
-                                                           effective_memory_level,
-                                                           device_id,
-                                                           chunks_owner,
-                                                           column_cache_);
+            ColumnFetcher::getOneColumnFragment(executor_,
+                                                *inner_col,
+                                                first_frag,
+                                                effective_memory_level,
+                                                device_id,
+                                                chunks_owner,
+                                                column_cache_);
       } catch (...) {
         throw FailedToFetchColumn();
       }
@@ -493,9 +494,8 @@ std::pair<const int8_t*, size_t> BaselineJoinHashTable::getAllColumnFragments(
   }
   const int8_t* col_buff;
   size_t total_elem_count;
-  std::tie(col_buff, total_elem_count) =
-      Executor::ExecutionDispatch::getAllColumnFragments(
-          executor_, hash_col, fragments, chunks_owner, column_cache_);
+  std::tie(col_buff, total_elem_count) = ColumnFetcher::getAllColumnFragments(
+      executor_, hash_col, fragments, chunks_owner, column_cache_);
   linearized_multifrag_column_owner_.addColBuffer(col_buff);
   const auto shard_count = shardCount();
   if (!shard_count) {

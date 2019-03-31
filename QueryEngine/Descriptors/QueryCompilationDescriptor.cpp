@@ -22,16 +22,16 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
     const bool has_cardinality_estimation,
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& table_infos,
+    const ColumnFetcher& column_fetcher,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
-    const Catalog_Namespace::Catalog& cat,
     RenderInfo* render_info,
-    Executor::ExecutionDispatch* execution_dispatch,
     Executor* executor) {
   compilation_device_type_ = co.device_type_;
   hoist_literals_ = co.hoist_literals_;
   CHECK(executor);
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
+  const auto cat = executor->getCatalog();
   try {
     OOM_TRACE_PUSH();
     std::tie(compilation_result_, query_mem_desc) = executor->compileWorkUnit(
@@ -39,13 +39,13 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
         ra_exe_unit,
         co,
         eo,
-        cat.getDataMgr().getCudaMgr(),
+        cat->getDataMgr().getCudaMgr(),
         render_info && render_info->isPotentialInSituRender() ? false : true,
-        execution_dispatch->row_set_mem_owner_,
+        executor->row_set_mem_owner_,
         max_groups_buffer_entry_guess,
         crt_min_byte_width,
         has_cardinality_estimation,
-        execution_dispatch->columnarized_table_cache_,
+        column_fetcher.columnarized_table_cache_,
         render_info);
   } catch (const CompilationRetryNoLazyFetch&) {
     OOM_TRACE_PUSH();
@@ -57,13 +57,13 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
                                   ra_exe_unit,
                                   co,
                                   eo,
-                                  cat.getDataMgr().getCudaMgr(),
+                                  cat->getDataMgr().getCudaMgr(),
                                   false,
-                                  execution_dispatch->row_set_mem_owner_,
+                                  executor->row_set_mem_owner_,
                                   max_groups_buffer_entry_guess,
                                   crt_min_byte_width,
                                   has_cardinality_estimation,
-                                  execution_dispatch->columnarized_table_cache_,
+                                  column_fetcher.columnarized_table_cache_,
                                   render_info);
   }
   actual_min_byte_width_ =

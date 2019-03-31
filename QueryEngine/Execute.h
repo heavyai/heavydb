@@ -102,6 +102,7 @@ extern void read_udf_gpu_module(std::string& udf_ir_filename);
 extern void read_udf_cpu_module(std::string& udf_ir_filename);
 extern bool is_udf_module_present();
 
+class ColumnFetcher;
 class ExecutionResult;
 
 class WatchdogException : public std::runtime_error {
@@ -832,33 +833,12 @@ class Executor {
     std::atomic_flag dynamic_watchdog_set_ = ATOMIC_FLAG_INIT;
     static std::mutex reduce_mutex_;
 
-    using CacheKey = std::vector<int>;
-    mutable std::mutex columnar_conversion_mutex_;
-    mutable ColumnCacheMap columnarized_table_cache_;
-    mutable std::unordered_map<
-        InputColDescriptor,
-        std::unordered_map<CacheKey, std::unique_ptr<const ColumnarResults>>>
-        columnarized_ref_table_cache_;
-    mutable std::unordered_map<InputColDescriptor, std::unique_ptr<const ColumnarResults>>
-        columnarized_scan_table_cache_;
-
     uint32_t getFragmentStride(const FragmentsList& frag_list) const;
-
-    std::vector<const ColumnarResults*> getAllScanColumnFrags(
-        const int table_id,
-        const int col_id,
-        const std::map<int, const TableFragments*>& all_tables_fragments) const;
-
-    const int8_t* getColumn(const ResultSetPtr& buffer,
-                            const int table_id,
-                            const int frag_id,
-                            const int col_id,
-                            const Data_Namespace::MemoryLevel memory_level,
-                            const int device_id) const;
 
     void runImpl(const ExecutorDeviceType chosen_device_type,
                  int chosen_device_id,
                  const ExecutionOptions& eo,
+                 const ColumnFetcher& column_fetcher,
                  const QueryCompilationDescriptor& query_comp_desc,
                  const QueryMemoryDescriptor& query_mem_desc,
                  const FragmentsList& frag_list,
@@ -872,7 +852,6 @@ class Executor {
                       const Catalog_Namespace::Catalog& cat,
                       const size_t context_count,
                       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                      const ColumnCacheMap& column_cache,
                       int32_t* error_code,
                       RenderInfo* render_info);
 
@@ -889,46 +868,18 @@ class Executor {
         const int8_t crt_min_byte_width,
         const CompilationOptions& co,
         const ExecutionOptions& eo,
+        const ColumnFetcher& column_fetcher,
         const bool has_cardinality_estimation);
 
     void run(const ExecutorDeviceType chosen_device_type,
              int chosen_device_id,
              const ExecutionOptions& eo,
+             const ColumnFetcher& column_fetcher,
              const QueryCompilationDescriptor& query_comp_desc,
              const QueryMemoryDescriptor& query_mem_desc,
              const FragmentsList& frag_ids,
              const size_t ctx_idx,
              const int64_t rowid_lookup_key) noexcept;
-
-    const int8_t* getScanColumn(
-        const int table_id,
-        const int frag_id,
-        const int col_id,
-        const std::map<int, const TableFragments*>& all_tables_fragments,
-        std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunk_holder,
-        std::list<ChunkIter>& chunk_iter_holder,
-        const Data_Namespace::MemoryLevel memory_level,
-        const int device_id) const;
-    const int8_t* getAllScanColumnFrags(
-        const int table_id,
-        const int col_id,
-        const std::map<int, const TableFragments*>& all_tables_fragments,
-        const Data_Namespace::MemoryLevel memory_level,
-        const int device_id) const;
-
-    const int8_t* getColumn(
-        const InputColDescriptor* col_desc,
-        const int frag_id,
-        const std::map<int, const TableFragments*>& all_tables_fragments,
-        const Data_Namespace::MemoryLevel memory_level,
-        const int device_id,
-        const bool is_rowid) const;
-
-    static const int8_t* getColumn(const ColumnarResults* columnar_results,
-                                   const int col_id,
-                                   Data_Namespace::DataMgr* data_mgr,
-                                   const Data_Namespace::MemoryLevel memory_level,
-                                   const int device_id);
 
     const RelAlgExecutionUnit& getExecutionUnit() const;
 
@@ -937,22 +888,6 @@ class Executor {
     const std::vector<std::unique_ptr<QueryExecutionContext>>& getQueryContexts() const;
 
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& getFragmentResults();
-
-    static std::pair<const int8_t*, size_t> getColumnFragment(
-        Executor* executor,
-        const Analyzer::ColumnVar& hash_col,
-        const Fragmenter_Namespace::FragmentInfo& fragment,
-        const Data_Namespace::MemoryLevel effective_mem_lvl,
-        const int device_id,
-        std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-        ColumnCacheMap& column_cache);
-
-    static std::pair<const int8_t*, size_t> getAllColumnFragments(
-        Executor* executor,
-        const Analyzer::ColumnVar& hash_col,
-        const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-        std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-        ColumnCacheMap& column_cache);
 
     friend class QueryCompilationDescriptor;
   };
@@ -1045,7 +980,7 @@ class Executor {
                         const RelAlgExecutionUnit& ra_exe_unit,
                         const ExecutorDeviceType device_type);
 
-  FetchResult fetchChunks(const ExecutionDispatch&,
+  FetchResult fetchChunks(const ColumnFetcher&,
                           const RelAlgExecutionUnit& ra_exe_unit,
                           const int device_id,
                           const Data_Namespace::MemoryLevel,
@@ -1734,6 +1669,7 @@ class Executor {
   static const int32_t ERR_STRING_CONST_IN_RESULTSET{13};
   static const int32_t ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY{14};
   friend class BaselineJoinHashTable;
+  friend class ColumnFetcher;
   friend class OverlapsJoinHashTable;
   friend class GroupByAndAggregate;
   friend class QueryCompilationDescriptor;

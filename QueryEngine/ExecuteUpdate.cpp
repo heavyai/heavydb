@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "ColumnFetcher.h"
 #include "Descriptors/QueryCompilationDescriptor.h"
 #include "Descriptors/QueryFragmentDescriptor.h"
 #include "Execute.h"
@@ -93,10 +94,11 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                                        cat,
                                        context_count,
                                        row_set_mem_owner,
-                                       column_cache,
                                        &error_code,
                                        nullptr);
-  const auto execution_descriptors = execution_dispatch.compile(0, 8, co, eo, false);
+  ColumnFetcher column_fetcher(this, column_cache);
+  const auto execution_descriptors =
+      execution_dispatch.compile(0, 8, co, eo, column_fetcher, false);
   CHECK_EQ(size_t(1), ra_exe_unit.input_descs.size());
   const auto table_id = ra_exe_unit.input_descs[0].getTableId();
   const auto& outer_fragments = table_info.info.fragments;
@@ -108,6 +110,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
         co.device_type_,
         0,
         eo,
+        column_fetcher,
         *std::get<QueryCompilationDescriptorOwned>(execution_descriptors),
         *std::get<QueryMemoryDescriptorOwned>(execution_descriptors),
         {{table_id, {fragment_index}}},
@@ -137,17 +140,17 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                                                           cat,
                                                           context_count,
                                                           row_set_mem_owner,
-                                                          column_cache,
                                                           &error_code,
                                                           nullptr);
-    const auto execution_descriptors =
-        current_fragment_execution_dispatch.compile(*count_ptr, 8, co, eo, false);
+    const auto execution_descriptors = current_fragment_execution_dispatch.compile(
+        *count_ptr, 8, co, eo, column_fetcher, false);
     // We may want to consider in the future allowing this to execute on devices other
     // than CPU
     current_fragment_execution_dispatch.run(
         co.device_type_,
         0,
         eo,
+        column_fetcher,
         *std::get<QueryCompilationDescriptorOwned>(execution_descriptors),
         *std::get<QueryMemoryDescriptorOwned>(execution_descriptors),
         {FragmentsPerTable{table_id, {fragment_index}}},

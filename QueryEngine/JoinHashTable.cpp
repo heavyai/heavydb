@@ -15,6 +15,7 @@
  */
 
 #include "JoinHashTable.h"
+#include "ColumnFetcher.h"
 #include "Execute.h"
 #include "ExpressionRewrite.h"
 #include "HashJoinRuntime.h"
@@ -357,19 +358,19 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
   return join_hash_table;
 }
 
-std::pair<const int8_t*, size_t> JoinHashTable::getColumnFragment(
+std::pair<const int8_t*, size_t> JoinHashTable::getOneColumnFragment(
     const Analyzer::ColumnVar& hash_col,
     const Fragmenter_Namespace::FragmentInfo& fragment,
     const Data_Namespace::MemoryLevel effective_mem_lvl,
     const int device_id,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner) {
-  return Executor::ExecutionDispatch::getColumnFragment(executor_,
-                                                        hash_col,
-                                                        fragment,
-                                                        effective_mem_lvl,
-                                                        device_id,
-                                                        chunks_owner,
-                                                        column_cache_);
+  return ColumnFetcher::getOneColumnFragment(executor_,
+                                             hash_col,
+                                             fragment,
+                                             effective_mem_lvl,
+                                             device_id,
+                                             chunks_owner,
+                                             column_cache_);
 }
 
 std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
@@ -383,9 +384,8 @@ std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
   }
   const int8_t* col_buff;
   size_t total_elem_count;
-  std::tie(col_buff, total_elem_count) =
-      Executor::ExecutionDispatch::getAllColumnFragments(
-          executor_, hash_col, fragments, chunks_owner, column_cache_);
+  std::tie(col_buff, total_elem_count) = ColumnFetcher::getAllColumnFragments(
+      executor_, hash_col, fragments, chunks_owner, column_cache_);
   linearized_multifrag_column_owner_.addColBuffer(col_buff);
   if (!shardCount()) {
     linearized_multifrag_column_ = {col_buff, total_elem_count};
@@ -541,7 +541,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
         col_buff = dev_col_buff;
       }
     } else {
-      std::tie(col_buff, elem_count) = getColumnFragment(
+      std::tie(col_buff, elem_count) = getOneColumnFragment(
           *hash_col, first_frag, effective_memory_level, device_id, chunks_owner);
     }
   }
