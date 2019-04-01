@@ -3128,6 +3128,7 @@ void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {
                                            copy_params.s3_access_key,
                                            copy_params.s3_secret_key,
                                            copy_params.s3_region,
+                                           copy_params.s3_endpoint,
                                            copy_params.plain_text));
         us3arch->init_for_read();
         total_file_size += us3arch->get_total_file_size();
@@ -3239,6 +3240,7 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
                                       copy_params.s3_access_key,
                                       copy_params.s3_secret_key,
                                       copy_params.s3_region,
+                                      copy_params.s3_endpoint,
                                       copy_params.plain_text));
           us3arch->init_for_read();
           total_file_size += us3arch->get_total_file_size();
@@ -3756,6 +3758,17 @@ void Importer::setGDALAuthorizationTokens(const CopyParams& copy_params) {
     LOG(INFO) << "GDAL: Clearing AWS_REGION";
 #endif
     CPLSetConfigOption("AWS_REGION", nullptr);
+  }
+  if (copy_params.s3_endpoint.size()) {
+#if DEBUG_AWS_AUTHENTICATION
+    LOG(INFO) << "GDAL: Setting AWS_S3_ENDPOINT to '" << copy_params.s3_endpoint << "'";
+#endif
+    CPLSetConfigOption("AWS_S3_ENDPOINT", copy_params.s3_endpoint.c_str());
+  } else {
+#if DEBUG_AWS_AUTHENTICATION
+    LOG(INFO) << "GDAL: Clearing AWS_S3_ENDPOINT";
+#endif
+    CPLSetConfigOption("AWS_S3_ENDPOINT", nullptr);
   }
   if (copy_params.s3_access_key.size()) {
 #if DEBUG_AWS_AUTHENTICATION

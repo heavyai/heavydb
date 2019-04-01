@@ -56,17 +56,21 @@ class S3Archive : public Archive {
       s3_access_key = env;
     if (0 != (env = getenv("AWS_SECRET_ACCESS_KEY")))
       s3_secret_key = env;
+    if (0 != (env = getenv("AWS_ENDPOINT")))
+      s3_endpoint = env;
   }
 
   S3Archive(const std::string& url,
             const std::string& s3_access_key,
             const std::string& s3_secret_key,
             const std::string& s3_region,
+            const std::string& s3_endpoint,
             const bool plain_text)
       : S3Archive(url, plain_text) {
     this->s3_access_key = s3_access_key;
     this->s3_secret_key = s3_secret_key;
     this->s3_region = s3_region;
+    this->s3_endpoint = s3_endpoint;
 
     // this must be local to omnisci_server not client
     // or posix dir path accessible to omnisci_server
@@ -116,6 +120,7 @@ class S3Archive : public Archive {
   std::string s3_access_key;  // per-query credentials to override the
   std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
   std::string s3_region;
+  std::string s3_endpoint;
   std::string s3_temp_dir;
 
   std::string bucket_name;
@@ -131,8 +136,10 @@ class S3ParquetArchive : public S3Archive {
                    const std::string& s3_access_key,
                    const std::string& s3_secret_key,
                    const std::string& s3_region,
+                   const std::string& s3_endpoint,
                    const bool plain_text)
-      : S3Archive(url, s3_access_key, s3_secret_key, s3_region, plain_text) {}
+      : S3Archive(url, s3_access_key, s3_secret_key, s3_region, s3_endpoint, plain_text) {
+  }
 
  private:
 };

@@ -2491,6 +2491,9 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
   if (cp.s3_region.length() > 0) {
     copy_params.s3_region = cp.s3_region;
   }
+  if (cp.s3_endpoint.length() > 0) {
+    copy_params.s3_endpoint = cp.s3_endpoint;
+  }
   switch (cp.file_type) {
     case TFileType::POLYGON:
       copy_params.file_type = Importer_NS::FileType::POLYGON;
@@ -2578,6 +2581,7 @@ TCopyParams MapDHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp)
   copy_params.s3_access_key = cp.s3_access_key;
   copy_params.s3_secret_key = cp.s3_secret_key;
   copy_params.s3_region = cp.s3_region;
+  copy_params.s3_endpoint = cp.s3_endpoint;
   switch (cp.file_type) {
     case Importer_NS::FileType::POLYGON:
       copy_params.file_type = TFileType::POLYGON;

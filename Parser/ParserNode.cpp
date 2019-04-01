@@ -3156,6 +3156,13 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           throw std::runtime_error("Option s3_region must be a string.");
         }
         copy_params.s3_region = *str_literal->get_stringval();
+      } else if (boost::iequals(*p->get_name(), "s3_endpoint")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("Option s3_endpoint must be a string.");
+        }
+        copy_params.s3_endpoint = *str_literal->get_stringval();
       } else if (boost::iequals(*p->get_name(), "quote")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());

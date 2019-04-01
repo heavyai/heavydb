@@ -59,6 +59,7 @@ void S3Archive::init_for_read() {
     // WITH s3_access_key/s3_secret_key parameters.
     Aws::Client::ClientConfiguration s3_config;
     s3_config.region = s3_region.size() ? s3_region : Aws::Region::US_EAST_1;
+    s3_config.endpointOverride = s3_endpoint;
 
     /*
        Fix a wrong ca path established at building libcurl on Centos being carried to

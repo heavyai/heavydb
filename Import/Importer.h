@@ -109,6 +109,7 @@ struct CopyParams {
   std::string s3_access_key;  // per-query credentials to override the
   std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
   std::string s3_region;
+  std::string s3_endpoint;
   // kafka related params
   size_t retry_count;
   size_t retry_wait;

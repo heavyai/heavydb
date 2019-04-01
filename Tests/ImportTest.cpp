@@ -1099,6 +1099,25 @@ TEST_F(ImportTest, S3_One_7z_with_many_csv_files) {
 TEST_F(ImportTest, S3_All_files) {
   EXPECT_TRUE(import_test_s3_compressed("", 105200, 1.0));
 }
+
+TEST_F(ImportTest, S3_GCS_One_gz_file) {
+  EXPECT_TRUE(import_test_common(
+      std::string(
+          "COPY trips FROM 's3://omnisci-importtest-data/trip-data/trip_data_9.gz' "
+          "WITH (header='true', s3_endpoint='storage.googleapis.com');"),
+      100,
+      1.0));
+}
+
+TEST_F(ImportTest, S3_GCS_One_geo_file) {
+  EXPECT_TRUE(import_test_common_geo(
+      "COPY geo FROM "
+      "'s3://omnisci-importtest-data/geo-data/S_USA.Experimental_Area_Locations.gdb.zip' "
+      "WITH (geo='true', s3_endpoint='storage.googleapis.com');",
+      "geo",
+      87,
+      1.0));
+}
 #endif  // HAVE_AWS_S3
 }  // namespace
 
