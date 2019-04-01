@@ -314,10 +314,10 @@ rsync -av $VERS/x86_64/* $PREFIX
 popd # vulkan
 
 # install opensaml and its dependencies
-VERS=3_2_1
-download ${HTTP_DEPS}/Xerces-C_$VERS.tar.gz
-extract Xerces-C_$VERS.tar.gz
-XERCESCROOT=$PWD/xerces-c-Xerces-C_$VERS
+VERS=3.2.2
+download ${HTTP_DEPS}/xerces-c-$VERS.tar.gz
+extract xerces-c-$VERS.tar.gz
+XERCESCROOT=$PWD/xerces-c-$VERS
 mkdir $XERCESCROOT/build
 pushd $XERCESCROOT/build
 cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DBUILD_SHARED_LIBS=off -Dnetwork=off -DCMAKE_BUILD_TYPE=release ..
@@ -325,9 +325,9 @@ makej
 make install
 popd
 
-download_make_install ${HTTP_DEPS}/xml-security-c-2.0.0.tar.gz "" "--without-xalan --enable-static --disable-shared"
-download_make_install ${HTTP_DEPS}/xmltooling-3.0.2-nolog4shib.tar.gz "" "--enable-static --disable-shared"
-download_make_install ${HTTP_DEPS}/opensaml-3.0.0-nolog4shib.tar.gz "" "--enable-static --disable-shared"
+download_make_install ${HTTP_DEPS}/xml-security-c-2.0.2.tar.gz "" "--without-xalan --enable-static --disable-shared"
+download_make_install ${HTTP_DEPS}/xmltooling-3.0.4-nolog4shib.tar.gz "" "--enable-static --disable-shared"
+download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz "" "--enable-static --disable-shared"
 
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.modulefile.in > mapd-deps-$SUFFIX.modulefile
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.sh.in > mapd-deps-$SUFFIX.sh
