@@ -24,7 +24,7 @@ elif cat /etc/os-release | grep -i -q fedora ; then
     exit 1
   fi
 else
-  echo "Only debain- and fedora-based OSs are supported by this script"
+  echo "Only debian- and fedora-based OSs are supported by this script"
   exit 1
 fi
 
@@ -121,12 +121,12 @@ if [ "$DISTRO" = "u18.04" ] ; then
 
   sudo mkdir -p $PREFIX
   pushd $PREFIX
-  sudo $GETTER https://internal-dependencies.mapd.com/mapd-deps/mapd-deps-ubuntu-$FLAG.tar.xz
+  sudo $GETTER https://dependencies.mapd.com/mapd-deps/mapd-deps-ubuntu-$FLAG.tar.xz
   sudo tar xvf mapd-deps-ubuntu-$FLAG.tar.xz
   sudo rm -f mapd-deps-ubuntu-$FLAG.tar.xz
   popd
 
-  cat > $PREFIX/mapd-deps.sh <<EOF
+  cat << EOF | sudo tee -a $PREFIX/mapd-deps.sh
 PREFIX=$PREFIX
 
 LD_LIBRARY_PATH=/usr/local/cuda/lib64:\$LD_LIBRARY_PATH
@@ -146,7 +146,7 @@ EOF
 
   PROFPATH=/etc/profile.d/xx-mapd-deps.sh
   if [ "$ENABLE" = true ] ; then
-    ln -sf $PREFIX/mapd-deps.sh $PROFPATH
+    sudo ln -sf $PREFIX/mapd-deps.sh $PROFPATH
     echo "Done. A file at $PROFPATH has been created and will be run on startup"
     echo "Source this file or reboot to load vars in this shell"
   else
@@ -182,7 +182,7 @@ elif [ "$DISTRO" = "c7" ] ; then
 
   sudo mkdir -p $PREFIX
   pushd $PREFIX
-  sudo $GETTER https://internal-dependencies.mapd.com/mapd-deps/mapd-deps-$FLAG.tar.xz
+  sudo $GETTER https://dependencies.mapd.com/mapd-deps/mapd-deps-$FLAG.tar.xz
   DIRNAME=$(tar tf mapd-deps-$FLAG.tar.xz | head -n 2 | tail -n 1 | xargs dirname)
   sudo tar xvf mapd-deps-$FLAG.tar.xz
   sudo rm -f mapd-deps-$FLAG.tar.xz
@@ -194,18 +194,18 @@ elif [ "$DISTRO" = "c7" ] ; then
 
   if [ ! -e "$MODPATH/cuda" ]; then
     pushd $MODPATH
-    sudo $GETTER https://internal-dependencies.mapd.com/mapd-deps/cuda
+    sudo $GETTER https://dependencies.mapd.com/mapd-deps/cuda
     popd
   fi
 
   PROFPATH=/etc/profile.d/xx-mapd-deps.sh
   if [ "$ENABLE" = true ] ; then
-    sudo echo 'module load cuda mapd-deps' > $PROFPATH
+    echo 'module load cuda mapd-deps' | sudo tee $PROFPATH
     echo "Done. A file at $PROFPATH has been created and will be run on startup"
     echo "Run 'source /etc/profile' or reboot to load mapd-deps and cuda module vars in this shell"
   else
     if [ ! -f "$PROFPATH" ] ; then
-      sudo echo '#module load cuda mapd-deps' > $PROFPATH
+      echo '#module load cuda mapd-deps' | sudo tee $PROFPATH
     fi
     echo "Done. Be sure to load modules function and load the mapd-deps and cuda modules to load variables:"
     echo "    source /etc/profile.d/modules.sh"
