@@ -1,9 +1,26 @@
 MapD Core
 =========
 
-MapD Core is an in-memory, column store, SQL relational database that was designed from the ground up to run on GPUs.
+MapD Core is an in-memory, column store, SQL relational database designed from the ground up to run on GPUs. MapD Core is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
-# Table of Contents
+The repository includes a number of third party packages provided under separate licenses. Details about these packages and their respective licenses is at [ThirdParty/licenses/index.md](ThirdParty/licenses/index.md).
+
+# Downloads and Installation Instructions
+
+OmniSci provides pre-built binaries for Linux for stable releases of the project:
+
+| Distro | Package type | CPU/GPU | Link | Docs |
+| --- | --- | --- | --- | --- |
+| CentOS | RPM | CPU | https://releases.omnisci.com/os/yum/stable/cpu | https://www.omnisci.com/docs/latest/4_centos7-yum-cpu-os-recipe.html |
+| CentOS | RPM | GPU | https://releases.omnisci.com/os/yum/stable/cuda | https://www.omnisci.com/docs/latest/4_centos7-yum-gpu-os-recipe.html |
+| Ubuntu | DEB | CPU | deb https://releases.omnisci.com/os/apt/ stable cpu | https://www.omnisci.com/docs/latest/4_ubuntu-apt-cpu-os-recipe.html |
+| Ubuntu | DEB | GPU | deb https://releases.omnisci.com/os/apt/ stable cuda | https://www.omnisci.com/docs/latest/4_ubuntu-apt-gpu-os-recipe.html |
+| * | tarball | CPU | https://releases.omnisci.com/os/tar/omnisci-os-latest-Linux-x86_64-cpu.tar.gz |  |
+| * | tarball | GPU | https://releases.omnisci.com/os/tar/omnisci-os-latest-Linux-x86_64-cuda.tar.gz |  |
+
+*** 
+
+# Developing MapD Core: Table of Contents
 
 - [Links](#links)
 - [License](#license)
