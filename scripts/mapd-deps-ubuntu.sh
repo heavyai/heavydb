@@ -207,9 +207,9 @@ popd # vulkan
 
 
 # OpenSAML
-download_make_install ${HTTP_DEPS}/xml-security-c-2.0.0.tar.gz "" "--without-xalan"
-download_make_install ${HTTP_DEPS}/xmltooling-3.0.2-nolog4shib.tar.gz
-download_make_install ${HTTP_DEPS}/opensaml-3.0.0-nolog4shib.tar.gz
+download_make_install ${HTTP_DEPS}/xml-security-c-2.0.2.tar.gz "" "--without-xalan"
+download_make_install ${HTTP_DEPS}/xmltooling-3.0.4-nolog4shib.tar.gz
+download_make_install ${HTTP_DEPS}/opensaml-3.0.1-nolog4shib.tar.gz
 
 cat > $PREFIX/mapd-deps.sh <<EOF
 PREFIX=$PREFIX
