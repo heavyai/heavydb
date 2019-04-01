@@ -418,6 +418,7 @@ void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
   if (query_mem_desc.getPaddedColumnWidthBytes(slot_index_counter) == 0) {
     CHECK(!dynamic_cast<const Analyzer::AggExpr*>(target_expr));
     ++slot_index_counter;
+    ++target_index_counter;
     return;
   }
   if (dynamic_cast<const Analyzer::UOper*>(target_expr) &&

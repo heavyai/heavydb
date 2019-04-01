@@ -1097,12 +1097,28 @@ TEST(Select, FilterAndMultipleAggregation) {
 TEST(Select, GroupBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    const auto big_group_threshold = g_big_group_threshold;
-    ScopeGuard reset_big_group_threshold = [&big_group_threshold] {
-      g_big_group_threshold = big_group_threshold;
-    };
-    g_big_group_threshold = 1;
-    c("SELECT d, COUNT(*) FROM test GROUP BY d ORDER BY d DESC LIMIT 10;", dt);
+
+    {
+      const auto big_group_threshold = g_big_group_threshold;
+      ScopeGuard reset_big_group_threshold = [&big_group_threshold] {
+        g_big_group_threshold = big_group_threshold;
+      };
+      g_big_group_threshold = 1;
+      c("SELECT d, COUNT(*) FROM test GROUP BY d ORDER BY d DESC LIMIT 10;", dt);
+    }
+
+    if (g_enable_columnar_output) {
+      // TODO: Fixup the tests below when running with columnar output enabled
+      continue;
+    }
+
+    c("SELECT x, y, COUNT(*) FROM test GROUP BY x, y;", dt);
+    c("SELECT x, y, APPROX_COUNT_DISTINCT(str) FROM test GROUP BY x, y;",
+      "SELECT x, y, COUNT(distinct str) FROM test GROUP BY x, y;",
+      dt);
+    c("SELECT f, ff, APPROX_COUNT_DISTINCT(str) from test group by f, ff ORDER BY f, ff;",
+      "SELECT f, ff, COUNT(distinct str) FROM test GROUP BY f, ff ORDER BY f, ff;",
+      dt);
   }
 }
 
