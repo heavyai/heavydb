@@ -1996,7 +1996,7 @@ void Catalog::createTable(
       }
     } catch (std::exception& e) {
       sqliteConnector_.query("ROLLBACK TRANSACTION");
-      throw e;
+      throw;
     }
 
   } else {  // Temporary table
@@ -2038,7 +2038,7 @@ void Catalog::createTable(
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     removeTableFromMap(td.tableName, td.tableId);
-    throw e;
+    throw;
   }
 
   sqliteConnector_.query("END TRANSACTION");

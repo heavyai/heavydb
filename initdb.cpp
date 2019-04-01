@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <thrift/Thrift.h>
 #include <array>
 #include <boost/filesystem.hpp>
 #include <exception>
@@ -34,6 +35,8 @@ static const std::array<std::string, 3> SampleGeoTableNames{"omnisci_states",
                                                             "omnisci_counties",
                                                             "omnisci_countries"};
 
+bool g_enable_thrift_logs{false};
+
 int main(int argc, char* argv[]) {
   std::string base_path;
   bool force = false;
@@ -49,6 +52,12 @@ int main(int argc, char* argv[]) {
       "Directory path to OmniSci catalogs")(
       "force,f", "Force overwriting of existing OmniSci instance")(
       "skip-geo", "Skip inserting sample geo data");
+
+  desc.add_options()("enable-thrift-logs",
+                     po::value<bool>(&g_enable_thrift_logs)
+                         ->default_value(g_enable_thrift_logs)
+                         ->implicit_value(true),
+                     "Enable writing messages directly from thrift to stdout/stderr.");
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -75,6 +84,10 @@ int main(int argc, char* argv[]) {
   } catch (boost::program_options::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;
+  }
+
+  if (!g_enable_thrift_logs) {
+    apache::thrift::GlobalOutput.setOutputFunction([](const char* msg) {});
   }
 
   if (!boost::filesystem::exists(base_path)) {

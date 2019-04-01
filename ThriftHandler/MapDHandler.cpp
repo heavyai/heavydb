@@ -37,6 +37,7 @@
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/THttpServer.h>
 #include <thrift/transport/TServerSocket.h>
+#include <thrift/transport/TTransportException.h>
 
 #include "MapDRelease.h"
 
@@ -771,8 +772,11 @@ void MapDHandler::sql_execute(TQueryResult& _return,
                                       mapd_parameters_);
       } catch (std::exception& e) {
         const auto mapd_exception = dynamic_cast<const TMapDException*>(&e);
-        THROW_MAPD_EXCEPTION(mapd_exception ? mapd_exception->error_msg
-                                            : (std::string("Exception: ") + e.what()));
+        const auto thrift_exception = dynamic_cast<const apache::thrift::TException*>(&e);
+        THROW_MAPD_EXCEPTION(
+            thrift_exception ? std::string(thrift_exception->what())
+                             : mapd_exception ? mapd_exception->error_msg
+                                              : std::string("Exception: ") + e.what());
       }
       _return.nonce = nonce;
     });
@@ -5094,7 +5098,9 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                         executor_device_type,
                         first_n);
     } catch (std::exception& e) {
-      THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+      const auto thrift_exception = dynamic_cast<const apache::thrift::TException*>(&e);
+      THROW_MAPD_EXCEPTION(thrift_exception ? std::string(thrift_exception->what())
+                                            : std::string("Exception: ") + e.what());
     }
   }
 }

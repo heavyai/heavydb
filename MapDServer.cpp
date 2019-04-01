@@ -54,6 +54,8 @@ using namespace ::apache::thrift::transport;
 extern bool g_cache_string_hash;
 extern size_t g_leaf_count;
 
+bool g_enable_thrift_logs{false};
+
 TableGenerations table_generations_from_thrift(
     const std::vector<TTableGeneration>& thrift_table_generations) {
   TableGenerations table_generations;
@@ -123,11 +125,11 @@ void register_signal_handler() {
   std::signal(SIGPIPE, SIG_IGN);
 }
 
-void start_server(TThreadedServer& server) {
+void start_server(TThreadedServer& server, const int port) {
   try {
     server.serve();
   } catch (std::exception& e) {
-    LOG(ERROR) << "Exception: " << e.what() << std::endl;
+    LOG(ERROR) << "Exception: " << e.what() << ": port " << port << std::endl;
   }
 }
 
@@ -406,7 +408,12 @@ void MapDProgramOptions::fillOptions(po::options_description& desc) {
                      po::value<bool>(&g_cache_string_hash)
                          ->default_value(g_cache_string_hash)
                          ->implicit_value(true),
-                     "Enable chache to store hashes in string dictionary server");
+                     "Enable cache to store hashes in string dictionary server");
+  desc.add_options()("enable-thrift-logs",
+                     po::value<bool>(&g_enable_thrift_logs)
+                         ->default_value(g_enable_thrift_logs)
+                         ->implicit_value(true),
+                     "Enable writing messages directly from thrift to stdout/stderr.");
 }
 
 void MapDProgramOptions::fillAdvancedOptions(po::options_description& desc_adv) {
@@ -748,6 +755,10 @@ int main(int argc, char** argv) {
   std::thread file_delete_thread(
       file_delete, std::ref(running), wait_interval, desc_all.base_path + "/mapd_data");
 
+  if (!g_enable_thrift_logs) {
+    apache::thrift::GlobalOutput.setOutputFunction([](const char* msg) {});
+  }
+
   g_mapd_handler = mapd::make_shared<MapDHandler>(desc_all.db_leaves,
                                                   desc_all.string_leaves,
                                                   desc_all.base_path,
@@ -809,8 +820,9 @@ int main(int argc, char** argv) {
     TThreadedServer httpServer(
         processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
 
-    std::thread bufThread(start_server, std::ref(bufServer));
-    std::thread httpThread(start_server, std::ref(httpServer));
+    std::thread bufThread(
+        start_server, std::ref(bufServer), desc_all.mapd_parameters.omnisci_server_port);
+    std::thread httpThread(start_server, std::ref(httpServer), desc_all.http_port);
 
     // run warm up queries if any exists
     run_warmup_queries(g_mapd_handler, desc_all.base_path, desc_all.db_query_file);
