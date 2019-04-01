@@ -501,19 +501,19 @@ class OmniSciResultSet implements java.sql.ResultSet {
   @Override
   public Date getDate(String columnLabel)
           throws SQLException { // logger.debug("Entered "+ sql );
-    return getDate(columnLabel,null);
+    return getDate(columnLabel, null);
   }
 
   @Override
   public Time getTime(String columnLabel)
           throws SQLException { // logger.debug("Entered "+ sql );
-    return getTime(columnLabel,null);
+    return getTime(columnLabel, null);
   }
 
   @Override
   public Timestamp getTimestamp(String columnLabel)
           throws SQLException { // logger.debug("Entered "+ sql );
-    return getTimestamp(columnLabel,null);
+    return getTimestamp(columnLabel, null);
   }
 
   @Override
@@ -1323,35 +1323,32 @@ class OmniSciResultSet implements java.sql.ResultSet {
             + " method:" + new Throwable().getStackTrace()[0].getMethodName());
   }
 
-  // this method is used to add a TZ from Calendar; is TimeZone in the calendar isn't specified it uses the local TZ
-  private long getOffsetFromTZ(long actualmillis, Calendar cal, int precision ) {
+  // this method is used to add a TZ from Calendar; is TimeZone in the calendar isn't
+  // specified it uses the local TZ
+  private long getOffsetFromTZ(long actualmillis, Calendar cal, int precision) {
     long offset;
     if (cal.getTimeZone() != null) {
-        offset = cal.getTimeZone().getOffset(actualmillis);
-      }
-      else {
-        offset = Calendar.getInstance().getTimeZone().getOffset(actualmillis);
-      }
-      switch (precision)
-      {
-         case 0:
-           return offset/1000;
-         case 3:
-           return offset;
-         case 6:
-           return offset*1000;
-         case 9:
-           return offset*1000000;
-         default:
-           throw new RuntimeException("Invalid precision [" + Integer.toString(precision)
-                  + "] returned. Valid values 0,3,6,9");
-
-      }
+      offset = cal.getTimeZone().getOffset(actualmillis);
+    } else {
+      offset = Calendar.getInstance().getTimeZone().getOffset(actualmillis);
+    }
+    switch (precision) {
+      case 0:
+        return offset / 1000;
+      case 3:
+        return offset;
+      case 6:
+        return offset * 1000;
+      case 9:
+        return offset * 1000000;
+      default:
+        throw new RuntimeException("Invalid precision [" + Integer.toString(precision)
+                + "] returned. Valid values 0,3,6,9");
+    }
   }
 
   @Override
-  public Date getDate(int columnIndex, Calendar cal)
-            throws SQLException {
+  public Date getDate(int columnIndex, Calendar cal) throws SQLException {
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return null;
@@ -1368,18 +1365,17 @@ class OmniSciResultSet implements java.sql.ResultSet {
   }
 
   @Override
-  public Date getDate(String columnLabel, Calendar cal)
-          throws SQLException {
+  public Date getDate(String columnLabel, Calendar cal) throws SQLException {
     Integer colNum = columnMap.get(columnLabel);
     if (colNum == null) {
       throw new SQLException("Could not find column " + columnLabel);
     }
-    return getDate(colNum,cal);
+    return getDate(colNum, cal);
   }
 
   @Override
   public Time getTime(int columnIndex, Calendar cal)
-        throws SQLException { // logger.debug("Entered "+ sql );
+          throws SQLException { // logger.debug("Entered "+ sql );
     if (rowSet.columns.get(columnIndex - 1).nulls.get(offset)) {
       wasNull = true;
       return null;
@@ -1394,7 +1390,6 @@ class OmniSciResultSet implements java.sql.ResultSet {
     }
   }
 
-
   @Override
   public Time getTime(String columnLabel, Calendar cal)
           throws SQLException { // logger.debug("Entered "+ sql );
@@ -1402,7 +1397,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
     if (colNum == null) {
       throw new SQLException("Could not find column " + columnLabel);
     }
-    return getTime(colNum,cal);
+    return getTime(colNum, cal);
   }
 
   @Override
@@ -1445,7 +1440,7 @@ class OmniSciResultSet implements java.sql.ResultSet {
     if (colNum == null) {
       throw new SQLException("Could not find column " + columnLabel);
     }
-    return getTimestamp(colNum,cal);
+    return getTimestamp(colNum, cal);
   }
 
   @Override

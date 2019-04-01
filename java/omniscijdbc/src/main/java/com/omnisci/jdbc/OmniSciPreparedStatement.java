@@ -77,7 +77,8 @@ class OmniSciPreparedStatement implements PreparedStatement {
   private boolean[] parmIsString = null;
   private List<TStringRow> rows = null;
   private static final Pattern REGEX_PATTERN = Pattern.compile("(?i)\\s+INTO\\s+(\\w+)");
-  private static final Pattern REGEX_LOF_PATTERN = Pattern.compile("(?i)\\s*insert\\s+into\\s+[\\w:\\.]+\\s*\\(([\\w:\\s:\\,:\\']+)\\)[\\w:\\s]+\\(");
+  private static final Pattern REGEX_LOF_PATTERN = Pattern.compile(
+          "(?i)\\s*insert\\s+into\\s+[\\w:\\.]+\\s*\\(([\\w:\\s:\\,:\\']+)\\)[\\w:\\s]+\\(");
 
   OmniSciPreparedStatement(String sql, String session, MapD.Client client) {
     MAPDLOGGER.debug("Entered");
@@ -357,25 +358,26 @@ class OmniSciPreparedStatement implements PreparedStatement {
           String listOfFields[] = matcher.group(1).trim().split("\\s*,+\\s*,*\\s*");
           if (listOfFields.length != parmCount) {
             throw new SQLException("Too many or too few values");
-          }
-          else if (Arrays.stream(listOfFields).distinct().toArray().length != listOfFields.length) {
+          } else if (Arrays.stream(listOfFields).distinct().toArray().length
+                  != listOfFields.length) {
             throw new SQLException("Duplicated column name");
           }
           fieldsOrder = new int[listOfFields.length];
           List<String> listOfColumns = new ArrayList<String>();
           try {
-            TTableDetails tableDetails = client.get_table_details(session, insertTableName);
+            TTableDetails tableDetails =
+                    client.get_table_details(session, insertTableName);
             for (TColumnType column : tableDetails.row_desc) {
               listOfColumns.add(column.col_name.toLowerCase());
             }
-          }
-          catch (TException ex) {
+          } catch (TException ex) {
             throw new SQLException(ex.toString());
           }
           for (int i = 0; i < fieldsOrder.length; i++) {
             fieldsOrder[i] = listOfColumns.indexOf(listOfFields[i].toLowerCase());
             if (fieldsOrder[i] == -1) {
-              throw new SQLException("Column " + listOfFields[i].toLowerCase() + " does not exist");
+              throw new SQLException(
+                      "Column " + listOfFields[i].toLowerCase() + " does not exist");
             }
           }
         }

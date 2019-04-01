@@ -48,7 +48,10 @@ class OmniSciData {
   }
 
   void setNull(boolean b) {
-   if (colType == TDatumType.STR) tcolumn.data.addToStr_col(null); else tcolumn.data.addToInt_col(0);
+    if (colType == TDatumType.STR)
+      tcolumn.data.addToStr_col(null);
+    else
+      tcolumn.data.addToInt_col(0);
     tcolumn.addToNulls(b);
   }
 
