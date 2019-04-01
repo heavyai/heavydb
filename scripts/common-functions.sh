@@ -95,7 +95,7 @@ function install_snappy() {
   popd
 }
 
-AWSCPP_VERSION=1.4.76
+AWSCPP_VERSION=1.7.83
 
 function install_awscpp() {
     # default c++ standard support
@@ -109,7 +109,6 @@ function install_awscpp() {
     download https://github.com/aws/aws-sdk-cpp/archive/${AWSCPP_VERSION}.tar.gz
     tar xvfz ${AWSCPP_VERSION}.tar.gz
     pushd aws-sdk-cpp-${AWSCPP_VERSION}
-    patch -p1 < ${SCRIPTS_DIR}/aws-sdk-cpp-remove-git-version.patch
     mkdir build
     cd build
     cmake \
