@@ -48,7 +48,7 @@ class CoreMockClient {
   RetValMockMethod(get_table_epoch, int32_t)
   RetValMockMethod(get_table_epoch_by_name, int32_t)
   MockMethod(get_status)
-  MockMethod(create_frontend_view)
+  MockMethod(create_dashboard)
   MockMethod(get_roles)
   MockMethod(get_db_objects_for_grantee)
   MockMethod(get_db_object_privs)

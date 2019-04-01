@@ -109,11 +109,11 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
         context.client.get_status(context.cluster_status, context.session);
         break;
       case kIMPORT_DASHBOARD:
-        context.client.create_frontend_view(context.session,
-                                            context.view_name,
-                                            context.view_state,
-                                            "",
-                                            context.view_metadata);
+        context.client.create_dashboard(context.session,
+                                        context.view_name,
+                                        context.view_state,
+                                        "",
+                                        context.view_metadata);
         break;
       case kGET_ROLES:
         context.client.get_roles(context.role_names, context.session);

@@ -1689,6 +1689,7 @@ void MapDHandler::get_row_descriptor(TRowDescriptor& _return,
   LOG(ERROR) << "get_row_descriptor is deprecated, please fix application";
 }
 
+// DEPRECATED(2019-04-01) - use get_dashboard()
 void MapDHandler::get_frontend_view(TFrontendView& _return,
                                     const TSessionId& session,
                                     const std::string& view_name) {
@@ -1991,6 +1992,7 @@ void MapDHandler::get_databases(std::vector<TDBInfo>& dbinfos,
   }
 }
 
+// DEPRECATED(2019-04-01) - use get_dashboards()
 void MapDHandler::get_frontend_views(std::vector<TFrontendView>& view_names,
                                      const TSessionId& session) {
   LOG_ON_RETURN(session);
@@ -3314,6 +3316,7 @@ void MapDHandler::get_dashboard_grantees(
   }
 }
 
+// DEPRECATED(2019-04-01) - use create_dashboard()
 void MapDHandler::create_frontend_view(const TSessionId& session,
                                        const std::string& view_name,
                                        const std::string& view_state,
@@ -3340,6 +3343,7 @@ void MapDHandler::create_frontend_view(const TSessionId& session,
   }
 }
 
+// DEPRECATED(2019-04-01) - use delete_dashboard()
 void MapDHandler::delete_frontend_view(const TSessionId& session,
                                        const std::string& view_name) {
   LOG_ON_RETURN(session);
