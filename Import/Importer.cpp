@@ -708,6 +708,11 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         if (!is_null) {
           ArrayDatum d = StringToArray(val, ti, copy_params);
           if (d.is_null) {  // val could be "NULL"
+            if (ti.get_size() > 0) {
+              // TODO: remove once NULL fixlen arrays are allowed
+              throw std::runtime_error("Fixed length array column " + cd->columnName +
+                                       " currently cannot accept NULL arrays");
+            }
             addArray(NullArray(ti));
           } else {
             if (ti.get_size() > 0 && static_cast<size_t>(ti.get_size()) != d.length) {
@@ -717,6 +722,11 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
             addArray(d);
           }
         } else {
+          if (ti.get_size() > 0) {
+            // TODO: remove once NULL fixlen arrays are allowed
+            throw std::runtime_error("Fixed length array column " + cd->columnName +
+                                     " currently cannot accept NULL arrays");
+          }
           addArray(NullArray(ti));
         }
       }

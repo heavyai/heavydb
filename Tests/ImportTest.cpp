@@ -502,7 +502,8 @@ TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
       CHECK(!date_arr1->is_initialized());
     }
     const auto date_arr2 = boost::get<ArrayTargetValue>(&crt_row[2]);
-    CHECK(date_arr2 && !date_arr2->is_initialized());
+    CHECK(date_arr2);
+    // TODO: Check !date_arr2->is_initialized() too if NULL fixlen arrays are allowed
   }
 }
 

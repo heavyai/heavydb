@@ -536,13 +536,17 @@ TEST(Insert, NullArrayNullEmpty) {
         run_multiple_agg("INSERT INTO table_array_with_nulls "
                          "VALUES(4, {NULL,NULL}, {NULL,NULL});",
                          dt));
+    EXPECT_THROW(run_multiple_agg("INSERT INTO table_array_with_nulls "
+                                  "VALUES(5, NULL, NULL);",
+                                  dt),
+                 std::runtime_error);
     EXPECT_NO_THROW(
         run_multiple_agg("INSERT INTO table_array_with_nulls "
-                         "VALUES(5, NULL, NULL);",
+                         "VALUES(5, NULL, {NULL,NULL});",
                          dt));
     EXPECT_NO_THROW(
         run_multiple_agg("INSERT INTO table_array_with_nulls "
-                         "VALUES(6, {}, NULL);",
+                         "VALUES(6, {}, {NULL,NULL});",
                          dt));
     EXPECT_NO_THROW(
         run_multiple_agg("INSERT INTO table_array_with_nulls "
@@ -573,7 +577,7 @@ TEST(Insert, NullArrayNullEmpty) {
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM table_array_with_nulls WHERE sia IS NULL;", dt)));
     ASSERT_EQ(
-        3,
+        7,  // TODO: switch back to 3 when NULL fixlen arrays are allowed
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM table_array_with_nulls WHERE fa2 IS NOT NULL;", dt)));
     ASSERT_EQ(1,

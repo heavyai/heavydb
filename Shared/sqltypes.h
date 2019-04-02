@@ -576,53 +576,6 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     }
     return false;
   }
-  HOST DEVICE inline bool is_null_array(const int8_t* val, int array_size) const {
-    // Check if fixed length array is filled with NULL sentinels
-    if (type == kARRAY && val && array_size > 0 && array_size == size) {
-      // Need to create element type to get the size, but can't call get_elem_type()
-      // since this is a HOST DEVICE function. Going through copy constructor instead.
-      auto elem_ti{*this};
-      elem_ti.set_type(subtype);
-      elem_ti.set_subtype(kNULLT);
-      auto elem_size = elem_ti.get_storage_size();
-      if (elem_size < 1)
-        return false;
-      for (auto p = val; p < val + array_size; p += elem_size) {
-        if (subtype == kFLOAT) {
-          if (*(float*)p != NULL_FLOAT)
-            return false;
-          continue;
-        }
-        if (subtype == kDOUBLE) {
-          if (*(double*)p != NULL_DOUBLE)
-            return false;
-          continue;
-        }
-        switch (elem_size) {
-          case 1:
-            if (*p != NULL_TINYINT)
-              return false;
-            break;
-          case 2:
-            if (*(int16_t*)p != NULL_SMALLINT)
-              return false;
-            break;
-          case 4:
-            if (*(int32_t*)p != NULL_INT)
-              return false;
-            break;
-          case 8:
-            if (*(int64_t*)p != NULL_BIGINT)
-              return false;
-            break;
-          default:
-            return false;
-        }
-      }
-      return true;
-    }
-    return false;
-  }
   inline SQLTypeInfoCore get_elem_type() const {
     return SQLTypeInfoCore(
         subtype, dimension, scale, notnull, compression, comp_param, kNULLT);
