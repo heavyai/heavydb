@@ -14105,6 +14105,12 @@ TEST(Select, WindowFunctionAggregate) {
         "ORDER BY y ASC";
     c(query + " NULLS FIRST, m ASC NULLS FIRST;", query + ", m ASC;", dt);
   }
+  c("SELECT x, RANK() OVER (PARTITION BY y ORDER BY n ASC NULLS FIRST) r FROM (SELECT x, "
+    "y, COUNT(*) n FROM test_window_func GROUP BY x, y) ORDER BY x ASC NULLS FIRST, y "
+    "ASC NULLS FIRST;",
+    "SELECT x, RANK() OVER (PARTITION BY y ORDER BY n ASC) r FROM (SELECT x, y, COUNT(*) "
+    "n FROM test_window_func GROUP BY x, y) ORDER BY x ASC, y ASC;",
+    dt);
 }
 
 TEST(Select, WindowFunctionAggregateNoOrder) {
