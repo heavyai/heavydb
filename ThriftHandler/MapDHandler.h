@@ -63,6 +63,7 @@
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/measure.h"
 #include "Shared/scope.h"
+#include "StringDictionary/StringDictionaryClient.h"
 #include "ThriftHandler/DistributedValidate.h"
 
 #include <fcntl.h>

@@ -990,6 +990,81 @@ std::string hide_sensitive_data_from_connect(const std::string& connect_str) {
   return result;
 }
 
+std::string get_process_role(TRole::type role) {
+  switch (role) {
+    case TRole::type::SERVER:
+      return "Server";
+    case TRole::type::AGGREGATOR:
+      return "Aggregator";
+    case TRole::type::LEAF:
+      return "Leaf";
+    case TRole::type::STRING_DICTIONARY:
+      return "String Dictionary Server";
+  }
+  UNREACHABLE();
+  return "";
+}
+
+void print_status(ClientContext& context) {
+  std::ostringstream tss;
+  const size_t lhs_width = 36;
+  time_t t = (time_t)context.cluster_status[0].start_time;
+  std::tm* tm_ptr = gmtime(&t);
+  char buf[12] = {0};
+  strftime(buf, 11, "%F", tm_ptr);
+  const std::string agg_version = context.cluster_status[0].version;
+  const bool is_cluster = context.cluster_status.size() > 1;
+
+  std::string edition = "";
+  if (context.cluster_status[0].edition == "ee") {
+    edition = "Enterprise Edition";
+  }
+
+  const std::string deployment_type = (is_cluster) ? "Cluster" : "Server";
+
+  tss << std::left << std::setfill(' ') << std::setw(lhs_width);
+  tss << deployment_type + " Version"
+      << ": " << agg_version << " " << edition;
+  tss << std::endl;
+
+  if (is_cluster) {
+    tss << std::left << std::setfill(' ') << std::setw(lhs_width);
+    tss << "Number of processes"
+        << ": " << context.cluster_status.size() << std::endl;
+  }
+
+  for (auto node = context.cluster_status.begin(); node != context.cluster_status.end();
+       ++node) {
+    const std::string process_role = get_process_role(node->role);
+
+    t = (time_t)node->start_time;
+    memset(buf, 0, 12);
+    std::tm* tm_ptr = gmtime(&t);
+    strftime(buf, 11, "%F", tm_ptr);
+
+    tss << "--------------------------------------------------" << std::endl;
+
+    tss << std::left << std::setfill(' ') << std::setw(lhs_width);
+    tss << process_role + " Name"
+        << ": " << node->host_name << std::endl;
+
+    tss << std::left << std::setfill(' ') << std::setw(lhs_width);
+    tss << process_role + " Start Time"
+        << ": " << buf << " : " << tm_ptr->tm_hour << ":" << tm_ptr->tm_min << ":"
+        << tm_ptr->tm_sec << std::endl;
+
+    if (agg_version != node->version) {
+      tss << std::left << std::setfill(' ') << std::setw(lhs_width);
+      tss << process_role << " Version : " + node->version << std::endl;
+      std::cerr << "\033[31m*** Version mismatch! ***\033[0m Please make "
+                   "sure All leaves, Aggregator and String Dictionary are running "
+                   "the same version of OmniSci."
+                << std::endl;
+    }
+  }
+  std::cout << tss.str() << std::endl;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1303,43 +1378,7 @@ int main(int argc, char** argv) {
       }
     } else if (!strncmp(line, "\\status", 8)) {
       if (thrift_with_retry(kGET_SERVER_STATUS, context, nullptr)) {
-        time_t t = (time_t)context.cluster_status[0].start_time;
-        std::tm* tm_ptr = gmtime(&t);
-        char buf[12] = {0};
-        strftime(buf, 11, "%F", tm_ptr);
-        std::string agg_version = context.cluster_status[0].version;
-
-        std::cout << "The Server Version Number  : " << context.cluster_status[0].version
-                  << std::endl;
-        std::cout << "The Server Start Time      : " << buf << " : " << tm_ptr->tm_hour
-                  << ":" << tm_ptr->tm_min << ":" << tm_ptr->tm_sec << std::endl;
-        std::cout << "The Server edition         : " << agg_version << std::endl;
-
-        if (context.cluster_status.size() > 1) {
-          std::cout << "The Number of Leaves       : "
-                    << context.cluster_status.size() - 1 << std::endl;
-          for (auto leaf = context.cluster_status.begin() + 1;
-               leaf != context.cluster_status.end();
-               ++leaf) {
-            t = (time_t)leaf->start_time;
-            buf[11] = 0;
-            std::tm* tm_ptr = gmtime(&t);
-            strftime(buf, 11, "%F", tm_ptr);
-            std::cout << "--------------------------------------------------"
-                      << std::endl;
-            std::cout << "Name of Leaf               : " << leaf->host_name << std::endl;
-            if (agg_version != leaf->version) {
-              std::cout << "The Leaf Version Number   : " << leaf->version << std::endl;
-              std::cerr << "\033[31m*** Version number mismatch! ***\033[0m Please make "
-                           "sure All leaves, Aggregator "
-                           "and String Dictionary are running the same version of MapD."
-                        << std::endl;
-            }
-            std::cout << "The Leaf Start Time        : " << buf << " : "
-                      << tm_ptr->tm_hour << ":" << tm_ptr->tm_min << ":" << tm_ptr->tm_sec
-                      << std::endl;
-          }
-        }
+        print_status(context);
       }
     } else if (!strncmp(line, "\\detect", 7)) {
       char* filepath = strtok(line + 8, " ");

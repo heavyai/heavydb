@@ -72,6 +72,13 @@ enum TImportHeaderRow {
   HAS_HEADER
 }
 
+enum TRole {
+  SERVER, // A single node instance
+  AGGREGATOR,
+  LEAF,
+  STRING_DICTIONARY
+}
+
 /* union */ struct TDatumVal {
   1: i64 int_val,
   2: double real_val,
@@ -249,6 +256,7 @@ struct TServerStatus {
   5: string edition
   6: string host_name
   7: bool poly_rendering_enabled
+  8: TRole role
 }
 
 struct TPixel {
@@ -504,7 +512,7 @@ struct TLicenseInfo {
 }
 
 struct TSessionInfo {
-  1: string user; 
+  1: string user;
   2: string database;
   3: i64 start_time;
 }
