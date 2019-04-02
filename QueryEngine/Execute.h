@@ -1685,8 +1685,8 @@ class Executor {
   friend class PendingExecutionClosure;
   friend class RelAlgExecutor;
   friend class TableOptimizer;
-  friend class TargetExprCodegenBuilder;
-  friend class TargetExprCodegen;
+  friend struct TargetExprCodegenBuilder;
+  friend struct TargetExprCodegen;
 
   template <typename META_TYPE_CLASS>
   friend class AggregateReductionEgress;
