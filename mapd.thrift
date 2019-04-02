@@ -414,12 +414,13 @@ struct TRenderParseResult {
 }
 
 struct TRawRenderPassDataResult {
-  1: i32 num_channels
-  2: binary pixels
-  3: binary row_ids_A
-  4: binary row_ids_B
-  5: binary table_ids
-  6: binary accum_data
+  1: i32 num_pixel_channels
+  2: i32 num_pixel_samples
+  3: binary pixels
+  4: binary row_ids_A
+  5: binary row_ids_B
+  6: binary table_ids
+  7: binary accum_data
 }
 
 typedef map<i32, TRawRenderPassDataResult> TRenderPassMap
