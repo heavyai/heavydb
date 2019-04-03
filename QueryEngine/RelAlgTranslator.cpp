@@ -806,10 +806,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
   if (sql_op == kIN) {
     return translateInOper(rex_operator);
   }
-  if (sql_op == kMINUS) {
-    auto date_minus = translateDateminus(rex_operator);
-    if (date_minus) {
-      return date_minus;
+  if (sql_op == kMINUS || sql_op == kPLUS) {
+    auto date_plus_minus = translateDatePlusMinus(rex_operator);
+    if (date_plus_minus) {
+      return date_plus_minus;
     }
   }
   if (sql_op == kOVERLAPS) {
@@ -967,35 +967,6 @@ std::shared_ptr<Analyzer::Constant> makeNumericConstant(const SQLTypeInfo& ti,
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
     const RexFunctionOperator* rex_function) const {
-  if (rex_function->getName() == std::string("DATETIME_PLUS")) {
-    const auto datetime = translateScalarRex(rex_function->getOperand(0));
-    if (datetime->get_type_info().get_type() == kTIME) {
-      throw std::runtime_error("Interval addition/subtraction not supported for TIME.");
-    }
-    const auto unfolded_number = translateScalarRex(rex_function->getOperand(1));
-    const auto number = fold_expr(unfolded_number.get());
-    const auto number_lit = std::dynamic_pointer_cast<Analyzer::Constant>(number);
-    const auto& number_ti = number->get_type_info();
-    if (number_ti.get_type() == kINTERVAL_DAY_TIME) {
-      std::shared_ptr<Analyzer::Expr> number_sec;
-      if (number_lit) {
-        number_sec = makeNumericConstant(SQLTypeInfo(kBIGINT, false),
-                                         number_lit->get_constval().bigintval / 1000);
-      } else {
-        number_sec = makeExpr<Analyzer::BinOper>(
-            number_ti.get_type(),
-            kDIVIDE,
-            kONE,
-            number,
-            makeNumericConstant(SQLTypeInfo(kBIGINT, false), 1000));
-      }
-      return makeExpr<Analyzer::DateaddExpr>(
-          datetime->get_type_info(), daSECOND, number_sec, datetime);
-    }
-    CHECK(number_ti.get_type() == kINTERVAL_YEAR_MONTH);
-    return makeExpr<Analyzer::DateaddExpr>(
-        datetime->get_type_info(), daMONTH, number, datetime);
-  }
   CHECK_EQ(size_t(3), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
   const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
@@ -1047,14 +1018,17 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
       datetime);
 }
 
-std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatePlusMinus(
     const RexOperator* rex_operator) const {
   if (rex_operator->size() != 2) {
     return nullptr;
   }
   const auto datetime = translateScalarRex(rex_operator->getOperand(0));
   const auto datetime_ti = datetime->get_type_info();
-  if (datetime_ti.get_type() != kTIMESTAMP && datetime_ti.get_type() != kDATE) {
+  if (!datetime_ti.is_timestamp() && !datetime_ti.is_date()) {
+    if (datetime_ti.get_type() == kTIME) {
+      throw std::runtime_error("DateTime addition/subtraction not supported for TIME.");
+    }
     return nullptr;
   }
   const auto rhs = translateScalarRex(rex_operator->getOperand(1));
@@ -1086,31 +1060,34 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(
   const auto interval = fold_expr(rhs.get());
   auto interval_ti = interval->get_type_info();
   auto bigint_ti = SQLTypeInfo(kBIGINT, false);
+  const auto op = rex_operator->getOperator();
   const auto interval_lit = std::dynamic_pointer_cast<Analyzer::Constant>(interval);
   if (interval_ti.get_type() == kINTERVAL_DAY_TIME) {
-    std::shared_ptr<Analyzer::Expr> neg_interval_sec;
+    std::shared_ptr<Analyzer::Expr> interval_sec;
     if (interval_lit) {
-      neg_interval_sec =
-          makeNumericConstant(bigint_ti, -interval_lit->get_constval().bigintval / 1000);
+      interval_sec =
+          makeNumericConstant(bigint_ti,
+                              (op == kMINUS ? -interval_lit->get_constval().bigintval
+                                            : interval_lit->get_constval().bigintval) /
+                                  1000);
     } else {
-      auto interval_sec =
-          makeExpr<Analyzer::BinOper>(bigint_ti.get_type(),
-                                      kDIVIDE,
-                                      kONE,
-                                      interval,
-                                      makeNumericConstant(bigint_ti, 1000));
-      neg_interval_sec =
-          std::make_shared<Analyzer::UOper>(bigint_ti, false, kUMINUS, interval_sec);
+      interval_sec = makeExpr<Analyzer::BinOper>(bigint_ti.get_type(),
+                                                 kDIVIDE,
+                                                 kONE,
+                                                 interval,
+                                                 makeNumericConstant(bigint_ti, 1000));
+      if (op == kMINUS) {
+        interval_sec =
+            std::make_shared<Analyzer::UOper>(bigint_ti, false, kUMINUS, interval_sec);
+      }
     }
-    return makeExpr<Analyzer::DateaddExpr>(
-        datetime_ti, daSECOND, neg_interval_sec, datetime);
+    return makeExpr<Analyzer::DateaddExpr>(datetime_ti, daSECOND, interval_sec, datetime);
   }
   CHECK(interval_ti.get_type() == kINTERVAL_YEAR_MONTH);
-  std::shared_ptr<Analyzer::Expr> neg_interval_months;
-  neg_interval_months =
-      std::make_shared<Analyzer::UOper>(bigint_ti, false, kUMINUS, interval);
-  return makeExpr<Analyzer::DateaddExpr>(
-      datetime_ti, daMONTH, neg_interval_months, datetime);
+  const auto interval_months = op == kMINUS ? std::make_shared<Analyzer::UOper>(
+                                                  bigint_ti, false, kUMINUS, interval)
+                                            : interval;
+  return makeExpr<Analyzer::DateaddExpr>(datetime_ti, daMONTH, interval_months, datetime);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatediff(
