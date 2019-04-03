@@ -123,11 +123,13 @@ QueryMemoryInitializer::QueryMemoryInitializer(
 
   const auto group_buffer_size =
       query_mem_desc.getBufferSizeBytes(ra_exe_unit, thread_count, device_type);
-  OOM_TRACE_PUSH(+": group_buffer_size " + std::to_string(group_buffer_size));
-  std::unique_ptr<int64_t, CheckedAllocDeleter> group_by_buffer_template(
-      static_cast<int64_t*>(checked_malloc(group_buffer_size)));
 
+  std::unique_ptr<int64_t, CheckedAllocDeleter> group_by_buffer_template;
   if (!query_mem_desc.lazyInitGroups(device_type)) {
+    OOM_TRACE_PUSH(+": group_buffer_size " + std::to_string(group_buffer_size));
+    group_by_buffer_template.reset(
+        static_cast<int64_t*>(checked_malloc(group_buffer_size)));
+
     if (output_columnar) {
       initColumnarGroups(
           query_mem_desc, group_by_buffer_template.get(), init_agg_vals_, executor);
@@ -179,6 +181,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     auto group_by_buffer =
         alloc_group_by_buffer(actual_group_buffer_size, render_allocator_map);
     if (!query_mem_desc.lazyInitGroups(device_type)) {
+      CHECK(group_by_buffer_template);
       memcpy(group_by_buffer + index_buffer_qw,
              group_by_buffer_template.get(),
              group_buffer_size);
