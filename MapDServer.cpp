@@ -310,7 +310,8 @@ void MapDProgramOptions::fillOptions(po::options_description& desc) {
       "Number of bits used from the hash value used to specify the bucket number.");
   desc.add_options()("enable-calcite-view-optimize",
                      po::value<bool>(&mapd_parameters.enable_calcite_view_optimize)
-                         ->default_value(mapd_parameters.enable_calcite_view_optimize),
+                         ->default_value(mapd_parameters.enable_calcite_view_optimize)
+                         ->implicit_value(true),
                      "Enable calcite to optimize when a view is part of the query");
   desc.add_options()("enable-watchdog",
                      po::value<bool>(&enable_watchdog)
