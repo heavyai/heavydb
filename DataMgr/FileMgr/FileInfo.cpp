@@ -120,12 +120,12 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec,
       int versionEpoch = ints[1 + numHeaderElems - 1];
       if (chunkKey != oldChunkKey || oldPageId != pageId - (1 + skipped)) {
         if (skipped > 0) {
-          VLOG(1) << "FId.PSz: " << fileId << "." << pageSize
+          VLOG(4) << "FId.PSz: " << fileId << "." << pageSize
                   << " Chunk key: " << showChunk(oldChunkKey)
                   << " Page id from : " << oldPageId << " to : " << oldPageId + skipped
                   << " Epoch: " << oldVersionEpoch;
         } else if (oldPageId != -99) {
-          VLOG(1) << "FId.PSz: " << fileId << "." << pageSize
+          VLOG(4) << "FId.PSz: " << fileId << "." << pageSize
                   << " Chunk key: " << showChunk(oldChunkKey) << " Page id: " << oldPageId
                   << " Epoch: " << oldVersionEpoch;
         }
@@ -173,12 +173,12 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec,
   // printlast
   if (oldPageId != -99) {
     if (skipped > 0) {
-      VLOG(1) << "FId.PSz: " << fileId << "." << pageSize
+      VLOG(4) << "FId.PSz: " << fileId << "." << pageSize
               << " Chunk key: " << showChunk(oldChunkKey)
               << " Page id from : " << oldPageId << " to : " << oldPageId + skipped
               << " Epoch: " << oldVersionEpoch;
     } else {
-      VLOG(1) << "FId.PSz: " << fileId << "." << pageSize
+      VLOG(4) << "FId.PSz: " << fileId << "." << pageSize
               << " Chunk key: " << showChunk(oldChunkKey) << " Page id: " << oldPageId
               << " Epoch: " << oldVersionEpoch;
     }

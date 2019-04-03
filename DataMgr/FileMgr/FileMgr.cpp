@@ -177,7 +177,7 @@ void FileMgr::init(const size_t num_reader_threads) {
           assert(fileSize % pageSize == 0);  // should be no partial pages
           size_t numPages = fileSize / pageSize;
 
-          VLOG(1) << "File id: " << fileId << " Page size: " << pageSize
+          VLOG(4) << "File id: " << fileId << " Page size: " << pageSize
                   << " Num pages: " << numPages;
 
           file_futures.emplace_back(std::async(
@@ -214,7 +214,7 @@ void FileMgr::init(const size_t num_reader_threads) {
      * sorted headerVec of the same ChunkId, which we
      * can then initiate a FileBuffer with */
 
-    VLOG(1) << "Number of Headers in Vector: " << headerVec.size();
+    VLOG(4) << "Number of Headers in Vector: " << headerVec.size();
     if (headerVec.size() > 0) {
       ChunkKey lastChunkKey = headerVec.begin()->chunkKey;
       auto startIt = headerVec.begin();
