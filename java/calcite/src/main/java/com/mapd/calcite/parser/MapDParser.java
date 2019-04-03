@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2019 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -74,6 +74,7 @@ import com.google.common.collect.ImmutableList;
 import org.apache.calcite.sql.SqlExplainFormat;
 import org.apache.calcite.sql.SqlExplainLevel;
 
+import com.mapd.calcite.parser.ProjectProjectRemoveRule;
 import com.mapd.parser.server.ExtensionFunction;
 import com.mapd.common.SockTransportProperties;
 
@@ -259,6 +260,7 @@ public final class MapDParser {
       final Program program =
               Programs.hep(ImmutableList.of(FilterProjectTransposeRule.INSTANCE,
                                    projectMergeRule,
+                                   ProjectProjectRemoveRule.INSTANCE,
                                    FilterMergeRule.INSTANCE,
                                    JoinProjectTransposeRule.LEFT_PROJECT_INCLUDE_OUTER,
                                    JoinProjectTransposeRule.RIGHT_PROJECT_INCLUDE_OUTER,
