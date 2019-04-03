@@ -75,8 +75,7 @@ makej
 make install PREFIX=$PREFIX
 popd
 
-# https://www.openssl.org/source/openssl-1.0.2p.tar.gz
-download_make_install ${HTTP_DEPS}/openssl-1.0.2p.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
+download_make_install ${HTTP_DEPS}/openssl-1.1.1b.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
 
 # libarchive
 download_make_install ${HTTP_DEPS}/xz-5.2.4.tar.xz "" "--disable-shared"
@@ -101,7 +100,7 @@ pushd boost_$VERS
 popd
 
 # https://cmake.org/files/v3.12/cmake-3.12.2.tar.gz
-download_make_install ${HTTP_DEPS}/cmake-3.12.2.tar.gz
+CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-3.12.2.tar.gz
 
 VERS=3.1.0
 download https://github.com/google/double-conversion/archive/v$VERS.tar.gz
