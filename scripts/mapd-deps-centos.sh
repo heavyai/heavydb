@@ -307,7 +307,7 @@ VERS=1.1.101.0 # 3/1/19
 rm -rf vulkan
 mkdir -p vulkan
 pushd vulkan
-wget --continue --no-cookies https://vulkan.lunarg.com/sdk/download/$VERS/linux/vulkansdk-linux-x86_64-$VERS.tar.gz -O vulkansdk-linux-x86_64-$VERS.tar.gz
+wget --continue --no-cookies ${HTTP_DEPS}/vulkansdk-linux-x86_64-$VERS.tar.gz -O vulkansdk-linux-x86_64-$VERS.tar.gz
 tar xvf vulkansdk-linux-x86_64-$VERS.tar.gz
 rsync -av $VERS/x86_64/* $PREFIX
 popd # vulkan
