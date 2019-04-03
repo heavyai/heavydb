@@ -548,7 +548,13 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       return families;
     }
 
-    private static class EscapeOptional implements Predicate<Integer> {
+    private static class EscapeOptional
+            implements java.util.function.Predicate<Integer>, Predicate<Integer> {
+      @Override
+      public boolean test(Integer t) {
+        return apply(t);
+      }
+
       @Override
       public boolean apply(Integer t) {
         return t == 2;
@@ -581,8 +587,13 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       return families;
     }
 
-    private static class EscapeOptional implements Predicate<Integer> {
+    private static class EscapeOptional
+            implements java.util.function.Predicate<Integer>, Predicate<Integer> {
       @Override
+      public boolean test(Integer t) {
+        return apply(t);
+      }
+
       public boolean apply(Integer t) {
         return t == 2;
       }

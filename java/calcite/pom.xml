@@ -37,9 +37,14 @@
       <version>1.7.12</version>
     </dependency>
     <dependency>
+      <groupId>commons-pool</groupId>
+      <artifactId>commons-pool</artifactId>
+      <version>1.5.4</version>
+    </dependency>
+    <dependency>
       <groupId>org.apache.calcite</groupId>
       <artifactId>calcite-core</artifactId>
-      <version>1.16.0</version>
+      <version>1.19.0</version>
       <exclusions>
         <exclusion>
           <groupId>org.pentaho</groupId>
@@ -106,7 +111,7 @@
                   <artifact>org.apache.calcite:calcite-core</artifact>
                   <excludes>
                       <!-- TODO: can be removed once https://issues.apache.org/jira/browse/CALCITE-2416 is resolved -->
-                     <exclude>org/**/SqlMonotonicBinaryOperator*</exclude>
+                     <exclude>org/**/SqlDatetimePlusOperator*</exclude>
                   </excludes>
                 </filter>
                 <filter>

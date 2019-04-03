@@ -27,4 +27,10 @@ public class MapDTypeSystem extends RelDataTypeSystemImpl {
     // Nanoseconds for timestamps
     return (typeName == SqlTypeName.TIMESTAMP) ? 9 : super.getMaxPrecision(typeName);
   }
+
+  public boolean shouldConvertRaggedUnionTypesToVarying() {
+    // this makes sure that CHAR literals are translated into VARCHAR literals
+    // mostly to avoid padding / trimming
+    return true;
+  }
 }

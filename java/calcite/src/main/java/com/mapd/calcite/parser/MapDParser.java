@@ -21,14 +21,21 @@ import java.util.Map;
 import java.util.Set;
 
 import org.apache.calcite.avatica.util.Casing;
+import org.apache.calcite.plan.RelOptLattice;
+import org.apache.calcite.plan.RelOptMaterialization;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.core.RelFactories;
-import org.apache.calcite.rel.type.RelDataTypeSystem;
+import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
+import org.apache.calcite.rel.rules.FilterMergeRule;
+import org.apache.calcite.rel.rules.FilterProjectTransposeRule;
+import org.apache.calcite.rel.rules.JoinProjectTransposeRule;
+import org.apache.calcite.rel.rules.ProjectMergeRule;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.rel.type.RelDataTypeSystem;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlAsOperator;
 import org.apache.calcite.sql.SqlBasicCall;
@@ -48,35 +55,22 @@ import org.apache.calcite.sql.parser.SqlParser;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.type.SqlTypeUtil;
+import org.apache.calcite.sql.validate.SqlConformanceEnum;
+import org.apache.calcite.sql2rel.SqlToRelConverter;
 import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.Planner;
+import org.apache.calcite.tools.Program;
+import org.apache.calcite.tools.Programs;
 import org.apache.calcite.tools.RelConversionException;
 import org.apache.calcite.tools.ValidationException;
 import org.apache.calcite.util.ConversionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.calcite.tools.Program;
-import org.apache.calcite.tools.Programs;
-import org.apache.calcite.rel.rules.FilterMergeRule;
-import org.apache.calcite.rel.rules.FilterProjectTransposeRule;
-import org.apache.calcite.rel.rules.JoinProjectTransposeRule;
-import org.apache.calcite.rel.rules.ProjectCalcMergeRule;
-import org.apache.calcite.rel.rules.ProjectFilterTransposeRule;
-import org.apache.calcite.rel.rules.ProjectMergeRule;
-import org.apache.calcite.rel.rules.ProjectRemoveRule;
-import org.apache.calcite.rel.rules.PruneEmptyRules;
-import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
-import org.apache.calcite.plan.RelOptMaterialization;
-import org.apache.calcite.plan.RelOptLattice;
 import com.google.common.collect.ImmutableList;
-import org.apache.calcite.sql.SqlExplainFormat;
-import org.apache.calcite.sql.SqlExplainLevel;
-
-import com.mapd.calcite.parser.ProjectProjectRemoveRule;
-import com.mapd.parser.server.ExtensionFunction;
 import com.mapd.common.SockTransportProperties;
+import com.mapd.parser.server.ExtensionFunction;
 
 /**
  *
@@ -125,9 +119,18 @@ public final class MapDParser {
                     .defaultSchema(rootSchema.add(mapdUser.getDB(), mapd))
                     .operatorTable(createOperatorTable(extSigs))
                     .parserConfig(SqlParser.configBuilder()
+                                          .setConformance(SqlConformanceEnum.LENIENT)
                                           .setUnquotedCasing(Casing.UNCHANGED)
                                           .setCaseSensitive(false)
                                           .build())
+                    .sqlToRelConverterConfig(
+                            SqlToRelConverter
+                                    .configBuilder()
+                                    // disable sub-query expansion (in-lining)
+                                    .withExpand(false)
+                                    // allow as many as possible IN operator values
+                                    .withInSubQueryThreshold(Integer.MAX_VALUE)
+                                    .build())
                     .typeSystem(createTypeSystem())
                     .build();
     return new MapDPlanner(config);

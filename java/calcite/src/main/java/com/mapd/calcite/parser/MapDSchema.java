@@ -7,9 +7,11 @@ package com.mapd.calcite.parser;
 
 import com.mapd.metadata.MetaConnect;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import org.apache.calcite.linq4j.tree.Expression;
+import org.apache.calcite.rel.type.RelProtoDataType;
 import org.apache.calcite.schema.Function;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
@@ -94,6 +96,16 @@ public class MapDSchema implements Schema {
 
   @Override
   public Schema snapshot(SchemaVersion sv) {
+    throw new UnsupportedOperationException("Not supported yet.");
+  }
+
+  @Override
+  public RelProtoDataType getType(String arg0) {
+    throw new UnsupportedOperationException("Not supported yet.");
+  }
+
+  @Override
+  public Set<String> getTypeNames() {
     throw new UnsupportedOperationException("Not supported yet.");
   }
 }

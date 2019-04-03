@@ -23,22 +23,13 @@ import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.core.Project;
 import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.rules.ProjectRemoveRule;
-import org.apache.calcite.runtime.PredicateImpl;
 import org.apache.calcite.tools.RelBuilderFactory;
-
-import com.google.common.base.Predicate;
 
 /**
  * removes identical projection nodes, if they are not the outer most projection
  * or if the child is a projection
  */
 public class ProjectProjectRemoveRule extends RelOptRule {
-  private static final Predicate<Project> PREDICATE = new PredicateImpl<Project>() {
-    public boolean test(Project input) {
-      return ProjectRemoveRule.isTrivial(input);
-    }
-  };
-
   static RelNode unwrap(RelNode node) {
     if (node instanceof HepRelVertex) {
       return unwrap(((HepRelVertex) node).getCurrentRel());
@@ -58,7 +49,9 @@ public class ProjectProjectRemoveRule extends RelOptRule {
    * @param relBuilderFactory Builder for relational expressions
    */
   public ProjectProjectRemoveRule(RelBuilderFactory relBuilderFactory) {
-    super(operand(Project.class, null, PREDICATE, any()), relBuilderFactory, null);
+    super(operandJ(Project.class, null, ProjectRemoveRule::isTrivial, any()),
+            relBuilderFactory,
+            null);
     innerRule = new ProjectRemoveRule(relBuilderFactory);
   }
 
@@ -66,8 +59,8 @@ public class ProjectProjectRemoveRule extends RelOptRule {
   public void onMatch(RelOptRuleCall call) {
     boolean hasParents = null != call.getParents() && !call.getParents().isEmpty();
     Project project = (Project) call.rel(0);
-    boolean childIsProject = unwrap(project.getInput()) instanceof Project;
-    if (hasParents || childIsProject) {
+    boolean inputIsProject = unwrap(project.getInput()) instanceof Project;
+    if (hasParents || inputIsProject) {
       innerRule.onMatch(call);
     }
   }

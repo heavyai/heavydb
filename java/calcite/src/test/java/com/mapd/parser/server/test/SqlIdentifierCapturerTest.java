@@ -12,6 +12,7 @@ import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
+import org.apache.calcite.rel.type.RelProtoDataType;
 import org.apache.calcite.schema.Function;
 import org.apache.calcite.schema.Schema;
 import org.apache.calcite.schema.SchemaPlus;
@@ -30,6 +31,16 @@ public class SqlIdentifierCapturerTest {
   private class MockSchema implements Schema {
     @Override
     public Table getTable(String name) {
+      return null;
+    }
+
+    @Override
+    public Set<String> getTypeNames() {
+      return Collections.emptySet();
+    }
+
+    @Override
+    public RelProtoDataType getType(String arg0) {
       return null;
     }
 

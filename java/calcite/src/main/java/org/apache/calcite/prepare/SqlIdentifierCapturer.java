@@ -27,8 +27,6 @@ import org.apache.calcite.sql.SqlWith;
 import org.apache.calcite.sql.SqlWithItem;
 import org.apache.calcite.sql.parser.SqlParser;
 
-import com.mapd.calcite.parser.MapDSchema;
-
 /**
  * scans from a root {@link SqlNode} and retrieves all {@link SqlIdentifier}s
  * used in a query.
