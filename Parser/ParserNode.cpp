@@ -2231,10 +2231,8 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     }
 
     if (catalog.getMetadataForTable(table_name_) != nullptr) {
-      if (if_not_exists_) {
-        return;
-      }
-      throw std::runtime_error("Table " + table_name_ + " already exists.");
+      throw std::runtime_error("Table " + table_name_ +
+                               " already exists and no data was loaded.");
     }
 
     // only validate the select query so we get the target types

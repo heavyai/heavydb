@@ -605,36 +605,24 @@ TEST(Ctas, SyntaxCheck) {
   ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
   run_ddl_statement(ddl);
   EXPECT_THROW(run_ddl_statement(ddl), apache::thrift::TException);
-  ddl = "CREATE TABLE IF NOT EXISTS CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
-  run_ddl_statement(ddl);
   ddl = "DROP TABLE CTAS_TARGET;";
   run_ddl_statement(ddl);
 
   ddl = "CREATE TEMPORARY TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
   run_ddl_statement(ddl);
   EXPECT_THROW(run_ddl_statement(ddl), apache::thrift::TException);
-  ddl = "CREATE TEMPORARY TABLE IF NOT EXISTS CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
-  run_ddl_statement(ddl);
   ddl = "DROP TABLE CTAS_TARGET;";
   run_ddl_statement(ddl);
 
   ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE WITH( FRAGMENT_SIZE=3 );";
   run_ddl_statement(ddl);
   EXPECT_THROW(run_ddl_statement(ddl), apache::thrift::TException);
-  ddl =
-      "CREATE TABLE IF NOT EXISTS CTAS_TARGET AS SELECT * FROM CTAS_SOURCE WITH( "
-      "FRAGMENT_SIZE=3 );";
-  run_ddl_statement(ddl);
   ddl = "DROP TABLE CTAS_TARGET;";
   run_ddl_statement(ddl);
 
   ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE WITH( MAX_CHUNK_SIZE=3 );";
   run_ddl_statement(ddl);
   EXPECT_THROW(run_ddl_statement(ddl), apache::thrift::TException);
-  ddl =
-      "CREATE TABLE IF NOT EXISTS CTAS_TARGET AS SELECT * FROM CTAS_SOURCE WITH( "
-      "MAX_CHUNK_SIZE=3 );";
-  run_ddl_statement(ddl);
   ddl = "DROP TABLE CTAS_TARGET;";
   run_ddl_statement(ddl);
 }
