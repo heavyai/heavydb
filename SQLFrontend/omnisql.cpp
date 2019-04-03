@@ -1055,11 +1055,12 @@ void print_status(ClientContext& context) {
 
     if (agg_version != node->version) {
       tss << std::left << std::setfill(' ') << std::setw(lhs_width);
-      tss << process_role << " Version : " + node->version << std::endl;
-      std::cerr << "\033[31m*** Version mismatch! ***\033[0m Please make "
-                   "sure All leaves, Aggregator and String Dictionary are running "
-                   "the same version of OmniSci."
-                << std::endl;
+      tss << process_role + " Version "
+          << ": " << node->version << std::endl
+          << "\033[31m*** Version mismatch! ***\033[0m Please make "
+             "sure All leaves, Aggregator and String Dictionary are running "
+             "the same version of OmniSci."
+          << std::endl;
     }
   }
   std::cout << tss.str() << std::endl;
