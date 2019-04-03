@@ -259,8 +259,9 @@ public final class MapDParser {
       final Program program =
               Programs.hep(ImmutableList.of(FilterProjectTransposeRule.INSTANCE,
                                    projectMergeRule,
-                                   ProjectRemoveRule.INSTANCE,
                                    FilterMergeRule.INSTANCE,
+                                   JoinProjectTransposeRule.LEFT_PROJECT_INCLUDE_OUTER,
+                                   JoinProjectTransposeRule.RIGHT_PROJECT_INCLUDE_OUTER,
                                    JoinProjectTransposeRule.BOTH_PROJECT_INCLUDE_OUTER),
                       true,
                       DefaultRelMetadataProvider.INSTANCE);
