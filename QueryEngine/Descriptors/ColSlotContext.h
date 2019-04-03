@@ -27,6 +27,7 @@
 #include <glog/logging.h>
 
 #include <algorithm>
+#include <string>
 #include <vector>
 
 struct SlotSize {
@@ -98,6 +99,21 @@ class ColSlotContext {
   bool operator!=(const ColSlotContext& that) const { return !(*this == that); }
 
   void alignPaddedSlots(const bool sort_on_gpu);
+
+  std::string toString() const {
+    std::string str{"Col Slot Context State\n"};
+    if (slot_sizes_.empty()) {
+      str += "\tEmpty";
+      return str;
+    }
+    str += "\tN | P , L\n";
+    for (size_t i = 0; i < slot_sizes_.size(); i++) {
+      const auto& slot_size = slot_sizes_[i];
+      str += "\t" + std::to_string(i) + " | " + std::to_string(slot_size.padded_size) +
+             " , " + std::to_string(slot_size.logical_size) + "\n";
+    }
+    return str;
+  }
 
  private:
   void addSlotForColumn(const int8_t logical_size, const size_t column_idx);

@@ -1139,6 +1139,7 @@ std::string QueryMemoryDescriptor::toString() const {
   str += "\tOutput Columnar: " + boolToString(output_columnar_) + "\n";
   str += "\tRender Output: " + boolToString(render_output_) + "\n";
   str += "\tUse Baseline Sort: " + boolToString(must_use_baseline_sort_) + "\n";
+  str += "\t" + col_slot_context_.toString();
   return str;
 }
 
