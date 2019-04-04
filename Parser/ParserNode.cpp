@@ -2841,8 +2841,11 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
     int s = -1;
     auto array_size = t->get_array_size();
     if (array_size > 0) {
-      SQLTypeInfo sti(cd.columnType.get_subtype(), true);
+      auto sti = cd.columnType.get_elem_type();
       s = array_size * sti.get_size();
+      if (s <= 0) {
+        throw std::runtime_error(cd.columnName + ": Unexpected fixed length array size");
+      }
     }
     cd.columnType.set_size(s);
 

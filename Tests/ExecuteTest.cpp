@@ -518,6 +518,19 @@ TEST(Insert, NullArrayNullEmpty) {
               v<int64_t>(run_simple_agg(
                   "SELECT CARDINALITY(val) from table_array_empty limit 1;", dt)));
 
+    run_ddl_statement("DROP TABLE IF EXISTS table_array_fixlen_text;");
+    EXPECT_NO_THROW(
+        run_ddl_statement("create table table_array_fixlen_text (strings text[2]);"));
+    EXPECT_THROW(
+        run_multiple_agg("INSERT INTO table_array_fixlen_text VALUES(NULL);", dt),
+        std::runtime_error);
+    EXPECT_THROW(run_multiple_agg("INSERT INTO table_array_fixlen_text VALUES({});", dt),
+                 std::runtime_error);
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO table_array_fixlen_text VALUES({NULL,NULL});", dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO table_array_fixlen_text VALUES({'a','b'});", dt));
+
     run_ddl_statement("DROP TABLE IF EXISTS table_array_with_nulls;");
     EXPECT_NO_THROW(run_ddl_statement(create_table_array_with_nulls));
     EXPECT_NO_THROW(
