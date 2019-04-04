@@ -35,6 +35,7 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     const std::vector<InputTableInfo>& query_infos,
     const RelAlgExecutionUnit& ra_exe_unit,
     const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
     const int device_count,
     ColumnCacheMap& column_cache,
     Executor* executor) {
@@ -50,14 +51,15 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
                                : 0;
   const auto entries_per_device =
       get_entries_per_device(total_entries, shard_count, device_count, memory_level);
-  auto join_hash_table =
-      std::shared_ptr<BaselineJoinHashTable>(new BaselineJoinHashTable(condition,
-                                                                       query_infos,
-                                                                       ra_exe_unit,
-                                                                       memory_level,
-                                                                       entries_per_device,
-                                                                       column_cache,
-                                                                       executor));
+  auto join_hash_table = std::shared_ptr<BaselineJoinHashTable>(
+      new BaselineJoinHashTable(condition,
+                                query_infos,
+                                ra_exe_unit,
+                                memory_level,
+                                preferred_hash_type,
+                                entries_per_device,
+                                column_cache,
+                                executor));
   join_hash_table->checkHashJoinReplicationConstraint(
       getInnerTableId(condition.get(), executor));
   try {
@@ -88,18 +90,19 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     const std::vector<InputTableInfo>& query_infos,
     const RelAlgExecutionUnit& ra_exe_unit,
     const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
     const size_t entry_count,
     ColumnCacheMap& column_cache,
     Executor* executor)
     : condition_(condition)
     , query_infos_(query_infos)
     , memory_level_(memory_level)
+    , layout_(preferred_hash_type)
     , entry_count_(entry_count)
     , emitted_keys_count_(0)
     , executor_(executor)
     , ra_exe_unit_(ra_exe_unit)
-    , column_cache_(column_cache)
-    , layout_(JoinHashTableInterface::HashType::OneToOne) {}
+    , column_cache_(column_cache) {}
 
 size_t BaselineJoinHashTable::getShardCountForCondition(
     const Analyzer::BinOper* condition,
@@ -176,8 +179,7 @@ void BaselineJoinHashTable::reify(const int device_count) {
       condition_.get(), *executor_->getCatalog(), executor_->getTemporaryTables());
   const auto composite_key_info = getCompositeKeyInfo(inner_outer_pairs);
   const auto type_and_found = HashTypeCache::get(composite_key_info.cache_key_chunks);
-  const auto layout = type_and_found.second ? type_and_found.first
-                                            : JoinHashTableInterface::HashType::OneToOne;
+  const auto layout = type_and_found.second ? type_and_found.first : layout_;
 
   if (condition_->is_overlaps_oper()) {
     try {

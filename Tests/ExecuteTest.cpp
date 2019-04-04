@@ -13926,6 +13926,15 @@ TEST(Select, WindowFunctionRank) {
   c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
 }
 
+TEST(Select, WindowFunctionOneRowPartitions) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  std::string part1 = "SELECT y, RANK() OVER (PARTITION BY y ORDER BY n ASC";
+  std::string part2 =
+      "r FROM (SELECT y, COUNT(*) n FROM test_window_func GROUP BY y) ORDER BY y ASC";
+  c(part1 + " NULLS FIRST) " + part2 + " NULLS FIRST;", part1 + ") " + part2 + ";", dt);
+}
+
 TEST(Select, WindowFunctionPercentRank) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;

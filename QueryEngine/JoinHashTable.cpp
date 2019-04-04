@@ -278,6 +278,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const std::vector<InputTableInfo>& query_infos,
     const RelAlgExecutionUnit& ra_exe_unit,
     const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
     const int device_count,
     ColumnCacheMap& column_cache,
     Executor* executor) {
@@ -326,15 +327,17 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
       col_range.getIntMax() >= std::numeric_limits<int64_t>::max()) {
     throw HashJoinFail("Cannot translate null value for kBW_EQ");
   }
-  auto join_hash_table = std::shared_ptr<JoinHashTable>(new JoinHashTable(qual_bin_oper,
-                                                                          inner_col,
-                                                                          query_infos,
-                                                                          ra_exe_unit,
-                                                                          memory_level,
-                                                                          col_range,
-                                                                          column_cache,
-                                                                          executor,
-                                                                          device_count));
+  auto join_hash_table =
+      std::shared_ptr<JoinHashTable>(new JoinHashTable(qual_bin_oper,
+                                                       inner_col,
+                                                       query_infos,
+                                                       ra_exe_unit,
+                                                       memory_level,
+                                                       preferred_hash_type,
+                                                       col_range,
+                                                       column_cache,
+                                                       executor,
+                                                       device_count));
   try {
     join_hash_table->reify(device_count);
   } catch (const TableMustBeReplicated& e) {
@@ -466,11 +469,14 @@ void JoinHashTable::reify(const int device_count) {
           shard_count
               ? only_shards_for_device(query_info.fragments, device_id, device_count)
               : query_info.fragments;
-      init_threads.push_back(std::async(std::launch::async,
-                                        &JoinHashTable::reifyOneToOneForDevice,
-                                        this,
-                                        fragments,
-                                        device_id));
+      init_threads.push_back(
+          std::async(std::launch::async,
+                     hash_type_ == JoinHashTableInterface::HashType::OneToOne
+                         ? &JoinHashTable::reifyOneToOneForDevice
+                         : &JoinHashTable::reifyOneToManyForDevice,
+                     this,
+                     fragments,
+                     device_id));
     }
     for (auto& init_thread : init_threads) {
       init_thread.wait();

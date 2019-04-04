@@ -1291,15 +1291,18 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
                                 ? MemoryLevel::GPU_LEVEL
                                 : MemoryLevel::CPU_LEVEL;
   ColumnCacheMap column_cache_map;
-  const auto join_table_or_err = executor_->buildHashTableForQualifier(
-      partition_key_cond, query_infos, ra_exe_unit, memory_level, column_cache_map);
+  const auto join_table_or_err =
+      executor_->buildHashTableForQualifier(partition_key_cond,
+                                            query_infos,
+                                            ra_exe_unit,
+                                            memory_level,
+                                            JoinHashTableInterface::HashType::OneToMany,
+                                            column_cache_map);
   if (!join_table_or_err.fail_reason.empty()) {
     throw std::runtime_error(join_table_or_err.fail_reason);
   }
-  if (join_table_or_err.hash_table->getHashType() !=
-      JoinHashTableInterface::HashType::OneToMany) {
-    throw std::runtime_error("One row only partitions not supported");
-  }
+  CHECK(join_table_or_err.hash_table->getHashType() ==
+        JoinHashTableInterface::HashType::OneToMany);
   const auto& order_keys = window_func->getOrderKeys();
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   const size_t elem_count = query_infos.front().info.fragments.front().getNumTuples();

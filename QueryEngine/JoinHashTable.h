@@ -54,6 +54,7 @@ class JoinHashTable : public JoinHashTableInterface {
       const std::vector<InputTableInfo>& query_infos,
       const RelAlgExecutionUnit& ra_exe_unit,
       const Data_Namespace::MemoryLevel memory_level,
+      const HashType preferred_hash_type,
       const int device_count,
       ColumnCacheMap& column_cache,
       Executor* executor);
@@ -125,6 +126,7 @@ class JoinHashTable : public JoinHashTableInterface {
                 const std::vector<InputTableInfo>& query_infos,
                 const RelAlgExecutionUnit& ra_exe_unit,
                 const Data_Namespace::MemoryLevel memory_level,
+                const HashType preferred_hash_type,
                 const ExpressionRange& col_range,
                 ColumnCacheMap& column_cache,
                 Executor* executor,
@@ -133,7 +135,7 @@ class JoinHashTable : public JoinHashTableInterface {
       , col_var_(std::dynamic_pointer_cast<Analyzer::ColumnVar>(col_var->deep_copy()))
       , query_infos_(query_infos)
       , memory_level_(memory_level)
-      , hash_type_(HashType::OneToOne)
+      , hash_type_(preferred_hash_type)
       , hash_entry_count_(0)
       , col_range_(col_range)
       , executor_(executor)

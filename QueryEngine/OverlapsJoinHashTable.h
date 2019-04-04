@@ -32,6 +32,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
                               query_infos,
                               ra_exe_unit,
                               memory_level,
+                              JoinHashTableInterface::HashType::OneToOne,
                               entry_count,
                               column_map,
                               executor) {}

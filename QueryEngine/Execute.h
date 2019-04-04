@@ -1160,6 +1160,7 @@ class Executor {
       const std::vector<InputTableInfo>& query_infos,
       const RelAlgExecutionUnit& ra_exe_unit,
       const MemoryLevel memory_level,
+      const JoinHashTableInterface::HashType preferred_hash_type,
       ColumnCacheMap& column_cache);
   void nukeOldState(const bool allow_lazy_fetch,
                     const std::vector<InputTableInfo>& query_infos,
