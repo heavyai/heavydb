@@ -2780,6 +2780,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const std::vector<InputTableInfo>& query_infos,
     const RelAlgExecutionUnit& ra_exe_unit,
     const MemoryLevel memory_level,
+    const JoinHashTableInterface::HashType preferred_hash_type,
     ColumnCacheMap& column_cache) {
   std::shared_ptr<JoinHashTableInterface> join_hash_table;
   const int device_count = deviceCountForMemoryLevel(memory_level);
@@ -2804,6 +2805,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                            query_infos,
                                                            ra_exe_unit,
                                                            memory_level,
+                                                           preferred_hash_type,
                                                            device_count,
                                                            column_cache,
                                                            this);
@@ -2814,6 +2816,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                      query_infos,
                                                      ra_exe_unit,
                                                      memory_level,
+                                                     preferred_hash_type,
                                                      device_count,
                                                      column_cache,
                                                      this);
@@ -2827,6 +2830,7 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                              query_infos,
                                                              ra_exe_unit,
                                                              memory_level,
+                                                             preferred_hash_type,
                                                              device_count,
                                                              column_cache,
                                                              this);

@@ -47,6 +47,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
       const std::vector<InputTableInfo>& query_infos,
       const RelAlgExecutionUnit& ra_exe_unit,
       const Data_Namespace::MemoryLevel memory_level,
+      const HashType preferred_hash_type,
       const int device_count,
       ColumnCacheMap& column_map,
       Executor* executor);
@@ -92,6 +93,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
                         const std::vector<InputTableInfo>& query_infos,
                         const RelAlgExecutionUnit& ra_exe_unit,
                         const Data_Namespace::MemoryLevel memory_level,
+                        const HashType preferred_hash_type,
                         const size_t entry_count,
                         ColumnCacheMap& column_map,
                         Executor* executor);
@@ -204,6 +206,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   const std::shared_ptr<Analyzer::BinOper> condition_;
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
+  JoinHashTableInterface::HashType layout_;
   size_t entry_count_;         // number of keys in the hash table
   size_t emitted_keys_count_;  // number of keys emitted across all rows
   Executor* executor_;
@@ -219,7 +222,6 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   std::map<LinearizedColumnCacheKey, LinearizedColumn> linearized_multifrag_columns_;
   std::mutex linearized_multifrag_column_mutex_;
   RowSetMemoryOwner linearized_multifrag_column_owner_;
-  JoinHashTableInterface::HashType layout_;
 
   struct HashTableCacheValue {
     const std::shared_ptr<std::vector<int8_t>> buffer;
