@@ -424,9 +424,8 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       ps = "(" + std::to_string(dimension) + ")";
     }
     if (type == kARRAY) {
-      auto num_elems =
-          (size > 0) ? std::to_string(size / (SQLTypeInfoCore(subtype, true).get_size()))
-                     : "";
+      auto elem_ti = get_elem_type();
+      auto num_elems = (size > 0) ? std::to_string(size / elem_ti.get_size()) : "";
       return type_name[(int)subtype] + ps + "[" + num_elems + "]";
     }
     return type_name[(int)type] + ps;
