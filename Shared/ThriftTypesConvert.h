@@ -170,12 +170,13 @@ inline EncodingType thrift_to_encoding(const TEncodingType::type tEncodingType) 
 
 inline std::string thrift_to_name(const TTypeInfo& ti) {
   const auto type = thrift_to_type(ti.type);
+  const auto encoding = thrift_to_encoding(ti.encoding);
   auto internal_ti = SQLTypeInfo(ti.is_array ? kARRAY : type,
                                  0,
                                  0,
                                  !ti.nullable,
-                                 kENCODING_NONE,
-                                 0,
+                                 encoding,
+                                 ti.comp_param,
                                  ti.is_array ? type : kNULLT);
   if (type == kDECIMAL || type == kNUMERIC) {
     internal_ti.set_precision(ti.precision);
