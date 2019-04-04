@@ -171,6 +171,9 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
     case kENCODING_DICT: {
       if (sqlType.get_type() == kARRAY) {
         CHECK(IS_STRING(sqlType.get_subtype()));
+        if (sqlType.get_size() > 0) {
+          return new FixedLengthArrayNoneEncoder(buffer, sqlType.get_size());
+        }
         return new ArrayNoneEncoder(buffer);
       } else {
         CHECK(sqlType.is_string());
