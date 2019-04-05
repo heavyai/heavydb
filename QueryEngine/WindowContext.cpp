@@ -786,7 +786,9 @@ void WindowFunctionContext::fillPartitionEnd() {
     }
     agg_count_distinct_bitmap(&partition_end_handle, partition_offsets[i] - 1, 0);
   }
-  agg_count_distinct_bitmap(&partition_end_handle, elem_count_ - 1, 0);
+  if (elem_count_) {
+    agg_count_distinct_bitmap(&partition_end_handle, elem_count_ - 1, 0);
+  }
 }
 
 const int32_t* WindowFunctionContext::payload() const {

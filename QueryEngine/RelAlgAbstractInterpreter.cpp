@@ -578,11 +578,14 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
   if (name == "MAX") {
     return SqlWindowFunctionKind::MAX;
   }
-  if (name == "$SUM0") {
-    return SqlWindowFunctionKind::SUM_INTERNAL;
+  if (name == "SUM") {
+    return SqlWindowFunctionKind::SUM;
   }
   if (name == "COUNT") {
     return SqlWindowFunctionKind::COUNT;
+  }
+  if (name == "$SUM0") {
+    return SqlWindowFunctionKind::SUM_INTERNAL;
   }
   throw std::runtime_error("Unsupported window function: " + name);
 }
