@@ -16,14 +16,18 @@
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.util.Properties;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
 public class SampleJDBC {
   // JDBC driver name and database URL
-  static final String JDBC_DRIVER = "com.mapd.jdbc.MapDDriver";
-  static final String DB_URL = "jdbc:mapd:localhost:6274:mapd";
+  static final String JDBC_DRIVER = "com.omnisci.jdbc.OmniSciDriver";
+  static final String DB_URL = "jdbc:omnisci:localhost:6274:mapd";
+
+  // Connection protocol http|https|binary
+  static final String PROTOCOL = "binary";
 
   //  Database credentials
   static final String USER = "mapd";
@@ -37,7 +41,11 @@ public class SampleJDBC {
       Class.forName(JDBC_DRIVER);
 
       // STEP 2: Open a connection
-      conn = DriverManager.getConnection(DB_URL, USER, PASS);
+      Properties pt = new Properties();
+      pt.setProperty("user", USER);
+      pt.setProperty("password", PASS);
+      pt.setProperty("protocol", PROTOCOL);
+      conn = DriverManager.getConnection(DB_URL, pt);
 
       // STEP 3: Execute a query
       stmt = conn.createStatement();
