@@ -16,6 +16,7 @@
 
 #include "StringTransform.h"
 
+#include <numeric>
 #include <regex>
 
 void apply_shim(std::string& result,
@@ -64,9 +65,14 @@ std::vector<std::pair<size_t, size_t>> find_string_literals(const std::string& q
 std::string hide_sensitive_data_from_query(std::string const& query_str) {
   constexpr std::regex::flag_type flags =
       std::regex::ECMAScript | std::regex::icase | std::regex::optimize;
-  static const std::regex regex(
-      R"(\b((?:password|s3_access_key|s3_secret_key)\s*=\s*)'.+?')", flags);
-  return std::regex_replace(query_str, regex, "$1'XXXXXXXX'");
+  static const std::initializer_list<std::pair<std::regex, std::string>> rules{
+      {std::regex(R"(\b((?:password|s3_access_key|s3_secret_key)\s*=\s*)'.+?')", flags),
+       "$1'XXXXXXXX'"},
+      {std::regex(R"((\\set_license\s+)\S+)", flags), "$1XXXXXXXX"}};
+  return std::accumulate(
+      rules.begin(), rules.end(), query_str, [](auto& str, auto& rule) {
+        return std::regex_replace(str, rule.first, rule.second);
+      });
 }
 
 ssize_t inside_string_literal(
