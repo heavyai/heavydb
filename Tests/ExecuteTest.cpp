@@ -14225,6 +14225,18 @@ TEST(Select, WindowFunctionAggregateNoOrder) {
   }
 }
 
+TEST(Select, WindowFunctionSum) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  c("SELECT total FROM (SELECT SUM(n) OVER (PARTITION BY y) AS total FROM (SELECT y, "
+    "COUNT(*) AS n FROM test_window_func GROUP BY y)) ORDER BY total ASC;",
+    dt);
+  std::string query =
+      "SELECT total FROM (SELECT SUM(x) OVER (PARTITION BY y) AS total FROM (SELECT x, y "
+      "FROM test_window_func)) ORDER BY total ASC";
+  c(query + " NULLS FIRST;", query + ";", dt);
+}
+
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,
