@@ -1485,7 +1485,7 @@ int main(int argc, char** argv) {
     if (line[0] == '\\' && line[1] == 'c') {
       linenoiseHistoryAdd(hide_sensitive_data_from_connect(line).c_str());
     } else {
-      linenoiseHistoryAdd(line);
+      linenoiseHistoryAdd(hide_sensitive_data_from_query(line).c_str());
     }
     linenoiseHistorySave("omnisql_history.txt"); /* Save the history on disk. */
   }

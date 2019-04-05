@@ -58,7 +58,9 @@ TEST(StringTransform, HideSensitiveDataFromQuery) {
       {"CREATE USER jason (password = 'OmniSciRocks!', is_super = 'true'); CREATE "
        "USER omnisci (password = 'OmniSciIsFast!')",
        "CREATE USER jason (password = 'XXXXXXXX', is_super = 'true'); CREATE USER "
-       "omnisci (password = 'XXXXXXXX')"}};
+       "omnisci (password = 'XXXXXXXX')"},
+      {"\\set_license DONTSHOWTHISSTRING", "\\set_license XXXXXXXX"},
+      {"   \\set_license 'DONTSHOWTHISSTRING';", "   \\set_license XXXXXXXX"}};
   for (auto const& test : tests) {
     std::string const safe = hide_sensitive_data_from_query(test.first);
     ASSERT_EQ(safe, test.second);
