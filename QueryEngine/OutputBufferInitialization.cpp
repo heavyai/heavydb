@@ -39,7 +39,8 @@ inline std::vector<int64_t> init_agg_val_vec(
         agg_init_vals.push_back(
             get_agg_initial_val(agg_info.agg_kind,
                                 agg_info.sql_type,
-                                query_mem_desc.getLogicalColumnWidthBytes(agg_col_idx)));
+                                is_group_by,
+                                query_mem_desc.getCompactByteWidth()));
         continue;
       }
       if (query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx) > 0) {
@@ -60,6 +61,8 @@ inline std::vector<int64_t> init_agg_val_vec(
       continue;
     }
     CHECK_GT(query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx), 0);
+    const bool float_argument_input = takes_float_argument(agg_info);
+    const auto chosen_bytes = query_mem_desc.getCompactByteWidth();
     auto init_ti = get_compact_type(agg_info);
     if (!is_group_by) {
       init_ti.set_notnull(false);
@@ -67,7 +70,8 @@ inline std::vector<int64_t> init_agg_val_vec(
     agg_init_vals.push_back(
         get_agg_initial_val(agg_info.agg_kind,
                             init_ti,
-                            query_mem_desc.getLogicalColumnWidthBytes(agg_col_idx)));
+                            is_group_by || float_argument_input,
+                            (float_argument_input ? sizeof(float) : chosen_bytes)));
     if (kAVG == agg_info.agg_kind) {
       ++agg_col_idx;
       agg_init_vals.push_back(0);
@@ -119,11 +123,16 @@ std::pair<uint64_t, uint64_t> inline_uint_max_min(const size_t byte_width) {
 // TODO(alex): proper types for aggregate
 int64_t get_agg_initial_val(const SQLAgg agg,
                             const SQLTypeInfo& ti,
-                            const size_t byte_width) {
+                            const bool enable_compaction,
+                            const unsigned min_byte_width_to_compact) {
   CHECK(!ti.is_string() || agg == kSAMPLE);
-  const auto type_size = ti.is_decimal() ? ti.get_size() : ti.get_logical_size();
-  CHECK(type_size < 0 || byte_width >= static_cast<size_t>(type_size));
-
+  const auto byte_width =
+      enable_compaction
+          ? compact_byte_width(static_cast<unsigned>(get_bit_width(ti) >> 3),
+                               unsigned(min_byte_width_to_compact))
+          : sizeof(int64_t);
+  CHECK(ti.get_logical_size() < 0 ||
+        byte_width >= static_cast<unsigned>(ti.get_logical_size()));
   switch (agg) {
     case kAVG:
     case kSUM: {
@@ -139,8 +148,7 @@ int64_t get_agg_initial_val(const SQLAgg agg,
               return *reinterpret_cast<const int64_t*>(may_alias_ptr(&null_double));
             }
             default:
-              LOG(FATAL) << "Unrecognized fp byte width for SUM: "
-                         << std::to_string(byte_width);
+              CHECK(false);
           }
         } else {
           return inline_int_null_val(ti);
@@ -160,106 +168,71 @@ int64_t get_agg_initial_val(const SQLAgg agg,
                      : 0;
         }
         default:
-          LOG(FATAL) << "Unrecognized byte width for SUM: " << std::to_string(byte_width);
-          ;
+          CHECK(false);
       }
     }
     case kCOUNT:
     case kAPPROX_COUNT_DISTINCT:
       return 0;
     case kMIN: {
-      if (ti.is_fp()) {
-        switch (byte_width) {
-          case 4: {
-            const float max_float = std::numeric_limits<float>::max();
-            const float null_float = static_cast<float>(inline_fp_null_val(ti));
-            return (ti.get_notnull()
-                        ? *reinterpret_cast<const int32_t*>(may_alias_ptr(&max_float))
-                        : *reinterpret_cast<const int32_t*>(may_alias_ptr(&null_float)));
-          }
-          case 8: {
-            const double max_double = std::numeric_limits<double>::max();
-            const double null_double{inline_fp_null_val(ti)};
-            return (ti.get_notnull()
-                        ? *reinterpret_cast<const int64_t*>(may_alias_ptr(&max_double))
-                        : *reinterpret_cast<const int64_t*>(may_alias_ptr(&null_double)));
-          }
-          default:
-            LOG(FATAL) << "Unrecognized fp byte width for MIN: "
-                       << std::to_string(byte_width);
+      switch (byte_width) {
+        case 4: {
+          const float max_float = std::numeric_limits<float>::max();
+          const float null_float =
+              ti.is_fp() ? static_cast<float>(inline_fp_null_val(ti)) : 0.;
+          return ti.is_fp()
+                     ? (ti.get_notnull()
+                            ? *reinterpret_cast<const int32_t*>(may_alias_ptr(&max_float))
+                            : *reinterpret_cast<const int32_t*>(
+                                  may_alias_ptr(&null_float)))
+                     : (ti.get_notnull() ? std::numeric_limits<int32_t>::max()
+                                         : inline_int_null_val(ti));
         }
-      } else {
-        switch (byte_width) {
-          case 1: {
-            return (ti.get_notnull() ? std::numeric_limits<int8_t>::max()
-                                     : inline_int_null_val(ti));
-          }
-          case 2: {
-            return (ti.get_notnull() ? std::numeric_limits<int16_t>::max()
-                                     : inline_int_null_val(ti));
-          }
-          case 4: {
-            return (ti.get_notnull() ? std::numeric_limits<int32_t>::max()
-                                     : inline_int_null_val(ti));
-          }
-          case 8: {
-            return (ti.get_notnull() ? std::numeric_limits<int64_t>::max()
-                                     : inline_int_null_val(ti));
-          }
-          default:
-            LOG(FATAL) << "Unrecognized byte width for MIN: "
-                       << std::to_string(byte_width);
+        case 8: {
+          const double max_double = std::numeric_limits<double>::max();
+          const double null_double{ti.is_fp() ? inline_fp_null_val(ti) : 0.};
+          return ti.is_fp() ? (ti.get_notnull() ? *reinterpret_cast<const int64_t*>(
+                                                      may_alias_ptr(&max_double))
+                                                : *reinterpret_cast<const int64_t*>(
+                                                      may_alias_ptr(&null_double)))
+                            : (ti.get_notnull() ? std::numeric_limits<int64_t>::max()
+                                                : inline_int_null_val(ti));
         }
+        default:
+          CHECK(false);
       }
     }
     case kSAMPLE:
     case kMAX: {
-      if (ti.is_fp()) {
-        switch (byte_width) {
-          case 4: {
-            const float min_float = -std::numeric_limits<float>::max();
-            const float null_float = static_cast<float>(inline_fp_null_val(ti));
-            return ti.get_notnull()
-                       ? *reinterpret_cast<const int32_t*>(may_alias_ptr(&min_float))
-                       : *reinterpret_cast<const int32_t*>(may_alias_ptr(&null_float));
-          }
-          case 8: {
-            const double min_double = -std::numeric_limits<double>::max();
-            const double null_double{inline_fp_null_val(ti)};
-            return ti.get_notnull()
-                       ? *reinterpret_cast<const int64_t*>(may_alias_ptr(&min_double))
-                       : *reinterpret_cast<const int64_t*>(may_alias_ptr(&null_double));
-          }
-          default:
-            LOG(FATAL) << "Unrecognized fp byte width for MAX: "
-                       << std::to_string(byte_width);
+      switch (byte_width) {
+        case 4: {
+          const float min_float = -std::numeric_limits<float>::max();
+          const float null_float =
+              ti.is_fp() ? static_cast<float>(inline_fp_null_val(ti)) : 0.;
+          return (ti.is_fp())
+                     ? (ti.get_notnull()
+                            ? *reinterpret_cast<const int32_t*>(may_alias_ptr(&min_float))
+                            : *reinterpret_cast<const int32_t*>(
+                                  may_alias_ptr(&null_float)))
+                     : (ti.get_notnull() ? std::numeric_limits<int32_t>::min()
+                                         : inline_int_null_val(ti));
         }
-      } else {
-        switch (byte_width) {
-          case 1: {
-            return ti.get_notnull() ? std::numeric_limits<int8_t>::min()
-                                    : inline_int_null_val(ti);
-          }
-          case 2: {
-            return ti.get_notnull() ? std::numeric_limits<int16_t>::min()
-                                    : inline_int_null_val(ti);
-          }
-          case 4: {
-            return ti.get_notnull() ? std::numeric_limits<int32_t>::min()
-                                    : inline_int_null_val(ti);
-          }
-          case 8: {
-            return ti.get_notnull() ? std::numeric_limits<int64_t>::min()
-                                    : inline_int_null_val(ti);
-          }
-          default:
-            LOG(FATAL) << "Unrecognized byte width for MAX: "
-                       << std::to_string(byte_width);
+        case 8: {
+          const double min_double = -std::numeric_limits<double>::max();
+          const double null_double{ti.is_fp() ? inline_fp_null_val(ti) : 0.};
+          return ti.is_fp() ? (ti.get_notnull() ? *reinterpret_cast<const int64_t*>(
+                                                      may_alias_ptr(&min_double))
+                                                : *reinterpret_cast<const int64_t*>(
+                                                      may_alias_ptr(&null_double)))
+                            : (ti.get_notnull() ? std::numeric_limits<int64_t>::min()
+                                                : inline_int_null_val(ti));
         }
+        default:
+          CHECK(false);
       }
     }
     default:
-      UNREACHABLE();
+      abort();
   }
 }
 

@@ -41,7 +41,8 @@ std::pair<uint64_t, uint64_t> inline_uint_max_min(const size_t byte_width);
 
 int64_t get_agg_initial_val(const SQLAgg agg,
                             const SQLTypeInfo& ti,
-                            const size_t byte_width);
+                            const bool enable_compaction,
+                            const unsigned min_byte_width_to_compact);
 
 std::vector<int64_t> init_agg_val_vec(
     const std::vector<Analyzer::Expr*>& targets,

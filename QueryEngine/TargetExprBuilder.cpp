@@ -471,10 +471,13 @@ namespace {
 
 inline int64_t get_initial_agg_val(const TargetInfo& target_info,
                                    const QueryMemoryDescriptor& query_mem_desc) {
+  const bool is_group_by{query_mem_desc.isGroupBy()};
   if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_string() &&
       target_info.sql_type.get_compression() != kENCODING_NONE) {
-    return get_agg_initial_val(
-        target_info.agg_kind, target_info.sql_type, query_mem_desc.getCompactByteWidth());
+    return get_agg_initial_val(target_info.agg_kind,
+                               target_info.sql_type,
+                               is_group_by,
+                               query_mem_desc.getCompactByteWidth());
   }
   return 0;
 }
