@@ -347,7 +347,7 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
 
   // Non-grouped aggregates do not support accessing aggregated ranges
   const auto keyless_info = !is_group_by
-                                ? KeylessInfo{false, -1, 0, false}
+                                ? KeylessInfo{false, -1, false}
                                 : getKeylessInfo(ra_exe_unit_.target_exprs, is_group_by);
 
   if (g_enable_watchdog &&
@@ -570,7 +570,6 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
    * shared_mem_valid_data_type are declared to ensure such support. */
   int32_t num_agg_expr{0};  // used for shared memory support on the GPU
   int32_t index{0};
-  int64_t init_val{0};
   for (const auto target_expr : target_expr_list) {
     const auto agg_info = get_target_info(target_expr, g_bigint_count);
     const auto& chosen_type = get_compact_type(agg_info);
@@ -598,7 +597,6 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
               break;
             }
           }
-          init_val = 0;
           found = true;
           break;
         case kCOUNT:
@@ -613,7 +611,6 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
               break;
             }
           }
-          init_val = 0;
           found = true;
           if (!agg_info.skip_null_val) {
             shared_mem_support = true;  // currently just support 8 bytes per group
@@ -628,14 +625,9 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
             auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
             if (expr_range_info.getType() != ExpressionRangeType::Invalid &&
                 !expr_range_info.hasNulls()) {
-              init_val = get_agg_initial_val(agg_info.agg_kind,
-                                             arg_ti,
-                                             is_group_by || float_argument_input,
-                                             float_argument_input ? sizeof(float) : 8);
               found = true;
             }
           } else {
-            init_val = 0;
             auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
             switch (expr_range_info.getType()) {
               case ExpressionRangeType::Float:
@@ -670,7 +662,6 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
           switch (expr_range_info.getType()) {
             case ExpressionRangeType::Float:
             case ExpressionRangeType::Double: {
-              init_val = init_max;
               auto double_max =
                   *reinterpret_cast<const double*>(may_alias_ptr(&init_max));
               if (expr_range_info.getFpMax() < double_max) {
@@ -679,7 +670,6 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
               break;
             }
             case ExpressionRangeType::Integer:
-              init_val = init_max;
               if (expr_range_info.getIntMax() < init_max) {
                 found = true;
               }
@@ -704,7 +694,6 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
           switch (expr_range_info.getType()) {
             case ExpressionRangeType::Float:
             case ExpressionRangeType::Double: {
-              init_val = init_min;
               auto double_min =
                   *reinterpret_cast<const double*>(may_alias_ptr(&init_min));
               if (expr_range_info.getFpMin() > double_min) {
@@ -713,7 +702,6 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
               break;
             }
             case ExpressionRangeType::Integer:
-              init_val = init_min;
               if (expr_range_info.getIntMin() > init_min) {
                 found = true;
               }
@@ -744,7 +732,6 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
    */
   return {keyless && found,
           index,
-          init_val,
           ((num_agg_expr == 1) && (target_expr_list.size() <= 2))
               ? shared_mem_support && shared_mem_valid_data_type
               : false};
