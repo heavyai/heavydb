@@ -785,6 +785,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     } else {
       throw QueryNotSupported(function_name + " doesn't accept geographies");
     }
+  } else if (function_name == std::string("ST_Distance") && rex_function->size() == 3) {
+    if (arg0_ti.get_type() == kPOINT && arg1_ti.get_type() == kPOINT) {
+      // Cartesian distance between points used by ST_DWithin - switch to faster Squared
+      specialized_geofunc += std::string("_Squared");
+    }
   }
 
   // Add first input's compression mode and SRID args to enable on-the-fly
@@ -836,6 +841,21 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
 
   // Translate the geo distance function call portion
   const auto geo_distance_expr = translateBinaryGeoFunction(rex_function);
+
+  if (rex_function->getName() == std::string("ST_DWithin")) {
+    auto func_oper = dynamic_cast<Analyzer::FunctionOper*>(geo_distance_expr.get());
+    if (func_oper &&
+        func_oper->getName() == std::string("ST_Distance_Point_Point_Squared")) {
+      // Point_Point combination will yield geo_distance squared which is faster,
+      // need to compare it with distance squared
+      distance_expr = makeExpr<Analyzer::BinOper>(distance_ti,
+                                                  distance_expr->get_contains_agg(),
+                                                  kMULTIPLY,
+                                                  kONE,
+                                                  distance_expr,
+                                                  distance_expr);
+    }
+  }
 
   return makeExpr<Analyzer::BinOper>(
       kBOOLEAN, kLE, kONE, geo_distance_expr, distance_expr);

@@ -114,22 +114,20 @@ DEVICE ALWAYS_INLINE double coord_y(int8_t* data,
   return decompressed_transformed_coord_y;
 }
 
-DEVICE ALWAYS_INLINE double hypotenuse(double x, double y) {
-  x = fabs(x);
-  y = fabs(y);
-  if (x < y) {
-    auto t = x;
-    x = y;
-    y = t;
-  }
-  // x >= y
-  if (tol_zero(x)) {
+// Cartesian distance between points, squared
+DEVICE ALWAYS_INLINE double distance_point_point_squared(double p1x,
+                                                         double p1y,
+                                                         double p2x,
+                                                         double p2y) {
+  auto x = p1x - p2x;
+  auto y = p1y - p2y;
+  auto x2 = x * x;
+  auto y2 = y * y;
+  auto d2 = x2 + y2;
+  if (tol_zero(d2)) {
     return 0.0;
   }
-  if (tol_zero(y)) {
-    return x;
-  }
-  return x * sqrt(1.0 + (y * y) / (x * x));
+  return d2;
 }
 
 // Cartesian distance between points
@@ -137,7 +135,8 @@ DEVICE ALWAYS_INLINE double distance_point_point(double p1x,
                                                  double p1y,
                                                  double p2x,
                                                  double p2y) {
-  return hypotenuse(p1x - p2x, p1y - p2y);
+  auto d2 = distance_point_point_squared(p1x, p1y, p2x, p2y);
+  return sqrt(d2);
 }
 
 // Cartesian distance between a point and a line segment
@@ -1090,6 +1089,23 @@ double ST_Distance_Point_Point(int8_t* p1,
   double p2x = coord_x(p2, 0, ic2, isr2, osr);
   double p2y = coord_y(p2, 1, ic2, isr2, osr);
   return distance_point_point(p1x, p1y, p2x, p2y);
+}
+
+EXTENSION_NOINLINE
+double ST_Distance_Point_Point_Squared(int8_t* p1,
+                                       int64_t p1size,
+                                       int8_t* p2,
+                                       int64_t p2size,
+                                       int32_t ic1,
+                                       int32_t isr1,
+                                       int32_t ic2,
+                                       int32_t isr2,
+                                       int32_t osr) {
+  double p1x = coord_x(p1, 0, ic1, isr1, osr);
+  double p1y = coord_y(p1, 1, ic1, isr1, osr);
+  double p2x = coord_x(p2, 0, ic2, isr2, osr);
+  double p2y = coord_y(p2, 1, ic2, isr2, osr);
+  return distance_point_point_squared(p1x, p1y, p2x, p2y);
 }
 
 EXTENSION_NOINLINE
