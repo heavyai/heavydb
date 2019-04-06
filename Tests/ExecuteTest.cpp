@@ -708,6 +708,7 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT SUM(x * y + 15) FROM test WHERE x + y + 1 = 50;", dt);
     c("SELECT SUM(x * y + 15) FROM test WHERE x + y + z + 1 = 151;", dt);
     c("SELECT SUM(x * y + 15) FROM test WHERE x + y + z + t + 1 = 1152;", dt);
+    c("SELECT SUM(z) FROM test WHERE z IS NOT NULL;", dt);
     c("SELECT MIN(x * y + 15) FROM test WHERE x + y + 1 = 50;", dt);
     c("SELECT MIN(x * y + 15) FROM test WHERE x + y + z + 1 = 151;", dt);
     c("SELECT MIN(x * y + 15) FROM test WHERE x + y + z + t + 1 = 1152;", dt);
@@ -1191,6 +1192,7 @@ TEST(Select, FilterAndGroupBy) {
       "'2014-12-14 22:23:15' AND "
       "'2014-12-13 22:23:15' group by shared_dict,m;",
       dt);
+    c("SELECT x, SUM(z) FROM test WHERE z IS NOT NULL GROUP BY x ORDER BY x;", dt);
     EXPECT_THROW(run_multiple_agg(
                      "SELECT x, MIN(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
                  std::runtime_error);
