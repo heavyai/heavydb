@@ -134,8 +134,6 @@ class GroupByAndAggregate {
                       const std::vector<InputTableInfo>& query_infos,
                       std::shared_ptr<RowSetMemoryOwner>);
 
-  bool outputColumnar() const;
-
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
   bool codegen(llvm::Value* filter_result,

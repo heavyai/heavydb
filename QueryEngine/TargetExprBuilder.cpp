@@ -170,7 +170,7 @@ void TargetExprCodegen::codegen(
     const auto chosen_bytes = query_mem_desc.getPaddedColumnWidthBytes(slot_index);
     llvm::Value* agg_col_ptr{nullptr};
     if (is_group_by) {
-      if (group_by_and_agg->outputColumnar()) {
+      if (query_mem_desc.didOutputColumnar()) {
         col_off = query_mem_desc.getColOffInBytes(slot_index);
         CHECK_EQ(size_t(0), col_off % chosen_bytes);
         col_off /= chosen_bytes;
@@ -377,7 +377,7 @@ void TargetExprCodegen::codegen(
       switch (window_func_ti.get_type()) {
         case kFLOAT: {
           apply_window_pending_outputs_name += "_float";
-          if (group_by_and_agg->outputColumnar()) {
+          if (query_mem_desc.didOutputColumnar()) {
             apply_window_pending_outputs_name += "_columnar";
           }
           break;
@@ -388,7 +388,7 @@ void TargetExprCodegen::codegen(
         }
         default: {
           apply_window_pending_outputs_name += "_int";
-          if (group_by_and_agg->outputColumnar()) {
+          if (query_mem_desc.didOutputColumnar()) {
             apply_window_pending_outputs_name +=
                 std::to_string(window_func_ti.get_size() * 8);
           } else {

@@ -299,9 +299,6 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                                                    must_use_baseline_sort,
                                                    output_columnar_hint);
     CHECK(query_mem_desc);
-
-    output_columnar_ = query_mem_desc->didOutputColumnar();
-
     if (query_mem_desc->sortOnGpu() &&
         (query_mem_desc->getBufferSizeBytes(device_type_) +
          align_to_int64(query_mem_desc->getEntryCount() * sizeof(int32_t))) >
@@ -554,10 +551,6 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
     }
   }
   return count_distinct_descriptors;
-}
-
-bool GroupByAndAggregate::outputColumnar() const {
-  return output_columnar_;
 }
 
 KeylessInfo GroupByAndAggregate::getKeylessInfo(
@@ -989,11 +982,12 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
   CHECK_EQ(size_t(1), ra_exe_unit_.groupby_exprs.size());
   const auto group_expr = ra_exe_unit_.groupby_exprs.front();
   CHECK(!group_expr);
-  if (!outputColumnar()) {
+  if (!query_mem_desc.didOutputColumnar()) {
     CHECK_EQ(size_t(0), query_mem_desc.getRowSize() % sizeof(int64_t));
   }
-  const int32_t row_size_quad =
-      outputColumnar() ? 0 : query_mem_desc.getRowSize() / sizeof(int64_t);
+  const int32_t row_size_quad = query_mem_desc.didOutputColumnar()
+                                    ? 0
+                                    : query_mem_desc.getRowSize() / sizeof(int64_t);
   if (use_streaming_top_n(ra_exe_unit_, query_mem_desc.didOutputColumnar())) {
     const auto& only_order_entry = ra_exe_unit_.sort_info.order_entries.front();
     CHECK_GE(only_order_entry.tle_no, int(1));
@@ -1088,8 +1082,9 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
         query_mem_desc.getQueryDescriptionType() ==
             QueryDescriptionType::GroupByPerfectHash);
 
-  const int32_t row_size_quad =
-      outputColumnar() ? 0 : query_mem_desc.getRowSize() / sizeof(int64_t);
+  const int32_t row_size_quad = query_mem_desc.didOutputColumnar()
+                                    ? 0
+                                    : query_mem_desc.getRowSize() / sizeof(int64_t);
 
   const auto col_width_size = query_mem_desc.isSingleColumnGroupByWithPerfectHash()
                                   ? sizeof(int64_t)
@@ -1185,13 +1180,14 @@ GroupByAndAggregate::codegenSingleColumnPerfectHash(
     llvm::Value* group_expr_lv_original,
     const int32_t row_size_quad) {
   CHECK(query_mem_desc.usesGetGroupValueFast());
-  std::string get_group_fn_name{outputColumnar() ? "get_columnar_group_bin_offset"
-                                                 : "get_group_value_fast"};
-  if (!outputColumnar() && query_mem_desc.hasKeylessHash()) {
+  std::string get_group_fn_name{query_mem_desc.didOutputColumnar()
+                                    ? "get_columnar_group_bin_offset"
+                                    : "get_group_value_fast"};
+  if (!query_mem_desc.didOutputColumnar() && query_mem_desc.hasKeylessHash()) {
     get_group_fn_name += "_keyless";
   }
   if (query_mem_desc.interleavedBins(co.device_type_)) {
-    CHECK(!outputColumnar());
+    CHECK(!query_mem_desc.didOutputColumnar());
     CHECK(query_mem_desc.hasKeylessHash());
     get_group_fn_name += "_semiprivate";
   }
@@ -1205,11 +1201,11 @@ GroupByAndAggregate::codegenSingleColumnPerfectHash(
   get_group_fn_args.push_back(LL_INT(query_mem_desc.getMinVal()));
   get_group_fn_args.push_back(LL_INT(query_mem_desc.getBucket()));
   if (!query_mem_desc.hasKeylessHash()) {
-    if (!outputColumnar()) {
+    if (!query_mem_desc.didOutputColumnar()) {
       get_group_fn_args.push_back(LL_INT(row_size_quad));
     }
   } else {
-    if (!outputColumnar()) {
+    if (!query_mem_desc.didOutputColumnar()) {
       get_group_fn_args.push_back(LL_INT(row_size_quad));
     }
     if (query_mem_desc.interleavedBins(co.device_type_)) {
@@ -1401,8 +1397,9 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
   const auto window_func_context =
       WindowProjectNodeContext::getActiveWindowFunctionContext();
   if (window_func_context && window_function_is_aggregate(window_func->getKind())) {
-    const int32_t row_size_quad =
-        outputColumnar() ? 0 : query_mem_desc.getRowSize() / sizeof(int64_t);
+    const int32_t row_size_quad = query_mem_desc.didOutputColumnar()
+                                      ? 0
+                                      : query_mem_desc.getRowSize() / sizeof(int64_t);
     auto arg_it = ROW_FUNC->arg_begin();
     auto groups_buffer = arg_it++;
     if (!window_func_context->getRowNumber()) {
@@ -1452,7 +1449,7 @@ bool GroupByAndAggregate::codegenAggCalls(
   // different sizes (only used when actual column width sizes are used)
   llvm::Value* output_buffer_byte_stream{nullptr};
   llvm::Value* out_row_idx{nullptr};
-  if (outputColumnar() && !g_cluster &&
+  if (query_mem_desc.didOutputColumnar() && !g_cluster &&
       query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
     output_buffer_byte_stream = LL_BUILDER.CreateBitCast(
         std::get<0>(agg_out_ptr_w_idx),
@@ -1503,7 +1500,7 @@ llvm::Value* GroupByAndAggregate::codegenAggColumnPtr(
     const size_t agg_out_off,
     const size_t target_idx) {
   llvm::Value* agg_col_ptr{nullptr};
-  if (outputColumnar()) {
+  if (query_mem_desc.didOutputColumnar()) {
     // TODO(Saman): remove the second columnar branch, and support all query description
     // types through the first branch. Then, input arguments should also be cleaned up
     if (!g_cluster &&

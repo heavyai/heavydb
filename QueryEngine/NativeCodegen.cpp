@@ -1407,7 +1407,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
     throw CardinalityEstimationRequired();
   }
 
-  const bool output_columnar = group_by_and_aggregate.outputColumnar();
+  const bool output_columnar = query_mem_desc->didOutputColumnar();
 
   if (co.device_type_ == ExecutorDeviceType::GPU) {
     const size_t num_count_distinct_descs =
