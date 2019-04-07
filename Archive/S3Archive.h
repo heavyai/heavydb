@@ -23,6 +23,8 @@
 #include <thread>
 #include "Archive.h"
 
+#include <openssl/evp.h>
+
 #ifdef HAVE_AWS_S3
 #include <aws/core/Aws.h>
 #include <aws/s3/S3Client.h>
@@ -93,6 +95,13 @@ class S3Archive : public Archive {
     std::unique_lock<std::mutex> lck(awsapi_mtx);
     if (0 == --awsapi_count) {
       Aws::ShutdownAPI(awsapi_options);
+      // somehow, with -DPREFER_STATIC_LIBS=ON, any s3 activity causes following SAML
+      // logins to fail with an error "OpenSSL:Hash - Error loading Message Digest"
+      // (due to a unknown hash algorithm). Reloading related openssl stuff seems
+      // the only fix i can think of, though it is the best fix for sure ...
+      OpenSSL_add_all_algorithms();
+      OpenSSL_add_all_ciphers();
+      OpenSSL_add_all_digests();
     }
 #endif  // HAVE_AWS_S3
   }
