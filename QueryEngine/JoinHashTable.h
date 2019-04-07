@@ -27,13 +27,13 @@
 #include "../Analyzer/Analyzer.h"
 #include "../Catalog/Catalog.h"
 #include "../Chunk/Chunk.h"
+#include "Allocators/ThrustAllocator.h"
 #include "ColumnarResults.h"
 #include "Descriptors/InputDescriptors.h"
 #include "ExpressionRange.h"
 #include "InputMetadata.h"
 #include "JoinHashTableInterface.h"
 #include "ResultRows.h"
-#include "ThrustAllocator.h"
 
 #include <llvm/IR/Value.h>
 

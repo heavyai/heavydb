@@ -18,14 +18,18 @@
 #define QUERYENGINE_GPUMEMUTILS_H
 
 #include "CompilationOptions.h"
-#include "Rendering/RenderAllocator.h"
-#include "ThrustAllocator.h"
 
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <utility>
 #include <vector>
+
+#ifdef HAVE_CUDA
+#include <cuda.h>
+#else
+#include "../Shared/nocuda.h"
+#endif  // HAVE_CUDA
 
 namespace CudaMgr_Namespace {
 
@@ -39,19 +43,6 @@ class AbstractBuffer;
 class DataMgr;
 
 }  // namespace Data_Namespace
-
-CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr,
-                          const size_t num_bytes,
-                          const int device_id,
-                          RenderAllocator* render_allocator);
-
-Data_Namespace::AbstractBuffer* alloc_gpu_abstract_buffer(
-    Data_Namespace::DataMgr* data_mgr,
-    const size_t num_bytes,
-    const int device_id);
-
-void free_gpu_abstract_buffer(Data_Namespace::DataMgr* data_mgr,
-                              Data_Namespace::AbstractBuffer* ab);
 
 void copy_to_gpu(Data_Namespace::DataMgr* data_mgr,
                  CUdeviceptr dst,
@@ -68,10 +59,11 @@ void copy_from_gpu(Data_Namespace::DataMgr* data_mgr,
 using GpuGroupByBuffers = std::pair<CUdeviceptr, CUdeviceptr>;
 
 class QueryMemoryDescriptor;
-class CudaAllocator;
+class DeviceAllocator;
+class RenderAllocator;
 
 GpuGroupByBuffers create_dev_group_by_buffers(
-    const CudaAllocator& cuda_allocator,
+    const DeviceAllocator* device_allocator,
     const std::vector<int64_t*>& group_by_buffers,
     const QueryMemoryDescriptor&,
     const unsigned block_size_x,

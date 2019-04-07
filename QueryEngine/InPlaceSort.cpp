@@ -18,8 +18,8 @@
 #include "InPlaceSortImpl.h"
 
 #include <Analyzer/Analyzer.h>
+#include "Allocators/ThrustAllocator.h"
 #include "Descriptors/QueryMemoryDescriptor.h"
-#include "ThrustAllocator.h"
 
 #include <glog/logging.h>
 #include <cstdint>

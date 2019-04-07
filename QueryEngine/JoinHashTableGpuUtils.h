@@ -17,8 +17,8 @@
 #ifndef QUERYENGINE_JOINHASHTABLE_GPUUTILS_H
 #define QUERYENGINE_JOINHASHTABLE_GPUUTILS_H
 
+#include "Allocators/ThrustAllocator.h"
 #include "GpuMemUtils.h"
-#include "ThrustAllocator.h"
 
 template <class T>
 T* transfer_pod_vector_to_gpu(const std::vector<T>& vec, ThrustAllocator& allocator) {

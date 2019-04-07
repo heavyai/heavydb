@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include "Allocators/DeviceAllocator.h"
+
 #include "Descriptors/QueryMemoryDescriptor.h"
 #include "GpuMemUtils.h"
 #include "ResultSet.h"
@@ -44,6 +46,7 @@ class QueryMemoryInitializer {
                          RenderAllocatorMap* render_allocator_map,
                          RenderInfo* render_info,
                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                         DeviceAllocator* gpu_allocator,
                          const Executor* executor);
 
   const auto getCountDistinctBitmapPtr() const { return count_distinct_bitmap_mem_; }
@@ -61,7 +64,7 @@ class QueryMemoryInitializer {
 
   std::unique_ptr<ResultSet> getResultSetOwned(const size_t index) {
     CHECK_LT(index, result_sets_.size());
-    return std::unique_ptr<ResultSet>(result_sets_[index].release());
+    return std::move(result_sets_[index]);
   }
 
   void resetResultSet(const size_t index) {
@@ -104,9 +107,7 @@ class QueryMemoryInitializer {
                         const std::vector<int64_t>& init_vals,
                         const std::vector<ssize_t>& bitmap_sizes);
 
-  void allocateCountDistinctGpuMem(const int device_id,
-                                   const QueryMemoryDescriptor& query_mem_desc,
-                                   const Executor* executor);
+  void allocateCountDistinctGpuMem(const QueryMemoryDescriptor& query_mem_desc);
 
   std::vector<ssize_t> allocateCountDistinctBuffers(
       const QueryMemoryDescriptor& query_mem_desc,
@@ -118,8 +119,7 @@ class QueryMemoryInitializer {
   int64_t allocateCountDistinctSet();
 
 #ifdef HAVE_CUDA
-  GpuGroupByBuffers prepareTopNHeapsDevBuffer(const CudaAllocator& cuda_allocator,
-                                              const QueryMemoryDescriptor& query_mem_desc,
+  GpuGroupByBuffers prepareTopNHeapsDevBuffer(const QueryMemoryDescriptor& query_mem_desc,
                                               const CUdeviceptr init_agg_vals_dev_ptr,
                                               const size_t n,
                                               const int device_id,
@@ -136,7 +136,6 @@ class QueryMemoryInitializer {
       const int8_t warp_size,
       const bool can_sort_on_gpu,
       const bool output_columnar,
-      const CudaAllocator& cuda_allocator,
       RenderAllocator* render_allocator);
 #endif
 
@@ -183,6 +182,8 @@ class QueryMemoryInitializer {
   size_t count_distinct_bitmap_mem_bytes_;
   int8_t* count_distinct_bitmap_crt_ptr_;
   int8_t* count_distinct_bitmap_host_mem_;
+
+  DeviceAllocator* device_allocator_{nullptr};
 
   friend class Executor;  // Accesses result_sets_
   friend class QueryExecutionContext;

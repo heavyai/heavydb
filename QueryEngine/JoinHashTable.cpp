@@ -869,7 +869,7 @@ void JoinHashTable::initHashTableForDevice(
       CHECK_GT(shards_per_device, 0);
       hash_entry_count = entries_per_shard * shards_per_device;
     }
-    gpu_hash_table_buff_[device_id] = alloc_gpu_abstract_buffer(
+    gpu_hash_table_buff_[device_id] = CudaAllocator::allocGpuAbstractBuffer(
         &data_mgr, hash_entry_count * sizeof(int32_t), device_id);
   }
 #else
@@ -916,7 +916,7 @@ void JoinHashTable::initHashTableForDevice(
     CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
     auto& data_mgr = catalog->getDataMgr();
     gpu_hash_table_err_buff_[device_id] =
-        alloc_gpu_abstract_buffer(&data_mgr, sizeof(int), device_id);
+        CudaAllocator::allocGpuAbstractBuffer(&data_mgr, sizeof(int), device_id);
     auto dev_err_buff = reinterpret_cast<CUdeviceptr>(
         gpu_hash_table_err_buff_[device_id]->getMemoryPtr());
     copy_to_gpu(&data_mgr, dev_err_buff, &err, sizeof(err), device_id);
@@ -1003,9 +1003,8 @@ void JoinHashTable::initOneToManyHashTable(
   auto& data_mgr = executor_->getCatalog()->getDataMgr();
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
     const size_t total_count = 2 * hash_entry_count + num_elements;
-    OOM_TRACE_PUSH(+": total_count " + std::to_string(total_count));
-    gpu_hash_table_buff_[device_id] =
-        alloc_gpu_abstract_buffer(&data_mgr, total_count * sizeof(int32_t), device_id);
+    gpu_hash_table_buff_[device_id] = CudaAllocator::allocGpuAbstractBuffer(
+        &data_mgr, total_count * sizeof(int32_t), device_id);
   }
 #endif
   const int32_t hash_join_invalid_val{-1};
@@ -1359,13 +1358,13 @@ void JoinHashTable::freeHashBufferGpuMemory() {
   auto& data_mgr = catalog.getDataMgr();
   for (auto& buf : gpu_hash_table_buff_) {
     if (buf) {
-      free_gpu_abstract_buffer(&data_mgr, buf);
+      CudaAllocator::freeGpuAbstractBuffer(&data_mgr, buf);
       buf = nullptr;
     }
   }
   for (auto& buf : gpu_hash_table_err_buff_) {
     if (buf) {
-      free_gpu_abstract_buffer(&data_mgr, buf);
+      CudaAllocator::freeGpuAbstractBuffer(&data_mgr, buf);
       buf = nullptr;
     }
   }

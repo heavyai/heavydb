@@ -24,7 +24,7 @@
 
 #include "ResultSet.h"
 
-#include "CudaAllocator.h"
+#include "Allocators/CudaAllocator.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Execute.h"
 #include "GpuMemUtils.h"
@@ -164,8 +164,8 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {
   if (device_type == ExecutorDeviceType::GPU) {
-    estimator_buffer_ = reinterpret_cast<int8_t*>(
-        alloc_gpu_mem(data_mgr_, estimator_->getBufferSize(), device_id_, nullptr));
+    estimator_buffer_ = reinterpret_cast<int8_t*>(CudaAllocator::alloc(
+        data_mgr_, estimator_->getBufferSize(), device_id_, nullptr));
     data_mgr->getCudaMgr()->zeroDeviceMem(
         estimator_buffer_, estimator_->getBufferSize(), device_id_);
   } else {
@@ -771,7 +771,7 @@ void ResultSet::radixSortOnGpu(
   CudaAllocator cuda_allocator(data_mgr, device_id);
   std::vector<int64_t*> group_by_buffers(executor_->blockSize());
   group_by_buffers[0] = reinterpret_cast<int64_t*>(storage_->getUnderlyingBuffer());
-  auto dev_group_by_buffers = create_dev_group_by_buffers(cuda_allocator,
+  auto dev_group_by_buffers = create_dev_group_by_buffers(&cuda_allocator,
                                                           group_by_buffers,
                                                           query_mem_desc_,
                                                           executor_->blockSize(),

@@ -922,7 +922,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
             << " entries in the one to many buffer";
     VLOG(1) << "Total hash table size: " << hash_table_size << " Bytes";
     gpu_hash_table_buff_[device_id] =
-        alloc_gpu_abstract_buffer(&data_mgr, hash_table_size, device_id);
+        CudaAllocator::allocGpuAbstractBuffer(&data_mgr, hash_table_size, device_id);
   }
 #else
   CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
@@ -1186,7 +1186,7 @@ void BaselineJoinHashTable::freeHashBufferGpuMemory() {
   auto& data_mgr = catalog.getDataMgr();
   for (auto& buf : gpu_hash_table_buff_) {
     if (buf) {
-      free_gpu_abstract_buffer(&data_mgr, buf);
+      CudaAllocator::freeGpuAbstractBuffer(&data_mgr, buf);
       buf = nullptr;
     }
   }

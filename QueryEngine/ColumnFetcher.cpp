@@ -192,7 +192,7 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
       CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level);
       auto& data_mgr = cat.getDataMgr();
       auto chunk_iter_gpu =
-          alloc_gpu_mem(&data_mgr, sizeof(ChunkIter), device_id, nullptr);
+          CudaAllocator::alloc(&data_mgr, sizeof(ChunkIter), device_id, nullptr);
       copy_to_gpu(&data_mgr, chunk_iter_gpu, &chunk_iter, sizeof(ChunkIter), device_id);
       return reinterpret_cast<int8_t*>(chunk_iter_gpu);
     }
@@ -282,7 +282,7 @@ const int8_t* ColumnFetcher::transferColumnIfNeeded(
     const auto num_bytes = columnar_results->size() * col_ti.get_size();
     OOM_TRACE_PUSH(+": device_id " + std::to_string(device_id) + ", num_bytes " +
                    std::to_string(num_bytes) + ", col_id " + std::to_string(col_id));
-    auto gpu_col_buffer = alloc_gpu_mem(data_mgr, num_bytes, device_id, nullptr);
+    auto gpu_col_buffer = CudaAllocator::alloc(data_mgr, num_bytes, device_id, nullptr);
     copy_to_gpu(data_mgr, gpu_col_buffer, col_buffers[col_id], num_bytes, device_id);
     return reinterpret_cast<const int8_t*>(gpu_col_buffer);
   }

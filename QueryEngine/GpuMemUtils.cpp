@@ -15,7 +15,8 @@
  */
 
 #include "GpuMemUtils.h"
-#include "CudaAllocator.h"
+#include "Allocators/CudaAllocator.h"
+#include "Allocators/ThrustAllocator.h"
 #include "GpuInitGroups.h"
 #include "StreamingTopN.h"
 
@@ -23,33 +24,6 @@
 #include "GroupByAndAggregate.h"
 
 #include <glog/logging.h>
-
-CUdeviceptr alloc_gpu_mem(Data_Namespace::DataMgr* data_mgr,
-                          const size_t num_bytes,
-                          const int device_id,
-                          RenderAllocator* render_allocator) {
-  if (render_allocator) {
-    return reinterpret_cast<CUdeviceptr>(render_allocator->alloc(num_bytes));
-  }
-  OOM_TRACE_PUSH(+": device_id " + std::to_string(device_id) + ", num_bytes " +
-                 std::to_string(num_bytes));
-  auto ab = alloc_gpu_abstract_buffer(data_mgr, num_bytes, device_id);
-  return reinterpret_cast<CUdeviceptr>(ab->getMemoryPtr());
-}
-
-Data_Namespace::AbstractBuffer* alloc_gpu_abstract_buffer(
-    Data_Namespace::DataMgr* data_mgr,
-    const size_t num_bytes,
-    const int device_id) {
-  auto ab = data_mgr->alloc(Data_Namespace::GPU_LEVEL, device_id, num_bytes);
-  CHECK_EQ(ab->getPinCount(), 1);
-  return ab;
-}
-
-void free_gpu_abstract_buffer(Data_Namespace::DataMgr* data_mgr,
-                              Data_Namespace::AbstractBuffer* ab) {
-  data_mgr->free(ab);
-}
 
 void copy_to_gpu(Data_Namespace::DataMgr* data_mgr,
                  CUdeviceptr dst,
@@ -82,7 +56,7 @@ inline size_t coalesced_size(const QueryMemoryDescriptor& query_mem_desc,
 }  // namespace
 
 GpuGroupByBuffers create_dev_group_by_buffers(
-    const CudaAllocator& cuda_allocator,
+    const DeviceAllocator* cuda_allocator,
     const std::vector<int64_t*>& group_by_buffers,
     const QueryMemoryDescriptor& query_mem_desc,
     const unsigned block_size_x,
@@ -94,6 +68,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
   if (group_by_buffers.empty() && !render_allocator) {
     return std::make_pair(0, 0);
   }
+  CHECK(cuda_allocator);
 
   size_t groups_buffer_size{query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU)};
 
@@ -111,7 +86,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
           : 0};
 
   auto group_by_dev_buffers_mem =
-      cuda_allocator.alloc(mem_size + prepended_buff_size, device_id, render_allocator) +
+      cuda_allocator->alloc(mem_size + prepended_buff_size, render_allocator) +
       prepended_buff_size;
   CHECK(query_mem_desc.threadsShareMemory());
   const size_t step{block_size_x};
@@ -125,8 +100,8 @@ GpuGroupByBuffers create_dev_group_by_buffers(
       memcpy(buff_to_gpu_ptr, group_by_buffers[i], groups_buffer_size);
       buff_to_gpu_ptr += groups_buffer_size;
     }
-    cuda_allocator.copyToDevice(
-        group_by_dev_buffers_mem, &buff_to_gpu[0], buff_to_gpu.size(), device_id);
+    cuda_allocator->copyToDevice(
+        group_by_dev_buffers_mem, &buff_to_gpu[0], buff_to_gpu.size());
   }
 
   auto group_by_dev_buffer = group_by_dev_buffers_mem;
@@ -144,12 +119,9 @@ GpuGroupByBuffers create_dev_group_by_buffers(
     }
   }
 
-  auto group_by_dev_ptr =
-      cuda_allocator.alloc(num_ptrs * sizeof(CUdeviceptr), device_id, nullptr);
-  cuda_allocator.copyToDevice(group_by_dev_ptr,
-                              &group_by_dev_buffers[0],
-                              num_ptrs * sizeof(CUdeviceptr),
-                              device_id);
+  auto group_by_dev_ptr = cuda_allocator->alloc(num_ptrs * sizeof(CUdeviceptr), nullptr);
+  cuda_allocator->copyToDevice(
+      group_by_dev_ptr, &group_by_dev_buffers[0], num_ptrs * sizeof(CUdeviceptr));
 
   return std::make_pair(group_by_dev_ptr, group_by_dev_buffers_mem);
 }
@@ -274,10 +246,8 @@ int8_t* ThrustAllocator::allocate(std::ptrdiff_t num_bytes) {
     return reinterpret_cast<int8_t*>(ptr);
   }
 #endif  // HAVE_CUDA
-  OOM_TRACE_PUSH(+": device_id " + std::to_string(device_id_) + ", num_bytes " +
-                 std::to_string(num_bytes));
   Data_Namespace::AbstractBuffer* ab =
-      alloc_gpu_abstract_buffer(data_mgr_, num_bytes, device_id_);
+      CudaAllocator::allocGpuAbstractBuffer(data_mgr_, num_bytes, device_id_);
   int8_t* raw_ptr = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
   CHECK(!raw_to_ab_ptr_.count(raw_ptr));
   raw_to_ab_ptr_.insert(std::make_pair(raw_ptr, ab));
@@ -308,10 +278,8 @@ int8_t* ThrustAllocator::allocateScopedBuffer(std::ptrdiff_t num_bytes) {
     return reinterpret_cast<int8_t*>(ptr);
   }
 #endif  // HAVE_CUDA
-  OOM_TRACE_PUSH(+": device_id " + std::to_string(device_id_) + ", num_bytes " +
-                 std::to_string(num_bytes));
   Data_Namespace::AbstractBuffer* ab =
-      alloc_gpu_abstract_buffer(data_mgr_, num_bytes, device_id_);
+      CudaAllocator::allocGpuAbstractBuffer(data_mgr_, num_bytes, device_id_);
   scoped_buffers_.push_back(ab);
   return reinterpret_cast<int8_t*>(ab->getMemoryPtr());
 }

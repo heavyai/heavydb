@@ -20,8 +20,9 @@
  * @brief   Allocate GPU memory using GpuBuffers via DataMgr
  */
 
-#ifndef CUDA_ALLOCATOR_H
-#define CUDA_ALLOCATOR_H
+#pragma once
+
+#include "DeviceAllocator.h"
 
 #ifdef HAVE_CUDA
 #include <cuda.h>
@@ -39,40 +40,43 @@ class DataMgr;
 
 class RenderAllocator;
 
-class CudaAllocator {
+class CudaAllocator : public DeviceAllocator {
  public:
   CudaAllocator(Data_Namespace::DataMgr* data_mgr, const int device_id);
 
-  CUdeviceptr alloc(const size_t num_bytes,
-                    const int device_id,
-                    RenderAllocator* render_allocator) const;
+  static CUdeviceptr alloc(Data_Namespace::DataMgr* data_mgr,
+                           const size_t num_bytes,
+                           const int device_id,
+                           RenderAllocator* render_allocator);
 
-  void free(Data_Namespace::AbstractBuffer* ab) const;
+  static Data_Namespace::AbstractBuffer* allocGpuAbstractBuffer(
+      Data_Namespace::DataMgr* data_mgr,
+      const size_t num_bytes,
+      const int device_id);
+
+  static void freeGpuAbstractBuffer(Data_Namespace::DataMgr* data_mgr,
+                                    Data_Namespace::AbstractBuffer* ab);
+
+  CUdeviceptr alloc(const size_t num_bytes,
+                    RenderAllocator* render_allocator) const override;
+
+  void free(Data_Namespace::AbstractBuffer* ab) const override;
 
   void copyToDevice(CUdeviceptr dst,
                     const void* src,
-                    const size_t num_bytes,
-                    const int device_id) const;
+                    const size_t num_bytes) const override;
 
   void copyFromDevice(void* dst,
                       const CUdeviceptr src,
-                      const size_t num_bytes,
-                      const int device_id) const;
+                      const size_t num_bytes) const override;
 
-  void zeroDeviceMem(int8_t* device_ptr,
-                     const size_t num_bytes,
-                     const int device_id) const;
+  void zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes) const override;
 
   void setDeviceMem(int8_t* device_ptr,
                     unsigned char uc,
-                    const size_t num_bytes,
-                    const int device_id) const;
+                    const size_t num_bytes) const override;
 
  private:
-  Data_Namespace::AbstractBuffer* allocGpuAbstractBuffer(const size_t num_bytes,
-                                                         const int device_id) const;
-
   Data_Namespace::DataMgr* data_mgr_;
+  int device_id_;
 };
-
-#endif  // CUDA_ALLOCATOR_H
