@@ -75,7 +75,8 @@ makej
 make install PREFIX=$PREFIX
 popd
 
-download_make_install ${HTTP_DEPS}/openssl-1.1.1b.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
+# https://www.openssl.org/source/openssl-1.0.2p.tar.gz
+download_make_install ${HTTP_DEPS}/openssl-1.0.2p.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
 
 # libarchive
 download_make_install ${HTTP_DEPS}/xz-5.2.4.tar.xz "" "--disable-shared"
