@@ -118,6 +118,7 @@ function install_awscpp() {
         -DBUILD_SHARED_LIBS=0 \
         -DCUSTOM_MEMORY_MANAGEMENT=0 \
         -DCPP_STANDARD=$CPP_STANDARD \
+        -DENABLE_TESTING=off \
         ..
     make $*
     make_install
