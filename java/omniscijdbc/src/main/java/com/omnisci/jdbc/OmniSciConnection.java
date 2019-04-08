@@ -51,19 +51,21 @@ import com.mapd.common.SockTransportProperties;
  */
 /*
  * Param_pair - Simple pair class to hold the label for a component in the url
- * and an index into the url to that component.
- * For example in the url jdbc:mapd:hostname:6278 a Param_pair for
- * hostname would have a label of "hostname" and an index of 2
-
+ * and an index into the url to that component. For example in the url
+ * jdbc:mapd:hostname:6278 a Param_pair for hostname would have a label of
+ * "hostname" and an index of 2
+ *
  */
 class Param_pair {
   public Param_pair(String l, int i) {
     label = l;
     index = i;
   }
+
   public String label;
   public int index;
 }
+
 enum Connection_enums {
   host_name,
   port_num,
@@ -77,7 +79,9 @@ enum Connection_enums {
 
 public class OmniSciConnection implements java.sql.Connection {
   final static Logger logger = LoggerFactory.getLogger(OmniSciConnection.class);
-  // A simple internal class to hold a summary of the properties passed to the connection
+
+  // A simple internal class to hold a summary of the properties passed to the
+  // connection
   // Properties can come two ways - via the url or via a Properties param
   class Connection_properties extends Hashtable<Connection_enums, Object> {
     // All 'used' properties should be listed in this enum map
@@ -96,6 +100,7 @@ public class OmniSciConnection implements java.sql.Connection {
               }
             };
     protected boolean parm_warning = false;
+
     public Connection_properties(Properties properties, String connection_url) {
       super();
       String[] url_values = connection_url.split(":");
@@ -132,6 +137,7 @@ public class OmniSciConnection implements java.sql.Connection {
       // Make sure we have all that is needed and in the correct format
       validate_params();
     }
+
     private void validate_params() {
       // if present remove "//" from front of hostname
       String hN = (String) this.get(Connection_enums.host_name);
@@ -171,22 +177,28 @@ public class OmniSciConnection implements java.sql.Connection {
       return (this.containsKey(Connection_enums.protocol)
               && this.get(Connection_enums.protocol).equals("http"));
     }
+
     boolean isHttpsProtocol_insecure() {
       return (this.containsKey(Connection_enums.protocol)
               && this.get(Connection_enums.protocol).equals("https_insecure"));
     }
+
     boolean isHttpsProtocol() {
       return (this.containsKey(Connection_enums.protocol)
               && this.get(Connection_enums.protocol).equals("https"));
     }
+
     boolean isBinary() {
       return (this.containsKey(Connection_enums.protocol)
               && this.get(Connection_enums.protocol).equals("binary"));
     }
+
     boolean containsTrustStore() {
       return this.containsKey(Connection_enums.key_store);
     }
-  } /* End class Connection_properties extends Hashtable<Connection_enums, Object> */
+  } /*
+     * End class Connection_properties extends Hashtable<Connection_enums, Object>
+     */
 
   protected String session = null;
   protected MapD.Client client = null;
@@ -195,6 +207,7 @@ public class OmniSciConnection implements java.sql.Connection {
   protected SQLWarning warnings;
   protected String url;
   protected Connection_properties cP = null;
+
   public OmniSciConnection(String url, Properties info)
           throws SQLException { // logger.debug("Entered");
     this.url = url;
@@ -211,8 +224,8 @@ public class OmniSciConnection implements java.sql.Connection {
       key_store_pwd = cP.get(Connection_enums.key_store_pwd).toString();
     }
     try {
-      // cP extends hashtable.  hashtable get returns null when the
-      // key isn't present.  If key_store and keys_store_pwd are not present
+      // cP extends hashtable. hashtable get returns null when the
+      // key isn't present. If key_store and keys_store_pwd are not present
       // skT should then load the default java certs file ca-cert.
       TProtocol protocol = null;
       if (this.cP.isHttpProtocol()) {
@@ -242,7 +255,7 @@ public class OmniSciConnection implements java.sql.Connection {
         transport.open();
         protocol = new TJSONProtocol(transport);
       } else if (cP.isBinary()) {
-        // jdbc binary was implmented first.  It will currently look for a
+        // jdbc binary was implmented first. It will currently look for a
         // specified trust file, but doesn't look
         // for any of the default java trust stores
         if (key_store == null || key_store.isEmpty()) {
@@ -255,7 +268,7 @@ public class OmniSciConnection implements java.sql.Connection {
         } else {
           // encryoted
           skT = new SockTransportProperties(key_store, key_store_pwd);
-          transport = skT.openClientTransport_encryted(
+          transport = skT.openClientTransportEncrypted(
                   (String) this.cP.get(Connection_enums.host_name),
                   ((Integer) this.cP.get(Connection_enums.port_num)).intValue());
         }
