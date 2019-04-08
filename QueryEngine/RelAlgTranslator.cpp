@@ -356,14 +356,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUoper(
       if (operand_ti.is_string() && target_ti.is_string()) {
         return operand_expr;
       }
-      if (operand_ti.is_decimal() && target_ti.is_decimal() &&
-          operand_ti.get_scale() != target_ti.get_scale()) {
-        throw std::runtime_error("Cast between different DECIMAL scales not supported");
-      }
       if (target_ti.is_time() ||
           operand_ti
               .is_string()) {  // TODO(alex): check and unify with the rest of the cases
-        return operand_expr->add_cast(target_ti);
+        // Do not propogate encoding on small dates
+        return target_ti.is_date_in_days()
+                   ? operand_expr->add_cast(SQLTypeInfo(kDATE, false))
+                   : operand_expr->add_cast(target_ti);
       }
       if (!operand_ti.is_string() && target_ti.is_string()) {
         return operand_expr->add_cast(target_ti);
@@ -802,6 +801,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
       return date_minus;
     }
   }
+  if (sql_op == kOVERLAPS) {
+    return translateOverlapsOper(rex_operator);
+  }
   auto lhs = translateScalarRex(rex_operator->getOperand(0));
   for (size_t i = 1; i < rex_operator->size(); ++i) {
     std::shared_ptr<Analyzer::Expr> rhs;
@@ -815,6 +817,21 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
     lhs = Parser::OperExpr::normalize(sql_op, sql_qual, lhs, rhs);
   }
   return lhs;
+}
+
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOverlapsOper(
+    const RexOperator* rex_operator) const {
+  const auto sql_op = rex_operator->getOperator();
+  CHECK(sql_op == kOVERLAPS);
+
+  const auto lhs = translateScalarRex(rex_operator->getOperand(0));
+  const auto lhs_ti = lhs->get_type_info();
+  if (lhs_ti.is_geometry()) {
+    return translateGeoOverlapsOper(rex_operator);
+  } else {
+    throw std::runtime_error(
+        "Overlaps equivalence is currently only supported for geospatial types");
+  }
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateCase(
@@ -972,9 +989,36 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
   }
 
   const auto number_units = translateScalarRex(rex_function->getOperand(1));
-  const auto cast_number_units = number_units->add_cast(SQLTypeInfo(kBIGINT, false));
+  auto cast_number_units = number_units->add_cast(SQLTypeInfo(kBIGINT, false));
   const auto datetime = translateScalarRex(rex_function->getOperand(2));
   const auto& datetime_ti = datetime->get_type_info();
+  const auto& field = to_dateadd_field(*timeunit_lit->get_constval().stringval);
+  if (!datetime_ti.is_high_precision_timestamp() && is_subsecond_dateadd_field(field)) {
+    // Scale the number to get value in seconds
+    const auto bigint_ti = SQLTypeInfo(kBIGINT, false);
+    cast_number_units = makeExpr<Analyzer::BinOper>(
+        bigint_ti.get_type(),
+        kDIVIDE,
+        kONE,
+        cast_number_units,
+        makeNumericConstant(bigint_ti, get_dateadd_timestamp_precision_scale(field)));
+    cast_number_units = fold_expr(cast_number_units.get());
+  }
+  if (datetime_ti.is_high_precision_timestamp() && is_subsecond_dateadd_field(field)) {
+    const auto oper_scale =
+        get_dateadd_high_precision_adjusted_scale(field, datetime_ti.get_dimension());
+    if (oper_scale.first) {
+      // scale number to desired precision
+      const auto bigint_ti = SQLTypeInfo(kBIGINT, false);
+      cast_number_units =
+          makeExpr<Analyzer::BinOper>(bigint_ti.get_type(),
+                                      oper_scale.first,
+                                      kONE,
+                                      cast_number_units,
+                                      makeNumericConstant(bigint_ti, oper_scale.second));
+      cast_number_units = fold_expr(cast_number_units.get());
+    }
+  }
   return makeExpr<Analyzer::DateaddExpr>(
       SQLTypeInfo(kTIMESTAMP, datetime_ti.get_dimension(), 0, false),
       to_dateadd_field(*timeunit_lit->get_constval().stringval),
@@ -995,14 +1039,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateminus(
   const auto rhs = translateScalarRex(rex_operator->getOperand(1));
   const auto rhs_ti = rhs->get_type_info();
   if (rhs_ti.get_type() == kTIMESTAMP || rhs_ti.get_type() == kDATE) {
-    if (datetime_ti.get_dimension() > 0 || rhs_ti.get_dimension() > 0) {
+    if (datetime_ti.is_high_precision_timestamp() ||
+        rhs_ti.is_high_precision_timestamp()) {
       throw std::runtime_error(
-          "Only timestamp(0) is supported for TIMESTAMPDIFF operation.");
+          "High Precision timestamps are not supported for TIMESTAMPDIFF operation. Use "
+          "DATEDIFF.");
     }
     auto bigint_ti = SQLTypeInfo(kBIGINT, false);
     const auto& rex_operator_ti = rex_operator->getType();
     const auto datediff_field =
-        (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) ? dtNANOSECOND : dtMONTH;
+        (rex_operator_ti.get_type() == kINTERVAL_DAY_TIME) ? dtSECOND : dtMONTH;
     auto result =
         makeExpr<Analyzer::DatediffExpr>(bigint_ti, datediff_field, rhs, datetime);
     // multiply 1000 to result since expected result should be in millisecond precision.
@@ -1056,11 +1102,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatediff(
   }
   const auto start = translateScalarRex(rex_function->getOperand(1));
   const auto end = translateScalarRex(rex_function->getOperand(2));
-  return makeExpr<Analyzer::DatediffExpr>(
-      SQLTypeInfo(kBIGINT, false),
-      to_datediff_field(*timeunit_lit->get_constval().stringval),
-      start,
-      end);
+  const auto field = to_datediff_field(*timeunit_lit->get_constval().stringval);
+  return makeExpr<Analyzer::DatediffExpr>(SQLTypeInfo(kBIGINT, false), field, start, end);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatepart(
@@ -1337,8 +1380,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
       rex_function->getName() == std::string("ST_Perimeter") ||
       rex_function->getName() == std::string("ST_Area") ||
       rex_function->getName() == std::string("ST_SRID") ||
-      rex_function->getName() == std::string("MapD_GeoPolyBoundsPtr") ||
-      rex_function->getName() == std::string("MapD_GeoPolyRenderGroup")) {
+      rex_function->getName() == std::string("MapD_GeoPolyBoundsPtr") ||    // deprecated
+      rex_function->getName() == std::string("MapD_GeoPolyRenderGroup") ||  // deprecated
+      rex_function->getName() == std::string("OmniSci_Geo_PolyBoundsPtr") ||
+      rex_function->getName() == std::string("OmniSci_Geo_PolyRenderGroup")) {
     CHECK_EQ(rex_function->size(), size_t(1));
     return translateUnaryGeoFunction(rex_function);
   }
@@ -1351,10 +1396,16 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (rex_function->getName() == std::string("ST_Distance") ||
       rex_function->getName() == std::string("ST_MaxDistance") ||
       rex_function->getName() == std::string("ST_Intersects") ||
+      rex_function->getName() == std::string("ST_Disjoint") ||
       rex_function->getName() == std::string("ST_Contains") ||
       rex_function->getName() == std::string("ST_Within")) {
     CHECK_EQ(rex_function->size(), size_t(2));
     return translateBinaryGeoFunction(rex_function);
+  }
+  if (rex_function->getName() == std::string("ST_DWithin") ||
+      rex_function->getName() == std::string("ST_DFullyWithin")) {
+    CHECK_EQ(rex_function->size(), size_t(3));
+    return translateTernaryGeoFunction(rex_function);
   }
   if (rex_function->getName() == std::string("OFFSET_IN_FRAGMENT")) {
     CHECK_EQ(size_t(0), rex_function->size());
@@ -1385,11 +1436,12 @@ Analyzer::ExpressionPtrVector RelAlgTranslator::translateFunctionArgs(
 QualsConjunctiveForm qual_to_conjunctive_form(
     const std::shared_ptr<Analyzer::Expr> qual_expr) {
   CHECK(qual_expr);
-  const auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual_expr);
+  auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(qual_expr);
   if (!bin_oper) {
     const auto rewritten_qual_expr = rewrite_expr(qual_expr.get());
     return {{}, {rewritten_qual_expr ? rewritten_qual_expr : qual_expr}};
   }
+
   if (bin_oper->get_optype() == kAND) {
     const auto lhs_cf = qual_to_conjunctive_form(bin_oper->get_own_left_operand());
     const auto rhs_cf = qual_to_conjunctive_form(bin_oper->get_own_right_operand());

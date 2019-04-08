@@ -43,7 +43,7 @@ using namespace Planner;
 #define BASE_PATH "./tmp"
 #endif
 
-#define CALCITEPORT 39093
+#define CALCITEPORT 36279
 
 namespace {
 std::unique_ptr<SessionInfo> gsession;
@@ -99,7 +99,9 @@ class SQLTestEnv : public ::testing::Environment {
                    {},
                    g_calcite,
                    !boost::filesystem::exists(system_db_file),
-                   false);
+                   false,
+                   mapd_parms.aggregator,
+                   {});
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
       if (!sys_cat.getMetadataForUser("gtest", user)) {
         sys_cat.createUser("gtest", "test!test!", false);
@@ -114,8 +116,12 @@ class SQLTestEnv : public ::testing::Environment {
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
         data_dir.string(), mapd_parms, false, 0);
     gsession.reset(new SessionInfo(
-        std::make_shared<Catalog_Namespace::Catalog>(
-            base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
+        std::make_shared<Catalog_Namespace::Catalog>(base_path.string(),
+                                                     db,
+                                                     dataMgr,
+                                                     std::vector<LeafHostInfo>{},
+                                                     g_calcite,
+                                                     false),
         user,
         ExecutorDeviceType::GPU,
         ""));
@@ -136,8 +142,8 @@ RootPlan* plan_dml(const string& input_str) {
   Parser::DMLStmt* dml = dynamic_cast<Parser::DMLStmt*>(stmt.get());
   CHECK(dml != nullptr);
   Query query;
-  dml->analyze(gsession->get_catalog(), query);
-  Optimizer optimizer(query, gsession->get_catalog());
+  dml->analyze(gsession->getCatalog(), query);
+  Optimizer optimizer(query, gsession->getCatalog());
   RootPlan* plan = optimizer.optimize();
   return plan;
 }
@@ -151,26 +157,26 @@ TEST(ParseAnalyzePlan, Create) {
                                     "h real, i float, j double, k bigint encoding diff, "
                                     "l text not null encoding dict, m "
                                     "timestamp(0), n time(0), o date);"););
-  ASSERT_TRUE(gsession->get_catalog().getMetadataForTable("fat") != nullptr);
+  ASSERT_TRUE(gsession->getCatalog().getMetadataForTable("fat") != nullptr);
   ASSERT_NO_THROW(
       run_ddl_statement(
           "create table if not exists skinny (a smallint, b int, c bigint);"););
-  ASSERT_TRUE(gsession->get_catalog().getMetadataForTable("skinny") != nullptr);
+  ASSERT_TRUE(gsession->getCatalog().getMetadataForTable("skinny") != nullptr);
   ASSERT_NO_THROW(
       run_ddl_statement(
           "create table if not exists smallfrag (a int, b text, c bigint) with "
           "(fragment_size = 1000, page_size = 512);"););
-  const TableDescriptor* td = gsession->get_catalog().getMetadataForTable("smallfrag");
+  const TableDescriptor* td = gsession->getCatalog().getMetadataForTable("smallfrag");
   EXPECT_TRUE(td->maxFragRows == 1000 && td->fragPageSize == 512);
   ASSERT_NO_THROW(
       run_ddl_statement(
           "create table if not exists testdict (a varchar(100) encoding dict(8), c "
           "text encoding dict);"););
-  td = gsession->get_catalog().getMetadataForTable("testdict");
+  td = gsession->getCatalog().getMetadataForTable("testdict");
   const ColumnDescriptor* cd =
-      gsession->get_catalog().getMetadataForColumn(td->tableId, "a");
+      gsession->getCatalog().getMetadataForColumn(td->tableId, "a");
   const DictDescriptor* dd =
-      gsession->get_catalog().getMetadataForDict(cd->columnType.get_comp_param());
+      gsession->getCatalog().getMetadataForDict(cd->columnType.get_comp_param());
   ASSERT_TRUE(dd != nullptr);
   EXPECT_EQ(dd->dictNBits, 8);
 }
@@ -414,7 +420,6 @@ void drop_views_and_tables() {
   EXPECT_NO_THROW(run_ddl_statement("drop table if exists skinny;"));
   EXPECT_NO_THROW(run_ddl_statement("drop table if exists smallfrag;"));
   EXPECT_NO_THROW(run_ddl_statement("drop table if exists testdict;"));
-  // non-existent table shouldn't throw either (for PR# 1030 to fix issue #1029)
   EXPECT_NO_THROW(run_ddl_statement("drop table if exists foxoxoxo;"));
 }
 
@@ -422,7 +427,15 @@ int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
-  int err = RUN_ALL_TESTS();
+
+  int err{0};
+  try {
+    err = RUN_ALL_TESTS();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
+
   drop_views_and_tables();
+
   return err;
 }

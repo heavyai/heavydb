@@ -110,7 +110,7 @@ public class TestMapDServer {
     TTransport transport = null;
     MapD.Client client = null;
     try {
-      transport = new TSocket("localhost", 9091);
+      transport = new TSocket("localhost", 6274);
       transport.open();
       TProtocol protocol = new TBinaryProtocol(transport);
       client = new MapD.Client(protocol);

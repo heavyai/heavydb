@@ -43,7 +43,7 @@ public class DashboardTest {
   void testUserRoles() throws Exception {
     logger.info("testUserRoles()");
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 9091, "mapd", "mapd", "HyperInteractive");
+            "localhost", 6274, "mapd", "mapd", "HyperInteractive");
 
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER jason (password = 'password', is_super = 'false');");
@@ -55,11 +55,11 @@ public class DashboardTest {
     su.runSql("CREATE DATABASE db1;");
     su.runSql("CREATE DATABASE db2;");
     MapdTestClient dba1 =
-            MapdTestClient.getClient("localhost", 9091, "db1", "bob", "password");
+            MapdTestClient.getClient("localhost", 6274, "db1", "bob", "password");
     MapdTestClient dba2 =
-            MapdTestClient.getClient("localhost", 9091, "db2", "foo", "password");
+            MapdTestClient.getClient("localhost", 6274, "db2", "foo", "password");
     MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 9091, "db2", "dba", "password");
+            MapdTestClient.getClient("localhost", 6274, "db2", "dba", "password");
     MapdAsserts.assertEqual(0, dba1.get_users().size());
     MapdAsserts.assertEqual(0, dba1.get_roles().size());
     MapdAsserts.assertEqual(0, dba2.get_users().size());
@@ -96,7 +96,7 @@ public class DashboardTest {
     logger.info("testDbLevelDashboardPermissions()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 9091, "mapd", "mapd", "HyperInteractive");
+            "localhost", 6274, "mapd", "mapd", "HyperInteractive");
 
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER jason (password = 'password', is_super = 'false');");
@@ -107,11 +107,11 @@ public class DashboardTest {
     su.runSql("GRANT salesDept TO foo;");
 
     MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 9091, "mapd", "dba", "password");
+            MapdTestClient.getClient("localhost", 6274, "mapd", "dba", "password");
     MapdTestClient jason =
-            MapdTestClient.getClient("localhost", 9091, "mapd", "jason", "password");
+            MapdTestClient.getClient("localhost", 6274, "mapd", "jason", "password");
     MapdTestClient foo =
-            MapdTestClient.getClient("localhost", 9091, "mapd", "foo", "password");
+            MapdTestClient.getClient("localhost", 6274, "mapd", "foo", "password");
 
     MapdAsserts.assertEqual(
             0, jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
@@ -171,7 +171,7 @@ public class DashboardTest {
     logger.info("testDashboards()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 9091, "mapd", "mapd", "HyperInteractive");
+            "localhost", 6274, "mapd", "mapd", "HyperInteractive");
 
     List<String> users = su.get_users();
 
@@ -185,13 +185,13 @@ public class DashboardTest {
     su.runSql("GRANT salesDept TO foo;");
 
     MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 9091, "mapd", "dba", "password");
+            MapdTestClient.getClient("localhost", 6274, "mapd", "dba", "password");
     MapdTestClient jason =
-            MapdTestClient.getClient("localhost", 9091, "mapd", "jason", "password");
+            MapdTestClient.getClient("localhost", 6274, "mapd", "jason", "password");
     MapdTestClient bob =
-            MapdTestClient.getClient("localhost", 9091, "mapd", "bob", "password");
+            MapdTestClient.getClient("localhost", 6274, "mapd", "bob", "password");
     MapdTestClient foo =
-            MapdTestClient.getClient("localhost", 9091, "mapd", "foo", "password");
+            MapdTestClient.getClient("localhost", 6274, "mapd", "foo", "password");
 
     su.runSql("GRANT CREATE DASHBOARD ON DATABASE mapd TO jason;");
 

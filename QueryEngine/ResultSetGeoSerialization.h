@@ -24,6 +24,7 @@
 #ifndef QUERYENGINE_RESULTSET_GEOSERIALIZATION_H
 #define QUERYENGINE_RESULTSET_GEOSERIALIZATION_H
 
+#include <Shared/geo_compression.h>
 #include "TargetValue.h"
 
 template <SQLTypes GEO_SOURCE_TYPE>
@@ -58,6 +59,7 @@ namespace {
 template <typename T>
 void unpack_geo_vector(std::vector<T>& output, const int8_t* input_ptr, const size_t sz) {
   auto elems = reinterpret_cast<const T*>(input_ptr);
+  CHECK(elems);
   CHECK_EQ(size_t(0), sz % sizeof(T));
   const size_t num_elems = sz / sizeof(T);
   output.resize(num_elems);
@@ -66,31 +68,17 @@ void unpack_geo_vector(std::vector<T>& output, const int8_t* input_ptr, const si
   }
 }
 
-template <class T>
-T wrap_decompressed_coord(const double val) {
-  return static_cast<T>(val);
-}
-
-template <>
-double wrap_decompressed_coord(const double val) {
-  return val;
-}
-
-// TODO(adb): Move this to a common geo compression file / class
 template <typename T>
 void decompress_geo_coords_geoint32(std::vector<T>& dec,
                                     const int8_t* enc,
                                     const size_t sz) {
   const auto compressed_coords = reinterpret_cast<const int32_t*>(enc);
-  bool x = true;
   dec.reserve(sz / sizeof(int32_t));
-  for (size_t i = 0; i < sz / sizeof(int32_t); i++) {
-    // decompress longitude: -2,147,483,647..2,147,483,647  --->  -180..180
-    // decompress latitude:  -2,147,483,647..2,147,483,647  --->   -90..90
-    double decompressed_coord =
-        (x ? 180.0 : 90.0) * (compressed_coords[i] / 2147483647.0);
-    dec.push_back(wrap_decompressed_coord<T>(decompressed_coord));
-    x = !x;
+  for (size_t i = 0; i < sz / sizeof(int32_t); i += 2) {
+    dec.push_back(
+        Geo_namespace::decompress_longitude_coord_geoint32(compressed_coords[i]));
+    dec.push_back(
+        Geo_namespace::decompress_lattitude_coord_geoint32(compressed_coords[i + 1]));
   }
 }
 

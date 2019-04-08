@@ -47,11 +47,10 @@ class StringNoneEncoder : public Encoder {
 
   ChunkMetadata appendData(int8_t*& srcData,
                            const size_t numAppendElems,
+                           const SQLTypeInfo&,
                            const bool replicating = false) {
-    assert(false);  // should never be called for strings
-    ChunkMetadata chunkMetadata;
-    getMetadata(chunkMetadata);
-    return chunkMetadata;
+    CHECK(false);  // should never be called for strings
+    return ChunkMetadata{};
   }
 
   ChunkMetadata appendData(const std::vector<std::string>* srcData,

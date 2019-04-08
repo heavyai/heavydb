@@ -327,7 +327,7 @@ llvm::Function* query_template_impl(llvm::Module* mod,
 
   LoadInst* row_count = new LoadInst(row_count_ptr, "row_count", false, bb_entry);
   row_count->setAlignment(8);
-
+  row_count->setName("row_count");
   std::vector<Value*> agg_init_val_vec;
   if (!is_estimate_query) {
     for (size_t i = 0; i < aggr_col_count; ++i) {
@@ -626,6 +626,8 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   // Block  .entry
   LoadInst* row_count = new LoadInst(row_count_ptr, "", false, bb_entry);
   row_count->setAlignment(8);
+  row_count->setName("row_count");
+
   LoadInst* max_matched = new LoadInst(max_matched_ptr, "", false, bb_entry);
   max_matched->setAlignment(4);
   auto crt_matched_ptr = new AllocaInst(i32_type, 0, "crt_matched", bb_entry);
@@ -725,24 +727,14 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   Attributes row_process_pal;
   row_process->setAttributes(row_process_pal);
 
-  // Forcing all threads within a warp to be synchronized (Volta only)
+  // Forcing all threads within a warp to be synchronized (Compute >= 7.x)
   if (query_mem_desc.isWarpSyncRequired(device_type)) {
-    if (query_mem_desc.getGpuMemSharing() ==
-        GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
-      // The shared memory path requires __syncthreads to sync all threads within a block,
-      // so __syncwarp can make trouble if not propoerly handled; making sure either all
-      // or none of threads within a warp hit the same barrier.
-      auto func_sync_warp_protected = mod->getFunction("sync_warp_protected");
-      CHECK(func_sync_warp_protected);
-      CallInst::Create(func_sync_warp_protected,
-                       std::vector<llvm::Value*>{pos, row_count},
-                       "",
-                       bb_forbody);
-    } else {
-      auto func_sync_warp = mod->getFunction("sync_warp");
-      CHECK(func_sync_warp);
-      CallInst::Create(func_sync_warp, {}, "", bb_forbody);
-    }
+    auto func_sync_warp_protected = mod->getFunction("sync_warp_protected");
+    CHECK(func_sync_warp_protected);
+    CallInst::Create(func_sync_warp_protected,
+                     std::vector<llvm::Value*>{pos, row_count},
+                     "",
+                     bb_forbody);
   }
 
   BinaryOperator* pos_inc =

@@ -214,6 +214,23 @@ inline void put_scalar(void* ndptr,
                       isnull ? inline_int_null_value<int64_t>()
                              : oval * pow(10, etype.get_scale()));
       break;
+    case kDATE:
+      // For small dates, we store in days but decode in seconds
+      // therefore we have to scale the decoded value in order to
+      // make value storable.
+      // Should be removed when we refactor code to use DateConverterFactory
+      // from TargetValueConverterFactories so that we would
+      // have everything in one place.
+      if (etype.is_date_in_days()) {
+        put_scalar<T>(ndptr,
+                      etype,
+                      get_element_size(etype),
+                      isnull ? inline_int_null_value<int64_t>()
+                             : static_cast<T>(oval / SECSPERDAY));
+      } else {
+        put_scalar<T>(ndptr, etype, get_element_size(etype), oval);
+      }
+      break;
     default:
       if (otype && otype->is_decimal())
         put_scalar<double>(ndptr, etype, decimal_to_double(*otype, oval), col_name);

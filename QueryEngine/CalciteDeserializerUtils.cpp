@@ -76,6 +76,10 @@ ExtractField to_datepart_field(const std::string& field) {
     fieldno = kMICROSECOND;
   } else if (boost::iequals(field, "nanosecond") || boost::iequals(field, "ns")) {
     fieldno = kNANOSECOND;
+  } else if (boost::iequals(field, "weekday") || boost::iequals(field, "dw")) {
+    fieldno = kISODOW;
+  } else if (boost::iequals(field, "quarterday") || boost::iequals(field, "dq")) {
+    fieldno = kQUARTERDAY;
   } else {
     throw std::runtime_error("Unsupported field in DATEPART function: " + field);
   }
@@ -96,6 +100,9 @@ DateaddField to_dateadd_field(const std::string& field) {
   } else if (boost::iequals(field, "day") || boost::iequals(field, "dd") ||
              boost::iequals(field, "d")) {
     fieldno = daDAY;
+  } else if (boost::iequals(field, "week") || boost::iequals(field, "ww") ||
+             boost::iequals(field, "w")) {
+    fieldno = daWEEK;
   } else if (boost::iequals(field, "hour") || boost::iequals(field, "hh")) {
     fieldno = daHOUR;
   } else if (boost::iequals(field, "minute") || boost::iequals(field, "mi") ||
@@ -110,6 +117,10 @@ DateaddField to_dateadd_field(const std::string& field) {
     fieldno = daMICROSECOND;
   } else if (boost::iequals(field, "nanosecond") || boost::iequals(field, "ns")) {
     fieldno = daNANOSECOND;
+  } else if (boost::iequals(field, "weekday") || boost::iequals(field, "dw")) {
+    fieldno = daWEEKDAY;
+  } else if (boost::iequals(field, "decade") || boost::iequals(field, "dc")) {
+    fieldno = daDECADE;
   } else {
     throw std::runtime_error("Unsupported field in DATEADD function: " + field);
   }

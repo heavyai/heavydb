@@ -12,6 +12,7 @@ prepend-path LIBRARY_PATH $root/lib
 prepend-path C_INCLUDE_PATH $root/include
 prepend-path CXX_INCLUDE_PATH $root/include
 prepend-path PATH $root/bin
+prepend-path CMAKE_PREFIX_PATH $root
 
 
 setenv BOOST_ROOT $root

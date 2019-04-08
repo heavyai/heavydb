@@ -1,0 +1,9 @@
+port = 6274
+http-port = 6278
+calcite-port = 6279
+data = "@OMNISCI_DATA@"
+null-div-by-zero = true
+
+[web]
+port = 6273
+frontend = "@OMNISCI_PATH@/frontend"

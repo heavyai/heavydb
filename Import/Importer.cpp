@@ -44,6 +44,7 @@
 #include <vector>
 #include "../QueryEngine/SqlTypesLayout.h"
 #include "../QueryEngine/TypePunning.h"
+#include "../Shared/geo_compression.h"
 #include "../Shared/geo_types.h"
 #include "../Shared/geosupport.h"
 #include "../Shared/import_helpers.h"
@@ -334,6 +335,47 @@ int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti) {
   return NULL;
 }
 
+Datum NullDatum(SQLTypeInfo& ti) {
+  Datum d;
+  const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+  switch (type) {
+    case kBOOLEAN:
+      d.boolval = inline_fixed_encoding_null_val(ti);
+      break;
+    case kBIGINT:
+      d.bigintval = inline_fixed_encoding_null_val(ti);
+      break;
+    case kINT:
+      d.intval = inline_fixed_encoding_null_val(ti);
+      break;
+    case kSMALLINT:
+      d.smallintval = inline_fixed_encoding_null_val(ti);
+      break;
+    case kTINYINT:
+      d.tinyintval = inline_fixed_encoding_null_val(ti);
+      break;
+    case kFLOAT:
+      d.floatval = NULL_FLOAT;
+      break;
+    case kDOUBLE:
+      d.doubleval = NULL_DOUBLE;
+      break;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      d.timeval = inline_fixed_encoding_null_val(ti);
+      break;
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON:
+      throw std::runtime_error("Internal error: geometry type in NullDatum.");
+    default:
+      throw std::runtime_error("Internal error: invalid type in NullDatum.");
+  }
+  return d;
+}
+
 ArrayDatum StringToArray(const std::string& s,
                          const SQLTypeInfo& ti,
                          const CopyParams& copy_params) {
@@ -349,15 +391,25 @@ ArrayDatum StringToArray(const std::string& s,
     elem_strs.push_back(s.substr(last, i - last));
     last = i + 1;
   }
-  if (last + 1 < s.size()) {
+  if (last + 1 <= s.size()) {
     elem_strs.push_back(s.substr(last, s.size() - 1 - last));
   }
   if (!elem_ti.is_string()) {
     size_t len = elem_strs.size() * elem_ti.get_size();
     int8_t* buf = (int8_t*)checked_malloc(len);
     int8_t* p = buf;
-    for (auto& e : elem_strs) {
-      Datum d = StringToDatum(e, elem_ti);
+    for (auto& es : elem_strs) {
+      auto e = trim_space(es.c_str(), es.length());
+      bool is_null = (e == copy_params.null_str);
+      if (!elem_ti.is_string() && e == "") {
+        is_null = true;
+      }
+      if (elem_ti.is_number() || elem_ti.is_time()) {
+        if (!isdigit(e[0]) && e[0] != '-') {
+          is_null = true;
+        }
+      }
+      Datum d = is_null ? NullDatum(elem_ti) : StringToDatum(e, elem_ti);
       p = appendDatum(p, d, elem_ti);
     }
     return ArrayDatum(len, buf, len == 0);
@@ -653,9 +705,9 @@ void TypedImportBuffer::pop_value() {
     case kCHAR:
       string_buffer_->pop_back();
       break;
+    case kDATE:
     case kTIME:
     case kTIMESTAMP:
-    case kDATE:
       time_buffer_->pop_back();
       break;
     case kARRAY:
@@ -886,6 +938,42 @@ void append_arrow_date(const ColumnDescriptor* cd,
   }
 }
 
+void append_arrow_date_i32(const ColumnDescriptor* cd,
+                           const Array& values,
+                           std::vector<time_t>* buffer) {
+  const time_t null_sentinel = inline_fixed_encoding_null_val(cd->columnType);
+  if (values.type_id() == Type::DATE32) {
+    const auto& typed_values = static_cast<const Date32Array&>(values);
+
+    buffer->reserve(typed_values.length());
+    const int32_t* raw_values = typed_values.raw_values();
+
+    for (int64_t i = 0; i < typed_values.length(); i++) {
+      if (typed_values.IsNull(i)) {
+        buffer->push_back(null_sentinel);
+      } else {
+        buffer->push_back(static_cast<time_t>(raw_values[i]));
+      }
+    }
+  } else if (values.type_id() == Type::DATE64) {
+    const auto& typed_values = static_cast<const Date64Array&>(values);
+
+    buffer->reserve(typed_values.length());
+    const int64_t* raw_values = typed_values.raw_values();
+
+    // Convert from milliseconds since UNIX epoch into days since UNIX epoch
+    for (int64_t i = 0; i < typed_values.length(); i++) {
+      if (typed_values.IsNull(i)) {
+        buffer->push_back(null_sentinel);
+      } else {
+        buffer->push_back(static_cast<int32_t>((raw_values[i] / 1000) / kSecondsInDay));
+      }
+    }
+  } else {
+    ARROW_THROW_IF(true, "Column was not date32 or date64");
+  }
+}
+
 void append_arrow_binary(const ColumnDescriptor* cd,
                          const Array& values,
                          std::vector<std::string>* buffer) {
@@ -959,6 +1047,10 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
       append_arrow_timestamp(cd, col, time_buffer_);
       break;
     case kDATE:
+      if (cd->columnType.get_compression() == kENCODING_DATE_IN_DAYS) {
+        append_arrow_date_i32(cd, col, time_buffer_);
+        break;
+      }
       append_arrow_date(cd, col, time_buffer_);
       break;
     case kARRAY:
@@ -1090,6 +1182,22 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
           time_buffer_->push_back(inline_fixed_encoding_null_val(cd->columnType));
         } else {
           time_buffer_->push_back((time_t)col.data.int_col[i]);
+        }
+      }
+      break;
+    }
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON: {
+      dataSize = col.data.str_col.size();
+      geo_string_buffer_->reserve(dataSize);
+      for (size_t i = 0; i < dataSize; i++) {
+        if (col.nulls[i]) {
+          // TODO: add support for NULL geo
+          geo_string_buffer_->push_back(std::string());
+        } else {
+          geo_string_buffer_->push_back(col.data.str_col[i]);
         }
       }
       break;
@@ -1249,7 +1357,8 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
                 addArray(ArrayDatum(0, NULL, true));
               } else {
                 size_t len = col.data.arr_col[i].data.int_col.size();
-                size_t byteSize = len * sizeof(time_t);
+                size_t byteWidth = sizeof(time_t);
+                size_t byteSize = len * byteWidth;
                 int8_t* buf = (int8_t*)checked_malloc(len * byteSize);
                 int8_t* p = buf;
                 for (size_t j = 0; j < len; ++j) {
@@ -1368,9 +1477,9 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     }
     case kTIME:
     case kTIMESTAMP:
-    case kDATE:
+    case kDATE: {
       if (!is_null) {
-        addTime((time_t)datum.val.int_val);
+        addTime(datum.val.int_val);
       } else {
         if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
@@ -1378,6 +1487,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         addTime(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
+    }
     case kARRAY:
       if (is_null && cd->columnType.get_notnull()) {
         throw std::runtime_error("NULL for column " + cd->columnName);
@@ -1446,11 +1556,8 @@ bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
 
 uint64_t compress_coord(double coord, const SQLTypeInfo& ti, bool x) {
   if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
-    // compress longitude: -180..180  --->  -2,147,483,647..2,147,483,647
-    // compress latitude: -90..90  --->  -2,147,483,647..2,147,483,647
-    int32_t compressed_coord =
-        static_cast<int32_t>(coord * (2147483647.0 / (x ? 180.0 : 90.0)));
-    return static_cast<uint64_t>(*reinterpret_cast<uint32_t*>(&compressed_coord));
+    return x ? Geo_namespace::compress_longitude_coord_geoint32(coord)
+             : Geo_namespace::compress_lattitude_coord_geoint32(coord);
   }
   return *reinterpret_cast<uint64_t*>(may_alias_ptr(&coord));
 }
@@ -1571,6 +1678,116 @@ void Importer::set_geo_physical_import_buffer(
     td_render_group.is_null = false;
     import_buffers[col_idx++]->add_value(
         cd_render_group, td_render_group, false, replicate_count);
+  }
+}
+
+void Importer::set_geo_physical_import_buffer_columnar(
+    const Catalog_Namespace::Catalog& catalog,
+    const ColumnDescriptor* cd,
+    std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+    size_t& col_idx,
+    std::vector<std::vector<double>>& coords_column,
+    std::vector<std::vector<double>>& bounds_column,
+    std::vector<std::vector<int>>& ring_sizes_column,
+    std::vector<std::vector<int>>& poly_rings_column,
+    int render_group,
+    const int64_t replicate_count) {
+  const auto col_ti = cd->columnType;
+  const auto col_type = col_ti.get_type();
+  auto columnId = cd->columnId;
+
+  auto coords_row_count = coords_column.size();
+  auto cd_coords = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+  for (auto coords : coords_column) {
+    std::vector<TDatum> td_coords_data;
+    std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
+    for (auto cc : compressed_coords) {
+      TDatum td_byte;
+      td_byte.val.int_val = cc;
+      td_coords_data.push_back(td_byte);
+    }
+    TDatum tdd_coords;
+    tdd_coords.val.arr_val = td_coords_data;
+    tdd_coords.is_null = false;
+    import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false, replicate_count);
+  }
+  col_idx++;
+
+  if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+    if (ring_sizes_column.size() != coords_row_count) {
+      CHECK(false) << "Geometry import columnar: ring sizes column size mismatch";
+    }
+    // Create ring_sizes array value and add it to the physical column
+    for (auto ring_sizes : ring_sizes_column) {
+      auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+      std::vector<TDatum> td_ring_sizes;
+      for (auto ring_size : ring_sizes) {
+        TDatum td_ring_size;
+        td_ring_size.val.int_val = ring_size;
+        td_ring_sizes.push_back(td_ring_size);
+      }
+      TDatum tdd_ring_sizes;
+      tdd_ring_sizes.val.arr_val = td_ring_sizes;
+      tdd_ring_sizes.is_null = false;
+      import_buffers[col_idx]->add_value(
+          cd_ring_sizes, tdd_ring_sizes, false, replicate_count);
+    }
+    col_idx++;
+  }
+
+  if (col_type == kMULTIPOLYGON) {
+    if (poly_rings_column.size() != coords_row_count) {
+      CHECK(false) << "Geometry import columnar: poly rings column size mismatch";
+    }
+    // Create poly_rings array value and add it to the physical column
+    for (auto poly_rings : poly_rings_column) {
+      auto cd_poly_rings = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+      std::vector<TDatum> td_poly_rings;
+      for (auto num_rings : poly_rings) {
+        TDatum td_num_rings;
+        td_num_rings.val.int_val = num_rings;
+        td_poly_rings.push_back(td_num_rings);
+      }
+      TDatum tdd_poly_rings;
+      tdd_poly_rings.val.arr_val = td_poly_rings;
+      tdd_poly_rings.is_null = false;
+      import_buffers[col_idx]->add_value(
+          cd_poly_rings, tdd_poly_rings, false, replicate_count);
+    }
+    col_idx++;
+  }
+
+  if (col_type == kLINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+    if (bounds_column.size() != coords_row_count) {
+      CHECK(false) << "Geometry import columnar: bounds column size mismatch";
+    }
+    for (auto bounds : bounds_column) {
+      auto cd_bounds = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+      std::vector<TDatum> td_bounds_data;
+      for (auto b : bounds) {
+        TDatum td_double;
+        td_double.val.real_val = b;
+        td_bounds_data.push_back(td_double);
+      }
+      TDatum tdd_bounds;
+      tdd_bounds.val.arr_val = td_bounds_data;
+      tdd_bounds.is_null = false;
+      import_buffers[col_idx]->add_value(cd_bounds, tdd_bounds, false, replicate_count);
+    }
+    col_idx++;
+  }
+
+  if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+    // Create render_group value and add it to the physical column
+    auto cd_render_group = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+    TDatum td_render_group;
+    td_render_group.val.int_val = render_group;
+    td_render_group.is_null = false;
+    for (decltype(coords_row_count) i = 0; i < coords_row_count; i++) {
+      import_buffers[col_idx]->add_value(
+          cd_render_group, td_render_group, false, replicate_count);
+    }
+    col_idx++;
   }
 }
 
@@ -1765,7 +1982,7 @@ static ImportStatus import_thread_delimited(
                 }
               }
 
-              Importer::set_geo_physical_import_buffer(importer->get_catalog(),
+              Importer::set_geo_physical_import_buffer(importer->getCatalog(),
                                                        cd,
                                                        import_buffers,
                                                        col_idx,
@@ -2295,6 +2512,67 @@ bool Loader::loadImpl(
   return loadToShard(import_buffers, row_count, table_desc, checkpoint);
 }
 
+std::vector<DataBlockPtr> Loader::get_data_block_pointers(
+    const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers) {
+  std::vector<DataBlockPtr> result(import_buffers.size());
+  std::vector<std::pair<const size_t, std::future<int8_t*>>>
+      encoded_data_block_ptrs_futures;
+  // make all async calls to string dictionary here and then continue execution
+  for (size_t buf_idx = 0; buf_idx < import_buffers.size(); buf_idx++) {
+    if (import_buffers[buf_idx]->getTypeInfo().is_string() &&
+        import_buffers[buf_idx]->getTypeInfo().get_compression() != kENCODING_NONE) {
+      auto string_payload_ptr = import_buffers[buf_idx]->getStringBuffer();
+      CHECK_EQ(kENCODING_DICT, import_buffers[buf_idx]->getTypeInfo().get_compression());
+
+      encoded_data_block_ptrs_futures.emplace_back(std::make_pair(
+          buf_idx,
+          std::async(std::launch::async, [buf_idx, &import_buffers, string_payload_ptr] {
+            import_buffers[buf_idx]->addDictEncodedString(*string_payload_ptr);
+            return import_buffers[buf_idx]->getStringDictBuffer();
+          })));
+    }
+  }
+
+  for (size_t buf_idx = 0; buf_idx < import_buffers.size(); buf_idx++) {
+    DataBlockPtr p;
+    if (import_buffers[buf_idx]->getTypeInfo().is_number() ||
+        import_buffers[buf_idx]->getTypeInfo().is_time() ||
+        import_buffers[buf_idx]->getTypeInfo().get_type() == kBOOLEAN) {
+      p.numbersPtr = import_buffers[buf_idx]->getAsBytes();
+    } else if (import_buffers[buf_idx]->getTypeInfo().is_string()) {
+      auto string_payload_ptr = import_buffers[buf_idx]->getStringBuffer();
+      if (import_buffers[buf_idx]->getTypeInfo().get_compression() == kENCODING_NONE) {
+        p.stringsPtr = string_payload_ptr;
+      } else {
+        // This condition means we have column which is ENCODED string. We already made
+        // Async request to gain the encoded integer values above so we should skip this
+        // iteration and continue.
+        continue;
+      }
+    } else if (import_buffers[buf_idx]->getTypeInfo().is_geometry()) {
+      auto geo_payload_ptr = import_buffers[buf_idx]->getGeoStringBuffer();
+      p.stringsPtr = geo_payload_ptr;
+    } else {
+      CHECK(import_buffers[buf_idx]->getTypeInfo().get_type() == kARRAY);
+      if (IS_STRING(import_buffers[buf_idx]->getTypeInfo().get_subtype())) {
+        CHECK(import_buffers[buf_idx]->getTypeInfo().get_compression() == kENCODING_DICT);
+        import_buffers[buf_idx]->addDictEncodedStringArray(
+            *import_buffers[buf_idx]->getStringArrayBuffer());
+        p.arraysPtr = import_buffers[buf_idx]->getStringArrayDictBuffer();
+      } else {
+        p.arraysPtr = import_buffers[buf_idx]->getArrayBuffer();
+      }
+    }
+    result[buf_idx] = p;
+  }
+
+  // wait for the async requests we made for string dictionary
+  for (auto& encoded_ptr_future : encoded_data_block_ptrs_futures) {
+    result[encoded_ptr_future.first].numbersPtr = encoded_ptr_future.second.get();
+  }
+  return result;
+}
+
 bool Loader::loadToShard(
     const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
     size_t row_count,
@@ -2313,35 +2591,11 @@ bool Loader::loadToShard(
   Fragmenter_Namespace::InsertData ins_data(insert_data);
   ins_data.numRows = row_count;
   bool success = true;
-  for (const auto& import_buff : import_buffers) {
-    DataBlockPtr p;
-    if (import_buff->getTypeInfo().is_number() || import_buff->getTypeInfo().is_time() ||
-        import_buff->getTypeInfo().get_type() == kBOOLEAN) {
-      p.numbersPtr = import_buff->getAsBytes();
-    } else if (import_buff->getTypeInfo().is_string()) {
-      auto string_payload_ptr = import_buff->getStringBuffer();
-      if (import_buff->getTypeInfo().get_compression() == kENCODING_NONE) {
-        p.stringsPtr = string_payload_ptr;
-      } else {
-        CHECK_EQ(kENCODING_DICT, import_buff->getTypeInfo().get_compression());
-        import_buff->addDictEncodedString(*string_payload_ptr);
-        p.numbersPtr = import_buff->getStringDictBuffer();
-      }
-    } else if (import_buff->getTypeInfo().is_geometry()) {
-      auto geo_payload_ptr = import_buff->getGeoStringBuffer();
-      p.stringsPtr = geo_payload_ptr;
-    } else {
-      CHECK(import_buff->getTypeInfo().get_type() == kARRAY);
-      if (IS_STRING(import_buff->getTypeInfo().get_subtype())) {
-        CHECK(import_buff->getTypeInfo().get_compression() == kENCODING_DICT);
-        import_buff->addDictEncodedStringArray(*import_buff->getStringArrayBuffer());
-        p.arraysPtr = import_buff->getStringArrayDictBuffer();
-      } else {
-        p.arraysPtr = import_buff->getArrayBuffer();
-      }
-    }
-    ins_data.data.push_back(p);
-    ins_data.bypass.push_back(0 == import_buff->get_replicate_count());
+
+  ins_data.data = get_data_block_pointers(import_buffers);
+
+  for (const auto& import_buffer : import_buffers) {
+    ins_data.bypass.push_back(0 == import_buffer->get_replicate_count());
   }
   {
     try {
@@ -2359,7 +2613,7 @@ bool Loader::loadToShard(
 }
 
 void Loader::init() {
-  insert_data.databaseId = catalog.get_currentDB().dbId;
+  insert_data.databaseId = catalog.getCurrentDB().dbId;
   insert_data.tableId = table_desc->tableId;
   for (auto cd : column_descs) {
     insert_data.columnIds.push_back(cd->columnId);
@@ -2765,6 +3019,17 @@ ImportStatus DataStreamSink::archivePlumber() {
     file_paths.push_back(file_path);
   }
 
+  // sum up sizes of all local files -- only for local files. if
+  // file_path is a s3 url, sizes will be obtained via S3Archive.
+  for (const auto& file_path : file_paths) {
+    boost::filesystem::path boost_file_path{file_path};
+    boost::system::error_code ec;
+    const auto filesize = boost::filesystem::file_size(boost_file_path, ec);
+    if (!ec) {
+      total_file_size += filesize;
+    }
+  }
+
   // s3 parquet goes different route because the files do not use libarchive
   // but parquet api, and they need to landed like .7z files.
   //
@@ -2901,6 +3166,7 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
                                       copy_params.s3_region,
                                       copy_params.plain_text));
           us3arch->init_for_read();
+          total_file_size += us3arch->get_total_file_size();
           // not land all files here but one by one in following iterations
           for (const auto& objkey : us3arch->get_objkeys()) {
             file_paths.emplace_back(std::string(S3_objkey_url_scheme) + "://" + objkey);
@@ -2940,14 +3206,26 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
         // and uncompressed by libarchive into a byte stream (in csv) for the pipe
         const void* buf;
         size_t size;
-        int64_t offset;
         bool just_saw_archive_header;
         bool is_detecting = nullptr != dynamic_cast<Detector*>(this);
         bool first_text_header_skipped = false;
         // start reading uncompressed bytes of this archive from libarchive
         // note! this archive may contain more than one files!
+        file_offsets.push_back(0);
         while (!stop && !!(just_saw_archive_header = arch.read_next_header())) {
-          while (!stop && arch.read_data_block(&buf, &size, &offset)) {
+          bool insert_line_delim_after_this_file = false;
+          while (!stop) {
+            int64_t offset{-1};
+            auto ok = arch.read_data_block(&buf, &size, &offset);
+            // can't use (uncompressed) size, so track (max) file offset.
+            // also we want to capture offset even on e.o.f.
+            if (offset > 0) {
+              std::unique_lock<std::mutex> lock(file_offsets_mutex);
+              file_offsets.back() = offset;
+            }
+            if (!ok) {
+              break;
+            }
             // one subtle point here is now we concatenate all files
             // to a single FILE stream with which we call importDelimited
             // only once. this would make it misunderstand that only one
@@ -2975,24 +3253,65 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
             // loop reading till no bytes left, otherwise the annoying `failed to write
             // pipe: Success`...
             if (size2 > 0) {
-              for (int nread = 0, nleft = size2; nleft > 0;
-                   nleft -= (nread > 0 ? nread : 0)) {
-                nread = write(fd[1], buf2, nleft);
-                if (nread == nleft) {
-                  break;  // done
+              int nremaining = size2;
+              while (nremaining > 0) {
+                // try to write the entire remainder of the buffer to the pipe
+                int nwritten = write(fd[1], buf2, nremaining);
+                // how did we do?
+                if (nwritten < 0) {
+                  // something bad happened
+                  if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
+                    // ignore these, assume nothing written, try again
+                    nwritten = 0;
+                  } else {
+                    // a real error
+                    throw std::runtime_error(
+                        std::string("failed or interrupted write to pipe: ") +
+                        strerror(errno));
+                  }
+                } else if (nwritten == nremaining) {
+                  // we wrote everything; we're done
+                  break;
                 }
+                // only wrote some (or nothing), try again
+                nremaining -= nwritten;
+                buf2 += nwritten;
                 // no exception when too many rejected
+                // @simon.eves how would this get set? from the other thread? mutex
+                // needed?
                 if (import_status.load_truncated) {
                   stop = true;
                   break;
                 }
-                // not to overwrite original error
-                if (nread < 0 &&
-                    !(errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) {
+              }
+              // check that this file (buf for size) ended with a line delim
+              if (size > 0) {
+                const char* plast = static_cast<const char*>(buf) + (size - 1);
+                insert_line_delim_after_this_file = (*plast != copy_params.line_delim);
+              }
+            }
+          }
+          // if that file didn't end with a line delim, we insert one here to terminate
+          // that file's stream use a loop for the same reason as above
+          if (insert_line_delim_after_this_file) {
+            while (true) {
+              // write the delim char to the pipe
+              int nwritten = write(fd[1], &copy_params.line_delim, 1);
+              // how did we do?
+              if (nwritten < 0) {
+                // something bad happened
+                if (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK) {
+                  // ignore these, assume nothing written, try again
+                  nwritten = 0;
+                } else {
+                  // a real error
                   throw std::runtime_error(
                       std::string("failed or interrupted write to pipe: ") +
                       strerror(errno));
                 }
+              } else if (nwritten == 1) {
+                // we wrote it; we're done
+                break;
               }
             }
           }
@@ -3085,7 +3404,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  auto columnDescriptors = loader->get_catalog().getAllColumnMetadataForTable(
+  auto columnDescriptors = loader->getCatalog().getAllColumnMetadataForTable(
       loader->get_table_desc()->tableId, false, false, false);
   for (auto cd : columnDescriptors) {
     SQLTypes ct = cd->columnType.get_type();
@@ -3096,7 +3415,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     }
   }
 
-  ChunkKey chunkKey = {loader->get_catalog().get_currentDB().dbId,
+  ChunkKey chunkKey = {loader->getCatalog().getCurrentDB().dbId,
                        loader->get_table_desc()->tableId};
   {
     std::list<std::future<ImportStatus>> threads;
@@ -3182,15 +3501,28 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
           if (p.wait_for(span) == std::future_status::ready) {
             auto ret_import_status = p.get();
             import_status += ret_import_status;
-            import_status.rows_estimated =
-                ((float)file_size / current_pos) * import_status.rows_completed;
+            // sum up current total file offsets
+            size_t total_file_offset{0};
+            if (decompressed) {
+              std::unique_lock<std::mutex> lock(file_offsets_mutex);
+              for (const auto file_offset : file_offsets) {
+                total_file_offset += file_offset;
+              }
+            }
+            // estimate number of rows per current total file offset
+            if (decompressed ? total_file_offset : current_pos) {
+              import_status.rows_estimated =
+                  (decompressed ? (float)total_file_size / total_file_offset
+                                : (float)file_size / current_pos) *
+                  import_status.rows_completed;
+            }
+            VLOG(3) << "rows_completed " << import_status.rows_completed
+                    << ", rows_estimated " << import_status.rows_estimated
+                    << ", total_file_size " << total_file_size << ", total_file_offset "
+                    << total_file_offset;
             set_import_status(import_id, import_status);
-
             // recall thread_id for reuse
             stack_thread_ids.push(ret_import_status.thread_id);
-            // LOG(INFO) << " stack_thread_ids.push " << ret_import_status.thread_id <<
-            // std::endl;
-
             threads.erase(it++);
             ++nready;
           } else {
@@ -3273,18 +3605,18 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
 void Loader::checkpoint() {
   if (get_table_desc()->persistenceLevel ==
       Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
-    get_catalog().checkpoint(get_table_desc()->tableId);
+    getCatalog().checkpoint(get_table_desc()->tableId);
   }
 }
 
 int32_t Loader::getTableEpoch() {
-  return get_catalog().getTableEpoch(get_catalog().get_currentDB().dbId,
-                                     get_table_desc()->tableId);
+  return getCatalog().getTableEpoch(getCatalog().getCurrentDB().dbId,
+                                    get_table_desc()->tableId);
 }
 
 void Loader::setTableEpoch(int32_t start_epoch) {
-  get_catalog().setTableEpoch(
-      get_catalog().get_currentDB().dbId, get_table_desc()->tableId, start_epoch);
+  getCatalog().setTableEpoch(
+      getCatalog().getCurrentDB().dbId, get_table_desc()->tableId, start_epoch);
 }
 
 void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {
@@ -3828,7 +4160,7 @@ ImportStatus Importer::importGDAL(
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  auto columnDescriptors = loader->get_catalog().getAllColumnMetadataForTable(
+  auto columnDescriptors = loader->getCatalog().getAllColumnMetadataForTable(
       loader->get_table_desc()->tableId, false, false, false);
   for (auto cd : columnDescriptors) {
     SQLTypes ct = cd->columnType.get_type();
@@ -4023,7 +4355,7 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(
   auto seedTimer = timer_start();
 
   // get the table descriptor
-  const auto& cat = loader->get_catalog();
+  const auto& cat = loader->getCatalog();
   const std::string& tableName = loader->get_table_desc()->tableName;
   const auto td = cat.getMetadataForTable(tableName);
   CHECK(td);
@@ -4212,7 +4544,7 @@ void ImportDriver::import_geo_table(const std::string& file_path,
     cd.columnName = col_name_sanitized;
   }
 
-  auto& cat = session_->get_catalog();
+  auto& cat = session_->getCatalog();
 
   if (create_table) {
     const auto td = cat.getMetadataForTable(table_name);

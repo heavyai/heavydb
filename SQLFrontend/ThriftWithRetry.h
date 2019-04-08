@@ -15,7 +15,7 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
   int max_reconnect = 4;
   int con_timeout_base = 1;
   if (try_count > max_reconnect) {
-    std::cerr << "Cannot connect to MapD Server." << std::endl;
+    std::cerr << "Cannot connect to OmniSci Server." << std::endl;
     return false;
   }
   try {
@@ -23,6 +23,9 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
       case kCONNECT:
         context.client.connect(
             context.session, context.user_name, context.passwd, context.db_name);
+        context.client.get_session_info(context.session_info, context.session);
+        context.user_name = context.session_info.user;
+        context.db_name = context.session_info.database;
         break;
       case kDISCONNECT:
         context.client.disconnect(context.session);
@@ -143,7 +146,10 @@ bool thrift_with_retry(SERVICE_ENUM which_service,
     std::cerr << e.error_msg << std::endl;
     return false;
   } catch (TException& te) {
+    std::cerr << "Thrift error: " << te.what() << std::endl;
     try {
+      std::cerr << "Thrift connection error: " << te.what() << std::endl;
+      std::cerr << "Retrying connection" << std::endl;
       context.transport.open();
       if (which_service == kDISCONNECT)
         return false;

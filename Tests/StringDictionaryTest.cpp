@@ -87,7 +87,14 @@ TEST(StringDictionary, RecoverMany) {
 }
 
 int main(int argc, char** argv) {
+  google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
-  auto err = RUN_ALL_TESTS();
+
+  int err{0};
+  try {
+    err = RUN_ALL_TESTS();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
   return err;
 }

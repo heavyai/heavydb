@@ -24,15 +24,19 @@ static std::set<std::string> reserved_keywords{
 
     // MapD reserved keywords
 
+    "ACCESS",
     "ADD",  // legacy
     "AMMSC",
     "ASC",
     "CONTINUE",
     "COPY",
+    "DASHBOARD",
     "DATABASE",
     "DATETIME",
     "DATE_TRUNC",
     "DESC",
+    "EDIT",
+    "EDITOR",
     "FIRST",
     "FOUND",
     "GEOGRAPHY",  // geo type
@@ -54,6 +58,7 @@ static std::set<std::string> reserved_keywords{
     "ROLE",   // permissions
     "ROWID",  // hidden column name
     "SCHEMA",
+    "SQL",
     "TEMPORARY",  // in-memory tables
     "TEXT",
     "VIEW",
@@ -277,6 +282,7 @@ static std::set<std::string> reserved_keywords{
     "ONE",
     "ONLY",
     "OPEN",
+    "OPTIMIZE",
     "OR",
     "ORDER",
     "OUT",

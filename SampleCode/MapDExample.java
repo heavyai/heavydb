@@ -53,8 +53,8 @@ java -cp
 MapDExample
 
 Connection samples:
-HTTP client - get_client('http://test.mapd.com:9091', null, true)
-Binary protocol - get_client('locahost', 9091, false)
+HTTP client - get_client('http://test.mapd.com:6274', null, true)
+Binary protocol - get_client('locahost', 6274, false)
 
 */
 
@@ -63,8 +63,8 @@ public class MapDExample {
     String db_name = "mapd";
     String user_name = "mapd";
     String passwd = "HyperInteractive";
-    String hostname = "http://test.mapd.com:9091";
-    int portno = 9091;
+    String hostname = "http://test.mapd.com:6274";
+    int portno = 6274;
     MapD.Client client;
     int session;
     String query;

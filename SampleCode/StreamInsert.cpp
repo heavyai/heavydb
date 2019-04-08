@@ -112,7 +112,7 @@ void createConnection(ConnectionDetails con) {
   try {
     mytransport->open();  // open transport
     client->connect(
-        session, con.user_name, con.passwd, con.db_name);  // connect to mapd_server
+        session, con.user_name, con.passwd, con.db_name);  // connect to omnisci_server
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
@@ -122,7 +122,7 @@ void createConnection(ConnectionDetails con) {
 
 void closeConnection() {
   try {
-    client->disconnect(session);  // disconnect from mapd_server
+    client->disconnect(session);  // disconnect from omnisci_server
     mytransport->close();         // close transport
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
@@ -317,7 +317,7 @@ void stream_insert(
 
 int main(int argc, char** argv) {
   std::string server_host("localhost");  // default to localhost
-  int port = 9091;                       // default port number
+  int port = 6274;                       // default port number
   std::string table_name;
   std::string db_name;
   std::string user_name;
@@ -346,9 +346,9 @@ int main(int argc, char** argv) {
       "passwd,p", po::value<std::string>(&passwd)->required(), "User Password");
   desc.add_options()("host",
                      po::value<std::string>(&server_host)->default_value(server_host),
-                     "MapD Server Hostname");
+                     "OmniSci Server Hostname");
   desc.add_options()(
-      "port", po::value<int>(&port)->default_value(port), "MapD Server Port Number");
+      "port", po::value<int>(&port)->default_value(port), "OmniSci Server Port Number");
   desc.add_options()("delim",
                      po::value<std::string>(&delim_str)->default_value(delim_str),
                      "Field delimiter");

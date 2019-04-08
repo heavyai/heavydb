@@ -23,17 +23,25 @@
 #include <tuple>
 #include <utility>
 
+#include "ConstExprLib.h"
+#include "sqltypes.h"
+
 namespace Experimental {
 
 struct UncapturedMetaType {};
 struct UncapturedMetaTypeClass {};
 
-enum MetaTypeClassifications { Geometry, Array };
+enum MetaTypeClassifications { Geometry, Array, String };
+
+template <typename T>
+struct MetaSwitchTraits {
+  static auto getType(T const& t) { return t; }
+};
 
 template <MetaTypeClassifications T>
 struct MetaTypeClassDeterminant {
   template <typename SQL_TYPE_INFO>
-  static auto isTargetClass(SQL_TYPE_INFO const& s) -> bool {
+  static auto isTargetClass(SQL_TYPE_INFO const& s) {
     return false;
   }
 };
@@ -41,22 +49,36 @@ struct MetaTypeClassDeterminant {
 template <>
 struct MetaTypeClassDeterminant<Geometry> {
   template <typename SQL_TYPE_INFO>
-  static auto isTargetClass(SQL_TYPE_INFO const& s) -> bool {
+  static auto isTargetClass(SQL_TYPE_INFO const& s) {
     return s.is_geometry();
+  }
+};
+
+template <>
+struct MetaTypeClassDeterminant<String> {
+  template <typename SQL_TYPE_INFO>
+  static auto isTargetClass(SQL_TYPE_INFO const& s) {
+    return s.is_string();
   }
 };
 
 template <>
 struct MetaTypeClassDeterminant<Array> {
   template <typename SQL_TYPE_INFO>
-  static auto isTargetClass(SQL_TYPE_INFO const& s) -> bool {
+  static auto isTargetClass(SQL_TYPE_INFO const& s) {
     return s.is_array();
   }
 };
 
-template <SQLTypes T>
+template <>
+struct MetaSwitchTraits<SQLTypeInfo> {
+  static auto getType(SQLTypeInfo const& s) { return s.get_type(); }
+};
+
+template <typename T, T VALUE>
 struct MetaType {
-  static SQLTypes const sql_type = T;
+  using ResolvedType = T;
+  static T const resolved_value = VALUE;
 };
 
 template <MetaTypeClassifications T>
@@ -70,53 +92,56 @@ using MetaTypeOptional = boost::optional<T>;  // Switch after C++17
 using UncapturedMetaTypeOptional = MetaTypeOptional<UncapturedMetaType>;
 using UncapturedMetaTypeClassOptional = MetaTypeOptional<UncapturedMetaTypeClass>;
 
-template <SQLTypes T>
-using CapturedMetaTypeOptional = MetaTypeOptional<MetaType<T>>;
+template <typename T, T VALUE>
+using CapturedMetaTypeOptional = MetaTypeOptional<MetaType<T, VALUE>>;
 
 template <MetaTypeClassifications T>
 using CapturedMetaTypeClassOptional = MetaTypeOptional<MetaTypeClass<T>>;
 
-template <SQLTypes... TYPE_PACK>
+template <typename T, T... VALUES_PACK>
 class MetaTypeAny : public UncapturedMetaTypeOptional,
-                    public CapturedMetaTypeOptional<TYPE_PACK>... {};
+                    public CapturedMetaTypeOptional<T, VALUES_PACK>... {};
 
 template <MetaTypeClassifications... CLASSIFICATIONS_PACK>
 class MetaTypeClassAny : public UncapturedMetaTypeClassOptional,
                          public CapturedMetaTypeClassOptional<CLASSIFICATIONS_PACK>... {};
 
-template <SQLTypes... TYPE_PACK>
+template <typename T, T... VALUES_PACK>
 class MetaTypeFactory {
  public:
-  using MetaTypeContainer = MetaTypeAny<TYPE_PACK...>;
+  using ResolvedType = T;
+  using MetaTypeContainer = MetaTypeAny<ResolvedType, VALUES_PACK...>;
 
-  template <typename SQL_TYPE_INFO>
-  static auto getMetaType(SQL_TYPE_INFO const& sql_type_info) -> MetaTypeContainer {
+  template <typename SOURCE_TYPE>
+  static auto getMetaType(SOURCE_TYPE&& source_type) {
     MetaTypeContainer return_value;
-    resolveType<TYPE_PACK...>(return_value, sql_type_info.get_type());
+    resolveType<VALUES_PACK...>(return_value,
+                                MetaSwitchTraits<SOURCE_TYPE>::getType(source_type));
     return return_value;
   }
 
  private:
-  template <SQLTypes FIRST_TYPE>
-  static auto resolveType(MetaTypeContainer& return_value, SQLTypes const sql_type)
-      -> void {
-    if (sql_type == FIRST_TYPE) {
-      static_cast<CapturedMetaTypeOptional<FIRST_TYPE>>(return_value) =
-          MetaType<FIRST_TYPE>();
-      return;
+  template <ResolvedType VALUE>
+  static auto resolveType(MetaTypeContainer& return_value,
+                          ResolvedType const switch_value) {
+    if (switch_value == VALUE) {
+      static_cast<CapturedMetaTypeOptional<ResolvedType, VALUE>&>(return_value) =
+          MetaType<ResolvedType, VALUE>();
     }
-    static_cast<UncapturedMetaTypeOptional>(return_value) = UncapturedMetaType();
+    static_cast<UncapturedMetaTypeOptional&>(return_value) = UncapturedMetaType();
   }
 
-  template <SQLTypes FIRST_TYPE, SQLTypes SECOND_TYPE, SQLTypes... REMAINING_TYPES>
-  static auto resolveType(MetaTypeContainer& return_value, SQLTypes const sql_type)
-      -> void {
-    if (sql_type == FIRST_TYPE) {
-      static_cast<CapturedMetaTypeOptional<FIRST_TYPE>>(return_value) =
-          MetaType<FIRST_TYPE>();
+  template <ResolvedType FIRST_VALUE,
+            ResolvedType SECOND_VALUE,
+            ResolvedType... REMAINING_VALUES>
+  static auto resolveType(MetaTypeContainer& return_value,
+                          ResolvedType const switch_value) {
+    if (switch_value == FIRST_VALUE) {
+      static_cast<CapturedMetaTypeOptional<ResolvedType, FIRST_VALUE>&>(return_value) =
+          MetaType<ResolvedType, FIRST_VALUE>();
       return;
     }
-    resolveType<SECOND_TYPE, REMAINING_TYPES...>(return_value, sql_type);
+    resolveType<SECOND_VALUE, REMAINING_VALUES...>(return_value, switch_value);
   }
 };
 
@@ -163,9 +188,79 @@ class MetaTypeClassFactory {
   }
 };
 
-template <template <class> class META_TYPE_CLASS_HANDLER,
+inline namespace Cpp14 {
+struct Applicator {
+  template <class FUNCTION_TYPE, class TUPLE_TYPE, std::size_t... I>
+  decltype(auto) internalApplyImpl(FUNCTION_TYPE&& f,
+                                   TUPLE_TYPE&& t,
+                                   std::index_sequence<I...>) {
+    return f(std::get<I>(std::forward<TUPLE_TYPE>(t))...);
+  }
+
+  template <class FUNCTION_TYPE, class TUPLE_TYPE>
+  decltype(auto) internalApply(FUNCTION_TYPE&& f, TUPLE_TYPE&& t) {
+    return internalApplyImpl(
+        std::forward<FUNCTION_TYPE>(f),
+        std::forward<TUPLE_TYPE>(t),
+        std::make_index_sequence<
+            std::tuple_size<std::remove_reference_t<TUPLE_TYPE>>::value>{});
+  }
+};
+
+template <template <class> class SPECIALIZED_HANDLER,
+          typename T,
+          T... HANDLED_VALUES_PACK>
+class MetaTypeHandler : protected Applicator {
+ public:
+  using ResolvedType = T;
+  static constexpr std::size_t handled_type_count = sizeof...(HANDLED_VALUES_PACK);
+
+  template <typename META_TYPE, typename... ARG_PACK>
+  decltype(auto) operator()(META_TYPE const& meta_type, ARG_PACK&&... args) {
+    using ArgumentPackaging = decltype(std::forward_as_tuple(args...));
+    return handleMetaType<META_TYPE, ArgumentPackaging, HANDLED_VALUES_PACK...>(
+        meta_type, std::forward_as_tuple(args...));
+  }
+
+ private:
+  template <typename META_TYPE, typename ARG_PACKAGING, ResolvedType VALUE>
+  decltype(auto) handleMetaType(META_TYPE const& meta_type,
+                                ARG_PACKAGING&& arg_packaging) {
+    using InspectionValue = MetaType<ResolvedType, VALUE>;
+    using CastAssistType =
+        CapturedMetaTypeOptional<ResolvedType, InspectionValue::resolved_value>;
+
+    auto const& lhs_ref = static_cast<CastAssistType const&>(meta_type);
+    if (!lhs_ref) {
+      return internalApply(SPECIALIZED_HANDLER<UncapturedMetaType>(), arg_packaging);
+    }
+    return internalApply(SPECIALIZED_HANDLER<InspectionValue>(), arg_packaging);
+  };
+
+  template <typename META_TYPE,
+            typename ARG_PACKAGING,
+            ResolvedType FIRST_VALUE,
+            ResolvedType SECOND_VALUE,
+            ResolvedType... REMAINING_VALUES>
+  decltype(auto) handleMetaType(META_TYPE const& meta_type,
+                                ARG_PACKAGING&& arg_packaging) {
+    using InspectionValue = MetaType<ResolvedType, FIRST_VALUE>;
+    using CastAssistType =
+        CapturedMetaTypeOptional<ResolvedType, InspectionValue::resolved_value>;
+
+    auto const& lhs_ref = static_cast<CastAssistType const&>(meta_type);
+    if (!lhs_ref) {
+      return handleMetaType<META_TYPE, ARG_PACKAGING, SECOND_VALUE, REMAINING_VALUES...>(
+          meta_type, std::forward<ARG_PACKAGING&&>(arg_packaging));
+      return;
+    }
+    return internalApply(SPECIALIZED_HANDLER<InspectionValue>(), arg_packaging);
+  };
+};
+
+template <template <class> class SPECIALIZED_HANDLER,
           MetaTypeClassifications... HANDLED_TYPE_CLASSES_PACK>
-class MetaTypeClassHandler {
+class MetaTypeClassHandler : protected Applicator {
  public:
   using TypeList = std::tuple<MetaTypeClass<HANDLED_TYPE_CLASSES_PACK>...>;
   static constexpr std::size_t handled_type_count = sizeof...(HANDLED_TYPE_CLASSES_PACK);
@@ -178,23 +273,6 @@ class MetaTypeClassHandler {
   }
 
  private:
-  // Needed until C++17; then we can just use std::apply()
-  // Use a back-channel to retrieve the return value for now
-  template <class FUNCTION_TYPE, class TUPLE_TYPE, std::size_t... I>
-  void internalApplyImpl(FUNCTION_TYPE&& f, TUPLE_TYPE&& t, std::index_sequence<I...>) {
-    f(std::get<I>(std::forward<TUPLE_TYPE>(t))...);
-  }
-
-  // Needed until C++17; then we can just use std::apply()
-  // Use a back-channel to retrieve the return value for now
-  template <class FUNCTION_TYPE, class TUPLE_TYPE>
-  void internalApply(FUNCTION_TYPE&& f, TUPLE_TYPE&& t) {
-    internalApplyImpl(std::forward<FUNCTION_TYPE>(f),
-                      std::forward<TUPLE_TYPE>(t),
-                      std::make_index_sequence<
-                          std::tuple_size<std::remove_reference_t<TUPLE_TYPE>>::value>{});
-  }
-
   template <typename META_TYPE_CLASS,
             typename ARG_PACKAGING,
             MetaTypeClassifications HANDLED_TYPE>
@@ -206,11 +284,11 @@ class MetaTypeClassHandler {
 
     auto& lhs_ref = static_cast<CastAssistClass&>(meta_type_class);
     if (!lhs_ref) {
-      internalApply(META_TYPE_CLASS_HANDLER<UncapturedMetaTypeClassOptional>(),
+      internalApply(SPECIALIZED_HANDLER<UncapturedMetaTypeClassOptional>(),
                     arg_packaging);
       return;
     }
-    internalApply(META_TYPE_CLASS_HANDLER<InspectionClass>(), arg_packaging);
+    internalApply(SPECIALIZED_HANDLER<InspectionClass>(), arg_packaging);
   }
 
   template <typename META_TYPE_CLASS,
@@ -232,12 +310,16 @@ class MetaTypeClassHandler {
                           REMAINING_TYPES...>(arg_packaging);
       return;
     }
-    internalApply(META_TYPE_CLASS_HANDLER<InspectionClass>(), arg_packaging);
+    internalApply(SPECIALIZED_HANDLER<InspectionClass>(), arg_packaging);
   }
 };
 
-using GeoMetaTypeFactory = MetaTypeFactory<kPOINT, kLINESTRING, kPOLYGON, kMULTIPOLYGON>;
-using FullMetaTypeFactory = MetaTypeFactory<kNULLT,
+}  // namespace Cpp14
+
+using GeoMetaTypeFactory =
+    MetaTypeFactory<SQLTypes, kPOINT, kLINESTRING, kPOLYGON, kMULTIPOLYGON>;
+using FullMetaTypeFactory = MetaTypeFactory<SQLTypes,
+                                            kNULLT,
                                             kBOOLEAN,
                                             kCHAR,
                                             kVARCHAR,
@@ -264,10 +346,19 @@ using FullMetaTypeFactory = MetaTypeFactory<kNULLT,
                                             kGEOGRAPHY>;
 
 using GeoMetaTypeClassFactory = MetaTypeClassFactory<Geometry>;
-using FullMetaTypeClassFactory = MetaTypeClassFactory<Geometry, Array>;
+using StringMetaTypeClassFactory = MetaTypeClassFactory<String>;
+using FullMetaTypeClassFactory = MetaTypeClassFactory<Geometry, Array, String>;
 
-template <template <class> class META_TYPE_CLASS_HANDLER>
-using GeoVsNonGeoClassHandler = MetaTypeClassHandler<META_TYPE_CLASS_HANDLER, Geometry>;
+template <template <class> class SPECIALIZED_HANDLER>
+using GeoMetaTypeHandler = MetaTypeHandler<SPECIALIZED_HANDLER,
+                                           SQLTypes,
+                                           kPOINT,
+                                           kLINESTRING,
+                                           kPOLYGON,
+                                           kMULTIPOLYGON>;
+
+template <template <class> class SPECIALIZED_HANDLER>
+using GeoVsNonGeoClassHandler = MetaTypeClassHandler<SPECIALIZED_HANDLER, Geometry>;
 
 }  // namespace Experimental
 

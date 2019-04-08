@@ -110,7 +110,9 @@ class SQLTestEnv : public ::testing::Environment {
                  {},
                  g_calcite,
                  !boost::filesystem::exists(system_db_file),
-                 false);
+                 false,
+                 mapd_parms.aggregator,
+                 {});
     CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
     // if no user create one
     if (!sys_cat.getMetadataForUser("gtest", user)) {
@@ -122,27 +124,30 @@ class SQLTestEnv : public ::testing::Environment {
       sys_cat.createDatabase("gtest_db", user.userId);
       CHECK(sys_cat.getMetadataForDB("gtest_db", db));
     }
-    gsession.reset(new SessionInfo(
-        std::make_shared<Catalog>(
-            base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-        user,
-        ExecutorDeviceType::GPU,
-        ""));
+    gsession.reset(new SessionInfo(std::make_shared<Catalog>(base_path.string(),
+                                                             db,
+                                                             dataMgr,
+                                                             std::vector<LeafHostInfo>{},
+                                                             g_calcite,
+                                                             false),
+                                   user,
+                                   ExecutorDeviceType::GPU,
+                                   ""));
   }
 };
 
 bool storage_test(const string& table_name, size_t num_rows) {
   vector<size_t> insert_col_hashs =
-      populate_table_random(table_name, num_rows, gsession->get_catalog());
+      populate_table_random(table_name, num_rows, gsession->getCatalog());
   vector<size_t> scan_col_hashs =
-      scan_table_return_hash(table_name, gsession->get_catalog());
+      scan_table_return_hash(table_name, gsession->getCatalog());
   vector<size_t> scan_col_hashs2 =
-      scan_table_return_hash_non_iter(table_name, gsession->get_catalog());
+      scan_table_return_hash_non_iter(table_name, gsession->getCatalog());
   return insert_col_hashs == scan_col_hashs && insert_col_hashs == scan_col_hashs2;
 }
 
 void simple_thread_wrapper(const string& table_name, size_t num_rows, size_t thread_id) {
-  populate_table_random(table_name, num_rows, gsession->get_catalog());
+  populate_table_random(table_name, num_rows, gsession->getCatalog());
 }
 
 bool storage_test_parallel(const string& table_name,
@@ -157,9 +162,9 @@ bool storage_test_parallel(const string& table_name,
     t.join();
   }
   vector<size_t> scan_col_hashs =
-      scan_table_return_hash(table_name, gsession->get_catalog());
+      scan_table_return_hash(table_name, gsession->getCatalog());
   vector<size_t> scan_col_hashs2 =
-      scan_table_return_hash_non_iter(table_name, gsession->get_catalog());
+      scan_table_return_hash_non_iter(table_name, gsession->getCatalog());
   return scan_col_hashs == scan_col_hashs2;
 }
 }  // namespace
@@ -171,7 +176,7 @@ TEST(StorageLarge, Numbers) {
   ASSERT_NO_THROW(run_ddl_statement("drop table if exists numbers;"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   EXPECT_TRUE(storage_test("numbers", LARGE));
   ASSERT_NO_THROW(run_ddl_statement("drop table numbers;"););
@@ -189,11 +194,19 @@ TEST(StorageSmall, Strings) {
 TEST(StorageSmall, AllTypes) {
   ASSERT_NO_THROW(run_ddl_statement("drop table if exists alltypes;"););
   ASSERT_NO_THROW(
+#ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
       run_ddl_statement("create table alltypes (a smallint, b int, c bigint, d "
-                        "numeric(7,3), e double, f float, "
+                        "numeric(17,3), e double, f float, "
                         "g timestamp(0), g_3 timestamp(3), g_6 timestamp(6), g_9 "
                         "timestamp(9), h time(0), i date, "
-                        "x varchar(10) encoding none, y text encoding none);"););
+                        "x varchar(10) encoding none, y text encoding none);");
+#else
+      run_ddl_statement("create table alltypes (a smallint, b int, c bigint, d "
+                        "numeric(17,3), e double, f float, "
+                        "g timestamp(0), h time(0), i date, "
+                        "x varchar(10) encoding none, y text encoding none);");
+#endif
+  );
   EXPECT_TRUE(storage_test("alltypes", SMALL));
   ASSERT_NO_THROW(run_ddl_statement("drop table alltypes;"););
 }
@@ -201,20 +214,36 @@ TEST(StorageSmall, AllTypes) {
 TEST(StorageRename, AllTypes) {
   ASSERT_NO_THROW(run_ddl_statement("drop table if exists original_table;"););
   ASSERT_NO_THROW(
+#ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
       run_ddl_statement("create table original_table (a smallint, b int, c bigint, d "
-                        "numeric(7,3), e double, f float, "
+                        "numeric(17,3), e double, f float, "
                         "g timestamp(0), g_3 timestamp(3), g_6 timestamp(6), g_9 "
                         "timestamp(9), h time(0), i date, "
-                        "x varchar(10) encoding none, y text encoding none);"););
+                        "x varchar(10) encoding none, y text encoding none);");
+#else
+      run_ddl_statement("create table original_table (a smallint, b int, c bigint, d "
+                        "numeric(17,3), e double, f float, "
+                        "g timestamp(0), h time(0), i date, "
+                        "x varchar(10) encoding none, y text encoding none);");
+#endif
+  );
   EXPECT_TRUE(storage_test("original_table", SMALL));
 
   ASSERT_NO_THROW(run_ddl_statement("drop table if exists new_table;"););
   ASSERT_NO_THROW(
+#ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
       run_ddl_statement("create table new_table (a smallint, b int, c bigint, d "
-                        "numeric(7,3), e double, f float, "
+                        "numeric(17,3), e double, f float, "
                         "g timestamp(0), g_3 timestamp(3), g_6 timestamp(6), g_9 "
                         "timestamp(9), h time(0), i date, "
-                        "x varchar(10) encoding none, y text encoding none);"););
+                        "x varchar(10) encoding none, y text encoding none);");
+#else
+      run_ddl_statement("create table new_table (a smallint, b int, c bigint, d "
+                        "numeric(17,3), e double, f float, "
+                        "g timestamp(0), h time(0), i date, "
+                        "x varchar(10) encoding none, y text encoding none);");
+#endif
+  );
   EXPECT_TRUE(storage_test("new_table", SMALL));
 
   ASSERT_NO_THROW(run_ddl_statement("alter table original_table rename to old_table;"););
@@ -224,11 +253,19 @@ TEST(StorageRename, AllTypes) {
   ASSERT_NO_THROW(run_ddl_statement("drop table old_table;"););
 
   ASSERT_NO_THROW(
+#ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
       run_ddl_statement("create table new_table (a smallint, b int, c bigint, d "
-                        "numeric(7,3), e double, f float, "
+                        "numeric(17,3), e double, f float, "
                         "g timestamp(0), g_3 timestamp(3), g_6 timestamp(6), g_9 "
                         "timestamp(9), h time(0), i date, "
-                        "x varchar(10) encoding none, y text encoding none);"););
+                        "x varchar(10) encoding none, y text encoding none);");
+#else
+      run_ddl_statement("create table new_table (a smallint, b int, c bigint, d "
+                        "numeric(17,3), e double, f float, "
+                        "g timestamp(0), h time(0), i date, "
+                        "x varchar(10) encoding none, y text encoding none);");
+#endif
+  );
 
   ASSERT_NO_THROW(run_ddl_statement("drop table original_table;"););
   ASSERT_NO_THROW(run_ddl_statement("drop table new_table;"););
@@ -237,11 +274,19 @@ TEST(StorageRename, AllTypes) {
 TEST(StorageSmallParallel, AllTypes) {
   ASSERT_NO_THROW(run_ddl_statement("drop table if exists alltypes;"););
   ASSERT_NO_THROW(
+#ifndef DISABLE_HIGH_PRECISION_TIMESTAMP
       run_ddl_statement(
-          "create table alltypes (a smallint, b int, c bigint, d numeric(7,3), e double, "
-          "f float, "
-          "g timestamp(0), g_3 timestamp(3), g_6 timestamp(6), g_9 timestamp(9), "
-          "h time(0), i date, x varchar(10) encoding none, y text encoding none);"););
+          "create table alltypes (a smallint, b int, c bigint, d numeric(17,3), e "
+          "double, f float, g timestamp(0), g_3 timestamp(3), g_6 timestamp(6), g_9 "
+          "timestamp(9), h time(0), i date, x varchar(10) encoding none, y text encoding "
+          "none);");
+#else
+      run_ddl_statement(
+          "create table alltypes (a smallint, b int, c bigint, d numeric(17,3), e "
+          "double, f float, g timestamp(0), h time(0), i date, x varchar(10) encoding "
+          "none, y text encoding none);");
+#endif
+  );
   EXPECT_TRUE(
       storage_test_parallel("alltypes", SMALL, std::thread::hardware_concurrency()));
   ASSERT_NO_THROW(run_ddl_statement("drop table alltypes;"););
@@ -251,5 +296,12 @@ int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
-  return RUN_ALL_TESTS();
+
+  int err{0};
+  try {
+    err = RUN_ALL_TESTS();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
+  return err;
 }

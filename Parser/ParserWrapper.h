@@ -49,6 +49,7 @@ class ParserWrapper {
   bool is_update_dml = false;
   bool is_copy = false;
   bool is_copy_to = false;
+  bool is_optimize = false;
   std::string actual_query;
 
   DMLType getDMLType() const { return dml_type; }
@@ -60,6 +61,7 @@ class ParserWrapper {
   static const std::vector<std::string> update_dml_cmd;
   static const std::string explain_str;
   static const std::string calcite_explain_str;
+  static const std::string optimize_str;
 };
 
 enum class CalciteDMLPathSelection : int {
@@ -98,8 +100,8 @@ inline bool is_calcite_permissable_dml(ParserWrapper const& pw, bool read_only_m
 
 inline bool is_calcite_path_permissable(ParserWrapper const& pw,
                                         bool read_only_mode = false) {
-  return (!pw.is_ddl && is_calcite_permissable_dml(pw, read_only_mode) &&
-          !pw.is_other_explain);
+  return (!pw.is_ddl && !pw.is_optimize &&
+          is_calcite_permissable_dml(pw, read_only_mode) && !pw.is_other_explain);
 }
 
 #endif  // PARSERWRAPPER_H_

@@ -516,6 +516,41 @@ bool GeoTypesFactory::getGeoColumns(OGRGeometry* geom,
   return true;
 }
 
+bool GeoTypesFactory::getGeoColumns(const std::vector<std::string>* wkt_column,
+                                    SQLTypeInfo& ti,
+                                    std::vector<std::vector<double>>& coords_column,
+                                    std::vector<std::vector<double>>& bounds_column,
+                                    std::vector<std::vector<int>>& ring_sizes_column,
+                                    std::vector<std::vector<int>>& poly_rings_column,
+                                    const bool promote_poly_to_mpoly) {
+  try {
+    for (const auto wkt : *wkt_column) {
+      std::vector<double> coords;
+      std::vector<double> bounds;
+      std::vector<int> ring_sizes;
+      std::vector<int> poly_rings;
+
+      SQLTypeInfo row_ti;
+      getGeoColumns(
+          wkt, row_ti, coords, bounds, ring_sizes, poly_rings, promote_poly_to_mpoly);
+
+      if (ti.get_type() != row_ti.get_type()) {
+        throw GeoTypesError("GeoFactory", "Columnar: Geometry type mismatch");
+      }
+      coords_column.push_back(coords);
+      bounds_column.push_back(bounds);
+      ring_sizes_column.push_back(ring_sizes);
+      poly_rings_column.push_back(poly_rings);
+    }
+
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Geospatial column Import Error: " << e.what();
+    return false;
+  }
+
+  return true;
+}
+
 std::unique_ptr<GeoBase> GeoTypesFactory::createGeoTypeImpl(OGRGeometry* geom,
                                                             const bool owns_geom_obj) {
   switch (wkbFlatten(geom->getGeometryType())) {

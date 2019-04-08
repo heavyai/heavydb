@@ -52,7 +52,7 @@ void S3Archive::init_for_read() {
     objects_request.WithPrefix(prefix_name);
     objects_request.SetMaxKeys(1 << 20);
 
-    // for a daemon like mapd_server it seems improper to set s3 credentials
+    // for a daemon like omnisci_server it seems improper to set s3 credentials
     // via AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY env's because that way
     // credentials are configured *globally* while different users with private
     // s3 resources may need separate credentials to access.in that case, use
@@ -64,7 +64,7 @@ void S3Archive::init_for_read() {
        Fix a wrong ca path established at building libcurl on Centos being carried to
        Ubuntu. To fix the issue, this is this sequence of locating ca file: 1) if
        `SSL_CERT_DIR` or `SSL_CERT_FILE` is set, set it to S3 ClientConfiguration. 2) if
-       none ^ is set, mapd core searches a list of known ca file paths. 3) if 2) finds
+       none ^ is set, omnisci core searches a list of known ca file paths. 3) if 2) finds
        nothing, it is users' call to set correct SSL_CERT_DIR or SSL_CERT_FILE. S3 c++
        sdk: "we only want to override the default path if someone has explicitly told us
        to."
@@ -115,6 +115,7 @@ void S3Archive::init_for_read() {
         for (auto const& obj : object_list) {
           std::string objkey = obj.GetKey().c_str();
           LOG(INFO) << "\t" << objkey << " (size = " << obj.GetSize() << " bytes)";
+          total_file_size += obj.GetSize();
           // skip _SUCCESS and keys with trailing / or basename with heading '.'
           boost::filesystem::path path{objkey};
           if (0 == obj.GetSize()) {

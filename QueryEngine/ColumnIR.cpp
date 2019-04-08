@@ -66,6 +66,11 @@ std::shared_ptr<Decoder> get_col_decoder(const Analyzer::ColumnVar* col_var) {
       CHECK_EQ(0, bit_width % 8);
       return std::make_shared<FixedWidthInt>(bit_width / 8);
     }
+    case kENCODING_DATE_IN_DAYS: {
+      CHECK(ti.is_date_in_days());
+      return col_var->get_comp_param() == 16 ? std::make_shared<FixedWidthSmallDate>(2)
+                                             : std::make_shared<FixedWidthSmallDate>(4);
+    }
     default:
       abort();
   }
@@ -86,9 +91,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
                                             const bool fetch_column,
                                             const CompilationOptions& co) {
   if (col_var->get_rte_idx() <= 0 ||
-      (!cgen_state_->outer_join_cond_lv_ &&
-       (cgen_state_->outer_join_match_found_per_level_.empty() ||
-        !foundOuterJoinMatch(col_var->get_rte_idx())))) {
+      cgen_state_->outer_join_match_found_per_level_.empty() ||
+      !foundOuterJoinMatch(col_var->get_rte_idx())) {
     return codegenColVar(col_var, fetch_column, true, co);
   }
   return codegenOuterJoinNullPlaceholder(col_var, fetch_column, co);
@@ -134,6 +138,11 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
       }
       return cols;
     }
+  } else {
+    if (col_var->get_type_info().is_geometry()) {
+      throw std::runtime_error(
+          "Geospatial columns not supported in temporary tables yet");
+    }
   }
   const auto grouped_col_lv = resolveGroupedColumnReference(col_var);
   if (grouped_col_lv) {
@@ -149,13 +158,12 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   const auto hash_join_lhs = hashJoinLhs(col_var);
   // Use the already fetched left-hand side of an equi-join if the types are identical.
   // Currently, types can only be different because of different underlying dictionaries.
-  if (hash_join_lhs && hash_join_lhs->get_rte_idx() == 0 &&
-      hash_join_lhs->get_type_info() == col_var->get_type_info()) {
+  if (hash_join_lhs && hash_join_lhs->get_type_info() == col_var->get_type_info()) {
     if (plan_state_->isLazyFetchColumn(col_var)) {
       plan_state_->columns_to_fetch_.insert(
           std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
     }
-    return codegen(hash_join_lhs, fetch_column, co);
+    return codegen(hash_join_lhs.get(), fetch_column, co);
   }
   auto pos_arg = posArg(col_var);
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
@@ -340,13 +348,7 @@ llvm::Value* Executor::codgenAdjustFixedEncNull(llvm::Value* val,
 llvm::Value* Executor::foundOuterJoinMatch(const ssize_t nesting_level) const {
   CHECK_GE(nesting_level, size_t(0));
   CHECK_LE(nesting_level, cgen_state_->outer_join_match_found_per_level_.size());
-  // The JoinLoop-based outer joins supersede the legacy version which checks
-  // `outer_join_cond_lv_`. They cannot coexist within the same execution unit.
-  CHECK(!cgen_state_->outer_join_cond_lv_ ||
-        !cgen_state_->outer_join_match_found_per_level_[nesting_level - 1]);
-  return cgen_state_->outer_join_cond_lv_
-             ? cgen_state_->outer_join_cond_lv_
-             : cgen_state_->outer_join_match_found_per_level_[nesting_level - 1];
+  return cgen_state_->outer_join_match_found_per_level_[nesting_level - 1];
 }
 
 std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(
@@ -440,44 +442,20 @@ llvm::Value* Executor::colByteStream(const Analyzer::ColumnVar* col_var,
 }
 
 llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
-  if (dynamic_cast<const Analyzer::ColumnVar*>(expr)) {
-    const auto col_var = static_cast<const Analyzer::ColumnVar*>(expr);
+  const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
+  if (col_var && col_var->get_rte_idx() > 0) {
     const auto hash_pos_it =
         cgen_state_->scan_idx_to_hash_pos_.find(col_var->get_rte_idx());
-    if (hash_pos_it != cgen_state_->scan_idx_to_hash_pos_.end()) {
-      if (hash_pos_it->second->getType()->isPointerTy()) {
-        CHECK(hash_pos_it->second->getType()->getPointerElementType()->isIntegerTy(32));
-        llvm::Value* result = cgen_state_->ir_builder_.CreateLoad(hash_pos_it->second);
-        result = cgen_state_->ir_builder_.CreateSExt(
-            result, get_int_type(64, cgen_state_->context_));
-        return result;
-      }
-      return hash_pos_it->second;
+    CHECK(hash_pos_it != cgen_state_->scan_idx_to_hash_pos_.end());
+    if (hash_pos_it->second->getType()->isPointerTy()) {
+      CHECK(hash_pos_it->second->getType()->getPointerElementType()->isIntegerTy(32));
+      llvm::Value* result = cgen_state_->ir_builder_.CreateLoad(hash_pos_it->second);
+      result = cgen_state_->ir_builder_.CreateSExt(
+          result, get_int_type(64, cgen_state_->context_));
+      return result;
     }
-    const auto inner_it = cgen_state_->scan_to_iterator_.find(
-        InputDescriptor(col_var->get_table_id(), col_var->get_rte_idx()));
-    if (inner_it != cgen_state_->scan_to_iterator_.end()) {
-      CHECK(inner_it->second.first);
-      CHECK(inner_it->second.first->getType()->isIntegerTy(64));
-      return inner_it->second.first;
-    }
+    return hash_pos_it->second;
   }
-#ifdef ENABLE_JOIN_EXEC
-  else if (dynamic_cast<const Analyzer::IterExpr*>(expr)) {
-    const auto iter = static_cast<const Analyzer::IterExpr*>(expr);
-    const auto hash_pos_it = cgen_state_->scan_idx_to_hash_pos_.find(iter->get_rte_idx());
-    if (hash_pos_it != cgen_state_->scan_idx_to_hash_pos_.end()) {
-      return hash_pos_it->second;
-    }
-    const auto inner_it = cgen_state_->scan_to_iterator_.find(
-        InputDescriptor(iter->get_table_id(), iter->get_rte_idx()));
-    if (inner_it != cgen_state_->scan_to_iterator_.end()) {
-      CHECK(inner_it->second.first);
-      CHECK(inner_it->second.first->getType()->isIntegerTy(64));
-      return inner_it->second.first;
-    }
-  }
-#endif
   for (auto& arg : cgen_state_->row_func_->args()) {
     if (arg.getName() == "pos") {
       CHECK(arg.getType()->isIntegerTy(64));
@@ -487,7 +465,20 @@ llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
   abort();
 }
 
-const Analyzer::ColumnVar* Executor::hashJoinLhs(const Analyzer::ColumnVar* rhs) const {
+const Analyzer::Expr* remove_cast_to_int(const Analyzer::Expr* expr) {
+  const auto uoper = dynamic_cast<const Analyzer::UOper*>(expr);
+  if (!uoper || uoper->get_optype() != kCAST) {
+    return nullptr;
+  }
+  const auto& target_ti = uoper->get_type_info();
+  if (!target_ti.is_integer()) {
+    return nullptr;
+  }
+  return uoper->get_operand();
+}
+
+std::shared_ptr<const Analyzer::Expr> Executor::hashJoinLhs(
+    const Analyzer::ColumnVar* rhs) const {
   for (const auto tautological_eq : plan_state_->join_info_.equi_join_tautologies_) {
     CHECK(IS_EQUIVALENCE(tautological_eq->get_optype()));
     if (dynamic_cast<const Analyzer::ExpressionTuple*>(
@@ -497,18 +488,43 @@ const Analyzer::ColumnVar* Executor::hashJoinLhs(const Analyzer::ColumnVar* rhs)
         return lhs_col;
       }
     } else {
-      if (*tautological_eq->get_right_operand() == *rhs) {
-        auto lhs_col =
-            dynamic_cast<const Analyzer::ColumnVar*>(tautological_eq->get_left_operand());
-        CHECK(lhs_col);
-        return lhs_col;
+      auto eq_right_op = tautological_eq->get_right_operand();
+      if (!rhs->get_type_info().is_string()) {
+        eq_right_op = remove_cast_to_int(eq_right_op);
+      }
+      if (!eq_right_op) {
+        eq_right_op = tautological_eq->get_right_operand();
+      }
+      if (*eq_right_op == *rhs) {
+        auto eq_left_op = tautological_eq->get_left_operand();
+        if (!eq_left_op->get_type_info().is_string()) {
+          eq_left_op = remove_cast_to_int(eq_left_op);
+        }
+        if (!eq_left_op) {
+          eq_left_op = tautological_eq->get_left_operand();
+        }
+        if (eq_left_op->get_type_info().is_geometry()) {
+          // skip cast for a geospatial lhs, since the rhs is likely to be a geospatial
+          // physical col without geospatial type info
+          return nullptr;
+        }
+        const auto eq_left_op_col = dynamic_cast<const Analyzer::ColumnVar*>(eq_left_op);
+        CHECK(eq_left_op_col);
+        if (eq_left_op_col->get_rte_idx() != 0) {
+          return nullptr;
+        }
+        if (rhs->get_type_info().is_string()) {
+          return eq_left_op->deep_copy();
+        }
+        return makeExpr<Analyzer::UOper>(
+            rhs->get_type_info(), false, kCAST, eq_left_op->deep_copy());
       }
     }
   }
   return nullptr;
 }
 
-const Analyzer::ColumnVar* Executor::hashJoinLhsTuple(
+std::shared_ptr<const Analyzer::ColumnVar> Executor::hashJoinLhsTuple(
     const Analyzer::ColumnVar* rhs,
     const Analyzer::BinOper* tautological_eq) const {
   const auto lhs_tuple_expr =
@@ -521,7 +537,9 @@ const Analyzer::ColumnVar* Executor::hashJoinLhsTuple(
   CHECK_EQ(lhs_tuple.size(), rhs_tuple.size());
   for (size_t i = 0; i < lhs_tuple.size(); ++i) {
     if (*rhs_tuple[i] == *rhs) {
-      return static_cast<Analyzer::ColumnVar*>(lhs_tuple[i].get());
+      const auto lhs_col =
+          std::static_pointer_cast<const Analyzer::ColumnVar>(lhs_tuple[i]);
+      return lhs_col->get_rte_idx() == 0 ? lhs_col : nullptr;
     }
   }
   return nullptr;

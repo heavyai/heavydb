@@ -25,7 +25,7 @@ class DistributedLoader : public Importer_NS::Loader {
   DistributedLoader(const Catalog_Namespace::SessionInfo& parent_session_info,
                     const TableDescriptor* t,
                     LeafAggregator* aggregator)
-      : Loader(parent_session_info.get_catalog(), t) {
+      : Loader(parent_session_info.getCatalog(), t) {
     CHECK(false);
   }
 

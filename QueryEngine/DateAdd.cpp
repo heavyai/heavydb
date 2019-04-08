@@ -15,7 +15,6 @@
  */
 
 #include "DateAdd.h"
-#include <math.h>
 #include "ExtractFromTime.h"
 
 #ifdef EXECUTE_INCLUDE
@@ -31,12 +30,11 @@ int32_t is_leap(int64_t year) {
 
 DEVICE
 time_t skip_months(time_t timeval, int64_t months_to_go) {
-  const int month_lengths[2][MONSPERYEAR] = {
+  const int32_t month_lengths[2][MONSPERYEAR] = {
       {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
       {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   tm tm_struct;
   gmtime_r_newlib(&timeval, &tm_struct);
-  int32_t dimen = 1;  // placeholder
   auto tod = (timeval % SECSPERDAY);
   auto day = (timeval / SECSPERDAY) * SECSPERDAY;
   // calculate the day of month offset
@@ -55,11 +53,8 @@ time_t skip_months(time_t timeval, int64_t months_to_go) {
     }
     if (months_to_go > 0) {
       auto m = (mon + months_covered) % MONSPERYEAR;
-      if (m == 1) {
-        int32_t eyr = (dimen > 0) ? ExtractFromTimeHighPrecision(kYEAR, month, dimen)
-                                  : ExtractFromTime(kYEAR, month);
-        leap_year = is_leap(eyr);
-      }
+      if (m == 1)
+        leap_year = is_leap(ExtractFromTime(kYEAR, month));
       month += (month_lengths[0 + leap_year][m] * SECSPERDAY);
       months_to_go--;
       months_covered++;
@@ -73,11 +68,8 @@ time_t skip_months(time_t timeval, int64_t months_to_go) {
     }
     if (months_to_go < 0) {
       auto m = (((mon - 1 - months_covered) % MONSPERYEAR) + MONSPERYEAR) % MONSPERYEAR;
-      if (m == 1) {
-        int32_t eyr = (dimen > 0) ? ExtractFromTimeHighPrecision(kYEAR, month, dimen)
-                                  : ExtractFromTime(kYEAR, month);
-        leap_year = is_leap(eyr);
-      }
+      if (m == 1)
+        leap_year = is_leap(ExtractFromTime(kYEAR, month));
       month -= (month_lengths[0 + leap_year][m] * SECSPERDAY);
       months_to_go++;
       months_covered++;
@@ -100,54 +92,24 @@ time_t skip_months(time_t timeval, int64_t months_to_go) {
 
 extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field,
                                               int64_t number,
-                                              time_t timeval,
-                                              const int32_t dimen) {
-  long scale_ret = 1;
-  if (dimen == 3) {
-    scale_ret = MILLISECSPERSEC;
-  } else if (dimen == 6) {
-    scale_ret = MICROSECSPERSEC;
-  } else if (dimen == 9) {
-    scale_ret = NANOSECSPERSEC;
-  }
+                                              time_t timeval) {
   switch (field) {
-    case daNANOSECOND: {
-      // highest level of granularity
-      if (dimen < 9) {
-        return timeval;
-      } else
-        return timeval + number;
-    }
-    case daMICROSECOND: {
-      int64_t mutimeval = 0;
-      if (dimen == 9) {
-        mutimeval = timeval + number * MILLISECSPERSEC;
-      } else if (dimen == 6) {
-        mutimeval = timeval + number;
-      } else
-        mutimeval = timeval;
-      return mutimeval;
-    }
-    case daMILLISECOND: {
-      int64_t mitimeval = 0;
-      if (dimen == 9) {
-        mitimeval = timeval + number * MICROSECSPERSEC;
-      } else if (dimen == 6) {
-        mitimeval = timeval + number * MILLISECSPERSEC;
-      } else
-        mitimeval = timeval + number;
-      return mitimeval;
-    }
+    case daNANOSECOND:
+    case daMICROSECOND:
+    case daMILLISECOND:
     case daSECOND:
-      return timeval + number * scale_ret;
+      /* this is the limit of current granularity */
+      return timeval + number;
     case daMINUTE:
-      return timeval + number * SECSPERMIN * scale_ret;
+      return timeval + number * SECSPERMIN;
     case daHOUR:
-      return timeval + number * SECSPERHOUR * scale_ret;
+      return timeval + number * SECSPERHOUR;
+    case daWEEKDAY:
+    case daDAYOFYEAR:
     case daDAY:
-      return timeval + number * SECSPERDAY * scale_ret;
+      return timeval + number * SECSPERDAY;
     case daWEEK:
-      return timeval + number * DAYSPERWEEK * SECSPERDAY * scale_ret;
+      return timeval + number * DAYSPERWEEK * SECSPERDAY;
     default:
       break;
   }
@@ -180,21 +142,48 @@ extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field,
 #endif
   }
   months_to_go *= number;
-  const time_t stimeval =
-      dimen == 0 ? timeval : static_cast<int64_t>(timeval) / scale_ret;
-  const time_t nfrac = static_cast<int64_t>(timeval) % scale_ret;
-  return (skip_months(stimeval, months_to_go) * scale_ret) + nfrac;
+  return skip_months(timeval, months_to_go);
+}
+
+extern "C" NEVER_INLINE DEVICE time_t DateAddHighPrecision(DateaddField field,
+                                                           const int64_t number,
+                                                           time_t timeval,
+                                                           const int64_t scale) {
+  switch (field) {
+    case daNANOSECOND:
+    case daMICROSECOND:
+    case daMILLISECOND:
+      /* Since number is constant, it is being adjusted according to the dimension
+      of type and field in RelAlgTranslator. Therefore, here would skip math and
+      just add the value.*/
+      return timeval + number;
+    default:
+      break;
+  }
+  const time_t stimeval = static_cast<int64_t>(timeval) / scale;
+  const time_t nfrac = static_cast<int64_t>(timeval) % scale;
+  return (DateAdd(field, number, stimeval) * scale) + nfrac;
 }
 
 extern "C" DEVICE time_t DateAddNullable(const DateaddField field,
-                                         int64_t number,
+                                         const int64_t number,
                                          time_t timeval,
-                                         const int32_t dimen,
                                          const time_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
-  return DateAdd(field, number, timeval, dimen);
+  return DateAdd(field, number, timeval);
+}
+
+extern "C" DEVICE time_t DateAddHighPrecisionNullable(const DateaddField field,
+                                                      const int64_t number,
+                                                      time_t timeval,
+                                                      const int64_t scale,
+                                                      const time_t null_val) {
+  if (timeval == null_val) {
+    return null_val;
+  }
+  return DateAddHighPrecision(field, number, timeval, scale);
 }
 
 #endif  // EXECUTE_INCLUDE

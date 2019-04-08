@@ -39,18 +39,6 @@ extern bool g_enable_dynamic_watchdog;
 
 namespace {
 
-inline bool const is_permissable_sample_agg(TargetInfo const& agg_info) {
-  if (agg_info.agg_kind == kSAMPLE) {
-    if (agg_info.sql_type.is_varlen()) {
-      return true;
-    }
-    if (agg_info.sql_type.is_geometry()) {
-      return true;
-    }
-  }
-  return false;
-}
-
 bool use_multithreaded_reduction(const size_t entry_count) {
   return entry_count > 100000;
 }
@@ -129,7 +117,9 @@ void fill_empty_key(void* key_ptr, const size_t key_count, const size_t key_widt
 
 // Driver method for various buffer layouts, actual work is done by reduceOne* methods.
 // Reduces the entries of `that` into the buffer of this ResultSetStorage object.
-void ResultSetStorage::reduce(const ResultSetStorage& that) const {
+void ResultSetStorage::reduce(
+    const ResultSetStorage& that,
+    const std::vector<std::string>& serialized_varlen_buffer) const {
   auto entry_count = query_mem_desc_.getEntryCount();
   CHECK_GT(entry_count, size_t(0));
   if (query_mem_desc_.didOutputColumnar()) {
@@ -151,6 +141,11 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
   CHECK(that_buff);
   if (query_mem_desc_.getQueryDescriptionType() ==
       QueryDescriptionType::GroupByBaselineHash) {
+    if (!serialized_varlen_buffer.empty()) {
+      throw std::runtime_error(
+          "Projection of variable length targets with baseline hash group by is not yet "
+          "supported in Distributed mode");
+    }
     if (use_multithreaded_reduction(that.query_mem_desc_.getEntryCount())) {
       const size_t thread_count = cpu_threads();
       std::vector<std::future<void>> reduction_threads;
@@ -194,18 +189,35 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
       const auto start_index = thread_idx * thread_entry_count;
       const auto end_index = std::min(start_index + thread_entry_count, entry_count);
       if (query_mem_desc_.didOutputColumnar()) {
-        reduction_threads.emplace_back(
-            std::async(std::launch::async,
-                       [this, this_buff, that_buff, start_index, end_index, &that] {
-                         reduceEntriesNoCollisionsColWise(
-                             this_buff, that_buff, that, start_index, end_index);
-                       }));
+        reduction_threads.emplace_back(std::async(std::launch::async,
+                                                  [this,
+                                                   this_buff,
+                                                   that_buff,
+                                                   start_index,
+                                                   end_index,
+                                                   &that,
+                                                   &serialized_varlen_buffer] {
+                                                    reduceEntriesNoCollisionsColWise(
+                                                        this_buff,
+                                                        that_buff,
+                                                        that,
+                                                        start_index,
+                                                        end_index,
+                                                        serialized_varlen_buffer);
+                                                  }));
       } else {
         reduction_threads.emplace_back(std::async(
             std::launch::async,
-            [this, this_buff, that_buff, start_index, end_index, &that] {
+            [this,
+             this_buff,
+             that_buff,
+             start_index,
+             end_index,
+             &that,
+             &serialized_varlen_buffer] {
               for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
-                reduceOneEntryNoCollisionsRowWise(entry_idx, this_buff, that_buff, that);
+                reduceOneEntryNoCollisionsRowWise(
+                    entry_idx, this_buff, that_buff, that, serialized_varlen_buffer);
               }
             }));
       }
@@ -218,11 +230,16 @@ void ResultSetStorage::reduce(const ResultSetStorage& that) const {
     }
   } else {
     if (query_mem_desc_.didOutputColumnar()) {
-      reduceEntriesNoCollisionsColWise(
-          this_buff, that_buff, that, 0, query_mem_desc_.getEntryCount());
+      reduceEntriesNoCollisionsColWise(this_buff,
+                                       that_buff,
+                                       that,
+                                       0,
+                                       query_mem_desc_.getEntryCount(),
+                                       serialized_varlen_buffer);
     } else {
       for (size_t i = 0; i < entry_count; ++i) {
-        reduceOneEntryNoCollisionsRowWise(i, this_buff, that_buff, that);
+        reduceOneEntryNoCollisionsRowWise(
+            i, this_buff, that_buff, that, serialized_varlen_buffer);
       }
     }
   }
@@ -242,17 +259,21 @@ ALWAYS_INLINE void check_watchdog(const size_t sample_seed) {
 
 }  // namespace
 
-void ResultSetStorage::reduceEntriesNoCollisionsColWise(int8_t* this_buff,
-                                                        const int8_t* that_buff,
-                                                        const ResultSetStorage& that,
-                                                        const size_t start_index,
-                                                        const size_t end_index) const {
+void ResultSetStorage::reduceEntriesNoCollisionsColWise(
+    int8_t* this_buff,
+    const int8_t* that_buff,
+    const ResultSetStorage& that,
+    const size_t start_index,
+    const size_t end_index,
+    const std::vector<std::string>& serialized_varlen_buffer) const {
+  // TODO(adb / saman): Support column wise output when serializing distributed agg
+  // functions
+  CHECK(serialized_varlen_buffer.empty());
+
   auto this_crt_col_ptr = get_cols_ptr(this_buff, query_mem_desc_);
   auto that_crt_col_ptr = get_cols_ptr(that_buff, query_mem_desc_);
   size_t agg_col_idx = 0;
-  const auto buffer_col_count = query_mem_desc_.getBufferColSlotCount();
   for (size_t target_idx = 0; target_idx < targets_.size(); ++target_idx) {
-    CHECK_LT(agg_col_idx, buffer_col_count);
     const auto& agg_info = targets_[target_idx];
     const auto this_next_col_ptr = advance_to_next_columnar_target_buff(
         this_crt_col_ptr, query_mem_desc_, agg_col_idx);
@@ -260,31 +281,28 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(int8_t* this_buff,
         that_crt_col_ptr, query_mem_desc_, agg_col_idx);
     for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
       check_watchdog(entry_idx);
-      if (__builtin_expect(query_mem_desc_.hasKeylessHash(), 0)) {
-        if (isEmptyEntry(entry_idx, that_buff)) {
-          continue;
-        }
-      } else {
-        // We should probably optimize the layout of ResultSetStorage::isEmptyEntry so
-        // that we can use it here and avoid this intrusive micro-optimization.
-        if (reinterpret_cast<const int64_t*>(that_buff)[entry_idx] == EMPTY_KEY_64) {
-          continue;
-        }
+      if (isEmptyEntryColumnar(entry_idx, that_buff)) {
+        continue;
+      }
+      if (LIKELY(!query_mem_desc_.hasKeylessHash())) {
         // copy the key from right hand side
         copyKeyColWise(entry_idx, this_buff, that_buff);
       }
       auto this_ptr1 = this_crt_col_ptr +
-                       entry_idx * query_mem_desc_.getColumnWidth(agg_col_idx).compact;
+                       entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx);
       auto that_ptr1 = that_crt_col_ptr +
-                       entry_idx * query_mem_desc_.getColumnWidth(agg_col_idx).compact;
+                       entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx);
       int8_t* this_ptr2{nullptr};
       const int8_t* that_ptr2{nullptr};
       if (agg_info.is_agg &&
-          (agg_info.agg_kind == kAVG || (is_permissable_sample_agg(agg_info)))) {
-        this_ptr2 = this_next_col_ptr +
-                    entry_idx * query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
-        that_ptr2 = that_next_col_ptr +
-                    entry_idx * query_mem_desc_.getColumnWidth(agg_col_idx + 1).compact;
+          (agg_info.agg_kind == kAVG ||
+           (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_varlen()))) {
+        this_ptr2 =
+            this_next_col_ptr +
+            entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx + 1);
+        that_ptr2 =
+            that_next_col_ptr +
+            entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx + 1);
       }
       reduceOneSlot(this_ptr1,
                     this_ptr2,
@@ -294,8 +312,10 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(int8_t* this_buff,
                     target_idx,
                     agg_col_idx,
                     agg_col_idx,
-                    that);
+                    that,
+                    serialized_varlen_buffer);
     }
+
     this_crt_col_ptr = this_next_col_ptr;
     that_crt_col_ptr = that_next_col_ptr;
     if (agg_info.is_agg && agg_info.agg_kind == kAVG) {
@@ -308,18 +328,120 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(int8_t* this_buff,
   }
 }
 
+/*
+ * copy all keys from the columnar prepended group buffer of "that_buff" into
+ * "this_buff"
+ */
 void ResultSetStorage::copyKeyColWise(const size_t entry_idx,
                                       int8_t* this_buff,
                                       const int8_t* that_buff) const {
-  const auto key_count = query_mem_desc_.getGroupbyColCount();
-  // TODO(alex): we might want to support keys smaller than 64 bits at some point
-  auto lhs_key_buff = reinterpret_cast<int64_t*>(this_buff) + entry_idx;
-  auto rhs_key_buff = reinterpret_cast<const int64_t*>(that_buff) + entry_idx;
-  for (size_t key_comp_idx = 0; key_comp_idx < key_count; ++key_comp_idx) {
-    *lhs_key_buff = *rhs_key_buff;
-    lhs_key_buff += query_mem_desc_.getEntryCount();
-    rhs_key_buff += query_mem_desc_.getEntryCount();
+  CHECK(query_mem_desc_.didOutputColumnar());
+  for (size_t group_idx = 0; group_idx < query_mem_desc_.getGroupbyColCount();
+       group_idx++) {
+    // if the column corresponds to a group key
+    const auto column_offset_bytes =
+        query_mem_desc_.getPrependedGroupColOffInBytes(group_idx);
+    auto lhs_key_ptr = this_buff + column_offset_bytes;
+    auto rhs_key_ptr = that_buff + column_offset_bytes;
+    switch (query_mem_desc_.groupColWidth(group_idx)) {
+      case 8:
+        *(reinterpret_cast<int64_t*>(lhs_key_ptr) + entry_idx) =
+            *(reinterpret_cast<const int64_t*>(rhs_key_ptr) + entry_idx);
+        break;
+      case 4:
+        *(reinterpret_cast<int32_t*>(lhs_key_ptr) + entry_idx) =
+            *(reinterpret_cast<const int32_t*>(rhs_key_ptr) + entry_idx);
+        break;
+      case 2:
+        *(reinterpret_cast<int16_t*>(lhs_key_ptr) + entry_idx) =
+            *(reinterpret_cast<const int16_t*>(rhs_key_ptr) + entry_idx);
+        break;
+      case 1:
+        *(reinterpret_cast<int8_t*>(lhs_key_ptr) + entry_idx) =
+            *(reinterpret_cast<const int8_t*>(rhs_key_ptr) + entry_idx);
+        break;
+      default:
+        CHECK(false);
+        break;
+    }
   }
+}
+
+// Rewrites the entries of this ResultSetStorage object to point directly into the
+// serialized_varlen_buffer rather than using offsets.
+void ResultSetStorage::rewriteAggregateBufferOffsets(
+    const std::vector<std::string>& serialized_varlen_buffer) const {
+  if (serialized_varlen_buffer.empty()) {
+    return;
+  }
+
+  CHECK(!query_mem_desc_.didOutputColumnar());
+  auto entry_count = query_mem_desc_.getEntryCount();
+  CHECK_GT(entry_count, size_t(0));
+  CHECK(buff_);
+
+  // Row-wise iteration, consider moving to separate function
+  for (size_t i = 0; i < entry_count; ++i) {
+    if (isEmptyEntry(i, buff_)) {
+      continue;
+    }
+    const auto key_bytes = get_key_bytes_rowwise(query_mem_desc_);
+    const auto key_bytes_with_padding = align_to_int64(key_bytes);
+    auto rowwise_targets_ptr =
+        row_ptr_rowwise(buff_, query_mem_desc_, i) + key_bytes_with_padding;
+    size_t target_slot_idx = 0;
+    for (size_t target_logical_idx = 0; target_logical_idx < targets_.size();
+         ++target_logical_idx) {
+      const auto& target_info = targets_[target_logical_idx];
+      if (target_info.sql_type.is_varlen() && target_info.is_agg) {
+        CHECK(target_info.agg_kind == kSAMPLE);
+        auto ptr1 = rowwise_targets_ptr;
+        auto slot_idx = target_slot_idx;
+        auto ptr2 = ptr1 + query_mem_desc_.getColumnWidth(slot_idx).compact;
+        auto offset = *reinterpret_cast<const int64_t*>(ptr1);
+
+        const auto& elem_ti = target_info.sql_type.get_elem_type();
+        size_t length_to_elems =
+            target_info.sql_type.is_string() || target_info.sql_type.is_geometry()
+                ? 1
+                : elem_ti.get_size();
+        if (target_info.sql_type.is_geometry()) {
+          for (int j = 0; j < target_info.sql_type.get_physical_coord_cols(); j++) {
+            if (j > 0) {
+              ptr1 = ptr2 + query_mem_desc_.getColumnWidth(slot_idx + 1).compact;
+              ptr2 = ptr1 + query_mem_desc_.getColumnWidth(slot_idx + 2).compact;
+              slot_idx += 2;
+              length_to_elems = 4;
+            }
+            CHECK_LT(offset, serialized_varlen_buffer.size());
+            const auto& varlen_bytes_str = serialized_varlen_buffer[offset++];
+            const auto str_ptr =
+                reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
+            CHECK(ptr1);
+            *reinterpret_cast<int64_t*>(ptr1) = reinterpret_cast<const int64_t>(str_ptr);
+            CHECK(ptr2);
+            *reinterpret_cast<int64_t*>(ptr2) =
+                static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
+          }
+        } else {
+          CHECK_LT(offset, serialized_varlen_buffer.size());
+          const auto& varlen_bytes_str = serialized_varlen_buffer[offset];
+          const auto str_ptr = reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
+          CHECK(ptr1);
+          *reinterpret_cast<int64_t*>(ptr1) = reinterpret_cast<const int64_t>(str_ptr);
+          CHECK(ptr2);
+          *reinterpret_cast<int64_t*>(ptr2) =
+              static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
+        }
+      }
+
+      rowwise_targets_ptr = advance_target_ptr_row_wise(
+          rowwise_targets_ptr, target_info, target_slot_idx, query_mem_desc_, false);
+      target_slot_idx = advance_slot(target_slot_idx, target_info, false);
+    }
+  }
+
+  return;
 }
 
 // Reduces entry at position entry_idx in that_buff into the same position in this_buff,
@@ -328,7 +450,8 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
     const size_t entry_idx,
     int8_t* this_buff,
     const int8_t* that_buff,
-    const ResultSetStorage& that) const {
+    const ResultSetStorage& that,
+    const std::vector<std::string>& serialized_varlen_buffer) const {
   check_watchdog(entry_idx);
   CHECK(!query_mem_desc_.didOutputColumnar());
   if (isEmptyEntry(entry_idx, that_buff)) {
@@ -353,7 +476,8 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
     int8_t* this_ptr2{nullptr};
     const int8_t* that_ptr2{nullptr};
     if (target_info.is_agg &&
-        (target_info.agg_kind == kAVG || is_permissable_sample_agg(target_info))) {
+        (target_info.agg_kind == kAVG ||
+         (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()))) {
       this_ptr2 =
           this_targets_ptr + query_mem_desc_.getColumnWidth(target_slot_idx).compact;
       that_ptr2 =
@@ -367,10 +491,11 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
                   target_logical_idx,
                   target_slot_idx,
                   init_agg_val_idx,
-                  that);
-    this_targets_ptr = advance_target_ptr(
+                  that,
+                  serialized_varlen_buffer);
+    this_targets_ptr = advance_target_ptr_row_wise(
         this_targets_ptr, target_info, target_slot_idx, query_mem_desc_, false);
-    that_targets_ptr = advance_target_ptr(
+    that_targets_ptr = advance_target_ptr_row_wise(
         that_targets_ptr, target_info, target_slot_idx, query_mem_desc_, false);
     target_slot_idx = advance_slot(target_slot_idx, target_info, false);
     if (query_mem_desc_.targetGroupbyIndicesSize() == 0) {
@@ -385,7 +510,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
 
 namespace {
 
-typedef std::pair<int64_t*, bool> GroupValueInfo;
+using GroupValueInfo = std::pair<int64_t*, bool>;
 
 GroupValueInfo get_matching_group_value_columnar_reduction(int64_t* groups_buffer,
                                                            const uint32_t h,
@@ -642,11 +767,12 @@ void ResultSetStorage::reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
     const auto& target_info = targets_[target_logical_idx];
     const auto that_slot_off =
         query_mem_desc_.didOutputColumnar()
-            ? slot_offset_colwise(that_entry_idx, j, key_count, that_entry_count)
+            ? slot_offset_colwise(
+                  that_entry_idx, init_agg_val_idx, key_count, that_entry_count)
             : get_row_qw_count(query_mem_desc_) * that_entry_idx +
                   get_slot_off_quad(query_mem_desc_) + init_agg_val_idx;
     const auto this_slot_off = query_mem_desc_.didOutputColumnar()
-                                   ? j * query_mem_desc_.getEntryCount()
+                                   ? init_agg_val_idx * query_mem_desc_.getEntryCount()
                                    : init_agg_val_idx;
     reduceOneSlotBaseline(this_entry_slots,
                           this_slot_off,
@@ -682,7 +808,8 @@ void ResultSetStorage::reduceOneSlotBaseline(int64_t* this_buff,
   int8_t* this_ptr2{nullptr};
   const int8_t* that_ptr2{nullptr};
   if (target_info.is_agg &&
-      (target_info.agg_kind == kAVG || is_permissable_sample_agg(target_info))) {
+      (target_info.agg_kind == kAVG ||
+       (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()))) {
     const auto this_count_off =
         query_mem_desc_.didOutputColumnar() ? query_mem_desc_.getEntryCount() : 1;
     const auto that_count_off =
@@ -698,7 +825,8 @@ void ResultSetStorage::reduceOneSlotBaseline(int64_t* this_buff,
                 target_logical_idx,
                 target_slot_idx,
                 init_agg_val_idx,
-                that);
+                that,
+                {});
 }
 
 // During the reduction of two result sets using the baseline strategy, we first create a
@@ -808,15 +936,39 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
     result = rs_->storage_.get();
     result_rs = rs_.get();
   }
+
+  auto& serialized_varlen_buffer = result_sets.front()->serialized_varlen_buffer_;
+  if (!serialized_varlen_buffer.empty()) {
+    result->rewriteAggregateBufferOffsets(serialized_varlen_buffer.front());
+    for (auto result_it = result_sets.begin() + 1; result_it != result_sets.end();
+         ++result_it) {
+      auto& result_serialized_varlen_buffer = (*result_it)->serialized_varlen_buffer_;
+      CHECK_EQ(result_serialized_varlen_buffer.size(), size_t(1));
+      serialized_varlen_buffer.emplace_back(
+          std::move(result_serialized_varlen_buffer.front()));
+    }
+  }
+
+  size_t ctr = 1;
   for (auto result_it = result_sets.begin() + 1; result_it != result_sets.end();
        ++result_it) {
-    result->reduce(*((*result_it)->storage_));
+    if (!serialized_varlen_buffer.empty()) {
+      result->reduce(*((*result_it)->storage_), serialized_varlen_buffer[ctr++]);
+    } else {
+      result->reduce(*((*result_it)->storage_), {});
+    }
   }
   return result_rs;
 }
 
 std::shared_ptr<ResultSet> ResultSetManager::getOwnResultSet() {
   return rs_;
+}
+
+void ResultSetManager::rewriteVarlenAggregates(ResultSet* result_rs) {
+  auto& result_storage = result_rs->storage_;
+  result_storage->rewriteAggregateBufferOffsets(
+      result_rs->serialized_varlen_buffer_.front());
 }
 
 void ResultSetStorage::fillOneEntryRowWise(const std::vector<int64_t>& entry) {
@@ -872,6 +1024,25 @@ void ResultSetStorage::initializeRowWise() const {
   }
 }
 
+void ResultSetStorage::fillOneEntryColWise(const std::vector<int64_t>& entry) {
+  CHECK(query_mem_desc_.didOutputColumnar());
+  CHECK_EQ(size_t(1), query_mem_desc_.getEntryCount());
+  const auto slot_count = query_mem_desc_.getBufferColSlotCount();
+  const auto key_count = query_mem_desc_.getGroupbyColCount();
+  CHECK_EQ(slot_count + key_count, entry.size());
+  auto this_buff = reinterpret_cast<int64_t*>(buff_);
+
+  for (size_t i = 0; i < key_count; i++) {
+    const auto key_offset = key_offset_colwise(0, i, 1);
+    this_buff[key_offset] = entry[i];
+  }
+
+  for (size_t i = 0; i < target_init_vals_.size(); i++) {
+    const auto slot_offset = slot_offset_colwise(0, i, key_count, 1);
+    this_buff[slot_offset] = entry[key_count + i];
+  }
+}
+
 void ResultSetStorage::initializeColWise() const {
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   auto this_buff = reinterpret_cast<int64_t*>(buff_);
@@ -907,14 +1078,6 @@ void ResultSetStorage::initializeBaselineValueSlots(int64_t* entry_slots) const 
   }
 }
 
-namespace {
-
-const bool min_check_flag = false;
-const bool max_check_flag = false;
-const bool sum_check_flag = true;
-
-}  // namespace
-
 #define AGGREGATE_ONE_VALUE(                                                      \
     agg_kind__, val_ptr__, other_ptr__, chosen_bytes__, agg_info__)               \
   do {                                                                            \
@@ -931,20 +1094,10 @@ const bool sum_check_flag = true;
       if (chosen_bytes__ == sizeof(int32_t)) {                                    \
         auto val_ptr = reinterpret_cast<int32_t*>(val_ptr__);                     \
         auto other_ptr = reinterpret_cast<const int32_t*>(other_ptr__);           \
-        if (agg_kind__##_check_flag &&                                            \
-            detect_overflow_and_underflow(                                        \
-                *val_ptr, *other_ptr, false, int32_t(0), sql_type)) {             \
-          throw OverflowOrUnderflow();                                            \
-        }                                                                         \
         agg_##agg_kind__##_int32(val_ptr, *other_ptr);                            \
       } else {                                                                    \
         auto val_ptr = reinterpret_cast<int64_t*>(val_ptr__);                     \
         auto other_ptr = reinterpret_cast<const int64_t*>(other_ptr__);           \
-        if (agg_kind__##_check_flag &&                                            \
-            detect_overflow_and_underflow(                                        \
-                *val_ptr, *other_ptr, false, int64_t(0), sql_type)) {             \
-          throw OverflowOrUnderflow();                                            \
-        }                                                                         \
         agg_##agg_kind__(val_ptr, *other_ptr);                                    \
       }                                                                           \
     }                                                                             \
@@ -972,21 +1125,11 @@ const bool sum_check_flag = true;
           int32_t* val_ptr = reinterpret_cast<int32_t*>(val_ptr__);                 \
           const int32_t* other_ptr = reinterpret_cast<const int32_t*>(other_ptr__); \
           const auto null_val = static_cast<int32_t>(init_val__);                   \
-          if (agg_kind__##_check_flag &&                                            \
-              detect_overflow_and_underflow(                                        \
-                  *val_ptr, *other_ptr, true, null_val, sql_type)) {                \
-            throw OverflowOrUnderflow();                                            \
-          }                                                                         \
           agg_##agg_kind__##_int32_skip_val(val_ptr, *other_ptr, null_val);         \
         } else {                                                                    \
           int64_t* val_ptr = reinterpret_cast<int64_t*>(val_ptr__);                 \
           const int64_t* other_ptr = reinterpret_cast<const int64_t*>(other_ptr__); \
           const auto null_val = static_cast<int64_t>(init_val__);                   \
-          if (agg_kind__##_check_flag &&                                            \
-              detect_overflow_and_underflow(                                        \
-                  *val_ptr, *other_ptr, true, null_val, sql_type)) {                \
-            throw OverflowOrUnderflow();                                            \
-          }                                                                         \
           agg_##agg_kind__##_skip_val(val_ptr, *other_ptr, null_val);               \
         }                                                                           \
       }                                                                             \
@@ -996,89 +1139,65 @@ const bool sum_check_flag = true;
     }                                                                               \
   } while (0)
 
-#define AGGREGATE_ONE_COUNT(val_ptr__, other_ptr__, chosen_bytes__)        \
-  do {                                                                     \
-    if (chosen_bytes__ == sizeof(int32_t)) {                               \
-      auto val_ptr = reinterpret_cast<int32_t*>(val_ptr__);                \
-      auto other_ptr = reinterpret_cast<const int32_t*>(other_ptr__);      \
-      if (detect_overflow_and_underflow(static_cast<uint32_t>(*val_ptr),   \
-                                        static_cast<uint32_t>(*other_ptr), \
-                                        false,                             \
-                                        uint32_t(0))) {                    \
-        throw OverflowOrUnderflow();                                       \
-      }                                                                    \
-      agg_sum_int32(val_ptr, *other_ptr);                                  \
-    } else {                                                               \
-      auto val_ptr = reinterpret_cast<int64_t*>(val_ptr__);                \
-      auto other_ptr = reinterpret_cast<const int64_t*>(other_ptr__);      \
-      if (detect_overflow_and_underflow(static_cast<uint64_t>(*val_ptr),   \
-                                        static_cast<uint64_t>(*other_ptr), \
-                                        false,                             \
-                                        uint64_t(0))) {                    \
-        throw OverflowOrUnderflow();                                       \
-      }                                                                    \
-      agg_sum(val_ptr, *other_ptr);                                        \
-    }                                                                      \
+#define AGGREGATE_ONE_COUNT(val_ptr__, other_ptr__, chosen_bytes__)   \
+  do {                                                                \
+    if (chosen_bytes__ == sizeof(int32_t)) {                          \
+      auto val_ptr = reinterpret_cast<int32_t*>(val_ptr__);           \
+      auto other_ptr = reinterpret_cast<const int32_t*>(other_ptr__); \
+      agg_sum_int32(val_ptr, *other_ptr);                             \
+    } else {                                                          \
+      auto val_ptr = reinterpret_cast<int64_t*>(val_ptr__);           \
+      auto other_ptr = reinterpret_cast<const int64_t*>(other_ptr__); \
+      agg_sum(val_ptr, *other_ptr);                                   \
+    }                                                                 \
   } while (0)
 
-#define AGGREGATE_ONE_NULLABLE_COUNT(                                          \
-    val_ptr__, other_ptr__, init_val__, chosen_bytes__, agg_info__)            \
-  {                                                                            \
-    if (agg_info__.skip_null_val) {                                            \
-      const auto sql_type = get_compact_type(agg_info__);                      \
-      if (sql_type.is_fp()) {                                                  \
-        if (chosen_bytes__ == sizeof(float)) {                                 \
-          agg_sum_float_skip_val(                                              \
-              reinterpret_cast<int32_t*>(val_ptr__),                           \
-              *reinterpret_cast<const float*>(other_ptr__),                    \
-              *reinterpret_cast<const float*>(may_alias_ptr(&init_val__)));    \
-        } else {                                                               \
-          agg_sum_double_skip_val(                                             \
-              reinterpret_cast<int64_t*>(val_ptr__),                           \
-              *reinterpret_cast<const double*>(other_ptr__),                   \
-              *reinterpret_cast<const double*>(may_alias_ptr(&init_val__)));   \
-        }                                                                      \
-      } else {                                                                 \
-        if (chosen_bytes__ == sizeof(int32_t)) {                               \
-          auto val_ptr = reinterpret_cast<int32_t*>(val_ptr__);                \
-          auto other_ptr = reinterpret_cast<const int32_t*>(other_ptr__);      \
-          const auto null_val = static_cast<int32_t>(init_val__);              \
-          if (detect_overflow_and_underflow(static_cast<uint32_t>(*val_ptr),   \
-                                            static_cast<uint32_t>(*other_ptr), \
-                                            true,                              \
-                                            static_cast<uint32_t>(null_val),   \
-                                            sql_type)) {                       \
-            throw OverflowOrUnderflow();                                       \
-          }                                                                    \
-          agg_sum_int32_skip_val(val_ptr, *other_ptr, null_val);               \
-        } else {                                                               \
-          auto val_ptr = reinterpret_cast<int64_t*>(val_ptr__);                \
-          auto other_ptr = reinterpret_cast<const int64_t*>(other_ptr__);      \
-          const auto null_val = static_cast<int64_t>(init_val__);              \
-          if (detect_overflow_and_underflow(static_cast<uint64_t>(*val_ptr),   \
-                                            static_cast<uint64_t>(*other_ptr), \
-                                            true,                              \
-                                            static_cast<uint64_t>(null_val),   \
-                                            sql_type)) {                       \
-            throw OverflowOrUnderflow();                                       \
-          }                                                                    \
-          agg_sum_skip_val(val_ptr, *other_ptr, null_val);                     \
-        }                                                                      \
-      }                                                                        \
-    } else {                                                                   \
-      AGGREGATE_ONE_COUNT(val_ptr__, other_ptr__, chosen_bytes__);             \
-    }                                                                          \
+#define AGGREGATE_ONE_NULLABLE_COUNT(                                        \
+    val_ptr__, other_ptr__, init_val__, chosen_bytes__, agg_info__)          \
+  {                                                                          \
+    if (agg_info__.skip_null_val) {                                          \
+      const auto sql_type = get_compact_type(agg_info__);                    \
+      if (sql_type.is_fp()) {                                                \
+        if (chosen_bytes__ == sizeof(float)) {                               \
+          agg_sum_float_skip_val(                                            \
+              reinterpret_cast<int32_t*>(val_ptr__),                         \
+              *reinterpret_cast<const float*>(other_ptr__),                  \
+              *reinterpret_cast<const float*>(may_alias_ptr(&init_val__)));  \
+        } else {                                                             \
+          agg_sum_double_skip_val(                                           \
+              reinterpret_cast<int64_t*>(val_ptr__),                         \
+              *reinterpret_cast<const double*>(other_ptr__),                 \
+              *reinterpret_cast<const double*>(may_alias_ptr(&init_val__))); \
+        }                                                                    \
+      } else {                                                               \
+        if (chosen_bytes__ == sizeof(int32_t)) {                             \
+          auto val_ptr = reinterpret_cast<int32_t*>(val_ptr__);              \
+          auto other_ptr = reinterpret_cast<const int32_t*>(other_ptr__);    \
+          const auto null_val = static_cast<int32_t>(init_val__);            \
+          agg_sum_int32_skip_val(val_ptr, *other_ptr, null_val);             \
+        } else {                                                             \
+          auto val_ptr = reinterpret_cast<int64_t*>(val_ptr__);              \
+          auto other_ptr = reinterpret_cast<const int64_t*>(other_ptr__);    \
+          const auto null_val = static_cast<int64_t>(init_val__);            \
+          agg_sum_skip_val(val_ptr, *other_ptr, null_val);                   \
+        }                                                                    \
+      }                                                                      \
+    } else {                                                                 \
+      AGGREGATE_ONE_COUNT(val_ptr__, other_ptr__, chosen_bytes__);           \
+    }                                                                        \
   }
 
-void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
-                                     int8_t* this_ptr2,
-                                     const int8_t* that_ptr1,
-                                     const int8_t* that_ptr2,
-                                     const TargetInfo& target_info,
-                                     const size_t target_logical_idx,
-                                     const size_t target_slot_idx,
-                                     const size_t init_agg_val_idx,
-                                     const ResultSetStorage& that) const {
+void ResultSetStorage::reduceOneSlot(
+    int8_t* this_ptr1,
+    int8_t* this_ptr2,
+    const int8_t* that_ptr1,
+    const int8_t* that_ptr2,
+    const TargetInfo& target_info,
+    const size_t target_logical_idx,
+    const size_t target_slot_idx,
+    const size_t init_agg_val_idx,
+    const ResultSetStorage& that,
+    const std::vector<std::string>& serialized_varlen_buffer) const {
   if (query_mem_desc_.targetGroupbyIndicesSize() > 0) {
     if (query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) >= 0) {
       return;
@@ -1139,15 +1258,58 @@ void ResultSetStorage::reduceOneSlot(int8_t* this_ptr1,
         break;
       }
       case 8: {
-        const auto rhs_proj_col = *reinterpret_cast<const int64_t*>(that_ptr1);
-        if (rhs_proj_col != init_val) {
-          *reinterpret_cast<int64_t*>(this_ptr1) = rhs_proj_col;
+        auto rhs_proj_col = *reinterpret_cast<const int64_t*>(that_ptr1);
+        if ((target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) &&
+            !serialized_varlen_buffer.empty()) {
+          auto ptr1 = this_ptr1;
+          auto ptr2 = this_ptr2;
+          auto slot_idx = target_slot_idx;
+
+          const auto& elem_ti = target_info.sql_type.get_elem_type();
+          size_t length_to_elems =
+              target_info.sql_type.is_string() || target_info.sql_type.is_geometry()
+                  ? 1
+                  : elem_ti.get_size();
+          if (target_info.sql_type.is_geometry()) {
+            for (int j = 0; j < target_info.sql_type.get_physical_coord_cols(); j++) {
+              if (j > 0) {
+                ptr1 = ptr2 + query_mem_desc_.getColumnWidth(++slot_idx).compact;
+                ptr2 = ptr1 + query_mem_desc_.getColumnWidth(++slot_idx).compact;
+                length_to_elems = 4;
+              }
+              CHECK_LT(rhs_proj_col, serialized_varlen_buffer.size());
+              const auto& varlen_bytes_str = serialized_varlen_buffer[rhs_proj_col++];
+              const auto str_ptr =
+                  reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
+              CHECK(ptr1);
+              *reinterpret_cast<int64_t*>(ptr1) =
+                  reinterpret_cast<const int64_t>(str_ptr);
+              CHECK(ptr2);
+              *reinterpret_cast<int64_t*>(ptr2) =
+                  static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
+            }
+          } else {
+            CHECK_LT(rhs_proj_col, serialized_varlen_buffer.size());
+            const auto& varlen_bytes_str = serialized_varlen_buffer[rhs_proj_col];
+            const auto str_ptr =
+                reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
+            CHECK(ptr1);
+            *reinterpret_cast<int64_t*>(ptr1) = reinterpret_cast<const int64_t>(str_ptr);
+            CHECK(ptr2);
+            *reinterpret_cast<int64_t*>(ptr2) =
+                static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
+          }
+        } else {
+          if (rhs_proj_col != init_val) {
+            *reinterpret_cast<int64_t*>(this_ptr1) = rhs_proj_col;
+          }
+          if ((target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen())) {
+            CHECK(this_ptr2 && that_ptr2);
+            *reinterpret_cast<int64_t*>(this_ptr2) =
+                *reinterpret_cast<const int64_t*>(that_ptr2);
+          }
         }
-        if (is_permissable_sample_agg(target_info)) {
-          CHECK(this_ptr2 && that_ptr2);
-          *reinterpret_cast<int64_t*>(this_ptr2) =
-              *reinterpret_cast<const int64_t*>(that_ptr2);
-        }
+
         break;
       }
       case 0: {
@@ -1318,6 +1480,11 @@ bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
           ++agg_col_idx;
         }
       } else {
+        if (agg_info.agg_kind == kSAMPLE) {
+          CHECK(!agg_info.sql_type.is_varlen())
+              << "Interleaved bins reduction not supported for variable length arguments "
+                 "to SAMPLE";
+        }
         if (agg_vals[agg_col_idx]) {
           if (agg_info.agg_kind == kSAMPLE) {
             continue;

@@ -21,6 +21,7 @@ linenoise | [BSD](<https://github.com/antirez/linenoise/blob/master/LICENSE>) | 
 LLVM | [LLVM](<http://llvm.org/releases/3.9.1/LICENSE.TXT>) | JIT |
 muparserx | [BSD](<https://github.com/beltoforion/muparserx/blob/master/License.txt>) | Expression string parsing |
 ncurses | [X11](<http://invisible-island.net/ncurses/ncurses.faq.html#who_owns_it>) | CLI/password entry |
+PicoSHA2 | [MIT](<https://github.com/okdshin/PicoSHA2/blob/master/LICENSE>) | SHA256 Library |
 rapidjson | [MIT](<https://github.com/miloyip/rapidjson/blob/master/license.txt>) | JSON parsing |
 SQLite | [Public Domain](<https://www.sqlite.org/copyright.html>) | Catalog management |
 Xorg | [MIT](<https://www.x.org/releases/X11R7.7/doc/xorg-docs/License.html>) | OpenGL rendering |
@@ -74,3 +75,8 @@ queue.h | [BSD](<https://github.com/edenhill/librdkafka/blob/master/LICENSE.queu
 regexp | [Public domain](<https://github.com/ccxvii/minilibs/blob/master/README.md>) | HA, Kafka support |
 tinycthread | [zlib](<https://github.com/tinycthread/tinycthread/blob/master/README.txt>) | HA, Kafka support |
 wingetopt | [BSD](<https://github.com/alex85k/wingetopt/blob/master/LICENSE>) | HA, Kafka support |
+--- | --- | --- |
+opensaml | [Apache](<https://git.shibboleth.net/view/?p=cpp-opensaml.git;a=blob;f=doc/LICENSE.txt>) | SAML support |
+xerces-c | [Apache](<https://github.com/apache/xerces-c/blob/trunk/LICENSE>) | SAML support |
+xml-security-c | [Apache](<https://github.com/apache/santuario-cpp/blob/trunk/LICENSE.txt>) | SAML support |
+xmltooling | [Apache](<https://git.shibboleth.net/view/?p=cpp-xmltooling.git;a=blob;f=doc/LICENSE.txt>) | SAML support |

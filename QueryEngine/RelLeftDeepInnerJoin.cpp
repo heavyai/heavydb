@@ -22,8 +22,6 @@
 
 #include <numeric>
 
-extern bool g_left_deep_join_optimization;
-
 RelLeftDeepInnerJoin::RelLeftDeepInnerJoin(
     const std::shared_ptr<RelFilter>& filter,
     std::vector<std::shared_ptr<const RelAlgNode>> inputs,
@@ -141,20 +139,6 @@ bool RelLeftDeepInnerJoin::coversOriginalNode(const RelAlgNode* node) const {
 
 namespace {
 
-bool is_left_deep_join_helper(const RelJoin* join) {
-  CHECK(join);
-  CHECK_EQ(size_t(2), join->inputCount());
-  if (dynamic_cast<const RelJoin*>(join->getInput(1))) {
-    // Not left-deep.
-    return false;
-  }
-  const auto left_input_join = dynamic_cast<const RelJoin*>(join->getInput(0));
-  if (left_input_join) {
-    return is_left_deep_join_helper(left_input_join);
-  }
-  return g_left_deep_join_optimization;
-}
-
 void collect_left_deep_join_inputs(
     std::deque<std::shared_ptr<const RelAlgNode>>& inputs,
     std::vector<std::shared_ptr<const RelJoin>>& original_joins,
@@ -246,7 +230,7 @@ std::shared_ptr<const RelAlgNode> get_left_deep_join_root(
     if (!join) {
       return nullptr;
     }
-    if (is_left_deep_join_helper(join) && join->getJoinType() == JoinType::INNER) {
+    if (join->getJoinType() == JoinType::INNER) {
       return node;
     }
   }
@@ -254,7 +238,7 @@ std::shared_ptr<const RelAlgNode> get_left_deep_join_root(
     return nullptr;
   }
   const auto join = dynamic_cast<const RelJoin*>(node->getInput(0));
-  if (!join || !is_left_deep_join_helper(join)) {
+  if (!join) {
     return nullptr;
   }
   return node->getAndOwnInput(0);

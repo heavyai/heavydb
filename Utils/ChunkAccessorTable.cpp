@@ -49,7 +49,7 @@ ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
 
       // find the chunk
       ChunkKey chunkKey{
-          cat.get_currentDB().dbId, td->tableId, cd->columnId, fragment.fragmentId};
+          cat.getCurrentDB().dbId, td->tableId, cd->columnId, fragment.fragmentId};
       auto chunkMetaIt = fragment.getChunkMetadataMap().find(cd->columnId);
       if (chunkMetaIt == fragment.getChunkMetadataMap().end()) {
         throw std::runtime_error("Failed to find the chunk for column: " +
@@ -60,7 +60,7 @@ ChunkAccessorTable getChunkAccessorTable(const Catalog_Namespace::Catalog& cat,
       // get the chunk
       std::shared_ptr<Chunk_NS::Chunk> chunk =
           Chunk_NS::Chunk::getChunk(cd,
-                                    &cat.get_dataMgr(),
+                                    &cat.getDataMgr(),
                                     chunkKey,
                                     Data_Namespace::CPU_LEVEL,
                                     0,

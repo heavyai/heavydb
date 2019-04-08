@@ -95,6 +95,12 @@ class FileMgr : public AbstractBufferMgr {  // implements
           const int epoch = -1,
           const size_t defaultPageSize = 2097152);
 
+  // used only to initialize enough to drop
+  FileMgr(const int deviceId,
+          GlobalFileMgr* gfm,
+          const std::pair<const int, const int> fileMgrKey,
+          const bool initOnly);
+
   FileMgr(GlobalFileMgr* gfm, const size_t defaultPageSize, std::string basePath);
 
   /// Destructor

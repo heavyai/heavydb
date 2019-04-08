@@ -49,7 +49,7 @@ using namespace Fragmenter_Namespace;
 #endif
 
 // doesnt need real calcite server
-#define CALCITEPORT 39093
+#define CALCITEPORT 36279
 
 namespace {
 std::unique_ptr<SessionInfo> gsession;
@@ -109,7 +109,9 @@ class SQLTestEnv : public ::testing::Environment {
                    {},
                    g_calcite,
                    !boost::filesystem::exists(system_db_file),
-                   false);
+                   false,
+                   mapd_parms.aggregator,
+                   {});
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
       if (!sys_cat.getMetadataForUser("gtest", user)) {
         sys_cat.createUser("gtest", "test!test!", false);
@@ -123,18 +125,21 @@ class SQLTestEnv : public ::testing::Environment {
     MapDParameters mapd_parms;
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
         data_dir.string(), mapd_parms, false, 0);
-    gsession.reset(new SessionInfo(
-        std::make_shared<Catalog>(
-            base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-        user,
-        ExecutorDeviceType::GPU,
-        ""));
+    gsession.reset(new SessionInfo(std::make_shared<Catalog>(base_path.string(),
+                                                             db,
+                                                             dataMgr,
+                                                             std::vector<LeafHostInfo>{},
+                                                             g_calcite,
+                                                             false),
+                                   user,
+                                   ExecutorDeviceType::GPU,
+                                   ""));
   }
 };
 
 bool load_data_test(string table_name, size_t num_rows) {
   vector<size_t> insert_col_hashs =
-      populate_table_random(table_name, num_rows, gsession->get_catalog());
+      populate_table_random(table_name, num_rows, gsession->getCatalog());
   return true;
 }
 
@@ -149,15 +154,15 @@ static size_t load_data_for_thread_test_2(int num_rows, string table_name) {
   if (num_rows <
       initial_num_rows) {  // to handle special case when only few rows should be added
     insert_col_hashs =
-        populate_table_random(table_name, num_rows, gsession->get_catalog());
+        populate_table_random(table_name, num_rows, gsession->getCatalog());
   } else {
     for (int cur_num_rows = initial_num_rows; cur_num_rows <= num_rows;
          cur_num_rows += num_rows_step) {
       if (cur_num_rows == num_rows) {
         insert_col_hashs =
-            populate_table_random(table_name, num_rows_step, gsession->get_catalog());
+            populate_table_random(table_name, num_rows_step, gsession->getCatalog());
       } else {
-        populate_table_random(table_name, num_rows_step, gsession->get_catalog());
+        populate_table_random(table_name, num_rows_step, gsession->getCatalog());
       }
     }
   }
@@ -170,7 +175,7 @@ TEST(DataLoad, Numbers) {
   ASSERT_NO_THROW(run_ddl_statement("drop table if exists numbers;"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   EXPECT_TRUE(load_data_test("numbers", LARGE));
   ASSERT_NO_THROW(run_ddl_statement("drop table numbers;"););
@@ -187,7 +192,7 @@ TEST(StorageSmall, AllTypes) {
   ASSERT_NO_THROW(run_ddl_statement("drop table if exists alltypes;"););
   ASSERT_NO_THROW(
       run_ddl_statement("create table alltypes (a smallint, b int, c bigint, d "
-                        "numeric(7,3), e double, f float, "
+                        "numeric(17,3), e double, f float, "
                         "g timestamp(0), h time(0), i date, x varchar(10), y text);"););
   EXPECT_TRUE(load_data_test("alltypes", SMALL));
   ASSERT_NO_THROW(run_ddl_statement("drop table alltypes;"););
@@ -203,23 +208,23 @@ TEST(DataLoad, Numbers_Parallel_Load) {
   /* create tables in single thread */
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_1 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_2 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_3 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_4 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_5 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
 
   /* load data into tables using parallel threads */
@@ -261,23 +266,23 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropTable) {
   /* create tables in single thread */
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_1 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_2 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_3 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_4 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_5 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
 
   /* Load table numbers_4 with data in the main thread, so it will be available for sure
@@ -317,7 +322,7 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropTable) {
   /* create table numbers_6 and load it with data */
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_6 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_6 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   int num_table_rows = SMALL;
   db_table.push_back(table_name + to_string(6));
@@ -346,23 +351,23 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropCreateTable_InsertRows) {
   /* create tables in single thread */
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_1 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_1 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_2 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_2 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_3 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_3 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_4 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_4 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_5 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_5 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
 
   /* Load table numbers_2 with data in the main thread, so it will be available for sure
@@ -403,7 +408,7 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropCreateTable_InsertRows) {
   /* create table numbers_6 and load it with data */
   ASSERT_NO_THROW(
       run_ddl_statement(
-          "create table numbers_6 (a smallint, b int, c bigint, d numeric(7,3), e "
+          "create table numbers_6 (a smallint, b int, c bigint, d numeric(17,3), e "
           "double, f float);"););
   int num_table_rows = SMALL;
   db_table.push_back(table_name + to_string(6));
@@ -444,5 +449,12 @@ int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
-  return RUN_ALL_TESTS();
+
+  int err{0};
+  try {
+    err = RUN_ALL_TESTS();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
+  return err;
 }

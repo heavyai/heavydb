@@ -63,7 +63,7 @@ void Executor::interrupt() {
               << ", gpu_active_modules_device_mask_: " << std::hex
               << std::to_string(gpu_active_modules_device_mask_);
 
-      catalog_->get_dataMgr().cudaMgr_->setContext(device_id);
+      catalog_->getDataMgr().getCudaMgr()->setContext(device_id);
 
       // Create high priority non-blocking communication stream
       CUstream cu_stream1;

@@ -18,7 +18,6 @@
 #define QUERYENGINE_INPUTMETADATA_H
 
 #include "InputDescriptors.h"
-#include "IteratorTable.h"
 #include "RelAlgExecutionUnit.h"
 
 #include <unordered_map>
@@ -29,7 +28,7 @@ class Catalog;
 
 class Executor;
 
-using TemporaryTables = std::unordered_map<int, const ResultPtr&>;
+using TemporaryTables = std::unordered_map<int, const ResultSetPtr&>;
 
 struct InputTableInfo {
   int table_id;

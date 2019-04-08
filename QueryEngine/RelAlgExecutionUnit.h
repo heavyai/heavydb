@@ -39,7 +39,7 @@ enum class SortAlgorithm { Default, SpeculativeTopN, StreamingTopN };
 namespace Analyzer {
 
 class Expr;
-class NDVEstimator;
+class Estimator;
 struct OrderEntry;
 
 }  // namespace Analyzer
@@ -60,22 +60,19 @@ typedef std::vector<JoinCondition> JoinQualsPerNestingLevel;
 
 struct RelAlgExecutionUnit {
   const std::vector<InputDescriptor> input_descs;
-  const std::vector<InputDescriptor> extra_input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   std::list<std::shared_ptr<Analyzer::Expr>> simple_quals;
   std::list<std::shared_ptr<Analyzer::Expr>> quals;
-  const JoinType join_type;
-  const JoinQualsPerNestingLevel inner_joins;
-  const std::vector<std::pair<int, size_t>> join_dimensions;
-  const std::list<std::shared_ptr<Analyzer::Expr>> inner_join_quals;
-  const std::list<std::shared_ptr<Analyzer::Expr>> outer_join_quals;
+  const JoinQualsPerNestingLevel join_quals;
   const std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
   std::vector<Analyzer::Expr*> target_exprs;
-  const std::vector<Analyzer::Expr*> orig_target_exprs;
-  const std::shared_ptr<Analyzer::NDVEstimator> estimator;
+  const std::shared_ptr<Analyzer::Estimator> estimator;
   const SortInfo sort_info;
   size_t scan_limit;
   QueryFeatureDescriptor query_features;
 };
+
+class ResultSet;
+typedef std::shared_ptr<ResultSet> ResultSetPtr;
 
 #endif  // QUERYENGINE_RELALGEXECUTIONUNIT_H

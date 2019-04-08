@@ -22,6 +22,7 @@
 #ifndef DATAMGR_MEMORY_ABSTRACTBUFFER_H
 #define DATAMGR_MEMORY_ABSTRACTBUFFER_H
 
+#include <glog/logging.h>
 #include "../Shared/sqltypes.h"
 #include "../Shared/types.h"
 #include "Encoder.h"
@@ -118,6 +119,8 @@ class AbstractBuffer {
     hasEncoder = true;
     sqlType = tmpSqlType;
     encoder.reset(Encoder::Create(this, sqlType));
+    LOG_IF(FATAL, encoder == nullptr)
+        << "Failed to create encoder for SQL Type " << sqlType.get_type_name();
   }
 
   void syncEncoder(const AbstractBuffer* srcBuffer) {

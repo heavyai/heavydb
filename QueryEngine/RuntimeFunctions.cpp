@@ -176,11 +176,28 @@ DEF_ARITH_NULLABLE_RHS(int64_t, int64_t, mod, %)
 #undef DEF_ARITH_NULLABLE_LHS
 #undef DEF_ARITH_NULLABLE
 
-extern "C" ALWAYS_INLINE int64_t scale_decimal(const int64_t operand,
-                                               const uint64_t scale,
-                                               const int64_t operand_null_val,
-                                               const int64_t result_null_val) {
+extern "C" ALWAYS_INLINE int64_t scale_decimal_up(const int64_t operand,
+                                                  const uint64_t scale,
+                                                  const int64_t operand_null_val,
+                                                  const int64_t result_null_val) {
   return operand != operand_null_val ? operand * scale : result_null_val;
+}
+
+extern "C" ALWAYS_INLINE int64_t scale_decimal_down(const int64_t operand,
+                                                    const int64_t scale,
+                                                    const int64_t scale_half,
+                                                    const bool do_null_check,
+                                                    const int64_t operand_null_val,
+                                                    const int64_t result_null_val) {
+  // rounded scale down of a decimal
+  if (do_null_check) {
+    if (operand == operand_null_val) {
+      return result_null_val;
+    }
+  }
+  int64_t temp = operand;
+  temp = temp >= 0 ? temp + scale_half : temp - scale_half;
+  return temp / scale;
 }
 
 #define DEF_UMINUS_NULLABLE(type, null_type)                                         \
@@ -370,9 +387,15 @@ extern "C" ALWAYS_INLINE void agg_min_int32(int32_t* agg, const int32_t val) {
   *agg = std::min(*agg, val);
 }
 
-extern "C" ALWAYS_INLINE void agg_id_int32(int32_t* agg, const int32_t val) {
-  *agg = val;
-}
+#define DEF_AGG_ID_INT(n)                                                              \
+  extern "C" ALWAYS_INLINE void agg_id_int##n(int##n##_t* agg, const int##n##_t val) { \
+    *agg = val;                                                                        \
+  }
+
+DEF_AGG_ID_INT(32)
+DEF_AGG_ID_INT(16)
+DEF_AGG_ID_INT(8)
+#undef DEF_AGG_ID_INT
 
 extern "C" ALWAYS_INLINE int64_t agg_sum_skip_val(int64_t* agg,
                                                   const int64_t val,
@@ -622,6 +645,10 @@ extern "C" ALWAYS_INLINE int64_t decimal_ceil(const int64_t x, const int64_t sca
       int64_t* agg, const int64_t val, const int64_t skip_val) {}                        \
   extern "C" GPU_RT_STUB void base_agg_func##_int32_shared(int32_t* agg,                 \
                                                            const int32_t val) {}         \
+  extern "C" GPU_RT_STUB void base_agg_func##_int16_shared(int16_t* agg,                 \
+                                                           const int16_t val) {}         \
+  extern "C" GPU_RT_STUB void base_agg_func##_int8_shared(int8_t* agg,                   \
+                                                          const int8_t val) {}           \
                                                                                          \
   extern "C" GPU_RT_STUB void base_agg_func##_int32_skip_val_shared(                     \
       int32_t* agg, const int32_t val, const int32_t skip_val) {}                        \
@@ -851,6 +878,54 @@ extern "C" ALWAYS_INLINE int64_t* get_matching_group_value(int64_t* groups_buffe
   return nullptr;
 }
 
+template <typename T>
+ALWAYS_INLINE int32_t get_matching_group_value_columnar_slot(int64_t* groups_buffer,
+                                                             const uint32_t entry_count,
+                                                             const uint32_t h,
+                                                             const T* key,
+                                                             const uint32_t key_count) {
+  auto off = h;
+  auto key_buffer = reinterpret_cast<T*>(groups_buffer);
+  if (key_buffer[off] == get_empty_key<T>()) {
+    for (size_t i = 0; i < key_count; ++i) {
+      key_buffer[off] = key[i];
+      off += entry_count;
+    }
+    return h;
+  }
+  off = h;
+  for (size_t i = 0; i < key_count; ++i) {
+    if (key_buffer[off] != key[i]) {
+      return -1;
+    }
+    off += entry_count;
+  }
+  return h;
+}
+
+extern "C" ALWAYS_INLINE int32_t
+get_matching_group_value_columnar_slot(int64_t* groups_buffer,
+                                       const uint32_t entry_count,
+                                       const uint32_t h,
+                                       const int64_t* key,
+                                       const uint32_t key_count,
+                                       const uint32_t key_width) {
+  switch (key_width) {
+    case 4:
+      return get_matching_group_value_columnar_slot(groups_buffer,
+                                                    entry_count,
+                                                    h,
+                                                    reinterpret_cast<const int32_t*>(key),
+                                                    key_count);
+    case 8:
+      return get_matching_group_value_columnar_slot(
+          groups_buffer, entry_count, h, key, key_count);
+    default:
+      return -1;
+  }
+  return -1;
+}
+
 extern "C" ALWAYS_INLINE int64_t* get_matching_group_value_columnar(
     int64_t* groups_buffer,
     const uint32_t h,
@@ -875,19 +950,47 @@ extern "C" ALWAYS_INLINE int64_t* get_matching_group_value_columnar(
   return &groups_buffer[off];
 }
 
+/*
+ * For a particular hashed_index, returns the row-wise offset
+ * to the first matching agg column in memory.
+ * It also checks the corresponding group column, and initialize all
+ * available keys if they are not empty (it is assumed all group columns are
+ * 64-bit wide).
+ *
+ * Memory layout:
+ *
+ * | prepended group columns (64-bit each) | agg columns |
+ */
 extern "C" ALWAYS_INLINE int64_t* get_matching_group_value_perfect_hash(
     int64_t* groups_buffer,
-    const uint32_t h,
+    const uint32_t hashed_index,
     const int64_t* key,
-    const uint32_t key_qw_count,
+    const uint32_t key_count,
     const uint32_t row_size_quad) {
-  uint32_t off = h * row_size_quad;
+  uint32_t off = hashed_index * row_size_quad;
   if (groups_buffer[off] == EMPTY_KEY_64) {
-    for (uint32_t i = 0; i < key_qw_count; ++i) {
+    for (uint32_t i = 0; i < key_count; ++i) {
       groups_buffer[off + i] = key[i];
     }
   }
-  return groups_buffer + off + key_qw_count;
+  return groups_buffer + off + key_count;
+}
+
+/*
+ * For a particular hashed_index, find and initialize (if necessary) all the group
+ * columns corresponding to a key. It is assumed that all group columns are 64-bit wide.
+ */
+extern "C" ALWAYS_INLINE void set_matching_group_value_perfect_hash_columnar(
+    int64_t* groups_buffer,
+    const uint32_t hashed_index,
+    const int64_t* key,
+    const uint32_t key_count,
+    const uint32_t entry_count) {
+  if (groups_buffer[hashed_index] == EMPTY_KEY_64) {
+    for (uint32_t i = 0; i < key_count; i++) {
+      groups_buffer[i * entry_count + hashed_index] = key[i];
+    }
+  }
 }
 
 #include "GroupByRuntime.cpp"
@@ -1013,13 +1116,6 @@ extern "C" void multifrag_query_hoisted_literals(const int8_t*** col_buffers,
                                 join_hash_tables,
                                 total_matched,
                                 error_code);
-#ifdef ENABLE_COMPACTION
-    // TODO(miyu): add detection w/ range info to enable this conditionally,
-    //             check if return when *error_code < 0.
-    if (*error_code > 0) {
-      return;
-    }
-#endif
   }
 }
 
@@ -1063,12 +1159,5 @@ extern "C" void multifrag_query(const int8_t*** col_buffers,
                join_hash_tables,
                total_matched,
                error_code);
-#ifdef ENABLE_COMPACTION
-    // TODO(miyu): add detection w/ range info to enable this conditionally,
-    //             check if return when *error_code < 0.
-    if (*error_code > 0) {
-      return;
-    }
-#endif
   }
 }

@@ -2,6 +2,7 @@
 #define CONFIGRESOLVE_H
 
 #include <type_traits>
+#include "funcannotations.h"
 
 struct PreprocessorTrue {};
 struct PreprocessorFalse {};
@@ -30,10 +31,23 @@ using CudaBuildSelector = PreprocessorTrue;
 using CudaBuildSelector = PreprocessorFalse;
 #endif
 
-// There is probably a better place to put this.  Catalog.h, perhaps?  Reviewers, please
-// comment.
-inline constexpr char const* getDeletedColumnLabel() {
-  return "$delete$";
+#ifdef ENABLE_VARLEN_UPDATE
+using VarlenUpdates = PreprocessorTrue;
+#else
+using VarlenUpdates = PreprocessorFalse;
+#endif
+
+template <typename T>
+inline constexpr bool is_feature_enabled() {
+  return std::is_same<T, PreprocessorTrue>::value;
+}
+
+inline DEVICE constexpr bool isCudaCC() {
+#ifdef __CUDACC__
+  return true;
+#else
+  return false;
+#endif
 }
 
 #endif

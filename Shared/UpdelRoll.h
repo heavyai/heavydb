@@ -63,6 +63,8 @@ struct UpdelRoll {
   int logicalTableId;
   Data_Namespace::MemoryLevel memoryLevel{Data_Namespace::MemoryLevel::CPU_LEVEL};
 
+  bool is_varlen_update = false;
+
   void cancelUpdate();
   void commitUpdate();
 };

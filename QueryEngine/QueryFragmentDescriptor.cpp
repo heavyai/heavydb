@@ -16,13 +16,17 @@
 
 #include "QueryFragmentDescriptor.h"
 
+#include <DataMgr/DataMgr.h>
 #include "Execute.h"
 
 QueryFragmentDescriptor::QueryFragmentDescriptor(
     const RelAlgExecutionUnit& ra_exe_unit,
-    const std::vector<InputTableInfo>& query_infos) {
+    const std::vector<InputTableInfo>& query_infos,
+    const std::vector<Data_Namespace::MemoryInfo>& gpu_mem_infos,
+    const double gpu_input_mem_limit_percent)
+    : gpu_input_mem_limit_percent_(gpu_input_mem_limit_percent) {
   const size_t input_desc_count{ra_exe_unit.input_descs.size()};
-  CHECK_EQ(query_infos.size(), (input_desc_count + ra_exe_unit.extra_input_descs.size()));
+  CHECK_EQ(query_infos.size(), input_desc_count);
   for (size_t table_idx = 0; table_idx < input_desc_count; ++table_idx) {
     const auto table_id = ra_exe_unit.input_descs[table_idx].getTableId();
     if (!selected_tables_fragments_.count(table_id)) {
@@ -30,29 +34,25 @@ QueryFragmentDescriptor::QueryFragmentDescriptor(
           &query_infos[table_idx].info.fragments;
     }
   }
+
+  for (size_t device_id = 0; device_id < gpu_mem_infos.size(); device_id++) {
+    const auto& gpu_mem_info = gpu_mem_infos[device_id];
+    available_gpu_mem_bytes_[device_id] =
+        gpu_mem_info.maxNumPages * gpu_mem_info.pageSize;
+  }
 }
 
 void QueryFragmentDescriptor::computeAllTablesFragments(
     std::map<int, const TableFragments*>& all_tables_fragments,
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos) {
-  for (size_t tab_idx = 0, tab_cnt = ra_exe_unit.input_descs.size(); tab_idx < tab_cnt;
-       ++tab_idx) {
+  for (size_t tab_idx = 0; tab_idx < ra_exe_unit.input_descs.size(); ++tab_idx) {
     int table_id = ra_exe_unit.input_descs[tab_idx].getTableId();
     CHECK_EQ(query_infos[tab_idx].table_id, table_id);
     const auto& fragments = query_infos[tab_idx].info.fragments;
     if (!all_tables_fragments.count(table_id)) {
       all_tables_fragments.insert(std::make_pair(table_id, &fragments));
     }
-  }
-  for (size_t tab_idx = 0,
-              extra_tab_base = ra_exe_unit.input_descs.size(),
-              tab_cnt = ra_exe_unit.extra_input_descs.size();
-       tab_idx < tab_cnt;
-       ++tab_idx) {
-    int table_id = ra_exe_unit.extra_input_descs[tab_idx].getTableId();
-    const auto& fragments = query_infos[extra_tab_base + tab_idx].info.fragments;
-    all_tables_fragments.insert(std::make_pair(table_id, &fragments));
   }
 }
 
@@ -90,6 +90,8 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
   const auto outer_fragments = it->second;
   outer_fragments_size_ = outer_fragments->size();
 
+  const auto num_bytes_for_row = executor->getNumBytesForFetchedRow();
+
   for (size_t i = 0; i < outer_fragments->size(); ++i) {
     const auto& fragment = (*outer_fragments)[i];
     const auto skip_frag = executor->skipFragment(
@@ -110,6 +112,9 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
                         ? fragment.deviceIds[static_cast<int>(memory_level)]
                         : fragment.shard % chosen_device_count;
 
+    if (device_type == ExecutorDeviceType::GPU) {
+      checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
+    }
     // Since we may have skipped fragments, the fragments_per_kernel_ vector may be
     // smaller than the outer_fragments size
     CHECK_LE(fragments_per_kernel_.size(), i);
@@ -154,6 +159,7 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
   outer_fragments_size_ = outer_fragments->size();
 
   const auto inner_table_id_to_join_condition = executor->getInnerTabIdToJoinCond();
+  const auto num_bytes_for_row = executor->getNumBytesForFetchedRow();
 
   for (size_t outer_frag_id = 0; outer_frag_id < outer_fragments->size();
        ++outer_frag_id) {
@@ -175,6 +181,9 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
         fragment.shard == -1
             ? fragment.deviceIds[static_cast<int>(Data_Namespace::GPU_LEVEL)]
             : fragment.shard % device_count;
+    if (device_type == ExecutorDeviceType::GPU) {
+      checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
+    }
     for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
       const auto table_id = ra_exe_unit.input_descs[j].getTableId();
       auto table_frags_it = selected_tables_fragments_.find(table_id);
@@ -220,9 +229,6 @@ bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
                       ra_exe_unit.sort_info.order_entries.empty() &&
                       ra_exe_unit.scan_limit;
   if (result) {
-    CHECK(ra_exe_unit.join_type == JoinType::INVALID);
-    CHECK(ra_exe_unit.inner_join_quals.empty());
-    CHECK(ra_exe_unit.outer_join_quals.empty());
     CHECK_EQ(size_t(1), ra_exe_unit.groupby_exprs.size());
     CHECK(!ra_exe_unit.groupby_exprs.front());
   }
@@ -241,4 +247,25 @@ bool QueryFragmentDescriptor::terminateDispatchMaybe(
     return true;
   }
   return false;
+}
+
+void QueryFragmentDescriptor::checkDeviceMemoryUsage(
+    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const int device_id,
+    const size_t num_bytes_for_row) {
+  if (g_cluster) {
+    // Disabled in distributed mode for now
+    return;
+  }
+  CHECK_GE(device_id, 0);
+  tuple_count_per_device_[device_id] += fragment.getNumTuples();
+  const size_t gpu_bytes_limit =
+      available_gpu_mem_bytes_[device_id] * gpu_input_mem_limit_percent_;
+  if (tuple_count_per_device_[device_id] * num_bytes_for_row > gpu_bytes_limit) {
+    LOG(WARNING) << "Not enough memory on device " << device_id
+                 << " for input chunks totaling "
+                 << tuple_count_per_device_[device_id] * num_bytes_for_row
+                 << " bytes (available device memory: " << gpu_bytes_limit << " bytes)";
+    throw QueryMustRunOnCpu();
+  }
 }

@@ -34,67 +34,6 @@
       parseTrees.emplace_back(new CreateTableAsSelectStmt(table_name, select_query, true));                             \
       return 0;                                                                                                         \
     }                                                                                                                   \
-    std::string rolename_regex = R"(([A-Za-z_][A-Za-z0-9\$_\-]*))";                                                     \
-    boost::regex create_role_expr{R"(CREATE\s+ROLE\s+)" + rolename_regex + R"(\s*;)",                                   \
-                                  boost::regex::extended | boost::regex::icase};                                        \
-    if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, create_role_expr)) {                     \
-      const auto role_name = what[1].str();                                                                             \
-      parseTrees.emplace_back(new CreateRoleStmt(role_name));                                                           \
-      return 0;                                                                                                         \
-    }                                                                                                                   \
-    boost::regex drop_role_expr{R"(DROP\s+ROLE\s+)" + rolename_regex + R"(\s*;)",                                       \
-                                boost::regex::extended | boost::regex::icase};                                          \
-    if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, drop_role_expr)) {                       \
-      const auto role_name = what[1].str();                                                                             \
-      parseTrees.emplace_back(new DropRoleStmt(role_name));                                                             \
-      return 0;                                                                                                         \
-    }                                                                                                                   \
-    std::string grantee_regex = R"((([A-Za-z_][A-Za-z0-9\$_\-]*)|([^\s"]+|".+")@[A-Za-z0-9][A-Za-z0-9\-\.]*\.[A-Za-z]+))"; \
-    boost::regex grant_privileges_expr{R"(GRANT\s+([A-Za-z_][A-Za-z0-9\$_\s]*)\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+TO\s+)" + grantee_regex + R"(\s*;)", \
-                                       boost::regex::extended | boost::regex::icase};                                   \
-    if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, grant_privileges_expr)) {                \
-      const auto priv = what[1].str();                                                                                  \
-      const auto object_type = what[2].str();                                                                           \
-      const auto object_name = what[3].str();                                                                           \
-      const auto role_name = what[4].str();                                                                             \
-      parseTrees.emplace_back(new GrantPrivilegesStmt(priv, object_type, object_name, role_name));                      \
-      return 0;                                                                                                         \
-    }                                                                                                                   \
-    boost::regex revoke_privileges_expr{R"(REVOKE\s+([A-Za-z_][A-Za-z0-9\$_\s]*)\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+FROM\s+)" + grantee_regex + R"(\s*;)", \
-                                       boost::regex::extended | boost::regex::icase};                                   \
-    if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, revoke_privileges_expr)) {               \
-      const auto priv = what[1].str();                                                                                  \
-      const auto object_type = what[2].str();                                                                           \
-      const auto object_name = what[3].str();                                                                           \
-      const auto role_name = what[4].str();                                                                             \
-      parseTrees.emplace_back(new RevokePrivilegesStmt(priv, object_type, object_name, role_name));                     \
-      return 0;                                                                                                         \
-    }                                                                                                                   \
-    boost::regex show_privileges_expr{R"(SHOW\s+ON\s+([A-Za-z][A-Za-z]*)\s+([A-Za-z0-9\$_\.]*)\s+FOR\s+)" + grantee_regex + R"(\s*;)", \
-                                       boost::regex::extended | boost::regex::icase};                                   \
-    if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, show_privileges_expr)) {                 \
-      const auto object_type = what[1].str();                                                                           \
-      const auto object_name = what[2].str();                                                                           \
-      const auto role_name = what[3].str();                                                                             \
-      parseTrees.emplace_back(new ShowPrivilegesStmt(object_type, object_name, role_name));                             \
-      return 0;                                                                                                         \
-    }                                                                                                                   \
-    boost::regex grant_role_expr{R"(GRANT\s+)" + rolename_regex + R"(\s+TO\s+)" + grantee_regex + R"(\s*;)",            \
-                                 boost::regex::extended | boost::regex::icase};                                         \
-    if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, grant_role_expr)) {                      \
-      const auto role_name = what[1].str();                                                                             \
-      const auto user_name = what[2].str();                                                                             \
-      parseTrees.emplace_back(new GrantRoleStmt(role_name, user_name));                                                 \
-      return 0;                                                                                                         \
-    }                                                                                                                   \
-    boost::regex revoke_role_expr{R"(REVOKE\s+)" + rolename_regex + R"(\s+FROM\s+)" + grantee_regex + R"(\s*;)",        \
-                                  boost::regex::extended | boost::regex::icase};                                        \
-    if (boost::regex_match(trimmed_input.cbegin(), trimmed_input.cend(), what, revoke_role_expr)) {                     \
-      const auto role_name = what[1].str();                                                                             \
-      const auto user_name = what[2].str();                                                                             \
-      parseTrees.emplace_back(new RevokeRoleStmt(role_name, user_name));                                                \
-      return 0;                                                                                                         \
-    }                                                                                                                   \
     std::istringstream ss(inputStr);                                                                                    \
     lexer.switch_streams(&ss,0);                                                                                        \
     yyparse(parseTrees);                                                                                                \
@@ -151,6 +90,7 @@ using namespace Parser;
 	/* symbolic tokens */
 
 %token NAME
+%token DASHEDNAME
 %token EMAIL
 %token STRING FWDSTR
 %token INTNUM FIXEDNUM
@@ -202,20 +142,20 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| rename_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| rename_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| add_column_statement { $<nodeval>$ = $<nodeval>1; }
-  | copy_table_statement { $<nodeval>$ = $<nodeval>1; }
+	| copy_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_user_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_user_statement { $<nodeval>$ = $<nodeval>1; }
 	| alter_user_statement { $<nodeval>$ = $<nodeval>1; }
-  | explain_statement { $<nodeval>$ = $<nodeval>1; }
-        | create_role_statement { $<nodeval>$ = $<nodeval>1; }
-        | drop_role_statement { $<nodeval>$ = $<nodeval>1; }
-        | grant_privileges_statement { $<nodeval>$ = $<nodeval>1; }
-        | revoke_privileges_statement { $<nodeval>$ = $<nodeval>1; }
-        | show_privileges_statement { $<nodeval>$ = $<nodeval>1; }
-        | grant_role_statement { $<nodeval>$ = $<nodeval>1; }
-        | revoke_role_statement { $<nodeval>$ = $<nodeval>1; }
+	| explain_statement { $<nodeval>$ = $<nodeval>1; }
+	| create_role_statement { $<nodeval>$ = $<nodeval>1; }
+	| drop_role_statement { $<nodeval>$ = $<nodeval>1; }
+	| grant_privileges_statement { $<nodeval>$ = $<nodeval>1; }
+	| revoke_privileges_statement { $<nodeval>$ = $<nodeval>1; }
+	| grant_role_statement { $<nodeval>$ = $<nodeval>1; }
+	| optimize_table_statement { $<nodeval>$ = $<nodeval>1; }
+	| revoke_role_statement { $<nodeval>$ = $<nodeval>1; }
 	;
 
 /* NOT SUPPORTED
@@ -239,10 +179,6 @@ schema_element:
 	|	privilege_def {	$$ = $1; }
 	;
 NOT SUPPORTED */
-
-username:
-        NAME | EMAIL
-    ;
 
 create_database_statement:
 		CREATE DATABASE NAME
@@ -386,50 +322,48 @@ copy_table_statement:
 	;
 
 create_role_statement:
-                CREATE ROLE role
-                {
-                  $<nodeval>$ = new CreateRoleStmt(*$<stringval>3);
-                }
-                ;
-
+		CREATE ROLE rolename
+		{
+		    $<nodeval>$ = new CreateRoleStmt($<stringval>3);
+		}
+		;
 drop_role_statement:
-                DROP ROLE role
-                {
-                  $<nodeval>$ = new DropRoleStmt(*$<stringval>3);
-                }
-                ;
-
+		DROP ROLE rolename
+		{
+		    $<nodeval>$ = new DropRoleStmt($<stringval>3);
+		}
+		;
 grant_privileges_statement:
-                GRANT PRIVILEGES privileges
-                {
-                  $<nodeval>$ = new GrantPrivilegesStmt(*$<stringval>2, *$<stringval>4, *$<stringval>5, *$<stringval>7);
-                }
-                ;
-
+		GRANT privileges ON privileges_target_type privileges_target TO grantees
+		{
+		    $<nodeval>$ = new GrantPrivilegesStmt($<slistval>2, $<stringval>4, $<stringval>5, $<slistval>7);
+		}
+		;
 revoke_privileges_statement:
-                REVOKE PRIVILEGES privileges
-                {
-                  $<nodeval>$ = new RevokePrivilegesStmt(*$<stringval>2, *$<stringval>4, *$<stringval>5, *$<stringval>7);
-                }
-                ;
-show_privileges_statement:
-                SHOW PRIVILEGES privileges
-                {
-                  $<nodeval>$ = new ShowPrivilegesStmt(*$<stringval>3, *$<stringval>4, *$<stringval>6);
-                }
-                ;
+		REVOKE privileges ON privileges_target_type privileges_target FROM grantees
+		{
+		    $<nodeval>$ = new RevokePrivilegesStmt($<slistval>2, $<stringval>4, $<stringval>5, $<slistval>7);
+		}
+		;
 grant_role_statement:
-                GRANT ROLE membership
-                {
-                  $<nodeval>$ = new GrantRoleStmt(*$<stringval>3, *$<stringval>5);
-                }
-                ;
+		GRANT rolenames TO grantees
+		{
+		    $<nodeval>$ = new GrantRoleStmt($<slistval>2, $<slistval>4);
+		}
+		;
 revoke_role_statement:
-                REVOKE ROLE membership
-                {
-                  $<nodeval>$ = new RevokeRoleStmt(*$<stringval>3, *$<stringval>5);
-                }
-                ;
+		REVOKE rolenames FROM grantees
+		{
+		    $<nodeval>$ = new RevokeRoleStmt($<slistval>2, $<slistval>4);
+		}
+		;
+
+optimize_table_statement:
+		OPTIMIZE TABLE opt_table opt_with_option_list
+		{
+			$<nodeval>$ = new OptimizeTableStmt($<stringval>3, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>4));
+		}
+		;
 
 base_table_element_commalist:
 		base_table_element { $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }
@@ -1122,7 +1056,6 @@ select_entry_commalist:
 atom:
 		literal { $<nodeval>$ = $<nodeval>1; }
 	|	USER { $<nodeval>$ = new UserLiteral(); }
-	| NULLX { $<nodeval>$ = new NullLiteral(); }
 	/* |	parameter_ref { $<nodeval>$ = $<nodeval>1; } */
 	;
 
@@ -1152,6 +1085,7 @@ literal:
 	|	data_type STRING { $<nodeval>$ = new CastExpr(new StringLiteral($<stringval>2), dynamic_cast<SQLType*>($<nodeval>1)); }
 	|	'{' literal_commalist '}' { $<nodeval>$ = new ArrayLiteral(reinterpret_cast<std::list<Expr*>*>($<listval>2)); }
 	|	ARRAY '[' literal_commalist ']' { $<nodeval>$ = new ArrayLiteral(reinterpret_cast<std::list<Expr*>*>($<listval>3)); }
+	|	NULLX { $<nodeval>$ = new NullLiteral(); }
 	;
 
 literal_commalist:
@@ -1170,17 +1104,85 @@ table:
 	/* |	NAME '.' NAME { $$ = new TableRef($<stringval>1, $<stringval>3); } */
 	;
 
-role:
-               NAME { $<stringval>$ = $<stringval>1; }
-        ;
+opt_table:
+		{ $<nodeval>$ = nullptr; }
+	|	table
+	;
+username:
+        NAME | EMAIL | DASHEDNAME
+    ;
+
+rolenames:
+		rolename { $<slistval>$ = new std::list<std::string*>(1, $<stringval>1); }
+	|	rolenames ',' rolename
+	{
+		$<slistval>$ = $<slistval>1;
+		$<slistval>$->push_back($<stringval>3);
+	}
+	;
+
+rolename:
+        NAME | DASHEDNAME
+    ;
+
+grantees:
+		grantee { $<slistval>$ = new std::list<std::string*>(1, $<stringval>1); }
+	|	grantees ',' grantee
+	{
+		$<slistval>$ = $<slistval>1;
+		$<slistval>$->push_back($<stringval>3);
+	}
+	;
+
+grantee:
+        username | rolename
+    ;
 
 privileges:
-               NAME { $<stringval>$ = $<stringval>1; }
-        ;
+		privilege { $<slistval>$ = new std::list<std::string*>(1, $<stringval>1); }
+	|	privileges ',' privilege
+	{
+		$<slistval>$ = $<slistval>1;
+		$<slistval>$->push_back($<stringval>3);
+	}
+	;
 
-membership:
-               NAME { $<stringval>$ = $<stringval>1; }
-        ;
+privilege:
+		ALL { $<stringval>$ = new std::string("ALL"); }
+	|	CREATE { $<stringval>$ = new std::string("CREATE"); }
+	|	SELECT { $<stringval>$ = new std::string("SELECT"); }
+	|	INSERT { $<stringval>$ = new std::string("INSERT"); }
+	|	TRUNCATE { $<stringval>$ = new std::string("TRUNCATE"); }
+	|	UPDATE { $<stringval>$ = new std::string("UPDATE"); }
+	|	DELETE { $<stringval>$ = new std::string("DELETE"); }
+	| 	ALTER { $<stringval>$ = new std::string("ALTER"); }
+	|	DROP { $<stringval>$ = new std::string("DROP"); }
+	|	VIEW { $<stringval>$ = new std::string("VIEW"); }
+	|	EDIT { $<stringval>$ = new std::string("EDIT"); }
+	|	ACCESS { $<stringval>$ = new std::string("ACCESS"); }
+	|	CREATE TABLE { $<stringval>$ = new std::string("CREATE TABLE"); }
+	|	CREATE VIEW { $<stringval>$ = new std::string("CREATE VIEW"); }
+	|	SELECT VIEW { $<stringval>$ = new std::string("SELECT VIEW"); }
+	|	DROP VIEW { $<stringval>$ = new std::string("DROP VIEW"); }
+	|	CREATE DASHBOARD { $<stringval>$ = new std::string("CREATE DASHBOARD"); }
+	|	EDIT DASHBOARD { $<stringval>$ = new std::string("EDIT DASHBOARD"); }
+	|	VIEW DASHBOARD { $<stringval>$ = new std::string("VIEW DASHBOARD"); }
+	|	DELETE DASHBOARD { $<stringval>$ = new std::string("DELETE DASHBOARD"); }
+	|	VIEW SQL EDITOR { $<stringval>$ = new std::string("VIEW SQL EDITOR"); }
+	;
+
+privileges_target_type:
+		DATABASE { $<stringval>$ = new std::string("DATABASE"); }
+	|	TABLE { $<stringval>$ = new std::string("TABLE"); }
+	|	DASHBOARD { $<stringval>$ = new std::string("DASHBOARD"); }
+	|	VIEW { $<stringval>$ = new std::string("VIEW"); }
+	;
+
+privileges_target:
+		NAME
+	|	INTNUM { $<stringval>$ = new std::string(std::to_string($<intval>1)); }
+    ;
+
 
 column_ref:
 		NAME { $<nodeval>$ = new ColumnRef($<stringval>1); }

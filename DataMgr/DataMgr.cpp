@@ -47,34 +47,24 @@ DataMgr::DataMgr(const string& dataDir,
                  const MapDParameters& mapd_parameters,
                  const bool useGpus,
                  const int numGpus,
-                 const string& dbConvertDir,
                  const int startGpu,
                  const size_t reservedGpuMem,
                  const size_t numReaderThreads)
-    : dataDir_(dataDir), dbConvertDir_(dbConvertDir) {
+    : dataDir_(dataDir) {
   if (useGpus) {
     try {
-      cudaMgr_ = new CudaMgr_Namespace::CudaMgr(numGpus, startGpu);
+      cudaMgr_ = std::make_unique<CudaMgr_Namespace::CudaMgr>(numGpus, startGpu);
       reservedGpuMem_ = reservedGpuMem;
       hasGpus_ = true;
     } catch (std::runtime_error& error) {
       hasGpus_ = false;
-      cudaMgr_ = 0;
     }
   } else {
     hasGpus_ = false;
-    cudaMgr_ = 0;
   }
 
   populateMgrs(mapd_parameters, numReaderThreads);
   createTopLevelMetadata();
-
-  if (dbConvertDir_.size() > 0) {  // i.e. "--db_convert" option was used
-    dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->setDBConvert(true);
-    convertDB(
-        dbConvertDir_);  // dbConvertDir_ is path to DB directory with old data structure
-    dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->setDBConvert(false);
-  }
 }
 
 DataMgr::~DataMgr() {
@@ -83,9 +73,6 @@ DataMgr::~DataMgr() {
     for (size_t device = 0; device < bufferMgrs_[level].size(); device++) {
       delete bufferMgrs_[level][device];
     }
-  }
-  if (hasGpus_) {
-    delete cudaMgr_;
   }
 }
 
@@ -127,24 +114,24 @@ void DataMgr::populateMgrs(const MapDParameters& mapd_parameters,
               << "M includes render buffer allocation";
     bufferMgrs_.resize(3);
     bufferMgrs_[1].push_back(new CpuBufferMgr(
-        0, cpuBufferSize, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
+        0, cpuBufferSize, cudaMgr_.get(), cpuSlabSize, 512, bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
     int numGpus = cudaMgr_->getDeviceCount();
     for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
       size_t gpuMaxMemSize =
           mapd_parameters.gpu_buffer_mem_bytes != 0
               ? mapd_parameters.gpu_buffer_mem_bytes
-              : (cudaMgr_->deviceProperties[gpuNum].globalMem) - (reservedGpuMem_);
+              : (cudaMgr_->getDeviceProperties(gpuNum)->globalMem) - (reservedGpuMem_);
       size_t gpuSlabSize = std::min(static_cast<size_t>(1L << 31), gpuMaxMemSize);
       gpuSlabSize -= gpuSlabSize % 512 == 0 ? 0 : 512 - (gpuSlabSize % 512);
       LOG(INFO) << "gpuSlabSize is " << (float)gpuSlabSize / (1024 * 1024) << "M";
       bufferMgrs_[2].push_back(new GpuCudaBufferMgr(
-          gpuNum, gpuMaxMemSize, cudaMgr_, gpuSlabSize, 512, bufferMgrs_[1][0]));
+          gpuNum, gpuMaxMemSize, cudaMgr_.get(), gpuSlabSize, 512, bufferMgrs_[1][0]));
     }
     levelSizes_.push_back(numGpus);
   } else {
     bufferMgrs_[1].push_back(new CpuBufferMgr(
-        0, cpuBufferSize, cudaMgr_, cpuSlabSize, 512, bufferMgrs_[0][0]));
+        0, cpuBufferSize, cudaMgr_.get(), cpuSlabSize, 512, bufferMgrs_[0][0]));
     levelSizes_.push_back(1);
   }
 }
@@ -313,10 +300,14 @@ std::string DataMgr::dumpLevel(const MemoryLevel memLevel) {
 void DataMgr::clearMemory(const MemoryLevel memLevel) {
   // if gpu we need to iterate through all the buffermanagers for each card
   if (memLevel == MemoryLevel::GPU_LEVEL) {
-    int numGpus = cudaMgr_->getDeviceCount();
-    for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
-      LOG(INFO) << "clear slabs on gpu " << gpuNum;
-      bufferMgrs_[memLevel][gpuNum]->clearSlabs();
+    if (cudaMgr_) {
+      int numGpus = cudaMgr_->getDeviceCount();
+      for (int gpuNum = 0; gpuNum < numGpus; ++gpuNum) {
+        LOG(INFO) << "clear slabs on gpu " << gpuNum;
+        bufferMgrs_[memLevel][gpuNum]->clearSlabs();
+      }
+    } else {
+      throw std::runtime_error("Unable to clear GPU memory: No GPUs detected");
     }
   } else {
     bufferMgrs_[memLevel][0]->clearSlabs();

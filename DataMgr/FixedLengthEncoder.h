@@ -23,6 +23,8 @@
 #include "AbstractBuffer.h"
 #include "Encoder.h"
 
+#include <Shared/DatumFetchers.h>
+
 template <typename T, typename V>
 class FixedLengthEncoder : public Encoder {
  public:
@@ -34,23 +36,35 @@ class FixedLengthEncoder : public Encoder {
 
   ChunkMetadata appendData(int8_t*& srcData,
                            const size_t numAppendElems,
+                           const SQLTypeInfo& ti,
                            const bool replicating = false) {
     T* unencodedData = reinterpret_cast<T*>(srcData);
     auto encodedData = std::unique_ptr<V[]>(new V[numAppendElems]);
     for (size_t i = 0; i < numAppendElems; ++i) {
       size_t ri = replicating ? 0 : i;
-      encodedData.get()[ri] = static_cast<V>(unencodedData[ri]);
-      if (unencodedData[ri] != encodedData.get()[ri]) {
+      encodedData.get()[i] = static_cast<V>(unencodedData[ri]);
+      if (unencodedData[ri] != encodedData.get()[i]) {
+        decimal_overflow_validator_.validate(unencodedData[ri]);
         LOG(ERROR) << "Fixed encoding failed, Unencoded: " +
                           std::to_string(unencodedData[ri]) +
-                          " encoded: " + std::to_string(encodedData.get()[ri]);
+                          " encoded: " + std::to_string(encodedData.get()[i]);
       } else {
         T data = unencodedData[ri];
         if (data == std::numeric_limits<V>::min())
           has_nulls = true;
         else {
-          dataMin = std::min(dataMin, data);
-          dataMax = std::max(dataMax, data);
+          decimal_overflow_validator_.validate(data);
+          if (ti.is_date_in_days()) {
+            // convert days -> seconds for metadata
+            auto convert_days_to_seconds = [](const int64_t days) {
+              return days * SECSPERDAY;
+            };
+            dataMin = std::min(dataMin, static_cast<T>(convert_days_to_seconds(data)));
+            dataMax = std::max(dataMax, static_cast<T>(convert_days_to_seconds(data)));
+          } else {
+            dataMin = std::min(dataMin, data);
+            dataMax = std::max(dataMax, data);
+          }
         }
       }
     }
@@ -133,6 +147,21 @@ class FixedLengthEncoder : public Encoder {
     fread((int8_t*)&dataMax, 1, sizeof(T), f);
     fread((int8_t*)&has_nulls, 1, sizeof(bool), f);
   }
+
+  bool resetChunkStats(const ChunkStats& stats) override {
+    const auto new_min = DatumFetcher::getDatumVal<T>(stats.min);
+    const auto new_max = DatumFetcher::getDatumVal<T>(stats.max);
+
+    if (dataMin == new_min && dataMax == new_max && has_nulls == stats.has_nulls) {
+      return false;
+    }
+
+    dataMin = new_min;
+    dataMax = new_max;
+    has_nulls = stats.has_nulls;
+    return true;
+  }
+
   T dataMin;
   T dataMax;
   bool has_nulls;

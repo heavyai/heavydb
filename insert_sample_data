@@ -2,7 +2,7 @@
 
 set -e
 
-MAPD_TCP_PORT=${MAPD_TCP_PORT:=9091}
+MAPD_TCP_PORT=${MAPD_TCP_PORT:=6274}
 
 DATA_URL=${DATA_URL:="https://data.mapd.com"}
 
@@ -99,11 +99,11 @@ for idx in $idxs; do
     filebase="${filename%%.*}"
 
     echo "- adding schema"
-    ./bin/mapdql mapd -u mapd -p HyperInteractive --port "$MAPD_TCP_PORT" < "$SAMPLE_PATH/$filebase"/*.sql
+    ./bin/omnisql mapd -u mapd -p HyperInteractive --port "$MAPD_TCP_PORT" < "$SAMPLE_PATH/$filebase"/*.sql
     table=${tables[$idx]}
     for csv in $SAMPLE_PATH/$filebase/*csv; do
       echo "- inserting file: $csv"
-      echo "copy $table from '${csv}' with (quoted='true');" | ./bin/mapdql mapd -u mapd -p HyperInteractive --port "$MAPD_TCP_PORT"
+      echo "copy $table from '${csv}' with (quoted='true');" | ./bin/omnisql mapd -u mapd -p HyperInteractive --port "$MAPD_TCP_PORT"
     done
   fi
 done

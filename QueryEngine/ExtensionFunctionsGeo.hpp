@@ -7,6 +7,8 @@
 #define TOLERANCE_DEFAULT 0.000000001
 #define TOLERANCE_GEOINT32 0.0000001
 
+#include "../Shared/geo_compression.h"
+
 // Adjustable tolerance, determined by compression mode.
 // The criteria is to still recognize a compressed+decompressed number.
 // For example 1.0 longitude compressed with GEOINT32 and then decompressed
@@ -54,11 +56,11 @@ DEVICE ALWAYS_INLINE double decompress_coord(int8_t* data,
   if (ic == COMPRESSION_GEOINT32) {
     auto compressed_coords = reinterpret_cast<int32_t*>(data);
     auto compressed_coord = compressed_coords[index];
-    // decompress longitude: -2,147,483,647..2,147,483,647  --->  -180..180
-    // decompress latitude: -2,147,483,647..2,147,483,647  --->  -90..90
-    return static_cast<double>(compressed_coord) *
-           (x ? 8.3819031754424345e-08    // (180.0 / 2147483647.0)
-              : 4.1909515877212172e-08);  // (90.0 / 2147483647.0)
+    if (x) {
+      return Geo_namespace::decompress_longitude_coord_geoint32(compressed_coord);
+    } else {
+      return Geo_namespace::decompress_lattitude_coord_geoint32(compressed_coord);
+    }
   }
   auto double_coords = reinterpret_cast<double*>(data);
   return double_coords[index];
@@ -318,9 +320,102 @@ double distance_line_line(double l11x,
   return fmin(dist12, dist21);
 }
 
+DEVICE
+double distance_ring_linestring(int8_t* ring,
+                                int32_t ring_num_coords,
+                                int8_t* l,
+                                int32_t lnum_coords,
+                                int32_t ic1,
+                                int32_t isr1,
+                                int32_t ic2,
+                                int32_t isr2,
+                                int32_t osr) {
+  double min_distance = 0.0;
+
+  double re1x = coord_x(ring, ring_num_coords - 2, ic1, isr1, osr);
+  double re1y = coord_y(ring, ring_num_coords - 1, ic1, isr1, osr);
+  for (auto i = 0; i < ring_num_coords; i += 2) {
+    double re2x = coord_x(ring, i, ic1, isr1, osr);
+    double re2y = coord_y(ring, i + 1, ic1, isr1, osr);
+
+    double le1x = coord_x(l, 0, ic2, isr2, osr);
+    double le1y = coord_y(l, 1, ic2, isr2, osr);
+    for (auto j = 2; j < lnum_coords; j += 2) {
+      double le2x = coord_x(l, j, ic2, isr2, osr);
+      double le2y = coord_y(l, j + 1, ic2, isr2, osr);
+
+      auto distance = distance_line_line(re1x, re1y, re2x, re2y, le1x, le1y, le2x, le2y);
+      if ((i == 0 && j == 2) || min_distance > distance) {
+        min_distance = distance;
+        if (tol_zero(min_distance)) {
+          return 0.0;
+        }
+      }
+      le1x = le2x;
+      le1y = le2y;
+    }
+    re1x = re2x;
+    re1y = re2y;
+  }
+
+  return min_distance;
+}
+
+DEVICE
+double distance_ring_ring(int8_t* ring1,
+                          int32_t ring1_num_coords,
+                          int8_t* ring2,
+                          int32_t ring2_num_coords,
+                          int32_t ic1,
+                          int32_t isr1,
+                          int32_t ic2,
+                          int32_t isr2,
+                          int32_t osr) {
+  double min_distance = 0.0;
+
+  double e11x = coord_x(ring1, ring1_num_coords - 2, ic1, isr1, osr);
+  double e11y = coord_y(ring1, ring1_num_coords - 1, ic1, isr1, osr);
+  for (auto i = 0; i < ring1_num_coords; i += 2) {
+    double e12x = coord_x(ring1, i, ic1, isr1, osr);
+    double e12y = coord_y(ring1, i + 1, ic1, isr1, osr);
+
+    double e21x = coord_x(ring2, ring2_num_coords - 2, ic2, isr2, osr);
+    double e21y = coord_y(ring2, ring2_num_coords - 1, ic2, isr2, osr);
+    for (auto j = 0; j < ring2_num_coords; j += 2) {
+      double e22x = coord_x(ring2, j, ic2, isr2, osr);
+      double e22y = coord_y(ring2, j + 1, ic2, isr2, osr);
+
+      auto distance = distance_line_line(e11x, e11y, e12x, e12y, e21x, e21y, e22x, e22y);
+      if ((i == 0 && j == 0) || min_distance > distance) {
+        min_distance = distance;
+        if (tol_zero(min_distance)) {
+          return 0.0;
+        }
+      }
+      e21x = e22x;
+      e21y = e22y;
+    }
+    e11x = e12x;
+    e11y = e12y;
+  }
+
+  return min_distance;
+}
+
 // Checks if a simple polygon (no holes) contains a point.
+//
 // Poly coords are extracted from raw data, based on compression (ic1) and input/output
 // SRIDs (isr1/osr).
+//
+// Shoot a ray from point P to the right, register intersections with any of polygon's
+// edges. Each intersection means entrance into or exit from the polygon. Odd number of
+// intersections means the polygon does contain P. Account for special cases: touch+cross,
+// touch+leave, touch+overlay+cross, touch+overlay+leave, on edge, etc.
+//
+// Secondary ray is shot from point P down for simple redundancy, to reduce main probe's
+// chance of error. No intersections means P is outside, irrespective of main probe's
+// result.
+//
 DEVICE
 bool polygon_contains_point(int8_t* poly,
                             int32_t poly_num_coords,
@@ -329,19 +424,36 @@ bool polygon_contains_point(int8_t* poly,
                             int32_t ic1,
                             int32_t isr1,
                             int32_t osr) {
-  // Shoot a line from point P to the right along x axis, register intersections with any
-  // of polygon's edges. Each intersection means we're entered/exited the polygon. Odd
-  // number of intersections means the polygon does contain P.
   bool result = false;
-  int8_t xray_touch = 0;
+  int xray_touch = 0;
+  bool horizontal_edge = false;
+  bool yray_intersects = false;
+
   double e1x = coord_x(poly, poly_num_coords - 2, ic1, isr1, osr);
   double e1y = coord_y(poly, poly_num_coords - 1, ic1, isr1, osr);
   for (int64_t i = 0; i < poly_num_coords; i += 2) {
     double e2x = coord_x(poly, i, ic1, isr1, osr);
     double e2y = coord_y(poly, i + 1, ic1, isr1, osr);
+
+    // Check if point sits on an edge.
+    if (tol_zero(distance_point_line(px, py, e1x, e1y, e2x, e2y))) {
+      return true;
+    }
+
+    // Before flipping the switch, check if xray hit a horizontal edge
+    // - If an edge lays on the xray, one of the previous edges touched it
+    //   so while moving horizontally we're in 'xray_touch' state
+    // - Last edge that touched xray at (e2x,e2y) didn't register intersection
+    // - Next edge that diverges from xray at (e1,e1y) will register intersection
+    // - Can have several horizontal edges, one after the other, keep moving though
+    //   in 'xray_touch' state without flipping the switch
+    horizontal_edge = (xray_touch != 0) && tol_eq(py, e1y) && tol_eq(py, e2y);
+
+    // Main probe: xray
     // Overshoot the xray to detect an intersection if there is one.
     double xray = fmax(e2x, e1x) + 1.0;
-    if (px <= xray &&  // Only check for intersection if the edge is on the right
+    if (px <= xray &&        // Only check for intersection if the edge is on the right
+        !horizontal_edge &&  // Keep moving through horizontal edges
         line_intersects_line(px,  // xray shooting from point p to the right
                              py,
                              xray,
@@ -350,38 +462,71 @@ bool polygon_contains_point(int8_t* poly,
                              e1y,
                              e2x,
                              e2y)) {
+      // Register intersection
       result = !result;
 
-      if (tol_zero(distance_point_line(e2x, e2y, px, py, xray + 1.0, py))) {
-        // Xray goes through the edge's second vertex, flip the result again -
-        // that vertex will be crossed again when we look at the next edge
-        result = !result;
-        // Register if the xray was touched from above (1) or from below (-1)
-        xray_touch = (e1y > py) ? 1 : -1;
-      }
-      if (xray_touch != 0) {
+      // Adjust for special cases
+      if (xray_touch == 0) {
+        if (tol_zero(distance_point_line(e2x, e2y, px, py, xray + 1.0, py))) {
+          // Xray goes through the edge's second vertex, unregister intersection -
+          // that vertex will be crossed again when we look at the following edge(s)
+          result = !result;
+          // Enter the xray-touch state:
+          // (1) - xray was touched by the edge from above, (-1) from below
+          xray_touch = (e1y > py) ? 1 : -1;
+        }
+      } else {
         // Previous edge touched the xray, intersection hasn't been registered,
         // it has to be registered now if this edge continues across the xray.
-        // TODO: what if after touch, edge(s) follow the xray horizontally?
         if (xray_touch > 0) {
           // Previous edge touched the xray from above
-          // Register intersection if current edge crosses under
-          if (e2y <= py)
+          if (e2y <= py) {
+            // Current edge crosses under xray: intersection is already registered
+          } else {
+            // Current edge just touched the xray and pulled up: unregister intersection
             result = !result;
+          }
         } else {
           // Previous edge touched the xray from below
-          // Register intersection if current edge crosses over
-          if (e2y > py)
+          if (e2y > py) {
+            // Current edge crosses over xray: intersection is already registered
+          } else {
+            // Current edge just touched the xray and pulled down: unregister intersection
             result = !result;
+          }
         }
-        // Unregister the xray touch
+        // Exit the xray-touch state
         xray_touch = 0;
       }
     }
+
+    // Redundancy: vertical yray down
+    // Main probe xray may hit multiple complex fragments which increases a chance of
+    // error. Perform a simple secondary check for edge intersections to see if point is
+    // outside.
+    if (!yray_intersects) {  // Continue checking on yray until intersection is found
+      double yray = fmin(e2y, e1y) - 1.0;
+      if (yray <= py) {  // Only check for yray intersection if point P is above the edge
+        yray_intersects = line_intersects_line(px,  // yray shooting from point P down
+                                               py,
+                                               px,
+                                               yray,
+                                               e1x,  // polygon edge
+                                               e1y,
+                                               e2x,
+                                               e2y);
+      }
+    }
+
     // Advance to the next vertex
     e1x = e2x;
     e1y = e2y;
   }
+  if (!yray_intersects) {
+    // yray has zero intersections - point is outside the polygon
+    return false;
+  }
+  // Otherwise rely on the main probe
   return result;
 }
 
@@ -423,6 +568,13 @@ DEVICE ALWAYS_INLINE bool box_contains_point(double* bounds,
                                              double py) {
   return (tol_ge(px, bounds[0]) && tol_ge(py, bounds[1]) && tol_le(px, bounds[2]) &&
           tol_le(py, bounds[3]));
+}
+
+EXTENSION_NOINLINE bool Point_Overlaps_Box(double* bounds,
+                                           int64_t bounds_size,
+                                           double px,
+                                           double py) {
+  return box_contains_point(bounds, bounds_size, px, py);
 }
 
 DEVICE ALWAYS_INLINE bool box_contains_box(double* bounds1,
@@ -1280,60 +1432,59 @@ double ST_Distance_LineString_Polygon(int8_t* l,
                                       int32_t ic2,
                                       int32_t isr2,
                                       int32_t osr) {
-  // TODO: revisit implementation, cover all cases
-
   auto lnum_coords = lsize / compression_unit_size(ic1);
   auto lnum_points = lnum_coords / 2;
+  if (lindex < 0 || lindex > lnum_points)
+    lindex = lnum_points;
+  auto p = l + lindex * compression_unit_size(ic1);
+  auto psize = 2 * compression_unit_size(ic1);
+  auto min_distance = ST_Distance_Point_Polygon(p,
+                                                psize,
+                                                poly_coords,
+                                                poly_coords_size,
+                                                poly_ring_sizes,
+                                                poly_num_rings,
+                                                ic1,
+                                                isr1,
+                                                ic2,
+                                                isr2,
+                                                osr);
   if (lindex != 0) {
-    // Statically indexed linestring
-    if (lindex < 0 || lindex > lnum_points)
-      lindex = lnum_points;
-    auto p = l + lindex * compression_unit_size(ic1);
-    auto psize = 2 * compression_unit_size(ic1);
-    return ST_Distance_Point_Polygon(p,
-                                     psize,
-                                     poly_coords,
-                                     poly_coords_size,
-                                     poly_ring_sizes,
-                                     poly_num_rings,
-                                     ic1,
-                                     isr1,
-                                     ic2,
-                                     isr2,
-                                     osr);
+    // Statically indexed linestring: return distance from the indexed point to poly
+    return min_distance;
+  }
+  if (tol_zero(min_distance)) {
+    // Linestring's first point is inside the poly
+    return 0.0;
   }
 
-  auto exterior_ring_num_coords = poly_coords_size / compression_unit_size(ic2);
-  if (poly_num_rings > 0)
-    exterior_ring_num_coords = poly_ring_sizes[0] * 2;
-  auto exterior_ring_coords_size = exterior_ring_num_coords * compression_unit_size(ic2);
+  // Otherwise, linestring's first point is outside the external ring or inside
+  // an internal ring. Measure minimum distance between linestring segments and
+  // poly rings. Crossing a ring zeroes the distance and causes an early return.
+  auto poly_ring_coords = poly_coords;
+  for (auto r = 0; r < poly_num_rings; r++) {
+    int64_t poly_ring_num_coords = poly_ring_sizes[r] * 2;
 
-  auto l_num_coords = lsize / compression_unit_size(ic1);
-  auto poly = poly_coords;
-  if (!polygon_contains_linestring(
-          poly, exterior_ring_num_coords, l, l_num_coords, ic2, isr2, ic1, isr1, osr)) {
-    // Linestring is outside poly's exterior ring
-    return ST_Distance_LineString_LineString(
-        poly, exterior_ring_coords_size, 0, l, lsize, 0, ic2, isr2, ic1, isr1, osr);
-  }
-
-  // Linestring is inside poly's exterior ring
-  poly += exterior_ring_coords_size;
-  // Check if one of the polygon's holes contains that linestring
-  for (auto r = 1; r < poly_num_rings; r++) {
-    int64_t interior_ring_num_coords = poly_ring_sizes[r] * 2;
-    if (polygon_contains_linestring(
-            poly, interior_ring_num_coords, l, l_num_coords, ic2, isr2, ic1, isr1, osr)) {
-      // Inside an interior ring
-      auto interior_ring_coords_size =
-          interior_ring_num_coords * compression_unit_size(ic2);
-      return ST_Distance_LineString_LineString(
-          poly, interior_ring_coords_size, 0, l, lsize, 0, ic2, isr2, ic1, isr1, osr);
+    auto distance = distance_ring_linestring(poly_ring_coords,
+                                             poly_ring_num_coords,
+                                             l,
+                                             lnum_coords,
+                                             ic2,
+                                             isr2,
+                                             ic1,
+                                             isr1,
+                                             osr);
+    if (min_distance > distance) {
+      min_distance = distance;
+      if (tol_zero(min_distance)) {
+        return 0.0;
+      }
     }
-    poly += interior_ring_num_coords * compression_unit_size(ic2);
+
+    poly_ring_coords += poly_ring_num_coords * compression_unit_size(ic2);
   }
 
-  return 0.0;
+  return min_distance;
 }
 
 EXTENSION_NOINLINE
@@ -1483,125 +1634,66 @@ double ST_Distance_Polygon_Polygon(int8_t* poly1_coords,
                                    int32_t ic2,
                                    int32_t isr2,
                                    int32_t osr) {
-  // TODO: revisit implementation
-
-  auto poly1_exterior_ring_num_coords = poly1_coords_size / compression_unit_size(ic1);
-  if (poly1_num_rings > 0)
-    poly1_exterior_ring_num_coords = poly1_ring_sizes[0] * 2;
-  auto poly1_exterior_ring_coords_size =
-      poly1_exterior_ring_num_coords * compression_unit_size(ic1);
-
-  auto poly2_exterior_ring_num_coords = poly2_coords_size / compression_unit_size(ic2);
-  if (poly2_num_rings > 0)
-    poly2_exterior_ring_num_coords = poly2_ring_sizes[0] * 2;
-  auto poly2_exterior_ring_coords_size =
-      poly2_exterior_ring_num_coords * compression_unit_size(ic2);
-
-  // check if poly2 is inside poly1 exterior ring and outside poly1 holes
-  auto poly1 = poly1_coords;
-  if (polygon_contains_linestring(poly1,
-                                  poly1_exterior_ring_num_coords,
-                                  poly2_coords,
-                                  poly2_exterior_ring_num_coords,
-                                  ic1,
-                                  isr1,
-                                  ic2,
-                                  isr2,
-                                  osr)) {
-    // poly1 exterior ring contains poly2 exterior ring
-    poly1 += poly1_exterior_ring_num_coords * compression_unit_size(ic1);
-    // Check if one of the poly1's holes contains that poly2 exterior ring
-    for (auto r = 1; r < poly1_num_rings; r++) {
-      int64_t poly1_interior_ring_num_coords = poly1_ring_sizes[r] * 2;
-      if (polygon_contains_linestring(poly1,
-                                      poly1_interior_ring_num_coords,
-                                      poly2_coords,
-                                      poly2_exterior_ring_num_coords,
-                                      ic1,
-                                      isr1,
-                                      ic2,
-                                      isr2,
-                                      osr)) {
-        // Inside an interior ring - measure the distance of poly2 exterior to that hole's
-        // border
-        auto poly1_interior_ring_coords_size =
-            poly1_interior_ring_num_coords * compression_unit_size(ic1);
-        return ST_Distance_LineString_LineString(poly1,
-                                                 poly1_interior_ring_coords_size,
-                                                 0,
-                                                 poly2_coords,
-                                                 poly2_exterior_ring_coords_size,
-                                                 0,
-                                                 ic1,
-                                                 isr1,
-                                                 ic2,
-                                                 isr2,
-                                                 osr);
-      }
-      poly1 += poly1_interior_ring_num_coords * compression_unit_size(ic1);
-    }
+  // Check if poly1 contains the first point of poly2's shape, i.e. the external ring
+  auto poly2_first_point_coords = poly2_coords;
+  auto poly2_first_point_coords_size = compression_unit_size(ic2) * 2;
+  auto min_distance = ST_Distance_Polygon_Point(poly1_coords,
+                                                poly1_coords_size,
+                                                poly1_ring_sizes,
+                                                poly1_num_rings,
+                                                poly2_first_point_coords,
+                                                poly2_first_point_coords_size,
+                                                ic1,
+                                                isr1,
+                                                ic2,
+                                                isr2,
+                                                osr);
+  if (tol_zero(min_distance)) {
+    // Polygons overlap
     return 0.0;
   }
 
-  // check if poly1 is inside poly2 exterior ring and outside poly2 holes
-  auto poly2 = poly2_coords;
-  if (polygon_contains_linestring(poly2,
-                                  poly2_exterior_ring_num_coords,
-                                  poly1_coords,
-                                  poly1_exterior_ring_num_coords,
-                                  ic2,
-                                  isr2,
-                                  ic1,
-                                  isr1,
-                                  osr)) {
-    // poly2 exterior ring contains poly1 exterior ring
-    poly2 += poly2_exterior_ring_num_coords * compression_unit_size(ic2);
-    // Check if one of the poly2's holes contains that poly1 exterior ring
-    for (auto r = 1; r < poly2_num_rings; r++) {
-      int64_t poly2_interior_ring_num_coords = poly2_ring_sizes[r] * 2;
-      if (polygon_contains_linestring(poly2,
-                                      poly2_interior_ring_num_coords,
-                                      poly1_coords,
-                                      poly1_exterior_ring_num_coords,
-                                      ic2,
-                                      isr2,
-                                      ic1,
-                                      isr1,
-                                      osr)) {
-        // Inside an interior ring - measure the distance of poly1 exterior to that hole's
-        // border
-        auto poly2_interior_ring_coords_size =
-            poly2_interior_ring_num_coords * compression_unit_size(ic2);
-        return ST_Distance_LineString_LineString(poly2,
-                                                 poly2_interior_ring_coords_size,
-                                                 0,
-                                                 poly1_coords,
-                                                 poly1_exterior_ring_coords_size,
-                                                 0,
-                                                 ic2,
-                                                 isr2,
-                                                 ic1,
-                                                 isr1,
-                                                 osr);
+  // Poly2's first point is either outside poly1's external ring or inside one of the
+  // internal rings. Measure the smallest distance between a poly1 ring (external or
+  // internal) and a poly2 ring (external or internal). If poly2 is completely outside
+  // poly1, then the min distance would be between poly1's and poly2's external rings. If
+  // poly2 is completely inside one of poly1 internal rings then the min distance would be
+  // between that poly1 internal ring and poly2's external ring. If poly1 is completely
+  // inside one of poly2 internal rings, min distance is between that internal ring and
+  // poly1's external ring. In each case other rings don't get in the way. Any ring
+  // intersection means zero distance - short-circuit and return.
+
+  auto poly1_ring_coords = poly1_coords;
+  for (auto r1 = 0; r1 < poly1_num_rings; r1++) {
+    int64_t poly1_ring_num_coords = poly1_ring_sizes[r1] * 2;
+
+    auto poly2_ring_coords = poly2_coords;
+    for (auto r2 = 0; r2 < poly2_num_rings; r2++) {
+      int64_t poly2_ring_num_coords = poly2_ring_sizes[r2] * 2;
+
+      auto distance = distance_ring_ring(poly1_ring_coords,
+                                         poly1_ring_num_coords,
+                                         poly2_ring_coords,
+                                         poly2_ring_num_coords,
+                                         ic1,
+                                         isr1,
+                                         ic2,
+                                         isr2,
+                                         osr);
+      if (min_distance > distance) {
+        min_distance = distance;
+        if (tol_zero(min_distance)) {
+          return 0.0;
+        }
       }
-      poly2 += poly2_interior_ring_num_coords * compression_unit_size(ic2);
+
+      poly2_ring_coords += poly2_ring_num_coords * compression_unit_size(ic2);
     }
-    return 0.0;
+
+    poly1_ring_coords += poly1_ring_num_coords * compression_unit_size(ic1);
   }
 
-  // poly1 does not properly contain poly2, poly2 does not properly contain poly1
-  // Assuming disjoint or intersecting shapes: return distance between exterior rings.
-  return ST_Distance_LineString_LineString(poly1_coords,
-                                           poly1_exterior_ring_coords_size,
-                                           0,
-                                           poly2_coords,
-                                           poly2_exterior_ring_coords_size,
-                                           0,
-                                           ic1,
-                                           isr1,
-                                           ic2,
-                                           isr2,
-                                           osr);
+  return min_distance;
 }
 
 EXTENSION_NOINLINE
@@ -3021,15 +3113,29 @@ bool ST_Intersects_MultiPolygon_MultiPolygon(int8_t* mpoly1_coords,
 //
 // Accessors for poly bounds and render group for in-situ poly render queries
 //
+// The MapD_* varieties are deprecated and renamed to "OmniSci_Geo*"
+// There may be some clients out there who are playing with the MapD_* so leaving
+// them for backwards compatibility.
+//
 
 EXTENSION_INLINE
-int64_t MapD_GeoPolyBoundsPtr(double* bounds, int64_t size) {
+int64_t OmniSci_Geo_PolyBoundsPtr(double* bounds, int64_t size) {
   return reinterpret_cast<int64_t>(bounds);
 }
 
 EXTENSION_INLINE
-int32_t MapD_GeoPolyRenderGroup(int32_t render_group) {
+int32_t OmniSci_Geo_PolyRenderGroup(int32_t render_group) {
   return render_group;
+}
+
+EXTENSION_INLINE
+int64_t MapD_GeoPolyBoundsPtr(double* bounds, int64_t size) {
+  return OmniSci_Geo_PolyBoundsPtr(bounds, size);
+}
+
+EXTENSION_INLINE
+int32_t MapD_GeoPolyRenderGroup(int32_t render_group) {
+  return OmniSci_Geo_PolyRenderGroup(render_group);
 }
 
 EXTENSION_NOINLINE

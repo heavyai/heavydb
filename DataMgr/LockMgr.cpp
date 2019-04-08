@@ -65,11 +65,9 @@ void getTableNames(std::map<std::string, bool>& tableNames, const Value& value) 
 
 ChunkKey getTableChunkKey(const Catalog_Namespace::Catalog& cat,
                           const std::string& tableName) {
-  if (const auto tdp = cat.getMetadataForTable(tableName)) {
-    const auto fragmenter =
-        dynamic_cast<Fragmenter_Namespace::InsertOrderFragmenter*>(tdp->fragmenter);
-    CHECK(fragmenter);
-    return fragmenter->getChunkKeyPrefix();
+  if (const auto tdp = cat.getMetadataForTable(tableName, false)) {
+    ChunkKey chunk_key{cat.getCurrentDB().dbId, tdp->tableId};
+    return chunk_key;
   } else {
     throw std::runtime_error("Table " + tableName + " does not exist.");
   }
@@ -78,7 +76,7 @@ ChunkKey getTableChunkKey(const Catalog_Namespace::Catalog& cat,
 std::string parse_to_ra(const Catalog_Namespace::Catalog& cat,
                         const std::string& query_str,
                         const Catalog_Namespace::SessionInfo& session_info) {
-  return cat.get_calciteMgr()
+  return cat.getCalciteMgr()
       .process(session_info, query_str, {}, false, false)
       .plan_result;
 }

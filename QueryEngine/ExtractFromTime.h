@@ -32,6 +32,8 @@
 #define SECSPERQUARTERDAY (SECSPERHOUR * 6)
 #define DAYSPERWEEK 7
 #define MONSPERYEAR 12
+#define SECSPERHALFDAY 43200L
+#define MINSPERMONTH 43200L  // Month of 30 days
 
 #define YEAR_BASE 1900
 
@@ -108,6 +110,6 @@ extern "C" __attribute__((noinline))
 __device__
 #endif
     int64_t
-    ExtractFromTimeHighPrecision(ExtractField field, time_t timeval, const int32_t dimen);
+    ExtractFromTimeHighPrecision(ExtractField field, time_t timeval, const int64_t scale);
 
 #endif  // QUERYENGINE_EXTRACTFROMTIME_H

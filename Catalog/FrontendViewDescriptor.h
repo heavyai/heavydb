@@ -18,6 +18,7 @@
 #define FRONTEND_VIEW_DESCRIPTOR_H
 
 #include <cstdint>
+#include <regex>
 #include <string>
 #include "../Shared/sqldefs.h"
 
@@ -26,6 +27,8 @@
  * @brief specifies the content in-memory of a row in the frontend view metadata view
  *
  */
+
+static const std::string SYSTEM_ROLE_TAG("#dash_system_role");
 
 struct FrontendViewDescriptor {
   int32_t viewId;       /**< viewId starts at 0 for valid views. */
@@ -36,6 +39,30 @@ struct FrontendViewDescriptor {
   std::string viewMetadata;
   int32_t userId;
   std::string user;
+  std::string viewSystemRoleName; /** Stores system role name */
 };
+
+inline std::string generate_dash_system_rolename(const std::string& id) {
+  return id + SYSTEM_ROLE_TAG;
+}
+
+inline std::vector<std::string> parse_underlying_dash_objects(const std::string& meta) {
+  /** Parses underlying Tables/Views */
+  std::regex extract_objects_expr(".*table\":\"(.*?)\"");
+  std::smatch match;
+  if (std::regex_search(meta, match, extract_objects_expr)) {
+    const std::string list = match[1];
+    std::vector<std::string> dash_objects;
+    std::regex individual_objects_expr(R"(\w+)");
+    std::sregex_iterator iter(list.begin(), list.end(), individual_objects_expr);
+    std::sregex_iterator end;
+    while (iter != end) {
+      dash_objects.push_back((*iter)[0]);
+      ++iter;
+    }
+    return dash_objects;
+  }
+  return {};
+}
 
 #endif  // FRONTEND_VIEW_DESCRIPTOR

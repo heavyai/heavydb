@@ -36,7 +36,7 @@
 #define BASE_PATH "./tmp"
 #endif
 
-#define CALCITEPORT 9093
+#define CALCITEPORT 6279
 
 using namespace std;
 using namespace Catalog_Namespace;
@@ -173,7 +173,7 @@ const char* create_table_trips =
     "            pickup_longitude        DECIMAL(14,7),"
     "            pickup_latitude         DECIMAL(14,7),"
     "            dropoff_longitude       DOUBLE,"
-    "            dropoff_latitude        DECIMAL(19,5),"
+    "            dropoff_latitude        DECIMAL(18,5),"
     "            deleted                 BOOLEAN"
     "            ) WITH (FRAGMENT_SIZE=50);";  // so 2 fragments here
 
@@ -203,6 +203,9 @@ std::vector<std::tuple<std::string, std::string, std::string, std::string>> type
     MT("smallint", "", "123", ""),
     MT("integer", "", "123", ""),
     MT("bigint", "", "123", ""),
+    MT("bigint encoding fixed(8)", "", "", ""),
+    MT("bigint encoding fixed(16)", "", "", ""),
+    MT("bigint encoding fixed(32)", "", "", ""),
     MT("decimal(8)", "", "123", ""),
     MT("decimal(8,2)", "", "1.23", ""),
     MT("date", "", "'2011-10-23'", ""),

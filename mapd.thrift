@@ -32,7 +32,8 @@ enum TEncodingType {
   DIFF,
   DICT,
   SPARSE,
-  GEOINT
+  GEOINT,
+  DATE_IN_DAYS
 }
 
 enum TExecuteMode {
@@ -126,12 +127,13 @@ enum TMergeType {
 }
 
 struct TStepResult {
-  1: string serialized_rows
-  2: bool execution_finished
-  3: TMergeType merge_type
-  4: bool sharded
-  5: TRowDescriptor row_desc
-  6: i32 node_id
+  1: binary serialized_rows
+  2: i64 uncompressed_size
+  3: bool execution_finished
+  4: TMergeType merge_type
+  5: bool sharded
+  6: TRowDescriptor row_desc
+  7: i32 node_id
 }
 
 struct TRowSet {
@@ -449,6 +451,13 @@ struct TViewPermissions {
   6: bool delete_;
 }
 
+union TDBObjectPermissions {
+  1: TDatabasePermissions database_permissions_
+  2: TTablePermissions table_permissions_
+  3: TDashboardPermissions dashboard_permissions_
+  4: TViewPermissions view_permissions_
+}
+
 enum TDBObjectType {
   AbstractDBObjectType = 0,
   DatabaseDBObjectType,
@@ -469,8 +478,15 @@ struct TDashboardGrantees {
   2: bool is_user;
   3: TDashboardPermissions permissions;
 }
+
 struct TLicenseInfo {
   1: list<string> claims
+}
+
+struct TSessionInfo {
+  1: string user; 
+  2: string database;
+  3: i64 start_time;
 }
 
 service MapD {
@@ -499,6 +515,7 @@ service MapD {
   void set_table_epoch_by_name (1: TSessionId session 2: string table_name 3: i32 new_epoch) throws (1: TMapDException e)
   i32 get_table_epoch (1: TSessionId session 2: i32 db_id 3: i32 table_id);
   i32 get_table_epoch_by_name (1: TSessionId session 2: string table_name);
+  TSessionInfo get_session_info(1: TSessionId session) throws (1: TMapDException e)
   # query, render
   TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce, 5: i32 first_n = -1, 6: i32 at_most_n = -1) throws (1: TMapDException e)
   TDataFrame sql_execute_df(1: TSessionId session, 2: string query 3: TDeviceType device_type 4: i32 device_id = 0 5: i32 first_n = -1) throws (1: TMapDException e)
@@ -540,9 +557,10 @@ service MapD {
   string get_first_geo_file_in_archive(1: TSessionId session, 2: string archive_path, 3: TCopyParams copy_params) throws (1: TMapDException e)
   list<string> get_all_files_in_archive(1: TSessionId session, 2: string archive_path, 3: TCopyParams copy_params) throws (1: TMapDException e)
   # distributed
+  TTableMeta check_table_consistency(1: TSessionId session, 2: i32 table_id) throws (1: TMapDException e)
   TPendingQuery start_query(1: TSessionId session, 2: string query_ra, 3: bool just_explain) throws (1: TMapDException e)
   TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e)
-  void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e)
+  void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: i64 uncompressed_size, 4: TQueryId query_id) throws (1: TMapDException e)
   TPendingRenderQuery start_render_query(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx, 4: string vega_json) throws (1: TMapDException e)
   TRenderStepResult execute_next_render_step(1: TPendingRenderQuery pending_render, 2: TRenderAggDataMap merged_data) throws (1: TMapDException e)
   void insert_data(1: TSessionId session, 2: TInsertData insert_data) throws (1: TMapDException e)
@@ -555,6 +573,7 @@ service MapD {
   list<TDBObject> get_db_objects_for_grantee(1: TSessionId session 2: string roleName) throws (1: TMapDException e)
   list<TDBObject> get_db_object_privs(1: TSessionId session 2: string objectName 3: TDBObjectType type) throws (1: TMapDException e)
   list<string> get_all_roles_for_user(1: TSessionId session 2: string userName) throws (1: TMapDException e)
+  bool has_object_privilege(1: TSessionId session 2: string granteeName 3: string ObjectName 4: TDBObjectType objectType 5: TDBObjectPermissions permissions) throws (1: TMapDException e)
   # licensing
   TLicenseInfo set_license_key(1: TSessionId session, 2: string key, 3: string nonce = "") throws (1: TMapDException e)
   TLicenseInfo get_license_claims(1: TSessionId session, 2: string nonce = "") throws (1: TMapDException e)

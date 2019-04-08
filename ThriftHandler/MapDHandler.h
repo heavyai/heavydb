@@ -92,20 +92,23 @@
 #include <unordered_map>
 #include "gen-cpp/MapD.h"
 
+using namespace std::string_literals;
+
 class MapDRenderHandler;
 class MapDAggHandler;
 class MapDLeafHandler;
 
 enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIEWS };
 
-typedef std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> SessionMap;
+using SessionMap = std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>>;
+using permissionFuncPtr = bool (*)(const AccessPrivileges&, const TDBObjectPermissions&);
 
 class MapDHandler : public MapDIf {
  public:
   MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
               const std::vector<LeafHostInfo>& string_leaves,
               const std::string& base_data_path,
-              const std::string& executor_device,
+              const bool cpu_only,
               const bool allow_multifrag,
               const bool jit_debug,
               const bool read_only,
@@ -118,7 +121,6 @@ class MapDHandler : public MapDIf {
               const size_t num_reader_threads,
               const AuthMetadata authMetadata,
               const MapDParameters& mapd_parameters,
-              const std::string& db_convert_dir,
               const bool legacy_syntax,
               const bool access_priv_check,
               const int idle_session_duration,
@@ -178,6 +180,7 @@ class MapDHandler : public MapDIf {
                           const int32_t table_id);
   int32_t get_table_epoch_by_name(const TSessionId& session,
                                   const std::string& table_name);
+  void get_session_info(TSessionInfo& _return, const TSessionId& session);
   // query, render
   void sql_execute(TQueryResult& _return,
                    const TSessionId& session,
@@ -329,6 +332,9 @@ class MapDHandler : public MapDIf {
                                 const std::string& archive_path,
                                 const TCopyParams& copy_params);
   // distributed
+  void check_table_consistency(TTableMeta& _return,
+                               const TSessionId& session,
+                               const int32_t table_id);
   void start_query(TPendingQuery& _return,
                    const TSessionId& session,
                    const std::string& query_ra,
@@ -336,6 +342,7 @@ class MapDHandler : public MapDIf {
   void execute_first_step(TStepResult& _return, const TPendingQuery& pending_query);
   void broadcast_serialized_rows(const std::string& serialized_rows,
                                  const TRowDescriptor& row_desc,
+                                 const int64_t result_size,
                                  const TQueryId query_id);
 
   void start_render_query(TPendingRenderQuery& _return,
@@ -358,6 +365,11 @@ class MapDHandler : public MapDIf {
                           const std::string& table_name);
   // DB Object Privileges
   void get_roles(std::vector<std::string>& _return, const TSessionId& session);
+  bool has_object_privilege(const TSessionId& sessionId,
+                            const std::string& granteeName,
+                            const std::string& objectName,
+                            const TDBObjectType::type object_type,
+                            const TDBObjectPermissions& permissions);
   void get_db_objects_for_grantee(std::vector<TDBObject>& _return,
                                   const TSessionId& session,
                                   const std::string& roleName);
@@ -387,12 +399,6 @@ class MapDHandler : public MapDIf {
   void internal_connect(TSessionId& session,
                         const std::string& user,
                         const std::string& dbname);
-  void connectImpl(TSessionId& session,
-                   const std::string& user,
-                   const std::string& passwd,
-                   const std::string& dbname,
-                   Catalog_Namespace::UserMetadata& user_meta,
-                   std::shared_ptr<Catalog_Namespace::Catalog> cat);
 
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_;
   std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>> sessions_;
@@ -421,6 +427,12 @@ class MapDHandler : public MapDIf {
   Catalog_Namespace::SessionInfo get_session(const TSessionId& session);
 
  private:
+  void connect_impl(TSessionId& session,
+                    const std::string& passwd,
+                    const std::string& dbname,
+                    Catalog_Namespace::UserMetadata& user_meta,
+                    std::shared_ptr<Catalog_Namespace::Catalog> cat);
+  void disconnect_impl(const SessionMap::iterator& session_it);
   void check_table_load_privileges(const TSessionId& session,
                                    const std::string& table_name);
   void check_table_load_privileges(const Catalog_Namespace::SessionInfo& session_info,
@@ -580,6 +592,15 @@ class MapDHandler : public MapDIf {
   fill_column_names_by_table(const std::vector<std::string>& table_names,
                              const TSessionId& session);
 
+  static bool has_database_permission(const AccessPrivileges& privs,
+                                      const TDBObjectPermissions& permissions);
+  static bool has_table_permission(const AccessPrivileges& privs,
+                                   const TDBObjectPermissions& permission);
+  static bool has_dashboard_permission(const AccessPrivileges& privs,
+                                       const TDBObjectPermissions& permissions);
+  static bool has_view_permission(const AccessPrivileges& privs,
+                                  const TDBObjectPermissions& permissions);
+
   // For the provided upper case column names `uc_column_names`, return the tables
   // from `table_names` which contain at least one of them. Used to rank the TABLE
   // auto-completion hints by the columns specified in the projection.
@@ -610,6 +631,12 @@ class MapDHandler : public MapDIf {
   friend class MapDRenderHandler;
   friend class MapDAggHandler;
   friend class MapDLeafHandler;
+
+  std::map<const std::string, const permissionFuncPtr> permissionFuncMap_ = {
+      {"database"s, has_database_permission},
+      {"dashboard"s, has_dashboard_permission},
+      {"table"s, has_table_permission},
+      {"view"s, has_view_permission}};
 };
 
 #endif /* MAPDHANDLER_H */

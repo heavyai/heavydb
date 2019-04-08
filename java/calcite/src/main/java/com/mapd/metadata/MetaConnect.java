@@ -25,6 +25,8 @@ import com.mapd.thrift.server.TEncodingType;
 import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TTableDetails;
 import com.mapd.thrift.server.TTypeInfo;
+import com.mapd.common.SockTransportProperties;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -36,6 +38,7 @@ import org.apache.calcite.schema.Table;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
@@ -46,13 +49,14 @@ import com.mapd.calcite.parser.MapDView;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
+import com.mapd.common.SockTransportProperties;
 /**
  *
  * @author michael
  */
 public class MetaConnect {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MetaConnect.class);
+  private SockTransportProperties sockTransportProperties = null;
   private final String dataDir;
   private final String db;
   private final MapDUser currentUser;
@@ -87,9 +91,12 @@ public class MetaConnect {
           new ConcurrentHashMap<>();
   private static volatile Map<List<String>, Table> MAPD_TABLE_DETAILS =
           new ConcurrentHashMap<>();
-
-  public MetaConnect(
-          int mapdPort, String dataDir, MapDUser currentMapDUser, MapDParser parser) {
+  private final SockTransportProperties sock_transport_properties;
+  public MetaConnect(int mapdPort,
+          String dataDir,
+          MapDUser currentMapDUser,
+          MapDParser parser,
+          SockTransportProperties skT) {
     this.dataDir = dataDir;
     if (currentMapDUser != null) {
       this.db = currentMapDUser.getDB();
@@ -99,6 +106,7 @@ public class MetaConnect {
     this.currentUser = currentMapDUser;
     this.mapdPort = mapdPort;
     this.parser = parser;
+    this.sock_transport_properties = skT;
   }
 
   private void connectToDBCatalog() {
@@ -173,9 +181,9 @@ public class MetaConnect {
     // use thrift direct to local server
     try {
       TProtocol protocol = null;
-
-      TTransport transport = new TSocket("localhost", mapdPort);
-      transport.open();
+      TTransport transport = SockTransportProperties.openClientTransport(
+              "localhost", mapdPort, sock_transport_properties);
+      if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
       MapD.Client client = new MapD.Client(protocol);
@@ -191,6 +199,7 @@ public class MetaConnect {
       return ts;
 
     } catch (TTransportException ex) {
+      MAPDLOGGER.error("TTransportException on port [" + mapdPort + "]");
       MAPDLOGGER.error(ex.toString());
       throw new RuntimeException(ex.toString());
     } catch (TMapDException ex) {
@@ -242,8 +251,9 @@ public class MetaConnect {
     try {
       TProtocol protocol = null;
 
-      TTransport transport = new TSocket("localhost", mapdPort);
-      transport.open();
+      TTransport transport = SockTransportProperties.openClientTransport(
+              "localhost", mapdPort, sock_transport_properties);
+      if (!transport.isOpen()) transport.open();
       protocol = new TBinaryProtocol(transport);
 
       MapD.Client client = new MapD.Client(protocol);
@@ -464,8 +474,9 @@ public class MetaConnect {
       try {
         TProtocol protocol = null;
 
-        TTransport transport = new TSocket("localhost", mapdPort);
-        transport.open();
+        TTransport transport = SockTransportProperties.openClientTransport(
+                "localhost", mapdPort, sock_transport_properties);
+        if (!transport.isOpen()) transport.open();
         protocol = new TBinaryProtocol(transport);
 
         MapD.Client client = new MapD.Client(protocol);
@@ -578,11 +589,11 @@ public class MetaConnect {
     if (table.equals("")) {
       // Drop db and all tables
       // iterate through all and remove matching schema
-      for (List<String> keys : MAPD_TABLE_DETAILS.keySet()) {
-        if (keys.get(1).equals(schema.toUpperCase())) {
-          MAPDLOGGER.debug("removing schema " + keys.get(1) + " table " + keys.get(2));
-          MAPD_TABLE_DETAILS.remove(
-                  ImmutableList.of(keys.get(1).toUpperCase(), keys.get(2).toUpperCase()));
+      Set<List<String>> all = new HashSet<>(MAPD_TABLE_DETAILS.keySet());
+      for (List<String> keys : all) {
+        if (keys.get(0).equals(schema.toUpperCase())) {
+          MAPDLOGGER.debug("removing schema " + keys.get(0) + " table " + keys.get(1));
+          MAPD_TABLE_DETAILS.remove(keys);
         }
       }
     } else {

@@ -323,16 +323,17 @@ bool RowToColumnLoader::convert_string_to_column(
   return true;
 }
 
-RowToColumnLoader::RowToColumnLoader(const std::string server_host,
-                                     const int port,
-                                     const std::string db_name,
-                                     const std::string user_name,
-                                     const std::string passwd,
-                                     const std::string table_name)
-    : conn_details_(server_host, port, db_name, user_name, passwd) {
+RowToColumnLoader::RowToColumnLoader(const ThriftClientConnection& conn_details,
+                                     const std::string& user_name,
+                                     const std::string& passwd,
+                                     const std::string& db_name,
+                                     const std::string& table_name)
+    : user_name_(user_name)
+    , passwd_(passwd)
+    , db_name_(db_name)
+    , table_name_(table_name)
+    , conn_details_(conn_details) {
   createConnection(conn_details_);
-
-  table_name_ = table_name;
 
   TTableDetails table_details;
   client_->get_table_details(table_details, session_, table_name_);
@@ -344,8 +345,8 @@ RowToColumnLoader::RowToColumnLoader(const std::string server_host,
     column_type_info_.push_back(create_sql_type_info_from_col_type(ct));
   }
 
-  // create vector with array column details presented as real column for easier resue of
-  // othe code
+  // create vector with array column details presented as real column for easier resue
+  // of othe code
   for (TColumnType ct : row_desc_) {
     array_column_type_info_.push_back(create_array_sql_type_info_from_col_type(ct));
   }
@@ -360,15 +361,27 @@ RowToColumnLoader::~RowToColumnLoader() {
   closeConnection();
 }
 
-void RowToColumnLoader::createConnection(ConnectionDetails con) {
-  mapd::shared_ptr<TTransport> socket(new TSocket(con.server_host, con.port));
-  mytransport_.reset(new TBufferedTransport(socket));
-  mapd::shared_ptr<TProtocol> protocol(new TBinaryProtocol(mytransport_));
+void RowToColumnLoader::createConnection(const ThriftClientConnection& con) {
+  mapd::shared_ptr<TProtocol> protocol;
+  mapd::shared_ptr<TTransport> socket;
+  if (con.conn_type_ == ThriftConnectionType::HTTP ||
+      con.conn_type_ == ThriftConnectionType::HTTPS) {
+    mytransport_ = openHttpClientTransport(con.server_host_,
+                                           con.port_,
+                                           con.ca_cert_name_,
+                                           con.conn_type_ == ThriftConnectionType::HTTPS,
+                                           con.skip_host_verify_);
+    protocol = mapd::shared_ptr<TProtocol>(new TJSONProtocol(mytransport_));
+  } else {
+    mytransport_ =
+        openBufferedClientTransport(con.server_host_, con.port_, con.ca_cert_name_);
+    protocol = mapd::shared_ptr<TProtocol>(new TBinaryProtocol(mytransport_));
+  }
   client_.reset(new MapDClient(protocol));
+
   try {
-    mytransport_->open();  // open transport
-    client_->connect(
-        session_, con.user_name, con.passwd, con.db_name);  // connect to mapd_server
+    mytransport_->open();
+    client_->connect(session_, user_name_, passwd_, db_name_);
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {
@@ -378,7 +391,7 @@ void RowToColumnLoader::createConnection(ConnectionDetails con) {
 
 void RowToColumnLoader::closeConnection() {
   try {
-    client_->disconnect(session_);  // disconnect from mapd_server
+    client_->disconnect(session_);  // disconnect from omnisci_server
     mytransport_->close();          // close transport
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
@@ -389,15 +402,14 @@ void RowToColumnLoader::closeConnection() {
 
 void RowToColumnLoader::wait_disconnet_reconnnect_retry(
     size_t tries,
-    Importer_NS::CopyParams copy_params,
-    ConnectionDetails conn_details) {
+    Importer_NS::CopyParams copy_params) {
   std::cout << "  Waiting  " << copy_params.retry_wait
             << " secs to retry Inserts , will try " << (copy_params.retry_count - tries)
             << " times more " << std::endl;
   sleep(copy_params.retry_wait);
 
   closeConnection();
-  createConnection(conn_details);
+  createConnection(conn_details_);
 }
 
 void RowToColumnLoader::do_load(int& nrows,
@@ -421,10 +433,10 @@ void RowToColumnLoader::do_load(int& nrows,
       return;
     } catch (TMapDException& e) {
       std::cerr << "Exception trying to insert data " << e.error_msg << std::endl;
-      wait_disconnet_reconnnect_retry(tries, copy_params, conn_details_);
+      wait_disconnet_reconnnect_retry(tries, copy_params);
     } catch (TException& te) {
       std::cerr << "Exception trying to insert data " << te.what() << std::endl;
-      wait_disconnet_reconnnect_retry(tries, copy_params, conn_details_);
+      wait_disconnet_reconnnect_retry(tries, copy_params);
     }
   }
   std::cerr << "Retries exhausted program terminated" << std::endl;

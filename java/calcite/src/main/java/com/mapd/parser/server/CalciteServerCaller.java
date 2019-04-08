@@ -30,8 +30,10 @@ import org.apache.commons.cli.ParseException;
 import org.apache.log4j.PropertyConfigurator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.mapd.common.SockTransportProperties;
 
 public class CalciteServerCaller {
+  private SockTransportProperties skT = null;
   private final static Logger MAPDLOGGER =
           LoggerFactory.getLogger(CalciteServerCaller.class);
   private CommandLine cmd = null;
@@ -49,6 +51,18 @@ public class CalciteServerCaller {
 
     Option port =
             Option.builder("p").hasArg().desc("port number").longOpt("port").build();
+
+    Option ssl_trust_store = Option.builder("T")
+                                     .hasArg()
+                                     .desc("SSL_trust_store")
+                                     .longOpt("trust_store")
+                                     .build();
+
+    Option ssl_trust_passwd = Option.builder("P")
+                                      .hasArg()
+                                      .desc("SSL_trust_password")
+                                      .longOpt("trust_store_pw")
+                                      .build();
 
     Option mapdPort = Option.builder("m")
                               .hasArg()
@@ -73,6 +87,8 @@ public class CalciteServerCaller {
     options.addOption(data);
     options.addOption(extensions);
     options.addOption(mapdPort);
+    options.addOption(ssl_trust_store);
+    options.addOption(ssl_trust_passwd);
 
     CommandLineParser parser = new DefaultParser();
 
@@ -84,13 +100,14 @@ public class CalciteServerCaller {
       exit(0);
     }
 
-    int portNum = Integer.valueOf(cmd.getOptionValue("port", "9093"));
-    int mapdPortNum = Integer.valueOf(cmd.getOptionValue("mapd_port", "9091"));
+    int portNum = Integer.valueOf(cmd.getOptionValue("port", "6279"));
+    int mapdPortNum = Integer.valueOf(cmd.getOptionValue("mapd_port", "6274"));
     String dataDir = cmd.getOptionValue("data", "data");
     String extensionsDir = cmd.getOptionValue("extensions", "build/QueryEngine");
+    String trust_store = cmd.getOptionValue("trust_store", "");
+    String trust_store_pw = cmd.getOptionValue("trust_store_pw", "");
     final Path extensionFunctionsAstFile =
             Paths.get(extensionsDir, "ExtensionFunctions.ast");
-
     // Add logging to our log files directories
     Properties p = new Properties();
     try {
@@ -102,8 +119,16 @@ public class CalciteServerCaller {
     p.put("log.dir", dataDir); // overwrite "log.dir"
     PropertyConfigurator.configure(p);
 
+    try {
+      if (!trust_store.isEmpty())
+        skT = new SockTransportProperties(trust_store, trust_store_pw);
+    } catch (Exception ex) {
+      MAPDLOGGER.error(
+              "Supplied java trust stored could not be opened " + ex.getMessage());
+    }
+
     calciteServerWrapper = new CalciteServerWrapper(
-            portNum, mapdPortNum, dataDir, extensionFunctionsAstFile.toString());
+            portNum, mapdPortNum, dataDir, extensionFunctionsAstFile.toString(), skT);
 
     while (true) {
       try {

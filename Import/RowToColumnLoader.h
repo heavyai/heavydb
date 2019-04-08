@@ -35,6 +35,7 @@
 #include <iterator>
 #include <string>
 
+#include "Shared/ThriftClient.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/sqltypes.h"
 
@@ -45,7 +46,9 @@
 
 // include files for Thrift and MapD Thrift Services
 #include <thrift/protocol/TBinaryProtocol.h>
+#include <thrift/protocol/TJSONProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
+#include <thrift/transport/THttpClient.h>
 #include <thrift/transport/TSocket.h>
 #include "Importer.h"
 #include "gen-cpp/MapD.h"
@@ -55,34 +58,13 @@ using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::transport;
 
-struct ConnectionDetails {
-  std::string server_host;
-  int port;
-  std::string db_name;
-  std::string user_name;
-  std::string passwd;
-
-  ConnectionDetails(const std::string in_server_host,
-                    const int in_port,
-                    const std::string in_db_name,
-                    const std::string in_user_name,
-                    const std::string in_passwd)
-      : server_host(in_server_host)
-      , port(in_port)
-      , db_name(in_db_name)
-      , user_name(in_user_name)
-      , passwd(in_passwd) {}
-  ConnectionDetails(){};
-};
-
 class RowToColumnLoader {
  public:
-  RowToColumnLoader(const std::string server_host,
-                    const int port,
-                    const std::string db_name,
-                    const std::string user_name,
-                    const std::string passwd,
-                    const std::string table_name);
+  RowToColumnLoader(const ThriftClientConnection& conn_details,
+                    const std::string& user_name,
+                    const std::string& passwd,
+                    const std::string& db_name,
+                    const std::string& table_name);
   ~RowToColumnLoader();
   void do_load(int& nrows, int& nskipped, Importer_NS::CopyParams copy_params);
   bool convert_string_to_column(std::vector<TStringValue> row,
@@ -92,7 +74,11 @@ class RowToColumnLoader {
                                    const Importer_NS::CopyParams& copy_params);
 
  private:
+  std::string user_name_;
+  std::string passwd_;
+  std::string db_name_;
   std::string table_name_;
+  ThriftClientConnection conn_details_;
 
   std::vector<TColumn> input_columns_;
   std::vector<SQLTypeInfo> column_type_info_;
@@ -100,17 +86,13 @@ class RowToColumnLoader {
 
   TRowDescriptor row_desc_;
 
-  ConnectionDetails conn_details_;
-
   mapd::shared_ptr<MapDClient> client_;
   TSessionId session_;
   mapd::shared_ptr<apache::thrift::transport::TTransport> mytransport_;
 
-  void createConnection(ConnectionDetails con);
+  void createConnection(const ThriftClientConnection& con);
   void closeConnection();
-  void wait_disconnet_reconnnect_retry(size_t tries,
-                                       Importer_NS::CopyParams copy_params,
-                                       ConnectionDetails conn_details);
+  void wait_disconnet_reconnnect_retry(size_t tries, Importer_NS::CopyParams copy_params);
 };
 
 #endif  // _ROWTOCOLUMNLOADER_H_

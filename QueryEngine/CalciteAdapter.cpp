@@ -1376,6 +1376,15 @@ std::string pg_shim_impl(const std::string& query) {
         });
   }
   {
+    boost::regex immediate_cast_expr{R"(TIMESTAMP\(3\)\s+('[^']+'))",
+                                     boost::regex::extended | boost::regex::icase};
+    apply_shim(
+        result, immediate_cast_expr, [](std::string& result, const boost::smatch& what) {
+          result.replace(
+              what.position(), what.length(), "CAST(" + what[1] + " AS TIMESTAMP(3))");
+        });
+  }
+  {
     boost::regex corr_expr{R"((\s+|,|\()(corr)\s*\()",
                            boost::regex::extended | boost::regex::icase};
     apply_shim(result, corr_expr, [](std::string& result, const boost::smatch& what) {
@@ -1383,15 +1392,23 @@ std::string pg_shim_impl(const std::string& query) {
     });
   }
   {
-    boost::regex cast_to_geography_expr{
-        R"(CAST\s*\(\s*(((?!geography).)+)\s+AS\s+geography\s*\))",
-        boost::regex::perl | boost::regex::icase};
-    apply_shim(result,
-               cast_to_geography_expr,
-               [](std::string& result, const boost::smatch& what) {
-                 result.replace(
-                     what.position(), what.length(), "CastToGeography(" + what[1] + ")");
-               });
+    try {
+      // the geography regex pattern is expensive and can sometimes run out of stack space
+      // on long queries. Treat it separately from the other shims.
+      boost::regex cast_to_geography_expr{
+          R"(CAST\s*\(\s*(((?!geography).)+)\s+AS\s+geography\s*\))",
+          boost::regex::perl | boost::regex::icase};
+      apply_shim(result,
+                 cast_to_geography_expr,
+                 [](std::string& result, const boost::smatch& what) {
+                   result.replace(what.position(),
+                                  what.length(),
+                                  "CastToGeography(" + what[1] + ")");
+                 });
+    } catch (const std::exception& e) {
+      LOG(WARNING) << "Error apply geography cast shim: " << e.what()
+                   << "\nContinuing query parse...";
+    }
   }
   return result;
 }
@@ -1401,7 +1418,8 @@ std::string pg_shim_impl(const std::string& query) {
 std::string pg_shim(const std::string& query) {
   try {
     return pg_shim_impl(query);
-  } catch (...) {
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Error applying shim: " << e.what() << "\nContinuing query parse...";
     // boost::regex throws an exception about the complexity of matching when
     // the wrong type of quotes are used or they're mismatched. Let the query
     // through unmodified, the parser will throw a much more informative error.

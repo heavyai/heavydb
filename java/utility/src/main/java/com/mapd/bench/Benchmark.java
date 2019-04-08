@@ -17,7 +17,7 @@
 package com.mapd.bench;
 
 // STEP 1. Import required packages
-import com.mapd.jdbc.MapDStatement;
+import com.omnisci.jdbc.OmniSciStatement;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -33,10 +33,10 @@ public class Benchmark {
   final static Logger logger = LoggerFactory.getLogger(Benchmark.class);
 
   // JDBC driver name and database URL
-  static final String JDBC_DRIVER = "com.mapd.jdbc.MapDDriver";
-  static final String DB_URL = "jdbc:mapd:localhost:9091:mapd";
+  static final String JDBC_DRIVER = "com.omnisci.jdbc.OmniSciDriver";
+  static final String DB_URL = "jdbc:omnisci:localhost:6274:mapd";
 
-  //  Database credentials
+  // Database credentials
   static final String USER = "mapd";
   static final String PASS = "HyperInteractive";
 
@@ -84,7 +84,8 @@ public class Benchmark {
   void doWork(String[] args, int query) {
     // Grab parameters from args
     // parm0 number of iterations per query
-    // parm1 file containing sql queries {contains quoted query, expected result count]
+    // parm1 file containing sql queries {contains quoted query, expected result
+    // count]
     // parm2 optional JDBC Driver class name
     // parm3 optional DB URL
     // parm4 optionsl user
@@ -184,9 +185,9 @@ public class Benchmark {
         long executeTime = 0;
         long jdbcTime = 0;
 
-        // gather internal execute time for MapD as we are interested in that
+        // gather internal execute time for OmniSci as we are interested in that
         if (driver.equals(JDBC_DRIVER)) {
-          executeTime = ((MapDStatement) stmt).getQueryInternalExecuteTime();
+          executeTime = ((OmniSciStatement) stmt).getQueryInternalExecuteTime();
           jdbcTime = (System.currentTimeMillis() - timer) - executeTime;
         } else {
           jdbcTime = (System.currentTimeMillis() - timer);

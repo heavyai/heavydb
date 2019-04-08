@@ -19,6 +19,7 @@
 #include "GpuMemUtils.h"
 #include "GroupByAndAggregate.h"
 #include "InPlaceSort.h"
+#include "ResultSet.h"
 #include "ThrustAllocator.h"
 
 void ResultRows::inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>& order_entries,
@@ -36,7 +37,7 @@ void ResultRows::inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>& order
   for (const auto& order_entry : order_entries) {
     const auto target_idx = order_entry.tle_no - 1;
     const auto val_buff =
-        group_by_buffers.second + query_mem_desc.getColOffInBytes(0, target_idx);
+        group_by_buffers.second + query_mem_desc.getColOffInBytes(target_idx);
     const auto chosen_bytes = query_mem_desc.getColumnWidth(target_idx).compact;
     sort_groups_gpu(reinterpret_cast<int64_t*>(val_buff),
                     reinterpret_cast<int32_t*>(idx_buff),
@@ -57,7 +58,7 @@ void ResultRows::inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>& order
       }
       const auto chosen_bytes = query_mem_desc.getColumnWidth(target_idx).compact;
       const auto val_buff =
-          group_by_buffers.second + query_mem_desc.getColOffInBytes(0, target_idx);
+          group_by_buffers.second + query_mem_desc.getColOffInBytes(target_idx);
       apply_permutation_gpu(reinterpret_cast<int64_t*>(val_buff),
                             reinterpret_cast<int32_t*>(idx_buff),
                             query_mem_desc.getEntryCount(),
@@ -65,88 +66,4 @@ void ResultRows::inplaceSortGpuImpl(const std::list<Analyzer::OrderEntry>& order
                             alloc);
     }
   }
-}
-
-const std::vector<const int8_t*>& QueryExecutionContext::getColumnFrag(
-    const size_t table_idx,
-    int64_t& global_idx) const {
-  if (col_buffers_.size() > 1) {
-    int64_t frag_id = 0;
-    int64_t local_idx = global_idx;
-    if (consistent_frag_sizes_[table_idx] != -1) {
-      frag_id = global_idx / consistent_frag_sizes_[table_idx];
-      local_idx = global_idx % consistent_frag_sizes_[table_idx];
-    } else {
-      std::tie(frag_id, local_idx) =
-          get_frag_id_and_local_idx(frag_offsets_, table_idx, global_idx);
-    }
-    CHECK_GE(frag_id, int64_t(0));
-    CHECK_LT(frag_id, col_buffers_.size());
-    global_idx = local_idx;
-    return col_buffers_[frag_id];
-  } else {
-    CHECK_EQ(size_t(1), col_buffers_.size());
-    return col_buffers_.front();
-  }
-}
-
-RowSetPtr QueryExecutionContext::groupBufferToResults(
-    const size_t i,
-    const std::vector<Analyzer::Expr*>& targets) const {
-  if (query_mem_desc_.interleavedBins(device_type_)) {
-    return groupBufferToDeinterleavedResults(i);
-  }
-  CHECK_LT(i, result_sets_.size());
-  return std::unique_ptr<ResultSet>(result_sets_[i].release());
-}
-
-RowSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(const size_t i) const {
-  CHECK(!output_columnar_);
-  const auto& result_set = result_sets_[i];
-  auto deinterleaved_query_mem_desc =
-      ResultSet::fixupQueryMemoryDescriptor(query_mem_desc_);
-  deinterleaved_query_mem_desc.setHasInterleavedBinsOnGpu(false);
-  for (auto& col_widths : deinterleaved_query_mem_desc.agg_col_widths_) {
-    col_widths.actual = col_widths.compact = 8;
-  }
-  auto deinterleaved_result_set =
-      std::make_shared<ResultSet>(result_set->getTargetInfos(),
-                                  std::vector<ColumnLazyFetchInfo>{},
-                                  std::vector<std::vector<const int8_t*>>{},
-                                  std::vector<std::vector<int64_t>>{},
-                                  std::vector<int64_t>{},
-                                  ExecutorDeviceType::CPU,
-                                  -1,
-                                  deinterleaved_query_mem_desc,
-                                  row_set_mem_owner_,
-                                  executor_);
-  auto deinterleaved_storage =
-      deinterleaved_result_set->allocateStorage(executor_->plan_state_->init_agg_vals_);
-  auto deinterleaved_buffer =
-      reinterpret_cast<int64_t*>(deinterleaved_storage->getUnderlyingBuffer());
-  const auto rows_ptr = result_set->getStorage()->getUnderlyingBuffer();
-  size_t deinterleaved_buffer_idx = 0;
-  const size_t agg_col_count{query_mem_desc_.getColCount()};
-  for (size_t bin_base_off = query_mem_desc_.getColOffInBytes(0, 0), bin_idx = 0;
-       bin_idx < result_set->entryCount();
-       ++bin_idx, bin_base_off += query_mem_desc_.getColOffInBytesInNextBin(0)) {
-    std::vector<int64_t> agg_vals(agg_col_count, 0);
-    memcpy(&agg_vals[0],
-           &executor_->plan_state_->init_agg_vals_[0],
-           agg_col_count * sizeof(agg_vals[0]));
-    ResultRows::reduceSingleRow(rows_ptr + bin_base_off,
-                                executor_->warpSize(),
-                                false,
-                                true,
-                                agg_vals,
-                                query_mem_desc_,
-                                result_set->getTargetInfos(),
-                                executor_->plan_state_->init_agg_vals_);
-    for (size_t agg_idx = 0; agg_idx < agg_col_count;
-         ++agg_idx, ++deinterleaved_buffer_idx) {
-      deinterleaved_buffer[deinterleaved_buffer_idx] = agg_vals[agg_idx];
-    }
-  }
-  result_sets_[i].reset();
-  return deinterleaved_result_set;
 }

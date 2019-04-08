@@ -3,8 +3,6 @@
 set -e
 set -x
 
-HTTP_DEPS="https://dependencies.mapd.com/thirdparty"
-
 SUFFIX=${SUFFIX:=$(date +%Y%m%d)}
 PREFIX=${MAPD_PATH:="/usr/local/mapd-deps/$SUFFIX"}
 if [ ! -w $(dirname $PREFIX) ] ; then
@@ -15,6 +13,9 @@ $SUDO chown -R $USER $PREFIX
 
 export PATH=$PREFIX/bin:$PATH
 export LD_LIBRARY_PATH=$PREFIX/lib64:$PREFIX/lib:$LD_LIBRARY_PATH
+
+# Needed to find xmltooling and xml_security_c
+export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
 
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $SCRIPTS_DIR/common-functions.sh
@@ -102,8 +103,7 @@ popd
 # https://cmake.org/files/v3.12/cmake-3.12.2.tar.gz
 download_make_install ${HTTP_DEPS}/cmake-3.12.2.tar.gz
 
-# folly
-VERS=3.0.0
+VERS=3.1.0
 download https://github.com/google/double-conversion/archive/v$VERS.tar.gz
 extract v$VERS.tar.gz
 mkdir -p double-conversion-$VERS/build
@@ -126,6 +126,7 @@ popd
 VERS=0.3.5
 CXXFLAGS="-fPIC" download_make_install https://github.com/google/glog/archive/v$VERS.tar.gz glog-$VERS "--enable-shared=no" # --build=powerpc64le-unknown-linux-gnu"
 
+# folly
 VERS=2.1.8
 download_make_install https://github.com/libevent/libevent/releases/download/release-$VERS-stable/libevent-$VERS-stable.tar.gz
 
@@ -231,6 +232,8 @@ makej
 make install
 popd
 
+install_snappy
+
 # c-blosc
 VERS=1.14.4
 download https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
@@ -306,6 +309,22 @@ wget --continue https://vulkan.lunarg.com/sdk/download/$VERS/linux/vulkansdk-lin
 tar xvf vulkansdk-linux-x86_64-$VERS.tar.gz
 rsync -av $VERS/x86_64/* $PREFIX
 popd # vulkan
+
+# install opensaml and its dependencies
+VERS=3_2_1
+download ${HTTP_DEPS}/Xerces-C_$VERS.tar.gz
+extract Xerces-C_$VERS.tar.gz
+XERCESCROOT=$PWD/xerces-c-Xerces-C_$VERS
+mkdir $XERCESCROOT/build
+pushd $XERCESCROOT/build
+cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DBUILD_SHARED_LIBS=off -Dnetwork=off -DCMAKE_BUILD_TYPE=release ..
+makej
+make install
+popd
+
+download_make_install ${HTTP_DEPS}/xml-security-c-2.0.0.tar.gz "" "--without-xalan --enable-static --disable-shared"
+download_make_install ${HTTP_DEPS}/xmltooling-3.0.2-nolog4shib.tar.gz "" "--enable-static --disable-shared"
+download_make_install ${HTTP_DEPS}/opensaml-3.0.0-nolog4shib.tar.gz "" "--enable-static --disable-shared"
 
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.modulefile.in > mapd-deps-$SUFFIX.modulefile
 sed -e "s|%MAPD_DEPS_ROOT%|$PREFIX|g" mapd-deps.sh.in > mapd-deps-$SUFFIX.sh

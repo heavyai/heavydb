@@ -19,9 +19,11 @@
 #include "../Shared/sqldefs.h"
 #include "DeepCopyVisitor.h"
 #include "Execute.h"
+#include "RelAlgTranslator.h"
 #include "ScalarExprVisitor.h"
 
 #include <glog/logging.h>
+#include <unordered_set>
 
 namespace {
 
@@ -155,51 +157,6 @@ class RecursiveOrToInVisitor : public DeepCopyVisitor {
                                        rewritten_lhs ? rewritten_lhs : lhs,
                                        rewritten_rhs ? rewritten_rhs : rhs);
   }
-};
-
-class IndirectToDirectColVisitor : public DeepCopyVisitor {
- public:
-  IndirectToDirectColVisitor(
-      const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs) {
-    for (auto& desc : col_descs) {
-      if (!std::dynamic_pointer_cast<const IndirectInputColDescriptor>(desc)) {
-        continue;
-      }
-      ind_col_id_to_desc_.insert(std::make_pair(desc->getColId(), desc.get()));
-    }
-  }
-
- protected:
-  RetType visitColumnVar(const Analyzer::ColumnVar* col_var) const override {
-    if (!ind_col_id_to_desc_.count(col_var->get_column_id())) {
-      return col_var->deep_copy();
-    }
-    auto desc_it = ind_col_id_to_desc_.find(col_var->get_column_id());
-    CHECK(desc_it != ind_col_id_to_desc_.end());
-    CHECK(desc_it->second);
-    if (desc_it->second->getScanDesc().getTableId() != col_var->get_table_id()) {
-      return col_var->deep_copy();
-    }
-    auto ind_col_desc = dynamic_cast<const IndirectInputColDescriptor*>(desc_it->second);
-    CHECK(ind_col_desc);
-    return makeExpr<Analyzer::ColumnVar>(col_var->get_type_info(),
-                                         ind_col_desc->getIndirectDesc().getTableId(),
-                                         ind_col_desc->getRefColIndex(),
-                                         col_var->get_rte_idx());
-  }
-
-  RetType visitColumnVarTuple(
-      const Analyzer::ExpressionTuple* col_var_tuple) const override {
-    std::vector<std::shared_ptr<Analyzer::Expr>> redirected_tuple;
-    for (const auto& tuple_component : col_var_tuple->getTuple()) {
-      const auto redirected_component = visit(tuple_component.get());
-      redirected_tuple.push_back(redirected_component);
-    }
-    return std::make_shared<Analyzer::ExpressionTuple>(redirected_tuple);
-  }
-
- private:
-  std::unordered_map<int, const InputColDescriptor*> ind_col_id_to_desc_;
 };
 
 class ArrayElementStringLiteralEncodingVisitor : public DeepCopyVisitor {
@@ -694,63 +651,122 @@ Analyzer::ExpressionPtr rewrite_expr(const Analyzer::Expr* expr) {
   return rewritten_expr;
 }
 
-std::list<std::shared_ptr<Analyzer::Expr>> redirect_exprs(
-    const std::list<std::shared_ptr<Analyzer::Expr>>& exprs,
-    const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs) {
-  bool has_indirect_col = false;
-  for (const auto& desc : col_descs) {
-    if (std::dynamic_pointer_cast<const IndirectInputColDescriptor>(desc)) {
-      has_indirect_col = true;
-      break;
+namespace {
+
+static const std::unordered_set<std::string> overlaps_supported_functions = {
+    "ST_Contains_MultiPolygon_Point",
+    "ST_Contains_Polygon_Point"};
+
+}  // namespace
+
+boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
+    const std::shared_ptr<Analyzer::Expr> expr) {
+  auto func_oper = dynamic_cast<Analyzer::FunctionOper*>(expr.get());
+  if (func_oper) {
+    // TODO(adb): consider converting unordered set to an unordered map, potentially
+    // storing the rewrite function we want to apply in the map
+    if (overlaps_supported_functions.find(func_oper->getName()) !=
+        overlaps_supported_functions.end()) {
+      CHECK_GE(func_oper->getArity(), size_t(3));
+
+      DeepCopyVisitor deep_copy_visitor;
+      auto lhs = func_oper->getOwnArg(2);
+      auto rewritten_lhs = deep_copy_visitor.visit(lhs.get());
+      CHECK(rewritten_lhs);
+      const auto& lhs_ti = rewritten_lhs->get_type_info();
+      if (!lhs_ti.is_geometry()) {
+        // TODO(adb): If ST_Contains is passed geospatial literals instead of columns, the
+        // function will be expanded during translation rather than during code
+        // generation. While this scenario does not make sense for the overlaps join, we
+        // need to detect and abort the overlaps rewrite. Adding a GeospatialConstant
+        // dervied class to the Analyzer may prove to be a better way to handle geo
+        // literals, but for now we ensure the LHS type is a geospatial type, which would
+        // mean the function has not been expanded to the physical types, yet.
+        LOG(WARNING) << "Failed to rewrite " << func_oper->getName()
+                     << " to overlaps conjunction. LHS input type is not a geospatial "
+                        "type. Are both inputs geospatial columns?";
+        return boost::none;
+      }
+
+      // Read the bounds arg from the ST_Contains FuncOper (second argument)instead of the
+      // poly column (first argument)
+      auto rhs = func_oper->getOwnArg(1);
+      auto rewritten_rhs = deep_copy_visitor.visit(rhs.get());
+      CHECK(rewritten_rhs);
+
+      auto overlaps_oper = makeExpr<Analyzer::BinOper>(
+          kBOOLEAN, kOVERLAPS, kONE, rewritten_lhs, rewritten_rhs);
+
+      return OverlapsJoinConjunction{{expr}, {overlaps_oper}};
     }
   }
-
-  if (!has_indirect_col) {
-    return exprs;
-  }
-
-  IndirectToDirectColVisitor visitor(col_descs);
-  std::list<std::shared_ptr<Analyzer::Expr>> new_exprs;
-  for (auto& e : exprs) {
-    new_exprs.push_back(e ? visitor.visit(e.get()) : nullptr);
-  }
-  return new_exprs;
+  return boost::none;
 }
 
-std::vector<std::shared_ptr<Analyzer::Expr>> redirect_exprs(
-    const std::vector<Analyzer::Expr*>& exprs,
-    const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs) {
-  bool has_indirect_col = false;
-  for (const auto& desc : col_descs) {
-    if (std::dynamic_pointer_cast<const IndirectInputColDescriptor>(desc)) {
-      has_indirect_col = true;
-      break;
+/**
+ * JoinCoveredQualVisitor returns true if the visited qual is true if and only if a
+ * corresponding equijoin qual is true. During the pre-filtered count we can elide the
+ * visited qual decreasing query run time while upper bounding the number of rows passing
+ * the filter. Currently only used for expressions of the form `a OVERLAPS b AND Expr<a,
+ * b>`. Strips `Expr<a,b>` if the expression has been pre-determined to be expensive to
+ * compute twice.
+ */
+class JoinCoveredQualVisitor : public ScalarExprVisitor<bool> {
+ public:
+  JoinCoveredQualVisitor(const JoinQualsPerNestingLevel& join_quals) {
+    for (const auto& join_condition : join_quals) {
+      for (const auto& qual : join_condition.quals) {
+        auto qual_bin_oper = dynamic_cast<Analyzer::BinOper*>(qual.get());
+        if (qual_bin_oper) {
+          join_qual_pairs.emplace_back(qual_bin_oper->get_left_operand(),
+                                       qual_bin_oper->get_right_operand());
+        }
+      }
     }
   }
 
-  std::vector<std::shared_ptr<Analyzer::Expr>> new_exprs;
-  if (!has_indirect_col) {
-    for (auto& e : exprs) {
-      new_exprs.push_back(e ? e->deep_copy() : nullptr);
+  bool visitFunctionOper(const Analyzer::FunctionOper* func_oper) const override {
+    if (overlaps_supported_functions.find(func_oper->getName()) !=
+        overlaps_supported_functions.end()) {
+      const auto lhs = func_oper->getArg(2);
+      const auto rhs = func_oper->getArg(1);
+      for (const auto qual_pair : join_qual_pairs) {
+        if (*lhs == *qual_pair.first && *rhs == *qual_pair.second) {
+          return true;
+        }
+      }
     }
-    return new_exprs;
+    return false;
   }
 
-  IndirectToDirectColVisitor visitor(col_descs);
-  for (auto& e : exprs) {
-    new_exprs.push_back(e ? visitor.visit(e) : nullptr);
-  }
-  return new_exprs;
-}
+  bool defaultResult() const override { return false; }
 
-std::shared_ptr<Analyzer::Expr> redirect_expr(
-    const Analyzer::Expr* expr,
-    const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs) {
-  if (!expr) {
-    return nullptr;
+ private:
+  std::vector<std::pair<const Analyzer::Expr*, const Analyzer::Expr*>> join_qual_pairs;
+};
+
+std::list<std::shared_ptr<Analyzer::Expr>> strip_join_covered_filter_quals(
+    const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
+    const JoinQualsPerNestingLevel& join_quals) {
+  if (!g_strip_join_covered_quals) {
+    return quals;
   }
-  IndirectToDirectColVisitor visitor(col_descs);
-  return visitor.visit(expr);
+
+  if (join_quals.empty()) {
+    return quals;
+  }
+
+  std::list<std::shared_ptr<Analyzer::Expr>> quals_to_return;
+
+  JoinCoveredQualVisitor visitor(join_quals);
+  for (const auto& qual : quals) {
+    if (!visitor.visit(qual.get())) {
+      // Not a covered qual, don't elide it from the filtered count
+      quals_to_return.push_back(qual);
+    }
+  }
+
+  return quals_to_return;
 }
 
 std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr* expr) {

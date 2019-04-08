@@ -1,0 +1,4 @@
+select
+  count(*)
+from
+  ##TAB##

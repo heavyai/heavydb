@@ -47,6 +47,15 @@ class QueryMemoryDescriptor;
 bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
                          const QueryMemoryDescriptor& query_mem_desc);
 
+namespace Analyzer {
+class Expr;
+}  // namespace Analyzer
+
+// Compute the slot index where the target given by target_idx is stored, where
+// target_exprs is the list all projected expressions.
+size_t get_heap_key_slot_index(const std::vector<Analyzer::Expr*>& target_exprs,
+                               const size_t target_idx);
+
 #ifdef HAVE_CUDA
 namespace Data_Namespace {
 

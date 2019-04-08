@@ -100,7 +100,7 @@ void stream_insert(MapDClient& client,
 
 int main(int argc, char** argv) {
   std::string server_host("localhost");  // default to localohost
-  int port = 9091;                       // default port number
+  int port = 6274;                       // default port number
   const char* delimiter = "\t";          // only support tab delimiter for now
 
   if (argc < 5) {
@@ -129,11 +129,11 @@ int main(int argc, char** argv) {
   TSessionId session;
   try {
     transport->open();                                    // open transport
-    client.connect(session, user_name, passwd, db_name);  // connect to mapd_server
+    client.connect(session, user_name, passwd, db_name);  // connect to omnisci_server
     TTableDetails table_details;
     client.get_table_details(table_details, session, table_name);
     stream_insert(client, session, table_name, table_details.row_desc, delimiter);
-    client.disconnect(session);  // disconnect from mapd_server
+    client.disconnect(session);  // disconnect from omnisci_server
     transport->close();          // close transport
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;

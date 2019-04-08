@@ -85,6 +85,10 @@ endif()
 
 # Set standard CMake FindPackage variables if found.
 set(Thrift_LIBRARIES ${Thrift_LIBRARY})
+if(Thrift_USE_STATIC_LIBS)
+  set(Thrift_LIBRARIES ${Thrift_LIBRARIES} ${OPENSSL_LIBRARIES})
+endif()
+
 set(Thrift_LIBRARY_DIRS ${Thrift_LIBRARY_DIR})
 set(Thrift_INCLUDE_DIRS ${Thrift_LIBRARY_DIR}/../include)
 

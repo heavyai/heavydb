@@ -22,6 +22,7 @@ using namespace std;
 
 	/* literal keyword tokens */
 
+ACCESS        TOK(ACCESS)
 ALL		{ yylval.qualval = kALL; TOK(ALL) }
 ALTER         TOK(ALTER)
 ADD           TOK(ADD)
@@ -48,6 +49,7 @@ COPY          TOK(COPY);
 CREATE        TOK(CREATE)
 CURRENT       TOK(CURRENT)
 CURSOR        TOK(CURSOR)
+DASHBOARD     TOK(DASHBOARD)
 DATABASE      TOK(DATABASE)
 DATE          TOK(DATE)
 DATETIME      TOK(DATETIME)
@@ -61,6 +63,8 @@ DICTIONARY    TOK(DICTIONARY)
 DISTINCT      TOK(DISTINCT)
 DOUBLE        TOK(DOUBLE)
 DROP          TOK(DROP)
+EDIT          TOK(EDIT)
+EDITOR        TOK(EDITOR)
 ELSE          TOK(ELSE)
 END           TOK(END)
 EXISTS        TOK(EXISTS)
@@ -104,6 +108,7 @@ OFFSET        TOK(OFFSET)
 ON            TOK(ON)
 OPEN          TOK(OPEN)
 OPTION        TOK(OPTION)
+OPTIMIZE      TOK(OPTIMIZE)
 OR            TOK(OR)
 ORDER         TOK(ORDER)
 POINT         TOK(POINT)
@@ -117,6 +122,7 @@ REAL          TOK(REAL)
 REFERENCES		TOK(REFERENCES)
 RENAME        TOK(RENAME)
 REVOKE        TOK(REVOKE)
+ROLE          TOK(ROLE)
 ROLLBACK      TOK(ROLLBACK)
 SCHEMA        TOK(SCHEMA)
 SELECT        TOK(SELECT)
@@ -127,6 +133,7 @@ SHOW          TOK(SHOW)
 SKYLINE       TOK(SKYLINE)
 SMALLINT      TOK(SMALLINT)
 SOME          { yylval.qualval = kANY; TOK(SOME) } /* SOME = ANY */
+SQL           TOK(SQL)
 TABLE         TOK(TABLE)
 TEMPORARY     TOK(TEMPORARY)
 TEXT          TOK(TEXT)
@@ -163,6 +170,9 @@ WORK          TOK(WORK)
 	/* names */
 [A-Za-z_][A-Za-z0-9\$_]*	{ yylval.stringval = new std::string(yytext); TOK(NAME) }
 
+  /* names with dashes */
+[A-Za-z_][A-Za-z0-9\$_\-]*	{ yylval.stringval = new std::string(yytext); TOK(DASHEDNAME) }
+
 	/* emails */
 ([^[:space:]\"]+|\".+\")@[A-Za-z0-9][A-Za-z0-9\-\.]*\.[A-Za-z]+	{ yylval.stringval = new std::string(yytext); TOK(EMAIL) }
 
@@ -175,12 +185,14 @@ WORK          TOK(WORK)
 -?[0-9]+"."[0-9]* |
 -?"."[0-9]*		{
 		yylval.stringval = new std::string(yytext);
-		// numeric and decimal precisions cannot exceed 19
-		if (yylval.stringval->length() < 20)
-			return SQLParser::FIXEDNUM;
-		// otherwise return as double
-		yylval.doubleval = std::stod(*yylval.stringval);
-		return SQLParser::DOUBLE;
+    // numeric and decimal precisions cannot exceed 19
+    if (yylval.stringval->length() < 20) {
+            return SQLParser::FIXEDNUM;
+    }
+    delete yylval.stringval;
+    // otherwise return as double
+    yylval.doubleval = std::stod(yytext);
+    return SQLParser::DOUBLE;
 	}
 
 	/* TODO: handle FLOAT v.s. DOUBLE */

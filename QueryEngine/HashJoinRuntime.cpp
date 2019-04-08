@@ -17,6 +17,7 @@
 #include "HashJoinRuntime.h"
 #include "../Shared/shard_key.h"
 #include "CompareKeysInl.h"
+#include "HashJoinKeyHandlers.h"
 #include "HyperLogLogRank.h"
 #include "MurmurHash1Inl.h"
 #ifdef __CUDACC__
@@ -38,6 +39,7 @@
 #endif
 #include "../Shared/funcannotations.h"
 
+#include <cmath>
 #include <numeric>
 
 DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
@@ -79,11 +81,7 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem = get_join_column_element_value(type_info, join_column, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -106,6 +104,8 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
       }
       elem = outer_id;
     }
+    CHECK_GE(elem, type_info.min_val)
+        << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     int32_t* entry_ptr = SUFFIX(get_hash_slot)(buff, elem, type_info.min_val);
     if (mapd_cas(entry_ptr, invalid_slot_val, i) != invalid_slot_val) {
@@ -132,11 +132,7 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem = get_join_column_element_value(type_info, join_column, i);
     size_t shard = SHARD_FOR_KEY(elem, shard_info.num_shards);
     if (shard != shard_info.shard) {
       continue;
@@ -163,6 +159,8 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
       }
       elem = outer_id;
     }
+    CHECK_GE(elem, type_info.min_val)
+        << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     int32_t* entry_ptr = SUFFIX(get_hash_slot_sharded)(buff,
                                                        elem,
@@ -325,19 +323,16 @@ DEVICE int write_baseline_hash_slot(const int32_t val,
   return 0;
 }
 
-template <typename T>
-DEVICE int SUFFIX(fill_baseline_hash_join_buff)(
-    int8_t* hash_buff,
-    const size_t entry_count,
-    const int32_t invalid_slot_val,
-    const size_t key_component_count,
-    const bool with_val_slot,
-    const JoinColumn* join_column_per_key,
-    const JoinColumnTypeInfo* type_info_per_key,
-    const void* const* sd_inner_proxy_per_key,
-    const void* const* sd_outer_proxy_per_key,
-    const int32_t cpu_thread_idx,
-    const int32_t cpu_thread_count) {
+template <typename T, typename FILL_HANDLER>
+DEVICE int SUFFIX(fill_baseline_hash_join_buff)(int8_t* hash_buff,
+                                                const size_t entry_count,
+                                                const int32_t invalid_slot_val,
+                                                const size_t key_component_count,
+                                                const bool with_val_slot,
+                                                const FILL_HANDLER* f,
+                                                const size_t num_elems,
+                                                const int32_t cpu_thread_idx,
+                                                const int32_t cpu_thread_count) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
@@ -345,56 +340,26 @@ DEVICE int SUFFIX(fill_baseline_hash_join_buff)(
   int32_t start = cpu_thread_idx;
   int32_t step = cpu_thread_count;
 #endif
-  const auto num_elems = join_column_per_key[0].num_elems;
+
   T key_scratch_buff[g_maximum_conditions_to_coalesce];
+
+  auto key_buff_handler = [hash_buff, entry_count, with_val_slot, invalid_slot_val](
+                              const size_t entry_idx,
+                              const T* key_scratch_buffer,
+                              const size_t key_component_count) {
+    return write_baseline_hash_slot<T>(entry_idx,
+                                       hash_buff,
+                                       entry_count,
+                                       key_scratch_buffer,
+                                       key_component_count,
+                                       with_val_slot,
+                                       invalid_slot_val);
+  };
+
   for (size_t i = start; i < num_elems; i += step) {
-    bool skip_entry = false;
-    for (size_t key_component_index = 0; key_component_index < key_component_count;
-         ++key_component_index) {
-      const auto& join_column = join_column_per_key[key_component_index];
-      const auto& type_info = type_info_per_key[key_component_index];
-#ifndef __CUDACC__
-      const auto sd_inner_proxy = sd_inner_proxy_per_key[key_component_index];
-      const auto sd_outer_proxy = sd_outer_proxy_per_key[key_component_index];
-#endif
-      int64_t elem = type_info.is_unsigned
-                         ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                               join_column.col_buff, type_info.elem_sz, i)
-                         : SUFFIX(fixed_width_int_decode_noinline)(
-                               join_column.col_buff, type_info.elem_sz, i);
-      if (elem == type_info.null_val && !type_info.uses_bw_eq) {
-        skip_entry = true;
-        break;
-      }
-#ifndef __CUDACC__
-      if (sd_inner_proxy && elem != type_info.null_val) {
-        CHECK(sd_outer_proxy);
-        const auto sd_inner_dict_proxy =
-            static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-        const auto sd_outer_dict_proxy =
-            static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
-        const auto elem_str = sd_inner_dict_proxy->getString(elem);
-        const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
-        if (outer_id == StringDictionary::INVALID_STR_ID) {
-          skip_entry = true;
-          break;
-        }
-        elem = outer_id;
-      }
-#endif
-      key_scratch_buff[key_component_index] = elem;
-    }
-    if (!skip_entry) {
-      int err = write_baseline_hash_slot<T>(i,
-                                            hash_buff,
-                                            entry_count,
-                                            key_scratch_buff,
-                                            key_component_count,
-                                            with_val_slot,
-                                            invalid_slot_val);
-      if (err) {
-        return err;
-      }
+    const auto err = (*f)(i, key_scratch_buff, key_buff_handler);
+    if (err) {
+      return err;
     }
   }
   return 0;
@@ -428,11 +393,7 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem = get_join_column_element_value(type_info, join_column, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -455,6 +416,8 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
       }
       elem = outer_id;
     }
+    CHECK_GE(elem, type_info.min_val)
+        << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     int32_t* entry_ptr = SUFFIX(get_hash_slot)(count_buff, elem, type_info.min_val);
     mapd_add(entry_ptr, int32_t(1));
@@ -482,11 +445,7 @@ GLOBAL void SUFFIX(count_matches_sharded)(int32_t* count_buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem = get_join_column_element_value(type_info, join_column, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -509,6 +468,8 @@ GLOBAL void SUFFIX(count_matches_sharded)(int32_t* count_buff,
       }
       elem = outer_id;
     }
+    CHECK_GE(elem, type_info.min_val)
+        << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     int32_t* entry_ptr = SUFFIX(get_hash_slot_sharded)(count_buff,
                                                        elem,
@@ -548,18 +509,14 @@ DEVICE NEVER_INLINE const T* SUFFIX(get_matching_baseline_hash_slot_readonly)(
   return nullptr;
 }
 
-template <typename T>
+template <typename T, typename KEY_HANDLER>
 GLOBAL void SUFFIX(count_matches_baseline)(int32_t* count_buff,
                                            const T* composite_key_dict,
                                            const size_t entry_count,
-                                           const int32_t invalid_slot_val,
-                                           const size_t key_component_count,
-                                           const JoinColumn* join_column_per_key,
-                                           const JoinColumnTypeInfo* type_info_per_key
+                                           const KEY_HANDLER* f,
+                                           const size_t num_elems
 #ifndef __CUDACC__
                                            ,
-                                           const void* const* sd_inner_proxy_per_key,
-                                           const void* const* sd_outer_proxy_per_key,
                                            const int32_t cpu_thread_idx,
                                            const int32_t cpu_thread_count
 #endif
@@ -571,54 +528,24 @@ GLOBAL void SUFFIX(count_matches_baseline)(int32_t* count_buff,
   int32_t start = cpu_thread_idx;
   int32_t step = cpu_thread_count;
 #endif
-  const auto num_elems = join_column_per_key[0].num_elems;
-  T key_scratch_buff[g_maximum_conditions_to_coalesce];
-  for (size_t i = start; i < num_elems; i += step) {
-    bool skip_entry = false;
-    for (size_t key_component_index = 0; key_component_index < key_component_count;
-         ++key_component_index) {
-      const auto& join_column = join_column_per_key[key_component_index];
-      const auto& type_info = type_info_per_key[key_component_index];
-#ifndef __CUDACC__
-      const auto sd_inner_proxy = sd_inner_proxy_per_key[key_component_index];
-      const auto sd_outer_proxy = sd_outer_proxy_per_key[key_component_index];
-#endif
-      int64_t elem = type_info.is_unsigned
-                         ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                               join_column.col_buff, type_info.elem_sz, i)
-                         : SUFFIX(fixed_width_int_decode_noinline)(
-                               join_column.col_buff, type_info.elem_sz, i);
-      if (elem == type_info.null_val && !type_info.uses_bw_eq) {
-        skip_entry = true;
-        break;
-      }
-#ifndef __CUDACC__
-      if (sd_inner_proxy && elem != type_info.null_val) {
-        CHECK(sd_outer_proxy);
-        const auto sd_inner_dict_proxy =
-            static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-        const auto sd_outer_dict_proxy =
-            static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
-        const auto elem_str = sd_inner_dict_proxy->getString(elem);
-        const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
-        if (outer_id == StringDictionary::INVALID_STR_ID) {
-          skip_entry = true;
-          break;
-        }
-        elem = outer_id;
-      }
-#endif
-      key_scratch_buff[key_component_index] = elem;
-    }
 #ifdef __CUDACC__
-    assert(composite_key_dict);
+  assert(composite_key_dict);
 #endif
-    if (!skip_entry) {
-      const auto matching_group = SUFFIX(get_matching_baseline_hash_slot_readonly)(
-          key_scratch_buff, key_component_count, composite_key_dict, entry_count);
-      const auto entry_idx = (matching_group - composite_key_dict) / key_component_count;
-      mapd_add(&count_buff[entry_idx], int32_t(1));
-    }
+  T key_scratch_buff[g_maximum_conditions_to_coalesce];
+
+  auto key_buff_handler = [composite_key_dict, entry_count, count_buff](
+                              const size_t row_entry_idx,
+                              const T* key_scratch_buff,
+                              const size_t key_component_count) {
+    const auto matching_group = SUFFIX(get_matching_baseline_hash_slot_readonly)(
+        key_scratch_buff, key_component_count, composite_key_dict, entry_count);
+    const auto entry_idx = (matching_group - composite_key_dict) / key_component_count;
+    mapd_add(&count_buff[entry_idx], int32_t(1));
+    return 0;
+  };
+
+  for (size_t i = start; i < num_elems; i += step) {
+    (*f)(i, key_scratch_buff, key_buff_handler);
   }
 }
 
@@ -647,11 +574,7 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem = get_join_column_element_value(type_info, join_column, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -674,6 +597,8 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
       }
       elem = outer_id;
     }
+    CHECK_GE(elem, type_info.min_val)
+        << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     int32_t* pos_ptr = SUFFIX(get_hash_slot)(pos_buff, elem, type_info.min_val);
 #ifndef __CUDACC__
@@ -711,11 +636,7 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
   int32_t step = cpu_thread_count;
 #endif
   for (size_t i = start; i < join_column.num_elems; i += step) {
-    int64_t elem = type_info.is_unsigned
-                       ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i)
-                       : SUFFIX(fixed_width_int_decode_noinline)(
-                             join_column.col_buff, type_info.elem_sz, i);
+    int64_t elem = get_join_column_element_value(type_info, join_column, i);
     if (elem == type_info.null_val) {
       if (type_info.uses_bw_eq) {
         elem = type_info.translated_null_val;
@@ -738,6 +659,8 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
       }
       elem = outer_id;
     }
+    CHECK_GE(elem, type_info.min_val)
+        << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
     int32_t* pos_ptr = SUFFIX(get_hash_slot_sharded)(pos_buff,
                                                      elem,
@@ -754,18 +677,15 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
   }
 }
 
-template <typename T>
+template <typename T, typename KEY_HANDLER>
 GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
                                           const T* composite_key_dict,
                                           const size_t hash_entry_count,
                                           const int32_t invalid_slot_val,
-                                          const size_t key_component_count,
-                                          const JoinColumn* join_column_per_key,
-                                          const JoinColumnTypeInfo* type_info_per_key
+                                          const KEY_HANDLER* f,
+                                          const size_t num_elems
 #ifndef __CUDACC__
                                           ,
-                                          const void* const* sd_inner_proxy_per_key,
-                                          const void* const* sd_outer_proxy_per_key,
                                           const int32_t cpu_thread_idx,
                                           const int32_t cpu_thread_count
 #endif
@@ -780,78 +700,51 @@ GLOBAL void SUFFIX(fill_row_ids_baseline)(int32_t* buff,
   int32_t start = cpu_thread_idx;
   int32_t step = cpu_thread_count;
 #endif
-  const auto num_elems = join_column_per_key[0].num_elems;
+
   T key_scratch_buff[g_maximum_conditions_to_coalesce];
-  for (size_t i = start; i < num_elems; i += step) {
-    bool skip_entry = false;
-    for (size_t key_component_index = 0; key_component_index < key_component_count;
-         ++key_component_index) {
-      const auto& join_column = join_column_per_key[key_component_index];
-      const auto& type_info = type_info_per_key[key_component_index];
-#ifndef __CUDACC__
-      const auto sd_inner_proxy = sd_inner_proxy_per_key[key_component_index];
-      const auto sd_outer_proxy = sd_outer_proxy_per_key[key_component_index];
-#endif
-      int64_t elem = type_info.is_unsigned
-                         ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                               join_column.col_buff, type_info.elem_sz, i)
-                         : SUFFIX(fixed_width_int_decode_noinline)(
-                               join_column.col_buff, type_info.elem_sz, i);
-      if (elem == type_info.null_val && !type_info.uses_bw_eq) {
-        skip_entry = true;
-        break;
-      }
-#ifndef __CUDACC__
-      if (sd_inner_proxy && elem != type_info.null_val) {
-        CHECK(sd_outer_proxy);
-        const auto sd_inner_dict_proxy =
-            static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-        const auto sd_outer_dict_proxy =
-            static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
-        const auto elem_str = sd_inner_dict_proxy->getString(elem);
-        const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
-        if (outer_id == StringDictionary::INVALID_STR_ID) {
-          skip_entry = true;
-          break;
-        }
-        elem = outer_id;
-      }
-#endif
-      key_scratch_buff[key_component_index] = elem;
-    }
 #ifdef __CUDACC__
-    assert(composite_key_dict);
+  assert(composite_key_dict);
 #endif
-    if (!skip_entry) {
-      const T* matching_group = SUFFIX(get_matching_baseline_hash_slot_readonly)(
-          key_scratch_buff, key_component_count, composite_key_dict, hash_entry_count);
-      const auto entry_idx = (matching_group - composite_key_dict) / key_component_count;
-      int32_t* pos_ptr = pos_buff + entry_idx;
+
+  auto key_buff_handler = [composite_key_dict,
+                           hash_entry_count,
+                           pos_buff,
+                           invalid_slot_val,
+                           count_buff,
+                           id_buff](const size_t row_index,
+                                    const T* key_scratch_buff,
+                                    const size_t key_component_count) {
+    const T* matching_group = SUFFIX(get_matching_baseline_hash_slot_readonly)(
+        key_scratch_buff, key_component_count, composite_key_dict, hash_entry_count);
+    const auto entry_idx = (matching_group - composite_key_dict) / key_component_count;
+    int32_t* pos_ptr = pos_buff + entry_idx;
 #ifndef __CUDACC__
-      CHECK_NE(*pos_ptr, invalid_slot_val);
+    CHECK_NE(*pos_ptr, invalid_slot_val);
 #endif
-      const auto bin_idx = pos_ptr - pos_buff;
-      const auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
-      id_buff[id_buff_idx] = static_cast<int32_t>(i);
-    }
+    const auto bin_idx = pos_ptr - pos_buff;
+    const auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
+    id_buff[id_buff_idx] = static_cast<int32_t>(row_index);
+    return 0;
+  };
+
+  for (size_t i = start; i < num_elems; i += step) {
+    (*f)(i, key_scratch_buff, key_buff_handler);
   }
   return;
 }
 
 #undef mapd_add
 
-namespace {
-
-GLOBAL void SUFFIX(approximate_distinct_tuples_impl)(
-    uint8_t* hll_buffer,
-    const uint32_t b,
-    const size_t key_component_count,
-    const JoinColumn* join_column_per_key,
-    const JoinColumnTypeInfo* type_info_per_key
+template <typename KEY_HANDLER>
+GLOBAL void SUFFIX(approximate_distinct_tuples_impl)(uint8_t* hll_buffer,
+                                                     int32_t* row_count_buffer,
+                                                     const uint32_t b,
+                                                     const size_t num_elems,
+                                                     const KEY_HANDLER* f
 #ifndef __CUDACC__
-    ,
-    const int32_t cpu_thread_idx,
-    const int32_t cpu_thread_count
+                                                     ,
+                                                     const int32_t cpu_thread_idx,
+                                                     const int32_t cpu_thread_count
 #endif
 ) {
 #ifdef __CUDACC__
@@ -861,19 +754,15 @@ GLOBAL void SUFFIX(approximate_distinct_tuples_impl)(
   int32_t start = cpu_thread_idx;
   int32_t step = cpu_thread_count;
 #endif
-  const auto num_elems = join_column_per_key[0].num_elems;
-  int64_t key_scratch_buff[g_maximum_conditions_to_coalesce];
-  for (size_t i = start; i < num_elems; i += step) {
-    for (size_t key_component_index = 0; key_component_index < key_component_count;
-         ++key_component_index) {
-      const auto& join_column = join_column_per_key[key_component_index];
-      const auto& type_info = type_info_per_key[key_component_index];
-      key_scratch_buff[key_component_index] =
-          type_info.is_unsigned ? SUFFIX(fixed_width_unsigned_decode_noinline)(
-                                      join_column.col_buff, type_info.elem_sz, i)
-                                : SUFFIX(fixed_width_int_decode_noinline)(
-                                      join_column.col_buff, type_info.elem_sz, i);
+
+  auto key_buff_handler = [b, hll_buffer, row_count_buffer](
+                              const size_t entry_idx,
+                              const int64_t* key_scratch_buff,
+                              const size_t key_component_count) {
+    if (row_count_buffer) {
+      row_count_buffer[entry_idx] += 1;
     }
+
     const uint64_t hash =
         MurmurHash64AImpl(key_scratch_buff, key_component_count * sizeof(int64_t), 0);
     const uint32_t index = hash >> (64 - b);
@@ -883,10 +772,71 @@ GLOBAL void SUFFIX(approximate_distinct_tuples_impl)(
 #else
     hll_buffer[index] = std::max(hll_buffer[index], rank);
 #endif
+
+    return 0;
+  };
+
+  int64_t key_scratch_buff[g_maximum_conditions_to_coalesce];
+  for (size_t i = start; i < num_elems; i += step) {
+    (*f)(i, key_scratch_buff, key_buff_handler);
   }
 }
 
+#ifdef __CUDACC__
+namespace {
+// TODO(adb): put these in a header file so they are not duplicated between here and
+// cuda_mapd_rt.cu
+__device__ double atomicMin(double* address, double val) {
+  unsigned long long int* address_as_ull = (unsigned long long int*)address;
+  unsigned long long int old = *address_as_ull, assumed;
+
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull,
+                    assumed,
+                    __double_as_longlong(min(val, __longlong_as_double(assumed))));
+  } while (assumed != old);
+
+  return __longlong_as_double(old);
+}
 }  // namespace
+#endif
+
+template <size_t N>
+GLOBAL void SUFFIX(compute_bucket_sizes_impl)(double* bucket_sizes_for_thread,
+                                              const JoinColumn* join_column,
+                                              const double bucket_sz_threshold,
+                                              const int32_t cpu_thread_idx,
+                                              const int32_t cpu_thread_count) {
+#ifdef __CUDACC__
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+#else
+  int32_t start = cpu_thread_idx;
+  int32_t step = cpu_thread_count;
+#endif
+  for (size_t i = start; i < join_column->num_elems; i += step) {
+    // We exepct the bounds column to be (min, max) e.g. (x_min, y_min, x_max, y_max)
+    double bounds[2 * N];
+    for (size_t j = 0; j < 2 * N; j++) {
+      bounds[j] = SUFFIX(fixed_width_double_decode_noinline)(join_column->col_buff,
+                                                             2 * N * i + j);
+    }
+
+    for (size_t j = 0; j < N; j++) {
+      const auto diff = bounds[j + N] - bounds[j];
+#ifdef __CUDACC__
+      if (diff > bucket_sz_threshold) {
+        atomicMin(&bucket_sizes_for_thread[j], diff);
+      }
+#else
+      if (diff > bucket_sz_threshold && diff < bucket_sizes_for_thread[j]) {
+        bucket_sizes_for_thread[j] = diff;
+      }
+#endif
+    }
+  }
+}
 
 #ifndef __CUDACC__
 
@@ -1145,52 +1095,82 @@ void init_baseline_hash_join_buff_64(int8_t* hash_join_buff,
                                         cpu_thread_count);
 }
 
-int fill_baseline_hash_join_buff_32(
-    int8_t* hash_buff,
-    const size_t entry_count,
-    const int32_t invalid_slot_val,
-    const size_t key_component_count,
-    const bool with_val_slot,
-    const std::vector<JoinColumn>& join_column_per_key,
-    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
-    const std::vector<const void*>& sd_inner_proxy_per_key,
-    const std::vector<const void*>& sd_outer_proxy_per_key,
-    const int32_t cpu_thread_idx,
-    const int32_t cpu_thread_count) {
+int fill_baseline_hash_join_buff_32(int8_t* hash_buff,
+                                    const size_t entry_count,
+                                    const int32_t invalid_slot_val,
+                                    const size_t key_component_count,
+                                    const bool with_val_slot,
+                                    const GenericKeyHandler* key_handler,
+                                    const size_t num_elems,
+                                    const int32_t cpu_thread_idx,
+                                    const int32_t cpu_thread_count) {
   return fill_baseline_hash_join_buff<int32_t>(hash_buff,
                                                entry_count,
                                                invalid_slot_val,
                                                key_component_count,
                                                with_val_slot,
-                                               &join_column_per_key[0],
-                                               &type_info_per_key[0],
-                                               &sd_inner_proxy_per_key[0],
-                                               &sd_outer_proxy_per_key[0],
+                                               key_handler,
+                                               num_elems,
                                                cpu_thread_idx,
                                                cpu_thread_count);
 }
 
-int fill_baseline_hash_join_buff_64(
-    int8_t* hash_buff,
-    const size_t entry_count,
-    const int32_t invalid_slot_val,
-    const size_t key_component_count,
-    const bool with_val_slot,
-    const std::vector<JoinColumn>& join_column_per_key,
-    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
-    const std::vector<const void*>& sd_inner_proxy_per_key,
-    const std::vector<const void*>& sd_outer_proxy_per_key,
-    const int32_t cpu_thread_idx,
-    const int32_t cpu_thread_count) {
+int overlaps_fill_baseline_hash_join_buff_32(int8_t* hash_buff,
+                                             const size_t entry_count,
+                                             const int32_t invalid_slot_val,
+                                             const size_t key_component_count,
+                                             const bool with_val_slot,
+                                             const OverlapsKeyHandler* key_handler,
+                                             const size_t num_elems,
+                                             const int32_t cpu_thread_idx,
+                                             const int32_t cpu_thread_count) {
+  return fill_baseline_hash_join_buff<int32_t>(hash_buff,
+                                               entry_count,
+                                               invalid_slot_val,
+                                               key_component_count,
+                                               with_val_slot,
+                                               key_handler,
+                                               num_elems,
+                                               cpu_thread_idx,
+                                               cpu_thread_count);
+}
+
+int fill_baseline_hash_join_buff_64(int8_t* hash_buff,
+                                    const size_t entry_count,
+                                    const int32_t invalid_slot_val,
+                                    const size_t key_component_count,
+                                    const bool with_val_slot,
+                                    const GenericKeyHandler* key_handler,
+                                    const size_t num_elems,
+                                    const int32_t cpu_thread_idx,
+                                    const int32_t cpu_thread_count) {
   return fill_baseline_hash_join_buff<int64_t>(hash_buff,
                                                entry_count,
                                                invalid_slot_val,
                                                key_component_count,
                                                with_val_slot,
-                                               &join_column_per_key[0],
-                                               &type_info_per_key[0],
-                                               &sd_inner_proxy_per_key[0],
-                                               &sd_outer_proxy_per_key[0],
+                                               key_handler,
+                                               num_elems,
+                                               cpu_thread_idx,
+                                               cpu_thread_count);
+}
+
+int overlaps_fill_baseline_hash_join_buff_64(int8_t* hash_buff,
+                                             const size_t entry_count,
+                                             const int32_t invalid_slot_val,
+                                             const size_t key_component_count,
+                                             const bool with_val_slot,
+                                             const OverlapsKeyHandler* key_handler,
+                                             const size_t num_elems,
+                                             const int32_t cpu_thread_idx,
+                                             const int32_t cpu_thread_count) {
+  return fill_baseline_hash_join_buff<int64_t>(hash_buff,
+                                               entry_count,
+                                               invalid_slot_val,
+                                               key_component_count,
+                                               with_val_slot,
+                                               key_handler,
+                                               num_elems,
                                                cpu_thread_idx,
                                                cpu_thread_count);
 }
@@ -1204,6 +1184,7 @@ void fill_one_to_many_baseline_hash_table(
     const size_t key_component_count,
     const std::vector<JoinColumn>& join_column_per_key,
     const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+    const std::vector<JoinBucketInfo>& join_buckets_per_key,
     const std::vector<const void*>& sd_inner_proxy_per_key,
     const std::vector<const void*>& sd_outer_proxy_per_key,
     const int32_t cpu_thread_count) {
@@ -1212,19 +1193,56 @@ void fill_one_to_many_baseline_hash_table(
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
   std::vector<std::future<void>> counter_threads;
   for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
-    counter_threads.push_back(std::async(std::launch::async,
-                                         &count_matches_baseline<T>,
-                                         count_buff,
-                                         composite_key_dict,
-                                         hash_entry_count,
-                                         invalid_slot_val,
-                                         key_component_count,
-                                         &join_column_per_key[0],
-                                         &type_info_per_key[0],
-                                         &sd_inner_proxy_per_key[0],
-                                         &sd_outer_proxy_per_key[0],
-                                         cpu_thread_idx,
-                                         cpu_thread_count));
+    if (join_buckets_per_key.size() > 0) {
+      counter_threads.push_back(
+          std::async(std::launch::async,
+                     [count_buff,
+                      composite_key_dict,
+                      &hash_entry_count,
+                      &join_buckets_per_key,
+                      &join_column_per_key,
+                      cpu_thread_idx,
+                      cpu_thread_count] {
+                       const auto key_handler = OverlapsKeyHandler(
+                           join_buckets_per_key[0].bucket_sizes_for_dimension.size(),
+                           &join_column_per_key[0],
+                           join_buckets_per_key[0].bucket_sizes_for_dimension.data());
+                       count_matches_baseline(count_buff,
+                                              composite_key_dict,
+                                              hash_entry_count,
+                                              &key_handler,
+                                              join_column_per_key[0].num_elems,
+                                              cpu_thread_idx,
+                                              cpu_thread_count);
+                     }));
+    } else {
+      counter_threads.push_back(std::async(
+          std::launch::async,
+          [count_buff,
+           composite_key_dict,
+           &key_component_count,
+           &hash_entry_count,
+           &join_column_per_key,
+           &type_info_per_key,
+           &sd_inner_proxy_per_key,
+           &sd_outer_proxy_per_key,
+           cpu_thread_idx,
+           cpu_thread_count] {
+            const auto key_handler = GenericKeyHandler(key_component_count,
+                                                       true,
+                                                       &join_column_per_key[0],
+                                                       &type_info_per_key[0],
+                                                       &sd_inner_proxy_per_key[0],
+                                                       &sd_outer_proxy_per_key[0]);
+            count_matches_baseline(count_buff,
+                                   composite_key_dict,
+                                   hash_entry_count,
+                                   &key_handler,
+                                   join_column_per_key[0].num_elems,
+                                   cpu_thread_idx,
+                                   cpu_thread_count);
+          }));
+    }
   }
 
   for (auto& child : counter_threads) {
@@ -1256,19 +1274,62 @@ void fill_one_to_many_baseline_hash_table(
   memset(count_buff, 0, hash_entry_count * sizeof(int32_t));
   std::vector<std::future<void>> rowid_threads;
   for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
-    rowid_threads.push_back(std::async(std::launch::async,
-                                       SUFFIX(fill_row_ids_baseline<T>),
-                                       buff,
-                                       composite_key_dict,
-                                       hash_entry_count,
-                                       invalid_slot_val,
-                                       key_component_count,
-                                       &join_column_per_key[0],
-                                       &type_info_per_key[0],
-                                       &sd_inner_proxy_per_key[0],
-                                       &sd_outer_proxy_per_key[0],
-                                       cpu_thread_idx,
-                                       cpu_thread_count));
+    if (join_buckets_per_key.size() > 0) {
+      rowid_threads.push_back(
+          std::async(std::launch::async,
+                     [buff,
+                      composite_key_dict,
+                      hash_entry_count,
+                      invalid_slot_val,
+                      &join_column_per_key,
+                      &join_buckets_per_key,
+                      cpu_thread_idx,
+                      cpu_thread_count] {
+                       const auto key_handler = OverlapsKeyHandler(
+                           join_buckets_per_key[0].bucket_sizes_for_dimension.size(),
+                           &join_column_per_key[0],
+                           join_buckets_per_key[0].bucket_sizes_for_dimension.data());
+                       SUFFIX(fill_row_ids_baseline)
+                       (buff,
+                        composite_key_dict,
+                        hash_entry_count,
+                        invalid_slot_val,
+                        &key_handler,
+                        join_column_per_key[0].num_elems,
+                        cpu_thread_idx,
+                        cpu_thread_count);
+                     }));
+    } else {
+      rowid_threads.push_back(std::async(std::launch::async,
+                                         [buff,
+                                          composite_key_dict,
+                                          hash_entry_count,
+                                          invalid_slot_val,
+                                          key_component_count,
+                                          &join_column_per_key,
+                                          &type_info_per_key,
+                                          &sd_inner_proxy_per_key,
+                                          &sd_outer_proxy_per_key,
+                                          cpu_thread_idx,
+                                          cpu_thread_count] {
+                                           const auto key_handler = GenericKeyHandler(
+                                               key_component_count,
+                                               true,
+                                               &join_column_per_key[0],
+                                               &type_info_per_key[0],
+                                               &sd_inner_proxy_per_key[0],
+                                               &sd_outer_proxy_per_key[0]);
+                                           SUFFIX(fill_row_ids_baseline)
+                                           (buff,
+                                            composite_key_dict,
+                                            hash_entry_count,
+                                            invalid_slot_val,
+                                            &key_handler,
+                                            join_column_per_key[0].num_elems,
+                                            cpu_thread_idx,
+                                            cpu_thread_count);
+                                         }));
+    }
   }
 
   for (auto& child : rowid_threads) {
@@ -1284,6 +1345,7 @@ void fill_one_to_many_baseline_hash_table_32(
     const size_t key_component_count,
     const std::vector<JoinColumn>& join_column_per_key,
     const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+    const std::vector<JoinBucketInfo>& join_bucket_info,
     const std::vector<const void*>& sd_inner_proxy_per_key,
     const std::vector<const void*>& sd_outer_proxy_per_key,
     const int32_t cpu_thread_count) {
@@ -1294,6 +1356,7 @@ void fill_one_to_many_baseline_hash_table_32(
                                                 key_component_count,
                                                 join_column_per_key,
                                                 type_info_per_key,
+                                                join_bucket_info,
                                                 sd_inner_proxy_per_key,
                                                 sd_outer_proxy_per_key,
                                                 cpu_thread_count);
@@ -1307,6 +1370,7 @@ void fill_one_to_many_baseline_hash_table_64(
     const size_t key_component_count,
     const std::vector<JoinColumn>& join_column_per_key,
     const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+    const std::vector<JoinBucketInfo>& join_bucket_info,
     const std::vector<const void*>& sd_inner_proxy_per_key,
     const std::vector<const void*>& sd_outer_proxy_per_key,
     const int32_t cpu_thread_count) {
@@ -1317,6 +1381,7 @@ void fill_one_to_many_baseline_hash_table_64(
                                                 key_component_count,
                                                 join_column_per_key,
                                                 type_info_per_key,
+                                                join_bucket_info,
                                                 sd_inner_proxy_per_key,
                                                 sd_outer_proxy_per_key,
                                                 cpu_thread_count);
@@ -1330,6 +1395,7 @@ void approximate_distinct_tuples(uint8_t* hll_buffer_all_cpus,
                                  const int thread_count) {
   CHECK_EQ(join_column_per_key.size(), type_info_per_key.size());
   CHECK(!join_column_per_key.empty());
+
   std::vector<std::future<void>> approx_distinct_threads;
   for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
     approx_distinct_threads.push_back(std::async(
@@ -1342,17 +1408,103 @@ void approximate_distinct_tuples(uint8_t* hll_buffer_all_cpus,
          thread_idx,
          thread_count] {
           auto hll_buffer = hll_buffer_all_cpus + thread_idx * padded_size_bytes;
+
+          const auto key_handler = GenericKeyHandler(join_column_per_key.size(),
+                                                     false,
+                                                     &join_column_per_key[0],
+                                                     &type_info_per_key[0],
+                                                     nullptr,
+                                                     nullptr);
           approximate_distinct_tuples_impl(hll_buffer,
+                                           nullptr,
                                            b,
-                                           join_column_per_key.size(),
-                                           &join_column_per_key[0],
-                                           &type_info_per_key[0],
+                                           join_column_per_key[0].num_elems,
+                                           &key_handler,
                                            thread_idx,
                                            thread_count);
         }));
   }
   for (auto& child : approx_distinct_threads) {
     child.get();
+  }
+}
+
+void approximate_distinct_tuples_overlaps(
+    uint8_t* hll_buffer_all_cpus,
+    std::vector<int32_t>& row_counts,
+    const uint32_t b,
+    const size_t padded_size_bytes,
+    const std::vector<JoinColumn>& join_column_per_key,
+    const std::vector<JoinColumnTypeInfo>& type_info_per_key,
+    const std::vector<JoinBucketInfo>& join_buckets_per_key,
+    const int thread_count) {
+  CHECK_EQ(join_column_per_key.size(), join_buckets_per_key.size());
+  CHECK_EQ(join_column_per_key.size(), type_info_per_key.size());
+  CHECK(!join_column_per_key.empty());
+
+  std::vector<std::future<void>> approx_distinct_threads;
+  for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+    approx_distinct_threads.push_back(std::async(
+        std::launch::async,
+        [&join_column_per_key,
+         &join_buckets_per_key,
+         &row_counts,
+         b,
+         hll_buffer_all_cpus,
+         padded_size_bytes,
+         thread_idx,
+         thread_count] {
+          auto hll_buffer = hll_buffer_all_cpus + thread_idx * padded_size_bytes;
+
+          const auto key_handler = OverlapsKeyHandler(
+              join_buckets_per_key[0].bucket_sizes_for_dimension.size(),
+              &join_column_per_key[0],
+              join_buckets_per_key[0].bucket_sizes_for_dimension.data());
+          approximate_distinct_tuples_impl(hll_buffer,
+                                           row_counts.data(),
+                                           b,
+                                           join_column_per_key[0].num_elems,
+                                           &key_handler,
+                                           thread_idx,
+                                           thread_count);
+        }));
+  }
+  for (auto& child : approx_distinct_threads) {
+    child.get();
+  }
+
+  inclusive_scan(row_counts.begin(), row_counts.end(), row_counts.begin(), thread_count);
+}
+
+void compute_bucket_sizes(std::vector<double>& bucket_sizes_for_dimension,
+                          const JoinColumn& join_column,
+                          const double bucket_size_threshold,
+                          const int thread_count) {
+  std::vector<std::vector<double>> bucket_sizes_for_threads;
+  for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+    bucket_sizes_for_threads.emplace_back(bucket_sizes_for_dimension.size(),
+                                          std::numeric_limits<double>::max());
+  }
+  std::vector<std::future<void>> threads;
+  for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+    threads.push_back(std::async(std::launch::async,
+                                 compute_bucket_sizes_impl<2>,
+                                 bucket_sizes_for_threads[thread_idx].data(),
+                                 &join_column,
+                                 bucket_size_threshold,
+                                 thread_idx,
+                                 thread_count));
+  }
+  for (auto& child : threads) {
+    child.get();
+  }
+
+  for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+    for (size_t i = 0; i < bucket_sizes_for_dimension.size(); i++) {
+      if (bucket_sizes_for_threads[thread_idx][i] < bucket_sizes_for_dimension[i]) {
+        bucket_sizes_for_dimension[i] = bucket_sizes_for_threads[thread_idx][i];
+      }
+    }
   }
 }
 

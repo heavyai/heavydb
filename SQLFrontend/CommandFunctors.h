@@ -102,7 +102,7 @@ class ContextOperations {
     context.dash_names.clear();
     thrift_op<kGET_DASHBOARDS>(context, [](ContextType& lambda_context) {
       if (lambda_context.dash_names.size() == 0) {
-        std::cout << "User does not have level of access to dashboards." << std::endl;
+        std::cout << "No dashboards to display." << std::endl;
       } else {
         std::cout << "Dashboard ID | Dashboard Name | Owner" << std::endl;
         for (auto p : lambda_context.dash_names) {
@@ -242,7 +242,7 @@ StandardCommand(Help, {
   std::cout << "\\timing Print timing information.\n";
   std::cout << "\\notiming Do not print timing information.\n";
   std::cout << "\\memory_summary Print memory usage summary.\n";
-  std::cout << "\\version Print MapD Server version.\n";
+  std::cout << "\\version Print OmniSci Server version.\n";
   std::cout << "\\copy <file path> <table> Copy data from file to table.\n";
   std::cout << "\\status Get status of the server and the leaf nodes.\n";
   std::cout << "\\export_dashboard <dashboard name> <filename> Exports a dashboard to a "
@@ -396,15 +396,18 @@ StandardCommand(ListColumns, {
         comma_or_blank = ", ";
       }
       if (table_details.partition_detail != TPartitionDetail::DEFAULT) {
-        partition_detail =
-            comma_or_blank + "PARTITION = " +
-            (table_details.partition_detail == TPartitionDetail::REPLICATED ? "REPLICATED"
-                                                                            : "");
-        partition_detail +=
-            (table_details.partition_detail == TPartitionDetail::SHARDED ? "SHARDED"
-                                                                         : "");
-        partition_detail +=
-            (table_details.partition_detail == TPartitionDetail::OTHER ? "OTHER" : "");
+        partition_detail = comma_or_blank + "PARTITIONS = ";
+        switch (table_details.partition_detail) {
+          case TPartitionDetail::REPLICATED:
+            partition_detail += "'REPLICATED'";
+            break;
+          case TPartitionDetail::SHARDED:
+            partition_detail += "'SHARDED'";
+            break;
+          default:
+            partition_detail += "'OTHER'";
+            break;
+        }
       }
       std::string with = frag + page + row + partition_detail;
       if (with.length() > 0) {

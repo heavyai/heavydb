@@ -23,7 +23,7 @@ import java.sql.Statement;
 public class SampleJDBC {
   // JDBC driver name and database URL
   static final String JDBC_DRIVER = "com.mapd.jdbc.MapDDriver";
-  static final String DB_URL = "jdbc:mapd:localhost:9091:mapd";
+  static final String DB_URL = "jdbc:mapd:localhost:6274:mapd";
 
   //  Database credentials
   static final String USER = "mapd";

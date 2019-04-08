@@ -16,12 +16,19 @@
 
 #include "../RenderInfo.h"
 
-RenderInfo::RenderInfo(const std::string& session_id,
-                       const int render_widget_id,
-                       const std::string& render_vega,
-                       const bool force_non_in_situ_data)
-    : render_widget_id(render_widget_id) {
+RenderInfo::RenderInfo(
+    const std::shared_ptr<const ::QueryRenderer::RenderSession> in_render_session,
+    const std::string& render_vega,
+    const bool force_non_in_situ_data)
+    : render_session(in_render_session) {
   CHECK(false);
+}
+
+const Catalog_Namespace::SessionInfo& RenderInfo::getSessionInfo() const {
+  CHECK(false);
+  static const Catalog_Namespace::SessionInfo tmp(
+      nullptr, Catalog_Namespace::UserMetadata(), ExecutorDeviceType::CPU, "");
+  return tmp;
 }
 
 void RenderInfo::setForceNonInSituData() {

@@ -87,9 +87,9 @@ public class CatalogConcurrencyTest {
         public void run() {
           try {
             MapdTestClient dba =
-                    MapdTestClient.getClient("localhost", 9091, db, dbaUser, dbaPassword);
+                    MapdTestClient.getClient("localhost", 6274, db, dbaUser, dbaPassword);
             MapdTestClient user =
-                    MapdTestClient.getClient("localhost", 9091, db, dbUser, dbPassword);
+                    MapdTestClient.getClient("localhost", 6274, db, dbUser, dbPassword);
             run_test(dba, user, prefix, runs);
           } catch (Exception e) {
             logger.error("[" + Thread.currentThread().getId() + "]"
@@ -119,7 +119,7 @@ public class CatalogConcurrencyTest {
     logger.info("testCatalogConcurrency()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 9091, "mapd", "mapd", "HyperInteractive");
+            "localhost", 6274, "mapd", "mapd", "HyperInteractive");
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
 
@@ -140,6 +140,11 @@ public class CatalogConcurrencyTest {
     su.runSql("GRANT DROP on DATABASE db1 TO bob;");
     su.runSql("GRANT DROP VIEW on DATABASE db1 TO bob;");
     su.runSql("GRANT DELETE DASHBOARD on DATABASE db1 TO bob;");
+
+    su.runSql("GRANT ACCESS on database mapd TO dba;");
+    su.runSql("GRANT ACCESS on database mapd TO bob;");
+    su.runSql("GRANT ACCESS on database db1 TO dba;");
+    su.runSql("GRANT ACCESS on database db1 TO bob;");
 
     runTest("db1", "mapd", "HyperInteractive", "mapd", "HyperInteractive");
     runTest("db1", "mapd", "HyperInteractive", "dba", "password");

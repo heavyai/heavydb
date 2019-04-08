@@ -28,13 +28,12 @@
 #include <boost/multiprecision/cpp_int.hpp>
 #include <limits>
 
-typedef boost::multiprecision::number<
+using checked_int64_t = boost::multiprecision::number<
     boost::multiprecision::cpp_int_backend<64,
                                            64,
                                            boost::multiprecision::signed_magnitude,
                                            boost::multiprecision::checked,
-                                           void>>
-    checked_int64_t;
+                                           void>>;
 
 InValuesBitmap::InValuesBitmap(const std::vector<int64_t>& values,
                                const int64_t null_val,

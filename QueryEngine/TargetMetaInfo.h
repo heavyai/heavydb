@@ -28,13 +28,19 @@
 class TargetMetaInfo {
  public:
   TargetMetaInfo(const std::string& resname, const SQLTypeInfo& ti)
-      : resname_(resname), ti_(ti) {}
+      : resname_(resname), ti_(ti), physical_ti_(ti) {}
+  TargetMetaInfo(const std::string& resname,
+                 const SQLTypeInfo& ti,
+                 const SQLTypeInfo& physical_ti)
+      : resname_(resname), ti_(ti), physical_ti_(physical_ti) {}
   const std::string& get_resname() const { return resname_; }
   const SQLTypeInfo& get_type_info() const { return ti_; }
+  const SQLTypeInfo& get_physical_type_info() const { return physical_ti_; }
 
  private:
   std::string resname_;
   SQLTypeInfo ti_;
+  SQLTypeInfo physical_ti_;
 };
 
 #endif  // QUERYENGINE_TARGETMETAINFO_H

@@ -54,7 +54,7 @@ CubinResult ptx_to_cubin(const std::string& ptx,
   gpu_rt_path /= "QueryEngine";
   gpu_rt_path /= "cuda_mapd_rt.a";
   if (!boost::filesystem::exists(gpu_rt_path)) {
-    throw std::runtime_error("MapD GPU runtime library not found at " +
+    throw std::runtime_error("OmniSci GPU runtime library not found at " +
                              gpu_rt_path.string());
   }
 
@@ -95,9 +95,14 @@ GpuCompilationContext::GpuCompilationContext(const void* image,
                                              unsigned int num_options,
                                              CUjit_option* options,
                                              void** option_vals)
-    : module_(nullptr), kernel_(nullptr), device_id_(device_id), cuda_mgr_(cuda_mgr) {
-  static_cast<const CudaMgr_Namespace::CudaMgr*>(cuda_mgr_)->setContext(device_id_);
-  checkCudaErrors(cuModuleLoadDataEx(&module_, image, num_options, options, option_vals));
+    : module_(nullptr)
+    , kernel_(nullptr)
+    , device_id_(device_id)
+    , cuda_mgr_(static_cast<const CudaMgr_Namespace::CudaMgr*>(cuda_mgr)) {
+  LOG_IF(FATAL, cuda_mgr_ == nullptr)
+      << "Unable to initialize GPU compilation context without CUDA manager";
+  cuda_mgr_->loadGpuModuleData(
+      &module_, image, num_options, options, option_vals, device_id_);
   CHECK(module_);
   checkCudaErrors(cuModuleGetFunction(&kernel_, module_, kernel_name.c_str()));
 }
@@ -105,12 +110,7 @@ GpuCompilationContext::GpuCompilationContext(const void* image,
 
 GpuCompilationContext::~GpuCompilationContext() {
 #ifdef HAVE_CUDA
-  static_cast<const CudaMgr_Namespace::CudaMgr*>(cuda_mgr_)->setContext(device_id_);
-  auto status = cuModuleUnload(module_);
-  // TODO(alex): handle this race better
-  if (status == CUDA_ERROR_DEINITIALIZED) {
-    return;
-  }
-  checkCudaErrors(status);
+  CHECK(cuda_mgr_);
+  cuda_mgr_->unloadGpuModuleData(&module_, device_id_);
 #endif
 }

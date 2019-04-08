@@ -16,7 +16,9 @@
 
 #include "../Utils/Regexp.h"
 #include "../Utils/StringLike.h"
-#include "gtest/gtest.h"
+
+#include <glog/logging.h>
+#include <gtest/gtest.h>
 
 TEST(Utils, StringLike) {
   ASSERT_TRUE(string_like("abc", 3, "abc", 3, '\\'));
@@ -44,6 +46,14 @@ TEST(Utils, Regexp) {
 }
 
 int main(int argc, char* argv[]) {
+  google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);
-  return RUN_ALL_TESTS();
+
+  int err{0};
+  try {
+    err = RUN_ALL_TESTS();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
+  return err;
 }

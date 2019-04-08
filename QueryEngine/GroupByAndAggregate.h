@@ -22,7 +22,6 @@
 #include "CompilationOptions.h"
 #include "GpuMemUtils.h"
 #include "InputMetadata.h"
-#include "IteratorTable.h"
 #include "QueryExecutionContext.h"
 #include "Rendering/RenderInfo.h"
 #include "RuntimeFunctions.h"
@@ -131,12 +130,9 @@ class GroupByAndAggregate {
 
   bool outputColumnar() const;
 
-  void patchGroupbyCall(llvm::CallInst* call_site);
-
   // returns true iff checking the error code after every row
   // is required -- slow path group by queries for now
   bool codegen(llvm::Value* filter_result,
-               llvm::Value* nonjoin_filter_result,
                llvm::BasicBlock* sc_false,
                const CompilationOptions& co);
 
@@ -180,7 +176,8 @@ class GroupByAndAggregate {
                                  const int8_t crt_min_byte_width,
                                  const bool sort_on_gpu_hint,
                                  RenderInfo* render_info,
-                                 const bool must_use_baseline_sort);
+                                 const bool must_use_baseline_sort,
+                                 const bool output_columnar_hint);
 
   int64_t getShardedTopBucket(const ColRangeInfo& col_range_info,
                               const size_t shard_count) const;
@@ -242,17 +239,17 @@ class GroupByAndAggregate {
                                 const SQLTypeInfo& agg_type,
                                 const size_t chosen_bytes,
                                 llvm::Value* target);
-#ifdef ENABLE_COMPACTION
-  bool detectOverflowAndUnderflow(llvm::Value* agg_addr,
-                                  llvm::Value* val,
-                                  const TargetInfo& agg_info,
-                                  const size_t chosen_bytes,
-                                  const bool need_skip_null,
-                                  const std::string& agg_base_name);
-#endif
   bool codegenAggCalls(const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
                        const std::vector<llvm::Value*>& agg_out_vec,
                        const CompilationOptions&);
+
+  llvm::Value* codegenAggColumnPtr(
+      llvm::Value* output_buffer_byte_stream,
+      llvm::Value* out_row_idx,
+      const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+      const size_t chosen_bytes,
+      const size_t agg_out_off,
+      const size_t target_idx);
 
   void codegenEstimator(std::stack<llvm::BasicBlock*>& array_loops,
                         GroupByAndAggregate::DiamondCodegen& diamond_codegen,
@@ -288,22 +285,6 @@ class GroupByAndAggregate {
   friend class Executor;
   friend class QueryMemoryDescriptor;
 };
-
-inline std::vector<Analyzer::Expr*> get_agg_target_exprs(
-    const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& target_list) {
-  std::vector<Analyzer::Expr*> result;
-  for (auto target : target_list) {
-    auto target_expr = target->get_expr();
-    CHECK(target_expr);
-    result.push_back(target_expr);
-  }
-  return result;
-}
-
-inline std::vector<Analyzer::Expr*> get_agg_target_exprs(const Planner::Plan* plan) {
-  const auto& target_list = plan->get_targetlist();
-  return get_agg_target_exprs(target_list);
-}
 
 inline int64_t extract_from_datum(const Datum datum, const SQLTypeInfo& ti) {
   const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
@@ -403,11 +384,7 @@ inline std::vector<int8_t> get_col_byte_widths(
 }
 
 inline int8_t get_min_byte_width() {
-#ifdef ENABLE_COMPACTION
-  return 4;
-#else
   return MAX_BYTE_WIDTH_SUPPORTED;
-#endif
 }
 
 struct RelAlgExecutionUnit;

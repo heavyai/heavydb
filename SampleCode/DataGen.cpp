@@ -21,11 +21,11 @@
  *
  * Usage: <table> <database> <user> <password> [<num rows>] [hostname[:port]]
  * The program executes the following:
- * 1. connect to mapd_server at hostname:port (default: localhost:9091)
+ * 1. connect to omnisci_server at hostname:port (default: localhost:6274)
  *    with <database> <user> <password>
  * 2. get the table descriptor of <table>
  * 3. randomly generate tab-delimited data that can be imported to <table>
- * 4. disconnect from mapd_server
+ * 4. disconnect from omnisci_server
  *
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
@@ -184,7 +184,7 @@ void data_gen(const TRowDescriptor& row_desc, const char* delimiter, int num_row
 
 int main(int argc, char** argv) {
   std::string server_host("localhost");  // default to localhost
-  int port = 9091;                       // default port number
+  int port = 6274;                       // default port number
   int num_rows = 1000000;                // default number of rows to generate
   const char* delimiter = "\t";          // only support tab delimiter for now
 
@@ -218,11 +218,11 @@ int main(int argc, char** argv) {
   TSessionId session;
   try {
     transport->open();                                    // open transport
-    client.connect(session, user_name, passwd, db_name);  // connect to mapd_server
+    client.connect(session, user_name, passwd, db_name);  // connect to omnisci_server
     TTableDetails table_details;
     client.get_table_details(table_details, session, table_name);
     data_gen(table_details.row_desc, delimiter, num_rows);
-    client.disconnect(session);  // disconnect from mapd_server
+    client.disconnect(session);  // disconnect from omnisci_server
     transport->close();          // close transport
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;

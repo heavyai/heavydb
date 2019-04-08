@@ -17,12 +17,13 @@ MapD Core is an in-memory, column store, SQL relational database that was design
 
 # Links
 
-- [Documentation](https://www.mapd.com/docs/)
-- [Release Notes](https://www.mapd.com/docs/latest/release-notes/platform/)
-- [Community Forum](https://community.mapd.com)
-- [MapD Homepage](https://www.mapd.com)
-- [MapD Blog](https://www.mapd.com/blog/)
-- [MapD Downloads](https://www.mapd.com/platform/downloads/)
+- [Documentation](https://www.omnisci.com/docs/latest/)
+- [Release Notes](https://www.omnisci.com/docs/latest/7_0_release.html)
+- [Community Forum](https://community.omnisci.com)
+- [OmniSci Homepage](https://www.omnisci.com)
+- [OmniSci Blog](https://www.omnisci.com/blog/)
+- [OmniSci Downloads](https://www.omnisci.com/platform/downloads/)
+- [Doxygen-generated documentation](http://doxygen.omnisci.com/)
 
 # License
 
@@ -32,7 +33,7 @@ The repository includes a number of third party packages provided under separate
 
 # Contributing
 
-In order to clarify the intellectual property license granted with Contributions from any person or entity, MapD must have a Contributor License Agreement ("CLA") on file that has been signed by each Contributor, indicating agreement to the [Contributor License Agreement](CLA.txt). After making a pull request, a bot will notify you if a signed CLA is required and provide instructions for how to sign it. Please read the agreement carefully before signing and keep a copy for your records.
+In order to clarify the intellectual property license granted with Contributions from any person or entity, OmniSci must have a Contributor License Agreement ("CLA") on file that has been signed by each Contributor, indicating agreement to the [Contributor License Agreement](CLA.txt). After making a pull request, a bot will notify you if a signed CLA is required and provide instructions for how to sign it. Please read the agreement carefully before signing and keep a copy for your records.
 
 # Building
 
@@ -53,18 +54,17 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 - `-DENABLE_AWS_S3=on` - Enable AWS S3 support, if available. Default is `on`.
 - `-DENABLE_CALCITE_DELETE_PATH=on` - Enable Calcite Delete Path. Default is `on`.
 - `-DENABLE_CALCITE_UPDATE_PATH=on` - Enable Calcite Update Path. Default is `on`.
-- `-DENABLE_COMPACTION=off` - Enable Compaction and Overflow/Underflow Detection. Default is `off`.
 - `-DENABLE_CUDA=off` - Disable CUDA. Default is `on`.
+- `-DENABLE_CUDA_KERNEL_DEBUG=off` - Enable debugging symbols for CUDA kernels. Will dramatically reduce kernel performance. Default is `off`.
 - `-DENABLE_DECODERS_BOUNDS_CHECKING=off` - Enable bounds checking for column decoding. Default is `off`.
 - `-DENABLE_FOLLY=on` - Use Folly. Default is `on`.
 - `-DENABLE_IWYU=off` - Enable include-what-you-use. Default is `off`.
 - `-DENABLE_JIT_DEBUG=off` - Enable debugging symbols for the JIT. Default is `off`.
-- `-DENABLE_JOIN_EXEC=on` - Enable RA vm to execute join node. Default is `on`.
-- `-DENABLE_ONE_TO_MANY_HASH_JOIN=on` - Enable hash join on a column w/ duplicate values. Default is `on`.
 - `-DENABLE_PROFILER=off` - Enable google perftools. Default is `off`.
 - `-DENABLE_STANDALONE_CALCITE=off` - Require standalone Calcite server. Default is `off`.
 - `-DENABLE_TESTS=on` - Build unit tests. Default is `on`.
 - `-DENABLE_TSAN=off` - Enable thread sanitizer. Default is `off`.
+- `-DENABLE_CODE_COVERAGE=off` - Enable code coverage symbols (clang only). Default is `off`.
 - `-DENALBE_JAVA_REMOTE_DEBUG=on` - Enable Java Remote Debug. Default is `off`.
 - `-DMAPD_DOCS_DOWNLOAD=on` - Download the latest master build of the documentation / `docs.mapd.com`. Default is `off`.
                               **Note:** this is a >50MB download.
@@ -126,17 +126,17 @@ The last command generates a `.tar.gz` package. The `TGZ` can be replaced with, 
 
 # Using
 
-The [`startmapd`](startmapd) wrapper script may be used to start MapD Core in a testing environment. This script performs the following tasks:
+The [`startomnisci`](startomnisci) wrapper script may be used to start MapD Core in a testing environment. This script performs the following tasks:
 
 - initializes the `data` storage directory via `initdb`, if required
-- starts the main MapD Core server, `mapd_server`
-- starts the MapD Core web server, `mapd_web_server`, for serving MapD Immerse
+- starts the main MapD Core server, `omnisci_server`
+- starts the MapD Core web server, `omnisci_web_server`, for serving MapD Immerse
 - offers to download and import a sample dataset, using the `insert_sample_data` script
 - attempts to open MapD Immerse in your web browser
 
-Assuming you are in the `build` directory, and it is a subdirectory of the `mapd-core` repository, `startmapd` may be run by:
+Assuming you are in the `build` directory, and it is a subdirectory of the `mapd-core` repository, `startomnisci` may be run by:
 
-    ../startmapd
+    ../startomnisci
 
 ## Starting Manually
 
@@ -148,37 +148,51 @@ Initialize the `data` storage directory. This command only needs to be run once.
 
 Start the MapD Core server:
 
-    ./bin/mapd_server
+    ./bin/omnisci_server
 
 In a new terminal, start the MapD Core web server:
 
-    ./bin/mapd_web_server
+    ./bin/omnisci_web_server
 
 If desired, insert a sample dataset by running the `insert_sample_data` script in a new terminal:
 
     ../insert_sample_data
 
-You can now start using the database. The `mapdql` utility may be used to interact with the database from the command line:
+You can now start using the database. The `omnisql` utility may be used to interact with the database from the command line:
 
-    ./bin/mapdql -p HyperInteractive
+    ./bin/omnisql -p HyperInteractive
 
 where `HyperInteractive` is the default password. The default user `mapd` is assumed if not provided.
 
-You can also interact with the database using the web-based MapD Immerse frontend by visiting the web server's default port of `9092`:
+You can also interact with the database using the web-based MapD Immerse frontend by visiting the web server's default port of `6273`:
 
-[http://localhost:9092](http://localhost:9092)
+[http://localhost:6273](http://localhost:6273)
 
-Note: usage of MapD Immerse is governed by a separate license agreement, provided under `EULA-CE.txt`. The version bundled with this project may only be used for non-commercial purposes.
+Note: usage of OmniSci Immerse is governed by a separate license agreement, provided under `EULA-CE.txt`. The version bundled with this project may only be used for non-commercial purposes.
 
 # Code Style
 
-A [`.clang-format`](http://clang.llvm.org/docs/ClangFormat.html) style configuration, based on the Chromium style guide, is provided at the top level of the repository. Please format your code using a recent version (6.0+ preferred) of ClangFormat before submitting.
+Contributed code should compile without generating warnings by recent compilers on most Linux distributions. Changes to the code should follow the [C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines).
+
+## clang-format
+
+A [`.clang-format`](https://clang.llvm.org/docs/ClangFormat.html) style configuration, based on the Chromium style guide, is provided at the top level of the repository. Please format your code using a recent version (6.0+ preferred) of ClangFormat before submitting.
 
 To use:
 
     clang-format -i File.cpp
 
-Contributed code should compile without generating warnings by recent compilers on most Linux distributions. Changes to the code should follow the [C++ Core Guidelines](https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines).
+## clang-tidy
+
+A [`.clang-tidy`](https://clang.llvm.org/extra/clang-tidy/) configuration is provided at the top level of the repository. Please lint your code using a recent version (6.0+ preferred) of clang-tidy before submitting.
+
+`clang-tidy` requires all generated files to exist before running. The easiest way to accomplish this is to simply run a full build before running `clang-tidy`. A build target which runs `clang-tidy` is provided. To use:
+
+    make clang-tidy
+
+Note: `clang-tidy` may make invalid or overly verbose changes to the source code. It is recommended to first commit your changes, then run `clang-tidy` and review its recommended changes before amending them to your commit.
+
+Note: the `clang-tidy` target uses the `run-clang-tidy.py` script provided with LLVM, which may depend on `PyYAML`. The target also depends on `jq`, which is used to filter portions of the `compile_commands.json` file.
 
 # Dependencies
 
@@ -188,7 +202,7 @@ MapD has the following dependencies:
 | ------- | ----------- | -------- |
 | [CMake](https://cmake.org/) | 3.3 | yes |
 | [LLVM](http://llvm.org/) | 3.8-4.0, 6.0 | yes |
-| [GCC](http://gcc.gnu.org/) | 5.1 | no, if building with clang |
+| [GCC](http://gcc.gnu.org/) | 6.0 | no, if building with clang |
 | [Go](https://golang.org/) | 1.6 | yes |
 | [Boost](http://www.boost.org/) | 1.65.0 | yes |
 | [OpenJDK](http://openjdk.java.net/) | 1.7 | yes |
@@ -197,11 +211,11 @@ MapD has the following dependencies:
 | [gdal](http://gdal.org/) | | yes |
 | [Arrow](https://arrow.apache.org/) | 0.10.0 | yes |
 
-Dependencies for `mapd_web_server` and other Go utils are in [`ThirdParty/go`](ThirdParty/go). See [`ThirdParty/go/src/mapd/vendor/README.md`](ThirdParty/go/src/mapd/vendor/README.md) for instructions on how to add new deps.
+Dependencies for `omnisci_web_server` and other Go utils are in [`ThirdParty/go`](ThirdParty/go). See [`ThirdParty/go/src/mapd/vendor/README.md`](ThirdParty/go/src/mapd/vendor/README.md) for instructions on how to add new deps.
 
 ## CentOS 7
 
-MapD Core requires a number of dependencies which are not provided in the common CentOS/RHEL package repositories. The script [scripts/mapd-deps-centos.sh](scripts/mapd-deps-centos.sh) is provided to automatically build and install these dependencies. A prebuilt package containing these dependencies is also provided for CentOS 7 (x86_64).
+MapD Core requires a number of dependencies which are not provided in the common CentOS/RHEL package repositories. A prebuilt package containing all these dependencies is provided for CentOS 7 (x86_64).
 
 First install the basic build tools:
 
@@ -223,6 +237,8 @@ First install the basic build tools:
         wget \
         curl \
         environment-modules
+    sudo yum install -y \
+        jq
 
 Next download and install the prebuilt dependencies:
 
@@ -255,11 +271,19 @@ Be sure to reboot after installing in order to activate the NVIDIA drivers.
 
 ### Environment Variables
 
-[scripts/mapd-deps-centos.sh](scripts/mapd-deps-centos.sh) generates two files with the appropriate environment variables: `mapd-deps-<date>.sh` (for sourcing from your shell config) and `mapd-deps-<date>.modulefile` (for use with [Environment Modules](http://modules.sf.net), yum package `environment-modules`). These files are placed in mapd-deps install directory, usually `/usr/local/mapd-deps/<date>`. Either of these may be used to configure your environment: the `.sh` may be sourced in your shell config; the `.modulefile` needs to be moved to the modulespath.
+The `deploy.sh` script includes two files with the appropriate environment variables: `mapd-deps-<date>.sh` (for sourcing from your shell config) and `mapd-deps-<date>.modulefile` (for use with [Environment Modules](http://modules.sf.net), yum package `environment-modules`). These files are placed in mapd-deps install directory, usually `/usr/local/mapd-deps/<date>`. Either of these may be used to configure your environment: the `.sh` may be sourced in your shell config; the `.modulefile` needs to be moved to the modulespath.
+
+### Building Dependencies
+
+The [scripts/mapd-deps-centos.sh](scripts/mapd-deps-centos.sh) script is used to build the dependencies. Modify this script and run if you would like to change dependency versions or to build on alternative CPU architectures.
+
+    cd scripts
+    module unload mapd-deps
+    ./mapd-deps-centos.sh --compress
 
 ## macOS
 
-[scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) is provided that will automatically install and/or update [Homebrew](http://brew.sh/) and use that to install all dependencies. Please make sure macOS is completely update to date and Xcode is installed before running. Xcode can be installed from the App Store.
+[scripts/mapd-deps-osx.sh](scripts/mapd-deps-osx.sh) is provided that will automatically install and/or update [Homebrew](http://brew.sh/) and use that to install all dependencies. Please make sure macOS is completely up to date and Xcode is installed before running. Xcode can be installed from the App Store.
 
 ### CUDA
 
@@ -275,11 +299,11 @@ Most build dependencies required by MapD Core are available via APT. Certain dep
 
 ### Ubuntu 16.04
 
-MapD Core requires a newer version of Boost than the version which is provided by Ubuntu 16.04. The [scripts/mapd-deps-ubuntu1604.sh](scripts/mapd-deps-ubuntu1604.sh) build script will compile and install a newer version of Boost into the `/usr/local/mapd-deps/` directory. 
+MapD Core requires a newer version of Boost than the version which is provided by Ubuntu 16.04. The [scripts/mapd-deps-ubuntu1604.sh](scripts/mapd-deps-ubuntu1604.sh) build script will compile and install a newer version of Boost into the `/usr/local/mapd-deps/` directory.
 
 ### Ubuntu 18.04
 
-Use the [scripts/mapd-deps-ubuntu.sh](scripts/mapd-deps-ubuntu.sh) build script to install dependencies. 
+Use the [scripts/mapd-deps-ubuntu.sh](scripts/mapd-deps-ubuntu.sh) build script to install dependencies.
 
 Some installs of Ubuntu 18.04 may fail while building with a message similar to:
 

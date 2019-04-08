@@ -43,6 +43,11 @@ class LeafAggregator {
     return {nullptr, {}};
   }
 
+  void leafCatalogConsistencyCheck(
+      const Catalog_Namespace::SessionInfo& parent_session_info) {
+    CHECK(false);
+  }
+
   std::vector<TQueryResult> forwardQueryToLeaves(
       const Catalog_Namespace::SessionInfo& parent_session_info,
       const std::string& query_str) {

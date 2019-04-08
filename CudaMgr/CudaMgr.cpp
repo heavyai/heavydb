@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2018 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,314 +15,227 @@
  */
 
 #include "CudaMgr.h"
+#include <cuda_runtime.h>
 #include <glog/logging.h>
 #include <algorithm>
 #include <cassert>
 #include <iostream>
 #include <stdexcept>
-#ifdef HAVE_CUDA
-#include <cuda_runtime.h>
-#endif
+
 namespace CudaMgr_Namespace {
 
-#ifdef HAVE_CUDA
-CudaMgr::CudaMgr(const int numGpus, const int startGpu)
-    : maxSharedMemoryForAll(0), startGpu_(startGpu) {
+CudaMgr::CudaMgr(const int num_gpus, const int start_gpu)
+    : start_gpu_(start_gpu), max_shared_memory_for_all_(0) {
   checkError(cuInit(0));
-  checkError(cuDeviceGetCount(&deviceCount_));
+  checkError(cuDeviceGetCount(&device_count_));
 
-  if (numGpus > 0) {  // numGpus <= 0 will just use number of gpus found
-    CHECK_LE(numGpus + startGpu_, deviceCount_);
-    deviceCount_ = std::min(deviceCount_, numGpus);
+  if (num_gpus > 0) {  // numGpus <= 0 will just use number of gpus found
+    CHECK_LE(num_gpus + start_gpu_, device_count_);
+    device_count_ = std::min(device_count_, num_gpus);
   } else {
-    CHECK_EQ(startGpu_,
-             0);  // if we are using all gpus we cannot start on a gpu other than 0
+    // if we are using all gpus we cannot start on a gpu other than 0
+    CHECK_EQ(start_gpu_, 0);
   }
   fillDeviceProperties();
   createDeviceContexts();
   printDeviceProperties();
 }
-#else
-CudaMgr::CudaMgr(const int, const int) {
-  CHECK(false);
-}
-#endif  // HAVE_CUDA
 
 CudaMgr::~CudaMgr() {
-#ifdef HAVE_CUDA
   try {
+    // We don't want to remove the cudaMgr before all other processes have cleaned up.
+    // This should be enforced by the lifetime policies, but take this lock to be safe.
+    std::lock_guard<std::mutex> gpu_lock(device_cleanup_mutex_);
+
     synchronizeDevices();
-    for (int d = 0; d < deviceCount_; ++d) {
-      checkError(cuCtxDestroy(deviceContexts[d]));
+    for (int d = 0; d < device_count_; ++d) {
+      checkError(cuCtxDestroy(device_contexts_[d]));
     }
+  } catch (const CudaErrorException& e) {
+    if (e.getStatus() == CUDA_ERROR_DEINITIALIZED) {
+      // TODO(adb / asuhan): Verify cuModuleUnload removes the context
+      return;
+    }
+    LOG(ERROR) << "CUDA Error: " << e.what();
   } catch (const std::runtime_error& e) {
     LOG(ERROR) << "CUDA Error: " << e.what();
   }
-#endif
 }
 
-void CudaMgr::synchronizeDevices() {
-#ifdef HAVE_CUDA
-  for (int d = 0; d < deviceCount_; ++d) {
+void CudaMgr::synchronizeDevices() const {
+  for (int d = 0; d < device_count_; ++d) {
     setContext(d);
     checkError(cuCtxSynchronize());
   }
-#endif
+}
+
+void CudaMgr::copyHostToDevice(int8_t* device_ptr,
+                               const int8_t* host_ptr,
+                               const size_t num_bytes,
+                               const int device_num) {
+  setContext(device_num);
+  checkError(
+      cuMemcpyHtoD(reinterpret_cast<CUdeviceptr>(device_ptr), host_ptr, num_bytes));
+}
+
+void CudaMgr::copyDeviceToHost(int8_t* host_ptr,
+                               const int8_t* device_ptr,
+                               const size_t num_bytes,
+                               const int device_num) {
+  setContext(device_num);
+  checkError(
+      cuMemcpyDtoH(host_ptr, reinterpret_cast<const CUdeviceptr>(device_ptr), num_bytes));
+}
+
+void CudaMgr::copyDeviceToDevice(int8_t* dest_ptr,
+                                 int8_t* src_ptr,
+                                 const size_t num_bytes,
+                                 const int dest_device_num,
+                                 const int src_device_num) {
+  // dest_device_num and src_device_num are the device numbers relative to start_gpu_
+  // (real_device_num - start_gpu_)
+  if (src_device_num == dest_device_num) {
+    setContext(src_device_num);
+    checkError(cuMemcpy(reinterpret_cast<CUdeviceptr>(dest_ptr),
+                        reinterpret_cast<CUdeviceptr>(src_ptr),
+                        num_bytes));
+  } else {
+    checkError(cuMemcpyPeer(reinterpret_cast<CUdeviceptr>(dest_ptr),
+                            device_contexts_[dest_device_num],
+                            reinterpret_cast<CUdeviceptr>(src_ptr),
+                            device_contexts_[src_device_num],
+                            num_bytes));  // will we always have peer?
+  }
+}
+
+void CudaMgr::loadGpuModuleData(CUmodule* module,
+                                const void* image,
+                                unsigned int num_options,
+                                CUjit_option* options,
+                                void** option_vals,
+                                const int device_id) const {
+  setContext(device_id);
+  checkError(cuModuleLoadDataEx(module, image, num_options, options, option_vals));
+}
+
+void CudaMgr::unloadGpuModuleData(CUmodule* module, const int device_id) const {
+  std::lock_guard<std::mutex> gpuLock(device_cleanup_mutex_);
+  CHECK(module);
+
+  setContext(device_id);
+  try {
+    checkError(cuModuleUnload(*module));
+  } catch (const std::runtime_error& e) {
+    LOG(ERROR) << "CUDA Error: " << e.what();
+  }
 }
 
 void CudaMgr::fillDeviceProperties() {
-#ifdef HAVE_CUDA
-  deviceProperties.resize(deviceCount_);
-  cudaDriverGetVersion(&gpu_driver_version);
-  for (int deviceNum = 0; deviceNum < deviceCount_; ++deviceNum) {
-    checkError(cuDeviceGet(&deviceProperties[deviceNum].device, deviceNum + startGpu_));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].computeMajor,
-                                    CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
-                                    deviceProperties[deviceNum].device));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].computeMinor,
-                                    CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,
-                                    deviceProperties[deviceNum].device));
-    checkError(cuDeviceTotalMem(&deviceProperties[deviceNum].globalMem,
-                                deviceProperties[deviceNum].device));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].constantMem,
-                                    CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY,
-                                    deviceProperties[deviceNum].device));
+  device_properties_.resize(device_count_);
+  cudaDriverGetVersion(&gpu_driver_version_);
+  for (int device_num = 0; device_num < device_count_; ++device_num) {
     checkError(
-        cuDeviceGetAttribute(&deviceProperties[deviceNum].sharedMemPerMP,
+        cuDeviceGet(&device_properties_[device_num].device, device_num + start_gpu_));
+    checkError(cuDeviceGetAttribute(&device_properties_[device_num].computeMajor,
+                                    CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
+                                    device_properties_[device_num].device));
+    checkError(cuDeviceGetAttribute(&device_properties_[device_num].computeMinor,
+                                    CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR,
+                                    device_properties_[device_num].device));
+    checkError(cuDeviceTotalMem(&device_properties_[device_num].globalMem,
+                                device_properties_[device_num].device));
+    checkError(cuDeviceGetAttribute(&device_properties_[device_num].constantMem,
+                                    CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY,
+                                    device_properties_[device_num].device));
+    checkError(
+        cuDeviceGetAttribute(&device_properties_[device_num].sharedMemPerMP,
                              CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_MULTIPROCESSOR,
-                             deviceProperties[deviceNum].device));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].sharedMemPerBlock,
+                             device_properties_[device_num].device));
+    checkError(cuDeviceGetAttribute(&device_properties_[device_num].sharedMemPerBlock,
                                     CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK,
-                                    deviceProperties[deviceNum].device));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].numMPs,
+                                    device_properties_[device_num].device));
+    checkError(cuDeviceGetAttribute(&device_properties_[device_num].numMPs,
                                     CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT,
-                                    deviceProperties[deviceNum].device));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].warpSize,
+                                    device_properties_[device_num].device));
+    checkError(cuDeviceGetAttribute(&device_properties_[device_num].warpSize,
                                     CU_DEVICE_ATTRIBUTE_WARP_SIZE,
-                                    deviceProperties[deviceNum].device));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].maxThreadsPerBlock,
+                                    device_properties_[device_num].device));
+    checkError(cuDeviceGetAttribute(&device_properties_[device_num].maxThreadsPerBlock,
                                     CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK,
-                                    deviceProperties[deviceNum].device));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].maxRegistersPerBlock,
+                                    device_properties_[device_num].device));
+    checkError(cuDeviceGetAttribute(&device_properties_[device_num].maxRegistersPerBlock,
                                     CU_DEVICE_ATTRIBUTE_MAX_REGISTERS_PER_BLOCK,
-                                    deviceProperties[deviceNum].device));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].maxRegistersPerMP,
+                                    device_properties_[device_num].device));
+    checkError(cuDeviceGetAttribute(&device_properties_[device_num].maxRegistersPerMP,
                                     CU_DEVICE_ATTRIBUTE_MAX_REGISTERS_PER_MULTIPROCESSOR,
-                                    deviceProperties[deviceNum].device));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].pciBusId,
+                                    device_properties_[device_num].device));
+    checkError(cuDeviceGetAttribute(&device_properties_[device_num].pciBusId,
                                     CU_DEVICE_ATTRIBUTE_PCI_BUS_ID,
-                                    deviceProperties[deviceNum].device));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].pciDeviceId,
+                                    device_properties_[device_num].device));
+    checkError(cuDeviceGetAttribute(&device_properties_[device_num].pciDeviceId,
                                     CU_DEVICE_ATTRIBUTE_PCI_DEVICE_ID,
-                                    deviceProperties[deviceNum].device));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].clockKhz,
+                                    device_properties_[device_num].device));
+    checkError(cuDeviceGetAttribute(&device_properties_[device_num].clockKhz,
                                     CU_DEVICE_ATTRIBUTE_CLOCK_RATE,
-                                    deviceProperties[deviceNum].device));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].memoryClockKhz,
+                                    device_properties_[device_num].device));
+    checkError(cuDeviceGetAttribute(&device_properties_[device_num].memoryClockKhz,
                                     CU_DEVICE_ATTRIBUTE_MEMORY_CLOCK_RATE,
-                                    deviceProperties[deviceNum].device));
-    checkError(cuDeviceGetAttribute(&deviceProperties[deviceNum].memoryBusWidth,
+                                    device_properties_[device_num].device));
+    checkError(cuDeviceGetAttribute(&device_properties_[device_num].memoryBusWidth,
                                     CU_DEVICE_ATTRIBUTE_GLOBAL_MEMORY_BUS_WIDTH,
-                                    deviceProperties[deviceNum].device));
-    deviceProperties[deviceNum].memoryBandwidthGBs =
-        deviceProperties[deviceNum].memoryClockKhz / 1000000.0 / 8.0 *
-        deviceProperties[deviceNum].memoryBusWidth;
+                                    device_properties_[device_num].device));
+    device_properties_[device_num].memoryBandwidthGBs =
+        device_properties_[device_num].memoryClockKhz / 1000000.0 / 8.0 *
+        device_properties_[device_num].memoryBusWidth;
   }
-  maxSharedMemoryForAll = computeMaxSharedMemoryForAll();
-#endif
+  max_shared_memory_for_all_ = computeMaxSharedMemoryForAll();
 }
 
-/**
- * This function returns the maximum available dynamic shared memory that is available for
- * all GPU devices (i.e., minimum of all available dynamic shared memory per blocks, for
- * all GPU devices).
- */
-size_t CudaMgr::computeMaxSharedMemoryForAll() const {
-  int sharedMemSize = deviceCount_ > 0 ? deviceProperties.front().sharedMemPerBlock : 0;
-  for (int d = 1; d < deviceCount_; d++) {
-    sharedMemSize = std::min(sharedMemSize, deviceProperties[d].sharedMemPerBlock);
-  }
-  return sharedMemSize;
-}
-
-void CudaMgr::createDeviceContexts() {
-#ifdef HAVE_CUDA
-  CHECK_EQ(deviceContexts.size(), size_t(0));
-  deviceContexts.resize(deviceCount_);
-  for (int d = 0; d < deviceCount_; ++d) {
-    CUresult status = cuCtxCreate(&deviceContexts[d], 0, deviceProperties[d].device);
-    if (status != CUDA_SUCCESS) {
-      // this is called from destructor so we need
-      // to clean up
-      // destroy all contexts up to this point
-      for (int destroyId = 0; destroyId <= d; ++destroyId) {
-        checkError(cuCtxDestroy(
-            deviceContexts[destroyId]));  // check error here - what if it throws?
-      }
-      // now throw via checkError
-      checkError(status);
-    }
-  }
-#endif
-}
-
-void CudaMgr::printDeviceProperties() const {
-#ifdef HAVE_CUDA
-  LOG(INFO) << "Using " << deviceCount_ << " Gpus.";
-  for (int d = 0; d < deviceCount_; ++d) {
-    VLOG(1) << "Device: " << deviceProperties[d].device;
-    VLOG(1) << "Clock (khz): " << deviceProperties[d].clockKhz;
-    VLOG(1) << "Compute Major: " << deviceProperties[d].computeMajor;
-    VLOG(1) << "Compute Minor: " << deviceProperties[d].computeMinor;
-    VLOG(1) << "PCI bus id: " << deviceProperties[d].pciBusId;
-    VLOG(1) << "PCI deviceId id: " << deviceProperties[d].pciDeviceId;
-    VLOG(1) << "Total Global memory: " << deviceProperties[d].globalMem / 1073741824.0
-            << " GB";
-    VLOG(1) << "Memory clock (khz): " << deviceProperties[d].memoryClockKhz;
-    VLOG(1) << "Memory bandwidth: " << deviceProperties[d].memoryBandwidthGBs
-            << " GB/sec";
-
-    VLOG(1) << "Constant Memory: " << deviceProperties[d].constantMem;
-    VLOG(1) << "Shared memory per multiprocessor: " << deviceProperties[d].sharedMemPerMP;
-    VLOG(1) << "Shared memory per block: " << deviceProperties[d].sharedMemPerBlock;
-    VLOG(1) << "Number of MPs: " << deviceProperties[d].numMPs;
-    VLOG(1) << "Warp Size: " << deviceProperties[d].warpSize;
-    VLOG(1) << "Max threads per block: " << deviceProperties[d].maxThreadsPerBlock;
-    VLOG(1) << "Max registers per block: " << deviceProperties[d].maxRegistersPerBlock;
-    VLOG(1) << "Max register per MP: " << deviceProperties[d].maxRegistersPerMP;
-    VLOG(1) << "Memory bus width in bits: " << deviceProperties[d].memoryBusWidth;
-  }
-#endif
-}
-
-DeviceProperties* CudaMgr::getDeviceProperties(const size_t deviceNum) {
-#ifdef HAVE_CUDA
-  if (deviceNum < deviceProperties.size()) {
-    return &deviceProperties[deviceNum];
-  }
-#endif
-  return nullptr;
-}
-
-// deviceNum is the device number relative to startGpu (realDeviceNum - startGpu_)
-void CudaMgr::setContext(const int deviceNum) const {
-#ifdef HAVE_CUDA
-  // assert (deviceNum < deviceCount_);
-  cuCtxSetCurrent(deviceContexts[deviceNum]);
-#endif
-}
-
-int8_t* CudaMgr::allocatePinnedHostMem(const size_t numBytes) {
-#ifdef HAVE_CUDA
+int8_t* CudaMgr::allocatePinnedHostMem(const size_t num_bytes) {
   setContext(0);
-  void* hostPtr;
-  checkError(cuMemHostAlloc(&hostPtr, numBytes, CU_MEMHOSTALLOC_PORTABLE));
-  return (reinterpret_cast<int8_t*>(hostPtr));
-#else
-  return nullptr;
-#endif
+  void* host_ptr;
+  checkError(cuMemHostAlloc(&host_ptr, num_bytes, CU_MEMHOSTALLOC_PORTABLE));
+  return reinterpret_cast<int8_t*>(host_ptr);
 }
 
-int8_t* CudaMgr::allocateDeviceMem(const size_t numBytes, const int deviceNum) {
-#ifdef HAVE_CUDA
-  setContext(deviceNum);
-  CUdeviceptr devicePtr;
-  checkError(cuMemAlloc(&devicePtr, numBytes));
-  return (reinterpret_cast<int8_t*>(devicePtr));
-#else
-  return nullptr;
-#endif
+int8_t* CudaMgr::allocateDeviceMem(const size_t num_bytes, const int device_num) {
+  setContext(device_num);
+  CUdeviceptr device_ptr;
+  checkError(cuMemAlloc(&device_ptr, num_bytes));
+  return reinterpret_cast<int8_t*>(device_ptr);
 }
 
-void CudaMgr::freePinnedHostMem(int8_t* hostPtr) {
-#ifdef HAVE_CUDA
-  checkError(cuMemFreeHost(reinterpret_cast<void*>(hostPtr)));
-#endif
+void CudaMgr::freePinnedHostMem(int8_t* host_ptr) {
+  checkError(cuMemFreeHost(reinterpret_cast<void*>(host_ptr)));
 }
 
-void CudaMgr::freeDeviceMem(int8_t* devicePtr) {
-#ifdef HAVE_CUDA
-  checkError(cuMemFree(reinterpret_cast<CUdeviceptr>(devicePtr)));
-#endif
+void CudaMgr::freeDeviceMem(int8_t* device_ptr) {
+  std::lock_guard<std::mutex> gpu_lock(device_cleanup_mutex_);
+
+  checkError(cuMemFree(reinterpret_cast<CUdeviceptr>(device_ptr)));
 }
 
-void CudaMgr::copyHostToDevice(int8_t* devicePtr,
-                               const int8_t* hostPtr,
-                               const size_t numBytes,
-                               const int deviceNum) {
-#ifdef HAVE_CUDA
-  setContext(deviceNum);
-  checkError(cuMemcpyHtoD(reinterpret_cast<CUdeviceptr>(devicePtr), hostPtr, numBytes));
-#endif
+void CudaMgr::zeroDeviceMem(int8_t* device_ptr,
+                            const size_t num_bytes,
+                            const int device_num) {
+  setDeviceMem(device_ptr, 0, num_bytes, device_num);
 }
 
-void CudaMgr::copyDeviceToHost(int8_t* hostPtr,
-                               const int8_t* devicePtr,
-                               const size_t numBytes,
-                               const int deviceNum) {
-#ifdef HAVE_CUDA
-  setContext(deviceNum);
-  checkError(
-      cuMemcpyDtoH(hostPtr, reinterpret_cast<const CUdeviceptr>(devicePtr), numBytes));
-#endif
-}
-
-// destDeviceNum and srcDeviceNum are the device numbers relative to startGpu
-// (realDeviceNum - startGpu_)
-void CudaMgr::copyDeviceToDevice(int8_t* destPtr,
-                                 int8_t* srcPtr,
-                                 const size_t numBytes,
-                                 const int destDeviceNum,
-                                 const int srcDeviceNum) {
-#ifdef HAVE_CUDA
-  if (srcDeviceNum == destDeviceNum) {
-    setContext(srcDeviceNum);
-    checkError(cuMemcpy(reinterpret_cast<CUdeviceptr>(destPtr),
-                        reinterpret_cast<CUdeviceptr>(srcPtr),
-                        numBytes));
-  } else {
-    checkError(cuMemcpyPeer(reinterpret_cast<CUdeviceptr>(destPtr),
-                            deviceContexts[destDeviceNum],
-                            reinterpret_cast<CUdeviceptr>(srcPtr),
-                            deviceContexts[srcDeviceNum],
-                            numBytes));  // will we always have peer?
-  }
-#endif
-}
-
-void CudaMgr::zeroDeviceMem(int8_t* devicePtr,
-                            const size_t numBytes,
-                            const int deviceNum) {
-  setDeviceMem(devicePtr, 0, numBytes, deviceNum);
-}
-
-void CudaMgr::setDeviceMem(int8_t* devicePtr,
+void CudaMgr::setDeviceMem(int8_t* device_ptr,
                            const unsigned char uc,
-                           const size_t numBytes,
-                           const int deviceNum) {
-#ifdef HAVE_CUDA
-  setContext(deviceNum);
-  checkError(cuMemsetD8(reinterpret_cast<CUdeviceptr>(devicePtr), uc, numBytes));
-#endif
+                           const size_t num_bytes,
+                           const int device_num) {
+  setContext(device_num);
+  checkError(cuMemsetD8(reinterpret_cast<CUdeviceptr>(device_ptr), uc, num_bytes));
 }
 
-void CudaMgr::checkError(CUresult status) {
-#ifdef HAVE_CUDA
-  if (status != CUDA_SUCCESS) {
-    const char* errorString{nullptr};
-    cuGetErrorString(status, &errorString);
-    // should clean up here - delete any contexts, etc.
-    throw std::runtime_error(errorString ? errorString : "Unkown error");
-  }
-#endif
-}
 /**
  * Returns true if all devices have Maxwell micro-architecture, or later.
  * Returns false, if there is any device with compute capability of < 5.0
  */
 bool CudaMgr::isArchMaxwellOrLaterForAll() const {
-  for (int i = 0; i < deviceCount_; i++) {
-    if (deviceProperties[i].computeMajor < 5) {
+  for (int i = 0; i < device_count_; i++) {
+    if (device_properties_[i].computeMajor < 5) {
       return false;
     }
   }
@@ -334,50 +247,89 @@ bool CudaMgr::isArchMaxwellOrLaterForAll() const {
  * Returns false, if there is any non-Volta device available.
  */
 bool CudaMgr::isArchVoltaForAll() const {
-  for (int i = 0; i < deviceCount_; i++) {
-    if (deviceProperties[i].computeMajor != 7) {
+  for (int i = 0; i < device_count_; i++) {
+    if (device_properties_[i].computeMajor != 7) {
       return false;
     }
   }
   return true;
 }
 
-}  // namespace CudaMgr_Namespace
-
-/*
-int main () {
-    try {
-        CudaMgr_Namespace::CudaMgr cudaMgr;
-        cudaMgr.printDeviceProperties();
-        int numDevices = cudaMgr.getDeviceCount();
-        cout << "There exists " << numDevices << " CUDA devices." << endl;
-        int8_t *hostPtr, *hostPtr2, *devicePtr;
-        const size_t numBytes = 1000000;
-        hostPtr = cudaMgr.allocatePinnedHostMem(numBytes);
-        hostPtr2 = cudaMgr.allocatePinnedHostMem(numBytes);
-        devicePtr = cudaMgr.allocateDeviceMem(numBytes,0);
-        for (int i = 0; i < numBytes; ++i) {
-            hostPtr[i] = i % 100;
-        }
-        cudaMgr.copyHostToDevice(devicePtr,hostPtr,numBytes,0);
-        cudaMgr.copyDeviceToHost(hostPtr2,devicePtr,numBytes,0);
-
-        bool matchFlag = true;
-        for (int i = 0; i < numBytes; ++i) {
-            if (hostPtr[i] != hostPtr2[i]) {
-                matchFlag = false;
-                break;
-            }
-        }
-        cout << "Match flag: " << matchFlag << endl;
-
-
-        cudaMgr.setContext(0);
-        cudaMgr.freeDeviceMem(devicePtr);
-        cudaMgr.freePinnedHostMem(hostPtr);
-    }
-    catch (std::runtime_error &error) {
-        cout << "Caught error: " << error.what() << endl;
-    }
+/**
+ * This function returns the maximum available dynamic shared memory that is available for
+ * all GPU devices (i.e., minimum of all available dynamic shared memory per blocks, for
+ * all GPU devices).
+ */
+size_t CudaMgr::computeMaxSharedMemoryForAll() const {
+  int shared_mem_size =
+      device_count_ > 0 ? device_properties_.front().sharedMemPerBlock : 0;
+  for (int d = 1; d < device_count_; d++) {
+    shared_mem_size = std::min(shared_mem_size, device_properties_[d].sharedMemPerBlock);
+  }
+  return shared_mem_size;
 }
-*/
+
+void CudaMgr::createDeviceContexts() {
+  CHECK_EQ(device_contexts_.size(), size_t(0));
+  device_contexts_.resize(device_count_);
+  for (int d = 0; d < device_count_; ++d) {
+    CUresult status = cuCtxCreate(&device_contexts_[d], 0, device_properties_[d].device);
+    if (status != CUDA_SUCCESS) {
+      // this is called from destructor so we need
+      // to clean up
+      // destroy all contexts up to this point
+      for (int destroy_id = 0; destroy_id <= d; ++destroy_id) {
+        try {
+          checkError(cuCtxDestroy(device_contexts_[destroy_id]));
+        } catch (const CudaErrorException& e) {
+          LOG(ERROR) << "Error destroying context after failed creation for device "
+                     << destroy_id;
+        }
+      }
+      // checkError will translate the message and throw
+      checkError(status);
+    }
+  }
+}
+
+void CudaMgr::setContext(const int device_num) const {
+  // deviceNum is the device number relative to startGpu (realDeviceNum - startGpu_)
+  CHECK_LT(device_num, device_count_);
+  cuCtxSetCurrent(device_contexts_[device_num]);
+}
+
+void CudaMgr::printDeviceProperties() const {
+  LOG(INFO) << "Using " << device_count_ << " Gpus.";
+  for (int d = 0; d < device_count_; ++d) {
+    VLOG(1) << "Device: " << device_properties_[d].device;
+    VLOG(1) << "Clock (khz): " << device_properties_[d].clockKhz;
+    VLOG(1) << "Compute Major: " << device_properties_[d].computeMajor;
+    VLOG(1) << "Compute Minor: " << device_properties_[d].computeMinor;
+    VLOG(1) << "PCI bus id: " << device_properties_[d].pciBusId;
+    VLOG(1) << "PCI deviceId id: " << device_properties_[d].pciDeviceId;
+    VLOG(1) << "Total Global memory: " << device_properties_[d].globalMem / 1073741824.0
+            << " GB";
+    VLOG(1) << "Memory clock (khz): " << device_properties_[d].memoryClockKhz;
+    VLOG(1) << "Memory bandwidth: " << device_properties_[d].memoryBandwidthGBs
+            << " GB/sec";
+
+    VLOG(1) << "Constant Memory: " << device_properties_[d].constantMem;
+    VLOG(1) << "Shared memory per multiprocessor: "
+            << device_properties_[d].sharedMemPerMP;
+    VLOG(1) << "Shared memory per block: " << device_properties_[d].sharedMemPerBlock;
+    VLOG(1) << "Number of MPs: " << device_properties_[d].numMPs;
+    VLOG(1) << "Warp Size: " << device_properties_[d].warpSize;
+    VLOG(1) << "Max threads per block: " << device_properties_[d].maxThreadsPerBlock;
+    VLOG(1) << "Max registers per block: " << device_properties_[d].maxRegistersPerBlock;
+    VLOG(1) << "Max register per MP: " << device_properties_[d].maxRegistersPerMP;
+    VLOG(1) << "Memory bus width in bits: " << device_properties_[d].memoryBusWidth;
+  }
+}
+
+void CudaMgr::checkError(CUresult status) const {
+  if (status != CUDA_SUCCESS) {
+    throw CudaErrorException(status);
+  }
+}
+
+}  // namespace CudaMgr_Namespace

@@ -61,7 +61,17 @@ sudo apt install -y \
     autoconf-archive \
     automake \
     bison \
-    flex-old
+    flex-old \
+    libpng-dev \
+    rsync \
+    unzip \
+    jq \
+    python-yaml \
+    libxerces-c-dev \
+    libxmlsec1-dev
+
+# Needed to find xmltooling and xml_security_c
+export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
 
 # GEO STUFF
 # expat
@@ -87,7 +97,7 @@ VERS=0.11.0
 wget --continue http://apache.claz.org/thrift/$VERS/thrift-$VERS.tar.gz
 tar xvf thrift-$VERS.tar.gz
 pushd thrift-$VERS
-JAVA_PREFIX=$PREFIX/lib ./configure \
+CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure \
     --with-lua=no \
     --with-python=no \
     --with-php=no \
@@ -99,7 +109,8 @@ make -j $(nproc)
 make install
 popd
 
-VERS=1.14.3
+#c-blosc
+VERS=1.14.4
 wget --continue https://github.com/Blosc/c-blosc/archive/v$VERS.tar.gz
 tar xvf v$VERS.tar.gz
 BDIR="c-blosc-$VERS/build"
@@ -192,6 +203,12 @@ tar xvf vulkansdk-linux-x86_64-$VERS.tar.gz
 rsync -av $VERS/x86_64/* $PREFIX
 popd # vulkan
 
+
+# OpenSAML
+download_make_install ${HTTP_DEPS}/xml-security-c-2.0.0.tar.gz "" "--without-xalan"
+download_make_install ${HTTP_DEPS}/xmltooling-3.0.2-nolog4shib.tar.gz
+download_make_install ${HTTP_DEPS}/opensaml-3.0.0-nolog4shib.tar.gz
+
 cat > $PREFIX/mapd-deps.sh <<EOF
 PREFIX=$PREFIX
 
@@ -205,7 +222,9 @@ PATH=\$PREFIX/bin:\$PATH
 VULKAN_SDK=\$PREFIX
 VK_LAYER_PATH=\$PREFIX/etc/explicit_layer.d
 
-export LD_LIBRARY_PATH PATH VULKAN_SDK VK_LAYER_PATH
+CMAKE_PREFIX_PATH=\$PREFIX:\$CMAKE_PREFIX_PATH
+
+export LD_LIBRARY_PATH PATH VULKAN_SDK VK_LAYER_PATH CMAKE_PREFIX_PATH
 EOF
 
 echo

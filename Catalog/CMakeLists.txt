@@ -16,4 +16,4 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   add_subdirectory(ee)
 endif()
 
-target_link_libraries(Catalog SqliteConnector StringDictionary Fragmenter ${AUTH_LIBRARIES} Calcite bcrypt)
+target_link_libraries(Catalog SqliteConnector StringDictionary Fragmenter QueryEngine ${AUTH_LIBRARIES} Calcite bcrypt)

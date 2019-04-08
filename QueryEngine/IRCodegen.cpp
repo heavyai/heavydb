@@ -27,18 +27,6 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (!expr) {
     return {posArg(expr)};
   }
-  auto iter_expr = dynamic_cast<const Analyzer::IterExpr*>(expr);
-  if (iter_expr) {
-    if (iter_expr->get_rte_idx() > 0) {
-      const auto offset = cgen_state_->frag_offsets_[iter_expr->get_rte_idx()];
-      if (offset) {
-        return {cgen_state_->ir_builder_.CreateAdd(posArg(iter_expr), offset)};
-      } else {
-        return {posArg(iter_expr)};
-      }
-    }
-    return {posArg(iter_expr)};
-  }
   auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper) {
     return {codegen(bin_oper, co)};
@@ -164,134 +152,6 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper,
   }
 }
 
-llvm::Value* Executor::codegenRetOnHashFail(llvm::Value* hash_cond_lv,
-                                            const Analyzer::Expr* qual) {
-  std::unordered_map<const Analyzer::Expr*, size_t> equi_join_conds;
-  for (size_t i = 0; i < plan_state_->join_info_.equi_join_tautologies_.size(); ++i) {
-    auto cond = plan_state_->join_info_.equi_join_tautologies_[i];
-    equi_join_conds.insert(std::make_pair(cond.get(), i));
-  }
-  auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(qual);
-  if (!bin_oper || !equi_join_conds.count(bin_oper)) {
-    return hash_cond_lv;
-  }
-
-  auto bb_hash_pass =
-      llvm::BasicBlock::Create(cgen_state_->context_,
-                               "hash_pass_" + std::to_string(equi_join_conds[bin_oper]),
-                               cgen_state_->row_func_);
-  auto bb_hash_fail =
-      llvm::BasicBlock::Create(cgen_state_->context_,
-                               "hash_fail_" + std::to_string(equi_join_conds[bin_oper]),
-                               cgen_state_->row_func_);
-  cgen_state_->ir_builder_.CreateCondBr(hash_cond_lv, bb_hash_pass, bb_hash_fail);
-  cgen_state_->ir_builder_.SetInsertPoint(bb_hash_fail);
-
-  cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
-  cgen_state_->ir_builder_.SetInsertPoint(bb_hash_pass);
-  return ll_bool(true);
-}
-
-const std::vector<Analyzer::Expr*> Executor::codegenHashJoinsBeforeLoopJoin(
-    const std::vector<Analyzer::Expr*>& primary_quals,
-    const RelAlgExecutionUnit& ra_exe_unit,
-    const CompilationOptions& co) {
-  std::unordered_set<const Analyzer::Expr*> hash_join_quals;
-  if (plan_state_->join_info_.join_impl_type_ != JoinImplType::HashPlusLoop) {
-    return primary_quals;
-  }
-  CHECK_GT(ra_exe_unit.input_descs.size(), size_t(2));
-  const auto rte_limit = ra_exe_unit.input_descs.size() - 1;
-
-  llvm::Value* filter_lv = nullptr;
-  for (auto expr : ra_exe_unit.inner_join_quals) {
-    auto bin_oper = std::dynamic_pointer_cast<const Analyzer::BinOper>(expr);
-    if (!bin_oper || !IS_EQUIVALENCE(bin_oper->get_optype())) {
-      continue;
-    }
-    std::set<int> rte_idx_set;
-    bin_oper->collect_rte_idx(rte_idx_set);
-    bool found_hash_join = true;
-    for (auto rte : rte_idx_set) {
-      if (rte >= static_cast<int>(rte_limit)) {
-        found_hash_join = false;
-        break;
-      }
-    }
-    if (!found_hash_join) {
-      continue;
-    }
-    hash_join_quals.insert(expr.get());
-    if (!filter_lv) {
-      filter_lv = ll_bool(true);
-    }
-    CHECK(filter_lv);
-    auto cond_lv = toBool(codegen(expr.get(), true, co).front());
-    auto new_cond_lv = codegenRetOnHashFail(cond_lv, expr.get());
-    filter_lv = new_cond_lv == cond_lv
-                    ? cgen_state_->ir_builder_.CreateAnd(filter_lv, cond_lv)
-                    : new_cond_lv;
-    CHECK(filter_lv->getType()->isIntegerTy(1));
-  }
-
-  if (!filter_lv) {
-    return primary_quals;
-  }
-
-  if (llvm::isa<llvm::ConstantInt>(filter_lv)) {
-    auto constant_true = llvm::cast<llvm::ConstantInt>(filter_lv);
-    CHECK_NE(constant_true->getSExtValue(), int64_t(0));
-  } else {
-    auto cond_true = llvm::BasicBlock::Create(
-        cgen_state_->context_, "match_true", cgen_state_->row_func_);
-    auto cond_false = llvm::BasicBlock::Create(
-        cgen_state_->context_, "match_false", cgen_state_->row_func_);
-
-    cgen_state_->ir_builder_.CreateCondBr(filter_lv, cond_true, cond_false);
-    cgen_state_->ir_builder_.SetInsertPoint(cond_false);
-    cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
-    cgen_state_->ir_builder_.SetInsertPoint(cond_true);
-  }
-
-  std::vector<Analyzer::Expr*> remaining_quals;
-  for (auto qual : primary_quals) {
-    if (hash_join_quals.count(qual)) {
-      continue;
-    }
-    remaining_quals.push_back(qual);
-  }
-  return remaining_quals;
-}
-
-void Executor::codegenInnerScanNextRowOrMatch() {
-  if (cgen_state_->inner_scan_labels_.empty()) {
-    if (cgen_state_->match_scan_labels_.empty()) {
-      cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
-      return;
-    }
-    // TODO(miyu): support multiple one-to-many hash joins in folded join sequence.
-    CHECK_EQ(size_t(1), cgen_state_->match_iterators_.size());
-    llvm::Value* match_pos = nullptr;
-    llvm::Value* match_pos_ptr = nullptr;
-    std::tie(match_pos, match_pos_ptr) = *cgen_state_->match_iterators_.begin();
-    auto next_match_pos =
-        cgen_state_->ir_builder_.CreateAdd(match_pos, ll_int(int64_t(1)));
-    cgen_state_->ir_builder_.CreateStore(next_match_pos, match_pos_ptr);
-    CHECK_EQ(size_t(1), cgen_state_->match_scan_labels_.size());
-    cgen_state_->ir_builder_.CreateBr(cgen_state_->match_scan_labels_.front());
-  } else {
-    // TODO(miyu): support one-to-many hash join + loop join
-    CHECK(cgen_state_->match_scan_labels_.empty());
-    CHECK_EQ(size_t(1), cgen_state_->scan_to_iterator_.size());
-    auto inner_it_val_and_ptr = cgen_state_->scan_to_iterator_.begin()->second;
-    auto inner_it_inc = cgen_state_->ir_builder_.CreateAdd(inner_it_val_and_ptr.first,
-                                                           ll_int(int64_t(1)));
-    cgen_state_->ir_builder_.CreateStore(inner_it_inc, inner_it_val_and_ptr.second);
-    CHECK_EQ(size_t(1), cgen_state_->inner_scan_labels_.size());
-    cgen_state_->ir_builder_.CreateBr(cgen_state_->inner_scan_labels_.front());
-  }
-}
-
 namespace {
 
 void add_qualifier_to_execution_unit(RelAlgExecutionUnit& ra_exe_unit,
@@ -312,9 +172,15 @@ void check_if_loop_join_is_allowed(RelAlgExecutionUnit& ra_exe_unit,
   if (eo.allow_loop_joins) {
     return;
   }
-  if (level_idx + 1 != ra_exe_unit.inner_joins.size() ||
-      !is_trivial_loop_join(query_infos, ra_exe_unit)) {
-    throw std::runtime_error("Hash join failed, reason(s): " + fail_reason);
+  if (level_idx + 1 != ra_exe_unit.join_quals.size()) {
+    throw std::runtime_error(
+        "Hash join failed, reason(s): " + fail_reason +
+        " | Cannot fall back to loop join for intermediate join quals");
+  }
+  if (!is_trivial_loop_join(query_infos, ra_exe_unit)) {
+    throw std::runtime_error(
+        "Hash join failed, reason(s): " + fail_reason +
+        " | Cannot fall back to loop join for non-trivial inner table size");
   }
 }
 
@@ -326,11 +192,12 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
     const ExecutionOptions& eo,
     const std::vector<InputTableInfo>& query_infos,
     ColumnCacheMap& column_cache) {
+  INJECT_TIMER(buildJoinLoops);
   std::vector<JoinLoop> join_loops;
   for (size_t level_idx = 0, current_hash_table_idx = 0;
-       level_idx < ra_exe_unit.inner_joins.size();
+       level_idx < ra_exe_unit.join_quals.size();
        ++level_idx) {
-    const auto& current_level_join_conditions = ra_exe_unit.inner_joins[level_idx];
+    const auto& current_level_join_conditions = ra_exe_unit.join_quals[level_idx];
     std::vector<std::string> fail_reasons;
     const auto current_level_hash_table =
         buildCurrentLevelHashTable(current_level_join_conditions,
@@ -522,7 +389,6 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
           ra_exe_unit,
           co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                      : MemoryLevel::CPU_LEVEL,
-          std::unordered_set<int>{},
           column_cache);
       current_level_hash_table = hash_table_or_error.hash_table;
     }
@@ -581,7 +447,8 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
             compileBody(ra_exe_unit, group_by_and_aggregate, co);
         if (can_return_error || cgen_state_->needs_error_check_ ||
             eo.with_dynamic_watchdog) {
-          createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog);
+          createErrorCheckControlFlow(
+              query_func, eo.with_dynamic_watchdog, co.device_type_);
         }
         return loop_body_bb;
       },

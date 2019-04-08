@@ -19,12 +19,14 @@
 #include "../Import/Importer.h"
 
 #include <algorithm>
+#include <limits>
 #include <string>
 
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #include <boost/algorithm/string.hpp>
+#include <boost/program_options.hpp>
 #include "../Catalog/Catalog.h"
 #include "../Parser/parser.h"
 #include "../QueryEngine/ResultSet.h"
@@ -36,10 +38,12 @@
 #define BASE_PATH "./tmp"
 #endif
 
-#define CALCITEPORT 39093
+#define CALCITEPORT 36279
 
 using namespace std;
 using namespace TestHelpers;
+
+extern bool g_use_date_in_days_default_encoding;
 
 namespace {
 
@@ -196,7 +200,7 @@ bool import_test_s3_parquet(const string& filename, const int64_t cnt, const dou
 #endif  // HAVE_AWS_S3
 class SQLTestEnv : public ::testing::Environment {
  public:
-  virtual void SetUp() {
+  virtual void SetUp() override {
     g_session.reset(QueryRunner::get_session(BASE_PATH,
                                              "gtest",
                                              "test!test!",
@@ -248,8 +252,8 @@ TEST(Detect, Numeric) {
   d(kTEXT, "1.22.22");
 }
 
-const char* create_table_fix1 = R"(
-    CREATE TABLE fix1(
+const char* create_table_mixed_varlen = R"(
+    CREATE TABLE import_test_mixed_varlen(
       pt GEOMETRY(POINT),
       ls GEOMETRY(LINESTRING),
       faii INTEGER[2],
@@ -258,25 +262,187 @@ const char* create_table_fix1 = R"(
     );
   )";
 
-class ImportTestFix1 : public ::testing::Test {
+class ImportTestMixedVarlen : public ::testing::Test {
  protected:
-  virtual void SetUp() {
-    ASSERT_NO_THROW(run_ddl_statement("drop table if exists fix1;"););
-    ASSERT_NO_THROW(run_ddl_statement(create_table_fix1););
+  virtual void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_mixed_varlen;"));
+    ASSERT_NO_THROW(run_ddl_statement(create_table_mixed_varlen););
   }
 
-  virtual void TearDown() { ASSERT_NO_THROW(run_ddl_statement("drop table fix1;");); }
+  virtual void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_mixed_varlen;"));
+  }
 };
 
-TEST_F(ImportTestFix1, Fix_failed_import_arrays_after_geos) {
+TEST_F(ImportTestMixedVarlen, Fix_failed_import_arrays_after_geos) {
   EXPECT_NO_THROW(
-      run_ddl_statement("copy fix1 from '../../Tests/Import/datafiles/fix1.txt' with "
-                        "(header='false');"););
-  std::string query_str = "SELECT COUNT(*) FROM fix1;";
+      run_ddl_statement("copy import_test_mixed_varlen from "
+                        "'../../Tests/Import/datafiles/mixed_varlen.txt' with "
+                        "(header='false');"));
+  std::string query_str = "SELECT COUNT(*) FROM import_test_mixed_varlen;";
   auto rows = run_query(query_str);
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(1), crt_row.size());
   CHECK_EQ(int64_t(1), v<int64_t>(crt_row[0]));
+}
+
+const char* create_table_date = R"(
+    CREATE TABLE import_test_date(
+      date_text TEXT ENCODING DICT(32),
+      date_date DATE,
+      date_date_not_null DATE NOT NULL,
+      date_i32 DATE ENCODING FIXED(32),
+      date_i16 DATE ENCODING FIXED(16)
+    );
+)";
+
+class ImportTestDate : public ::testing::Test {
+ protected:
+  virtual void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date;"));
+    ASSERT_NO_THROW(run_ddl_statement(create_table_date));
+  }
+
+  virtual void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date;"));
+  }
+};
+
+std::string convert_date_to_string(int64_t d) {
+  if (d == std::numeric_limits<int64_t>::min()) {
+    return std::string("NULL");
+  }
+  const auto date = static_cast<time_t>(d);
+  std::tm tm_struct;
+  gmtime_r(&date, &tm_struct);
+  char buf[11];
+  strftime(buf, 11, "%F", &tm_struct);
+  return std::string(buf);
+}
+
+inline void run_mixed_dates_test() {
+  EXPECT_NO_THROW(run_ddl_statement(
+      "COPY import_test_date FROM '../../Tests/Import/datafiles/mixed_dates.txt';"));
+
+  auto rows = run_query("SELECT * FROM import_test_date;");
+  ASSERT_EQ(size_t(11), rows->entryCount());
+  for (size_t i = 0; i < 10; i++) {
+    const auto crt_row = rows->getNextRow(true, true);
+    ASSERT_EQ(size_t(5), crt_row.size());
+    const auto date_truth_str_nullable = v<NullableString>(crt_row[0]);
+    const auto date_truth_str = boost::get<std::string>(&date_truth_str_nullable);
+    CHECK(date_truth_str);
+    for (size_t j = 1; j < crt_row.size(); j++) {
+      const auto date = v<int64_t>(crt_row[j]);
+      const auto date_str = convert_date_to_string(static_cast<int64_t>(date));
+      ASSERT_EQ(*date_truth_str, date_str);
+    }
+  }
+
+  // Last row is NULL (except for column 2 which is NOT NULL)
+  const auto crt_row = rows->getNextRow(true, true);
+  ASSERT_EQ(size_t(5), crt_row.size());
+  for (size_t j = 1; j < crt_row.size(); j++) {
+    if (j == 2) {
+      continue;
+    }
+    const auto date_null = v<int64_t>(crt_row[j]);
+    ASSERT_EQ(date_null, std::numeric_limits<int64_t>::min());
+  }
+}
+
+TEST_F(ImportTestDate, ImportMixedDates) {
+  run_mixed_dates_test();
+}
+
+class ImportTestLegacyDate : public ::testing::Test {
+ protected:
+  virtual void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date;"));
+    g_use_date_in_days_default_encoding = false;
+    ASSERT_NO_THROW(run_ddl_statement(create_table_date));
+  }
+
+  virtual void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date;"));
+    g_use_date_in_days_default_encoding = true;
+  }
+};
+
+TEST_F(ImportTestLegacyDate, ImportMixedDates) {
+  run_mixed_dates_test();
+}
+
+const char* create_table_date_arr = R"(
+    CREATE TABLE import_test_date_arr(
+      date_text TEXT[],
+      date_date DATE[],
+      date_date_fixed DATE[2],
+      date_date_not_null DATE[] NOT NULL
+    );
+)";
+
+class ImportTestDateArray : public ::testing::Test {
+ protected:
+  virtual void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date_arr;"));
+    ASSERT_NO_THROW(run_ddl_statement(create_table_date_arr));
+  }
+
+  virtual void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists import_test_date_arr;"));
+  }
+};
+
+void decode_str_array(const TargetValue& r, std::vector<std::string>& arr) {
+  const auto stv_arr = boost::get<std::vector<ScalarTargetValue>>(&r);
+  CHECK(stv_arr);
+  for (const auto& stv : *stv_arr) {
+    const auto ns = v<NullableString>(stv);
+    const auto str = boost::get<std::string>(&ns);
+    CHECK(str);
+    arr.push_back(*str);
+  }
+  CHECK_EQ(arr.size(), stv_arr->size());
+}
+
+TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
+  EXPECT_NO_THROW(
+      run_ddl_statement("COPY import_test_date_arr FROM "
+                        "'../../Tests/Import/datafiles/mixed_date_arrays.txt';"));
+
+  auto rows = run_query("SELECT * FROM import_test_date_arr;");
+  ASSERT_EQ(size_t(6), rows->entryCount());
+  for (size_t i = 0; i < 3; i++) {
+    const auto crt_row = rows->getNextRow(true, true);
+    ASSERT_EQ(size_t(4), crt_row.size());
+    std::vector<std::string> truth_arr;
+    decode_str_array(crt_row[0], truth_arr);
+    for (size_t j = 1; j < crt_row.size(); j++) {
+      const auto date_arr = boost::get<std::vector<ScalarTargetValue>>(&crt_row[j]);
+      CHECK(date_arr);
+      for (size_t k = 0; k < date_arr->size(); k++) {
+        const auto date = v<int64_t>((*date_arr)[k]);
+        const auto date_str = convert_date_to_string(static_cast<int64_t>(date));
+        ASSERT_EQ(truth_arr[k], date_str);
+      }
+    }
+  }
+  for (size_t i = 3; i < rows->entryCount(); i++) {
+    const auto crt_row = rows->getNextRow(true, true);
+    ASSERT_EQ(size_t(4), crt_row.size());
+    std::vector<std::string> truth_arr;
+    decode_str_array(crt_row[0], truth_arr);
+    for (size_t j = 1; j < crt_row.size() - 1; j++) {
+      const auto date_arr = boost::get<std::vector<ScalarTargetValue>>(&crt_row[j]);
+      CHECK(date_arr);
+      for (size_t k = 0; k < date_arr->size(); k++) {
+        const auto date = v<int64_t>((*date_arr)[k]);
+        const auto date_str = convert_date_to_string(static_cast<int64_t>(date));
+        ASSERT_EQ(truth_arr[k], date_str);
+      }
+    }
+  }
 }
 
 const char* create_table_trips = R"(
@@ -300,12 +466,12 @@ const char* create_table_trips = R"(
 
 class ImportTest : public ::testing::Test {
  protected:
-  virtual void SetUp() {
+  virtual void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
     ASSERT_NO_THROW(run_ddl_statement(create_table_trips););
   }
 
-  virtual void TearDown() {
+  virtual void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table trips;"););
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geo;"););
   }
@@ -315,16 +481,24 @@ TEST_F(ImportTest, One_csv_file) {
   EXPECT_TRUE(import_test_local("trip_data_9.csv", 100, 1.0));
 }
 
+TEST_F(ImportTest, One_csv_file_no_newline) {
+  EXPECT_TRUE(import_test_local("trip_data_no_newline_1.csv", 100, 1.0));
+}
+
+TEST_F(ImportTest, Many_csv_file) {
+  EXPECT_TRUE(import_test_local("trip_data_*.csv", 1200, 1.0));
+}
+
+TEST_F(ImportTest, Many_csv_file_no_newline) {
+  EXPECT_TRUE(import_test_local("trip_data_no_newline_*.csv", 200, 1.0));
+}
+
 TEST_F(ImportTest, One_gz_file) {
   EXPECT_TRUE(import_test_local("trip_data_9.gz", 100, 1.0));
 }
 
 TEST_F(ImportTest, One_bz2_file) {
   EXPECT_TRUE(import_test_local("trip_data_9.bz2", 100, 1.0));
-}
-
-TEST_F(ImportTest, Many_csv_file) {
-  EXPECT_TRUE(import_test_local("trip_data_*.csv", 1000, 1.0));
 }
 
 TEST_F(ImportTest, One_tar_with_many_csv_files) {
@@ -347,6 +521,10 @@ TEST_F(ImportTest, One_7z_with_many_csv_files) {
   EXPECT_TRUE(import_test_local("trip_data.7z", 1000, 1.0));
 }
 
+TEST_F(ImportTest, One_tgz_with_many_csv_files_no_newline) {
+  EXPECT_TRUE(import_test_local("trip_data_some_with_no_newline.tgz", 500, 1.0));
+}
+
 // Sharding tests
 const char* create_table_trips_sharded = R"(
     CREATE TABLE trips (
@@ -356,6 +534,8 @@ const char* create_table_trips_sharded = R"(
       vendor_id               TEXT ENCODING DICT,
       rate_code_id            SMALLINT,
       store_and_fwd_flag      TEXT ENCODING DICT,
+      pickup_date             DATE,
+      drop_date               DATE ENCODING FIXED(16),
       pickup_datetime         TIMESTAMP,
       dropoff_datetime        TIMESTAMP,
       passenger_count         SMALLINT,
@@ -370,12 +550,12 @@ const char* create_table_trips_sharded = R"(
   )";
 class ImportTestSharded : public ::testing::Test {
  protected:
-  virtual void SetUp() {
+  virtual void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
     ASSERT_NO_THROW(run_ddl_statement(create_table_trips_sharded););
   }
 
-  virtual void TearDown() {
+  virtual void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table trips;"););
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geo;"););
   }
@@ -479,12 +659,12 @@ void check_geo_gdal_mpoly_tv_import() {
 
 class GeoImportTest : public ::testing::Test {
  protected:
-  virtual void SetUp() {
+  virtual void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
     ASSERT_NO_THROW(run_ddl_statement(create_table_geo););
   }
 
-  virtual void TearDown() {
+  virtual void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table geospatial;"););
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
   }
@@ -568,11 +748,11 @@ TEST_F(GeoImportTest, Geo_CSV_Local_SRID_Other) {
 
 class GeoGDALImportTest : public ::testing::Test {
  protected:
-  virtual void SetUp() {
+  virtual void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
   }
 
-  virtual void TearDown() {
+  virtual void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geospatial;"););
   }
 };
@@ -700,6 +880,27 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
+  namespace po = boost::program_options;
+
+  po::options_description desc("Options");
+
+  // these two are here to allow passing correctly google testing parameters
+  desc.add_options()("gtest_list_tests", "list all tests");
+  desc.add_options()("gtest_filter", "filters tests, use --help for details");
+
+  desc.add_options()(
+      "test-help",
+      "Print all ExecuteTest specific options (for gtest options use `--help`).");
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::notify(vm);
+
+  if (vm.count("test-help")) {
+    std::cout << "Usage: ExecuteTest" << std::endl << std::endl;
+    std::cout << desc << std::endl;
+    return 0;
+  }
 
   int err{0};
   try {

@@ -20,7 +20,9 @@
 UpdateLogForFragment::UpdateLogForFragment(FragmentInfoType const& fragment_info,
                                            size_t const fragment_index,
                                            const std::shared_ptr<ResultSet>& rs)
-    : fragment_info_(fragment_info), fragment_index_(fragment_index), rs_(rs) {}
+    : fragment_info_(fragment_info), fragment_index_(fragment_index), rs_(rs) {
+  rs->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+}
 
 std::vector<TargetValue> UpdateLogForFragment::getEntryAt(const size_t index) const {
   return rs_->getRowAtNoTranslations(index);
@@ -29,6 +31,10 @@ std::vector<TargetValue> UpdateLogForFragment::getEntryAt(const size_t index) co
 std::vector<TargetValue> UpdateLogForFragment::getTranslatedEntryAt(
     const size_t index) const {
   return rs_->getRowAt(index);
+}
+
+size_t UpdateLogForFragment::count() const {
+  return getEntryCount();
 }
 
 UpdateLogForFragment::FragmentInfoType const& UpdateLogForFragment::getFragmentInfo()
@@ -89,8 +95,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                                        column_cache,
                                        &error_code,
                                        nullptr);
-  execution_dispatch.compile(
-      JoinInfo{JoinImplType::Invalid, {}, {}, ""}, 0, 8, eo, false);
+  execution_dispatch.compile(0, 8, eo, false);
   CHECK_EQ(size_t(1), ra_exe_unit.input_descs.size());
   const auto table_id = ra_exe_unit.input_descs[0].getTableId();
   const auto& outer_fragments = table_info.info.fragments;
@@ -108,7 +113,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
        ++fragment_index) {
     const auto& fragment_results =
         execution_dispatch.getFragmentResults()[fragment_index];
-    const auto count_result_set = boost::get<RowSetPtr>(fragment_results.first);
+    const auto count_result_set = fragment_results.first;
     CHECK(count_result_set);
     const auto count_row = count_result_set->getNextRow(false, false);
     CHECK_EQ(size_t(1), count_row.size());
@@ -127,15 +132,14 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                                                           column_cache,
                                                           &error_code,
                                                           nullptr);
-    current_fragment_execution_dispatch.compile(
-        JoinInfo{JoinImplType::Invalid, {}, {}, ""}, *count_ptr, 8, eo, false);
+    current_fragment_execution_dispatch.compile(*count_ptr, 8, eo, false);
     // We may want to consider in the future allowing this to execute on devices other
     // than CPU
     current_fragment_execution_dispatch.run(
         co.device_type_, 0, eo, {FragmentsPerTable{table_id, {fragment_index}}}, 0, -1);
     const auto& proj_fragment_results =
         current_fragment_execution_dispatch.getFragmentResults()[0];
-    const auto proj_result_set = boost::get<RowSetPtr>(proj_fragment_results.first);
+    const auto proj_result_set = proj_fragment_results.first;
     CHECK(proj_result_set);
     cb({outer_fragments[fragment_index], fragment_index, proj_result_set});
   }

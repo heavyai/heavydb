@@ -21,27 +21,26 @@
 
 class QueryRewriter {
  public:
-  QueryRewriter(const RelAlgExecutionUnit& ra_exe_unit,
-                const std::vector<InputTableInfo>& query_infos,
-                const Executor* executor,
-                const Planner::Plan* plan)
-      : ra_exe_unit_(ra_exe_unit)
-      , query_infos_(query_infos)
-      , executor_(executor)
-      , plan_(plan){};
-  RelAlgExecutionUnit rewrite() const;
+  QueryRewriter(const std::vector<InputTableInfo>& query_infos, const Executor* executor)
+      : query_infos_(query_infos), executor_(executor) {}
+  RelAlgExecutionUnit rewrite(const RelAlgExecutionUnit& ra_exe_unit_in) const;
 
  private:
-  RelAlgExecutionUnit rewriteConstrainedByIn() const;
+  RelAlgExecutionUnit rewriteOverlapsJoin(
+      const RelAlgExecutionUnit& ra_exe_unit_in) const;
+
+  RelAlgExecutionUnit rewriteConstrainedByIn(
+      const RelAlgExecutionUnit& ra_exe_unit_in) const;
+
+  RelAlgExecutionUnit rewriteConstrainedByInImpl(
+      const RelAlgExecutionUnit& ra_exe_unit_in,
+      const std::shared_ptr<Analyzer::CaseExpr>,
+      const Analyzer::InValues*) const;
+
   static std::shared_ptr<Analyzer::CaseExpr> generateCaseForDomainValues(
       const Analyzer::InValues*);
-  RelAlgExecutionUnit rewriteConstrainedByIn(const std::shared_ptr<Analyzer::CaseExpr>,
-                                             const Analyzer::InValues*) const;
 
-  const RelAlgExecutionUnit& ra_exe_unit_;
   const std::vector<InputTableInfo>& query_infos_;
   const Executor* executor_;
-  // TODO(alex): artifacts of the plan based interface below, remove.
-  const Planner::Plan* plan_;
   mutable std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;
 };

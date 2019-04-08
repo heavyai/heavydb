@@ -26,51 +26,15 @@ std::mutex Executor::ExecutionDispatch::reduce_mutex_;
 
 namespace {
 
-size_t get_mapped_frag_id_of_src_table(
-    const std::vector<std::pair<int, size_t>>& join_dimensions,
-    const int src_tab_id,
-    const size_t dst_frag_id) {
-  CHECK(join_dimensions.size());
-  std::unordered_map<int, size_t> tab_id_to_frag_cnt;
-  size_t combination_count{1};
-  for (const auto& table : join_dimensions) {
-    tab_id_to_frag_cnt.insert(table);
-    CHECK(table.second);
-    combination_count *= table.second;
-  }
-
-  auto cnt_it = tab_id_to_frag_cnt.find(src_tab_id);
-  CHECK(cnt_it != tab_id_to_frag_cnt.end());
-  if (size_t(1) == cnt_it->second) {
-    return size_t(0);
-  }
-  size_t crt_frag_id{dst_frag_id};
-  for (auto dim_it = join_dimensions.rbegin();
-       dim_it->first != src_tab_id && dim_it != join_dimensions.rend();
-       ++dim_it) {
-    crt_frag_id %= combination_count;
-    combination_count /= dim_it->second;
-  }
-  combination_count /= cnt_it->second;
-  return crt_frag_id / combination_count;
-}
-
-bool needs_skip_result(const ResultPtr& res) {
-  if (auto rows = boost::get<RowSetPtr>(&res)) {
-    return !*rows || (*rows)->definitelyHasNoRows();
-  } else if (auto tab = boost::get<IterTabPtr>(&res)) {
-    // Keep empty table in result array when no error
-    return !*tab;
-  }
-
-  return false;
+bool needs_skip_result(const ResultSetPtr& res) {
+  return !res || res->definitelyHasNoRows();
 }
 
 }  // namespace
 
 uint32_t Executor::ExecutionDispatch::getFragmentStride(
     const FragmentsList& frag_ids) const {
-  if (!ra_exe_unit_.inner_joins.empty()) {
+  if (!ra_exe_unit_.join_quals.empty()) {
     CHECK_EQ(ra_exe_unit_.input_descs.size(), frag_ids.size());
     const auto table_count = ra_exe_unit_.input_descs.size();
     uint32_t stride = 1;
@@ -80,16 +44,6 @@ uint32_t Executor::ExecutionDispatch::getFragmentStride(
       }
     }
     return stride;
-  }
-  const bool is_hash_join = executor_->plan_state_->join_info_.join_impl_type_ ==
-                                Executor::JoinImplType::HashOneToOne ||
-                            executor_->plan_state_->join_info_.join_impl_type_ ==
-                                Executor::JoinImplType::HashOneToMany;
-  if ((is_hash_join || executor_->isOuterLoopJoin()) &&
-      ra_exe_unit_.input_descs.size() == 2) {
-    CHECK_EQ(frag_ids.size(), size_t(2));
-    CHECK_EQ(ra_exe_unit_.input_descs.back().getTableId(), frag_ids[1].table_id);
-    return static_cast<uint32_t>(frag_ids[1].fragment_ids.size());
   }
   return 1u;
 }
@@ -141,7 +95,7 @@ std::vector<const ColumnarResults*> Executor::ExecutionDispatch::getAllScanColum
 }
 
 const int8_t* Executor::ExecutionDispatch::getColumn(
-    const ResultPtr& buffer,
+    const ResultSetPtr& buffer,
     const int table_id,
     const int frag_id,
     const int col_id,
@@ -165,7 +119,7 @@ const int8_t* Executor::ExecutionDispatch::getColumn(
     result = columnarized_table_cache_[table_id][frag_id].get();
   }
   CHECK_GE(col_id, 0);
-  return getColumn(result, col_id, &cat_.get_dataMgr(), memory_level, device_id);
+  return getColumn(result, col_id, &cat_.getDataMgr(), memory_level, device_id);
 }
 
 namespace {
@@ -243,9 +197,11 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     }
   } catch (const OutOfMemory&) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
-    *error_code_ = ERR_OUT_OF_GPU_MEM;
+    *error_code_ = memory_level == Data_Namespace::GPU_LEVEL ? ERR_OUT_OF_GPU_MEM
+                                                             : ERR_OUT_OF_CPU_MEM;
     return;
   }
+
   const CompilationResult& compilation_result =
       chosen_device_type == ExecutorDeviceType::GPU ? compilation_result_gpu_
                                                     : compilation_result_cpu_;
@@ -253,6 +209,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
         !ra_exe_unit_.scan_limit);
   std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
   const bool do_render = render_info_ && render_info_->isPotentialInSituRender();
+
   try {
     OOM_TRACE_PUSH();
     query_exe_context_owned =
@@ -260,7 +217,6 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
             ? nullptr
             : compilation_result.query_mem_desc.getQueryExecutionContext(
                   ra_exe_unit_,
-                  executor_->plan_state_->init_agg_vals_,
                   executor_,
                   chosen_device_type,
                   chosen_device_id,
@@ -288,7 +244,6 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
         query_contexts_[ctx_idx] =
             compilation_result.query_mem_desc.getQueryExecutionContext(
                 ra_exe_unit_,
-                executor_->plan_state_->init_agg_vals_,
                 executor_,
                 chosen_device_type,
                 chosen_device_id,
@@ -319,7 +274,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
     }
   }
 
-  ResultPtr device_results;
+  ResultSetPtr device_results;
   if (ra_exe_unit_.groupby_exprs.empty()) {
     OOM_TRACE_PUSH();
     err = executor_->executePlanWithoutGroupBy(ra_exe_unit_,
@@ -333,7 +288,7 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                                fetch_result.num_rows,
                                                fetch_result.frag_offsets,
                                                getFragmentStride(frag_list),
-                                               &cat_.get_dataMgr(),
+                                               &cat_.getDataMgr(),
                                                chosen_device_id,
                                                start_rowid,
                                                ra_exe_unit_.input_descs.size(),
@@ -351,24 +306,22 @@ void Executor::ExecutionDispatch::runImpl(const ExecutorDeviceType chosen_device
                                             fetch_result.num_rows,
                                             fetch_result.frag_offsets,
                                             getFragmentStride(frag_list),
-                                            &cat_.get_dataMgr(),
+                                            &cat_.getDataMgr(),
                                             chosen_device_id,
                                             ra_exe_unit_.scan_limit,
                                             start_rowid,
                                             ra_exe_unit_.input_descs.size(),
                                             do_render ? render_info_ : nullptr);
   }
-  if (auto rows_pp = boost::get<RowSetPtr>(&device_results)) {
-    if (auto& rows_ptr = *rows_pp) {
-      std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_to_hold;
-      for (const auto chunk : chunks) {
-        if (need_to_hold_chunk(chunk.get(), ra_exe_unit_)) {
-          chunks_to_hold.push_back(chunk);
-        }
+  if (device_results) {
+    std::list<std::shared_ptr<Chunk_NS::Chunk>> chunks_to_hold;
+    for (const auto chunk : chunks) {
+      if (need_to_hold_chunk(chunk.get(), ra_exe_unit_)) {
+        chunks_to_hold.push_back(chunk);
       }
-      rows_ptr->holdChunks(chunks_to_hold);
-      rows_ptr->holdChunkIterators(chunk_iterators_ptr);
     }
+    device_results->holdChunks(chunks_to_hold);
+    device_results->holdChunkIterators(chunk_iterators_ptr);
   }
   {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
@@ -406,8 +359,7 @@ Executor::ExecutionDispatch::ExecutionDispatch(
   all_fragment_results_.reserve(query_infos_.front().info.fragments.size());
 }
 
-int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
-                                            const size_t max_groups_buffer_entry_guess,
+int8_t Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry_guess,
                                             const int8_t crt_min_byte_width,
                                             const ExecutionOptions& options,
                                             const bool has_cardinality_estimation) {
@@ -425,13 +377,12 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
           ra_exe_unit_,
           co_cpu,
           options,
-          cat_.get_dataMgr().cudaMgr_,
+          cat_.getDataMgr().getCudaMgr(),
           render_info_ && render_info_->isPotentialInSituRender() ? false : true,
           row_set_mem_owner_,
           max_groups_buffer_entry_guess,
           executor_->small_groups_buffer_entry_count_,
           crt_min_byte_width,
-          join_info,
           has_cardinality_estimation,
           columnarized_table_cache_,
           render_info_);
@@ -445,13 +396,12 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      ra_exe_unit_,
                                      co_cpu,
                                      options,
-                                     cat_.get_dataMgr().cudaMgr_,
+                                     cat_.getDataMgr().getCudaMgr(),
                                      false,
                                      row_set_mem_owner_,
                                      max_groups_buffer_entry_guess,
                                      executor_->small_groups_buffer_entry_count_,
                                      crt_min_byte_width,
-                                     join_info,
                                      has_cardinality_estimation,
                                      columnarized_table_cache_,
                                      render_info_);
@@ -477,13 +427,12 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
           ra_exe_unit_,
           co_gpu,
           options,
-          cat_.get_dataMgr().cudaMgr_,
+          cat_.getDataMgr().getCudaMgr(),
           render_info_ && render_info_->isPotentialInSituRender() ? false : true,
           row_set_mem_owner_,
           max_groups_buffer_entry_guess,
           executor_->small_groups_buffer_entry_count_,
           crt_min_byte_width,
-          join_info,
           has_cardinality_estimation,
           columnarized_table_cache_,
           render_info_);
@@ -497,13 +446,12 @@ int8_t Executor::ExecutionDispatch::compile(const Executor::JoinInfo& join_info,
                                      ra_exe_unit_,
                                      co_gpu,
                                      options,
-                                     cat_.get_dataMgr().cudaMgr_,
+                                     cat_.getDataMgr().getCudaMgr(),
                                      false,
                                      row_set_mem_owner_,
                                      max_groups_buffer_entry_guess,
                                      executor_->small_groups_buffer_entry_count_,
                                      crt_min_byte_width,
-                                     join_info,
                                      has_cardinality_estimation,
                                      columnarized_table_cache_,
                                      render_info_);
@@ -591,7 +539,7 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
       col_type.is_array();  // TODO: should it be col_type.is_varlen_array() ?
   {
     ChunkKey chunk_key{
-        cat_.get_currentDB().dbId, fragment.physicalTableId, col_id, fragment.fragmentId};
+        cat_.getCurrentDB().dbId, fragment.physicalTableId, col_id, fragment.fragmentId};
     std::unique_ptr<std::lock_guard<std::mutex>> varlen_chunk_lock;
     if (is_varlen) {
       varlen_chunk_lock.reset(new std::lock_guard<std::mutex>(varlen_chunk_mutex));
@@ -599,7 +547,7 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
     OOM_TRACE_PUSH(+": chunk key [" + showChunk(chunk_key) + "]");
     chunk = Chunk_NS::Chunk::getChunk(
         cd,
-        &cat_.get_dataMgr(),
+        &cat_.getDataMgr(),
         chunk_key,
         memory_level,
         memory_level == Data_Namespace::CPU_LEVEL ? 0 : device_id,
@@ -617,7 +565,7 @@ const int8_t* Executor::ExecutionDispatch::getScanColumn(
       return reinterpret_cast<int8_t*>(&chunk_iter);
     } else {
       CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level);
-      auto& data_mgr = cat_.get_dataMgr();
+      auto& data_mgr = cat_.getDataMgr();
       auto chunk_iter_gpu =
           alloc_gpu_mem(&data_mgr, sizeof(ChunkIter), device_id, nullptr);
       copy_to_gpu(&data_mgr, chunk_iter_gpu, &chunk_iter, sizeof(ChunkIter), device_id);
@@ -679,168 +627,24 @@ const int8_t* Executor::ExecutionDispatch::getAllScanColumnFrags(
       table_column = column_it->second.get();
     }
   }
-  return getColumn(table_column, 0, &cat_.get_dataMgr(), memory_level, device_id);
+  return getColumn(table_column, 0, &cat_.getDataMgr(), memory_level, device_id);
 }
 
 const int8_t* Executor::ExecutionDispatch::getColumn(
     const InputColDescriptor* col_desc,
     const int frag_id,
     const std::map<int, const TableFragments*>& all_tables_fragments,
-    const std::map<size_t, std::vector<uint64_t>>& tab_id_to_frag_offsets,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_id,
     const bool is_rowid) const {
   CHECK(col_desc);
-  auto ind_col_desc = dynamic_cast<const IndirectInputColDescriptor*>(col_desc);
-  if (!ind_col_desc) {
-    const auto table_id = col_desc->getScanDesc().getTableId();
-    return getColumn(get_temporary_table(executor_->temporary_tables_, table_id),
-                     table_id,
-                     frag_id,
-                     col_desc->getColId(),
-                     memory_level,
-                     device_id);
-  }
-
-  const auto ref_table_id = ind_col_desc->getIndirectDesc().getTableId();
-  const auto ref_col_id = ind_col_desc->getRefColIndex();
-  const auto iter_table_id = ind_col_desc->getIterDesc().getTableId();
-  const auto iter_col_id = ind_col_desc->getIterIndex();
-  const auto& iter_buffer =
-      get_temporary_table(executor_->temporary_tables_, iter_table_id);
-  const bool ref_tab_is_result =
-      ind_col_desc->getIndirectDesc().getSourceType() == InputSourceType::RESULT;
-
-  const InputColDescriptor iter_desc(
-      iter_col_id, iter_table_id, ind_col_desc->getIterDesc().getNestLevel());
-  CHECK_LE(size_t(3), ra_exe_unit_.join_dimensions.size());
-  const std::vector<std::pair<int, size_t>> previous_join_dims(
-      ra_exe_unit_.join_dimensions.begin(),
-      std::prev(ra_exe_unit_.join_dimensions.end()));
-  for (const auto& table : previous_join_dims) {
-    if (!table.second) {
-      return nullptr;
-    }
-  }
-  const auto ref_frag_id =
-      get_mapped_frag_id_of_src_table(previous_join_dims, ref_table_id, frag_id);
-  CacheKey sub_key;
-  auto ref_col_id_for_cache = ref_col_id;
-  const ColumnarResults* result{nullptr};
-  {
-    std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex_);
-    if (columnarized_table_cache_.empty() ||
-        !columnarized_table_cache_.count(ref_table_id)) {
-      columnarized_table_cache_.insert(std::make_pair(
-          iter_table_id,
-          std::unordered_map<int, std::shared_ptr<const ColumnarResults>>()));
-    }
-    auto& frag_id_to_iters = columnarized_table_cache_[iter_table_id];
-    if (frag_id_to_iters.empty() || !frag_id_to_iters.count(frag_id)) {
-      frag_id_to_iters.insert(
-          std::make_pair(frag_id,
-                         std::shared_ptr<const ColumnarResults>(columnarize_result(
-                             row_set_mem_owner_, iter_buffer, frag_id))));
-    }
-
-    if (columnarized_ref_table_cache_.empty() ||
-        !columnarized_ref_table_cache_.count(iter_desc)) {
-      columnarized_ref_table_cache_.insert(std::make_pair(
-          iter_desc,
-          std::unordered_map<CacheKey, std::unique_ptr<const ColumnarResults>>()));
-    }
-    auto& frag_id_to_result = columnarized_ref_table_cache_[iter_desc];
-    if (ref_tab_is_result) {
-      CHECK(!is_rowid);
-      const auto& ref_buffer =
-          get_temporary_table(executor_->temporary_tables_, ref_table_id);
-      if (columnarized_table_cache_.empty() ||
-          !columnarized_table_cache_.count(ref_table_id)) {
-        columnarized_table_cache_.insert(std::make_pair(
-            ref_table_id,
-            std::unordered_map<int, std::shared_ptr<const ColumnarResults>>()));
-      }
-      auto& frag_id_to_ref = columnarized_table_cache_[ref_table_id];
-      if (frag_id_to_ref.empty() || !frag_id_to_ref.count(ref_frag_id)) {
-        frag_id_to_ref.insert(
-            std::make_pair(ref_frag_id,
-                           std::shared_ptr<const ColumnarResults>(columnarize_result(
-                               row_set_mem_owner_, ref_buffer, ref_frag_id))));
-      }
-      sub_key = {frag_id};
-      if (frag_id_to_result.empty() || !frag_id_to_result.count(sub_key)) {
-        frag_id_to_result.insert(std::make_pair(
-            sub_key,
-            ColumnarResults::createIndexedResults(row_set_mem_owner_,
-                                                  *frag_id_to_ref[ref_frag_id],
-                                                  *frag_id_to_iters[frag_id],
-                                                  iter_col_id)));
-      }
-    } else {
-      sub_key = {frag_id, ref_col_id};
-      if (frag_id_to_result.empty() || !frag_id_to_result.count(sub_key)) {
-        const auto frag_offsets_it = tab_id_to_frag_offsets.find(ref_table_id);
-        CHECK(frag_offsets_it != tab_id_to_frag_offsets.end());
-        const auto& frag_offsets = frag_offsets_it->second;
-        CHECK_LT(ref_frag_id, frag_offsets.size());
-        // TODO(miyu): Check rowid offseting
-        if (is_rowid) {
-          frag_id_to_result.insert(std::make_pair(
-              sub_key,
-              ColumnarResults::createOffsetResults(row_set_mem_owner_,
-                                                   *frag_id_to_iters[frag_id],
-                                                   iter_col_id,
-                                                   frag_offsets[ref_frag_id])));
-        } else {
-          // Each dispatch has only one fragment of outer table.
-          if (ref_table_id != ra_exe_unit_.join_dimensions[0].first) {
-            auto ref_frags =
-                getAllScanColumnFrags(ref_table_id, ref_col_id, all_tables_fragments);
-            frag_id_to_result.insert(std::make_pair(
-                sub_key,
-                ColumnarResults::createIndexedResults(row_set_mem_owner_,
-                                                      ref_frags,
-                                                      frag_offsets,
-                                                      *frag_id_to_iters[frag_id],
-                                                      iter_col_id)));
-          } else {
-            const auto fragments_it = all_tables_fragments.find(ref_table_id);
-            CHECK(fragments_it != all_tables_fragments.end());
-            const auto fragments = fragments_it->second;
-            const auto& fragment = (*fragments)[ref_frag_id];
-            auto chunk_meta_it = fragment.getChunkMetadataMap().find(ref_col_id);
-            CHECK(chunk_meta_it != fragment.getChunkMetadataMap().end());
-            std::list<std::shared_ptr<Chunk_NS::Chunk>> chunk_holder;
-            std::list<ChunkIter> chunk_iter_holder;
-            auto col_buffer = getScanColumn(ref_table_id,
-                                            ref_frag_id,
-                                            ref_col_id,
-                                            all_tables_fragments,
-                                            chunk_holder,
-                                            chunk_iter_holder,
-                                            Data_Namespace::CPU_LEVEL,
-                                            device_id);
-            ColumnarResults ref_values(row_set_mem_owner_,
-                                       col_buffer,
-                                       fragment.getNumTuples(),
-                                       chunk_meta_it->second.sqlType);
-            frag_id_to_result.insert(std::make_pair(
-                sub_key,
-                ColumnarResults::createIndexedResults(row_set_mem_owner_,
-                                                      ref_values,
-                                                      *frag_id_to_iters[frag_id],
-                                                      iter_col_id)));
-          }
-        }
-      }
-      ref_col_id_for_cache = 0;
-    }
-    CHECK_NE(size_t(0), columnarized_ref_table_cache_.count(iter_desc));
-    result = columnarized_ref_table_cache_[iter_desc][sub_key].get();
-  }
-  CHECK_GE(ref_col_id, 0);
-  return getColumn(
-      result, ref_col_id_for_cache, &cat_.get_dataMgr(), memory_level, device_id);
+  const auto table_id = col_desc->getScanDesc().getTableId();
+  return getColumn(get_temporary_table(executor_->temporary_tables_, table_id),
+                   table_id,
+                   frag_id,
+                   col_desc->getColId(),
+                   memory_level,
+                   device_id);
 }
 
 const int8_t* Executor::ExecutionDispatch::getColumn(
@@ -888,12 +692,6 @@ const QueryMemoryDescriptor& Executor::ExecutionDispatch::getQueryMemoryDescript
              : compilation_result_cpu_.query_mem_desc;
 }
 
-const bool Executor::ExecutionDispatch::outputColumnar() const {
-  return compilation_result_cpu_.native_functions.empty()
-             ? compilation_result_gpu_.output_columnar
-             : false;
-}
-
 const std::vector<uint64_t>& Executor::ExecutionDispatch::getFragOffsets() const {
   std::lock_guard<std::mutex> lock(all_frag_row_offsets_mutex_);
   if (all_frag_row_offsets_.empty()) {
@@ -912,7 +710,7 @@ Executor::ExecutionDispatch::getQueryContexts() const {
   return query_contexts_;
 }
 
-std::vector<std::pair<ResultPtr, std::vector<size_t>>>&
+std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>&
 Executor::ExecutionDispatch::getFragmentResults() {
   return all_fragment_results_;
 }
@@ -937,14 +735,14 @@ std::pair<const int8_t*, size_t> Executor::ExecutionDispatch::getColumnFragment(
   CHECK(!cd || !(cd->isVirtualCol));
   const int8_t* col_buff = nullptr;
   if (cd) {
-    ChunkKey chunk_key{catalog.get_currentDB().dbId,
+    ChunkKey chunk_key{catalog.getCurrentDB().dbId,
                        fragment.physicalTableId,
                        hash_col.get_column_id(),
                        fragment.fragmentId};
     OOM_TRACE_PUSH(+": chunk key [" + showChunk(chunk_key) + "]");
     const auto chunk = Chunk_NS::Chunk::getChunk(
         cd,
-        &catalog.get_dataMgr(),
+        &catalog.getDataMgr(),
         chunk_key,
         effective_mem_lvl,
         effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id,
@@ -978,7 +776,7 @@ std::pair<const int8_t*, size_t> Executor::ExecutionDispatch::getColumnFragment(
     }
     col_buff = getColumn(col_frag,
                          hash_col.get_column_id(),
-                         &catalog.get_dataMgr(),
+                         &catalog.getDataMgr(),
                          effective_mem_lvl,
                          effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id);
   }

@@ -15,6 +15,7 @@
  */
 
 #include "DateTruncate.h"
+#include "../Shared/unreachable.h"
 #include "ExtractFromTime.h"
 
 #ifndef __CUDACC__
@@ -62,18 +63,6 @@ extern "C" NEVER_INLINE DEVICE time_t create_epoch(int64_t year) {
   };
 
   return static_cast<int64_t>(new_time);
-}
-
-DEVICE int64_t get_precision(const int32_t dimen) {
-  int64_t scale_ret = 1;
-  if (dimen == 3) {
-    scale_ret = MILLISECSPERSEC;
-  } else if (dimen == 6) {
-    scale_ret = MICROSECSPERSEC;
-  } else if (dimen == 9) {
-    scale_ret = NANOSECSPERSEC;
-  }
-  return scale_ret;
 }
 
 /*
@@ -324,7 +313,7 @@ extern "C" NEVER_INLINE DEVICE time_t DateTruncate(DatetruncField field, time_t 
 
 extern "C" NEVER_INLINE DEVICE time_t DateTruncateHighPrecision(DatetruncField field,
                                                                 time_t timeval,
-                                                                const int32_t dimen) {
+                                                                const int64_t scale) {
   switch (field) {
     case dtNANOSECOND:
       /* this is the limit of current granularity*/
@@ -332,28 +321,27 @@ extern "C" NEVER_INLINE DEVICE time_t DateTruncateHighPrecision(DatetruncField f
       return timeval;
     case dtMICROSECOND: {
       // precision in microseconds
-      if (dimen == 3 || dimen == 6) {
+      if (scale == MILLISECSPERSEC || scale == MICROSECSPERSEC) {
         return timeval;
-      } else if (dimen == 9) {
+      } else if (scale == NANOSECSPERSEC) {
         return (static_cast<int64_t>(timeval) / MILLISECSPERSEC) * MILLISECSPERSEC;
       }
     }
     case dtMILLISECOND: {
       // precision in millisonds
-      if (dimen == 3) {
+      if (scale == MILLISECSPERSEC) {
         return timeval;
-      } else if (dimen == 6) {
+      } else if (scale == MICROSECSPERSEC) {
         return (static_cast<int64_t>(timeval) / MILLISECSPERSEC) * MILLISECSPERSEC;
-      } else if (dimen == 9) {
+      } else if (scale == NANOSECSPERSEC) {
         return (static_cast<int64_t>(timeval) / MICROSECSPERSEC) * MICROSECSPERSEC;
       }
     }
     default:
       break;
   }
-  const int64_t scale_ret = get_precision(dimen);
-  const time_t stimeval = static_cast<int64_t>(timeval) / scale_ret;
-  return DateTruncate(field, stimeval) * scale_ret;
+  const time_t stimeval = static_cast<int64_t>(timeval) / scale;
+  return DateTruncate(field, stimeval) * scale;
 }
 
 extern "C" DEVICE time_t DateTruncateNullable(DatetruncField field,
@@ -367,86 +355,72 @@ extern "C" DEVICE time_t DateTruncateNullable(DatetruncField field,
 
 extern "C" DEVICE time_t DateTruncateHighPrecisionNullable(DatetruncField field,
                                                            time_t timeval,
-                                                           const int32_t dimen,
+                                                           const int64_t scale,
                                                            const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
-  return DateTruncateHighPrecision(field, timeval, dimen);
+  return DateTruncateHighPrecision(field, timeval, scale);
+}
+
+extern "C" DEVICE int64_t
+DateTruncateAlterPrecisionScaleUpNullable(DatetruncField field,
+                                          time_t timeval,
+                                          const int64_t scale,
+                                          const int64_t null_val) {
+  if (timeval == null_val) {
+    return null_val;
+  }
+  return DateTruncateAlterPrecisionScaleUp(field, timeval, scale);
+}
+
+extern "C" DEVICE int64_t
+DateTruncateAlterPrecisionScaleDownNullable(DatetruncField field,
+                                            time_t timeval,
+                                            const int64_t scale,
+                                            const int64_t null_val) {
+  if (timeval == null_val) {
+    return null_val;
+  }
+  return DateTruncateAlterPrecisionScaleDown(field, timeval, scale);
 }
 
 extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
                                    time_t startdate,
-                                   time_t enddate,
-                                   const int32_t stdimen,
-                                   const int32_t endimen) {
-  int64_t res = 0;
-  int32_t prec = endimen - stdimen;
-  int32_t resdimen = endimen > stdimen ? endimen : stdimen;
-  if (prec == 0) {
-    res = enddate - startdate;
-  } else if (prec == 3 || prec == -3) {
-    res = (prec > 0) ? (enddate - (startdate * MILLISECSPERSEC))
-                     : ((enddate * MILLISECSPERSEC) - startdate);
-  } else if (prec == 6 || prec == -6) {
-    res = (prec > 0) ? (enddate - (startdate * MICROSECSPERSEC))
-                     : ((enddate * MICROSECSPERSEC) - startdate);
-  } else if (prec == 9 || prec == -9) {
-    res = (prec > 0) ? (enddate - (startdate * NANOSECSPERSEC))
-                     : ((enddate * NANOSECSPERSEC) - startdate);
-  }
-  const int64_t scale = resdimen == 0 ? 1 : get_precision(resdimen);
+                                   time_t enddate) {
+  int64_t res = enddate - startdate;
   switch (datepart) {
     case dtNANOSECOND:
-      // limit of current granularity
-      return res;
-    case dtMICROSECOND: {
-      if (resdimen == 9) {
-        return res / MILLISECSPERSEC;
-      } else {
-        { return res; }
-      }
-    }
-    case dtMILLISECOND: {
-      if (resdimen == 9) {
-        return res / MICROSECSPERSEC;
-      } else if (resdimen == 6) {
-        return res / MILLISECSPERSEC;
-      } else {
-        { return res; }
-      }
-    }
+      return res * NANOSECSPERSEC;
+    case dtMICROSECOND:
+      return res * MICROSECSPERSEC;
+    case dtMILLISECOND:
+      return res * MILLISECSPERSEC;
     case dtSECOND:
-      return res / scale;
+      return res;
     case dtMINUTE:
-      return res / (SECSPERMIN * scale);
+      return res / SECSPERMIN;
     case dtHOUR:
-      return res / (SECSPERHOUR * scale);
+      return res / SECSPERHOUR;
     case dtQUARTERDAY:
-      return res / (SECSPERQUARTERDAY * scale);
+      return res / SECSPERQUARTERDAY;
     case dtDAY:
-      return res / (SECSPERDAY * scale);
+      return res / SECSPERDAY;
     case dtWEEK:
-      return res / (SECSPERDAY * DAYSPERWEEK * scale);
+      return res / (SECSPERDAY * DAYSPERWEEK);
     default:
       break;
   }
 
-  const time_t stdate =
-      stdimen == 0 ? startdate : static_cast<int64_t>(startdate) / get_precision(stdimen);
-  const time_t endate =
-      endimen == 0 ? enddate : static_cast<int64_t>(enddate) / get_precision(endimen);
   auto future_date = (res > 0);
-  auto end = future_date ? endate : stdate;
-  auto start = future_date ? stdate : endate;
+  auto end = future_date ? enddate : startdate;
+  auto start = future_date ? startdate : enddate;
   res = 0;
   time_t crt = end;
   while (crt > start) {
     const time_t dt = DateTruncate(datepart, crt);
     if (dt <= start) {
-      {
-        break;
-      }
+      break;
     }
     ++res;
     crt = dt - 1;
@@ -454,14 +428,67 @@ extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
   return future_date ? res : -res;
 }
 
+extern "C" DEVICE int64_t DateDiffHighPrecision(const DatetruncField datepart,
+                                                time_t startdate,
+                                                time_t enddate,
+                                                const int32_t adj_dimen,
+                                                const int64_t adj_scale,
+                                                const int64_t sml_scale,
+                                                const int64_t scale) {
+  /* TODO(wamsi): When adj_dimen is 1 i.e. both precisions are same,
+     this code is really not required. We cam direcly do enddate-startdate here.
+     Need to address this in refactoring focussed subsequent PR.*/
+  int64_t res = (adj_dimen > 0) ? (enddate - (startdate * adj_scale))
+                                : ((enddate * adj_scale) - startdate);
+  switch (datepart) {
+    case dtNANOSECOND:
+      // limit of current granularity
+      return res;
+    case dtMICROSECOND: {
+      if (scale == NANOSECSPERSEC) {
+        return res / MILLISECSPERSEC;
+      } else {
+        { return res; }
+      }
+    }
+    case dtMILLISECOND: {
+      if (scale == NANOSECSPERSEC) {
+        return res / MICROSECSPERSEC;
+      } else if (scale == MICROSECSPERSEC) {
+        return res / MILLISECSPERSEC;
+      } else {
+        { return res; }
+      }
+    }
+    default:
+      break;
+  }
+  startdate /= adj_dimen > 0 ? sml_scale : scale;
+  enddate /= adj_dimen < 0 ? sml_scale : scale;
+  return DateDiff(datepart, startdate, enddate);
+}
+
 extern "C" DEVICE int64_t DateDiffNullable(const DatetruncField datepart,
                                            time_t startdate,
                                            time_t enddate,
-                                           const int32_t stdimen,
-                                           const int32_t endimen,
                                            const int64_t null_val) {
   if (startdate == null_val || enddate == null_val) {
     return null_val;
   }
-  return DateDiff(datepart, startdate, enddate, stdimen, endimen);
+  return DateDiff(datepart, startdate, enddate);
+}
+
+extern "C" DEVICE int64_t DateDiffHighPrecisionNullable(const DatetruncField datepart,
+                                                        time_t startdate,
+                                                        time_t enddate,
+                                                        const int32_t adj_dimen,
+                                                        const int64_t adj_scale,
+                                                        const int64_t sml_scale,
+                                                        const int64_t scale,
+                                                        const int64_t null_val) {
+  if (startdate == null_val || enddate == null_val) {
+    return null_val;
+  }
+  return DateDiffHighPrecision(
+      datepart, startdate, enddate, adj_dimen, adj_scale, sml_scale, scale);
 }

@@ -20,6 +20,8 @@
 #include <stddef.h>
 #include "../Shared/sqltypes.h"
 
+#include <glog/logging.h>
+
 struct ChunkStats {
   Datum min;
   Datum max;
@@ -96,6 +98,14 @@ struct ChunkMetadata {
     chunkStats.has_nulls = has_nulls;
     chunkStats.min = min;
     chunkStats.max = max;
+  }
+
+  bool operator==(const ChunkMetadata& that) const {
+    return sqlType == that.sqlType && numBytes == that.numBytes &&
+           numElements == that.numElements &&
+           DatumEqual(chunkStats.min, that.chunkStats.min, sqlType) &&
+           DatumEqual(chunkStats.max, that.chunkStats.max, sqlType) &&
+           chunkStats.has_nulls == that.chunkStats.has_nulls;
   }
 };
 

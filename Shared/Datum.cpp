@@ -26,10 +26,12 @@
 #include <cassert>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <stdexcept>
 #include <string>
 #include "StringTransform.h"
 
+#include "DateConversions.h"
 #include "TimeGM.h"
 #include "sqltypes.h"
 
@@ -51,16 +53,17 @@ int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
   int64_t result;
   result = std::abs(std::stoll(before_dot));
   int64_t fraction = 0;
+  const size_t before_dot_digits = before_dot.length() - (is_negative ? 1 : 0);
   if (!after_dot.empty()) {
     fraction = std::stoll(after_dot);
   }
   if (ti.get_dimension() == 0) {
     // set the type info based on the literal string
     ti.set_scale(after_dot.length());
-    ti.set_dimension(before_dot.length() + ti.get_scale());
+    ti.set_dimension(before_dot_digits + ti.get_scale());
     ti.set_notnull(false);
   } else {
-    if (before_dot.length() + ti.get_scale() > static_cast<size_t>(ti.get_dimension())) {
+    if (before_dot_digits + ti.get_scale() > static_cast<size_t>(ti.get_dimension())) {
       throw std::runtime_error("numeric value " + s +
                                " exceeds the maximum precision of " +
                                std::to_string(ti.get_dimension()));
@@ -212,24 +215,31 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
       // handle fractional seconds
       if (ti.get_dimension() > 0) {  // check for precision
-        time_t fsc = 0;
+        time_t fsc;
         if (*p == '.') {
           p++;
-          std::string fstr(p);
-          fsc = fstr.length() == static_cast<uint32_t>(ti.get_dimension())
-                    ? std::stol(fstr)
-                    : TimeGM::instance().parse_fractional_seconds(fstr, ti);
-          d.timeval = TimeGM::instance().my_timegm(&tm_struct, fsc, ti);
-          break;
+          uint64_t frac_num = 0;
+          int ntotal = 0;
+          sscanf(p, "%lu%n", &frac_num, &ntotal);
+          fsc = TimeGM::instance().parse_fractional_seconds(frac_num, ntotal, ti);
         } else if (*p == '\0') {
-          d.timeval = TimeGM::instance().my_timegm(&tm_struct, fsc, ti);
-          break;
+          fsc = 0;
         } else {  // check for misleading/unclear syntax
           throw std::runtime_error("Unclear syntax for leading fractional seconds: " +
                                    std::string(p));
         }
+        d.timeval = TimeGM::instance().my_timegm(&tm_struct, fsc, ti);
       } else {  // default timestamp(0) precision
         d.timeval = TimeGM::instance().my_timegm(&tm_struct);
+        if (*p == '.') {
+          p++;
+        }
+      }
+      if (*p != '\0') {
+        uint32_t hour = 0;
+        sscanf(tp, "%u", &hour);
+        d.timeval = TimeGM::instance().parse_meridians(d.timeval, p, hour, ti);
+        break;
       }
       break;
     }
@@ -251,7 +261,9 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       }
       if (!tp) {
         try {
-          d.timeval = std::stoll(s);
+          d.timeval = ti.is_date_in_days()
+                          ? DateConverters::get_epoch_days_from_seconds(std::stoll(s))
+                          : std::stoll(s);
           break;
         } catch (const std::invalid_argument& ia) {
           throw std::runtime_error("Invalid date string " + s);
@@ -260,7 +272,8 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       tm_struct.tm_sec = tm_struct.tm_min = tm_struct.tm_hour = 0;
       tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff =
           0;
-      d.timeval = TimeGM::instance().my_timegm(&tm_struct);
+      d.timeval = ti.is_date_in_days() ? TimeGM::instance().my_timegm_days(&tm_struct)
+                                       : TimeGM::instance().my_timegm(&tm_struct);
       break;
     }
     case kPOINT:
@@ -272,6 +285,43 @@ Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
       throw std::runtime_error("Internal error: invalid type in StringToDatum.");
   }
   return d;
+}
+
+bool DatumEqual(const Datum a, const Datum b, const SQLTypeInfo& ti) {
+  switch (ti.get_type()) {
+    case kBOOLEAN:
+      return a.boolval == b.boolval;
+    case kBIGINT:
+    case kNUMERIC:
+    case kDECIMAL:
+      return a.bigintval == b.bigintval;
+    case kINT:
+      return a.intval == b.intval;
+    case kSMALLINT:
+      return a.smallintval == b.smallintval;
+    case kTINYINT:
+      return a.tinyintval == b.tinyintval;
+    case kFLOAT:
+      return a.floatval == b.floatval;
+    case kDOUBLE:
+      return a.doubleval == b.doubleval;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
+      return a.timeval == b.timeval;
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      if (ti.get_compression() == kENCODING_DICT) {
+        return a.intval == b.intval;
+      }
+      return *a.stringval == *b.stringval;
+    default:
+      return false;
+  }
+  return false;
 }
 
 /*
@@ -331,7 +381,8 @@ std::string DatumToString(Datum d, const SQLTypeInfo& ti) {
     }
     case kDATE: {
       std::tm tm_struct;
-      gmtime_r(&d.timeval, &tm_struct);
+      time_t ntimeval = ti.is_date_in_days() ? d.timeval * 86400 : d.timeval;
+      gmtime_r(&ntimeval, &tm_struct);
       char buf[11];
       strftime(buf, 11, "%F", &tm_struct);
       return std::string(buf);

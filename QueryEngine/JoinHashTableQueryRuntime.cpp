@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "../Shared/geo_compression.h"
 #include "CompareKeysInl.h"
 #include "MurmurHash.h"
 
@@ -86,6 +87,46 @@ baseline_hash_join_idx_64(const int8_t* hash_buff,
                           const size_t key_bytes,
                           const size_t entry_count) {
   return baseline_hash_join_idx_impl<int64_t>(hash_buff, key, key_bytes, entry_count);
+}
+
+template <typename T>
+FORCE_INLINE DEVICE int64_t get_bucket_key_for_value_impl(const T value,
+                                                          const double bucket_size) {
+  return static_cast<int64_t>(floor(static_cast<double>(value) * bucket_size));
+}
+
+extern "C" NEVER_INLINE DEVICE int64_t
+get_bucket_key_for_range_double(const int8_t* range_bytes,
+                                const size_t range_component_index,
+                                const double bucket_size) {
+  const auto range = reinterpret_cast<const double*>(range_bytes);
+  return get_bucket_key_for_value_impl(range[range_component_index], bucket_size);
+}
+
+FORCE_INLINE DEVICE int64_t
+get_bucket_key_for_range_compressed_impl(const int8_t* range,
+                                         const size_t range_component_index,
+                                         const double bucket_size) {
+  const auto range_ptr = reinterpret_cast<const int32_t*>(range);
+  if (range_component_index % 2 == 0) {
+    return get_bucket_key_for_value_impl(
+        Geo_namespace::decompress_longitude_coord_geoint32(
+            range_ptr[range_component_index]),
+        bucket_size);
+  } else {
+    return get_bucket_key_for_value_impl(
+        Geo_namespace::decompress_lattitude_coord_geoint32(
+            range_ptr[range_component_index]),
+        bucket_size);
+  }
+}
+
+extern "C" NEVER_INLINE DEVICE int64_t
+get_bucket_key_for_range_compressed(const int8_t* range,
+                                    const size_t range_component_index,
+                                    const double bucket_size) {
+  return get_bucket_key_for_range_compressed_impl(
+      range, range_component_index, bucket_size);
 }
 
 template <typename T>

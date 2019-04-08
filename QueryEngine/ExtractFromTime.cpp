@@ -257,18 +257,6 @@ DEVICE tm* gmtime_r_newlib(const time_t* tim_p, tm* res) {
   return (res);
 }
 
-DEVICE int64_t get_scale(const int32_t dimen) {
-  int64_t scale_ret = 1;
-  if (dimen == 3) {
-    scale_ret = MILLISECSPERSEC;
-  } else if (dimen == 6) {
-    scale_ret = MICROSECSPERSEC;
-  } else if (dimen == 9) {
-    scale_ret = NANOSECSPERSEC;
-  }
-  return scale_ret;
-}
-
 /*
  * @brief support the SQL EXTRACT function
  */
@@ -358,28 +346,28 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field,
 
 extern "C" DEVICE int64_t ExtractFromTimeHighPrecision(ExtractField field,
                                                        time_t timeval,
-                                                       int32_t dimen) {
+                                                       int64_t scale) {
   switch (field) {
     case kMILLISECOND: {
       time_t mtime = timeval;
-      if (dimen == 6) {
+      if (scale == MICROSECSPERSEC) {
         mtime = static_cast<int64_t>(timeval) / MILLISECSPERSEC;
-      } else if (dimen == 9) {
+      } else if (scale == NANOSECSPERSEC) {
         mtime = static_cast<int64_t>(timeval) / MICROSECSPERSEC;
       }
       return extract_millisecond(&mtime);
     }
     case kMICROSECOND: {
       time_t mtime = timeval;
-      if (dimen == 9) {
+      if (scale == NANOSECSPERSEC) {
         mtime = static_cast<int64_t>(timeval) / MILLISECSPERSEC;
-      } else if (dimen == 3) {
+      } else if (scale == MILLISECSPERSEC) {
         return 0;
       }
       return extract_microsecond(&mtime);
     }
     case kNANOSECOND: {
-      if (dimen == 3 || dimen == 6) {
+      if (scale == MILLISECSPERSEC || scale == MICROSECSPERSEC) {
         return 0;
       } else {
         return extract_nanosecond(&timeval);
@@ -388,7 +376,7 @@ extern "C" DEVICE int64_t ExtractFromTimeHighPrecision(ExtractField field,
     default:
       break;
   }
-  const time_t stimeval = static_cast<int64_t>(timeval) / get_scale(dimen);
+  const time_t stimeval = static_cast<int64_t>(timeval) / scale;
   return ExtractFromTime(field, stimeval);
 }
 
@@ -403,10 +391,10 @@ extern "C" DEVICE int64_t ExtractFromTimeNullable(ExtractField field,
 
 extern "C" DEVICE int64_t ExtractFromTimeHighPrecisionNullable(ExtractField field,
                                                                time_t timeval,
-                                                               int32_t dimen,
+                                                               int64_t scale,
                                                                const int64_t null_val) {
   if (timeval == null_val) {
     return null_val;
   }
-  return ExtractFromTimeHighPrecision(field, timeval, dimen);
+  return ExtractFromTimeHighPrecision(field, timeval, scale);
 }

@@ -1,5 +1,13 @@
-cmake_minimum_required(VERSION 2.8)
-if("${CMAKE_VERSION}" VERSION_GREATER_EQUAL 3.12.0)
+# fixme: this should be 3.3, but that breaks static ncurses
+cmake_minimum_required(VERSION 3.2)
+
+# force `Release` build type if left unspecified
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+  set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
+  set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
+endif()
+
+if("${CMAKE_VERSION}" VERSION_GREATER 3.11.999)
   cmake_policy(SET CMP0074 NEW)
 endif()
 
@@ -16,7 +24,7 @@ if(ENABLE_IWYU)
   endif()
 endif()
 
-project(mapd)
+project(omnisci)
 
 if(NOT EXISTS "${CMAKE_SOURCE_DIR}/Rendering")
   set(MAPD_EDITION "OS")
@@ -29,12 +37,12 @@ add_definitions("-DMAPD_EDITION_${MAPD_EDITION}")
 string(TOLOWER "${MAPD_EDITION}" MAPD_EDITION_LOWER)
 
 set(MAPD_VERSION_MAJOR "4")
-set(MAPD_VERSION_MINOR "2")
+set(MAPD_VERSION_MINOR "5")
 set(MAPD_VERSION_PATCH "0")
-set(MAPD_VERSION_EXTRA "dev")
+set(MAPD_VERSION_EXTRA "")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
 set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v2-137-release-prod.zip")
-set(MAPD_DOCS_URL "http://docs.builds.mapd.com/master/docs-master.zip")
+set(MAPD_DOCS_URL "http://docs.builds.mapd.com/v4.5.0/docs-v4.5.0.zip")
 string(TIMESTAMP MAPD_BUILD_DATE "%Y%m%d")
 
 if($ENV{BUILD_NUMBER})
@@ -56,7 +64,8 @@ option(PREFER_STATIC_LIBS "Prefer linking against static libraries" OFF)
 if(PREFER_STATIC_LIBS)
   set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
   set(Boost_USE_STATIC_LIBS ON)
-
+  set(OPENSSL_USE_STATIC_LIBS ON)
+  set(Thrift_USE_STATIC_LIBS ON)
   if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++")
   endif()
@@ -67,6 +76,11 @@ endif()
 option(ENABLE_JAVA_REMOTE_DEBUG "Enable Java Remote Debug" OFF )
 if(ENABLE_JAVA_REMOTE_DEBUG)
   add_definitions("-DENABLE_JAVA_REMOTE_DEBUG")
+endif()
+
+option(ENABLE_VARLEN_UPDATE "Enable varlen updates" OFF )
+if( ENABLE_VARLEN_UPDATE )
+  add_definitions("-DENABLE_VARLEN_UPDATE")
 endif()
 
 option(ENABLE_CALCITE_UPDATE_PATH "Enable Calcite Update Path" ON)
@@ -95,6 +109,8 @@ else()
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-cpu")
 endif()
 
+option(ENABLE_CUDA_KERNEL_DEBUG "Enable debugging symbols for CUDA device Kernels" OFF)
+
 option(ENABLE_JIT_DEBUG "Enable debugging symbols for the JIT" OFF)
 if (ENABLE_JIT_DEBUG)
   add_definitions("-DWITH_JIT_DEBUG")
@@ -106,6 +122,13 @@ if(XCODE)
   endif()
   add_definitions("-DXCODE")
 endif()
+
+# fixme: hack works for Homebrew, might not work for Conda
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl/")
+endif()
+find_package(OpenSSL REQUIRED)
+include_directories(${OPENSSL_INCLUDE_DIR})
 
 find_package(Thrift REQUIRED)
 include_directories(${Thrift_INCLUDE_DIRS})
@@ -198,6 +221,19 @@ if(ENABLE_ASAN OR ENABLE_TSAN)
   set(ENABLE_STANDALONE_CALCITE ON)
 endif()
 
+# Code coverage
+option(ENABLE_CODE_COVERAGE "Enable compile time code coverage" OFF)
+if(ENABLE_CODE_COVERAGE)
+  if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    set(COVERAGE_FLAGS "-fprofile-instr-generate -fcoverage-mapping")
+  else()
+    message(FATAL_ERROR "Code coverage currently only supported with Clang compiler")
+  endif()
+  set(CMAKE_CXX_OUTPUT_EXTENSION_REPLACE ON)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COVERAGE_FLAGS}")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${COVERAGE_FLAGS}")
+endif()
+
 option(ENABLE_DECODERS_BOUNDS_CHECKING "Enable bounds checking for column decoding" OFF)
 
 if(ENABLE_STANDALONE_CALCITE)
@@ -285,6 +321,22 @@ endif()
 include_directories(ThirdParty/bcrypt)
 add_subdirectory(ThirdParty/bcrypt)
 
+# PicoSHA2
+include_directories(ThirdParty/PicoSHA2)
+
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+# opensaml
+  option(ENABLE_SAML "Enable SAML support" ON)
+  if(ENABLE_SAML)
+    find_package(OpenSaml)
+    if(NOT OpenSaml_FOUND)
+      set(ENABLE_SAML OFF CACHE BOOL "Enable SAML support" FORCE)
+    else()
+      add_definitions("-DHAVE_SAML")
+    endif()
+  endif()
+endif()
+
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     OUTPUT
@@ -340,19 +392,9 @@ else()
   set(ENABLE_RENDERING OFF CACHE BOOL "Build backend renderer" FORCE)
 endif()
 
-option(ENABLE_JOIN_EXEC "Enable RA vm to execute join node" ON)
-if(ENABLE_JOIN_EXEC)
-  add_definitions("-DENABLE_JOIN_EXEC")
-endif()
-option(ENABLE_ONE_TO_MANY_HASH_JOIN "Enable hash join on a column w/ duplicate values" ON)
-if(ENABLE_ONE_TO_MANY_HASH_JOIN)
-  add_definitions("-DENABLE_ONE_TO_MANY_HASH_JOIN")
-endif()
-
-
-option(ENABLE_COMPACTION "Enable Compaction and Overflow/Underflow Detection" OFF)
-if(ENABLE_COMPACTION)
-  add_definitions("-DENABLE_COMPACTION")
+option(DISABLE_HIGH_PRECISION_TIMESTAMP "Disable parser support for creating milli, micro, and nanosecond timestamp columns" ON)
+if(DISABLE_HIGH_PRECISION_TIMESTAMP)
+  add_definitions("-DDISABLE_HIGH_PRECISION_TIMESTAMP")
 endif()
 
 option(ENABLE_PROFILER "Enable google perftools" OFF)
@@ -426,10 +468,10 @@ endif()
 set(initdb_source_files initdb.cpp)
 add_executable(initdb ${initdb_source_files})
 
-set(mapd_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h ${CMAKE_SOURCE_DIR}/Shared/ConfigResolve.h)
+set(omnisci_server_source_files MapDServer.cpp ${CMAKE_BINARY_DIR}/MapDRelease.h ${CMAKE_SOURCE_DIR}/Shared/ConfigResolve.h)
 
-add_executable(mapd_server ${mapd_server_source_files})
-set_target_properties(mapd_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
+add_executable(omnisci_server ${omnisci_server_source_files})
+set_target_properties(omnisci_server PROPERTIES COMPILE_DEFINITIONS "${TIME_LIMITED_DEFINITIONS}")
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
@@ -472,9 +514,9 @@ add_custom_target(rerun_cmake ALL
   COMMAND cmake .
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
   )
-add_dependencies(mapd_server rerun_cmake)
+add_dependencies(omnisci_server rerun_cmake)
 
-target_link_libraries(mapd_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
+target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
 
 target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
 
@@ -489,6 +531,20 @@ macro(set_dpkg_arch arch_in arch_out)
     set(${arch_out} "${arch_in}")
   endif()
 endmacro()
+
+# clang-tidy
+find_program(JQ_EXECUTABLE NAMES jq)
+if (NOT ${JQ_EXECUTABLE} STREQUAL "JQ_EXECUTABLE-NOTFOUND")
+  file(WRITE ${CMAKE_BINARY_DIR}/jq.filter "map(select(.file | test(\".*/(build|ThirdParty)/.*\") | not))")
+  add_custom_target(clang-tidy
+    COMMAND mkdir -p clang-tidy
+    COMMAND ${JQ_EXECUTABLE} -f jq.filter ${CMAKE_BINARY_DIR}/compile_commands.json > clang-tidy/compile_commands.json
+    COMMAND cd clang-tidy && ${CMAKE_SOURCE_DIR}/ThirdParty/clang/run-clang-tidy.py -quiet -format -fix 2> /dev/null
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+else()
+  message(STATUS "jq not found, disabling clang-tidy target")
+endif()
 
 # doxygen
 find_package(Doxygen)
@@ -511,11 +567,17 @@ if(DOXYGEN_FOUND)
 endif(DOXYGEN_FOUND)
 
 # Packaging
-set(CPACK_PACKAGE_VENDOR "MapD Technologies, Inc.")
-set(CPACK_PACKAGE_CONTACT "support@mapd.com")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "MapD Core Database")
+
+string(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWER)
+if(NOT "${CMAKE_BUILD_TYPE_LOWER}" STREQUAL "debug" AND NOT "${CMAKE_BUILD_TYPE_LOWER}" STREQUAL "relwithdebinfo")
+  set(CPACK_STRIP_FILES ON)
+else()
+  set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-debug")
+endif()
+set(CPACK_PACKAGE_VENDOR "OmniSci, Inc.")
+set(CPACK_PACKAGE_CONTACT "support@omnisci.com")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "OmniSci Core Database")
 set(CPACK_PROJECT_CONFIG_FILE ${CMAKE_SOURCE_DIR}/CMakePackaging.txt)
-set(CPACK_STRIP_FILES ON)
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "default-jre-headless | openjdk-8-jre-headless | java8-runtime-headless, bsdmainutils, curl | wget")
 set(CPACK_RPM_PACKAGE_REQUIRES "java-headless, util-linux, curl")
 set(CPACK_RPM_PACKAGE_AUTOREQ OFF)
@@ -533,7 +595,7 @@ set_dpkg_arch(${CMAKE_SYSTEM_PROCESSOR} CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
 install(DIRECTORY ThirdParty/licenses DESTINATION "ThirdParty/")
 
 # Frontend
-option(MAPD_IMMERSE_DOWNLOAD "Download MapD Immerse for packaging" OFF)
+option(MAPD_IMMERSE_DOWNLOAD "Download OmniSci Immerse for packaging" OFF)
 set(MAPD_IMMERSE_URL ${MAPD_IMMERSE_URL} CACHE STRING "URL to bundled frontend")
 if(MAPD_IMMERSE_DOWNLOAD)
   include(ExternalProject)
@@ -558,20 +620,20 @@ if(NOT GO_EXECUTABLE)
 endif()
 file(GLOB_RECURSE GOLANG_SOURCES RELATIVE ${CMAKE_SOURCE_DIR} ThirdParty/go/src/mapd/vendor/**/*.go)
 add_custom_command(
-  OUTPUT ${CMAKE_BINARY_DIR}/bin/mapd_web_server
+  OUTPUT ${CMAKE_BINARY_DIR}/bin/omnisci_web_server
   COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/ThirdParty/go/src/mapd/vendor/ ${CMAKE_BINARY_DIR}/go/src/
-  COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} build -ldflags "-X main.version=${CPACK_PACKAGE_VERSION}" -o ${CMAKE_BINARY_DIR}/bin/mapd_web_server ${CMAKE_SOURCE_DIR}/MapDWebServer.go
-  DEPENDS MapDWebServer.go ${GOLANG_SOURCES}
+  COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} build -ldflags "-X main.version=${CPACK_PACKAGE_VERSION}" -o ${CMAKE_BINARY_DIR}/bin/omnisci_web_server ${CMAKE_SOURCE_DIR}/OmniSciWebServer.go
+  DEPENDS OmniSciWebServer.go ${GOLANG_SOURCES}
   )
-add_custom_target(mapd_web_server ALL DEPENDS ${CMAKE_BINARY_DIR}/bin/mapd_web_server)
-install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/mapd_web_server DESTINATION bin)
-list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/bin/mapd_web_server)
+add_custom_target(omnisci_web_server ALL DEPENDS ${CMAKE_BINARY_DIR}/bin/omnisci_web_server)
+install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/omnisci_web_server DESTINATION bin)
+list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/bin/omnisci_web_server)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/go)
 
 add_subdirectory(ThirdParty/generate_cert)
 
 # docs
-option(MAPD_DOCS_DOWNLOAD "Download MapD documentation for packaging" OFF)
+option(MAPD_DOCS_DOWNLOAD "Download OmniSci documentation for packaging" OFF)
 set(MAPD_DOCS_URL ${MAPD_DOCS_URL} CACHE STRING "URL to bundled docs")
 if(MAPD_DOCS_DOWNLOAD)
   include(ExternalProject)
@@ -593,20 +655,13 @@ endif()
 # systemd
 if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-    install(FILES systemd/mapd_sd_server.service.in systemd/mapd_sd_server@.service.in DESTINATION systemd)
-    install(FILES systemd/mapd-sds.conf.in DESTINATION systemd)
+    install(FILES systemd/omnisci_sd_server.service.in systemd/omnisci_sd_server@.service.in DESTINATION systemd)
+    install(FILES systemd/omnisci-sds.conf.in DESTINATION systemd)
   endif()
-  install(FILES systemd/mapd_web_server.service.in systemd/mapd_web_server@.service.in DESTINATION systemd)
-  install(FILES systemd/mapd.conf.in DESTINATION systemd)
-  install(PROGRAMS systemd/install_mapd_systemd.sh DESTINATION systemd)
-
-  if(NOT ENABLE_RENDERING OR "${RENDERER_CONTEXT_TYPE}" STREQUAL "EGL")
-    install(FILES systemd/mapd_server.service.in systemd/mapd_server@.service.in DESTINATION systemd)
-  else()
-    install(FILES systemd/mapd_server_render.service.in RENAME mapd_server.service.in DESTINATION systemd)
-    install(FILES systemd/mapd_server_render@.service.in RENAME mapd_server@.service.in DESTINATION systemd)
-    install(FILES systemd/mapd_xorg.service DESTINATION systemd)
-  endif()
+  install(FILES systemd/omnisci_server.service.in systemd/omnisci_server@.service.in DESTINATION systemd)
+  install(FILES systemd/omnisci_web_server.service.in systemd/omnisci_web_server@.service.in DESTINATION systemd)
+  install(FILES systemd/omnisci.conf.in DESTINATION systemd)
+  install(PROGRAMS systemd/install_omnisci_systemd.sh DESTINATION systemd)
 endif()
 
 add_custom_target(clean-all
@@ -621,20 +676,21 @@ endif()
 file(GLOB_RECURSE JAVA_POM RELATIVE ${CMAKE_SOURCE_DIR} java/**/pom.xml)
 file(GLOB_RECURSE JAVA_SOURCES RELATIVE ${CMAKE_SOURCE_DIR} java/**/*.java)
 
-set(MAPD_JAR_RELEASE_VERSION "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}")
+set(OMNISCI_JAR_RELEASE_VERSION "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}")
 if("${MAPD_VERSION_EXTRA}" STREQUAL "dev")
-  set (MAPD_JAR_RELEASE_VERSION "${MAPD_JAR_RELEASE_VERSION}-SNAPSHOT")
+  set (OMNISCI_JAR_RELEASE_VERSION "${OMNISCI_JAR_RELEASE_VERSION}-SNAPSHOT")
 endif()
-set (MAPD_JDBC_JAR "mapdjdbc-${MAPD_JAR_RELEASE_VERSION}.jar")
+
+set (OMNISCI_JDBC_JAR "omnisci-jdbc-${OMNISCI_JAR_RELEASE_VERSION}.jar")
 
 add_custom_command(
   OUTPUT
     ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
-    ${CMAKE_BINARY_DIR}/bin/${MAPD_JDBC_JAR}
+    ${CMAKE_BINARY_DIR}/bin/${OMNISCI_JDBC_JAR}
     ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar
-    COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q clean install -Dthrift.version="${Thrift_VERSION}" -Dmapd.release.version="${MAPD_JAR_RELEASE_VERSION}"
+    COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q clean install -Dthrift.version="${Thrift_VERSION}" -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}"
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/mapdjdbc/target/${MAPD_JDBC_JAR} ${CMAKE_BINARY_DIR}/bin
+    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/omniscijdbc/target/${OMNISCI_JDBC_JAR} ${CMAKE_BINARY_DIR}/bin
     COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar ${CMAKE_BINARY_DIR}/bin
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   DEPENDS
@@ -647,20 +703,20 @@ add_custom_command(
   )
 add_custom_target(mapd_java_components ALL DEPENDS
   ${CMAKE_BINARY_DIR}/bin/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar
-  ${CMAKE_BINARY_DIR}/bin/${MAPD_JDBC_JAR}
+  ${CMAKE_BINARY_DIR}/bin/${OMNISCI_JDBC_JAR}
   ${CMAKE_BINARY_DIR}/bin/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar)
 add_custom_target(mapd_java_clean
-  COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q clean -Dmapd.release.version="${MAPD_JAR_RELEASE_VERSION}"
+  COMMAND MVNPATH=${CMAKE_SOURCE_DIR}/java ${MVN_EXECUTABLE} -q clean -Domnisci.release.version="${OMNISCI_JAR_RELEASE_VERSION}"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/java
   )
 add_dependencies(clean-all mapd_java_clean)
 install(FILES ${CMAKE_SOURCE_DIR}/java/mapd/target/mapd-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
-install(FILES ${CMAKE_SOURCE_DIR}/java/mapdjdbc/target/${MAPD_JDBC_JAR} DESTINATION bin)
+install(FILES ${CMAKE_SOURCE_DIR}/java/omniscijdbc/target/${OMNISCI_JDBC_JAR} DESTINATION bin)
 install(FILES ${CMAKE_SOURCE_DIR}/java/calcite/target/calcite-1.0-SNAPSHOT-jar-with-dependencies.jar DESTINATION bin)
 
 set_directory_properties(PROPERTIES ADDITIONAL_MAKE_CLEAN_FILES "${ADDITIONAL_MAKE_CLEAN_FILES}")
 
-install(TARGETS initdb mapd_server DESTINATION bin)
+install(TARGETS initdb omnisci_server DESTINATION bin)
 install(FILES ${CMAKE_BINARY_DIR}/MAPD_GIT_HASH.txt DESTINATION ".")
 if(ENABLE_CUDA)
   install(FILES ${CMAKE_BINARY_DIR}/QueryEngine/cuda_mapd_rt.a DESTINATION QueryEngine)
@@ -685,13 +741,31 @@ endif()
 set(CPACK_RESOURCE_FILE_LICENSE "${EULA_FILE}")
 install(FILES "${EULA_FILE}" DESTINATION ".")
 
-install(PROGRAMS startmapd DESTINATION ".")
+install(PROGRAMS startomnisci DESTINATION ".")
 install(PROGRAMS insert_sample_data DESTINATION ".")
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   install(DIRECTORY docker/sds DESTINATION "docker")
 endif()
-install(FILES docker/Dockerfile docker/README.md DESTINATION "docker")
+install(FILES docker/Dockerfile docker/Dockerfile.mapd docker/README.md DESTINATION "docker")
+
+execute_process(
+  COMMAND ln -sf omnisql mapdql
+  COMMAND ln -sf omnisci_server mapd_server
+  COMMAND ln -sf omnisci_web_server mapd_web_server
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin
+  )
+install(FILES
+  ${CMAKE_BINARY_DIR}/bin/mapdql
+  ${CMAKE_BINARY_DIR}/bin/mapd_server
+  ${CMAKE_BINARY_DIR}/bin/mapd_web_server
+  DESTINATION "bin"
+  )
+execute_process(
+  COMMAND ln -sf startomnisci startmapd
+  WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+install(FILES ${CMAKE_BINARY_DIR}/startmapd DESTINATION ".")
 
 exec_program(uname ARGS -m OUTPUT_VARIABLE MAPD_HOST_SYSTEM_ARCHITECTURE) # does not account for cross-compiling or Windows
 set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${MAPD_EDITION_LOWER}-${CPACK_PACKAGE_VERSION}-${CMAKE_SYSTEM_NAME}-${MAPD_HOST_SYSTEM_ARCHITECTURE}${MAPD_PACKAGE_FLAGS}")

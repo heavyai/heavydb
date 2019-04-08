@@ -44,16 +44,42 @@ inline bool is_real_str_or_array(const TargetInfo& target_info) {
            target_info.sql_type.get_compression() == kENCODING_NONE));
 }
 
+inline size_t get_slots_for_geo_target(const TargetInfo& target_info,
+                                       const bool separate_varlen_storage) {
+  // Aggregates on geospatial types are serialized directly by rewriting the underlying
+  // buffer. Even if separate varlen storage is valid, treat aggregates the same on
+  // distributed and single node
+  if (separate_varlen_storage && !target_info.is_agg) {
+    return 1;
+  } else {
+    return 2 * target_info.sql_type.get_physical_coord_cols();
+  }
+}
+
+inline size_t get_slots_for_target(const TargetInfo& target_info,
+                                   const bool separate_varlen_storage) {
+  if (target_info.is_agg) {
+    if (target_info.agg_kind == kAVG || is_real_str_or_array(target_info)) {
+      return 2;
+    } else {
+      return 1;
+    }
+  } else {
+    if (is_real_str_or_array(target_info) && !separate_varlen_storage) {
+      return 2;
+    } else {
+      return 1;
+    }
+  }
+}
+
 inline size_t advance_slot(const size_t j,
                            const TargetInfo& target_info,
                            const bool separate_varlen_storage) {
-  if (target_info.sql_type.is_geometry() && !separate_varlen_storage) {
-    return j + 2 * target_info.sql_type.get_physical_coord_cols();
+  if (target_info.sql_type.is_geometry()) {
+    return j + get_slots_for_geo_target(target_info, separate_varlen_storage);
   }
-  return j + ((target_info.agg_kind == kAVG ||
-               (!separate_varlen_storage && is_real_str_or_array(target_info)))
-                  ? 2
-                  : 1);
+  return j + get_slots_for_target(target_info, separate_varlen_storage);
 }
 
 inline size_t slot_offset_rowwise(const size_t entry_idx,
@@ -86,54 +112,27 @@ template <class T>
 inline T advance_to_next_columnar_target_buff(T target_ptr,
                                               const QueryMemoryDescriptor& query_mem_desc,
                                               const size_t target_slot_idx) {
-  auto new_target_ptr =
-      target_ptr + query_mem_desc.getEntryCount() *
-                       query_mem_desc.getColumnWidth(target_slot_idx).compact;
-  if (query_mem_desc.getTargetColumnPadBytesSize() > 0) {
-    new_target_ptr += query_mem_desc.getTargetColumnPadBytes(target_slot_idx);
-  }
+  auto new_target_ptr = target_ptr;
+  const auto column_size = query_mem_desc.getEntryCount() *
+                           query_mem_desc.getPaddedColumnWidthBytes(target_slot_idx);
+  new_target_ptr += align_to_int64(column_size);
+
   return new_target_ptr;
 }
 
 template <class T>
 inline T get_cols_ptr(T buff, const QueryMemoryDescriptor& query_mem_desc) {
   CHECK(query_mem_desc.didOutputColumnar());
-  auto cols_ptr = buff;
-  if (query_mem_desc.hasKeylessHash()) {
-    CHECK_EQ(size_t(0), query_mem_desc.getKeyColumnPadBytesSize());
-  } else {
-    CHECK_EQ(query_mem_desc.getKeyColumnPadBytesSize() > 0,
-             query_mem_desc.getTargetColumnPadBytesSize() > 0);
-  }
-  const bool has_key_col_padding = query_mem_desc.getKeyColumnPadBytesSize() > 0;
-  const auto key_count = query_mem_desc.getKeyCount();
-  if (has_key_col_padding) {
-    CHECK_EQ(key_count, query_mem_desc.getKeyColumnPadBytesSize());
-  }
-  for (size_t key_idx = 0; key_idx < key_count; ++key_idx) {
-    cols_ptr += query_mem_desc.groupColWidth(key_idx) * query_mem_desc.getEntryCount();
-    if (has_key_col_padding) {
-      cols_ptr += query_mem_desc.getKeyColumnPadBytes(key_idx);
-    }
-  }
-  return cols_ptr;
+  return buff + query_mem_desc.getColOffInBytes(0);
 }
 
 inline size_t get_key_bytes_rowwise(const QueryMemoryDescriptor& query_mem_desc) {
   if (query_mem_desc.hasKeylessHash()) {
     return 0;
   }
-  size_t result = 0;
-  if (auto consist_key_width = query_mem_desc.getEffectiveKeyWidth()) {
-    result += consist_key_width * query_mem_desc.groupColWidthsSize();
-  } else {
-    for (auto group_itr = query_mem_desc.groupColWidthsBegin();
-         group_itr != query_mem_desc.groupColWidthsEnd();
-         ++group_itr) {
-      result += *group_itr;
-    }
-  }
-  return result;
+  auto consist_key_width = query_mem_desc.getEffectiveKeyWidth();
+  CHECK(consist_key_width);
+  return consist_key_width * query_mem_desc.groupColWidthsSize();
 }
 
 inline size_t get_row_bytes(const QueryMemoryDescriptor& query_mem_desc) {
@@ -150,22 +149,45 @@ inline T row_ptr_rowwise(T buff,
 }
 
 template <class T>
-inline T advance_target_ptr(T target_ptr,
-                            const TargetInfo& target_info,
-                            const size_t slot_idx,
-                            const QueryMemoryDescriptor& query_mem_desc,
-                            const bool separate_varlen_storage) {
+inline T advance_target_ptr_row_wise(T target_ptr,
+                                     const TargetInfo& target_info,
+                                     const size_t slot_idx,
+                                     const QueryMemoryDescriptor& query_mem_desc,
+                                     const bool separate_varlen_storage) {
   auto result = target_ptr + query_mem_desc.getColumnWidth(slot_idx).compact;
   if ((target_info.is_agg && target_info.agg_kind == kAVG) ||
-      (is_real_str_or_array(target_info) && !separate_varlen_storage)) {
+      ((!separate_varlen_storage || target_info.is_agg) &&
+       is_real_str_or_array(target_info))) {
     return result + query_mem_desc.getColumnWidth(slot_idx + 1).compact;
   }
-  if (target_info.sql_type.is_geometry() && !separate_varlen_storage) {
+  if (target_info.sql_type.is_geometry() &&
+      (!separate_varlen_storage || target_info.is_agg)) {
     for (auto i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); ++i) {
       result += query_mem_desc.getColumnWidth(slot_idx + i).compact;
     }
   }
   return result;
+}
+
+template <class T>
+inline T advance_target_ptr_col_wise(T target_ptr,
+                                     const TargetInfo& target_info,
+                                     const size_t slot_idx,
+                                     const QueryMemoryDescriptor& query_mem_desc,
+                                     const bool separate_varlen_storage) {
+  auto result =
+      advance_to_next_columnar_target_buff(target_ptr, query_mem_desc, slot_idx);
+  if ((target_info.is_agg && target_info.agg_kind == kAVG) ||
+      (is_real_str_or_array(target_info) && !separate_varlen_storage)) {
+    return advance_to_next_columnar_target_buff(result, query_mem_desc, slot_idx + 1);
+  } else if (target_info.sql_type.is_geometry() && !separate_varlen_storage) {
+    for (auto i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); ++i) {
+      result = advance_to_next_columnar_target_buff(result, query_mem_desc, slot_idx + i);
+    }
+    return result;
+  } else {
+    return result;
+  }
 }
 
 inline size_t get_slot_off_quad(const QueryMemoryDescriptor& query_mem_desc) {

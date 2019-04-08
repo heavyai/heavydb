@@ -19,6 +19,8 @@ struct MetaClientContext {
   std::string server_host;
   int port;
   bool http;
+  bool https;
+  bool skip_host_verify;
   TRANSPORT_TYPE transport;
   CLIENT_TYPE client;
   TSessionId session;
@@ -53,6 +55,7 @@ struct MetaClientContext {
   TLicenseInfo license_info;
   std::vector<TCompletionHint> completion_hints;
   std::vector<TDashboard> dash_names;
+  TSessionInfo session_info;
 
   MetaClientContext(TTransport& t, CLIENT_TYPE& c)
       : transport(t)

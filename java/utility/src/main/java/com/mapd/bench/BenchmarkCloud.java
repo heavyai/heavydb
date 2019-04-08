@@ -16,7 +16,7 @@
 package com.mapd.bench;
 
 // STEP 1. Import required packages
-import com.mapd.jdbc.MapDStatement;
+import com.omnisci.jdbc.OmniSciStatement;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -35,21 +35,27 @@ import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 public class BenchmarkCloud {
   final static Logger logger = LoggerFactory.getLogger(BenchmarkCloud.class);
 
-  // JDBC driver name and database URL
-  static final String JDBC_DRIVER = "com.mapd.jdbc.MapDDriver";
-  static final String DB_URL = "jdbc:mapd:localhost:9091:mapd";
-
-  //  Database credentials
-  static final String USER = "mapd";
-  static final String PASS = "HyperInteractive";
-
   static final String QUERY_RESULT_MACHINE = "bencher";
+
+  // JDBC driver name and database URL
+  static final String DB_URL = "jdbc:omnisci:localhost:6274:mapd";
+  static final String JDBC_DRIVER = "com.omnisci.jdbc.OmniSciDriver";
+
+  // Database credentials
+  static final String USER = "mapd";
+  static final String PASS = "";
+
+  // Database credentials
+  static final String RESULTS_USER = "mapd";
+  static final String RESULTS_PASS = "";
 
   private String driver;
   private String url;
   private String iUser;
   private String queryResultMachine;
   private String iPasswd;
+  private String iResultsUser;
+  private String iResultsPasswd;
   private String rid;
   private String rTimestamp;
   private String tableName;
@@ -100,7 +106,8 @@ public class BenchmarkCloud {
   void doWork(String[] args, int query) {
     // Grab parameters from args
     // parm0 number of iterations per query
-    // parm1 file containing sql queries {contains quoted query, expected result count]
+    // parm1 file containing sql queries {contains quoted query, expected result
+    // count]
     // parm2 table name
     // parm3 run label
     // parm4 gpu count
@@ -109,6 +116,8 @@ public class BenchmarkCloud {
     // parm7 optional JDBC Driver class name
     // parm8 optional user
     // parm9 optional passwd
+    // parm10 optional query results db user
+    // parm11 optional query results db passwd
     int iterations = Integer.valueOf(args[0]);
     logger.debug("Iterations per query is " + iterations);
 
@@ -124,6 +133,9 @@ public class BenchmarkCloud {
 
     iUser = (args.length > 8) ? args[8] : USER;
     iPasswd = (args.length > 9) ? args[9] : PASS;
+
+    iResultsUser = (args.length > 10) ? args[10] : RESULTS_USER;
+    iResultsPasswd = (args.length > 11) ? args[11] : RESULTS_PASS;
 
     // register the driver
     try {
@@ -163,8 +175,9 @@ public class BenchmarkCloud {
       System.exit(3);
     }
 
-    bencherCon = getConnection(
-            "jdbc:mapd:" + queryResultMachine + ":9091:mapd", "mapd", "HyperInteractive");
+    bencherCon = getConnection("jdbc:omnisci:" + queryResultMachine + ":6274:mapd",
+            iResultsUser,
+            iResultsPasswd);
 
     getQueries(queryIDMap, bencherCon, tableName);
 
@@ -228,9 +241,9 @@ public class BenchmarkCloud {
         long executeTime = 0;
         long jdbcTime = 0;
 
-        // gather internal execute time for MapD as we are interested in that
+        // gather internal execute time for OmniSci as we are interested in that
         if (driver.equals(JDBC_DRIVER)) {
-          executeTime = ((MapDStatement) stmt).getQueryInternalExecuteTime();
+          executeTime = ((OmniSciStatement) stmt).getQueryInternalExecuteTime();
           jdbcTime = (System.currentTimeMillis() - timer) - executeTime;
         } else {
           jdbcTime = (System.currentTimeMillis() - timer);
@@ -253,12 +266,12 @@ public class BenchmarkCloud {
         }
         long iterateTime = (System.currentTimeMillis() - timer);
 
-        //        if (resultCount != expected) {
-        //          logger.error("Expect " + expected + " actual " + resultCount + " for
-        //          query " + sql);
-        //          // don't run anymore
-        //          break;
-        //        }
+        // if (resultCount != expected) {
+        // logger.error("Expect " + expected + " actual " + resultCount + " for
+        // query " + sql);
+        // // don't run anymore
+        // break;
+        // }
         if (loop == 0) {
           firstJdbc = jdbcTime;
           firstExecute = executeTime;

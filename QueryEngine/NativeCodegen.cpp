@@ -143,11 +143,10 @@ std::string serialize_llvm_object(const T* llvm_obj) {
 
 }  // namespace
 
-std::vector<std::pair<void*, void*>> Executor::getCodeFromCache(
-    const CodeCacheKey& key,
-    const std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>>& cache) {
+std::vector<std::pair<void*, void*>> Executor::getCodeFromCache(const CodeCacheKey& key,
+                                                                const CodeCache& cache) {
   auto it = cache.find(key);
-  if (it != cache.end()) {
+  if (it != cache.cend()) {
     delete cgen_state_->module_;
     cgen_state_->module_ = it->second.second;
     std::vector<std::pair<void*, void*>> native_functions;
@@ -166,7 +165,7 @@ void Executor::addCodeToCache(
     const std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>>&
         native_code,
     llvm::Module* module,
-    std::map<CodeCacheKey, std::pair<CodeCacheVal, llvm::Module*>>& cache) {
+    CodeCache& cache) {
   CHECK(!native_code.empty());
   CodeCacheVal cache_val;
   for (const auto& native_func : native_code) {
@@ -175,9 +174,9 @@ void Executor::addCodeToCache(
         std::unique_ptr<llvm::ExecutionEngine>(std::get<1>(native_func)),
         std::unique_ptr<GpuCompilationContext>(std::get<2>(native_func)));
   }
-  auto it_ok =
-      cache.insert(std::make_pair(key, std::make_pair(std::move(cache_val), module)));
-  CHECK(it_ok.second);
+  cache.put(key,
+            std::make_pair<decltype(cache_val), decltype(module)>(std::move(cache_val),
+                                                                  std::move(module)));
 }
 
 std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
@@ -311,6 +310,8 @@ declare void @agg_from_smem_to_gmem_count_binId(i64*, i64*, i32);
 declare void @init_group_by_buffer_gpu(i64*, i64*, i32, i32, i32, i1, i8);
 declare i64* @get_group_value(i64*, i32, i64*, i32, i32, i32, i64*);
 declare i64* @get_group_value_with_watchdog(i64*, i32, i64*, i32, i32, i32, i64*);
+declare i32 @get_group_value_columnar_slot(i64*, i32, i64*, i32, i32);
+declare i32 @get_group_value_columnar_slot_with_watchdog(i64*, i32, i64*, i32, i32);
 declare i64* @get_group_value_fast(i64*, i64, i64, i64, i32);
 declare i64* @get_group_value_fast_with_original_key(i64*, i64, i64, i64, i64, i32);
 declare i32 @get_columnar_group_bin_offset(i64*, i64, i64, i64);
@@ -318,6 +319,8 @@ declare i64 @baseline_hash_join_idx_32(i8*, i8*, i64, i64);
 declare i64 @baseline_hash_join_idx_64(i8*, i8*, i64, i64);
 declare i64 @get_composite_key_index_32(i32*, i64, i32*, i64);
 declare i64 @get_composite_key_index_64(i64*, i64, i64*, i64);
+declare i64 @get_bucket_key_for_range_compressed(i8*, i64, double);
+declare i64 @get_bucket_key_for_range_double(i8*, i64, double);
 declare i64 @agg_count_shared(i64*, i64);
 declare i64 @agg_count_skip_val_shared(i64*, i64, i64);
 declare i32 @agg_count_int32_shared(i32*, i32);
@@ -352,21 +355,31 @@ declare void @agg_min_float_shared(i32*, float);
 declare void @agg_min_float_skip_val_shared(i32*, float, float);
 declare void @agg_id_shared(i64*, i64);
 declare void @agg_id_int32_shared(i32*, i32);
+declare void @agg_id_int16_shared(i16*, i16);
+declare void @agg_id_int8_shared(i8*, i8);
 declare void @agg_id_double_shared(i64*, double);
 declare void @agg_id_double_shared_slow(i64*, double*);
 declare void @agg_id_float_shared(i32*, float);
 declare i64 @ExtractFromTime(i32, i64);
 declare i64 @ExtractFromTimeNullable(i32, i64, i64);
-declare i64 @ExtractFromTimeHighPrecision(i32, i64, i32);
-declare i64 @ExtractFromTimeHighPrecisionNullable(i32, i64, i32, i64);
+declare i64 @ExtractFromTimeHighPrecision(i32, i64, i64);
+declare i64 @ExtractFromTimeHighPrecisionNullable(i32, i64, i64, i64);
 declare i64 @DateTruncate(i32, i64);
 declare i64 @DateTruncateNullable(i32, i64, i64);
-declare i64 @DateTruncateHighPrecision(i32, i64, i32);
-declare i64 @DateTruncateHighPrecisionNullable(i32, i64, i32, i64);
-declare i64 @DateDiff(i32, i64, i64, i32, i32);
-declare i64 @DateDiffNullable(i32, i64, i64, i32, i32, i64);
-declare i64 @DateAdd(i32, i64, i64, i32);
-declare i64 @DateAddNullable(i32, i64, i64, i32, i64);
+declare i64 @DateTruncateHighPrecision(i32, i64, i64);
+declare i64 @DateTruncateHighPrecisionNullable(i32, i64, i64, i64);
+declare i64 @DateTruncateAlterPrecisionScaleUp(i32, i64, i64);
+declare i64 @DateTruncateAlterPrecisionScaleUpNullable(i32, i64, i64, i64);
+declare i64 @DateTruncateAlterPrecisionScaleDown(i32, i64, i64);
+declare i64 @DateTruncateAlterPrecisionScaleDownNullable(i32, i64, i64, i64);
+declare i64 @DateDiff(i32, i64, i64);
+declare i64 @DateDiffNullable(i32, i64, i64, i64);
+declare i64 @DateDiffHighPrecision(i32, i64, i64, i32, i64, i64, i64);
+declare i64 @DateDiffHighPrecisionNullable(i32, i64, i64, i32, i64, i64, i64, i64);
+declare i64 @DateAdd(i32, i64, i64);
+declare i64 @DateAddNullable(i32, i64, i64, i64);
+declare i64 @DateAddHighPrecision(i32, i64, i64, i64);
+declare i64 @DateAddHighPrecisionNullable(i32, i64, i64, i64, i64);
 declare i64 @string_decode(i8*, i64);
 declare i32 @array_size(i8*, i64, i32);
 declare i1 @array_is_null(i8*, i64);
@@ -923,8 +936,10 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
         break;
       }
       case kMIN: {
-        if (agg_type_info.is_string() || agg_type_info.is_array()) {
-          throw std::runtime_error("MIN on strings or arrays not supported yet");
+        if (agg_type_info.is_string() || agg_type_info.is_array() ||
+            agg_type_info.is_geometry()) {
+          throw std::runtime_error(
+              "MIN on strings, arrays or geospatial types not supported yet");
         }
         result.emplace_back((agg_type_info.is_integer() || agg_type_info.is_time())
                                 ? "agg_min"
@@ -932,8 +947,10 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
         break;
       }
       case kMAX: {
-        if (agg_type_info.is_string() || agg_type_info.is_array()) {
-          throw std::runtime_error("MAX on strings or arrays not supported yet");
+        if (agg_type_info.is_string() || agg_type_info.is_array() ||
+            agg_type_info.is_geometry()) {
+          throw std::runtime_error(
+              "MAX on strings, arrays or geospatial types not supported yet");
         }
         result.emplace_back((agg_type_info.is_integer() || agg_type_info.is_time())
                                 ? "agg_max"
@@ -1012,10 +1029,48 @@ std::unordered_set<llvm::Function*> Executor::markDeadRuntimeFuncs(
   return live_funcs;
 }
 
+namespace {
+// searches for a particular variable within a specific basic block (or all if bb_name is
+// empty)
+template <typename InstType>
+llvm::Value* find_variable_in_basic_block(llvm::Function* func,
+                                          std::string bb_name,
+                                          std::string variable_name) {
+  llvm::Value* result = nullptr;
+  if (func == nullptr || variable_name.empty()) {
+    return result;
+  }
+  bool is_found = false;
+  for (auto bb_it = func->begin(); bb_it != func->end() && !is_found; ++bb_it) {
+    if (!bb_name.empty() && bb_it->getName() != bb_name) {
+      continue;
+    }
+    for (auto inst_it = bb_it->begin(); inst_it != bb_it->end(); inst_it++) {
+      if (llvm::isa<InstType>(*inst_it)) {
+        if (inst_it->getName() == variable_name) {
+          result = &*inst_it;
+          is_found = true;
+          break;
+        }
+      }
+    }
+  }
+  return result;
+}
+};  // namespace
+
 void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
-                                           bool run_with_dynamic_watchdog) {
+                                           bool run_with_dynamic_watchdog,
+                                           ExecutorDeviceType device_type) {
   // check whether the row processing was successful; currently, it can
   // fail by running out of group by buffer slots
+
+  llvm::Value* row_count = nullptr;
+  if (run_with_dynamic_watchdog && device_type == ExecutorDeviceType::GPU) {
+    row_count =
+        find_variable_in_basic_block<llvm::LoadInst>(query_func, ".entry", "row_count");
+  }
+
   bool done_splitting = false;
   for (auto bb_it = query_func->begin(); bb_it != query_func->end() && !done_splitting;
        ++bb_it) {
@@ -1041,11 +1096,32 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
         llvm::Value* err_lv = &*inst_it;
         if (run_with_dynamic_watchdog) {
           CHECK(pos);
-          // run watchdog after every 64 rows
-          auto and_lv = ir_builder.CreateAnd(pos, uint64_t(0x3f));
-          auto call_watchdog_lv = ir_builder.CreateICmp(
-              llvm::ICmpInst::ICMP_EQ, and_lv, ll_int(int64_t(0LL)));
+          llvm::Value* call_watchdog_lv = nullptr;
+          if (device_type == ExecutorDeviceType::GPU) {
+            // In order to make sure all threads wihtin a block see the same barrier,
+            // only those blocks whose none of their threads have experienced the critical
+            // edge will go through the dynamic watchdog computation
+            CHECK(row_count);
+            auto crit_edge_rem =
+                (blockSize() & (blockSize() - 1))
+                    ? ir_builder.CreateSRem(row_count,
+                                            ll_int(static_cast<int64_t>(blockSize())))
+                    : ir_builder.CreateAnd(row_count,
+                                           ll_int(static_cast<int64_t>(blockSize() - 1)));
+            auto crit_edge_threshold = ir_builder.CreateSub(row_count, crit_edge_rem);
+            crit_edge_threshold->setName("crit_edge_threshold");
 
+            // only those threads where pos < crit_edge_threshold go through dynamic
+            // watchdog call
+            call_watchdog_lv =
+                ir_builder.CreateICmp(llvm::ICmpInst::ICMP_SLT, pos, crit_edge_threshold);
+          } else {
+            // CPU path: run watchdog for every 64th row
+            auto dw_predicate = ir_builder.CreateAnd(pos, uint64_t(0x3f));
+            call_watchdog_lv = ir_builder.CreateICmp(
+                llvm::ICmpInst::ICMP_EQ, dw_predicate, ll_int(int64_t(0LL)));
+          }
+          CHECK(call_watchdog_lv);
           auto error_check_bb = bb_it->splitBasicBlock(
               llvm::BasicBlock::iterator(br_instr), ".error_check");
           auto& watchdog_br_instr = bb_it->back();
@@ -1074,8 +1150,16 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
         err_lv =
             ir_builder.CreateCall(cgen_state_->module_->getFunction("record_error_code"),
                                   std::vector<llvm::Value*>{err_lv, error_code_arg});
-        err_lv =
-            ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE, err_lv, ll_int(int32_t(0)));
+        if (device_type == ExecutorDeviceType::GPU) {
+          // let kernel execution finish as expected, regardless of the observed error,
+          // unless it is from the dynamic watchdog where all threads within that block
+          // return together.
+          err_lv = ir_builder.CreateICmp(
+              llvm::ICmpInst::ICMP_EQ, err_lv, ll_int(Executor::ERR_OUT_OF_TIME));
+        } else {
+          err_lv = ir_builder.CreateICmp(
+              llvm::ICmpInst::ICMP_NE, err_lv, ll_int(static_cast<int32_t>(0)));
+        }
         auto error_bb = llvm::BasicBlock::Create(
             cgen_state_->context_, ".error_exit", query_func, new_bb);
         llvm::ReturnInst::Create(cgen_state_->context_, error_bb);
@@ -1209,6 +1293,7 @@ bool always_clone_runtime_function(const llvm::Function* func) {
          func->getName() == "diff_fixed_width_int_decode" ||
          func->getName() == "fixed_width_double_decode" ||
          func->getName() == "fixed_width_float_decode" ||
+         func->getName() == "fixed_width_small_date_decode" ||
          func->getName() == "record_error_code";
 }
 
@@ -1225,25 +1310,23 @@ Executor::CompilationResult Executor::compileWorkUnit(
     const size_t max_groups_buffer_entry_guess,
     const size_t small_groups_buffer_entry_count,
     const int8_t crt_min_byte_width,
-    const JoinInfo& join_info,
     const bool has_cardinality_estimation,
     ColumnCacheMap& column_cache,
     RenderInfo* render_info) {
-  nukeOldState(allow_lazy_fetch, join_info, query_infos, ra_exe_unit);
+  nukeOldState(allow_lazy_fetch, query_infos, ra_exe_unit);
   OOM_TRACE_PUSH(+": " + (co.device_type_ == ExecutorDeviceType::GPU ? "gpu" : "cpu"));
 
-  GroupByAndAggregate group_by_and_aggregate(
-      this,
-      co.device_type_,
-      ra_exe_unit,
-      render_info,
-      query_infos,
-      row_set_mem_owner,
-      max_groups_buffer_entry_guess,
-      small_groups_buffer_entry_count,
-      crt_min_byte_width,
-      eo.allow_multifrag,
-      eo.output_columnar_hint && co.device_type_ == ExecutorDeviceType::GPU);
+  GroupByAndAggregate group_by_and_aggregate(this,
+                                             co.device_type_,
+                                             ra_exe_unit,
+                                             render_info,
+                                             query_infos,
+                                             row_set_mem_owner,
+                                             max_groups_buffer_entry_guess,
+                                             small_groups_buffer_entry_count,
+                                             crt_min_byte_width,
+                                             eo.allow_multifrag,
+                                             eo.output_columnar_hint);
   const auto& query_mem_desc = group_by_and_aggregate.getQueryMemoryDescriptor();
 
   if (query_mem_desc.getQueryDescriptionType() ==
@@ -1266,21 +1349,6 @@ Executor::CompilationResult Executor::compileWorkUnit(
            !co.hoist_literals_)) {
         throw QueryMustRunOnCpu();
       }
-    }
-  }
-
-  if (co.device_type_ == ExecutorDeviceType::GPU &&
-      query_mem_desc.getQueryDescriptionType() ==
-          QueryDescriptionType::GroupByPerfectHash &&
-      query_mem_desc.getGroupbyColCount() > 1) {
-    const auto grid_size = query_mem_desc.blocksShareMemory() ? 1 : gridSize();
-    const size_t required_memory{
-        (grid_size * query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU))};
-    CHECK(catalog_->get_dataMgr().cudaMgr_);
-    const size_t max_memory{
-        catalog_->get_dataMgr().cudaMgr_->deviceProperties[0].globalMem / 5};
-    if (required_memory > max_memory) {
-      throw QueryMustRunOnCpu();
     }
   }
 
@@ -1364,7 +1432,7 @@ Executor::CompilationResult Executor::compileWorkUnit(
     const bool can_return_error = compileBody(ra_exe_unit, group_by_and_aggregate, co);
 
     if (can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
-      createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog);
+      createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog, co.device_type_);
     }
   }
 
@@ -1492,53 +1560,11 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
             << " quals";
   }
 
-  primary_quals = codegenHashJoinsBeforeLoopJoin(primary_quals, ra_exe_unit, co);
-
-  if (ra_exe_unit.inner_joins.empty()) {
-    allocateInnerScansIterators(ra_exe_unit.input_descs);
-  }
-
-  llvm::Value* outer_join_nomatch_flag_lv = nullptr;
-  if (isOuterJoin()) {
-    if (isOuterLoopJoin()) {
-      CHECK(cgen_state_->outer_join_nomatch_);
-      outer_join_nomatch_flag_lv =
-          cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_nomatch_);
-      cgen_state_->outer_join_cond_lv_ =
-          cgen_state_->ir_builder_.CreateNot(outer_join_nomatch_flag_lv);
-    } else {
-      cgen_state_->outer_join_cond_lv_ = ll_bool(true);
-    }
-    for (auto expr : ra_exe_unit.outer_join_quals) {
-      cgen_state_->outer_join_cond_lv_ = cgen_state_->ir_builder_.CreateAnd(
-          cgen_state_->outer_join_cond_lv_,
-          toBool(codegen(expr.get(), true, co).front()));
-    }
-    if (isOneToManyOuterHashJoin()) {
-      CHECK(cgen_state_->outer_join_nomatch_);
-      // TODO(miyu): Support more than 1 one-to-many hash joins in folded sequence.
-      outer_join_nomatch_flag_lv =
-          cgen_state_->ir_builder_.CreateLoad(cgen_state_->outer_join_nomatch_);
-    }
-  }
-
-  llvm::Value* filter_lv = isOuterLoopJoin() || isOneToManyOuterHashJoin()
-                               ? cgen_state_->outer_join_cond_lv_
-                               : ll_bool(true);
-  llvm::Value* outerjoin_query_filter_lv =
-      (!primary_quals.empty() && (isOuterJoin() || isOuterLoopJoin())) ? ll_bool(true)
-                                                                       : nullptr;
+  llvm::Value* filter_lv = ll_bool(true);
   for (auto expr : primary_quals) {
     // Generate the filter for primary quals
     auto cond = toBool(codegen(expr, true, co).front());
-    auto new_cond = codegenRetOnHashFail(cond, expr);
-    if (new_cond == cond && !outerjoin_query_filter_lv) {
-      filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, cond);
-    }
-    if (outerjoin_query_filter_lv) {
-      outerjoin_query_filter_lv =
-          cgen_state_->ir_builder_.CreateAnd(outerjoin_query_filter_lv, cond);
-    }
+    filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, cond);
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
@@ -1548,14 +1574,10 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
         cgen_state_->context_, "sc_true", cgen_state_->row_func_);
     sc_false = llvm::BasicBlock::Create(
         cgen_state_->context_, "sc_false", cgen_state_->row_func_);
-    if (isOuterLoopJoin() || isOneToManyOuterHashJoin()) {
-      filter_lv =
-          cgen_state_->ir_builder_.CreateOr(filter_lv, outer_join_nomatch_flag_lv);
-    }
     cgen_state_->ir_builder_.CreateCondBr(filter_lv, sc_true, sc_false);
     cgen_state_->ir_builder_.SetInsertPoint(sc_false);
-    if (ra_exe_unit.inner_joins.empty()) {
-      codegenInnerScanNextRowOrMatch();
+    if (ra_exe_unit.join_quals.empty()) {
+      cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
     }
     cgen_state_->ir_builder_.SetInsertPoint(sc_true);
     filter_lv = ll_bool(true);
@@ -1565,13 +1587,8 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
     filter_lv = cgen_state_->ir_builder_.CreateAnd(
         filter_lv, toBool(codegen(expr, true, co).front()));
   }
-  if (isOuterLoopJoin() || isOneToManyOuterHashJoin()) {
-    CHECK(outer_join_nomatch_flag_lv);
-    filter_lv = cgen_state_->ir_builder_.CreateOr(filter_lv, outer_join_nomatch_flag_lv);
-  }
 
   CHECK(filter_lv->getType()->isIntegerTy(1));
 
-  return group_by_and_aggregate.codegen(
-      filter_lv, outerjoin_query_filter_lv, sc_false, co);
+  return group_by_and_aggregate.codegen(filter_lv, sc_false, co);
 }

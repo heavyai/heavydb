@@ -12,7 +12,7 @@ template <template <typename> class INPUT_PARSER_TYPE = QuotedInputSupportParser
           template <typename> class REGEX_INPUT_PARSER_TYPE = DefaultInputParser>
 class CommandResolutionChain {
  public:
-  FRIEND_TEST(MapDQLTest, CommandResolutionChain_DefaultTokenizer);
+  FRIEND_TEST(OmniSQLTest, CommandResolutionChain_DefaultTokenizer);
 
   using CommandTokenList = std::vector<std::string>;
   using ParamCountType = CommandTokenList::size_type;

@@ -126,14 +126,6 @@ struct DBMetadata {
 
 class Catalog {
  public:
-  Catalog(const std::string& basePath,
-          const std::string& dbname,
-          std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-          const std::vector<LeafHostInfo>& string_dict_hosts,
-          AuthMetadata authMetadata,
-          bool is_initdb,
-          std::shared_ptr<Calcite> calcite);
-
   /**
    * @brief Constructor - takes basePath to already extant
    * data directory for writing
@@ -142,21 +134,12 @@ class Catalog {
    * @param fragmenter Fragmenter object
    * metadata - expects for this directory to already exist
    */
-
   Catalog(const std::string& basePath,
           const DBMetadata& curDB,
           std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
           const std::vector<LeafHostInfo>& string_dict_hosts,
-          std::shared_ptr<Calcite> calcite);
-
-  /*
-   builds a catalog that uses an ldap server
-   */
-  Catalog(const std::string& basePath,
-          const DBMetadata& curDB,
-          std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-          AuthMetadata authMetadata,
-          std::shared_ptr<Calcite> calcite);
+          std::shared_ptr<Calcite> calcite,
+          bool is_new_db);
 
   /**
    * @brief Destructor - deletes all
@@ -198,6 +181,8 @@ class Catalog {
 
   const TableDescriptor* getMetadataForTable(const std::string& tableName,
                                              const bool populateFragmenter = true) const;
+  const TableDescriptor* getMetadataForTableImpl(int tableId,
+                                                 const bool populateFragmenter) const;
   const TableDescriptor* getMetadataForTable(int tableId) const;
 
   const ColumnDescriptor* getMetadataForColumn(int tableId,
@@ -228,7 +213,6 @@ class Catalog {
    * for each and every column in the table
    *
    */
-
   std::list<const ColumnDescriptor*> getAllColumnMetadataForTable(
       const int tableId,
       const bool fetchSystemColumns,
@@ -237,15 +221,16 @@ class Catalog {
 
   std::list<const TableDescriptor*> getAllTableMetadata() const;
   std::list<const FrontendViewDescriptor*> getAllFrontendViewMetadata() const;
-  const DBMetadata& get_currentDB() const { return currentDB_; }
-  void set_currentDB(const DBMetadata& db) { currentDB_ = db; }
-  Data_Namespace::DataMgr& get_dataMgr() const { return *dataMgr_; }
-  Calcite& get_calciteMgr() const { return *calciteMgr_; }
-  const std::string& get_basePath() const { return basePath_; }
+  const DBMetadata& getCurrentDB() const { return currentDB_; }
+  Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
+  Calcite& getCalciteMgr() const { return *calciteMgr_; }
+  const std::string& getBasePath() const { return basePath_; }
 
   const DictDescriptor* getMetadataForDict(int dict_ref, bool loadDict = true) const;
 
   const std::vector<LeafHostInfo>& getStringDictionaryHosts() const;
+
+  const ColumnDescriptor* getShardColumnMetadataForTable(const TableDescriptor* td) const;
 
   std::vector<const TableDescriptor*> getPhysicalTablesDescriptors(
       const TableDescriptor* logicalTableDesc) const;
@@ -263,6 +248,12 @@ class Catalog {
 
   static void set(const std::string& dbName, std::shared_ptr<Catalog> cat);
   static std::shared_ptr<Catalog> get(const std::string& dbName);
+  static std::shared_ptr<Catalog> get(const std::string& basePath,
+                                      const DBMetadata& curDB,
+                                      std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
+                                      const std::vector<LeafHostInfo>& string_dict_hosts,
+                                      std::shared_ptr<Calcite> calcite,
+                                      bool is_new_db);
   static void remove(const std::string& dbName);
 
   const bool checkMetadataForDeletedRecs(int dbId, int tableId, int columnId) const;
@@ -273,7 +264,10 @@ class Catalog {
   void setDeletedColumnUnlocked(const TableDescriptor* td, const ColumnDescriptor* cd);
   int getLogicalTableId(const int physicalTableId) const;
   void checkpoint(const int logicalTableId) const;
-  std::string name() const { return get_currentDB().dbName; }
+  std::string name() const { return getCurrentDB().dbName; }
+  void eraseDBData();
+  void eraseTablePhysicalData(const TableDescriptor* td);
+  void optimizeTable(const TableDescriptor* td) const;
 
  protected:
   typedef std::map<std::string, TableDescriptor*> TableDescriptorMap;
@@ -292,6 +286,7 @@ class Catalog {
       DeletedColumnPerTableMap;
 
   void CheckAndExecuteMigrations();
+  void CheckAndExecuteMigrationsPostBuildMaps();
   void updateDictionaryNames();
   void updateTableDescriptorSchema();
   void updateFrontendViewSchema();
@@ -304,6 +299,8 @@ class Catalog {
   void updateDeletedColumnIndicator();
   void updateFrontendViewsToDashboards();
   void recordOwnershipOfObjectsInObjectPermissions();
+  void checkDateInDaysColumnMigration();
+  void createDashboardSystemRoles();
   void buildMaps();
   void addTableToMap(TableDescriptor& td,
                      const std::list<ColumnDescriptor>& columns,
@@ -336,6 +333,13 @@ class Catalog {
   std::string calculateSHA1(const std::string& data);
   std::string generatePhysicalTableName(const std::string& logicalTableName,
                                         const int32_t& shardNumber);
+  std::vector<DBObject> parseDashboardObjects(const std::string& view_meta,
+                                              const int& user_id);
+  void createOrUpdateDashboardSystemRole(const std::string& view_meta,
+                                         const int32_t& user_id,
+                                         const std::string& dash_role_name);
+
+  const int getColumnIdBySpiUnlocked(const int table_id, const size_t spi) const;
 
   std::string basePath_;
   TableDescriptorMap tableDescriptorMap_;
@@ -350,8 +354,6 @@ class Catalog {
   DBMetadata currentDB_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
 
-  std::unique_ptr<LdapServer> ldap_server_;
-  std::unique_ptr<RestServer> rest_server_;
   const std::vector<LeafHostInfo> string_dict_hosts_;
   std::shared_ptr<Calcite> calciteMgr_;
 
@@ -395,7 +397,8 @@ class SysCatalog {
             std::shared_ptr<Calcite> calcite,
             bool is_new_db,
             bool check_privileges,
-            const std::vector<LeafHostInfo>* string_dict_hosts = nullptr);
+            bool aggregator,
+            const std::vector<LeafHostInfo>& string_dict_hosts);
 
   /**
    * logins (connects) a user against a database.
@@ -403,7 +406,7 @@ class SysCatalog {
    * throws a std::exception in all error cases! (including wrong password)
    */
   std::shared_ptr<Catalog> login(const std::string& db,
-                                 const std::string& username,
+                                 std::string& username,
                                  const std::string& password,
                                  UserMetadata& user_meta,
                                  bool check_password = true);
@@ -413,15 +416,17 @@ class SysCatalog {
   void grantPrivileges(const int32_t userid, const int32_t dbid, const Privileges& privs);
   bool checkPrivileges(UserMetadata& user, DBMetadata& db, const Privileges& wants_privs);
   void createDatabase(const std::string& dbname, int owner);
-  void dropDatabase(const int32_t dbid, const std::string& name, Catalog* db_cat);
+  void dropDatabase(const DBMetadata& db);
   bool getMetadataForUser(const std::string& name, UserMetadata& user);
   bool getMetadataForUserById(const int32_t idIn, UserMetadata& user);
-  bool checkPasswordForUser(const std::string& passwd, UserMetadata& user);
+  bool checkPasswordForUser(const std::string& passwd,
+                            std::string& name,
+                            UserMetadata& user);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
-  const DBMetadata& get_currentDB() const { return currentDB_; }
-  Data_Namespace::DataMgr& get_dataMgr() const { return *dataMgr_; }
-  Calcite& get_calciteMgr() const { return *calciteMgr_; }
-  const std::string& get_basePath() const { return basePath_; }
+  const DBMetadata& getCurrentDB() const { return currentDB_; }
+  Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
+  Calcite& getCalciteMgr() const { return *calciteMgr_; }
+  const std::string& getBasePath() const { return basePath_; }
   SqliteConnector* getSqliteConnector() { return sqliteConnector_.get(); }
   std::list<DBMetadata> getAllDBMetadata();
   std::list<UserMetadata> getAllUserMetadata();
@@ -434,12 +439,18 @@ class SysCatalog {
                       DBObjectType type,
                       const Catalog_Namespace::Catalog& catalog,
                       int32_t objectId = -1);
-  void grantDBObjectPrivileges(const std::string& roleName,
-                               DBObject& object,
+  void grantDBObjectPrivileges(const std::string& grantee,
+                               const DBObject& object,
                                const Catalog_Namespace::Catalog& catalog);
-  void revokeDBObjectPrivileges(const std::string& roleName,
-                                DBObject object,
+  void grantDBObjectPrivilegesBatch(const std::vector<std::string>& grantees,
+                                    const std::vector<DBObject>& objects,
+                                    const Catalog_Namespace::Catalog& catalog);
+  void revokeDBObjectPrivileges(const std::string& grantee,
+                                const DBObject& object,
                                 const Catalog_Namespace::Catalog& catalog);
+  void revokeDBObjectPrivilegesBatch(const std::vector<std::string>& grantees,
+                                     const std::vector<DBObject>& objects,
+                                     const Catalog_Namespace::Catalog& catalog);
   void revokeDBObjectPrivilegesFromAll_unsafe(DBObject object, Catalog* catalog);
   void getDBObjectPrivileges(const std::string& granteeName,
                              DBObject& object,
@@ -449,13 +460,19 @@ class SysCatalog {
                                const Catalog_Namespace::Catalog& catalog);
   void createRole(const std::string& roleName, const bool& userPrivateRole = false);
   void dropRole(const std::string& roleName);
-  void grantRole(const std::string& roleName, const std::string& userName);
-  void revokeRole(const std::string& roleName, const std::string& userName);
+  void grantRoleBatch(const std::vector<std::string>& roles,
+                      const std::vector<std::string>& grantees);
+  void grantRole(const std::string& role, const std::string& grantee);
+  void revokeRoleBatch(const std::vector<std::string>& roles,
+                       const std::vector<std::string>& grantees);
+  void revokeRole(const std::string& role, const std::string& grantee);
   // check if the user has any permissions on all the given objects
   bool hasAnyPrivileges(const UserMetadata& user, std::vector<DBObject>& privObjects);
   // check if the user has the requested permissions on all the given objects
-  bool checkPrivileges(const UserMetadata& user, std::vector<DBObject>& privObjects);
-  bool checkPrivileges(const std::string& userName, std::vector<DBObject>& privObjects);
+  bool checkPrivileges(const UserMetadata& user,
+                       const std::vector<DBObject>& privObjects) const;
+  bool checkPrivileges(const std::string& userName,
+                       const std::vector<DBObject>& privObjects) const;
   Grantee* getGrantee(const std::string& name) const;
   Role* getRoleGrantee(const std::string& name) const;
   User* getUserGrantee(const std::string& name) const;
@@ -468,9 +485,9 @@ class SysCatalog {
   std::vector<std::string> getRoles(bool userPrivateRole,
                                     bool isSuper,
                                     const std::string& userName);
-  std::vector<std::string> getRoles(const int32_t dbId);
+  std::vector<std::string> getRoles(const std::string& userName, const int32_t dbId);
   bool arePrivilegesOn() const { return check_privileges_; }
-
+  bool isAggregator() const { return aggregator_; }
   static SysCatalog& instance() {
     static SysCatalog sys_cat{};
     return sys_cat;
@@ -478,13 +495,19 @@ class SysCatalog {
 
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
   std::string name() const { return MAPD_SYSTEM_DB; }
+  void renameObjectsInDescriptorMap(DBObject& object,
+                                    const Catalog_Namespace::Catalog& cat);
+  void syncUserWithRemoteProvider(const std::string& user_name,
+                                  const std::vector<std::string>& roles,
+                                  bool* issuper);
 
  private:
   typedef std::map<std::string, Grantee*> GranteeMap;
   typedef std::multimap<std::string, ObjectRoleDescriptor*> ObjectRoleDescriptorMap;
 
   SysCatalog()
-      : sqliteMutex_()
+      : aggregator_(false)
+      , sqliteMutex_()
       , sharedMutex_()
       , thread_holding_sqlite_lock(std::thread::id())
       , thread_holding_write_lock(std::thread::id()) {}
@@ -506,7 +529,11 @@ class SysCatalog {
   void createRole_unsafe(const std::string& roleName,
                          const bool& userPrivateRole = false);
   void dropRole_unsafe(const std::string& roleName);
+  void grantRoleBatch_unsafe(const std::vector<std::string>& roles,
+                             const std::vector<std::string>& grantees);
   void grantRole_unsafe(const std::string& roleName, const std::string& granteeName);
+  void revokeRoleBatch_unsafe(const std::vector<std::string>& roles,
+                              const std::vector<std::string>& grantees);
   void revokeRole_unsafe(const std::string& roleName, const std::string& granteeName);
   void updateObjectDescriptorMap(const std::string& roleName,
                                  DBObject& object,
@@ -516,9 +543,15 @@ class SysCatalog {
   void deleteObjectDescriptorMap(const std::string& roleName,
                                  DBObject& object,
                                  const Catalog_Namespace::Catalog& cat);
+  void grantDBObjectPrivilegesBatch_unsafe(const std::vector<std::string>& grantees,
+                                           const std::vector<DBObject>& objects,
+                                           const Catalog_Namespace::Catalog& catalog);
   void grantDBObjectPrivileges_unsafe(const std::string& granteeName,
-                                      DBObject& object,
+                                      const DBObject object,
                                       const Catalog_Namespace::Catalog& catalog);
+  void revokeDBObjectPrivilegesBatch_unsafe(const std::vector<std::string>& grantees,
+                                            const std::vector<DBObject>& objects,
+                                            const Catalog_Namespace::Catalog& catalog);
   void revokeDBObjectPrivileges_unsafe(const std::string& granteeName,
                                        DBObject object,
                                        const Catalog_Namespace::Catalog& catalog);
@@ -528,6 +561,7 @@ class SysCatalog {
   void revokeAllOnDatabase_unsafe(const std::string& roleName,
                                   int32_t dbId,
                                   Grantee* grantee);
+  bool isDashboardSystemRole(const std::string& roleName);
 
   template <typename F, typename... Args>
   void execInTransaction(F&& f, Args&&... args) {
@@ -552,7 +586,8 @@ class SysCatalog {
   std::unique_ptr<LdapServer> ldap_server_;
   std::unique_ptr<RestServer> rest_server_;
   std::shared_ptr<Calcite> calciteMgr_;
-  const std::vector<LeafHostInfo>* string_dict_hosts_;
+  std::vector<LeafHostInfo> string_dict_hosts_;
+  bool aggregator_;
 
  public:
   mutable std::mutex sqliteMutex_;
@@ -560,8 +595,6 @@ class SysCatalog {
   mutable std::atomic<std::thread::id> thread_holding_sqlite_lock;
   mutable std::atomic<std::thread::id> thread_holding_write_lock;
   static thread_local bool thread_holds_read_lock;
-
-  friend LdapServer;
 };
 
 // this class is defined to accommodate both Thrift and non-Thrift builds.
@@ -593,7 +626,7 @@ class SessionInfo {
       , executor_device_type_(t)
       , session_id(sid)
       , last_used_time(time(0))
-      , creation_time(time(0)) {}
+      , start_time(time(0)) {}
   SessionInfo(std::shared_ptr<Catalog> cat,
               const UserMetadata& user,
               const ExecutorDeviceType t,
@@ -606,7 +639,7 @@ class SessionInfo {
       , executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_))
       , session_id(s.session_id) {}
   MapDHandler* get_mapdHandler() const { return mapdHandler_.get(); };
-  Catalog& get_catalog() const { return *catalog_; }
+  Catalog& getCatalog() const { return *catalog_; }
   std::shared_ptr<Catalog> get_catalog_ptr() const { return catalog_; }
   const UserMetadata& get_currentUser() const { return currentUser_; }
   const ExecutorDeviceType get_executor_device_type() const {
@@ -621,7 +654,9 @@ class SessionInfo {
   bool checkDBAccessPrivileges(const DBObjectType& permissionType,
                                const AccessPrivileges& privs,
                                const std::string& objectName = "") const;
-  time_t get_creation_time() const { return creation_time; }
+  time_t get_start_time() const { return start_time; }
+
+  operator std::string() const;
 
  private:
   std::shared_ptr<MapDHandler> mapdHandler_;
@@ -630,9 +665,12 @@ class SessionInfo {
   std::atomic<ExecutorDeviceType> executor_device_type_;
   const std::string session_id;
   std::atomic<time_t> last_used_time;  // for cleaning up SessionInfo after client dies
-  std::atomic<time_t> creation_time;   // for invalidating session after tolerance period
+  std::atomic<time_t> start_time;      // for invalidating session after tolerance period
 };
 
 }  // namespace Catalog_Namespace
+
+std::ostream& operator<<(std::ostream& os,
+                         const Catalog_Namespace::SessionInfo& session_info);
 
 #endif  // CATALOG_H

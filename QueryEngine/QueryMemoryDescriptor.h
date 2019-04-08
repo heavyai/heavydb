@@ -44,9 +44,6 @@ class RenderInfo;
 class RowSetMemoryOwner;
 struct InputTableInfo;
 
-/**
- *
- */
 enum class QueryDescriptionType {
   GroupByPerfectHash,
   GroupByBaselineHash,
@@ -106,7 +103,8 @@ class QueryMemoryDescriptor {
                         const size_t max_groups_buffer_entry_count,
                         RenderInfo* render_info,
                         const CountDistinctDescriptors count_distinct_descriptors,
-                        const bool must_use_baseline_sort);
+                        const bool must_use_baseline_sort,
+                        const bool output_columanr_hint);
 
   QueryMemoryDescriptor(const Executor* executor,
                         const size_t entry_count,
@@ -118,31 +116,6 @@ class QueryMemoryDescriptor {
                         const bool has_nulls,
                         const std::vector<int8_t>& group_col_widths);
 
-  QueryMemoryDescriptor(const Executor* executor,
-                        const bool allow_multifrag,
-                        const QueryDescriptionType query_desc_type,
-                        const bool keyless_hash,
-                        const bool interleaved_bins_on_gpu,
-                        const int32_t idx_target_as_key,
-                        const int64_t init_val,
-                        const std::vector<int8_t>& group_col_widths,
-                        const int8_t group_col_compact_width,
-                        const std::vector<ColWidths>& agg_col_widths,
-                        const std::vector<ssize_t>& target_groupby_indices,
-                        const size_t entry_count,
-                        const int64_t min_val,
-                        const int64_t max_val,
-                        const int64_t bucket,
-                        const bool hash_nulls,
-                        const GroupByMemSharing sharing,
-                        const CountDistinctDescriptors count_distinct_descriptors,
-                        const bool sort_on_gpu,
-                        const bool output_columnar,
-                        const bool render_output,
-                        const std::vector<int8_t>& key_column_pad_bytes,
-                        const std::vector<int8_t>& target_column_pad_bytes,
-                        const bool must_use_baseline_sort);
-
   // Serialization
   QueryMemoryDescriptor(const TResultSetBufferDescriptor& thrift_query_memory_descriptor);
   static TResultSetBufferDescriptor toThrift(const QueryMemoryDescriptor&);
@@ -151,7 +124,6 @@ class QueryMemoryDescriptor {
 
   std::unique_ptr<QueryExecutionContext> getQueryExecutionContext(
       const RelAlgExecutionUnit&,
-      const std::vector<int64_t>& init_agg_vals,
       const Executor* executor,
       const ExecutorDeviceType device_type,
       const int device_id,
@@ -212,6 +184,9 @@ class QueryMemoryDescriptor {
     CHECK_LT(key_idx, group_col_widths_.size());
     return group_col_widths_[key_idx];
   }
+  size_t getPrependedGroupColOffInBytes(const size_t group_idx) const;
+  size_t getPrependedGroupBufferSizeInBytes() const;
+
   const auto groupColWidthsBegin() const { return group_col_widths_.begin(); }
   const auto groupColWidthsEnd() const { return group_col_widths_.end(); }
   void clearGroupColWidths() { group_col_widths_.clear(); }
@@ -225,6 +200,34 @@ class QueryMemoryDescriptor {
     CHECK_LT(idx, agg_col_widths_.size());
     return agg_col_widths_[idx];
   }
+
+  const size_t getPaddedColumnWidthBytes(const size_t idx) const {
+    CHECK_LT(idx, padded_agg_col_widths_.size());
+    return padded_agg_col_widths_[idx];
+  }
+
+  /*
+   * This function recompute and set all column widths used in the IR and result set.
+   * padded_agg_col_widths_ are all initialized to be agg_col_widths_'s compact values,
+   * unless they are re-evaluated using this method.
+   * Currently, it is enabled when we have columnar output and not in distributed mode.
+   * NOTE Re. distributed: since result sets are serialized using rowwise
+   * iterators, we should only use actual column widths when we have full support of it
+   * for both columnar and rowwise.
+   * TODO(Saman): enable using actual widths in distributed mode.
+   */
+  void recomputePaddedColumnWidthBytes() {
+    padded_agg_col_widths_.clear();
+    padded_agg_col_widths_.reserve(agg_col_widths_.size());
+    for (size_t col_idx = 0; col_idx < agg_col_widths_.size(); col_idx++) {
+      padded_agg_col_widths_.push_back(
+          (output_columnar_ && !g_cluster &&
+           query_desc_type_ == QueryDescriptionType::Projection)
+              ? getColumnWidth(col_idx).actual
+              : getColumnWidth(col_idx).compact);
+    }
+  }
+
   size_t getPaddedColWidthForRange(const size_t offset, const size_t range) const {
     CHECK_LE(offset + range, agg_col_widths_.size());
     size_t ret = 0;
@@ -248,10 +251,16 @@ class QueryMemoryDescriptor {
     }
     return ret;
   }
+
   void addAggColWidth(const ColWidths& col_width) {
     agg_col_widths_.push_back(col_width);
+    padded_agg_col_widths_.push_back(col_width.compact);
   }
-  void clearAggColWidths() { agg_col_widths_.clear(); }
+
+  void clearAggColWidths() {
+    agg_col_widths_.clear();
+    padded_agg_col_widths_.clear();
+  }
 
   ssize_t getTargetGroupbyIndex(const size_t target_idx) const {
     CHECK_LT(target_idx, target_groupby_indices_.size());
@@ -268,10 +277,7 @@ class QueryMemoryDescriptor {
   int64_t getBucket() const { return bucket_; }
 
   bool hasNulls() const { return has_nulls_; }
-  void setHasNulls(const bool val) { has_nulls_ = val; }
-
   GroupByMemSharing getGpuMemSharing() const { return sharing_; }
-  void setGpuMemSharing(const GroupByMemSharing val) { sharing_ = val; }
 
   const CountDistinctDescriptor getCountDistinctDescriptor(const size_t idx) const {
     CHECK_LT(idx, count_distinct_descriptors_.size());
@@ -286,19 +292,13 @@ class QueryMemoryDescriptor {
 
   bool canOutputColumnar() const;
   bool didOutputColumnar() const { return output_columnar_; }
-  void setOutputColumnar(const bool val) { output_columnar_ = val; }
-
-  int8_t getKeyColumnPadBytes(const size_t idx) const {
-    CHECK_LT(idx, key_column_pad_bytes_.size());
-    return key_column_pad_bytes_[idx];
+  void setOutputColumnar(const bool val) {
+    output_columnar_ = val;
+    // padded column widths are used for all columnar formats
+    recomputePaddedColumnWidthBytes();
   }
-  size_t getKeyColumnPadBytesSize() const { return key_column_pad_bytes_.size(); }
-
-  int8_t getTargetColumnPadBytes(const size_t idx) const {
-    CHECK_LT(idx, target_column_pad_bytes_.size());
-    return target_column_pad_bytes_[idx];
-  }
-  size_t getTargetColumnPadBytesSize() const { return target_column_pad_bytes_.size(); }
+  bool shouldOutputColumnar(const bool output_columnar_hint,
+                            const bool has_count_distinct_target);
 
   bool mustUseBaselineSort() const { return must_use_baseline_sort_; }
 
@@ -308,8 +308,6 @@ class QueryMemoryDescriptor {
   void setForceFourByteFloat(const bool val) { force_4byte_float_ = val; }
 
   // Getters derived from state
-  size_t getBufferSizeQuad(const ExecutorDeviceType device_type) const;
-
   size_t getGroupbyColCount() const { return group_col_widths_.size(); }
   size_t getKeyCount() const { return keyless_hash_ ? 0 : getGroupbyColCount(); }
   size_t getBufferColSlotCount() const {
@@ -341,9 +339,7 @@ class QueryMemoryDescriptor {
 
   size_t sharedMemBytes(const ExecutorDeviceType) const;
 
-  size_t getKeyOffInBytes(const size_t bin, const size_t key_idx = 0) const;
-  size_t getNextKeyOffInBytes(const size_t key_idx) const;
-  size_t getColOffInBytes(const size_t bin, const size_t col_idx) const;
+  size_t getColOffInBytes(const size_t col_idx) const;
   size_t getColOffInBytesInNextBin(const size_t col_idx) const;
   size_t getNextColOffInBytes(const int8_t* col_ptr,
                               const size_t bin,
@@ -354,8 +350,6 @@ class QueryMemoryDescriptor {
   size_t getWarpCount() const;
 
   size_t getCompactByteWidth() const;
-  bool isCompactLayoutIsometric() const;
-  size_t getConsistColOffInBytes(const size_t bin, const size_t col_idx) const;
 
   inline size_t getEffectiveKeyWidth() const {
     return group_col_compact_width_ ? group_col_compact_width_ : sizeof(int64_t);
@@ -363,11 +357,14 @@ class QueryMemoryDescriptor {
 
   bool isWarpSyncRequired(const ExecutorDeviceType) const;
 
+  std::string toString() const;
+
  protected:
   void resetGroupColWidths(const std::vector<int8_t>& new_group_col_widths) {
     group_col_widths_ = new_group_col_widths;
   }
   std::vector<ColWidths> agg_col_widths_;
+  std::vector<size_t> padded_agg_col_widths_;
 
  private:
   const Executor* executor_;
@@ -393,13 +390,14 @@ class QueryMemoryDescriptor {
   bool sort_on_gpu_;
   bool output_columnar_;
   bool render_output_;
-  std::vector<int8_t> key_column_pad_bytes_;
-  std::vector<int8_t> target_column_pad_bytes_;
   bool must_use_baseline_sort_;
 
   bool force_4byte_float_;
 
   size_t getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths) const;
+  size_t getTotalBytesOfColumnarBuffers(const std::vector<ColWidths>& col_widths,
+                                        const size_t num_entries_per_column) const;
+  size_t getTotalBytesOfColumnarProjections(const size_t projection_count) const;
 
   friend class ResultSet;
   friend class QueryExecutionContext;

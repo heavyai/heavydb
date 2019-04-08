@@ -26,8 +26,15 @@
 class TimeGM {
  public:
   time_t my_timegm(const struct tm* tm);
-  time_t my_timegm(const struct tm* tm, const time_t& fsc, SQLTypeInfo& ti);
-  time_t parse_fractional_seconds(std::string sfrac, SQLTypeInfo& ti);
+  time_t my_timegm(const struct tm* tm, const time_t& fsc, const SQLTypeInfo& ti);
+  time_t my_timegm_days(const struct tm* tm);
+  time_t parse_fractional_seconds(uint64_t sfrac,
+                                  const int ntotal,
+                                  const SQLTypeInfo& ti);
+  time_t parse_meridians(const time_t& timeval,
+                         const char* p,
+                         const uint32_t& hour,
+                         const SQLTypeInfo& ti);
   static TimeGM& instance() {
     static TimeGM timegm{};
     return timegm;

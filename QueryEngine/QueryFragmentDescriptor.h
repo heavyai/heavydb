@@ -36,6 +36,10 @@ namespace Fragmenter_Namespace {
 class FragmentInfo;
 }
 
+namespace Data_Namespace {
+struct MemoryInfo;
+}
+
 class Executor;
 struct InputTableInfo;
 struct RelAlgExecutionUnit;
@@ -51,7 +55,9 @@ using TableFragments = std::deque<Fragmenter_Namespace::FragmentInfo>;
 class QueryFragmentDescriptor {
  public:
   QueryFragmentDescriptor(const RelAlgExecutionUnit& ra_exe_unit,
-                          const std::vector<InputTableInfo>& query_infos);
+                          const std::vector<InputTableInfo>& query_infos,
+                          const std::vector<Data_Namespace::MemoryInfo>& gpu_mem_infos,
+                          const double gpu_input_mem_limit_percent);
 
   static void computeAllTablesFragments(
       std::map<int, const TableFragments*>& all_tables_fragments,
@@ -108,6 +114,10 @@ class QueryFragmentDescriptor {
   std::map<int, std::set<size_t>> kernels_per_device_;
   std::vector<size_t> outer_fragment_tuple_sizes_;
 
+  double gpu_input_mem_limit_percent_;
+  std::map<size_t, size_t> tuple_count_per_device_;
+  std::map<size_t, size_t> available_gpu_mem_bytes_;
+
   void buildFragmentPerKernelMap(const RelAlgExecutionUnit& ra_exe_unit,
                                  const std::vector<uint64_t>& frag_offsets,
                                  const int device_count,
@@ -131,6 +141,10 @@ class QueryFragmentDescriptor {
 
   bool terminateDispatchMaybe(const RelAlgExecutionUnit& ra_exe_unit,
                               const size_t kernel_id) const;
+
+  void checkDeviceMemoryUsage(const Fragmenter_Namespace::FragmentInfo& fragment,
+                              const int device_id,
+                              const size_t num_cols);
 };
 
 #endif  // QUERYENGINE_QUERYFRAGMENTDESCRIPTOR_H

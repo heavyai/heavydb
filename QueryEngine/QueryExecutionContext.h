@@ -20,8 +20,10 @@
 #include "CompilationOptions.h"
 #include "CudaAllocator.h"
 #include "GpuMemUtils.h"
-#include "IteratorTable.h"
 #include "Rendering/RenderInfo.h"
+#include "ResultSet.h"
+
+#include "QueryMemoryInitializer.h"
 
 #include <boost/core/noncopyable.hpp>
 #include <vector>
@@ -32,10 +34,9 @@ class Executor;
 
 class QueryExecutionContext : boost::noncopyable {
  public:
-  // TODO(alex): move init_agg_vals to GroupByBufferDescriptor, remove device_type
+  // TODO(alex): remove device_type
   QueryExecutionContext(const RelAlgExecutionUnit& ra_exe_unit,
                         const QueryMemoryDescriptor&,
-                        const std::vector<int64_t>& init_agg_vals,
                         const Executor* executor,
                         const ExecutorDeviceType device_type,
                         const int device_id,
@@ -47,17 +48,11 @@ class QueryExecutionContext : boost::noncopyable {
                         const bool sort_on_gpu,
                         RenderInfo*);
 
-  ResultPtr getResult(const RelAlgExecutionUnit& ra_exe_unit,
-                      const std::vector<size_t>& outer_tab_frag_ids) const;
+  ResultSetPtr getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
+                         const QueryMemoryDescriptor& query_mem_desc) const;
 
-  // TOOD(alex): get rid of targets parameter
-  RowSetPtr getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
-                      const QueryMemoryDescriptor& query_mem_desc) const;
-  RowSetPtr groupBufferToResults(const size_t i,
-                                 const std::vector<Analyzer::Expr*>& targets) const;
-
-  IterTabPtr getIterTab(const std::vector<Analyzer::Expr*>& targets,
-                        const ssize_t frag_idx) const;
+  ResultSetPtr groupBufferToResults(const size_t i,
+                                    const std::vector<Analyzer::Expr*>& targets) const;
 
   std::vector<int64_t*> launchGpuCode(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -69,7 +64,6 @@ class QueryExecutionContext : boost::noncopyable {
       const std::vector<std::vector<uint64_t>>& frag_row_offsets,
       const uint32_t frag_stride,
       const int32_t scan_limit,
-      const std::vector<int64_t>& init_agg_vals,
       Data_Namespace::DataMgr* data_mgr,
       const unsigned block_size_x,
       const unsigned grid_size_x,
@@ -89,43 +83,17 @@ class QueryExecutionContext : boost::noncopyable {
       const std::vector<std::vector<uint64_t>>& frag_row_offsets,
       const uint32_t frag_stride,
       const int32_t scan_limit,
-      const std::vector<int64_t>& init_agg_vals,
       int32_t* error_code,
       const uint32_t num_tables,
       const std::vector<int64_t>& join_hash_tables);
 
   bool hasNoFragments() const { return consistent_frag_sizes_.empty(); }
 
+  int64_t getAggInitValForIndex(const size_t index) const;
+
  private:
   const std::vector<const int8_t*>& getColumnFrag(const size_t table_idx,
                                                   int64_t& global_idx) const;
-  bool isEmptyBin(const int64_t* group_by_buffer,
-                  const size_t bin,
-                  const size_t key_idx) const;
-
-  void initColumnPerRow(const QueryMemoryDescriptor& query_mem_desc,
-                        int8_t* row_ptr,
-                        const size_t bin,
-                        const int64_t* init_vals,
-                        const std::vector<ssize_t>& bitmap_sizes);
-
-  void initGroups(int64_t* groups_buffer,
-                  const int64_t* init_vals,
-                  const int32_t groups_buffer_entry_count,
-                  const bool keyless,
-                  const size_t warp_size);
-
-  template <typename T>
-  int8_t* initColumnarBuffer(T* buffer_ptr, const T init_val, const uint32_t entry_count);
-
-  void initColumnarGroups(int64_t* groups_buffer,
-                          const int64_t* init_vals,
-                          const int32_t groups_buffer_entry_count,
-                          const bool keyless);
-
-  IterTabPtr groupBufferToTab(const size_t buf_idx,
-                              const ssize_t frag_idx,
-                              const std::vector<Analyzer::Expr*>& targets) const;
 
   uint32_t getFragmentStride(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -186,19 +154,9 @@ class QueryExecutionContext : boost::noncopyable {
                                          const bool can_sort_on_gpu) const;
 #endif  // HAVE_CUDA
 
-  std::vector<ssize_t> allocateCountDistinctBuffers(const bool deferred);
-  int64_t allocateCountDistinctBitmap(const size_t bitmap_byte_sz);
-  int64_t allocateCountDistinctSet();
-
-  std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(
-      const std::vector<Analyzer::Expr*>& target_exprs) const;
-
-  void allocateCountDistinctGpuMem();
-
-  RowSetPtr groupBufferToDeinterleavedResults(const size_t i) const;
+  ResultSetPtr groupBufferToDeinterleavedResults(const size_t i) const;
 
   const QueryMemoryDescriptor& query_mem_desc_;
-  std::vector<int64_t> init_agg_vals_;
   const Executor* executor_;
   const ExecutorDeviceType device_type_;
   const int device_id_;
@@ -206,20 +164,14 @@ class QueryExecutionContext : boost::noncopyable {
   const std::vector<std::vector<const int8_t*>>& iter_buffers_;
   const std::vector<std::vector<uint64_t>>& frag_offsets_;
   const std::vector<int64_t> consistent_frag_sizes_;
-  const size_t num_buffers_;
 
-  std::vector<int64_t*> group_by_buffers_;
-  std::vector<int64_t*> small_group_by_buffers_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const bool output_columnar_;
   const bool sort_on_gpu_;
 
-  mutable std::vector<std::unique_ptr<ResultSet>> result_sets_;
+  std::unique_ptr<QueryMemoryInitializer> query_buffers_;
+
   mutable std::unique_ptr<ResultSet> estimator_result_set_;
-  CUdeviceptr count_distinct_bitmap_mem_;
-  int8_t* count_distinct_bitmap_host_mem_;
-  int8_t* count_distinct_bitmap_crt_ptr_;
-  size_t count_distinct_bitmap_mem_bytes_;
 
   friend class Executor;
 

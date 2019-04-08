@@ -34,16 +34,17 @@
 #include <csignal>
 #include <random>
 
-#define CALCITEPORT 39093
+#define CALCITEPORT 36279
 
-extern bool g_aggregator;
 extern bool g_enable_filter_push_down;
+
+double g_gpu_mem_limit_percent{0.9};
 namespace {
 
 Planner::RootPlan* parse_plan_legacy(
     const std::string& query_str,
     const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
-  const auto& cat = session->get_catalog();
+  const auto& cat = session->getCatalog();
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
@@ -69,8 +70,8 @@ Planner::RootPlan* parse_plan_calcite(
     return parse_plan_legacy(query_str, session);
   }
 
-  const auto& cat = session->get_catalog();
-  auto& calcite_mgr = cat.get_calciteMgr();
+  const auto& cat = session->getCatalog();
+  auto& calcite_mgr = cat.getCalciteMgr();
   const Catalog_Namespace::SessionInfo* sess = session.get();
   const auto query_ra =
       calcite_mgr.process(*sess,
@@ -155,11 +156,22 @@ Catalog_Namespace::SessionInfo* get_session(
     uses_gpus = false;
   }
   MapDParameters mapd_parms;
+  mapd_parms.aggregator = !leaf_servers.empty();
+
   auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
       data_dir.string(), mapd_parms, uses_gpus, -1);
 
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-  sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, false, false);
+
+  sys_cat.init(base_path.string(),
+               dataMgr,
+               {},
+               g_calcite,
+               false,
+               false,
+               mapd_parms.aggregator,
+               string_servers);
+
   if (create_user) {
     if (!sys_cat.getMetadataForUser(user_name, user)) {
       sys_cat.createUser(user_name, passwd, false);
@@ -175,11 +187,9 @@ Catalog_Namespace::SessionInfo* get_session(
   }
   CHECK(sys_cat.getMetadataForDB(db_name, db));
   CHECK(user.isSuper || (user.userId == db.dbOwner));
-
-  g_aggregator = !leaf_servers.empty();
-
   auto cat = std::make_shared<Catalog_Namespace::Catalog>(
-      base_path.string(), db, dataMgr, string_servers, g_calcite);
+      base_path.string(), db, dataMgr, string_servers, g_calcite, create_db);
+  Catalog_Namespace::Catalog::set(cat->getCurrentDB().dbName, cat);
   Catalog_Namespace::SessionInfo* session =
       new Catalog_Namespace::SessionInfo(cat, user, ExecutorDeviceType::GPU, "");
 
@@ -218,8 +228,7 @@ ExecutionResult run_select_query(
     const bool hoist_literals,
     const bool allow_loop_joins,
     const bool just_explain) {
-  CHECK(!g_aggregator);
-
+  CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
   if (g_enable_filter_push_down) {
     return run_select_query_with_filter_push_down(query_str,
                                                   session,
@@ -230,11 +239,11 @@ ExecutionResult run_select_query(
                                                   g_enable_filter_push_down);
   }
 
-  const auto& cat = session->get_catalog();
-  auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
+  const auto& cat = session->getCatalog();
+  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
-  ExecutionOptions eo = {false,
+  ExecutionOptions eo = {g_enable_columnar_output,
                          true,
                          just_explain,
                          allow_loop_joins,
@@ -244,8 +253,9 @@ ExecutionResult run_select_query(
                          false,
                          10000,
                          false,
-                         false};
-  auto& calcite_mgr = cat.get_calciteMgr();
+                         false,
+                         g_gpu_mem_limit_percent};
+  auto& calcite_mgr = cat.getCalciteMgr();
   const auto query_ra =
       calcite_mgr.process(*session, pg_shim(query_str), {}, true, false).plan_result;
   RelAlgExecutor ra_executor(executor.get(), cat);
@@ -260,11 +270,11 @@ ExecutionResult run_select_query_with_filter_push_down(
     const bool allow_loop_joins,
     const bool just_explain,
     const bool with_filter_push_down) {
-  const auto& cat = session->get_catalog();
-  auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
+  const auto& cat = session->getCatalog();
+  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
-  ExecutionOptions eo = {false,
+  ExecutionOptions eo = {g_enable_columnar_output,
                          true,
                          just_explain,
                          allow_loop_joins,
@@ -274,8 +284,9 @@ ExecutionResult run_select_query_with_filter_push_down(
                          false,
                          10000,
                          with_filter_push_down,
-                         false};
-  auto& calcite_mgr = cat.get_calciteMgr();
+                         false,
+                         g_gpu_mem_limit_percent};
+  auto& calcite_mgr = cat.getCalciteMgr();
   const auto query_ra =
       calcite_mgr.process(*session, pg_shim(query_str), {}, true, false).plan_result;
   RelAlgExecutor ra_executor(executor.get(), cat);
@@ -305,7 +316,8 @@ ExecutionResult run_select_query_with_filter_push_down(
                                        eo.with_dynamic_watchdog,
                                        eo.dynamic_watchdog_time_limit,
                                        /*find_push_down_candidates=*/false,
-                                       /*just_calcite_explain=*/false};
+                                       /*just_calcite_explain=*/false,
+                                       eo.gpu_input_mem_limit_percent};
     return ra_executor.executeRelAlgQuery(new_query_ra, co, eo_modified, nullptr);
   } else {
     return result;
@@ -339,7 +351,7 @@ std::shared_ptr<ResultSet> run_multiple_agg(
     const bool hoist_literals,
     const bool allow_loop_joins,
     const std::unique_ptr<IROutputFile>& ir_output_file) {
-  if (g_aggregator) {
+  if (Catalog_Namespace::SysCatalog::instance().isAggregator()) {
     return run_sql_distributed(query_str, session, device_type, allow_loop_joins);
   }
 
@@ -369,8 +381,8 @@ std::shared_ptr<ResultSet> run_multiple_agg(
     return execution_result.getRows();
   }
 
-  const auto& cat = session->get_catalog();
-  auto executor = Executor::getExecutor(cat.get_currentDB().dbId);
+  const auto& cat = session->getCatalog();
+  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
 
   auto plan = std::unique_ptr<Planner::RootPlan>(parse_plan(query_str, session));
 
@@ -395,7 +407,7 @@ std::shared_ptr<ResultSet> run_multiple_agg(
 
 void run_ddl_statement(const std::string& create_table_stmt,
                        const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
-  if (g_aggregator) {
+  if (Catalog_Namespace::SysCatalog::instance().isAggregator()) {
     run_sql_distributed(create_table_stmt, session, ExecutorDeviceType::CPU, false);
     return;
   }

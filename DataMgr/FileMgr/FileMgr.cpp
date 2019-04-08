@@ -25,9 +25,9 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/system/error_code.hpp>
 #include <string>
-#include "../Shared/measure.h"
-#include "File.h"
 #include "GlobalFileMgr.h"
+#include "Shared/File.h"
+#include "Shared/measure.h"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -77,6 +77,26 @@ FileMgr::FileMgr(const int deviceId,
   init(num_reader_threads);
 }
 
+// used only to initialize enough to drop
+FileMgr::FileMgr(const int deviceId,
+                 GlobalFileMgr* gfm,
+                 const std::pair<const int, const int> fileMgrKey,
+                 const bool initOnly)
+    : AbstractBufferMgr(deviceId)
+    , gfm_(gfm)
+    , fileMgrKey_(fileMgrKey)
+    , defaultPageSize_(0)
+    , nextFileId_(0)
+    , epoch_(0) {
+  const std::string fileMgrDirPrefix("table");
+  const std::string FileMgrDirDelim("_");
+  fileMgrBasePath_ = (gfm_->getBasePath() + fileMgrDirPrefix + FileMgrDirDelim +
+                      std::to_string(fileMgrKey_.first) +                     // db_id
+                      FileMgrDirDelim + std::to_string(fileMgrKey_.second));  // tb_id
+  epochFile_ = nullptr;
+  files_.clear();
+}
+
 FileMgr::FileMgr(GlobalFileMgr* gfm, const size_t defaultPageSize, std::string basePath)
     : AbstractBufferMgr(0)
     , gfm_(gfm)
@@ -103,10 +123,9 @@ void FileMgr::init(const size_t num_reader_threads) {
   // if epoch = -1 this means open from epoch file
   const std::string fileMgrDirPrefix("table");
   const std::string FileMgrDirDelim("_");
-  fileMgrBasePath_ =
-      (gfm_->getBasePath() + fileMgrDirPrefix + FileMgrDirDelim +
-       std::to_string(fileMgrKey_.first) +                           // db_id
-       FileMgrDirDelim + std::to_string(fileMgrKey_.second) + "/");  // tb_id
+  fileMgrBasePath_ = (gfm_->getBasePath() + fileMgrDirPrefix + FileMgrDirDelim +
+                      std::to_string(fileMgrKey_.first) +                     // db_id
+                      FileMgrDirDelim + std::to_string(fileMgrKey_.second));  // tb_id
   boost::filesystem::path path(fileMgrBasePath_);
   if (boost::filesystem::exists(path)) {
     if (!boost::filesystem::is_directory(path)) {
@@ -144,7 +163,8 @@ void FileMgr::init(const size_t num_reader_threads) {
           }
           size_t dotPos = fileStem.find_last_of(".");  // should only be one
           if (dotPos == std::string::npos) {
-            LOG(FATAL) << "Filename does not carry page size information.";
+            LOG(FATAL) << "File `" << fileIt->path()
+                       << "` does not carry page size information in the filename.";
           }
           int fileId = boost::lexical_cast<int>(fileStem.substr(0, dotPos));
           if (fileId > maxFileId) {
@@ -236,13 +256,10 @@ void FileMgr::init(const size_t num_reader_threads) {
     }
     nextFileId_ = maxFileId + 1;
     // std::cout << "next file id: " << nextFileId_ << std::endl;
-  } else {  // data directory does not exist
-    // std::cout << basePath_ << " does not exist. Creating" << std::endl;
+  } else {
     if (!boost::filesystem::create_directory(path)) {
-      LOG(FATAL) << "Could not create data directory";
+      LOG(FATAL) << "Could not create data directory: " << path;
     }
-    // std::cout << basePath_ << " created." << std::endl;
-    // now create epoch file
     createEpochFile(EPOCH_FILENAME);
   }
 
@@ -280,7 +297,7 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
   boost::filesystem::path path(dataPathToConvertFrom);
   if (boost::filesystem::exists(path)) {
     if (!boost::filesystem::is_directory(path)) {
-      LOG(FATAL) << "Specified path is not a directory.";
+      LOG(FATAL) << "Specified path `" << path << "` is not a directory.";
     }
 
     if (epoch_ != -1) {  // if opening at previous epoch
@@ -312,7 +329,8 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
           }
           size_t dotPos = fileStem.find_last_of(".");  // should only be one
           if (dotPos == std::string::npos) {
-            LOG(FATAL) << "Filename does not carry page size information.";
+            LOG(FATAL) << "File `" + fileIt->path().string() +
+                              "` does not carry page size information in the filename.";
           }
           int fileId = boost::lexical_cast<int>(fileStem.substr(0, dotPos));
           if (fileId > maxFileId) {
@@ -420,7 +438,7 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
     nextFileId_ = maxFileId + 1;
   } else {
     if (!boost::filesystem::create_directory(path)) {
-      LOG(FATAL) << "Specified path does not exist.";
+      LOG(FATAL) << "Specified path does not exist: " << path;
     }
   }
 }
@@ -438,14 +456,8 @@ void FileMgr::closeRemovePhysical() {
     epochFile_ = nullptr;
   }
 
-  /* remove directory containing table related data */
-  boost::system::error_code ec;
-  boost::filesystem::path pathToTableDS(getFileMgrBasePath());
-  boost::filesystem::remove_all(pathToTableDS, ec);
-
-  if (ec.value() != boost::system::errc::success) {
-    LOG(FATAL) << "failed to remove file " << getFileMgrBasePath() << "error was " << ec;
-  }
+  /* rename for later deletion the directory containing table related data */
+  File_Namespace::renameForDelete(getFileMgrBasePath());
 }
 
 void FileMgr::copyPage(Page& srcPage,
@@ -471,9 +483,9 @@ void FileMgr::copyPage(Page& srcPage,
 }
 
 void FileMgr::createEpochFile(const std::string& epochFileName) {
-  std::string epochFilePath(fileMgrBasePath_ + epochFileName);
+  std::string epochFilePath(fileMgrBasePath_ + "/" + epochFileName);
   if (boost::filesystem::exists(epochFilePath)) {
-    LOG(FATAL) << "Epoch file already exists";
+    LOG(FATAL) << "Epoch file `" << epochFilePath << "` already exists";
   }
   epochFile_ = create(epochFilePath, sizeof(int));
   // Write out current epoch to file - which if this
@@ -485,13 +497,15 @@ void FileMgr::createEpochFile(const std::string& epochFileName) {
 void FileMgr::openEpochFile(const std::string& epochFileName) {
   std::string epochFilePath(fileMgrBasePath_ + "/" + epochFileName);
   if (!boost::filesystem::exists(epochFilePath)) {
-    LOG(FATAL) << "Epoch file does not exist";
+    LOG(FATAL) << "Epoch file `" << epochFilePath << "` does not exist";
   }
   if (!boost::filesystem::is_regular_file(epochFilePath)) {
-    LOG(FATAL) << "Epoch file is not a regular file";
+    LOG(FATAL) << "Epoch file `" << epochFilePath << "` is not a regular file";
   }
   if (boost::filesystem::file_size(epochFilePath) < 4) {
-    LOG(FATAL) << "Epoch file is not sized properly";
+    LOG(FATAL) << "Epoch file `" << epochFilePath
+               << "` is not sized properly (current size: "
+               << boost::filesystem::file_size(epochFilePath) << ", expected size: 4)";
   }
   epochFile_ = open(epochFilePath);
   read(epochFile_, 0, sizeof(int), (int8_t*)&epoch_);
@@ -518,9 +532,9 @@ void FileMgr::writeAndSyncEpochToDisk() {
 }
 
 void FileMgr::createDBMetaFile(const std::string& DBMetaFileName) {
-  std::string DBMetaFilePath(fileMgrBasePath_ + DBMetaFileName);
+  std::string DBMetaFilePath(fileMgrBasePath_ + "/" + DBMetaFileName);
   if (boost::filesystem::exists(DBMetaFilePath)) {
-    LOG(FATAL) << "DB metadata file already exists.";
+    LOG(FATAL) << "DB metadata file `" << DBMetaFilePath << "` already exists.";
   }
   DBMetaFile_ = create(DBMetaFilePath, sizeof(int));
   int db_ver = getDBVersion();
@@ -529,7 +543,7 @@ void FileMgr::createDBMetaFile(const std::string& DBMetaFileName) {
 }
 
 bool FileMgr::openDBMetaFile(const std::string& DBMetaFileName) {
-  std::string DBMetaFilePath(fileMgrBasePath_ + DBMetaFileName);
+  std::string DBMetaFilePath(fileMgrBasePath_ + "/" + DBMetaFileName);
 
   if (!boost::filesystem::exists(DBMetaFilePath)) {
     // LOG(INFO) << "DB metadata file does not exist, one will be created.";
@@ -559,7 +573,7 @@ void FileMgr::writeAndSyncDBMetaToDisk() {
 }
 
 void FileMgr::checkpoint() {
-  // std::cout << "Checkpointing " << epoch_ <<  std::endl;
+  VLOG(2) << "Checkpointing epoch: " << epoch_;
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
     /*
@@ -605,7 +619,7 @@ AbstractBuffer* FileMgr::createBuffer(const ChunkKey& key,
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
 
   if (chunkIndex_.find(key) != chunkIndex_.end()) {
-    LOG(FATAL) << "Chunk already exists.";
+    LOG(FATAL) << "Chunk already exists for key: " << showChunk(key);
   }
   chunkIndex_[key] = new FileBuffer(this, actualPageSize, key, numBytes);
   chunkIndexWriteLock.unlock();
@@ -622,7 +636,7 @@ void FileMgr::deleteBuffer(const ChunkKey& key, const bool purge) {
   auto chunkIt = chunkIndex_.find(key);
   // ensure the Chunk exists
   if (chunkIt == chunkIndex_.end()) {
-    LOG(FATAL) << "Chunk does not exist.";
+    LOG(FATAL) << "Chunk does not exist for key: " << showChunk(key);
   }
   chunkIndexWriteLock.unlock();
   // chunkIt->second->writeMetadata(-1); // writes -1 as epoch - signifies deleted
@@ -665,7 +679,7 @@ AbstractBuffer* FileMgr::getBuffer(const ChunkKey& key, const size_t numBytes) {
   mapd_shared_lock<mapd_shared_mutex> chunkIndexReadLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.find(key);
   if (chunkIt == chunkIndex_.end()) {
-    LOG(FATAL) << "Chunk does not exist. " << showChunk(key);
+    LOG(FATAL) << "Chunk does not exist for key: " << showChunk(key);
   }
   return chunkIt->second;
 }
@@ -676,12 +690,14 @@ void FileMgr::fetchBuffer(const ChunkKey& key,
   // reads chunk specified by ChunkKey into AbstractBuffer provided by
   // destBuffer
   if (destBuffer->isDirty()) {
-    LOG(FATAL) << " Chunk inconsitency - fetchChunk";
+    LOG(FATAL)
+        << "Aborting attempt to fetch a chunk marked dirty. Chunk inconsistency for key: "
+        << showChunk(key);
   }
   mapd_shared_lock<mapd_shared_mutex> chunkIndexReadLock(chunkIndexMutex_);
   auto chunkIt = chunkIndex_.find(key);
   if (chunkIt == chunkIndex_.end()) {
-    LOG(FATAL) << "Chunk does not exist";
+    LOG(FATAL) << "Chunk does not exist for key: " << showChunk(key);
   }
   chunkIndexReadLock.unlock();
 
@@ -690,7 +706,9 @@ void FileMgr::fetchBuffer(const ChunkKey& key,
   // just look at pageSize * numPages in FileBuffer
   size_t chunkSize = numBytes == 0 ? chunk->size() : numBytes;
   if (numBytes > 0 && numBytes > chunk->size()) {
-    LOG(FATAL) << "Chunk is smaller than number of bytes requested";
+    LOG(FATAL) << "Chunk retrieved for key `" << showChunk(key) << "` is smaller ("
+               << chunk->size() << ") than number of bytes requested (" << numBytes
+               << ")";
   }
   destBuffer->reserve(chunkSize);
   // std::cout << "After reserve chunksize: " << chunkSize << std::endl;
@@ -729,7 +747,13 @@ AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key,
   // size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
   size_t newChunkSize = numBytes == 0 ? srcBuffer->size() : numBytes;
   if (chunk->isDirty()) {
-    LOG(FATAL) << "Chunk inconsistency";
+    // multiple appends are allowed,
+    // but only single update is allowed
+    if (srcBuffer->isUpdated() && chunk->isUpdated()) {
+      LOG(FATAL) << "Aborting attempt to write a chunk marked dirty. Chunk inconsistency "
+                    "for key: "
+                 << showChunk(key);
+    }
   }
   if (srcBuffer->isUpdated()) {
     //@todo use dirty flags to only flush pages of chunk that need to
@@ -866,9 +890,7 @@ FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
                    pageSize,
                    numPages);  // TM: not sure if I like naming scheme here - should be in
                                // separate namespace?
-  if (f == nullptr) {
-    LOG(FATAL) << "Unable to create the new file.";
-  }
+  CHECK(f);
 
   // instantiate a new FileInfo for the newly created file
   int fileId = nextFileId_++;
@@ -952,9 +974,8 @@ bool FileMgr::getDBConvert() const {
 void FileMgr::createTopLevelMetadata() {
   if (openDBMetaFile(DB_META_FILENAME)) {
     if (db_version_ > getDBVersion()) {
-      LOG(FATAL) << "DB forward compatibility is not supported. Version of mapd software "
-                    "used is older than the "
-                    "version of DB being read: "
+      LOG(FATAL) << "DB forward compatibility is not supported. Version of OmniSci "
+                    "software used is older than the version of DB being read: "
                  << db_version_;
     }
   } else {

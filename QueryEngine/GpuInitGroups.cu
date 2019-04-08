@@ -18,7 +18,7 @@ extern "C" __device__ void init_columnar_group_by_buffer_gpu_impl(
     int64_t* groups_buffer,
     const int64_t* init_vals,
     const uint32_t groups_buffer_entry_count,
-    const uint32_t key_qw_count,
+    const uint32_t key_count,
     const uint32_t agg_col_count,
     const int8_t* col_sizes,
     const bool need_padding,
@@ -29,38 +29,44 @@ extern "C" __device__ void init_columnar_group_by_buffer_gpu_impl(
 
   int8_t* buffer_ptr = reinterpret_cast<int8_t*>(groups_buffer);
   if (!keyless) {
-    switch (key_size) {
-      case 1:
-        buffer_ptr = init_columnar_buffer<int8_t>(
-            buffer_ptr, EMPTY_KEY_8, groups_buffer_entry_count, start, step);
-        break;
-      case 2:
-        buffer_ptr = init_columnar_buffer<int16_t>(reinterpret_cast<int16_t*>(buffer_ptr),
-                                                   EMPTY_KEY_16,
-                                                   groups_buffer_entry_count,
-                                                   start,
-                                                   step);
-        break;
-      case 4:
-        buffer_ptr = init_columnar_buffer<int32_t>(reinterpret_cast<int32_t*>(buffer_ptr),
-                                                   EMPTY_KEY_32,
-                                                   groups_buffer_entry_count,
-                                                   start,
-                                                   step);
-        break;
-      case 8:
-        buffer_ptr = init_columnar_buffer<int64_t>(reinterpret_cast<int64_t*>(buffer_ptr),
-                                                   EMPTY_KEY_64,
-                                                   groups_buffer_entry_count,
-                                                   start,
-                                                   step);
-        break;
-      default:
-        // FIXME(miyu): CUDA linker doesn't accept assertion on GPU yet right now.
-        break;
+    for (uint32_t i = 0; i < key_count; ++i) {
+      switch (key_size) {
+        case 1:
+          buffer_ptr = init_columnar_buffer<int8_t>(
+              buffer_ptr, EMPTY_KEY_8, groups_buffer_entry_count, start, step);
+          break;
+        case 2:
+          buffer_ptr =
+              init_columnar_buffer<int16_t>(reinterpret_cast<int16_t*>(buffer_ptr),
+                                            EMPTY_KEY_16,
+                                            groups_buffer_entry_count,
+                                            start,
+                                            step);
+          break;
+        case 4:
+          buffer_ptr =
+              init_columnar_buffer<int32_t>(reinterpret_cast<int32_t*>(buffer_ptr),
+                                            EMPTY_KEY_32,
+                                            groups_buffer_entry_count,
+                                            start,
+                                            step);
+          break;
+        case 8:
+          buffer_ptr =
+              init_columnar_buffer<int64_t>(reinterpret_cast<int64_t*>(buffer_ptr),
+                                            EMPTY_KEY_64,
+                                            groups_buffer_entry_count,
+                                            start,
+                                            step);
+          break;
+        default:
+          // FIXME(miyu): CUDA linker doesn't accept assertion on GPU yet right now.
+          break;
+      }
+      buffer_ptr = align_to_int64(buffer_ptr);
     }
-    buffer_ptr = align_to_int64(buffer_ptr);
   }
+  int32_t init_idx = 0;
   for (int32_t i = 0; i < agg_col_count; ++i) {
     if (need_padding) {
       buffer_ptr = align_to_int64(buffer_ptr);
@@ -68,29 +74,31 @@ extern "C" __device__ void init_columnar_group_by_buffer_gpu_impl(
     switch (col_sizes[i]) {
       case 1:
         buffer_ptr = init_columnar_buffer<int8_t>(
-            buffer_ptr, init_vals[i], groups_buffer_entry_count, start, step);
+            buffer_ptr, init_vals[init_idx++], groups_buffer_entry_count, start, step);
         break;
       case 2:
         buffer_ptr = init_columnar_buffer<int16_t>(reinterpret_cast<int16_t*>(buffer_ptr),
-                                                   init_vals[i],
+                                                   init_vals[init_idx++],
                                                    groups_buffer_entry_count,
                                                    start,
                                                    step);
         break;
       case 4:
         buffer_ptr = init_columnar_buffer<int32_t>(reinterpret_cast<int32_t*>(buffer_ptr),
-                                                   init_vals[i],
+                                                   init_vals[init_idx++],
                                                    groups_buffer_entry_count,
                                                    start,
                                                    step);
         break;
       case 8:
         buffer_ptr = init_columnar_buffer<int64_t>(reinterpret_cast<int64_t*>(buffer_ptr),
-                                                   init_vals[i],
+                                                   init_vals[init_idx++],
                                                    groups_buffer_entry_count,
                                                    start,
                                                    step);
         break;
+      case 0:
+        continue;
       default:
         // FIXME(miyu): CUDA linker doesn't accept assertion on GPU yet now.
         break;
@@ -174,7 +182,7 @@ __global__ void init_columnar_group_by_buffer_gpu_wrapper(
     int64_t* groups_buffer,
     const int64_t* init_vals,
     const uint32_t groups_buffer_entry_count,
-    const uint32_t key_qw_count,
+    const uint32_t key_count,
     const uint32_t agg_col_count,
     const int8_t* col_sizes,
     const bool need_padding,
@@ -183,7 +191,7 @@ __global__ void init_columnar_group_by_buffer_gpu_wrapper(
   init_columnar_group_by_buffer_gpu_impl(groups_buffer,
                                          init_vals,
                                          groups_buffer_entry_count,
-                                         key_qw_count,
+                                         key_count,
                                          agg_col_count,
                                          col_sizes,
                                          need_padding,
@@ -214,7 +222,7 @@ void init_group_by_buffer_on_device(int64_t* groups_buffer,
 void init_columnar_group_by_buffer_on_device(int64_t* groups_buffer,
                                              const int64_t* init_vals,
                                              const uint32_t groups_buffer_entry_count,
-                                             const uint32_t key_qw_count,
+                                             const uint32_t key_count,
                                              const uint32_t agg_col_count,
                                              const int8_t* col_sizes,
                                              const bool need_padding,
@@ -226,7 +234,7 @@ void init_columnar_group_by_buffer_on_device(int64_t* groups_buffer,
       groups_buffer,
       init_vals,
       groups_buffer_entry_count,
-      key_qw_count,
+      key_count,
       agg_col_count,
       col_sizes,
       need_padding,

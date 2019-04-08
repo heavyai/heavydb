@@ -62,8 +62,13 @@ ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
     } else {
       target_init_vals_.push_back(target_info.is_agg ? 0xdeadbeef : 0);
     }
-    if (target_info.agg_kind == kAVG ||
-        (target_info.agg_kind == kSAMPLE && (target_info.sql_type.is_varlen()))) {
+    if (target_info.agg_kind == kAVG) {
+      target_init_vals_.push_back(0);
+    } else if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_geometry()) {
+      for (int i = 1; i < 2 * target_info.sql_type.get_physical_coord_cols(); i++) {
+        target_init_vals_.push_back(0);
+      }
+    } else if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) {
       target_init_vals_.push_back(0);
     }
   }
@@ -142,7 +147,7 @@ ResultSet::ResultSet(const std::vector<TargetInfo>& targets,
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {}
 
-ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimator,
+ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
                      const ExecutorDeviceType device_type,
                      const int device_id,
                      Data_Namespace::DataMgr* data_mgr)
@@ -159,15 +164,15 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::NDVEstimator> estimat
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {
   if (device_type == ExecutorDeviceType::GPU) {
-    estimator_buffer_ = reinterpret_cast<int8_t*>(alloc_gpu_mem(
-        data_mgr_, estimator_->getEstimatorBufferSize(), device_id_, nullptr));
-    data_mgr->cudaMgr_->zeroDeviceMem(
-        estimator_buffer_, estimator_->getEstimatorBufferSize(), device_id_);
+    estimator_buffer_ = reinterpret_cast<int8_t*>(
+        alloc_gpu_mem(data_mgr_, estimator_->getBufferSize(), device_id_, nullptr));
+    data_mgr->getCudaMgr()->zeroDeviceMem(
+        estimator_buffer_, estimator_->getBufferSize(), device_id_);
   } else {
     OOM_TRACE_PUSH(+": host_estimator_buffer_ " +
-                   std::to_string(estimator_->getEstimatorBufferSize()));
+                   std::to_string(estimator_->getBufferSize()));
     host_estimator_buffer_ =
-        static_cast<int8_t*>(checked_calloc(estimator_->getEstimatorBufferSize(), 1));
+        static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
   }
 }
 
@@ -207,6 +212,11 @@ ResultSet::~ResultSet() {
       free(storage_->getUnderlyingBuffer());
     }
   }
+  for (auto& storage : appended_storage_) {
+    if (storage && !storage->buff_is_provided_) {
+      free(storage->getUnderlyingBuffer());
+    }
+  }
   if (host_estimator_buffer_) {
     CHECK(device_type_ == ExecutorDeviceType::CPU || estimator_buffer_);
     free(host_estimator_buffer_);
@@ -231,6 +241,7 @@ const ResultSetStorage* ResultSet::allocateStorage(
     int8_t* buff,
     const std::vector<int64_t>& target_init_vals) const {
   CHECK(buff);
+  CHECK(!storage_);
   storage_.reset(new ResultSetStorage(targets_, query_mem_desc_, buff, true));
   storage_->target_init_vals_ = target_init_vals;
   return storage_.get();
@@ -257,7 +268,6 @@ size_t ResultSet::getCurrentRowBufferIndex() const {
 
 void ResultSet::append(ResultSet& that) {
   CHECK_EQ(-1, cached_row_count_);
-  CHECK(!query_mem_desc_.didOutputColumnar());  // TODO(miyu)
   if (!that.storage_) {
     return;
   }
@@ -400,30 +410,16 @@ int8_t* ResultSet::getHostEstimatorBuffer() const {
 void ResultSet::syncEstimatorBuffer() const {
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   CHECK(!host_estimator_buffer_);
-  CHECK_EQ(size_t(0), estimator_->getEstimatorBufferSize() % sizeof(int64_t));
+  CHECK_EQ(size_t(0), estimator_->getBufferSize() % sizeof(int64_t));
   OOM_TRACE_PUSH(+": host_estimator_buffer_ " +
-                 std::to_string(estimator_->getEstimatorBufferSize()));
+                 std::to_string(estimator_->getBufferSize()));
   host_estimator_buffer_ =
-      static_cast<int8_t*>(checked_calloc(estimator_->getEstimatorBufferSize(), 1));
+      static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
   copy_from_gpu(data_mgr_,
                 host_estimator_buffer_,
                 reinterpret_cast<CUdeviceptr>(estimator_buffer_),
-                estimator_->getEstimatorBufferSize(),
+                estimator_->getBufferSize(),
                 device_id_);
-}
-
-size_t ResultSet::getNDVEstimator() const {
-  CHECK(host_estimator_buffer_);
-  auto bits_set =
-      bitmap_set_size(host_estimator_buffer_, estimator_->getEstimatorBufferSize());
-  const auto total_bits = estimator_->getEstimatorBufferSize() * 8;
-  CHECK_LE(bits_set, total_bits);
-  const auto unset_bits = total_bits - bits_set;
-  const auto ratio = static_cast<double>(unset_bits) / total_bits;
-  if (ratio == 0.) {
-    throw std::runtime_error("Failed to get a high quality cardinality estimation");
-  }
-  return -static_cast<double>(total_bits) * log(ratio);
 }
 
 void ResultSet::setQueueTime(const int64_t queue_time) {
@@ -663,8 +659,14 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
     // TODO the above takes_float_argument() is widely used  wonder if this problem
     // exists elsewhere
     if (entry_ti.get_type() == kFLOAT) {
+      const auto is_col_lazy =
+          !result_set_->lazy_fetch_info_.empty() &&
+          result_set_->lazy_fetch_info_[order_entry.tle_no - 1].is_lazily_fetched;
       if (result_set_->query_mem_desc_.getColumnWidth(order_entry.tle_no - 1).compact ==
-          sizeof(float)) {
+              sizeof(float) ||
+          (result_set_->query_mem_desc_.didOutputColumnar() && !is_col_lazy &&
+           result_set_->query_mem_desc_.getPaddedColumnWidthBytes(order_entry.tle_no -
+                                                                  1) == sizeof(float))) {
         float_argument_input = true;
       }
     }
@@ -781,7 +783,7 @@ void ResultSet::sortPermutation(
 
 void ResultSet::radixSortOnGpu(
     const std::list<Analyzer::OrderEntry>& order_entries) const {
-  auto data_mgr = &executor_->catalog_->get_dataMgr();
+  auto data_mgr = &executor_->catalog_->getDataMgr();
   const int device_id{0};
   CudaAllocator cuda_allocator(data_mgr, device_id);
   std::vector<int64_t*> group_by_buffers(executor_->blockSize());
@@ -822,7 +824,7 @@ void ResultSet::radixSortOnCpu(
   for (const auto& order_entry : order_entries) {
     const auto target_idx = order_entry.tle_no - 1;
     const auto sortkey_val_buff = reinterpret_cast<int64_t*>(
-        buffer_ptr + query_mem_desc_.getColOffInBytes(0, target_idx));
+        buffer_ptr + query_mem_desc_.getColOffInBytes(target_idx));
     const auto chosen_bytes = query_mem_desc_.getColumnWidth(target_idx).compact;
     sort_groups_cpu(sortkey_val_buff,
                     &idx_buff[0],
@@ -841,7 +843,7 @@ void ResultSet::radixSortOnCpu(
       }
       const auto chosen_bytes = query_mem_desc_.getColumnWidth(target_idx).compact;
       const auto satellite_val_buff = reinterpret_cast<int64_t*>(
-          buffer_ptr + query_mem_desc_.getColOffInBytes(0, target_idx));
+          buffer_ptr + query_mem_desc_.getColOffInBytes(target_idx));
       apply_permutation_cpu(satellite_val_buff,
                             &idx_buff[0],
                             query_mem_desc_.getEntryCount(),
@@ -869,4 +871,12 @@ int64_t ResultSetStorage::mappedPtr(const int64_t remote_ptr) const {
 
 size_t ResultSet::getLimit() {
   return keep_first_;
+}
+
+bool can_use_parallel_algorithms(const ResultSet& rows) {
+  return !rows.isTruncated();
+}
+
+bool use_parallel_algorithms(const ResultSet& rows) {
+  return can_use_parallel_algorithms(rows) && rows.entryCount() >= 20000;
 }

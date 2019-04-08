@@ -68,8 +68,8 @@ class S3Archive : public Archive {
     this->s3_secret_key = s3_secret_key;
     this->s3_region = s3_region;
 
-    // this must be local (on mapd_server not mapdql)
-    // or posix dir path accessible to mapd_server
+    // this must be local to omnisci_server not client
+    // or posix dir path accessible to omnisci_server
     auto env_s3_temp_dir = getenv("TMPDIR");
     s3_temp_dir = env_s3_temp_dir ? env_s3_temp_dir : "/tmp";
   }
@@ -102,6 +102,7 @@ class S3Archive : public Archive {
     throw std::runtime_error("AWS S3 support not available");
   }
 #endif  // HAVE_AWS_S3
+  size_t get_total_file_size() const { return total_file_size; }
 
  private:
 #ifdef HAVE_AWS_S3
@@ -121,6 +122,7 @@ class S3Archive : public Archive {
   std::string prefix_name;
   std::vector<std::string> objkeys;
   std::map<const std::string, const std::string> file_paths;
+  size_t total_file_size{0};
 };
 
 class S3ParquetArchive : public S3Archive {

@@ -113,7 +113,7 @@ void scan_chunk(const ChunkMetadata& chunk_metadata,
         break;
       }
       case kDATE:
-        if (sizeof(time_t) == 4) {
+        if (sizeof(time_t) == 4 || cd->columnType.is_date_in_days()) {
           {
             boost::hash_combine(hash, *(int32_t*)vd.pointer);
           }
@@ -140,12 +140,12 @@ vector<size_t> scan_table_return_hash(const string& table_name, const Catalog& c
     for (auto cd : cds) {
       auto chunk_meta_it = frag.getChunkMetadataMapPhysical().find(cd->columnId);
       ChunkKey chunk_key{
-          cat.get_currentDB().dbId, td->tableId, cd->columnId, frag.fragmentId};
+          cat.getCurrentDB().dbId, td->tableId, cd->columnId, frag.fragmentId};
       total_bytes += chunk_meta_it->second.numBytes;
       auto ms = measure<>::execution([&]() {
         std::shared_ptr<Chunk> chunkp =
             Chunk::getChunk(cd,
-                            &cat.get_dataMgr(),
+                            &cat.getDataMgr(),
                             chunk_key,
                             CPU_LEVEL,
                             frag.deviceIds[static_cast<int>(CPU_LEVEL)],
@@ -178,12 +178,12 @@ vector<size_t> scan_table_return_hash_non_iter(const string& table_name,
     for (auto cd : cds) {
       auto chunk_meta_it = frag.getChunkMetadataMapPhysical().find(cd->columnId);
       ChunkKey chunk_key{
-          cat.get_currentDB().dbId, td->tableId, cd->columnId, frag.fragmentId};
+          cat.getCurrentDB().dbId, td->tableId, cd->columnId, frag.fragmentId};
       total_bytes += chunk_meta_it->second.numBytes;
       auto ms = measure<>::execution([&]() {
         std::shared_ptr<Chunk> chunkp =
             Chunk::getChunk(cd,
-                            &cat.get_dataMgr(),
+                            &cat.getDataMgr(),
                             chunk_key,
                             CPU_LEVEL,
                             frag.deviceIds[static_cast<int>(CPU_LEVEL)],

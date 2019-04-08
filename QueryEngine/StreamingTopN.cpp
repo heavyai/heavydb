@@ -56,6 +56,7 @@ bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
   }
 
   if (!query_mem_desc.canOutputColumnar() &&  // TODO(miyu): relax this limitation
+      !query_mem_desc.didOutputColumnar() &&
       ra_exe_unit.sort_info.order_entries.size() == 1 && ra_exe_unit.sort_info.limit &&
       ra_exe_unit.sort_info.algorithm == SortAlgorithm::StreamingTopN) {
     const auto only_order_entry = ra_exe_unit.sort_info.order_entries.front();
@@ -74,6 +75,16 @@ bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
   return false;
 }
 
+size_t get_heap_key_slot_index(const std::vector<Analyzer::Expr*>& target_exprs,
+                               const size_t target_idx) {
+  size_t slot_idx = 0;
+  for (size_t i = 0; i < target_idx; ++i) {
+    auto agg_info = target_info(target_exprs[i]);
+    slot_idx = advance_slot(slot_idx, agg_info, false);
+  }
+  return slot_idx;
+}
+
 #ifdef HAVE_CUDA
 std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
     Data_Namespace::DataMgr* data_mgr,
@@ -89,9 +100,10 @@ std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
   const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
   const auto group_key_bytes = query_mem_desc.getEffectiveKeyWidth();
   const PodOrderEntry pod_oe{only_oe.tle_no, only_oe.is_desc, only_oe.nulls_first};
+  const auto key_slot_idx = get_heap_key_slot_index(ra_exe_unit.target_exprs, oe_col_idx);
   GroupByBufferLayoutInfo oe_layout{
       n * thread_count,
-      query_mem_desc.getColOffInBytes(0, oe_col_idx),
+      query_mem_desc.getColOffInBytes(key_slot_idx),
       static_cast<size_t>(query_mem_desc.getColumnWidth(oe_col_idx).compact),
       query_mem_desc.getRowSize(),
       target_info(ra_exe_unit.target_exprs[oe_col_idx]),

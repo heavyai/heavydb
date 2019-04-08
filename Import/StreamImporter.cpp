@@ -32,8 +32,9 @@
 #include <iterator>
 #include <string>
 
-#include "../Shared/sqltypes.h"
 #include "RowToColumnLoader.h"
+#include "Shared/ThriftClient.h"
+#include "Shared/sqltypes.h"
 
 #include <chrono>
 #include <thread>
@@ -188,7 +189,11 @@ void stream_insert(
 
 int main(int argc, char** argv) {
   std::string server_host("localhost");  // default to localhost
-  int port = 9091;                       // default port number
+  int port = 6274;                       // default port number
+  bool http = false;
+  bool https = false;
+  bool skip_host_verify = false;
+  std::string ca_cert_name{""};
   std::string table_name;
   std::string db_name;
   std::string user_name;
@@ -202,6 +207,7 @@ int main(int argc, char** argv) {
   std::map<std::string,
            std::pair<std::unique_ptr<boost::regex>, std::unique_ptr<std::string>>>
       transformations;
+  ThriftConnectionType conn_type;
 
   google::InitGoogleLogging(argv[0]);
 
@@ -219,9 +225,24 @@ int main(int argc, char** argv) {
       "passwd,p", po::value<std::string>(&passwd)->required(), "User Password");
   desc.add_options()("host",
                      po::value<std::string>(&server_host)->default_value(server_host),
-                     "MapD Server Hostname");
+                     "OmniSci Server Hostname");
   desc.add_options()(
-      "port", po::value<int>(&port)->default_value(port), "MapD Server Port Number");
+      "port", po::value<int>(&port)->default_value(port), "OmniSci Server Port Number");
+  desc.add_options()("http",
+                     po::bool_switch(&http)->default_value(http)->implicit_value(true),
+                     "Use HTTP transport");
+  desc.add_options()("https",
+                     po::bool_switch(&https)->default_value(https)->implicit_value(true),
+                     "Use HTTPS transport");
+  desc.add_options()("skip-verify",
+                     po::bool_switch(&skip_host_verify)
+                         ->default_value(skip_host_verify)
+                         ->implicit_value(true),
+                     "Don't verify SSL certificate validity");
+  desc.add_options()(
+      "ca-cert",
+      po::value<std::string>(&ca_cert_name)->default_value(ca_cert_name),
+      "Path to trusted server certificate. Initiates an encrypted connection");
   desc.add_options()("delim",
                      po::value<std::string>(&delim_str)->default_value(delim_str),
                      "Field delimiter");
@@ -281,6 +302,16 @@ int main(int argc, char** argv) {
   } catch (boost::program_options::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;
+  }
+
+  if (http) {
+    conn_type = ThriftConnectionType::HTTP;
+  } else if (https) {
+    conn_type = ThriftConnectionType::HTTPS;
+  } else if (!ca_cert_name.empty()) {
+    conn_type = ThriftConnectionType::BINARY_SSL;
+  } else {
+    conn_type = ThriftConnectionType::BINARY;
   }
 
   char delim = delim_str[0];
@@ -388,7 +419,14 @@ int main(int argc, char** argv) {
 
   Importer_NS::CopyParams copy_params(
       delim, nulls, line_delim, batch_size, retry_count, retry_wait);
-  RowToColumnLoader row_loader(server_host, port, db_name, user_name, passwd, table_name);
+  RowToColumnLoader row_loader(
+      ThriftClientConnection(
+          server_host, port, conn_type, skip_host_verify, ca_cert_name, ca_cert_name),
+      user_name,
+      passwd,
+      db_name,
+      table_name);
+
   stream_insert(row_loader, transformations, copy_params, remove_quotes);
   return 0;
 }

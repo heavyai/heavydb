@@ -1,0 +1,10 @@
+port = 6274
+http-port = 6278
+calcite-port = 6279
+data = "data"
+read-only = false
+verbose = false
+
+[web]
+port = 6273
+frontend = "frontend"

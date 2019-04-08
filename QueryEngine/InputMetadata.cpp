@@ -185,7 +185,7 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultSet* rows) {
   return metadata_map;
 }
 
-Fragmenter_Namespace::TableInfo synthesize_table_info(const RowSetPtr& rows) {
+Fragmenter_Namespace::TableInfo synthesize_table_info(const ResultSetPtr& rows) {
   std::deque<Fragmenter_Namespace::FragmentInfo> result;
   if (rows) {
     result.resize(1);
@@ -197,24 +197,6 @@ Fragmenter_Namespace::TableInfo synthesize_table_info(const RowSetPtr& rows) {
   }
   Fragmenter_Namespace::TableInfo table_info;
   table_info.fragments = result;
-  return table_info;
-}
-
-Fragmenter_Namespace::TableInfo synthesize_table_info(const IterTabPtr& table) {
-  Fragmenter_Namespace::TableInfo table_info;
-  size_t total_row_count{0};  // rows can be null only for query validation
-  if (!table->definitelyHasNoRows()) {
-    table_info.fragments.resize(table->fragCount());
-    for (size_t i = 0; i < table->fragCount(); ++i) {
-      auto& fragment = table_info.fragments[i];
-      fragment.fragmentId = i;
-      fragment.setPhysicalNumTuples(table->getFragAt(i).row_count);
-      fragment.deviceIds.resize(3);
-      total_row_count += fragment.getPhysicalNumTuples();
-    }
-  }
-
-  table_info.setPhysicalNumTuples(total_row_count);
   return table_info;
 }
 
@@ -239,15 +221,7 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
       CHECK(temporary_tables);
       const auto it = temporary_tables->find(table_id);
       CHECK(it != temporary_tables->end());
-      if (const auto rows = boost::get<RowSetPtr>(&it->second)) {
-        CHECK(*rows);
-        table_infos.push_back({table_id, synthesize_table_info(*rows)});
-      } else if (const auto table = boost::get<IterTabPtr>(&it->second)) {
-        CHECK(*table);
-        table_infos.push_back({table_id, synthesize_table_info(*table)});
-      } else {
-        CHECK(false);
-      }
+      table_infos.push_back({table_id, synthesize_table_info(it->second)});
     } else {
       CHECK(input_desc.getSourceType() == InputSourceType::TABLE);
       table_infos.push_back({table_id, executor->getTableInfo(table_id)});
@@ -265,7 +239,6 @@ size_t get_frag_count_of_table(const int table_id, Executor* executor) {
   auto it = temporary_tables->find(table_id);
   if (it != temporary_tables->end()) {
     CHECK_GE(int(0), table_id);
-    CHECK(boost::get<RowSetPtr>(&it->second));
     return size_t(1);
   } else {
     const auto table_info = executor->getTableInfo(table_id);
@@ -286,7 +259,6 @@ std::vector<InputTableInfo> get_table_infos(const RelAlgExecutionUnit& ra_exe_un
   INJECT_TIMER(get_table_infos);
   std::vector<InputTableInfo> table_infos;
   collect_table_infos(table_infos, ra_exe_unit.input_descs, executor);
-  collect_table_infos(table_infos, ra_exe_unit.extra_input_descs, executor);
   return table_infos;
 }
 

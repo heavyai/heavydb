@@ -279,7 +279,7 @@ llvm::Value* Executor::codegenDictStrCmp(const std::shared_ptr<Analyzer::Expr> l
   const auto sdp =
       getStringDictionaryProxy(col_ti.get_comp_param(), row_set_mem_owner_, true);
 
-  if (!g_fast_strcmp && sdp->storageEntryCount() > 200000000) {
+  if (sdp->storageEntryCount() > 200000000) {
     std::runtime_error("Cardinality for string dictionary is too high");
     return nullptr;
   }

@@ -194,9 +194,9 @@ class TypedImportBuffer : boost::noncopyable {
           }
         }
         break;
+      case kDATE:
       case kTIME:
       case kTIMESTAMP:
-      case kDATE:
         time_buffer_ = new std::vector<time_t>();
         break;
       case kARRAY:
@@ -261,9 +261,9 @@ class TypedImportBuffer : boost::noncopyable {
           }
         }
         break;
+      case kDATE:
       case kTIME:
       case kTIMESTAMP:
-      case kDATE:
         delete time_buffer_;
         break;
       case kARRAY:
@@ -312,6 +312,8 @@ class TypedImportBuffer : boost::noncopyable {
   void addStringArray(const std::vector<std::string>& arr) {
     string_array_buffer_->push_back(arr);
   }
+
+  void addDate32(const time_t v) { date_i32_buffer_->push_back(v); }
 
   void addTime(const time_t v) { time_buffer_->push_back(v); }
 
@@ -381,9 +383,9 @@ class TypedImportBuffer : boost::noncopyable {
         return reinterpret_cast<int8_t*>(&((*float_buffer_)[0]));
       case kDOUBLE:
         return reinterpret_cast<int8_t*>(&((*double_buffer_)[0]));
+      case kDATE:
       case kTIME:
       case kTIMESTAMP:
-      case kDATE:
         return reinterpret_cast<int8_t*>(&((*time_buffer_)[0]));
       default:
         abort();
@@ -408,9 +410,9 @@ class TypedImportBuffer : boost::noncopyable {
         return sizeof((*float_buffer_)[0]);
       case kDOUBLE:
         return sizeof((*double_buffer_)[0]);
+      case kDATE:
       case kTIME:
       case kTIMESTAMP:
-      case kDATE:
         return sizeof((*time_buffer_)[0]);
       default:
         abort();
@@ -503,12 +505,11 @@ class TypedImportBuffer : boost::noncopyable {
         }
         break;
       }
+      case kDATE:
       case kTIME:
       case kTIMESTAMP:
-      case kDATE: {
         time_buffer_->clear();
         break;
-      }
       case kARRAY: {
         if (IS_STRING(column_desc_->columnType.get_subtype())) {
           string_array_buffer_->clear();
@@ -557,6 +558,7 @@ class TypedImportBuffer : boost::noncopyable {
     std::vector<int64_t>* bigint_buffer_;
     std::vector<float>* float_buffer_;
     std::vector<double>* double_buffer_;
+    std::vector<int32_t>* date_i32_buffer_;
     std::vector<time_t>* time_buffer_;
     std::vector<std::string>* string_buffer_;
     std::vector<std::string>* geo_string_buffer_;
@@ -582,7 +584,7 @@ class Loader {
       , column_descs(c.getAllColumnMetadataForTable(t->tableId, false, false, true)) {
     init();
   };
-  Catalog_Namespace::Catalog& get_catalog() { return catalog; }
+  Catalog_Namespace::Catalog& getCatalog() { return catalog; }
   const TableDescriptor* get_table_desc() const { return table_desc; }
   const std::list<const ColumnDescriptor*>& get_column_descs() const {
     return column_descs;
@@ -627,6 +629,8 @@ class Loader {
                           const size_t shard_count);
 
  private:
+  std::vector<DataBlockPtr> get_data_block_pointers(
+      const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers);
   bool loadToShard(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
                    size_t row_count,
                    const TableDescriptor* shard_table,
@@ -682,6 +686,9 @@ class DataStreamSink {
   FILE* p_file = nullptr;
   ImportStatus import_status;
   bool load_failed = false;
+  size_t total_file_size{0};
+  std::vector<size_t> file_offsets;
+  std::mutex file_offsets_mutex;
 };
 
 class Detector : public DataStreamSink {
@@ -771,7 +778,7 @@ class ImporterUtils {
 
 class RenderGroupAnalyzer {
  public:
-  RenderGroupAnalyzer() : _numRenderGroups(0) {}
+  RenderGroupAnalyzer() : _rtree(std::make_unique<RTree>()), _numRenderGroups(0) {}
   void seedFromExistingTableContents(const std::unique_ptr<Loader>& loader,
                                      const std::string& geoColumnBaseName);
   int insertBoundsAndReturnRenderGroup(const std::vector<double>& bounds);
@@ -830,7 +837,7 @@ class Importer : public DataStreamSink {
       const std::string& archive_path,
       const CopyParams& copy_params);
   static bool gdalSupportsNetworkFileAccess();
-  Catalog_Namespace::Catalog& get_catalog() { return loader->get_catalog(); }
+  Catalog_Namespace::Catalog& getCatalog() { return loader->getCatalog(); }
   static void set_geo_physical_import_buffer(
       const Catalog_Namespace::Catalog& catalog,
       const ColumnDescriptor* cd,
@@ -840,6 +847,17 @@ class Importer : public DataStreamSink {
       std::vector<double>& bounds,
       std::vector<int>& ring_sizes,
       std::vector<int>& poly_rings,
+      int render_group,
+      const int64_t replicate_count = 0);
+  static void set_geo_physical_import_buffer_columnar(
+      const Catalog_Namespace::Catalog& catalog,
+      const ColumnDescriptor* cd,
+      std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
+      size_t& col_idx,
+      std::vector<std::vector<double>>& coords_column,
+      std::vector<std::vector<double>>& bounds_column,
+      std::vector<std::vector<int>>& ring_sizes_column,
+      std::vector<std::vector<int>>& poly_rings_column,
       int render_group,
       const int64_t replicate_count = 0);
 

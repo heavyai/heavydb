@@ -26,14 +26,16 @@ class TooManyHashEntries : public std::runtime_error {
       : std::runtime_error("Hash tables with more than 2B entries not supported yet") {}
 };
 
+class TableMustBeReplicated : public std::runtime_error {
+ public:
+  TableMustBeReplicated(const std::string& table_name)
+      : std::runtime_error("Hash join failed: Table '" + table_name +
+                           "' must be replicated.") {}
+};
+
 class HashJoinFail : public std::runtime_error {
  public:
   HashJoinFail(const std::string& reason) : std::runtime_error(reason) {}
-};
-
-class NeedsOneToManyHash : public HashJoinFail {
- public:
-  NeedsOneToManyHash() : HashJoinFail("Needs one to many hash") {}
 };
 
 class FailedToFetchColumn : public HashJoinFail {
@@ -53,12 +55,12 @@ struct HashJoinMatchingSet {
   llvm::Value* slot;
 };
 
+using InnerOuter = std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>;
+
 class JoinHashTableInterface {
  public:
   virtual int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
                                     const int device_id) noexcept = 0;
-
-  virtual llvm::Value* codegenSlotIsValid(const CompilationOptions&, const size_t) = 0;
 
   virtual llvm::Value* codegenSlot(const CompilationOptions&, const size_t) = 0;
 
@@ -69,10 +71,7 @@ class JoinHashTableInterface {
 
   virtual int getInnerTableRteIdx() const noexcept = 0;
 
-  enum class HashType {
-    OneToOne,
-    OneToMany,
-  };
+  enum class HashType { OneToOne, OneToMany };
 
   virtual HashType getHashType() const noexcept = 0;
 };

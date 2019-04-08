@@ -84,24 +84,18 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
                                   false,
                                   nullptr);
   RelAlgExecutionUnit ra_exe_unit{input_descs,
-                                  {},
                                   input_col_descs,
                                   {},
                                   quals,
-                                  JoinType::INVALID,
-                                  {},
-                                  {},
-                                  {},
                                   {},
                                   {},
                                   {count_expr.get()},
-                                  {},
                                   nullptr,
                                   {{}, SortAlgorithm::Default, 0, 0},
                                   0};
   int32_t error_code{0};
   size_t one{1};
-  ResultPtr filtered_result;
+  ResultSetPtr filtered_result;
   const auto table_infos = get_table_infos(input_descs, executor_);
   CHECK_EQ(size_t(1), table_infos.size());
   const size_t total_rows_upper_bound = table_infos.front().info.getNumTuplesUpperBound();
@@ -123,9 +117,7 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
   if (error_code) {
     return {false, 1.0, 0};
   }
-  const auto& filtered_result_rows = boost::get<RowSetPtr>(filtered_result);
-  CHECK(filtered_result_rows);
-  const auto count_row = filtered_result_rows->getNextRow(false, false);
+  const auto count_row = filtered_result->getNextRow(false, false);
   CHECK_EQ(size_t(1), count_row.size());
   const auto& count_tv = count_row.front();
   const auto count_scalar_tv = boost::get<ScalarTargetValue>(&count_tv);
@@ -186,7 +178,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
                                        eo.with_dynamic_watchdog,
                                        eo.dynamic_watchdog_time_limit,
                                        /*find_push_down_candidates=*/false,
-                                       /*just_calcite_explain=*/false};
+                                       /*just_calcite_explain=*/false,
+                                       eo.gpu_input_mem_limit_percent};
 
     // Dispatch the subqueries first
     for (auto subquery : subqueries_) {
@@ -265,7 +258,7 @@ std::vector<PushedDownFilterInfo> find_push_down_filters(
   }
   std::unordered_map<int, std::vector<std::shared_ptr<Analyzer::Expr>>>
       filters_per_nesting_level;
-  for (const auto& level_conditions : ra_exe_unit.inner_joins) {
+  for (const auto& level_conditions : ra_exe_unit.join_quals) {
     AllRangeTableIndexVisitor visitor;
     for (const auto& cond : level_conditions.quals) {
       const auto rte_indices = visitor.visit(cond.get());

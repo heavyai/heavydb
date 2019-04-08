@@ -100,19 +100,19 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   }
 
   /**
-   * Mock operator table for testing purposes. Contains the standard SQL
-   * operator table, plus a list of operators.
+   * Mock operator table for testing purposes. Contains the standard SQL operator
+   * table, plus a list of operators.
    */
-  //~ Instance fields --------------------------------------------------------
+  // ~ Instance fields --------------------------------------------------------
   private final ListSqlOperatorTable listOpTab;
 
-  //~ Constructors -----------------------------------------------------------
+  // ~ Constructors -----------------------------------------------------------
   public MapDSqlOperatorTable(SqlOperatorTable parentTable) {
     super(ImmutableList.of(parentTable, new CaseInsensitiveListSqlOperatorTable()));
     listOpTab = (ListSqlOperatorTable) tableList.get(1);
   }
 
-  //~ Methods ----------------------------------------------------------------
+  // ~ Methods ----------------------------------------------------------------
   /**
    * Adds an operator to this table.
    *
@@ -149,7 +149,10 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new Truncate());
     opTab.addOperator(new ST_Contains());
     opTab.addOperator(new ST_Intersects());
+    opTab.addOperator(new ST_Disjoint());
     opTab.addOperator(new ST_Within());
+    opTab.addOperator(new ST_DWithin());
+    opTab.addOperator(new ST_DFullyWithin());
     opTab.addOperator(new ST_Distance());
     opTab.addOperator(new ST_MaxDistance());
     opTab.addOperator(new ST_GeogFromText());
@@ -176,8 +179,11 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new ApproxCountDistinct());
     opTab.addOperator(new Sample());
     opTab.addOperator(new LastSample());
+    // MapD_Geo* are deprecated in place of the OmniSci_Geo_ varietals
     opTab.addOperator(new MapD_GeoPolyBoundsPtr());
     opTab.addOperator(new MapD_GeoPolyRenderGroup());
+    opTab.addOperator(new OmniSci_Geo_PolyBoundsPtr());
+    opTab.addOperator(new OmniSci_Geo_PolyRenderGroup());
     opTab.addOperator(new convert_meters_to_pixel_width());
     opTab.addOperator(new convert_meters_to_pixel_height());
     opTab.addOperator(new is_point_in_view());
@@ -691,6 +697,32 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
   }
 
+  static class ST_Disjoint extends SqlFunction {
+    ST_Disjoint() {
+      super("ST_Disjoint",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 2;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> st_disjoint_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
+      st_disjoint_sig.add(SqlTypeFamily.ANY);
+      st_disjoint_sig.add(SqlTypeFamily.ANY);
+      return st_disjoint_sig;
+    }
+  }
+
   static class ST_Within extends SqlFunction {
     ST_Within() {
       super("ST_Within",
@@ -714,6 +746,60 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       st_within_sig.add(SqlTypeFamily.ANY);
       st_within_sig.add(SqlTypeFamily.ANY);
       return st_within_sig;
+    }
+  }
+
+  static class ST_DWithin extends SqlFunction {
+    ST_DWithin() {
+      super("ST_DWithin",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 3;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> st_dwithin_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
+      st_dwithin_sig.add(SqlTypeFamily.ANY);
+      st_dwithin_sig.add(SqlTypeFamily.ANY);
+      st_dwithin_sig.add(SqlTypeFamily.NUMERIC);
+      return st_dwithin_sig;
+    }
+  }
+
+  static class ST_DFullyWithin extends SqlFunction {
+    ST_DFullyWithin() {
+      super("ST_DFullyWithin",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 3;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BOOLEAN);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> st_dwithin_sig =
+              new java.util.ArrayList<SqlTypeFamily>();
+      st_dwithin_sig.add(SqlTypeFamily.ANY);
+      st_dwithin_sig.add(SqlTypeFamily.ANY);
+      st_dwithin_sig.add(SqlTypeFamily.NUMERIC);
+      return st_dwithin_sig;
     }
   }
 
@@ -1276,6 +1362,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   //
   // Internal accessors for in-situ poly render queries
   //
+  // The MapD_* varietals are deprecated. The OmniSci_Geo_* ones should be used instead
+  //
 
   static class MapD_GeoPolyBoundsPtr extends SqlFunction {
     MapD_GeoPolyBoundsPtr() {
@@ -1298,6 +1386,42 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   static class MapD_GeoPolyRenderGroup extends SqlFunction {
     MapD_GeoPolyRenderGroup() {
       super("MapD_GeoPolyRenderGroup",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.INTEGER);
+    }
+  }
+
+  static class OmniSci_Geo_PolyBoundsPtr extends SqlFunction {
+    OmniSci_Geo_PolyBoundsPtr() {
+      super("OmniSci_Geo_PolyBoundsPtr",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.ANY),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 1;
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.BIGINT);
+    }
+  }
+
+  static class OmniSci_Geo_PolyRenderGroup extends SqlFunction {
+    OmniSci_Geo_PolyRenderGroup() {
+      super("OmniSci_Geo_PolyRenderGroup",
               SqlKind.OTHER_FUNCTION,
               null,
               null,

@@ -27,6 +27,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include "Shared/MapDParameters.h"
 #include "rapidjson/document.h"
 
 namespace Catalog_Namespace {
@@ -50,6 +51,9 @@ class Calcite {
           const std::string& data_dir,
           const size_t calcite_max_mem,
           const std::string& session_prefix);
+  Calcite(const MapDParameters& mapd_parameter,
+          const std::string& data_dir,
+          const std::string& session_prefix);
   TPlanResult process(const Catalog_Namespace::SessionInfo& session_info,
                       const std::string sql_string,
                       const std::vector<TFilterPushDownInfo>& filter_push_down_info,
@@ -68,6 +72,10 @@ class Calcite {
   std::string& get_session_prefix() { return session_prefix_; }
 
  private:
+  void init(const int mapd_port,
+            const int port,
+            const std::string& data_dir,
+            const size_t calcite_max_mem);
   void runServer(const int mapd_port,
                  const int port,
                  const std::string& data_dir,
@@ -84,6 +92,8 @@ class Calcite {
 
   bool server_available_;
   int remote_calcite_port_ = -1;
+  std::string ssl_trust_store_;
+  std::string ssl_trust_password_;
   std::string session_prefix_;
 };
 

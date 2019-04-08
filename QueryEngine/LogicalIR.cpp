@@ -57,12 +57,18 @@ bool should_defer_eval(const std::shared_ptr<Analyzer::Expr> expr) {
   if (std::dynamic_pointer_cast<Analyzer::RegexpExpr>(expr)) {
     return true;
   }
+  if (std::dynamic_pointer_cast<Analyzer::FunctionOper>(expr)) {
+    return true;
+  }
   if (!std::dynamic_pointer_cast<Analyzer::BinOper>(expr)) {
     return false;
   }
   const auto bin_expr = std::static_pointer_cast<Analyzer::BinOper>(expr);
   if (contains_unsafe_division(bin_expr.get())) {
     return true;
+  }
+  if (bin_expr->is_overlaps_oper()) {
+    return false;
   }
   const auto rhs = bin_expr->get_right_operand();
   return rhs->get_type_info().is_array();
@@ -145,58 +151,11 @@ Weight get_weight(const Analyzer::Expr* expr, int depth = 0) {
   return Weight();
 }
 
-void sort_eq_joins_by_rte_indices(std::vector<Analyzer::Expr*>& join_conditions) {
-  auto cmp = [](const Analyzer::Expr* lhs, const Analyzer::Expr* rhs) -> bool {
-    auto lhs_eq = dynamic_cast<const Analyzer::BinOper*>(lhs);
-    auto rhs_eq = dynamic_cast<const Analyzer::BinOper*>(rhs);
-    CHECK(lhs_eq && IS_EQUIVALENCE(lhs_eq->get_optype()));
-    CHECK(rhs_eq && IS_EQUIVALENCE(rhs_eq->get_optype()));
-    std::set<int> rte_idx_set;
-    lhs_eq->collect_rte_idx(rte_idx_set);
-    CHECK_EQ(rte_idx_set.size(), size_t(2));
-    auto lhs_outer_rte = *rte_idx_set.begin();
-    auto lhs_inner_rtx = *std::next(rte_idx_set.begin());
-    CHECK_LT(lhs_outer_rte, lhs_inner_rtx);
-
-    rte_idx_set.clear();
-    rhs_eq->collect_rte_idx(rte_idx_set);
-    CHECK_EQ(rte_idx_set.size(), size_t(2));
-    auto rhs_outer_rte = *rte_idx_set.begin();
-    auto rhs_inner_rtx = *std::next(rte_idx_set.begin());
-    if (lhs_outer_rte == rhs_outer_rte) {
-      return lhs_inner_rtx < rhs_inner_rtx;
-    }
-    return lhs_outer_rte < rhs_outer_rte;
-  };
-
-  std::sort(join_conditions.begin(), join_conditions.end(), cmp);
-}
-
 }  // namespace
 
 bool Executor::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
                                std::vector<Analyzer::Expr*>& primary_quals,
                                std::vector<Analyzer::Expr*>& deferred_quals) {
-  std::vector<std::shared_ptr<Analyzer::Expr>> remaining_inner_join_quals;
-  std::unordered_set<Analyzer::Expr*> equi_join_conds;
-  for (auto cond : plan_state_->join_info_.equi_join_tautologies_) {
-    equi_join_conds.insert(cond.get());
-  }
-  for (auto expr : ra_exe_unit.inner_join_quals) {
-    if (auto bin_oper = std::dynamic_pointer_cast<Analyzer::BinOper>(expr)) {
-      if (equi_join_conds.count(bin_oper.get())) {
-        primary_quals.push_back(expr.get());
-        continue;
-      }
-    }
-    remaining_inner_join_quals.push_back(expr);
-  }
-  sort_eq_joins_by_rte_indices(primary_quals);
-
-  for (auto expr : remaining_inner_join_quals) {
-    primary_quals.push_back(expr.get());
-  }
-
   for (auto expr : ra_exe_unit.simple_quals) {
     if (should_defer_eval(expr)) {
       deferred_quals.push_back(expr.get());

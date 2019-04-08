@@ -44,7 +44,7 @@ InsertOrderFragmenter::InsertOrderFragmenter(
     const vector<int> chunkKeyPrefix,
     vector<Chunk>& chunkVec,
     Data_Namespace::DataMgr* dataMgr,
-    const Catalog_Namespace::Catalog* catalog,
+    Catalog_Namespace::Catalog* catalog,
     const int physicalTableId,
     const int shard,
     const size_t maxFragmentRows,
@@ -84,49 +84,53 @@ InsertOrderFragmenter::InsertOrderFragmenter(
 InsertOrderFragmenter::~InsertOrderFragmenter() {}
 
 void InsertOrderFragmenter::getChunkMetadata() {
-  if (defaultInsertLevel_ ==
-      Data_Namespace::MemoryLevel::DISK_LEVEL) {  // memory-resident tables won't have
-                                                  // anything on disk
-    std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
-    dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, chunkKeyPrefix_);
+  if (defaultInsertLevel_ == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+    // memory-resident tables won't have anything on disk
+    std::vector<std::pair<ChunkKey, ChunkMetadata>> chunk_metadata;
+    dataMgr_->getChunkMetadataVecForKeyPrefix(chunk_metadata, chunkKeyPrefix_);
 
     // data comes like this - database_id, table_id, column_id, fragment_id
     // but lets sort by database_id, table_id, fragment_id, column_id
 
-    int fragmentSubKey = 3;
-    std::sort(chunkMetadataVec.begin(),
-              chunkMetadataVec.end(),
+    int fragment_subkey_index = 3;
+    std::sort(chunk_metadata.begin(),
+              chunk_metadata.end(),
               [&](const std::pair<ChunkKey, ChunkMetadata>& pair1,
                   const std::pair<ChunkKey, ChunkMetadata>& pair2) {
                 return pair1.first[3] < pair2.first[3];
               });
 
-    for (auto chunkIt = chunkMetadataVec.begin(); chunkIt != chunkMetadataVec.end();
-         ++chunkIt) {
-      int curFragmentId = chunkIt->first[fragmentSubKey];
+    for (auto chunk_itr = chunk_metadata.begin(); chunk_itr != chunk_metadata.end();
+         ++chunk_itr) {
+      int cur_column_id = chunk_itr->first[2];
+      int cur_fragment_id = chunk_itr->first[fragment_subkey_index];
 
       if (fragmentInfoVec_.empty() ||
-          curFragmentId != fragmentInfoVec_.back().fragmentId) {
-        maxFragmentId_ = curFragmentId;
+          cur_fragment_id != fragmentInfoVec_.back().fragmentId) {
+        maxFragmentId_ = cur_fragment_id;
         fragmentInfoVec_.emplace_back();
-        fragmentInfoVec_.back().fragmentId = curFragmentId;
-        fragmentInfoVec_.back().setPhysicalNumTuples(chunkIt->second.numElements);
+        fragmentInfoVec_.back().fragmentId = cur_fragment_id;
+        fragmentInfoVec_.back().setPhysicalNumTuples(chunk_itr->second.numElements);
         numTuples_ += fragmentInfoVec_.back().getPhysicalNumTuples();
-        for (const auto levelSize : dataMgr_->levelSizes_) {
-          fragmentInfoVec_.back().deviceIds.push_back(curFragmentId % levelSize);
+        for (const auto level_size : dataMgr_->levelSizes_) {
+          fragmentInfoVec_.back().deviceIds.push_back(cur_fragment_id % level_size);
         }
         fragmentInfoVec_.back().shadowNumTuples =
             fragmentInfoVec_.back().getPhysicalNumTuples();
         fragmentInfoVec_.back().physicalTableId = physicalTableId_;
         fragmentInfoVec_.back().shard = shard_;
       } else {
-        if (chunkIt->second.numElements !=
+        if (chunk_itr->second.numElements !=
             fragmentInfoVec_.back().getPhysicalNumTuples()) {
-          throw std::runtime_error("Inconsistency in num tuples within fragment");
+          throw std::runtime_error(
+              "Inconsistency in num tuples within fragment for table " +
+              std::to_string(physicalTableId_) + ", Column " +
+              std::to_string(cur_column_id) + ". Fragment Tuples: " +
+              std::to_string(fragmentInfoVec_.back().getPhysicalNumTuples()) +
+              ", Chunk Tuples: " + std::to_string(chunk_itr->second.numElements));
         }
       }
-      int columnId = chunkIt->first[2];
-      fragmentInfoVec_.back().setChunkMetadata(columnId, chunkIt->second);
+      fragmentInfoVec_.back().setChunkMetadata(cur_column_id, chunk_itr->second);
     }
   }
 
@@ -142,10 +146,8 @@ void InsertOrderFragmenter::getChunkMetadata() {
     maxFixedColSize = std::max(maxFixedColSize, size);
   }
 
-  maxFragmentRows_ =
-      std::min(maxFragmentRows_,
-               maxChunkSize_ / maxFixedColSize);  // this is maximum number of rows
-                                                  // assuming everything is fixed length
+  // this is maximum number of rows assuming everything is fixed length
+  maxFragmentRows_ = std::min(maxFragmentRows_, maxChunkSize_ / maxFixedColSize);
 
   if (fragmentInfoVec_.size() > 0) {
     // Now need to get the insert buffers for each column - should be last
@@ -227,17 +229,114 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
   }
 }
 
+void InsertOrderFragmenter::updateChunkStats(
+    const ColumnDescriptor* cd,
+    std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map) {
+  /**
+   * WARNING: This method is entirely unlocked. Higher level locks are expected to prevent
+   * any table read or write during a chunk metadata update, since we need to modify
+   * various buffers and metadata maps.
+   */
+  if (shard_ >= 0) {
+    LOG(WARNING) << "Skipping chunk stats update for logical table " << physicalTableId_;
+  }
+
+  CHECK(cd);
+  const auto column_id = cd->columnId;
+  const auto col_itr = columnMap_.find(column_id);
+  CHECK(col_itr != columnMap_.end());
+
+  for (auto& fragment : fragmentInfoVec_) {
+    auto stats_itr = stats_map.find(fragment.fragmentId);
+    if (stats_itr != stats_map.end()) {
+      auto chunk_meta_it = fragment.getChunkMetadataMapPhysical().find(column_id);
+      CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
+      ChunkKey chunk_key{catalog_->getCurrentDB().dbId,
+                         physicalTableId_,
+                         column_id,
+                         fragment.fragmentId};
+      auto chunk = Chunk_NS::Chunk::getChunk(cd,
+                                             &catalog_->getDataMgr(),
+                                             chunk_key,
+                                             Data_Namespace::MemoryLevel::DISK_LEVEL,
+                                             0,
+                                             chunk_meta_it->second.numBytes,
+                                             chunk_meta_it->second.numElements);
+      auto buf = chunk->get_buffer();
+      CHECK(buf);
+      auto encoder = buf->encoder.get();
+      if (!encoder) {
+        throw std::runtime_error("No encoder for chunk " + showChunk(chunk_key));
+      }
+
+      auto chunk_stats = stats_itr->second;
+
+      ChunkMetadata old_chunk_metadata;
+      encoder->getMetadata(old_chunk_metadata);
+      auto& old_chunk_stats = old_chunk_metadata.chunkStats;
+
+      const bool didResetStats = encoder->resetChunkStats(chunk_stats);
+      // Use the logical type to display data, since the encoding should be ignored
+      const auto logical_ti = get_logical_type_info(cd->columnType);
+      if (!didResetStats) {
+        VLOG(3) << "Skipping chunk stats reset for " << showChunk(chunk_key);
+        VLOG(3) << "Max: " << DatumToString(old_chunk_stats.max, logical_ti) << " -> "
+                << DatumToString(chunk_stats.max, logical_ti);
+        VLOG(3) << "Min: " << DatumToString(old_chunk_stats.min, logical_ti) << " -> "
+                << DatumToString(chunk_stats.min, logical_ti);
+        VLOG(3) << "Nulls: " << (chunk_stats.has_nulls ? "True" : "False");
+        continue;  // move to next fragment
+      }
+
+      VLOG(2) << "Resetting chunk stats for " << showChunk(chunk_key);
+      VLOG(2) << "Max: " << DatumToString(old_chunk_stats.max, logical_ti) << " -> "
+              << DatumToString(chunk_stats.max, logical_ti);
+      VLOG(2) << "Min: " << DatumToString(old_chunk_stats.min, logical_ti) << " -> "
+              << DatumToString(chunk_stats.min, logical_ti);
+      VLOG(2) << "Nulls: " << (chunk_stats.has_nulls ? "True" : "False");
+
+      // Reset fragment metadata map and set buffer to dirty
+      ChunkMetadata new_metadata;
+      // Run through fillChunkStats to ensure any transformations to the raw metadata
+      // values get applied (e.g. for date in days)
+      encoder->getMetadata(new_metadata);
+      fragment.setChunkMetadata(column_id, new_metadata);
+      fragment.shadowChunkMetadataMap =
+          fragment.getChunkMetadataMap();  // TODO(adb): needed?
+      buf->setDirty();
+    } else {
+      LOG(WARNING) << "No chunk stats update found for fragment " << fragment.fragmentId
+                   << ", table " << physicalTableId_ << ", "
+                   << ", column " << column_id;
+    }
+  }
+}
+
 void InsertOrderFragmenter::insertData(InsertData& insertDataStruct) {
   // TODO: this local lock will need to be centralized when ALTER COLUMN is added, bc
-  mapd_unique_lock<mapd_shared_mutex> insertLock(
-      insertMutex_);  // prevent two threads from trying to insert into the same table
-                      // simultaneously
-  insertDataImpl(insertDataStruct);
-  if (defaultInsertLevel_ ==
-      Data_Namespace::DISK_LEVEL) {  // only checkpoint if data is resident on disk
-    dataMgr_->checkpoint(
-        chunkKeyPrefix_[0],
-        chunkKeyPrefix_[1]);  // need to checkpoint here to remove window for corruption
+  try {
+    mapd_unique_lock<mapd_shared_mutex> insertLock(
+        insertMutex_);  // prevent two threads from trying to insert into the same table
+                        // simultaneously
+
+    insertDataImpl(insertDataStruct);
+
+    if (defaultInsertLevel_ ==
+        Data_Namespace::DISK_LEVEL) {  // only checkpoint if data is resident on disk
+      dataMgr_->checkpoint(
+          chunkKeyPrefix_[0],
+          chunkKeyPrefix_[1]);  // need to checkpoint here to remove window for corruption
+    }
+  } catch (...) {
+    int32_t tableEpoch =
+        catalog_->getTableEpoch(insertDataStruct.databaseId, insertDataStruct.tableId);
+
+    // the statement below deletes *this* object!
+    // relying on exception propagation at this stage
+    // until we can sort this out in a cleaner fashion
+    catalog_->setTableEpoch(
+        insertDataStruct.databaseId, insertDataStruct.tableId, tableEpoch);
+    throw;
   }
 }
 

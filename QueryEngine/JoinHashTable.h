@@ -32,6 +32,7 @@
 #include "InputDescriptors.h"
 #include "InputMetadata.h"
 #include "JoinHashTableInterface.h"
+#include "ResultRows.h"
 #include "ThrustAllocator.h"
 
 #include <llvm/IR/Value.h>
@@ -54,7 +55,6 @@ class JoinHashTable : public JoinHashTableInterface {
       const RelAlgExecutionUnit& ra_exe_unit,
       const Data_Namespace::MemoryLevel memory_level,
       const int device_count,
-      const std::unordered_set<int>& skip_tables,
       ColumnCacheMap& column_cache,
       Executor* executor);
 
@@ -65,16 +65,19 @@ class JoinHashTable : public JoinHashTableInterface {
     }
 #ifdef HAVE_CUDA
     CHECK_LT(static_cast<size_t>(device_id), gpu_hash_table_buff_.size());
-    return device_type == ExecutorDeviceType::CPU
-               ? reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0])
-               : gpu_hash_table_buff_[device_id];
+    if (device_type == ExecutorDeviceType::CPU) {
+      return reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0]);
+    } else {
+      return gpu_hash_table_buff_[device_id]
+                 ? reinterpret_cast<CUdeviceptr>(
+                       gpu_hash_table_buff_[device_id]->getMemoryPtr())
+                 : reinterpret_cast<CUdeviceptr>(nullptr);
+    }
 #else
     CHECK(device_type == ExecutorDeviceType::CPU);
     return reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0]);
 #endif
   }
-
-  llvm::Value* codegenSlotIsValid(const CompilationOptions&, const size_t) override;
 
   llvm::Value* codegenSlot(const CompilationOptions&, const size_t) override;
 
@@ -91,19 +94,10 @@ class JoinHashTable : public JoinHashTableInterface {
 
   HashType getHashType() const noexcept override { return hash_type_; }
 
-  static llvm::Value* codegenOneToManyHashJoin(
-      const std::vector<llvm::Value*>& hash_join_idx_args_in,
-      const size_t inner_rte_idx,
-      const bool is_sharded,
-      const bool col_range_has_nulls,
-      const bool is_bw_eq,
-      const int64_t sub_buff_size,
-      Executor* executor);
-
   static HashJoinMatchingSet codegenMatchingSet(
       const std::vector<llvm::Value*>& hash_join_idx_args_in,
       const bool is_sharded,
-      const bool col_range_has_nulls,
+      const bool col_is_nullable,
       const bool is_bw_eq,
       const int64_t sub_buff_size,
       Executor* executor);
@@ -174,8 +168,6 @@ class JoinHashTable : public JoinHashTableInterface {
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
       const Data_Namespace::MemoryLevel effective_memory_level,
-      std::pair<Data_Namespace::AbstractBuffer*, Data_Namespace::AbstractBuffer*>&
-          buff_and_err,
       const int device_id);
   void initOneToManyHashTable(
       const ChunkKey& chunk_key,
@@ -192,17 +184,17 @@ class JoinHashTable : public JoinHashTableInterface {
       const ChunkKey& chunk_key,
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols);
-  int initHashTableOnCpu(
+  void initHashTableOnCpu(
       const int8_t* col_buff,
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
-      const int32_t hash_entry_count,
+      const size_t hash_entry_count,
       const int32_t hash_join_invalid_val);
   void initOneToManyHashTableOnCpu(
       const int8_t* col_buff,
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
-      const int32_t hash_entry_count,
+      const size_t hash_entry_count,
       const int32_t hash_join_invalid_val);
 
   const InputTableInfo& getInnerQueryInfo(const Analyzer::ColumnVar* inner_col) const;
@@ -216,10 +208,6 @@ class JoinHashTable : public JoinHashTableInterface {
                                             const int shard_count,
                                             const CompilationOptions& co);
 
-  bool needOneToManyHash(const std::vector<int>& errors) const;
-
-  llvm::Value* codegenOneToManyHashJoin(const CompilationOptions&, const size_t);
-
   std::pair<const int8_t*, size_t> fetchFragments(
       const Analyzer::ColumnVar* hash_col,
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragment_info,
@@ -230,6 +218,10 @@ class JoinHashTable : public JoinHashTableInterface {
 
   bool isBitwiseEq() const;
 
+  void freeHashBufferMemory();
+  void freeHashBufferGpuMemory();
+  void freeHashBufferCpuMemory();
+
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   std::shared_ptr<Analyzer::ColumnVar> col_var_;
   const std::vector<InputTableInfo>& query_infos_;
@@ -239,7 +231,8 @@ class JoinHashTable : public JoinHashTableInterface {
   std::shared_ptr<std::vector<int32_t>> cpu_hash_table_buff_;
   std::mutex cpu_hash_table_buff_mutex_;
 #ifdef HAVE_CUDA
-  std::vector<CUdeviceptr> gpu_hash_table_buff_;
+  std::vector<Data_Namespace::AbstractBuffer*> gpu_hash_table_buff_;
+  std::vector<Data_Namespace::AbstractBuffer*> gpu_hash_table_err_buff_;
 #endif
   ExpressionRange col_range_;
   Executor* executor_;
@@ -269,11 +262,6 @@ class JoinHashTable : public JoinHashTableInterface {
       std::pair<JoinHashTableCacheKey, std::shared_ptr<std::vector<int32_t>>>>
       join_hash_table_cache_;
   static std::mutex join_hash_table_cache_mutex_;
-
-  static const int ERR_MULTI_FRAG{-2};
-  static const int ERR_FAILED_TO_FETCH_COLUMN{-3};
-  static const int ERR_FAILED_TO_JOIN_ON_VIRTUAL_COLUMN{-4};
-  static const int ERR_COLUMN_NOT_UNIQUE{-5};
 };
 
 inline std::string get_table_name_by_id(const int table_id,
@@ -303,11 +291,16 @@ bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,
                                   const Executor* executor);
 
 // Swap the columns if needed and make the inner column the first component.
-std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> normalize_column_pair(
-    const Analyzer::Expr* lhs,
-    const Analyzer::Expr* rhs,
-    const Catalog_Namespace::Catalog& cat,
-    const TemporaryTables* temporary_tables);
+InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
+                                 const Analyzer::Expr* rhs,
+                                 const Catalog_Namespace::Catalog& cat,
+                                 const TemporaryTables* temporary_tables,
+                                 const bool is_overlaps_join = false);
+
+// Normalize each expression tuple
+std::vector<InnerOuter> normalize_column_pairs(const Analyzer::BinOper* condition,
+                                               const Catalog_Namespace::Catalog& cat,
+                                               const TemporaryTables* temporary_tables);
 
 std::deque<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
@@ -317,5 +310,10 @@ std::deque<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
 const InputTableInfo& get_inner_query_info(
     const int inner_table_id,
     const std::vector<InputTableInfo>& query_infos);
+
+size_t get_entries_per_device(const size_t total_entries,
+                              const size_t shard_count,
+                              const size_t device_count,
+                              const Data_Namespace::MemoryLevel memory_level);
 
 #endif  // QUERYENGINE_JOINHASHTABLE_H

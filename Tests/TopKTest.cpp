@@ -68,7 +68,7 @@ T v(const TargetValue& r) {
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
   return device_type == ExecutorDeviceType::GPU &&
-         !g_session->get_catalog().get_dataMgr().gpusPresent();
+         !g_session->getCatalog().getDataMgr().gpusPresent();
 #else
   return device_type == ExecutorDeviceType::GPU;
 #endif
@@ -718,7 +718,6 @@ TEST(Select, DISABLED_TopK_LIMIT_OFFSET_DifferentOrders) {
 
 int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
-  LOG(INFO) << " after initialization";
   ::testing::InitGoogleTest(&argc, argv);
 
   g_session.reset(QueryRunner::get_session(BASE_PATH));

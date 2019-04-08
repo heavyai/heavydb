@@ -57,8 +57,8 @@ struct hash<InputDescriptor> {
 
 class InputColDescriptor {
  public:
-  InputColDescriptor(const int col_id, const int table_id, const int input_desc)
-      : col_id_(col_id), input_desc_(table_id, input_desc) {}
+  InputColDescriptor(const int col_id, const int table_id, const int nest_level)
+      : col_id_(col_id), input_desc_(table_id, nest_level) {}
 
   bool operator==(const InputColDescriptor& that) const {
     return col_id_ == that.col_id_ && input_desc_ == that.input_desc_;
@@ -73,39 +73,6 @@ class InputColDescriptor {
  private:
   const int col_id_;
   const InputDescriptor input_desc_;
-};
-
-class IndirectInputColDescriptor : public InputColDescriptor {
- public:
-  IndirectInputColDescriptor(const int col_id,
-                             const int table_id,
-                             const int input_desc,
-                             const int iter_col_id,
-                             const int iter_table_id,
-                             const int iter_input_desc,
-                             const int ref_col_id,
-                             const int ref_table_id,
-                             const int ref_input_desc)
-      : InputColDescriptor(col_id, table_id, input_desc)
-      , iter_col_id_(iter_col_id)
-      , iter_input_desc_(iter_table_id, iter_input_desc)
-      , ref_col_id_(ref_col_id)
-      , ref_input_desc_(ref_table_id, ref_input_desc) {}
-
-  int getIterIndex() const { return iter_col_id_; }
-
-  const InputDescriptor& getIterDesc() const { return iter_input_desc_; }
-
-  int getRefColIndex() const { return ref_col_id_; }
-
-  const InputDescriptor& getIndirectDesc() const { return ref_input_desc_; }
-
- private:
-  const int iter_col_id_;
-  const InputDescriptor iter_input_desc_;
-
-  const int ref_col_id_;
-  const InputDescriptor ref_input_desc_;
 };
 
 namespace std {

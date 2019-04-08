@@ -50,7 +50,7 @@ void check_error(CUresult status) {
   if (status != CUDA_SUCCESS) {
     const char* errorString{nullptr};
     cuGetErrorString(status, &errorString);
-    throw std::runtime_error(errorString ? errorString : "Unkown error");
+    throw std::runtime_error(errorString ? errorString : "Unknown error");
   }
 }
 #endif
@@ -384,7 +384,7 @@ inline bool is_empty_slot(const KeyT k) {
 template <typename KeyT = int64_t, typename ValT = int64_t>
 class AggregateEmulator {
  public:
-  typedef std::unordered_map<std::vector<KeyT>, std::vector<ValT>> ResultType;
+  using ResultType = std::unordered_map<std::vector<KeyT>, std::vector<ValT>>;
 
   explicit AggregateEmulator(const std::vector<OP_KIND>& ops) : agg_ops_(ops) {}
 
@@ -1832,11 +1832,18 @@ TEST(Reduction, PerfectHash) {
 }
 
 int main(int argc, char** argv) {
+  google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
   g_gpus_present = is_gpu_present();
 #ifndef HAVE_CUDA
   testing::GTEST_FLAG(filter) = "-Hash.Baseline";
 #endif
-  auto err = RUN_ALL_TESTS();
+
+  int err{0};
+  try {
+    err = RUN_ALL_TESTS();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
   return err;
 }

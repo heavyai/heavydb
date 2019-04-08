@@ -29,8 +29,6 @@
 #include <string>
 #include <unordered_set>
 
-extern bool g_multi_subquery_exc;
-
 namespace {
 
 const unsigned FIRST_RA_NODE_ID = 1;
@@ -864,6 +862,7 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                                     is_agg,
                                     manipulation_target->isUpdateViaSelect(),
                                     manipulation_target->isDeleteViaSelect(),
+                                    manipulation_target->isVarlenUpdateRequired(),
                                     manipulation_target->getModifiedTableDescriptor(),
                                     manipulation_target->getTargetColumns());
   auto old_node = nodes[pattern.back()];
@@ -962,245 +961,8 @@ class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_it
   std::unordered_set<size_t> visited_;
 };
 
-template <typename T>
-const RexOperator* get_equals_operator(const T* node) {
-  auto top_operator = dynamic_cast<const RexOperator*>(node->getCondition());
-  if (!top_operator) {
-    return nullptr;
-  }
-
-  std::vector<const RexOperator*> work_set{top_operator};
-  while (!work_set.empty()) {
-    auto rex_operator = work_set.back();
-    work_set.pop_back();
-    if (rex_operator->getOperator() == kAND) {
-      for (size_t i = 0; i < rex_operator->size(); ++i) {
-        if (auto sub_operator =
-                dynamic_cast<const RexOperator*>(rex_operator->getOperand(i))) {
-          work_set.push_back(sub_operator);
-        }
-      }
-      continue;
-    }
-    if (!IS_EQUIVALENCE(rex_operator->getOperator())) {
-      continue;
-    }
-    std::unordered_set<const RelAlgNode*> source_nodes;
-    for (size_t i = 0; i < rex_operator->size(); ++i) {
-      if (auto rex_in = dynamic_cast<const RexInput*>(rex_operator->getOperand(i))) {
-        source_nodes.insert(rex_in->getSourceNode());
-      }
-    }
-    if (source_nodes.size() == size_t(2)) {
-      return rex_operator;
-    }
-  }
-  return nullptr;
-}
-
-const RexOperator* get_equijoin_condition(const RelJoin* join) {
-  if (!join || join->getJoinType() != JoinType::INNER) {
-    return nullptr;
-  }
-  return get_equals_operator(join);
-}
-
-std::vector<const RelJoin*> collect_coalesceable_joins(
-    const RelJoin* head,
-    const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>&
-        du_web,
-    std::vector<const RexScalar*>& condition_set) {
-  CHECK(head);
-  auto first_condition = get_equijoin_condition(head);
-  if (!first_condition) {
-    return {};
-  }
-
-  condition_set.push_back(first_condition);
-  std::vector<const RelJoin*> join_seq;
-  const size_t first_table_size = head->getInput(0)->size();
-  for (auto walker = head; walker;) {
-    join_seq.push_back(walker);
-    auto usrs_it = du_web.find(walker);
-    CHECK(usrs_it != du_web.end());
-    auto& usrs = usrs_it->second;
-    CHECK(!usrs.empty());
-    if (usrs.size() > size_t(1)) {
-      break;
-    }
-    auto usr_join = dynamic_cast<const RelJoin*>(*usrs.begin());
-    if (usr_join) {
-      if (usr_join->getInput(0) != join_seq.back() ||
-          !dynamic_cast<const RelScan*>(head->getInput(1))) {
-        break;
-      }
-      auto equal_condition = get_equijoin_condition(usr_join);
-      if (!equal_condition) {
-        // Allow a loop join in the end of sequence for now
-        join_seq.push_back(usr_join);
-        condition_set.push_back(usr_join->getCondition());
-        break;
-      }
-      auto left_operand = dynamic_cast<const RexInput*>(equal_condition->getOperand(0));
-      CHECK(left_operand);
-      if (left_operand->getSourceNode() == walker) {
-        if (left_operand->getIndex() >= first_table_size) {
-          break;
-        }
-      } else {
-        auto right_operand =
-            dynamic_cast<const RexInput*>(equal_condition->getOperand(1));
-        CHECK(right_operand);
-        if (right_operand->getSourceNode() == walker) {
-          if (right_operand->getIndex() >= first_table_size) {
-            break;
-          }
-        }
-      }
-      condition_set.push_back(equal_condition);
-    }
-    walker = usr_join;
-  }
-
-  if (join_seq.empty()) {
-    condition_set.clear();
-  } else {
-    auto usrs_it = du_web.find(join_seq.back());
-    CHECK(usrs_it != du_web.end());
-    for (auto usr : usrs_it->second) {
-      if (auto filter = dynamic_cast<const RelFilter*>(usr)) {
-        if (get_equals_operator(filter)) {
-          return {};
-        }
-      }
-    }
-  }
-  return join_seq;
-}
-
-class RexInputRedirector : public RexDeepCopyVisitor {
- public:
-  RexInputRedirector(const std::unordered_set<const RelJoin*>& joins)
-      : join_set_(joins) {}
-  RetType visitInput(const RexInput* input) const override {
-    return getNonJoinInput(*input);
-  }
-
-  void visitNode(RelAlgNode* node) const {
-    if (dynamic_cast<RelAggregate*>(node) || dynamic_cast<RelSort*>(node)) {
-      return;
-    }
-    if (auto join = dynamic_cast<RelJoin*>(node)) {
-      auto new_condition = visit(join->getCondition());
-      join->setCondition(new_condition);
-      return;
-    }
-    if (auto project = dynamic_cast<RelProject*>(node)) {
-      std::vector<std::unique_ptr<const RexScalar>> new_exprs;
-      for (size_t i = 0; i < project->size(); ++i) {
-        new_exprs.push_back(visit(project->getProjectAt(i)));
-      }
-      project->setExpressions(new_exprs);
-      return;
-    }
-    if (auto filter = dynamic_cast<RelFilter*>(node)) {
-      auto new_condition = visit(filter->getCondition());
-      filter->setCondition(new_condition);
-      return;
-    }
-    CHECK(false);
-  }
-
- private:
-  RetType getNonJoinInput(const RexInput& rex_in) const {
-    const auto crt_source = rex_in.getSourceNode();
-    const auto col_id = rex_in.getIndex();
-    CHECK_LE(0, col_id);
-    const auto join = dynamic_cast<const RelJoin*>(crt_source);
-    if (!join || !join_set_.count(join)) {
-      return boost::make_unique<RexInput>(crt_source, col_id);
-    }
-    const auto lhs = join->getInput(0);
-    const auto rhs = join->getInput(1);
-    CHECK(!dynamic_cast<const RelJoin*>(rhs));
-    const auto src0_base = static_cast<unsigned>(lhs->size());
-    if (col_id >= src0_base) {
-      return boost::make_unique<RexInput>(rhs, col_id - src0_base);
-    }
-    if (dynamic_cast<const RelJoin*>(lhs)) {
-      return getNonJoinInput(RexInput(lhs, col_id));
-    }
-    return boost::make_unique<RexInput>(lhs, col_id);
-  }
-
-  const std::unordered_set<const RelJoin*>& join_set_;
-};
-
-void coalesce_joins(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
-  std::unordered_map<const RelAlgNode*, std::shared_ptr<RelAlgNode>> deconst_mapping;
-  for (auto node : nodes) {
-    deconst_mapping.insert(std::make_pair(node.get(), node));
-  }
-  auto web = build_du_web(nodes);
-
-  std::unordered_set<const RelAlgNode*> visited;
-  std::vector<std::shared_ptr<RelAlgNode>> new_nodes;
-  for (auto node : nodes) {
-    if (visited.count(node.get())) {
-      continue;
-    }
-    visited.insert(node.get());
-    if (auto join = std::dynamic_pointer_cast<RelJoin>(node)) {
-      std::vector<const RexScalar*> condition_set;
-      auto sequence = collect_coalesceable_joins(join.get(), web, condition_set);
-      if (sequence.size() < 2) {
-        new_nodes.push_back(node);
-        continue;
-      }
-      CHECK_EQ(deconst_mapping.count(sequence.back()), size_t(1));
-      auto tail = deconst_mapping[sequence.back()];
-      CHECK_EQ(web.count(tail.get()), size_t(1));
-      for (auto usr : web[tail.get()]) {
-        // TODO(miyu): check if safe to relax this limitation
-        if (dynamic_cast<const RelJoin*>(usr)) {
-          new_nodes.push_back(node);
-          continue;
-        }
-      }
-      // TODO(miyu): relax this limitation after we support duplicate input tables
-      //             esp. for self-join.
-      std::unordered_set<const RelAlgNode*> inputs_to_sequence;
-      for (auto j : sequence) {
-        if (j == sequence.front()) {
-          inputs_to_sequence.insert(j->getInput(0));
-        }
-        inputs_to_sequence.insert(j->getInput(1));
-      }
-      if (inputs_to_sequence.size() != sequence.size() + 1) {
-        new_nodes.push_back(node);
-        continue;
-      }
-
-      visited.insert(sequence.begin(), sequence.end());
-      std::vector<std::shared_ptr<RelJoin>> managed_sequence;
-      for (auto j : sequence) {
-        CHECK_EQ(deconst_mapping.count(j), size_t(1));
-        auto mj = std::dynamic_pointer_cast<RelJoin>(deconst_mapping[j]);
-        CHECK(mj);
-        managed_sequence.push_back(mj);
-      }
-    } else {
-      new_nodes.push_back(node);
-    }
-  }
-  nodes.swap(new_nodes);
-}
-
 void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                     const std::vector<const RelAlgNode*>& left_deep_joins) {
-  if (left_deep_joins.empty()) {
-    coalesce_joins(nodes);
-  }
   enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
   std::vector<size_t> crt_pattern;
   CoalesceState crt_state{CoalesceState::Initial};
@@ -1367,9 +1129,8 @@ class RelAlgAbstractInterpreter {
     coalesce_nodes(nodes_, left_deep_joins);
     CHECK(nodes_.back().unique());
     create_left_deep_join(nodes_);
-    if (g_multi_subquery_exc) {
-      create_implicit_subquery_node(nodes_, ra_executor_);
-    }
+    create_implicit_subquery_node(nodes_, ra_executor_);
+
     return nodes_.back();
   }
 

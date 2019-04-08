@@ -18,6 +18,7 @@ import org.apache.calcite.schema.Table;
 import org.apache.calcite.util.ConversionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.mapd.common.SockTransportProperties;
 
 /**
  *
@@ -27,15 +28,19 @@ public class MapDSchema implements Schema {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDSchema.class);
 
   final private MetaConnect metaConnect;
-
-  public MapDSchema(String dataDir, MapDParser mp, int mapdPort, MapDUser mapdUser) {
+  private SockTransportProperties sock_transport_properties = null;
+  public MapDSchema(String dataDir,
+          MapDParser mp,
+          int mapdPort,
+          MapDUser mapdUser,
+          SockTransportProperties skT) {
     System.setProperty(
             "saffron.default.charset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
     System.setProperty(
             "saffron.default.nationalcharset", ConversionUtil.NATIVE_UTF16_CHARSET_NAME);
     System.setProperty("saffron.default.collation.name",
             ConversionUtil.NATIVE_UTF16_CHARSET_NAME + "$en_US");
-    metaConnect = new MetaConnect(mapdPort, dataDir, mapdUser, mp);
+    metaConnect = new MetaConnect(mapdPort, dataDir, mapdUser, mp, skT);
   }
 
   @Override

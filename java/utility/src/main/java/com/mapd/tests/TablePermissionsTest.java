@@ -32,7 +32,7 @@ public class TablePermissionsTest {
     logger.info("testTablePermissions()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 9091, "mapd", "mapd", "HyperInteractive");
+            "localhost", 6274, "mapd", "mapd", "HyperInteractive");
 
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
@@ -45,14 +45,19 @@ public class TablePermissionsTest {
     su.runSql("CREATE DATABASE db1;");
     su.runSql("CREATE DATABASE db2;");
 
+    su.runSql("GRANT ACCESS on database db1 TO bob;");
+    su.runSql("GRANT ACCESS on database db1 TO bill;");
+    su.runSql("GRANT ACCESS on database db1 TO foo;");
+    su.runSql("GRANT ACCESS on database db1 TO dba;");
+
     MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 9091, "db1", "dba", "password");
+            MapdTestClient.getClient("localhost", 6274, "db1", "dba", "password");
     MapdTestClient bill =
-            MapdTestClient.getClient("localhost", 9091, "db1", "bill", "password");
+            MapdTestClient.getClient("localhost", 6274, "db1", "bill", "password");
     MapdTestClient bob =
-            MapdTestClient.getClient("localhost", 9091, "db1", "bob", "password");
+            MapdTestClient.getClient("localhost", 6274, "db1", "bob", "password");
     MapdTestClient foo =
-            MapdTestClient.getClient("localhost", 9091, "db1", "foo", "password");
+            MapdTestClient.getClient("localhost", 6274, "db1", "foo", "password");
 
     shouldThrowException("bill should not be able to create tables",
             () -> bill.runSql("CREATE TABLE bill_table(id integer);"));

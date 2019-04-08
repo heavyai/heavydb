@@ -1,0 +1,9 @@
+C++ Requests v1.2.0: https://github.com/whoshuu/cpr/releases/tag/1.2.0
+
+The following changes have been made:
+
+- disabled all status messages from CMake
+- CURLE_SSL_CACERT previously was different from
+  CURLE_PEER_FAILED_VERIFICATION. curl v1.62.0 defined these as the same, so
+  only treat as separate if they are different. See
+  https://github.com/curl/curl/pull/2901

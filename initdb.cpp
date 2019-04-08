@@ -25,7 +25,7 @@
 #include "Shared/mapdpath.h"
 #include "boost/program_options.hpp"
 
-#define CALCITEPORT 39093
+#define CALCITEPORT 36279
 
 static const std::array<std::string, 3> SampleGeoFileNames{"us-states.json",
                                                            "us-counties.json",
@@ -46,8 +46,8 @@ int main(int argc, char* argv[]) {
   desc.add_options()("help,h", "Print help messages ")(
       "data",
       po::value<std::string>(&base_path)->required(),
-      "Directory path to MapD catalogs")("force,f",
-                                         "Force overwriting of existing MapD instance")(
+      "Directory path to OmniSci catalogs")(
+      "force,f", "Force overwriting of existing OmniSci instance")(
       "skip-geo", "Skip inserting sample geo data");
 
   po::positional_options_description positionalOptions;
@@ -86,7 +86,7 @@ int main(int argc, char* argv[]) {
     if (force) {
       boost::filesystem::remove_all(catalogs_path);
     } else {
-      std::cerr << "MapD catalogs already initialized at " + base_path +
+      std::cerr << "OmniSci catalogs already initialized at " + base_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }
@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
     if (force) {
       boost::filesystem::remove_all(data_path);
     } else {
-      std::cerr << "MapD data directory already exists at " + base_path +
+      std::cerr << "OmniSci data directory already exists at " + base_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }
@@ -106,7 +106,7 @@ int main(int argc, char* argv[]) {
     if (force) {
       boost::filesystem::remove_all(export_path);
     } else {
-      std::cerr << "MapD export directory already exists at " + base_path +
+      std::cerr << "OmniSci export directory already exists at " + base_path +
                        ". Use -f to force reinitialization.\n";
       return 1;
     }
@@ -126,17 +126,15 @@ int main(int argc, char* argv[]) {
         std::make_shared<Data_Namespace::DataMgr>(data_path, mapd_parms, false, 0);
     auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path, 1024);
     auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-    sys_cat.init(base_path, dummy, {}, calcite, true, false);
+    sys_cat.init(base_path, dummy, {}, calcite, true, false, false, {});
 
     if (!skip_geo) {
       // Add geo samples to the system database using the root user
       Catalog_Namespace::DBMetadata cur_db;
       const std::string db_name(MAPD_SYSTEM_DB);
       CHECK(sys_cat.getMetadataForDB(db_name, cur_db));
-      auto cat = std::make_shared<Catalog_Namespace::Catalog>(
-          base_path, cur_db, dummy, std::vector<LeafHostInfo>(), calcite);
-      Catalog_Namespace::Catalog::set(db_name, cat);
-
+      auto cat = Catalog_Namespace::Catalog::get(
+          base_path, cur_db, dummy, std::vector<LeafHostInfo>(), calcite, false);
       Catalog_Namespace::UserMetadata user;
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
 

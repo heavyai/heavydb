@@ -96,22 +96,15 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                     const int device_id,
                                     const bool prepend_index_buffer);
 
-class QueryExecutionContext;
-struct RelAlgExecutionUnit;
+size_t get_num_allocated_rows_from_gpu(Data_Namespace::DataMgr* data_mgr,
+                                       CUdeviceptr projection_size_gpu,
+                                       const int device_id);
 
-void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
-                                    const QueryExecutionContext*,
-                                    const GpuQueryMemory&,
-                                    const RelAlgExecutionUnit&,
-                                    const unsigned block_size_x,
-                                    const unsigned grid_size_x,
-                                    const int device_id,
-                                    const bool prepend_index_buffer);
-
-// TODO(alex): remove
-bool buffer_not_null(const QueryMemoryDescriptor& query_mem_desc,
-                     const unsigned block_size_x,
-                     const ExecutorDeviceType device_type,
-                     size_t i);
+void copy_projection_buffer_from_gpu_columnar(Data_Namespace::DataMgr* data_mgr,
+                                              const GpuQueryMemory& gpu_query_mem,
+                                              const QueryMemoryDescriptor& query_mem_desc,
+                                              int8_t* projection_buffer,
+                                              const size_t projection_count,
+                                              const int device_id);
 
 #endif  // QUERYENGINE_GPUMEMUTILS_H

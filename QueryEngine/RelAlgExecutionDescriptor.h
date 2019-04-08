@@ -29,23 +29,9 @@ class ExecutionResult {
                   const std::vector<TargetMetaInfo>& targets_meta)
       : result_(rows), targets_meta_(targets_meta), filter_push_down_enabled_(false) {}
 
-  ExecutionResult(const IteratorTable& table,
-                  const std::vector<TargetMetaInfo>& targets_meta)
-      : result_(boost::make_unique<IteratorTable>(table))
-      , targets_meta_(targets_meta)
-      , filter_push_down_enabled_(false) {}
-
-  ExecutionResult(ResultPtr&& result, const std::vector<TargetMetaInfo>& targets_meta)
+  ExecutionResult(ResultSetPtr&& result, const std::vector<TargetMetaInfo>& targets_meta)
       : targets_meta_(targets_meta), filter_push_down_enabled_(false) {
-    if (auto rows = boost::get<RowSetPtr>(&result)) {
-      result_ = std::move(*rows);
-      CHECK(boost::get<RowSetPtr>(result_));
-    } else if (auto tab = boost::get<IterTabPtr>(&result)) {
-      result_ = std::move(*tab);
-      CHECK(boost::get<IterTabPtr>(result_));
-    } else {
-      CHECK(false);
-    }
+    result_ = std::move(result);
   }
 
   ExecutionResult(const ExecutionResult& that)
@@ -56,17 +42,7 @@ class ExecutionResult {
         (filter_push_down_enabled_ && pushed_down_filter_info_.empty())) {
       return;
     }
-    if (const auto rows = boost::get<RowSetPtr>(&that.result_)) {
-      CHECK(*rows);
-      result_ = *rows;
-      CHECK(boost::get<RowSetPtr>(result_));
-    } else if (const auto tab = boost::get<IterTabPtr>(&that.result_)) {
-      CHECK(*tab);
-      result_ = boost::make_unique<IteratorTable>(**tab);
-      CHECK(boost::get<IterTabPtr>(result_));
-    } else {
-      CHECK(false);
-    }
+    result_ = that.result_;
   }
 
   ExecutionResult(ExecutionResult&& that)
@@ -77,15 +53,7 @@ class ExecutionResult {
         (filter_push_down_enabled_ && pushed_down_filter_info_.empty())) {
       return;
     }
-    if (auto rows = boost::get<RowSetPtr>(&that.result_)) {
-      result_ = std::move(*rows);
-      CHECK(boost::get<RowSetPtr>(result_));
-    } else if (auto tab = boost::get<IterTabPtr>(&that.result_)) {
-      result_ = std::move(*tab);
-      CHECK(boost::get<IterTabPtr>(result_));
-    } else {
-      CHECK(false);
-    }
+    result_ = std::move(that.result_);
   }
 
   ExecutionResult(const std::vector<PushedDownFilterInfo>& pushed_down_filter_info,
@@ -100,39 +68,16 @@ class ExecutionResult {
       filter_push_down_enabled_ = that.filter_push_down_enabled_;
       return *this;
     }
-    if (const auto rows = boost::get<RowSetPtr>(&that.result_)) {
-      CHECK(*rows);
-      result_ = *rows;
-      CHECK(boost::get<RowSetPtr>(result_));
-    } else if (const auto tab = boost::get<IterTabPtr>(&that.result_)) {
-      CHECK(*tab);
-      result_ = boost::make_unique<IteratorTable>(**tab);
-      CHECK(boost::get<IterTabPtr>(result_));
-    } else {
-      CHECK(false);
-    }
+    result_ = that.result_;
     targets_meta_ = that.targets_meta_;
     return *this;
   }
 
-  const std::shared_ptr<ResultSet>& getRows() const {
-    auto& rows = boost::get<RowSetPtr>(result_);
-    CHECK(rows);
-    return rows;
-  }
+  const std::shared_ptr<ResultSet>& getRows() const { return result_; }
 
-  bool empty() const {
-    if (auto rows = boost::get<RowSetPtr>(&result_)) {
-      return !*rows;
-    } else if (auto tab = boost::get<IterTabPtr>(&result_)) {
-      return !*tab;
-    } else {
-      CHECK(false);
-    }
-    return true;
-  }
+  bool empty() const { return !result_; }
 
-  const ResultPtr& getDataPtr() const { return result_; }
+  const ResultSetPtr& getDataPtr() const { return result_; }
 
   const std::vector<TargetMetaInfo>& getTargetsMeta() const { return targets_meta_; }
 
@@ -143,14 +88,12 @@ class ExecutionResult {
   const bool isFilterPushDownEnabled() const { return filter_push_down_enabled_; }
 
   void setQueueTime(const int64_t queue_time_ms) {
-    if (auto rows = boost::get<RowSetPtr>(&result_)) {
-      CHECK(*rows);
-      (*rows)->setQueueTime(queue_time_ms);
-    }
+    CHECK(result_);
+    result_->setQueueTime(queue_time_ms);
   }
 
  private:
-  ResultPtr result_;
+  ResultSetPtr result_;
   std::vector<TargetMetaInfo> targets_meta_;
   // filters chosen to be pushed down
   std::vector<PushedDownFilterInfo> pushed_down_filter_info_;

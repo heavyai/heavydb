@@ -39,19 +39,27 @@ class CardinalityEstimationRequired : public std::runtime_error {
 namespace Analyzer {
 
 /*
- * @type  NDVEstimator
- * @brief Provides an estimate for the number of distinct tuples. Not a real
- *        Analyzer expression, it's only used in RelAlgExecutionUnit synthesized
- *        for the cardinality estimation before running an user-provided query.
+ * @type  Estimator
+ * @brief Infrastructure to define estimators which take an expression tuple, are called
+ * for every row and need a buffer to track state.
  */
-class NDVEstimator : public Analyzer::Expr {
+class Estimator : public Analyzer::Expr {
  public:
-  NDVEstimator(const std::list<std::shared_ptr<Analyzer::Expr>>& expr_tuple)
-      : Expr(SQLTypeInfo(kINT, true)), expr_tuple_(expr_tuple) {}
+  Estimator() : Expr(SQLTypeInfo(kINT, true)){};
 
-  const std::list<std::shared_ptr<Analyzer::Expr>>& getArgument() const {
-    return expr_tuple_;
-  }
+  // The tuple argument received by the estimator for every row.
+  virtual const std::list<std::shared_ptr<Analyzer::Expr>>& getArgument() const = 0;
+
+  // The size of the working buffer used by the estimator.
+  virtual size_t getBufferSize() const = 0;
+
+  // The name for the estimator runtime function which is called for every row.
+  // The runtime function will receive four arguments:
+  //   uint8_t* the pointer to the beginning of the estimator buffer
+  //   uint32_t the size of the estimator buffer, in bytes
+  //   uint8_t* the concatenated bytes for the argument tuple
+  //   uint32_t the size of the argument tuple, in bytes
+  virtual std::string getRuntimeFunctionName() const = 0;
 
   std::shared_ptr<Analyzer::Expr> deep_copy() const override {
     CHECK(false);
@@ -63,9 +71,32 @@ class NDVEstimator : public Analyzer::Expr {
     return false;
   }
 
-  void print() const override { CHECK(false); }
+  std::string toString() const override {
+    CHECK(false);
+    return "";
+  }
+};
 
-  size_t getEstimatorBufferSize() const { return 1024 * 1024; }
+/*
+ * @type  NDVEstimator
+ * @brief Provides an estimate for the number of distinct tuples. Not a real
+ *        Analyzer expression, it's only used in RelAlgExecutionUnit synthesized
+ *        for the cardinality estimation before running an user-provided query.
+ */
+class NDVEstimator : public Analyzer::Estimator {
+ public:
+  NDVEstimator(const std::list<std::shared_ptr<Analyzer::Expr>>& expr_tuple)
+      : expr_tuple_(expr_tuple) {}
+
+  const std::list<std::shared_ptr<Analyzer::Expr>>& getArgument() const override {
+    return expr_tuple_;
+  }
+
+  size_t getBufferSize() const override { return 1024 * 1024; }
+
+  std::string getRuntimeFunctionName() const override {
+    return "linear_probabilistic_count";
+  }
 
  private:
   const std::list<std::shared_ptr<Analyzer::Expr>> expr_tuple_;
@@ -73,45 +104,14 @@ class NDVEstimator : public Analyzer::Expr {
 
 }  // namespace Analyzer
 
-inline RelAlgExecutionUnit create_ndv_execution_unit(
-    const RelAlgExecutionUnit& ra_exe_unit) {
-  return {ra_exe_unit.input_descs,
-          ra_exe_unit.extra_input_descs,
-          ra_exe_unit.input_col_descs,
-          ra_exe_unit.simple_quals,
-          ra_exe_unit.quals,
-          ra_exe_unit.join_type,
-          ra_exe_unit.inner_joins,
-          ra_exe_unit.join_dimensions,
-          ra_exe_unit.inner_join_quals,
-          ra_exe_unit.outer_join_quals,
-          {},
-          {},
-          {},
-          makeExpr<Analyzer::NDVEstimator>(ra_exe_unit.groupby_exprs),
-          SortInfo{{}, SortAlgorithm::Default, 0, 0},
-          0};
-}
+RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_unit);
 
-inline RelAlgExecutionUnit create_count_all_execution_unit(
+RelAlgExecutionUnit create_count_all_execution_unit(
     const RelAlgExecutionUnit& ra_exe_unit,
-    std::shared_ptr<Analyzer::Expr> replacement_target) {
-  return {ra_exe_unit.input_descs,
-          ra_exe_unit.extra_input_descs,
-          ra_exe_unit.input_col_descs,
-          ra_exe_unit.simple_quals,
-          ra_exe_unit.quals,
-          ra_exe_unit.join_type,
-          ra_exe_unit.inner_joins,
-          ra_exe_unit.join_dimensions,
-          ra_exe_unit.inner_join_quals,
-          ra_exe_unit.outer_join_quals,
-          {},
-          {replacement_target.get()},
-          {},
-          nullptr,
-          SortInfo{{}, SortAlgorithm::Default, 0, 0},
-          0};
-}
+    std::shared_ptr<Analyzer::Expr> replacement_target);
+
+ResultSetPtr reduce_estimator_results(
+    const RelAlgExecutionUnit& ra_exe_unit,
+    std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device);
 
 #endif  // QUERYENGINE_CARDINALITYESTIMATOR_H

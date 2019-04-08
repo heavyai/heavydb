@@ -4,6 +4,14 @@ FROM nvidia/cuda:9.0-devel-centos7
 
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics
 
+# Add entrypoint script to run ldconfig
+RUN echo $'#!/bin/bash\n\
+      ldconfig\n\
+      exec "$@"'\
+    >> /docker-entrypoint.sh && \
+    chmod +x /docker-entrypoint.sh
+ENTRYPOINT ["/docker-entrypoint.sh"]
+
 RUN yum groupinstall -y "Development Tools"
 RUN yum install -y \
         zlib-devel \
@@ -25,7 +33,13 @@ RUN yum install -y \
         openldap-devel \
         libX11-devel \
         mesa-libGL-devel \
-        environment-modules && \
+        environment-modules \
+        PyYAML \
+        valgrind && \
+    rm -rf /var/cache/yum/*
+RUN yum install -y \
+        cloc \
+        jq && \
     rm -rf /var/cache/yum/*
 
 WORKDIR /libglvnd/

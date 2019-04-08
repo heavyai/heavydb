@@ -21,18 +21,18 @@ RUN ./configure --disable-glx && \
     make -j 4 && \
     make install
 
-# Copy and extract MapD tarball. In own stage so that the temporary tarball
+# Copy and extract OmniSci tarball. In own stage so that the temporary tarball
 # isn't included in a layer.
 FROM ubuntu:16.04 AS extract
 
-WORKDIR /mapd/
-COPY mapd-latest-Linux-x86_64.tar.gz /mapd/
-RUN tar xvf mapd-latest-Linux-x86_64.tar.gz --strip-components=1 && \
-    rm -rf mapd-latest-Linux-x86_64.tar.gz
+WORKDIR /omnisci/
+COPY omnisci-latest-Linux-x86_64.tar.gz /omnisci/
+RUN tar xvf omnisci-latest-Linux-x86_64.tar.gz --strip-components=1 && \
+    rm -rf omnisci-latest-Linux-x86_64.tar.gz
 
 # Build final stage
 FROM nvidia/cuda:9.0-runtime-ubuntu16.04
-LABEL maintainer "Andrew Seidl <andrew@mapd.com>"
+LABEL maintainer "Andrew Seidl <andrew@omnisci.com>"
 
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics
 
@@ -45,16 +45,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get remove --purge -y && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=extract /mapd /mapd
+COPY --from=extract /omnisci /omnisci
 COPY --from=glvnd /usr/local /usr/local/
 
+RUN ln -sf /omnisci /mapd
 RUN mkdir -p /usr/share/glvnd/egl_vendor.d && \
     echo '{ "file_format_version" : "1.0.0", "ICD" : { "library_path" : "libEGL_nvidia.so.0" } }' > /usr/share/glvnd/egl_vendor.d/10_nvidia.json
 RUN mkdir -p /usr/local/share/glvnd/egl_vendor.d && \
     echo '{ "file_format_version" : "1.0.0", "ICD" : { "library_path" : "libEGL_nvidia.so.0" } }' > /usr/local/share/glvnd/egl_vendor.d/10_nvidia.json
 
-WORKDIR /mapd
+WORKDIR /omnisci
 
-EXPOSE 9091 9092
+EXPOSE 6274 6273
 
-CMD /mapd/startmapd --non-interactive --data /mapd-storage/data --config /mapd-storage/mapd.conf
+CMD /omnisci/startomnisci --non-interactive --data /omnisci-storage/data --config /omnisci-storage/omnisci.conf

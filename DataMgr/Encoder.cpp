@@ -80,6 +80,27 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
       }
       break;
     }
+    case kENCODING_DATE_IN_DAYS: {
+      switch (sqlType.get_type()) {
+        case kDATE:
+          switch (sqlType.get_comp_param()) {
+            case 0:
+            case 32:
+              return new FixedLengthEncoder<time_t, int32_t>(buffer);
+              break;
+            case 16:
+              return new FixedLengthEncoder<time_t, int16_t>(buffer);
+              break;
+            default:
+              return 0;
+              break;
+          }
+          break;
+        default:
+          return 0;
+          break;
+      }
+    }
     case kENCODING_FIXED: {
       switch (sqlType.get_type()) {
         case kSMALLINT: {
@@ -187,6 +208,11 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
   }  // switch (encodingType)
   return 0;
 }
+
+Encoder::Encoder(Data_Namespace::AbstractBuffer* buffer)
+    : num_elems_(0)
+    , buffer_(buffer)
+    , decimal_overflow_validator_(buffer ? buffer->sqlType : SQLTypeInfo()){};
 
 void Encoder::getMetadata(ChunkMetadata& chunkMetadata) {
   // chunkMetadata = metadataTemplate_; // invoke copy constructor

@@ -55,12 +55,18 @@ enum DateaddField {
   daNANOSECOND,
   daWEEK,
   daQUARTERDAY,
+  daWEEKDAY,
+  daDAYOFYEAR,
   daINVALID
 };
 
 extern "C" NEVER_INLINE DEVICE time_t DateAdd(DateaddField field,
                                               int64_t number,
-                                              time_t timeval,
-                                              const int32_t dimen);
+                                              time_t timeval);
+
+extern "C" NEVER_INLINE DEVICE time_t DateAddHighPrecision(DateaddField field,
+                                                           const int64_t number,
+                                                           time_t timeval,
+                                                           const int64_t scale);
 
 #endif  // QUERYENGINE_DATEADD_H

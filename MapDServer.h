@@ -25,6 +25,7 @@
 #define MAPDSERVER_H
 
 #include "QueryEngine/AggregatedColRange.h"
+#include "QueryEngine/ExtractFromTime.h"
 #include "QueryEngine/StringDictionaryGenerations.h"
 #include "QueryEngine/TableGenerations.h"
 #include "QueryEngine/TargetMetaInfo.h"

@@ -182,12 +182,6 @@ std::shared_ptr<Analyzer::BinOper> lower_multicol_compare(
 
 llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper,
                                   const CompilationOptions& co) {
-  for (size_t i = 0; i < plan_state_->join_info_.equi_join_tautologies_.size(); ++i) {
-    const auto& equi_join_tautology = plan_state_->join_info_.equi_join_tautologies_[i];
-    if (*equi_join_tautology == *bin_oper) {
-      return plan_state_->join_info_.join_hash_tables_[i]->codegenSlotIsValid(co, i);
-    }
-  }
   const auto qualifier = bin_oper->get_qualifier();
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
@@ -203,13 +197,20 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper,
     const auto bw_eq_oper = lower_bw_eq(bin_oper);
     return codegenLogical(bw_eq_oper.get(), co);
   }
+  if (optype == kOVERLAPS) {
+    return codegenOverlaps(optype,
+                           qualifier,
+                           bin_oper->get_own_left_operand(),
+                           bin_oper->get_own_right_operand(),
+                           co);
+  }
   if (is_unnest(lhs) || is_unnest(rhs)) {
     throw std::runtime_error("Unnest not supported in comparisons");
   }
   const auto& lhs_ti = lhs->get_type_info();
   const auto& rhs_ti = rhs->get_type_info();
 
-  if (g_fast_strcmp && lhs_ti.is_string() && rhs_ti.is_string() &&
+  if (lhs_ti.is_string() && rhs_ti.is_string() &&
       !(IS_EQUIVALENCE(optype) || optype == kNE)) {
     auto cmp_str = codegenStrCmp(optype,
                                  qualifier,
@@ -231,6 +232,79 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper,
 
   auto lhs_lvs = codegen(lhs, true, co);
   return codegenCmp(optype, qualifier, lhs_lvs, lhs_ti, rhs, co);
+}
+
+llvm::Value* Executor::codegenOverlaps(const SQLOps optype,
+                                       const SQLQualifier qualifier,
+                                       const std::shared_ptr<Analyzer::Expr> lhs,
+                                       const std::shared_ptr<Analyzer::Expr> rhs,
+                                       const CompilationOptions& co) {
+  // TODO(adb): we should never get here, but going to leave this in place for now since
+  // it will likely be useful in factoring the bounds check out of ST_Contains
+  const auto lhs_ti = lhs->get_type_info();
+  CHECK(lhs_ti.is_geometry());
+
+  if (lhs_ti.is_geometry()) {
+    // only point in linestring/poly/mpoly is currently supported
+    CHECK(lhs_ti.get_type() == kPOINT);
+    const auto lhs_col = dynamic_cast<Analyzer::ColumnVar*>(lhs.get());
+    CHECK(lhs_col);
+
+    // Get the actual point data column descriptor
+    const auto coords_cd = catalog_->getMetadataForColumn(lhs_col->get_table_id(),
+                                                          lhs_col->get_column_id() + 1);
+    CHECK(coords_cd);
+
+    std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
+    geoargs.push_back(makeExpr<Analyzer::ColumnVar>(coords_cd->columnType,
+                                                    coords_cd->tableId,
+                                                    coords_cd->columnId,
+                                                    lhs_col->get_rte_idx()));
+
+    Datum input_compression;
+    input_compression.intval =
+        (lhs_ti.get_compression() == kENCODING_GEOINT && lhs_ti.get_comp_param() == 32)
+            ? 1
+            : 0;
+    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_compression));
+    Datum input_srid;
+    input_srid.intval = lhs_ti.get_input_srid();
+    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, input_srid));
+    Datum output_srid;
+    output_srid.intval = lhs_ti.get_output_srid();
+    geoargs.push_back(makeExpr<Analyzer::Constant>(kINT, false, output_srid));
+
+    const auto x_ptr_oper = makeExpr<Analyzer::FunctionOper>(
+        SQLTypeInfo(kDOUBLE, true), "ST_X_Point", geoargs);
+    const auto y_ptr_oper = makeExpr<Analyzer::FunctionOper>(
+        SQLTypeInfo(kDOUBLE, true), "ST_Y_Point", geoargs);
+
+    const auto rhs_ti = rhs->get_type_info();
+    CHECK(IS_GEO_POLY(rhs_ti.get_type()));
+    const auto rhs_col = dynamic_cast<Analyzer::ColumnVar*>(rhs.get());
+    CHECK(rhs_col);
+
+    const auto poly_bounds_cd = catalog_->getMetadataForColumn(
+        rhs_col->get_table_id(),
+        rhs_col->get_column_id() + rhs_ti.get_physical_coord_cols() + 1);
+    CHECK(poly_bounds_cd);
+
+    auto bbox_col_var = makeExpr<Analyzer::ColumnVar>(poly_bounds_cd->columnType,
+                                                      poly_bounds_cd->tableId,
+                                                      poly_bounds_cd->columnId,
+                                                      rhs_col->get_rte_idx());
+
+    const auto bbox_contains_func_oper =
+        makeExpr<Analyzer::FunctionOper>(SQLTypeInfo(kBOOLEAN, false),
+                                         "Point_Overlaps_Box",
+                                         std::vector<std::shared_ptr<Analyzer::Expr>>{
+                                             bbox_col_var, x_ptr_oper, y_ptr_oper});
+
+    return codegenFunctionOper(bbox_contains_func_oper.get(), co);
+  }
+
+  CHECK(false) << "Unsupported type for overlaps operator: " << lhs_ti.get_type_name();
+  return nullptr;
 }
 
 llvm::Value* Executor::codegenStrCmp(const SQLOps optype,
@@ -326,8 +400,14 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
   }
   auto rhs_lvs = codegen(rhs, true, co);
   CHECK_EQ(kONE, qualifier);
-  CHECK((lhs_ti.get_type() == rhs_ti.get_type()) ||
-        (lhs_ti.is_string() && rhs_ti.is_string()));
+  if (optype == kOVERLAPS) {
+    CHECK(lhs_ti.is_geometry());
+    CHECK(rhs_ti.is_array() ||
+          rhs_ti.is_geometry());  // allow geo col or bounds col to pass
+  } else {
+    CHECK((lhs_ti.get_type() == rhs_ti.get_type()) ||
+          (lhs_ti.is_string() && rhs_ti.is_string()));
+  }
   const auto null_check_suffix = get_null_check_suffix(lhs_ti, rhs_ti);
   if (lhs_ti.is_integer() || lhs_ti.is_decimal() || lhs_ti.is_time() ||
       lhs_ti.is_boolean() || lhs_ti.is_string() || lhs_ti.is_timeinterval()) {

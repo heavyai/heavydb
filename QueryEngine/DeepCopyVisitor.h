@@ -34,10 +34,6 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
     return constant->deep_copy();
   }
 
-  RetType visitIterator(const Analyzer::IterExpr* iter) const override {
-    return iter->deep_copy();
-  }
-
   RetType visitUOper(const Analyzer::UOper* uoper) const override {
     return makeExpr<Analyzer::UOper>(uoper->get_type_info(),
                                      uoper->get_contains_agg(),

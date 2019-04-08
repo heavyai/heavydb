@@ -15,7 +15,7 @@
 #define BASE_PATH "./tmp"
 #endif
 
-#define CALCITEPORT 39093
+#define CALCITEPORT 36279
 
 namespace {
 std::shared_ptr<Calcite> g_calcite;
@@ -72,25 +72,22 @@ class DBObjectPermissionsEnv : public ::testing::Environment {
       auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
           data_dir.string(), mapd_parms, false, 0);
       CHECK(boost::filesystem::exists(system_db_file));
-      sys_cat.init(base_path.string(), dataMgr, {}, g_calcite, false, true);
+      sys_cat.init(base_path.string(),
+                   dataMgr,
+                   {},
+                   g_calcite,
+                   false,
+                   true,
+                   mapd_parms.aggregator,
+                   {});
       CHECK(sys_cat.getMetadataForDB(db_name, db));
-      auto cat = Catalog_Namespace::Catalog::get(db_name);
-      if (cat == nullptr) {
-        cat = std::make_shared<Catalog_Namespace::Catalog>(
-            base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite);
-        Catalog_Namespace::Catalog::set(db_name, cat);
-      }
       CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
     }
     MapDParameters mapd_parms;
     auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
         data_dir.string(), mapd_parms, false, 0);
     g_session.reset(new Catalog_Namespace::SessionInfo(
-        std::make_shared<Catalog_Namespace::Catalog>(
-            base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-        user,
-        ExecutorDeviceType::GPU,
-        ""));
+        Catalog_Namespace::Catalog::get(db_name), user, ExecutorDeviceType::GPU, ""));
   }
 };
 
@@ -173,6 +170,19 @@ struct Roles {
   virtual ~Roles() { drop_roles(); }
 };
 
+struct GrantSyntax : testing::Test {
+  Users user_;
+  Roles role_;
+
+  void setup_tables() { run_ddl_statement("CREATE TABLE IF NOT EXISTS tbl(i INTEGER)"); }
+  void drop_tables() { run_ddl_statement("DROP TABLE IF EXISTS tbl"); }
+  explicit GrantSyntax() {
+    drop_tables();
+    setup_tables();
+  }
+  virtual ~GrantSyntax() { drop_tables(); }
+};
+
 struct DatabaseObject : testing::Test {
   Catalog_Namespace::UserMetadata user_meta;
   Catalog_Namespace::DBMetadata db_meta;
@@ -250,7 +260,7 @@ struct DashboardObject : testing::Test {
 
   FrontendViewDescriptor vd1;
   void setup_dashboards() {
-    auto& gcat = g_session->get_catalog();
+    auto& gcat = g_session->getCatalog();
     vd1.viewName = dname1;
     vd1.viewState = dstate;
     vd1.imageHash = dhash;
@@ -266,7 +276,7 @@ struct DashboardObject : testing::Test {
   }
 
   void drop_dashboards() {
-    auto& gcat = g_session->get_catalog();
+    auto& gcat = g_session->getCatalog();
     if (gcat.getMetadataForDashboard(id)) {
       gcat.deleteMetadataForDashboard(id);
     }
@@ -277,6 +287,64 @@ struct DashboardObject : testing::Test {
   }
   virtual ~DashboardObject() { drop_dashboards(); }
 };
+
+TEST_F(GrantSyntax, MultiPrivilegeGrantRevoke) {
+  auto& g_cat = g_session->getCatalog();
+  DBObject tbl_object("tbl", DBObjectType::TableDBObjectType);
+  tbl_object.loadKey(g_cat);
+  tbl_object.resetPrivileges();
+  auto tbl_object_select = tbl_object;
+  auto tbl_object_insert = tbl_object;
+  tbl_object_select.setPrivileges(AccessPrivileges::SELECT_FROM_TABLE);
+  tbl_object_insert.setPrivileges(AccessPrivileges::INSERT_INTO_TABLE);
+  std::vector<DBObject> objects = {tbl_object_select, tbl_object_insert};
+  ASSERT_NO_THROW(
+      sys_cat.grantDBObjectPrivilegesBatch({"Arsenal", "Juventus"}, objects, g_cat));
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", objects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", objects), true);
+  ASSERT_NO_THROW(
+      sys_cat.revokeDBObjectPrivilegesBatch({"Arsenal", "Juventus"}, objects, g_cat));
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", objects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", objects), false);
+
+  // now the same thing, but with SQL queries
+  ASSERT_NO_THROW(
+      run_ddl_statement("GRANT SELECT, INSERT ON TABLE tbl TO Arsenal, Juventus"));
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", objects), true);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", objects), true);
+  ASSERT_NO_THROW(
+      run_ddl_statement("REVOKE SELECT, INSERT ON TABLE tbl FROM Arsenal, Juventus"));
+  EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", objects), false);
+  EXPECT_EQ(sys_cat.checkPrivileges("Juventus", objects), false);
+}
+
+TEST_F(GrantSyntax, MultiRoleGrantRevoke) {
+  std::vector<std::string> roles = {"Gunners", "Sudens"};
+  std::vector<std::string> grantees = {"Juventus", "Bayern"};
+  auto check_grant = []() {
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Juventus", "Gunners", true), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Bayern", "Gunners", true), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Juventus", "Sudens", true), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Bayern", "Sudens", true), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Arsenal", "Sudens", true), false);
+  };
+  auto check_revoke = []() {
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Juventus", "Gunners", true), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Bayern", "Gunners", true), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Juventus", "Sudens", true), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("Bayern", "Sudens", true), false);
+  };
+  ASSERT_NO_THROW(sys_cat.grantRoleBatch(roles, grantees));
+  check_grant();
+  ASSERT_NO_THROW(sys_cat.revokeRoleBatch(roles, grantees));
+  check_revoke();
+
+  // now the same thing, but with SQL queries
+  ASSERT_NO_THROW(run_ddl_statement("GRANT Gunners, Sudens TO Juventus, Bayern"));
+  check_grant();
+  ASSERT_NO_THROW(run_ddl_statement("REVOKE Gunners, Sudens FROM Juventus, Bayern"));
+  check_revoke();
+}
 
 TEST(UserRoles, InvalidGrantsRevokesTest) {
   run_ddl_statement("CREATE USER Antazin(password = 'password', is_super = 'false');");
@@ -299,6 +367,7 @@ TEST(UserRoles, ValidNames) {
       run_ddl_statement("CREATE USER vasya.vasya@vasya.com (password = 'password');"));
   EXPECT_NO_THROW(run_ddl_statement(
       "CREATE USER \"vasya ivanov\"@vasya.ivanov.com (password = 'password');"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE USER vasya-vasya (password = 'password');"));
   EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer;"));
   EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer-backend;"));
   EXPECT_NO_THROW(run_ddl_statement("CREATE ROLE developer-backend-rendering;"));
@@ -306,9 +375,11 @@ TEST(UserRoles, ValidNames) {
   EXPECT_NO_THROW(
       run_ddl_statement("GRANT developer-backend TO \"vasya ivanov\"@vasya.ivanov.com;"));
   EXPECT_NO_THROW(run_ddl_statement("GRANT developer TO vasya.vasya@vasya.com;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT developer-backend-rendering TO vasya-vasya;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP USER vasya;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP USER vasya.vasya@vasya.com;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP USER \"vasya ivanov\"@vasya.ivanov.com;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP USER vasya-vasya;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer-backend;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP ROLE developer-backend-rendering;"));
@@ -340,7 +411,7 @@ TEST(UserRoles, RoleHierarchies) {
   EXPECT_NO_THROW(run_ddl_statement("GRANT UPDATE ON TABLE hr_tbl1 TO hr_r4;"));
 
   // check that we see privileges gratnted via roles' hierarchy
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   AccessPrivileges tbl_privs;
   ASSERT_NO_THROW(tbl_privs.add(AccessPrivileges::SELECT_FROM_TABLE));
   ASSERT_NO_THROW(tbl_privs.add(AccessPrivileges::INSERT_INTO_TABLE));
@@ -406,13 +477,12 @@ TEST_F(DatabaseObject, SqlEditorAccessTest) {
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
   CHECK(sys_cat.getMetadataForUser("Juventus", user_meta));
-  session_juve.reset(new Catalog_Namespace::SessionInfo(
-      std::make_shared<Catalog_Namespace::Catalog>(
-          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-      user_meta,
-      ExecutorDeviceType::GPU,
-      ""));
-  auto& cat_mapd = session_juve->get_catalog();
+  session_juve.reset(
+      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
+  auto& cat_mapd = session_juve->getCatalog();
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
@@ -427,8 +497,8 @@ TEST_F(DatabaseObject, SqlEditorAccessTest) {
 
   mapd_object.resetPrivileges();
   ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::VIEW_SQL_EDITOR));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Chelsea", mapd_object, cat_mapd));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Juventus", mapd_object, cat_mapd));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivilegesBatch(
+      {"Chelsea", "Juventus"}, {mapd_object}, cat_mapd));
 
   mapd_object.resetPrivileges();
   ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::VIEW_SQL_EDITOR));
@@ -439,10 +509,10 @@ TEST_F(DatabaseObject, SqlEditorAccessTest) {
 
   mapd_object.resetPrivileges();
   ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::VIEW_SQL_EDITOR));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Chelsea", mapd_object, cat_mapd));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Juventus", mapd_object, cat_mapd));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", mapd_object, cat_mapd));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivilegesBatch(
+      {"Chelsea", "Juventus"}, {mapd_object}, cat_mapd));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivilegesBatch(
+      {"Bayern", "Arsenal"}, {mapd_object}, cat_mapd));
 
   mapd_object.resetPrivileges();
   ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::VIEW_SQL_EDITOR));
@@ -462,13 +532,12 @@ TEST_F(DatabaseObject, DBLoginAccessTest) {
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
   CHECK(sys_cat.getMetadataForUser("Bayern", user_meta));
-  session_juve.reset(new Catalog_Namespace::SessionInfo(
-      std::make_shared<Catalog_Namespace::Catalog>(
-          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-      user_meta,
-      ExecutorDeviceType::GPU,
-      ""));
-  auto& cat_mapd = session_juve->get_catalog();
+  session_juve.reset(
+      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
+  auto& cat_mapd = session_juve->getCatalog();
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
@@ -483,8 +552,8 @@ TEST_F(DatabaseObject, DBLoginAccessTest) {
 
   mapd_object.resetPrivileges();
   ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::ACCESS));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", mapd_object, cat_mapd));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivilegesBatch(
+      {"Arsenal", "Bayern"}, {mapd_object}, cat_mapd));
 
   mapd_object.resetPrivileges();
   ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::ACCESS));
@@ -495,8 +564,8 @@ TEST_F(DatabaseObject, DBLoginAccessTest) {
 
   mapd_object.resetPrivileges();
   ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::ACCESS));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Bayern", mapd_object, cat_mapd));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", mapd_object, cat_mapd));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivilegesBatch(
+      {"Bayern", "Arsenal"}, {mapd_object}, cat_mapd));
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Juventus", mapd_object, cat_mapd));
 
   mapd_object.resetPrivileges();
@@ -517,16 +586,17 @@ TEST_F(DatabaseObject, TableAccessTest) {
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(new Catalog_Namespace::SessionInfo(
-      std::make_shared<Catalog_Namespace::Catalog>(
-          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-      user_meta,
-      ExecutorDeviceType::GPU,
-      ""));
-  auto& cat_mapd = session_ars->get_catalog();
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
+  auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
+  AccessPrivileges bayern_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::CREATE_TABLE));
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::DROP_TABLE));
+  ASSERT_NO_THROW(bayern_privs.add(AccessPrivileges::ALTER_TABLE));
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
@@ -551,6 +621,23 @@ TEST_F(DatabaseObject, TableAccessTest) {
   ASSERT_NO_THROW(mapd_object.setPrivileges(AccessPrivileges::CREATE_TABLE));
   privObjects.push_back(mapd_object);
   EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(bayern_privs));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(bayern_privs));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", mapd_object, cat_mapd));
+
+  mapd_object.resetPrivileges();
+  privObjects.clear();
+  ASSERT_NO_THROW(mapd_object.setPrivileges(bayern_privs));
+  privObjects.push_back(mapd_object);
+  EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), true);
 }
 
 TEST_F(DatabaseObject, ViewAccessTest) {
@@ -563,13 +650,12 @@ TEST_F(DatabaseObject, ViewAccessTest) {
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(new Catalog_Namespace::SessionInfo(
-      std::make_shared<Catalog_Namespace::Catalog>(
-          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-      user_meta,
-      ExecutorDeviceType::GPU,
-      ""));
-  auto& cat_mapd = session_ars->get_catalog();
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
+  auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_VIEW));
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
@@ -619,13 +705,12 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(new Catalog_Namespace::SessionInfo(
-      std::make_shared<Catalog_Namespace::Catalog>(
-          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-      user_meta,
-      ExecutorDeviceType::GPU,
-      ""));
-  auto& cat_mapd = session_ars->get_catalog();
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
+  auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DASHBOARD));
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
@@ -674,13 +759,12 @@ TEST_F(DatabaseObject, DatabaseAllTest) {
       std::make_shared<Data_Namespace::DataMgr>(data_dir.string(), mapd_parms, false, 0);
   CHECK(sys_cat.getMetadataForDB("mapd", db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
-  session_ars.reset(new Catalog_Namespace::SessionInfo(
-      std::make_shared<Catalog_Namespace::Catalog>(
-          base_path.string(), db, dataMgr, std::vector<LeafHostInfo>{}, g_calcite),
-      user_meta,
-      ExecutorDeviceType::GPU,
-      ""));
-  auto& cat_mapd = session_ars->get_catalog();
+  session_ars.reset(
+      new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db.dbName),
+                                         user_meta,
+                                         ExecutorDeviceType::GPU,
+                                         ""));
+  auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DATABASE));
   DBObject mapd_object("mapd", DBObjectType::DatabaseDBObjectType);
@@ -762,7 +846,7 @@ TEST_F(DatabaseObject, DatabaseAllTest) {
 }
 
 TEST_F(TableObject, AccessDefaultsTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Bayern"));
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
   AccessPrivileges epl_privs;
@@ -791,7 +875,7 @@ TEST_F(TableObject, AccessDefaultsTest) {
   EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
 }
 TEST_F(TableObject, AccessAfterGrantsTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Bayern"));
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
   AccessPrivileges epl_privs;
@@ -834,7 +918,7 @@ TEST_F(TableObject, AccessAfterGrantsTest) {
 }
 
 TEST_F(TableObject, AccessAfterRevokesTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
   ASSERT_NO_THROW(sys_cat.grantRole("Gunners", "Arsenal"));
   AccessPrivileges epl_privs;
@@ -926,7 +1010,7 @@ TEST_F(TableObject, AccessAfterRevokesTest) {
 
 void testViewPermissions(std::string user, std::string roleToGrant) {
   DBObject bill_view("bill_view", DBObjectType::ViewDBObjectType);
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
   bill_view.loadKey(cat);
   std::vector<DBObject> privs;
 
@@ -1028,7 +1112,7 @@ TEST_F(ViewObject, CalciteViewResolution) {
 }
 
 TEST_F(DashboardObject, AccessDefaultsTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("Gunners", "Bayern"));
   ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Arsenal"));
   AccessPrivileges dash_priv;
@@ -1046,7 +1130,7 @@ TEST_F(DashboardObject, AccessDefaultsTest) {
 }
 
 TEST_F(DashboardObject, AccessAfterGrantsTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("Gunners", "Arsenal"));
   AccessPrivileges dash_priv;
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
@@ -1055,8 +1139,8 @@ TEST_F(DashboardObject, AccessAfterGrantsTest) {
   dash_object.loadKey(g_cat);
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Gunners", dash_object, g_cat));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Juventus", dash_object, g_cat));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivilegesBatch(
+      {"Gunners", "Juventus"}, {dash_object}, g_cat));
 
   privObjects.clear();
   privObjects.push_back(dash_object);
@@ -1067,7 +1151,7 @@ TEST_F(DashboardObject, AccessAfterGrantsTest) {
 }
 
 TEST_F(DashboardObject, AccessAfterRevokesTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
   ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Bayern"));
   AccessPrivileges dash_priv;
@@ -1077,8 +1161,8 @@ TEST_F(DashboardObject, AccessAfterRevokesTest) {
   dash_object.loadKey(g_cat);
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("OldLady", dash_object, g_cat));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", dash_object, g_cat));
+  ASSERT_NO_THROW(
+      sys_cat.grantDBObjectPrivilegesBatch({"OldLady", "Arsenal"}, {dash_object}, g_cat));
 
   EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
   EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
@@ -1100,9 +1184,9 @@ TEST_F(DashboardObject, AccessAfterRevokesTest) {
 }
 
 TEST_F(DashboardObject, GranteesDefaultListTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   auto perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int size = static_cast<int>(perms_list.size());
@@ -1110,9 +1194,9 @@ TEST_F(DashboardObject, GranteesDefaultListTest) {
 }
 
 TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   auto perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs1 = static_cast<int>(perms_list.size());
@@ -1124,10 +1208,10 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
   dash_object.loadKey(g_cat);
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("OldLady", dash_object, g_cat));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", dash_object, g_cat));
+  ASSERT_NO_THROW(
+      sys_cat.grantDBObjectPrivilegesBatch({"OldLady", "Bayern"}, {dash_object}, g_cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs2 = static_cast<int>(perms_list.size());
@@ -1141,7 +1225,7 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", dash_object, g_cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs3 = static_cast<int>(perms_list.size());
@@ -1152,9 +1236,9 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
 }
 
 TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
-  auto& g_cat = g_session->get_catalog();
+  auto& g_cat = g_session->getCatalog();
   auto perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs1 = static_cast<int>(perms_list.size());
@@ -1167,10 +1251,10 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   dash_object.loadKey(g_cat);
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Gunners", dash_object, g_cat));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Chelsea", dash_object, g_cat));
+  ASSERT_NO_THROW(
+      sys_cat.grantDBObjectPrivilegesBatch({"Gunners", "Chelsea"}, {dash_object}, g_cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs2 = static_cast<int>(perms_list.size());
@@ -1185,7 +1269,7 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", dash_object, g_cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs3 = static_cast<int>(perms_list.size());
@@ -1199,7 +1283,7 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", dash_object, g_cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs4 = static_cast<int>(perms_list.size());
@@ -1211,7 +1295,7 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Chelsea", dash_object, g_cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.get_currentDB().dbId,
+      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs5 = static_cast<int>(perms_list.size());
@@ -1220,7 +1304,7 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
 }
 
 void create_tables(std::string prefix, int max) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
   for (int i = 0; i < max; i++) {
     std::string name = prefix + std::to_string(i);
     run_ddl_statement("CREATE TABLE " + name + " (id integer);");
@@ -1232,7 +1316,7 @@ void create_tables(std::string prefix, int max) {
 }
 
 void create_views(std::string prefix, int max) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
   for (int i = 0; i < max; i++) {
     std::string name = "view_" + prefix + std::to_string(i);
     run_ddl_statement("CREATE VIEW " + name + " AS SELECT * FROM " + prefix +
@@ -1245,7 +1329,7 @@ void create_views(std::string prefix, int max) {
 }
 
 void create_dashboards(std::string prefix, int max) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
   for (int i = 0; i < max; i++) {
     std::string name = "dash_" + prefix + std::to_string(i);
     FrontendViewDescriptor vd;
@@ -1266,7 +1350,7 @@ void create_dashboards(std::string prefix, int max) {
 }
 
 void assert_grants(std::string prefix, int i, bool expected) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
 
   DBObject tablePermission(prefix + std::to_string(i), DBObjectType::TableDBObjectType);
   try {
@@ -1301,7 +1385,7 @@ void assert_grants(std::string prefix, int i, bool expected) {
 }
 
 void check_grant_access(std::string prefix, int max) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
 
   for (int i = 0; i < max; i++) {
     assert_grants(prefix, i, false);
@@ -1327,7 +1411,7 @@ void check_grant_access(std::string prefix, int max) {
 }
 
 void drop_dashboards(std::string prefix, int max) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
 
   for (int i = 0; i < max; i++) {
     std::string name = "dash_" + prefix + std::to_string(i);
@@ -1341,7 +1425,7 @@ void drop_dashboards(std::string prefix, int max) {
 }
 
 void drop_views(std::string prefix, int max) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
 
   for (int i = 0; i < max; i++) {
     std::string name = "view_" + prefix + std::to_string(i);
@@ -1352,7 +1436,7 @@ void drop_views(std::string prefix, int max) {
 }
 
 void drop_tables(std::string prefix, int max) {
-  auto& cat = g_session->get_catalog();
+  auto& cat = g_session->getCatalog();
 
   for (int i = 0; i < max; i++) {
     std::string name = prefix + std::to_string(i);
@@ -1399,5 +1483,12 @@ int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   google::InitGoogleLogging(argv[0]);
   testing::AddGlobalTestEnvironment(new DBObjectPermissionsEnv);
-  return RUN_ALL_TESTS();
+
+  int err{0};
+  try {
+    err = RUN_ALL_TESTS();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
+  return err;
 }

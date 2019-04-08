@@ -172,7 +172,7 @@ std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
       col_names.push_back("col_" + std::to_string(i));
     }
   }
-  const auto serialized_arrow_output = rows->getSerializedArrowOutput(col_names);
+  const auto serialized_arrow_output = rows->getSerializedArrowOutput(col_names, -1);
 
   arrow::io::BufferReader schema_reader(serialized_arrow_output.schema);
 

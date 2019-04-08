@@ -56,7 +56,7 @@ class GpuCompilationContext {
   CUfunction kernel_;
 #ifdef HAVE_CUDA
   const int device_id_;
-  const void* cuda_mgr_;
+  const CudaMgr_Namespace::CudaMgr* cuda_mgr_;
 #endif  // HAVE_CUDA
 };
 

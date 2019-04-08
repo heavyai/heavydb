@@ -13,10 +13,11 @@
   </repositories>
   <name>MapD Java</name>
   <modules>
-    <module>mapdjdbc</module>
+    <module>omniscijdbc</module>
     <module>calcite</module>
     <module>utility</module>
     <module>thrift</module>
     <module>mapd</module>
+    <module>mapdcommon</module>
   </modules>
 </project>

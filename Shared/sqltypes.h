@@ -24,7 +24,7 @@
 #ifndef SQLTYPES_H
 #define SQLTYPES_H
 
-#include "funcannotations.h"
+#include "ConfigResolve.h"
 
 #include <stdint.h>
 #include <cassert>
@@ -79,21 +79,35 @@ struct VarlenDatum {
       : length(l), pointer(p), is_null(n) {}
 };
 
-// ArrayDatum is idential to VarlenDatum except that it takes ownership of
-// the memory holding array data.
-struct ArrayDatum : public VarlenDatum {
-#ifndef __CUDACC__
-  std::shared_ptr<int8_t> data_ptr;
-#endif
-
-  DEVICE ArrayDatum() : VarlenDatum() {}
-#ifndef __CUDACC__
-  ArrayDatum(const size_t l, int8_t* p, const bool n)
-      : VarlenDatum(l, p, n), data_ptr(p, [](int8_t* p) { free(p); }) {}
-#else
-  ArrayDatum(const size_t l, int8_t* p, const bool n) : VarlenDatum(l, p, n) {}
-#endif
+struct DoNothingDeleter {
+  void operator()(int8_t*) {}
 };
+struct FreeDeleter {
+  void operator()(int8_t* p) { free(p); }
+};
+
+struct HostArrayDatum : public VarlenDatum {
+  using ManagedPtr = std::shared_ptr<int8_t>;
+
+  HostArrayDatum() = default;
+
+  HostArrayDatum(size_t const l, int8_t* p, bool const n)
+      : VarlenDatum(l, p, n), data_ptr(p, FreeDeleter()){};
+
+  template <typename CUSTOM_DELETER,
+            typename = std::enable_if_t<
+                std::is_void<std::result_of_t<CUSTOM_DELETER(int8_t*)> >::value> >
+  HostArrayDatum(size_t const l, int8_t* p, CUSTOM_DELETER custom_deleter)
+      : VarlenDatum(l, p, 0 == l), data_ptr(p, custom_deleter) {}
+
+  ManagedPtr data_ptr;
+};
+
+struct DeviceArrayDatum : public VarlenDatum {
+  DEVICE DeviceArrayDatum() : VarlenDatum() {}
+};
+
+using ArrayDatum = std::conditional_t<isCudaCC(), DeviceArrayDatum, HostArrayDatum>;
 
 typedef union {
   bool boolval;
@@ -120,14 +134,15 @@ union DataBlockPtr {
 
 // must not change because these values persist in catalogs.
 enum EncodingType {
-  kENCODING_NONE = 0,    // no encoding
-  kENCODING_FIXED = 1,   // Fixed-bit encoding
-  kENCODING_RL = 2,      // Run Length encoding
-  kENCODING_DIFF = 3,    // Differential encoding
-  kENCODING_DICT = 4,    // Dictionary encoding
-  kENCODING_SPARSE = 5,  // Null encoding for sparse columns
-  kENCODING_GEOINT = 6,  // Encoding coordinates as intergers
-  kENCODING_LAST = 7
+  kENCODING_NONE = 0,          // no encoding
+  kENCODING_FIXED = 1,         // Fixed-bit encoding
+  kENCODING_RL = 2,            // Run Length encoding
+  kENCODING_DIFF = 3,          // Differential encoding
+  kENCODING_DICT = 4,          // Dictionary encoding
+  kENCODING_SPARSE = 5,        // Null encoding for sparse columns
+  kENCODING_GEOINT = 6,        // Encoding coordinates as intergers
+  kENCODING_DATE_IN_DAYS = 7,  // Date encoding in days
+  kENCODING_LAST = 8
 };
 
 #include "SQLTypeUtilities.h"
@@ -189,6 +204,40 @@ class ArrayContextTypeSizer {
   }
 };
 
+template <typename CORE_TYPE>
+class DateTimeFacilities {
+ public:
+  inline auto is_date_in_days() const {
+    CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
+    if (is_member_of_typeset<kDATE>(*derived)) {
+      auto comp_type(derived->get_compression());
+      if (comp_type == kENCODING_DATE_IN_DAYS) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  inline auto is_high_precision_timestamp() const {
+    CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
+    if (is_member_of_typeset<kTIMESTAMP>(*derived)) {
+      auto dimension(derived->get_dimension());
+      if (dimension > 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  inline auto is_timestamp() const {
+    CORE_TYPE const* derived(static_cast<CORE_TYPE const*>(this));
+    if (is_member_of_typeset<kTIMESTAMP>(*derived)) {
+      return true;
+    }
+    return false;
+  }
+};
+
 // @type SQLTypeInfo
 // @brief a structure to capture all type information including
 // length, precision, scale, etc.
@@ -213,6 +262,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       , compression(kENCODING_NONE)
       , comp_param(0)
       , size(get_storage_size()) {}
+  SQLTypeInfoCore(SQLTypes t, int d, int s) : SQLTypeInfoCore(t, d, s, false) {}
   SQLTypeInfoCore(SQLTypes t, bool n)
       : type(t)
       , subtype(kNULLT)
@@ -222,6 +272,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       , compression(kENCODING_NONE)
       , comp_param(0)
       , size(get_storage_size()) {}
+  SQLTypeInfoCore(SQLTypes t) : SQLTypeInfoCore(t, false) {}
   SQLTypeInfoCore(SQLTypes t, bool n, EncodingType c)
       : type(t)
       , subtype(kNULLT)
@@ -253,7 +304,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
   HOST DEVICE inline int get_comp_param() const { return comp_param; }
   HOST DEVICE inline int get_size() const { return size; }
   inline int get_logical_size() const {
-    if (compression == kENCODING_FIXED) {
+    if (compression == kENCODING_FIXED || compression == kENCODING_DATE_IN_DAYS) {
       SQLTypeInfoCore ti(type, dimension, scale, notnull, kENCODING_NONE, 0, subtype);
       return ti.get_size();
     }
@@ -389,6 +440,13 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
            IS_GEO(type);
   }
 
+  // need this here till is_varlen can be fixed w/o negative impact to existing code
+  inline bool is_varlen_indeed() const {
+    // SQLTypeInfo.is_varlen() is broken with fixedlen array now
+    // and seems left broken for some concern, so fix it locally
+    return is_varlen() && !is_fixlen_array();
+  }
+
   HOST DEVICE inline bool operator!=(const SQLTypeInfoCore& rhs) const {
     return type != rhs.get_type() || subtype != rhs.get_subtype() ||
            dimension != rhs.get_dimension() || scale != rhs.get_scale() ||
@@ -466,6 +524,9 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       case kTIME:
       case kTIMESTAMP:
       case kDATE:
+        if (compression == kENCODING_DATE_IN_DAYS) {
+          return d.timeval == NULL_INT;
+        }
 // @TODO(alex): remove the ifdef
 #ifdef __ARM_ARCH_7A__
 #ifndef __CUDACC__
@@ -629,6 +690,16 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
           case kENCODING_SPARSE:
             assert(false);
             break;
+          case kENCODING_DATE_IN_DAYS:
+            switch (comp_param) {
+              case 0:
+                return sizeof(int32_t);
+              case 16:
+                return 2;
+              default:
+                assert(false);
+                break;
+            }
           default:
             assert(false);
         }
@@ -686,16 +757,18 @@ std::string SQLTypeInfoCore<TYPE_FACET_PACK...>::type_name[kSQLTYPE_LAST] = {
 
 template <template <class> class... TYPE_FACET_PACK>
 std::string SQLTypeInfoCore<TYPE_FACET_PACK...>::comp_name[kENCODING_LAST] =
-    {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED"};
+    {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
 #endif
 
-using SQLTypeInfo = SQLTypeInfoCore<ArrayContextTypeSizer, ExecutorTypePackaging>;
+using SQLTypeInfo =
+    SQLTypeInfoCore<ArrayContextTypeSizer, ExecutorTypePackaging, DateTimeFacilities>;
 
 SQLTypes decimal_to_int_type(const SQLTypeInfo&);
 
 #ifndef __CUDACC__
 Datum StringToDatum(const std::string& s, SQLTypeInfo& ti);
 std::string DatumToString(Datum d, const SQLTypeInfo& ti);
+bool DatumEqual(const Datum, const Datum, const SQLTypeInfo& ti);
 int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
                                        const SQLTypeInfo& type_info,
                                        const SQLTypeInfo& new_type_info);
@@ -707,7 +780,8 @@ int64_t convert_decimal_value_to_scale(const int64_t decimal_value,
 
 inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
   EncodingType encoding = type_info.get_compression();
-  if (encoding == kENCODING_FIXED && (type_info.get_type() != kARRAY)) {
+  if (encoding == kENCODING_DATE_IN_DAYS ||
+      (encoding == kENCODING_FIXED && type_info.get_type() != kARRAY)) {
     encoding = kENCODING_NONE;
   }
   return SQLTypeInfo(type_info.get_type(),

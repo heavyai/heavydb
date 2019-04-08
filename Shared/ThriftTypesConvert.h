@@ -143,6 +143,7 @@ inline TEncodingType::type encoding_to_thrift(const SQLTypeInfo& type_info) {
     THRIFT_ENCODING_CASE(DICT)
     THRIFT_ENCODING_CASE(SPARSE)
     THRIFT_ENCODING_CASE(GEOINT)
+    THRIFT_ENCODING_CASE(DATE_IN_DAYS)
     default:
       CHECK(false);
   }
@@ -160,6 +161,7 @@ inline EncodingType thrift_to_encoding(const TEncodingType::type tEncodingType) 
     UNTHRIFT_ENCODING_CASE(DICT)
     UNTHRIFT_ENCODING_CASE(SPARSE)
     UNTHRIFT_ENCODING_CASE(GEOINT)
+    UNTHRIFT_ENCODING_CASE(DATE_IN_DAYS)
     default:
       CHECK(false);
   }
@@ -203,17 +205,19 @@ inline std::string thrift_to_encoding_name(const TTypeInfo& ti) {
   return internal_ti.get_compression_name();
 }
 
-inline SQLTypeInfo type_info_from_thrift(const TTypeInfo& thrift_ti) {
+inline SQLTypeInfo type_info_from_thrift(const TTypeInfo& thrift_ti,
+                                         const bool strip_geo_encoding = false) {
   const auto ti = thrift_to_type(thrift_ti.type);
   if (IS_GEO(ti)) {
     const auto base_type = static_cast<SQLTypes>(thrift_ti.precision);
-    return SQLTypeInfo(ti,
-                       thrift_ti.scale,
-                       thrift_ti.scale,
-                       !thrift_ti.nullable,
-                       thrift_to_encoding(thrift_ti.encoding),
-                       thrift_ti.comp_param,
-                       base_type);
+    return SQLTypeInfo(
+        ti,
+        thrift_ti.scale,
+        thrift_ti.scale,
+        !thrift_ti.nullable,
+        strip_geo_encoding ? kENCODING_NONE : thrift_to_encoding(thrift_ti.encoding),
+        thrift_ti.comp_param,
+        base_type);
   }
   if (thrift_ti.is_array) {
     auto ati = SQLTypeInfo(kARRAY,

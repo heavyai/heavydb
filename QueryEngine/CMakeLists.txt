@@ -12,6 +12,7 @@ set(query_engine_source_files
     BaselineJoinHashTable.cpp
     CalciteAdapter.cpp
     CalciteDeserializerUtils.cpp
+    CardinalityEstimator.cpp
     CaseIR.cpp
     CastIR.cpp
     Codec.cpp
@@ -32,6 +33,7 @@ set(query_engine_source_files
     ExtensionFunctionsWhitelist.cpp
     ExtensionFunctions.ast
     ExtensionsIR.cpp
+    FromTableReordering.cpp
     GpuInterrupt.cpp
     GpuMemUtils.cpp
     InPlaceSort.cpp
@@ -40,7 +42,6 @@ set(query_engine_source_files
     GroupByAndAggregate.cpp
     InValuesBitmap.cpp
     InputMetadata.cpp
-    IteratorTable.cpp
     JoinFilterPushDown.cpp
     LegacyExecute.cpp
     LogicalIR.cpp
@@ -51,12 +52,14 @@ set(query_engine_source_files
     NativeCodegen.cpp
     NvidiaKernel.cpp
     OutputBufferInitialization.cpp
+    OverlapsJoinHashTable.cpp
     QueryPhysicalInputsCollector.cpp
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp
     QueryExecutionContext.cpp
     QueryFragmentDescriptor.cpp
     QueryMemoryDescriptor.cpp
+    QueryMemoryInitializer.cpp
     RelAlgAbstractInterpreter.cpp
     RelLeftDeepInnerJoin.cpp
     RelAlgExecutionDescriptor.cpp
@@ -78,6 +81,7 @@ set(query_engine_source_files
     StreamingTopN.cpp
     StringDictionaryGenerations.cpp
     TableGenerations.cpp
+    TableOptimizer.cpp
     StringFunctions.cpp
     StringOpsIR.cpp
     RegexpFunctions.cpp
@@ -116,7 +120,10 @@ if(ENABLE_CUDA)
   set(NVCC_BUILD_TYPE_ARGS)
   string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPERCASE)
   if(CMAKE_BUILD_TYPE_UPPERCASE MATCHES DEBUG)
-    list(APPEND NVCC_BUILD_TYPE_ARGS -DTHRUST_DEBUG -g)
+    list(APPEND NVCC_BUILD_TYPE_ARGS -DTHRUST_DEBUG --debug)
+    if (ENABLE_CUDA_KERNEL_DEBUG) 
+        list(APPEND NVCC_BUILD_TYPE_ARGS --device-debug)
+    endif()
   else()
     list(APPEND NVCC_BUILD_TYPE_ARGS -O3)
   endif()
@@ -169,7 +176,7 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc ${CMAKE_CURRENT_BI
 
 if(ENABLE_CUDA)
   if (ENABLE_RENDERING)
-    add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o ${CMAKE_CURRENT_BINARY_DIR}/ThrustPolygons.o)
+    add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o ${CMAKE_CURRENT_BINARY_DIR}/ThrustPolygons.o ${CMAKE_CURRENT_BINARY_DIR}/ThrustLines.o ${CMAKE_CURRENT_BINARY_DIR}/ThrustTransform.o)
   else()
     add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
   endif()
@@ -307,6 +314,42 @@ add_custom_command(
         -Xcudafe "--diag_suppress=virtual_function_decl_hidden"
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/ThrustPolygons.cu
+    )
+
+add_custom_command(
+    DEPENDS Rendering/ee/ThrustLines.cu
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ThrustLines.o
+    COMMAND nvcc
+    ARGS
+        -I ${CMAKE_SOURCE_DIR}
+        -I ${glbinding_INCLUDE_DIR}
+        ${MAPD_HOST_COMPILER_FLAG}
+        -Xcompiler -fPIC
+        -D_FORCE_INLINES
+        ${MAPD_DEFINITIONS}
+        -arch sm_30
+        -std=c++14
+        -Xcudafe "--diag_suppress=virtual_function_decl_hidden"
+        ${NVCC_BUILD_TYPE_ARGS}
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/ThrustLines.cu
+    )
+
+add_custom_command(
+    DEPENDS Rendering/ee/ThrustTransform.cu
+    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ThrustTransform.o
+    COMMAND nvcc
+    ARGS
+        -I ${CMAKE_SOURCE_DIR}
+        -I ${glbinding_INCLUDE_DIR}
+        ${MAPD_HOST_COMPILER_FLAG}
+        -Xcompiler -fPIC
+        -D_FORCE_INLINES
+        ${MAPD_DEFINITIONS}
+        -arch sm_30
+        -std=c++14
+        -Xcudafe "--diag_suppress=virtual_function_decl_hidden"
+        ${NVCC_BUILD_TYPE_ARGS}
+        -c ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/ThrustTransform.cu
     )
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})

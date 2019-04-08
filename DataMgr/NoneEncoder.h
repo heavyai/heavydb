@@ -20,6 +20,8 @@
 #include "AbstractBuffer.h"
 #include "Encoder.h"
 
+#include <Shared/DatumFetchers.h>
+
 template <typename T>
 T none_encoded_null_value() {
   return std::is_integral<T>::value ? inline_int_null_value<T>()
@@ -37,6 +39,7 @@ class NoneEncoder : public Encoder {
 
   ChunkMetadata appendData(int8_t*& srcData,
                            const size_t numAppendElems,
+                           const SQLTypeInfo&,
                            const bool replicating = false) {
     T* unencodedData = reinterpret_cast<T*>(srcData);
     std::unique_ptr<T> encodedData;
@@ -50,6 +53,7 @@ class NoneEncoder : public Encoder {
       if (data == none_encoded_null_value<T>())
         has_nulls = true;
       else {
+        decimal_overflow_validator_.validate(data);
         dataMin = std::min(dataMin, data);
         dataMax = std::max(dataMax, data);
       }
@@ -122,6 +126,20 @@ class NoneEncoder : public Encoder {
     fread((int8_t*)&dataMin, sizeof(T), 1, f);
     fread((int8_t*)&dataMax, sizeof(T), 1, f);
     fread((int8_t*)&has_nulls, sizeof(bool), 1, f);
+  }
+
+  bool resetChunkStats(const ChunkStats& stats) override {
+    const auto new_min = DatumFetcher::getDatumVal<T>(stats.min);
+    const auto new_max = DatumFetcher::getDatumVal<T>(stats.max);
+
+    if (dataMin == new_min && dataMax == new_max && has_nulls == stats.has_nulls) {
+      return false;
+    }
+
+    dataMin = new_min;
+    dataMax = new_max;
+    has_nulls = stats.has_nulls;
+    return true;
   }
 
   void copyMetadata(const Encoder* copyFromEncoder) {

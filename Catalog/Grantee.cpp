@@ -79,6 +79,16 @@ DBObject* Grantee::findDbObject(const DBObjectKey& objectKey, bool only_direct) 
   return dbObject;
 }
 
+bool Grantee::hasAnyPrivilegesOnDb(int32_t dbId, bool only_direct) const {
+  const DBObjectMap& privs = only_direct ? directPrivileges_ : effectivePrivileges_;
+  for (const auto& priv : privs) {
+    if (priv.second->getObjectKey().dbId == dbId) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void Grantee::grantPrivileges(const DBObject& object) {
   auto* dbObject = findDbObject(object.getObjectKey(), false);
   if (!dbObject) {  // not found
@@ -95,6 +105,18 @@ void Grantee::grantPrivileges(const DBObject& object) {
   updatePrivileges();
 }
 
+void Grantee::renameDbObject(const DBObject& object) {
+  // rename direct and effective objects
+  auto directIt = directPrivileges_.find(object.getObjectKey());
+  if (directIt != directPrivileges_.end()) {
+    directIt->second->setName(object.getName());
+  }
+
+  auto effectiveIt = effectivePrivileges_.find(object.getObjectKey());
+  if (effectiveIt != effectivePrivileges_.end()) {
+    effectiveIt->second->setName(object.getName());
+  }
+}
 // Revoke privileges from the object.
 // If there are no privileges left - erase object and return nullptr.
 // Otherwise, return the changed object.
@@ -335,5 +357,12 @@ void Role::updatePrivileges() {
   Grantee::updatePrivileges();
   for (auto grantee : grantees_) {
     grantee->updatePrivileges();
+  }
+}
+
+void Role::renameDbObject(const DBObject& object) {
+  Grantee::renameDbObject(object);
+  for (auto grantee : grantees_) {
+    grantee->renameDbObject(object);
   }
 }

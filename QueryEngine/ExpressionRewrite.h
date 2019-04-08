@@ -17,11 +17,13 @@
 #ifndef QUERYENGINE_EXPRESSIONREWRITE_H
 #define QUERYENGINE_EXPRESSIONREWRITE_H
 
+#include <boost/optional.hpp>
 #include <list>
 #include <memory>
 #include <vector>
 
 #include "Analyzer/Analyzer.h"
+#include "RelAlgExecutionUnit.h"
 
 namespace Analyzer {
 
@@ -35,20 +37,23 @@ class InputColDescriptor;
 
 // Rewrites an OR tree where leaves are equality compare against literals.
 Analyzer::ExpressionPtr rewrite_expr(const Analyzer::Expr*);
+
 // Rewrites array elements that are strings to be dict encoded transient literals
 Analyzer::ExpressionPtr rewrite_array_elements(const Analyzer::Expr*);
 
-std::list<std::shared_ptr<Analyzer::Expr>> redirect_exprs(
-    const std::list<std::shared_ptr<Analyzer::Expr>>& exprs,
-    const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs);
+// Rewrite a FunctionOper to an AND between a BinOper and the FunctionOper if the
+// FunctionOper is supported for overlaps joins
+struct OverlapsJoinConjunction {
+  std::list<std::shared_ptr<Analyzer::Expr>> quals;
+  std::list<std::shared_ptr<Analyzer::Expr>> join_quals;
+};
 
-std::vector<std::shared_ptr<Analyzer::Expr>> redirect_exprs(
-    const std::vector<Analyzer::Expr*>& exprs,
-    const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs);
+boost::optional<OverlapsJoinConjunction> rewrite_overlaps_conjunction(
+    const std::shared_ptr<Analyzer::Expr> expr);
 
-std::shared_ptr<Analyzer::Expr> redirect_expr(
-    const Analyzer::Expr* expr,
-    const std::list<std::shared_ptr<const InputColDescriptor>>& col_descs);
+std::list<std::shared_ptr<Analyzer::Expr>> strip_join_covered_filter_quals(
+    const std::list<std::shared_ptr<Analyzer::Expr>>& quals,
+    const JoinQualsPerNestingLevel& join_quals);
 
 std::shared_ptr<Analyzer::Expr> fold_expr(const Analyzer::Expr*);
 
