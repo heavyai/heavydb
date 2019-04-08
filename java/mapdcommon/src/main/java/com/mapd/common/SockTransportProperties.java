@@ -26,8 +26,8 @@ public class SockTransportProperties {
           LoggerFactory.getLogger(SockTransportProperties.class);
 
   public SockTransportProperties(String ts_name, String ts_passwd) throws Exception {
-    // This constructor will always try and load trust data.  Either from the specified
-    // trust store file (ts_name) or from the java default trust stores.
+    // This constructor will always try and load trust data. Either from the
+    // specified trust store file (ts_name) or from the java default trust stores.
     if (ts_passwd != null && !ts_passwd.isEmpty())
       trust_store_password = ts_passwd.toCharArray();
 
@@ -47,11 +47,12 @@ public class SockTransportProperties {
       throw(eX);
     }
     initializeAcceptedIssuers(kS);
+    trust_store_set = true;
   }
 
   public SockTransportProperties(boolean load_trust_store) throws Exception {
-    // This constructor will either not bother loading trust data (and then trust all
-    // server certs or load from the java default trust stores.
+    // This constructor will either not bother loading trust data (and then trust
+    // all server certs) or load from the java default trust stores.
     trust_all_certs = !load_trust_store;
     if (load_trust_store) initializeAcceptedIssuers((KeyStore) null);
   }
@@ -64,7 +65,7 @@ public class SockTransportProperties {
   }
 
   /*
-   * open HTTPS  *********************
+   * open HTTPS *********************
    */
   public TTransport openHttpsClientTransport(String server_host, int port)
           throws Exception {
@@ -111,7 +112,7 @@ return transport;
 }
 
 /*
- * opern HTTP *********************
+ * open HTTP *********************
  */
 public TTransport openHttpClientTransport(String server_host, int port)
         throws org.apache.thrift.TException {
@@ -120,13 +121,18 @@ public TTransport openHttpClientTransport(String server_host, int port)
 }
 
 /*
- * opern Binary *********************
+ * open Binary *********************
  */
-public TTransport openClientTransport(String server_host, int port) {
-  return (new TSocket(server_host, port));
+public TTransport openClientTransport(String server_host, int port)
+        throws org.apache.thrift.TException {
+  if (trust_store_set) {
+    return openClientTransportEncrypted(server_host, port);
+  } else {
+    return (new TSocket(server_host, port));
+  }
 }
 
-public TTransport openClientTransport_encryted(String server_host, int port)
+public TTransport openClientTransportEncrypted(String server_host, int port)
         throws org.apache.thrift.TException {
   // Used to set Socket.setSoTimeout ms. 0 == inifinite.
   int socket_so_timeout_ms = 0;
@@ -146,6 +152,18 @@ public TTransport openClientTransport_encryted(String server_host, int port)
 
 private TrustManager[] trustManagers;
 private boolean trust_all_certs;
+
+// TODO MAT the latest set of changes here appear to use a
+// SocketTransportProperties as the deciding mechanism of what
+// kind of connection to create encrypted or unencrypted
+// but the decision of which entry point to call has been passed
+// upstream to the caller
+// I have introduced this hack currently to get around broken
+// catalog when certs are enabled to allow the call to open
+// a connection to know to use and encrypted one when requested
+// to from upstream (ie a trust store was explicitly give in the
+// case of catalog connection)
+private boolean trust_store_set = false;
 private String trust_store_name = null;
 private char[] trust_store_password = null;
 }
