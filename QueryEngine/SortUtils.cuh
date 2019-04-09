@@ -17,7 +17,7 @@
 #ifndef QUERYENGINE_SORTUTILS_CUH
 #define QUERYENGINE_SORTUTILS_CUH
 
-#include "ThrustAllocator.h"
+#include "Allocators/ThrustAllocator.h"
 #include <thrust/device_vector.h>
 
 template <typename T>

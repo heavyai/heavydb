@@ -4,6 +4,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_
 set_source_files_properties(RuntimeFunctionsCodegenWithIncludes.cpp PROPERTIES COMPILE_FLAGS -O0)
 set(query_engine_source_files
     Allocators/CudaAllocator.cpp
+    Allocators/ThrustAllocator.cpp
     AggregatedColRange.cpp
     ArithmeticIR.cpp
     ArrayIR.cpp

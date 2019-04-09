@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2019 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,13 +17,13 @@
 /*
  * @file    ThrustAllocator.h
  * @author  Minggang Yu <miyu@mapd.com>
- * @brief   Bridge allocator for thrust that delegates to DataMgr methods.
+ * @brief   Allocate GPU memory using GpuBuffers via DataMgr. Unlike the CudaAllocator,
+ * these buffers are destroyed and memory is released when the parent object goes out of
+ * scope.
  *
- * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
  */
 
-#ifndef THRUSTALLOCATOR_H
-#define THRUSTALLOCATOR_H
+#pragma once
 
 #include <unordered_map>
 #include <vector>
@@ -52,10 +52,8 @@ class ThrustAllocator {
  private:
   Data_Namespace::DataMgr* data_mgr_;
   const int device_id_;
-  typedef std::unordered_map<int8_t*, Data_Namespace::AbstractBuffer*> PtrMapperType;
+  using PtrMapperType = std::unordered_map<int8_t*, Data_Namespace::AbstractBuffer*>;
   PtrMapperType raw_to_ab_ptr_;
   std::vector<Data_Namespace::AbstractBuffer*> scoped_buffers_;
   std::vector<int8_t*> default_alloc_scoped_buffers_;  // for unit tests only
 };
-
-#endif /* THRUSTALLOCATOR_H */
