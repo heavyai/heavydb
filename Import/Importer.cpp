@@ -696,15 +696,40 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         addBigint(inline_fixed_encoding_null_val(cd->columnType));
       }
       break;
-    case kARRAY:
+    case kARRAY: {
       if (is_null && cd->columnType.get_notnull()) {
         throw std::runtime_error("NULL for column " + cd->columnName);
       }
-      if (IS_STRING(cd->columnType.get_subtype())) {
-        std::vector<std::string>& string_vec = addStringArray();
+      SQLTypeInfo ti = cd->columnType;
+      if (IS_STRING(ti.get_subtype())) {
+        std::vector<std::string> string_vec;
+        // Just parse string array, don't push it to buffer yet as we might throw
         ImporterUtils::parseStringArray(val, copy_params, string_vec);
+        if (!is_null) {
+          // TODO: add support for NULL string arrays
+          if (ti.get_size() > 0) {
+            auto sti = ti.get_elem_type();
+            size_t expected_size = ti.get_size() / sti.get_size();
+            size_t actual_size = string_vec.size();
+            if (actual_size != expected_size) {
+              throw std::runtime_error("Fixed length array column " + cd->columnName +
+                                       " expects " + std::to_string(expected_size) +
+                                       " values, received " +
+                                       std::to_string(actual_size));
+            }
+          }
+          addStringArray(string_vec);
+        } else {
+          if (ti.get_size() > 0) {
+            // TODO: remove once NULL fixlen arrays are allowed
+            throw std::runtime_error("Fixed length array column " + cd->columnName +
+                                     " currently cannot accept NULL arrays");
+          }
+          // TODO: add support for NULL string arrays, replace with addStringArray(),
+          //       for now add whatever parseStringArray() outputs for NULLs ("NULL")
+          addStringArray(string_vec);
+        }
       } else {
-        SQLTypeInfo ti = cd->columnType;
         if (!is_null) {
           ArrayDatum d = StringToArray(val, ti, copy_params);
           if (d.is_null) {  // val could be "NULL"
@@ -731,6 +756,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         }
       }
       break;
+    }
     case kPOINT:
     case kLINESTRING:
     case kPOLYGON:

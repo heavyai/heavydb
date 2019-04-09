@@ -71,9 +71,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
 
     for (size_t i = start_idx; i < start_idx + numAppendElems; i++) {
       size_t len = (*srcData)[replicating ? 0 : i].length;
-      if (len != array_size) {
-        throw std::runtime_error("Input length doesn't match fixed-length array length");
-      }
+      // Length of the appended array should be equal to the fixed length,
+      // all others should have been discarded, assert if something slips through
+      CHECK_EQ(len, array_size);
       // NULL arrays have been filled with subtype's NULL sentinels,
       // should be appended as regular data, same size
       buffer_->append((*srcData)[replicating ? 0 : i].pointer, len);

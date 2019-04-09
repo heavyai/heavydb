@@ -782,12 +782,14 @@ class Detector : public DataStreamSink {
 
 class ImporterUtils {
  public:
-  static void parseStringArray(const std::string& s,
+  static bool parseStringArray(const std::string& s,
                                const CopyParams& copy_params,
                                std::vector<std::string>& string_vec) {
     if (s == copy_params.null_str || s == "NULL" || s.size() < 1 || s.empty()) {
+      // TODO: should not convert NULL, empty arrays to {"NULL"},
+      //       need to support NULL, empty properly
       string_vec.emplace_back("NULL");
-      return;
+      return true;
     }
     if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
       throw std::runtime_error("Malformed Array :" + s);
@@ -817,6 +819,7 @@ class ImporterUtils {
 
       string_vec.push_back(s.substr(last, s.size() - 1 - last));
     }
+    return false;
   }
 };
 

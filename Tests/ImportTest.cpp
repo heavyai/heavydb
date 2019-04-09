@@ -294,7 +294,8 @@ const char* create_table_mixed_varlen = R"(
       ls GEOMETRY(LINESTRING),
       faii INTEGER[2],
       fadc DECIMAL(5,2)[2],
-      fatx TEXT[] ENCODING DICT(32)
+      fatx TEXT[] ENCODING DICT(32),
+      fatx2 TEXT[2] ENCODING DICT(32)
     );
   )";
 
