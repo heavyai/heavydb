@@ -1602,6 +1602,9 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   std::string llvm_ir;
   if (eo.just_explain) {
+    if (co.explain_type_ == ExecutorExplainType::Optimized) {
+      optimize_ir(query_func, cgen_state_->module_, live_funcs, co, "", "");
+    }
     llvm_ir =
         serialize_llvm_object(query_func) + serialize_llvm_object(cgen_state_->row_func_);
   }

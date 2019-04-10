@@ -1160,13 +1160,17 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
     try {
       INJECT_TIMER(execution_dispatch_comp);
-      std::tie(query_comp_desc_owned, query_mem_desc_owned) = execution_dispatch.compile(
-          max_groups_buffer_entry_guess,
-          crt_min_byte_width,
-          {device_type, co.hoist_literals_, co.opt_level_, co.with_dynamic_watchdog_},
-          eo,
-          column_fetcher,
-          has_cardinality_estimation);
+      std::tie(query_comp_desc_owned, query_mem_desc_owned) =
+          execution_dispatch.compile(max_groups_buffer_entry_guess,
+                                     crt_min_byte_width,
+                                     {device_type,
+                                      co.hoist_literals_,
+                                      co.opt_level_,
+                                      co.with_dynamic_watchdog_,
+                                      co.explain_type_},
+                                     eo,
+                                     column_fetcher,
+                                     has_cardinality_estimation);
       CHECK(query_comp_desc_owned);
       crt_min_byte_width = query_comp_desc_owned->getMinByteWidth();
     } catch (CompilationRetryNoCompaction&) {

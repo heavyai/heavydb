@@ -66,7 +66,7 @@ Planner::RootPlan* parse_plan_calcite(
     const std::string& query_str,
     const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
   ParserWrapper pw{query_str};
-  if (pw.is_other_explain || pw.is_ddl || pw.is_update_dml) {
+  if (pw.isOtherExplain() || pw.is_ddl || pw.is_update_dml) {
     return parse_plan_legacy(query_str, session);
   }
 
@@ -360,7 +360,7 @@ std::shared_ptr<ResultSet> run_multiple_agg(
   }
 
   ParserWrapper pw{query_str};
-  if (is_calcite_path_permissable(pw)) {
+  if (pw.isCalcitePathPermissable()) {
     if (ir_output_file && (pw.getDMLType() == ParserWrapper::DMLType::NotDML)) {
       try {
         const auto result = run_select_query(

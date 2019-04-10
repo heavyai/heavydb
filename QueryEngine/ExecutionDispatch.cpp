@@ -295,7 +295,8 @@ Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry_guess,
       const CompilationOptions co_cpu{ExecutorDeviceType::CPU,
                                       co.hoist_literals_,
                                       co.opt_level_,
-                                      co.with_dynamic_watchdog_};
+                                      co.with_dynamic_watchdog_,
+                                      co.explain_type_};
       query_mem_desc = query_comp_desc->compile(max_groups_buffer_entry_guess,
                                                 crt_min_byte_width,
                                                 has_cardinality_estimation,
@@ -311,7 +312,8 @@ Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry_guess,
       const CompilationOptions co_gpu{ExecutorDeviceType::GPU,
                                       co.hoist_literals_,
                                       co.opt_level_,
-                                      co.with_dynamic_watchdog_};
+                                      co.with_dynamic_watchdog_,
+                                      co.explain_type_};
       query_mem_desc = query_comp_desc->compile(max_groups_buffer_entry_guess,
                                                 crt_min_byte_width,
                                                 has_cardinality_estimation,

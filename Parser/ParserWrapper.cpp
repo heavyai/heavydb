@@ -49,6 +49,7 @@ const std::vector<std::string> ParserWrapper::update_dml_cmd = {
 
 const std::string ParserWrapper::explain_str = {"explain"};
 const std::string ParserWrapper::calcite_explain_str = {"explain calcite"};
+const std::string ParserWrapper::optimized_explain_str = {"explain optimized"};
 const std::string ParserWrapper::optimize_str = {"optimize"};
 const std::string ParserWrapper::validate_str = {"validate"};
 
@@ -57,10 +58,22 @@ ParserWrapper::ParserWrapper(std::string query_string) {
     actual_query = boost::trim_copy(query_string.substr(calcite_explain_str.size()));
     ParserWrapper inner{actual_query};
     if (inner.is_ddl || inner.is_update_dml) {
-      is_other_explain = true;
+      explain_type_ = ExplainType::Other;
       return;
     } else {
-      is_select_calcite_explain = true;
+      explain_type_ = ExplainType::Calcite;
+      return;
+    }
+  }
+
+  if (boost::istarts_with(query_string, optimized_explain_str)) {
+    actual_query = boost::trim_copy(query_string.substr(optimized_explain_str.size()));
+    ParserWrapper inner{actual_query};
+    if (inner.is_ddl || inner.is_update_dml) {
+      explain_type_ = ExplainType::Other;
+      return;
+    } else {
+      explain_type_ = ExplainType::OptimizedIR;
       return;
     }
   }
@@ -69,10 +82,10 @@ ParserWrapper::ParserWrapper(std::string query_string) {
     actual_query = boost::trim_copy(query_string.substr(explain_str.size()));
     ParserWrapper inner{actual_query};
     if (inner.is_ddl || inner.is_update_dml) {
-      is_other_explain = true;
+      explain_type_ = ExplainType::Other;
       return;
     } else {
-      is_select_explain = true;
+      explain_type_ = ExplainType::IR;
       return;
     }
   }
@@ -112,7 +125,7 @@ ParserWrapper::ParserWrapper(std::string query_string) {
   for (int i = 0; i < update_dml_cmd.size(); i++) {
     is_update_dml = boost::istarts_with(query_string, ParserWrapper::update_dml_cmd[i]);
     if (is_update_dml) {
-      dml_type = (DMLType)(i);
+      dml_type_ = (DMLType)(i);
       return;
     }
   }

@@ -1550,20 +1550,6 @@ class SelectStmt : public DMLStmt {
 };
 
 /*
- * @type ExplainStmt
- * @brief EXPLAIN DMLStmt
- */
-class ExplainStmt : public DDLStmt {
- public:
-  ExplainStmt(DMLStmt* s) : stmt(s) {}
-  const DMLStmt* get_stmt() const { return stmt.get(); }
-  void execute(const Catalog_Namespace::SessionInfo& session) override { CHECK(false); }
-
- private:
-  std::unique_ptr<DMLStmt> stmt;
-};
-
-/*
  * @type ShowCreateTableStmt
  * @brief shows create table statement to create table
  */

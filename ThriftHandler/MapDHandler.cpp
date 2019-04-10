@@ -860,7 +860,8 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
   std::string last_parsed;
   try {
     ParserWrapper pw{query_str};
-    if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
+    if (!pw.is_ddl && !pw.is_update_dml &&
+        !(pw.getExplainType() == ParserWrapper::ExplainType::Other)) {
       std::string query_ra;
       OptionalTableMap tableNames = TableMap{};
       query_ra = parse_to_ra(query_str, {}, session_info, tableNames, mapd_parameters_);
@@ -874,7 +875,7 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
                                        upddelLocks,
                                        LockType::UpdateDeleteLock);
 
-      if (pw.is_select_calcite_explain) {
+      if (pw.isCalciteExplain()) {
         throw std::runtime_error("explain is not unsupported by current thrift API");
       }
       execute_rel_alg_df(_return,
@@ -958,7 +959,8 @@ void MapDHandler::sql_validate(TTableDescriptor& _return,
   std::unique_ptr<const Planner::RootPlan> root_plan;
   const auto session_info = get_session_copy(session);
   ParserWrapper pw{query_str};
-  if (pw.is_select_explain || pw.is_other_explain || pw.is_ddl || pw.is_update_dml) {
+  if ((pw.getExplainType() != ParserWrapper::ExplainType::None) || pw.is_ddl ||
+      pw.is_update_dml) {
     THROW_MAPD_EXCEPTION("Can only validate SELECT statements.");
   }
   MapDHandler::validate_rel_alg(_return, query_str, session_info);
@@ -1153,6 +1155,7 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                  -1,
                                  false,
                                  true,
+                                 false,
                                  false,
                                  false);
     const auto& row_desc =
@@ -1648,6 +1651,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
                         false,
                         true,
                         false,
+                        false,
                         false);
         _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
       } else {
@@ -1846,6 +1850,7 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
                         -1,
                         false,
                         true,
+                        false,
                         false,
                         false);
         num_cols = result.row_set.row_desc.size();
@@ -4364,11 +4369,16 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
     const bool just_explain,
     const bool just_validate,
     const bool find_push_down_candidates,
-    const bool just_calcite_explain) const {
+    const bool just_calcite_explain,
+    const bool explain_optimized_ir) const {
   INJECT_TIMER(execute_rel_alg);
   const auto& cat = session_info.getCatalog();
-  CompilationOptions co = {
-      executor_device_type, true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
+  CompilationOptions co = {executor_device_type,
+                           true,
+                           ExecutorOptLevel::Default,
+                           g_enable_dynamic_watchdog,
+                           explain_optimized_ir ? ExecutorExplainType::Optimized
+                                                : ExecutorExplainType::Default};
   ExecutionOptions eo = {g_enable_columnar_output,
                          allow_multifrag_,
                          just_explain,
@@ -4752,7 +4762,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
   try {
     ParserWrapper pw{query_str};
     OptionalTableMap tableNames = TableMap{};
-    if (is_calcite_path_permissable(pw, read_only_)) {
+    if (pw.isCalcitePathPermissable(read_only_)) {
       std::string query_ra;
       _return.execution_time_ms += measure<>::execution([&]() {
         // query_ra = TIME_WRAP(parse_to_ra)(query_str, session_info);
@@ -4760,11 +4770,11 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       });
 
       std::string query_ra_calcite_explain;
-      if (pw.is_select_calcite_explain && (!g_enable_filter_push_down || g_cluster)) {
+      if (pw.isCalciteExplain() && (!g_enable_filter_push_down || g_cluster)) {
         // return the ra as the result
         convert_explain(_return, ResultSet(query_ra), true);
         return;
-      } else if (pw.is_select_calcite_explain) {
+      } else if (pw.isCalciteExplain()) {
         // removing the "explain calcite " from the beginning of the "query_str":
         std::string temp_query_str =
             query_str.substr(std::string("explain calcite ").length());
@@ -4786,19 +4796,20 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                        tableNames.value(),
                                        upddelLocks,
                                        LockType::UpdateDeleteLock);
-      const auto filter_push_down_requests = execute_rel_alg(
-          _return,
-          pw.is_select_calcite_explain ? query_ra_calcite_explain : query_ra,
-          column_format,
-          session_info,
-          executor_device_type,
-          first_n,
-          at_most_n,
-          pw.is_select_explain,
-          false,
-          g_enable_filter_push_down && !g_cluster,
-          pw.is_select_calcite_explain);
-      if (pw.is_select_calcite_explain && filter_push_down_requests.empty()) {
+      const auto filter_push_down_requests =
+          execute_rel_alg(_return,
+                          pw.isCalciteExplain() ? query_ra_calcite_explain : query_ra,
+                          column_format,
+                          session_info,
+                          executor_device_type,
+                          first_n,
+                          at_most_n,
+                          pw.isIRExplain(),
+                          false,
+                          g_enable_filter_push_down && !g_cluster,
+                          pw.isCalciteExplain(),
+                          pw.getExplainType() == ParserWrapper::ExplainType::OptimizedIR);
+      if (pw.isCalciteExplain() && filter_push_down_requests.empty()) {
         // we only reach here if filter push down was enabled, but no filter
         // push down candidate was found
         convert_explain(_return, ResultSet(query_ra), true);
@@ -4812,11 +4823,11 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                               executor_device_type,
                                               first_n,
                                               at_most_n,
-                                              pw.is_select_explain,
-                                              pw.is_select_calcite_explain,
+                                              pw.isIRExplain(),
+                                              pw.isCalciteExplain(),
                                               query_str,
                                               filter_push_down_requests);
-      } else if (pw.is_select_calcite_explain && filter_push_down_requests.empty()) {
+      } else if (pw.isCalciteExplain() && filter_push_down_requests.empty()) {
         // return the ra as the result:
         // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
         // no filter push down so we continue with the initial (unchanged) query's calcite
@@ -4826,12 +4837,12 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         convert_explain(_return, ResultSet(query_ra), true);
         return;
       }
-      if (pw.is_select_calcite_explain) {
+      if (pw.isCalciteExplain()) {
         // If we reach here, the filter push down candidates has been selected and
         // proper output result has been already created.
         return;
       }
-      if (pw.is_select_calcite_explain) {
+      if (pw.isCalciteExplain()) {
         // return the ra as the result:
         // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
         // no filter push down so we continue with the initial (unchanged) query's calcite
@@ -4949,24 +4960,12 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     return root_plan_ptr;
   };
 
-  auto handle_ddl = [&cat,
-                     &root_plan,
-                     &get_legacy_plan,
-                     &session_info,
-                     &_return,
-                     &chkptlLock,
-                     &upddelLock,
-                     &upddelLocks,
-                     this](Parser::DDLStmt* ddl) -> bool {
+  auto handle_ddl =
+      [&cat, &session_info, &_return, &chkptlLock, &upddelLock, &upddelLocks, this](
+          Parser::DDLStmt* ddl) -> bool {
     if (!ddl) {
       return false;
     }
-    const auto explain_stmt = dynamic_cast<Parser::ExplainStmt*>(ddl);
-    if (explain_stmt) {
-      root_plan = get_legacy_plan(explain_stmt->get_stmt(), true);
-      return false;
-    }
-
     const auto show_create_stmt = dynamic_cast<Parser::ShowCreateTableStmt*>(ddl);
     if (show_create_stmt) {
       // ParserNode ShowCreateTableStmt is currently unimplemented
@@ -5169,7 +5168,8 @@ void MapDHandler::execute_rel_alg_with_filter_push_down(
                   just_explain,
                   /*just_validate = */ false,
                   /*find_push_down_candidates = */ false,
-                  /*just_calcite_explain = */ false);
+                  /*just_calcite_explain = */ false,
+                  /*TODO: explain optimized*/ false);
 }
 
 void MapDHandler::execute_distributed_copy_statement(
@@ -5194,22 +5194,21 @@ Planner::RootPlan* MapDHandler::parse_to_plan(
   auto& cat = session_info.getCatalog();
   ParserWrapper pw{query_str};
   // if this is a calcite select or explain select run in calcite
-  if (!pw.is_ddl && !pw.is_update_dml && !pw.is_other_explain) {
-    const std::string actual_query{pw.is_select_explain || pw.is_select_calcite_explain
-                                       ? pw.actual_query
-                                       : query_str};
+  if (!pw.is_ddl && !pw.is_update_dml &&
+      !(pw.getExplainType() == ParserWrapper::ExplainType::Other)) {
+    const std::string actual_query{pw.isSelectExplain() ? pw.actual_query : query_str};
     const auto query_ra =
         calcite_
             ->process(session_info,
                       legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                       {},
                       legacy_syntax_,
-                      pw.is_select_calcite_explain,
+                      pw.isCalciteExplain(),
                       mapd_parameters_.enable_calcite_view_optimize)
             .plan_result;
     auto root_plan = translate_query(query_ra, cat);
     CHECK(root_plan);
-    if (pw.is_select_explain) {
+    if (pw.isSelectExplain()) {
       root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
     }
     return root_plan;
@@ -5226,14 +5225,13 @@ std::string MapDHandler::parse_to_ra(
     RenderInfo* render_info) {
   INJECT_TIMER(parse_to_ra);
   ParserWrapper pw{query_str};
-  const std::string actual_query{
-      pw.is_select_explain || pw.is_select_calcite_explain ? pw.actual_query : query_str};
-  if (is_calcite_path_permissable(pw)) {
+  const std::string actual_query{pw.isSelectExplain() ? pw.actual_query : query_str};
+  if (pw.isCalcitePathPermissable()) {
     auto result = calcite_->process(session_info,
                                     legacy_syntax_ ? pg_shim(actual_query) : actual_query,
                                     filter_push_down_info,
                                     legacy_syntax_,
-                                    pw.is_select_calcite_explain,
+                                    pw.isCalciteExplain(),
                                     mapd_parameters.enable_calcite_view_optimize);
     if (tableNames) {
       for (const auto& table : result.resolved_accessed_objects.tables_selected_from) {

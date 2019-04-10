@@ -21,11 +21,14 @@ enum class ExecutorDeviceType { CPU, GPU };
 
 enum class ExecutorOptLevel { Default, LoopStrengthReduction };
 
+enum class ExecutorExplainType { Default, Optimized };
+
 struct CompilationOptions {
   ExecutorDeviceType device_type_;
   const bool hoist_literals_;
   const ExecutorOptLevel opt_level_;
   const bool with_dynamic_watchdog_;
+  const ExecutorExplainType explain_type_{ExecutorExplainType::Default};
 };
 
 struct ExecutionOptions {
