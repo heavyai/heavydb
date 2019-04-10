@@ -110,8 +110,6 @@
                 <filter>
                   <artifact>org.apache.calcite:calcite-core</artifact>
                   <excludes>
-                      <!-- TODO: can be removed once https://issues.apache.org/jira/browse/CALCITE-2416 is resolved -->
-                     <!-- <exclude>org/**/SqlDatetimePlusOperator*</exclude> -->
                   </excludes>
                 </filter>
                 <filter>

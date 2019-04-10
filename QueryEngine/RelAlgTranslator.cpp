@@ -1018,6 +1018,15 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
       datetime);
 }
 
+namespace {
+
+std::string get_datetimeplus_rewrite_funcname(const SQLOps& op) {
+  CHECK(op == kPLUS);
+  return "DATETIME_PLUS";
+}
+
+}  // namespace
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatePlusMinus(
     const RexOperator* rex_operator) const {
   if (rex_operator->size() != 2) {
@@ -1057,10 +1066,19 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatePlusMinus(
       return result;
     }
   }
+  const auto op = rex_operator->getOperator();
+  if (op == kPLUS) {
+    std::vector<std::shared_ptr<Analyzer::Expr>> args = {datetime, rhs};
+    auto dt_plus = makeExpr<Analyzer::FunctionOper>(
+        datetime_ti, get_datetimeplus_rewrite_funcname(op), args);
+    const auto date_trunc = rewrite_to_date_trunc(dt_plus.get());
+    if (date_trunc) {
+      return date_trunc;
+    }
+  }
   const auto interval = fold_expr(rhs.get());
   auto interval_ti = interval->get_type_info();
   auto bigint_ti = SQLTypeInfo(kBIGINT, false);
-  const auto op = rex_operator->getOperator();
   const auto interval_lit = std::dynamic_pointer_cast<Analyzer::Constant>(interval);
   if (interval_ti.get_type() == kINTERVAL_DAY_TIME) {
     std::shared_ptr<Analyzer::Expr> interval_sec;
