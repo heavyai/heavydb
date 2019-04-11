@@ -154,6 +154,8 @@ void create_or_append_validity(const ScalarTargetValue& value,
     is_valid = inline_int_null_val(col_type) != static_cast<int64_t>(*pvalue);
   } else if (col_type.get_type() == kTIME || col_type.get_type() == kDATE) {
     is_valid = inline_int_null_val(col_type) != static_cast<int64_t>(*pvalue);
+  } else if (col_type.is_boolean()) {
+    is_valid = inline_int_null_val(col_type) != static_cast<int8_t>(*pvalue);
   } else {
     CHECK(col_type.is_fp());
     is_valid = inline_fp_null_val(col_type) != static_cast<double>(*pvalue);
