@@ -841,9 +841,9 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
 
  private:
   template <typename EXPR_VISITOR_FUNCTOR>
-  void visitAndStealScalarExprs(EXPR_VISITOR_FUNCTOR expr_burglar) const {
+  void visitScalarExprs(EXPR_VISITOR_FUNCTOR visitor_functor) const {
     for (int i = 0; i < static_cast<int>(scalar_exprs_.size()); i++) {
-      expr_burglar(i, scalar_exprs_[i]);
+      visitor_functor(i);
     }
   }
 
@@ -1288,16 +1288,12 @@ class RelModify : public RelAlgNode {
     CHECK(target_update_column_expr_start >= 0);
     CHECK(target_update_column_expr_end >= 0);
 
-    RelProject::ConstRexScalarPtrVector transform_stash;
     bool varlen_update_required = false;
 
-    auto cast_and_varlen_scan_visitor = [this,
-                                         &varlen_update_required,
-                                         &transform_stash,
-                                         target_update_column_expr_start,
-                                         target_update_column_expr_end](
-                                            int index,
-                                            RelProject::ConstRexScalarPtr& expr_ptr) {
+    auto varlen_scan_visitor = [this,
+                                &varlen_update_required,
+                                target_update_column_expr_start,
+                                target_update_column_expr_end](int index) {
       if (index >= target_update_column_expr_start &&
           index <= target_update_column_expr_end) {
         auto target_index = index - target_update_column_expr_start;
@@ -1330,27 +1326,10 @@ class RelModify : public RelAlgNode {
                 "UPDATE of a none-encoded string, geo, or array column is unsupported.");
           }
         }
-
-        // Type needs to be scrubbed because otherwise NULL values could get cut off or
-        // truncated
-        auto cast_target_type = get_logical_type_info(column_desc->columnType);
-        if (cast_target_type.is_varlen() && cast_target_type.is_array()) {
-          transform_stash.emplace_back(std::move(expr_ptr));
-        } else {
-          RelProject::ConstRexScalarPtrVector operand_stash;
-          operand_stash.emplace_back(std::move(expr_ptr));
-
-          auto capped_result_expr_ptr =
-              std::make_unique<RexOperator const>(kCAST, operand_stash, cast_target_type);
-          transform_stash.emplace_back(std::move(capped_result_expr_ptr));
-        }
-      } else {
-        transform_stash.emplace_back(std::move(expr_ptr));
       }
     };
 
-    previous_project_node->visitAndStealScalarExprs(cast_and_varlen_scan_visitor);
-    previous_project_node->setExpressions(transform_stash);
+    previous_project_node->visitScalarExprs(varlen_scan_visitor);
     previous_project_node->setVarlenUpdateRequired(varlen_update_required);
   }
 

@@ -1179,6 +1179,11 @@ std::shared_ptr<Analyzer::Expr> Constant::add_cast(const SQLTypeInfo& new_type_i
     }
     return Expr::add_cast(new_type_info);
   }
+  if (is_member_of_typeset<kINT, kDECIMAL, kFLOAT, kDOUBLE>(new_type_info) &&
+      is_member_of_typeset<kTIME, kDATE>(type_info)) {
+    // Let the codegen phase deal with casts from date/time to a number.
+    return makeExpr<UOper>(new_type_info, contains_agg, kCAST, shared_from_this());
+  }
   do_cast(new_type_info);
   return shared_from_this();
 }

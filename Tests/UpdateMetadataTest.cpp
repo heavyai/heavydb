@@ -973,11 +973,77 @@ TEST_F(MetadataUpdate, MetadataBigIntNotNull) {
 }
 
 TEST_F(MetadataUpdate, MetadataBooleanNull) {
-  return;  // Boolean updates need a fix; currently broken.
-
   if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
     return;
   }
+
+  make_table_cycler("boolean_null_table", "boolean")([&] {
+    query("insert into boolean_null_table values ('f');");
+
+    auto pre_metadata = get_metadata_vec("boolean_null_table");
+    auto pre_metadata_chunk = pre_metadata[0].second;
+
+    query("insert into boolean_null_table values ('t');");
+
+    auto post_metadata = get_metadata_vec("boolean_null_table");
+    auto post_metadata_chunk = post_metadata[0].second;
+
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.tinyintval,
+              post_metadata_chunk.chunkStats.min.tinyintval);
+    ASSERT_LT(pre_metadata_chunk.chunkStats.max.tinyintval,
+              post_metadata_chunk.chunkStats.max.tinyintval);
+  });
+
+  make_table_cycler("boolean_null_table", "boolean")([&] {
+    query("insert into boolean_null_table values ('t');");
+
+    auto pre_metadata = get_metadata_vec("boolean_null_table");
+    auto pre_metadata_chunk = pre_metadata[0].second;
+
+    query("insert into boolean_null_table values ('f');");
+
+    auto post_metadata = get_metadata_vec("boolean_null_table");
+    auto post_metadata_chunk = post_metadata[0].second;
+
+    ASSERT_GT(pre_metadata_chunk.chunkStats.min.tinyintval,
+              post_metadata_chunk.chunkStats.min.tinyintval);
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.max.tinyintval,
+              post_metadata_chunk.chunkStats.max.tinyintval);
+  });
+
+  make_table_cycler("boolean_null_table", "boolean")([&] {
+    query("insert into boolean_null_table values ('t');");
+
+    auto pre_metadata = get_metadata_vec("boolean_null_table");
+    auto pre_metadata_chunk = pre_metadata[0].second;
+
+    query("insert into boolean_null_table values (NULL);");
+
+    auto post_metadata = get_metadata_vec("boolean_null_table");
+    auto post_metadata_chunk = post_metadata[0].second;
+
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.tinyintval,
+              post_metadata_chunk.chunkStats.min.tinyintval);
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.max.tinyintval,
+              post_metadata_chunk.chunkStats.max.tinyintval);
+  });
+
+  make_table_cycler("boolean_null_table", "boolean")([&] {
+    query("insert into boolean_null_table values ('f');");
+
+    auto pre_metadata = get_metadata_vec("boolean_null_table");
+    auto pre_metadata_chunk = pre_metadata[0].second;
+
+    query("insert into boolean_null_table values (NULL);");
+
+    auto post_metadata = get_metadata_vec("boolean_null_table");
+    auto post_metadata_chunk = post_metadata[0].second;
+
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.tinyintval,
+              post_metadata_chunk.chunkStats.min.tinyintval);
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.max.tinyintval,
+              post_metadata_chunk.chunkStats.max.tinyintval);
+  });
 
   make_table_cycler("boolean_null_table", "boolean")([&] {
     query("insert into boolean_null_table values ('t');");
@@ -990,7 +1056,6 @@ TEST_F(MetadataUpdate, MetadataBooleanNull) {
     ASSERT_EQ(pre_metadata_chunk.numElements, 2U);
     ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
 
-    // Currently a bug; bool column can't be updated to null
     query("update boolean_null_table set x = NULL where x = true;");
 
     auto post_metadata = get_metadata_vec("boolean_null_table");
@@ -1020,10 +1085,6 @@ TEST_F(MetadataUpdate, MetadataBooleanNull) {
     ASSERT_EQ(post_metadata_chunk.chunkStats.max.tinyintval, 1);
     ASSERT_EQ(post_metadata_chunk.chunkStats.min.tinyintval, 0);
     ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, true);
-    ASSERT_GT(post_metadata_chunk.chunkStats.max.tinyintval,
-              pre_metadata_chunk.chunkStats.max.tinyintval);
-    ASSERT_LT(post_metadata_chunk.chunkStats.min.tinyintval,
-              pre_metadata_chunk.chunkStats.min.tinyintval);
   });
 }
 

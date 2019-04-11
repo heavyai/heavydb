@@ -792,6 +792,16 @@ std::shared_ptr<Analyzer::Expr> set_transient_dict(
   return expr->add_cast(transient_dict_ti);
 }
 
+void set_transient_dict_maybe(
+    std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
+    const std::shared_ptr<Analyzer::Expr>& expr) {
+  try {
+    scalar_sources.push_back(set_transient_dict(fold_expr(expr.get())));
+  } catch (...) {
+    scalar_sources.push_back(fold_expr(expr.get()));
+  }
+}
+
 template <class RA>
 std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
     const RA* ra_node,
@@ -808,11 +818,66 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
     const auto scalar_expr =
         rewrite_array_elements(translator.translateScalarRex(scalar_rex).get());
     const auto rewritten_expr = rewrite_expr(scalar_expr.get());
-    try {
-      scalar_sources.push_back(set_transient_dict(fold_expr(rewritten_expr.get())));
-    } catch (...) {
-      scalar_sources.push_back(fold_expr(rewritten_expr.get()));
+    set_transient_dict_maybe(scalar_sources, rewritten_expr);
+  }
+
+  return scalar_sources;
+}
+
+std::shared_ptr<Analyzer::Expr> cast_to_column_type(std::shared_ptr<Analyzer::Expr> expr,
+                                                    int32_t tableId,
+                                                    const Catalog_Namespace::Catalog& cat,
+                                                    const std::string& colName) {
+  const auto cd = *cat.getMetadataForColumn(tableId, colName);
+
+  auto cast_ti = cd.columnType;
+
+  // Type needs to be scrubbed because otherwise NULL values could get cut off or
+  // truncated
+  auto cast_logical_ti = get_logical_type_info(cast_ti);
+  if (cast_logical_ti.is_varlen() && cast_logical_ti.is_array()) {
+    return expr;
+  }
+
+  // CastIR.cpp Executor::codegenCast() doesn't know how to cast from a ColumnVar
+  // so it CHECK's unless casting is skipped here.
+  if (std::dynamic_pointer_cast<Analyzer::ColumnVar>(expr)) {
+    return expr;
+  }
+
+  // Cast the expression to match the type of the output column.
+  return expr->add_cast(cast_logical_ti);
+}
+
+template <class RA>
+std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources_for_update(
+    const RA* ra_node,
+    const RelAlgTranslator& translator,
+    int32_t tableId,
+    const Catalog_Namespace::Catalog& cat,
+    const ColumnNameList& colNames,
+    size_t starting_projection_column_idx) {
+  std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
+  for (size_t i = 0; i < get_scalar_sources_size(ra_node); ++i) {
+    const auto scalar_rex = scalar_at(i, ra_node);
+    if (dynamic_cast<const RexRef*>(scalar_rex)) {
+      // RexRef are synthetic scalars we append at the end of the real ones
+      // for the sake of taking memory ownership, no real work needed here.
+      continue;
     }
+
+    std::shared_ptr<Analyzer::Expr> translated_expr;
+    if (i >= starting_projection_column_idx && i < get_scalar_sources_size(ra_node) - 1) {
+      translated_expr = cast_to_column_type(translator.translateScalarRex(scalar_rex),
+                                            tableId,
+                                            cat,
+                                            colNames[i - starting_projection_column_idx]);
+    } else {
+      translated_expr = translator.translateScalarRex(scalar_rex);
+    }
+    const auto scalar_expr = rewrite_array_elements(translated_expr.get());
+    const auto rewritten_expr = rewrite_expr(scalar_expr.get());
+    set_transient_dict_maybe(scalar_sources, rewritten_expr);
   }
 
   return scalar_sources;
@@ -906,6 +971,55 @@ std::vector<Analyzer::Expr*> translate_targets(
         RelAlgTranslator::translateAggregateRex(target_rex_agg.get(), scalar_sources);
     CHECK(target_expr);
     target_expr = fold_expr(target_expr.get());
+    target_exprs_owned.push_back(target_expr);
+    target_exprs.push_back(target_expr.get());
+  }
+  return target_exprs;
+}
+
+std::vector<Analyzer::Expr*> translate_targets_for_update(
+    std::vector<std::shared_ptr<Analyzer::Expr>>& target_exprs_owned,
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
+    const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
+    const RelCompound* compound,
+    const RelAlgTranslator& translator,
+    int32_t tableId,
+    const Catalog_Namespace::Catalog& cat,
+    const ColumnNameList& colNames,
+    size_t starting_projection_column_idx) {
+  std::vector<Analyzer::Expr*> target_exprs;
+  for (size_t i = 0; i < compound->size(); ++i) {
+    const auto target_rex = compound->getTargetExpr(i);
+    const auto target_rex_agg = dynamic_cast<const RexAgg*>(target_rex);
+    std::shared_ptr<Analyzer::Expr> target_expr;
+    if (target_rex_agg) {
+      target_expr =
+          RelAlgTranslator::translateAggregateRex(target_rex_agg, scalar_sources);
+    } else {
+      const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
+      const auto target_rex_ref = dynamic_cast<const RexRef*>(target_rex_scalar);
+      if (target_rex_ref) {
+        const auto ref_idx = target_rex_ref->getIndex();
+        CHECK_GE(ref_idx, size_t(1));
+        CHECK_LE(ref_idx, groupby_exprs.size());
+        const auto groupby_expr = *std::next(groupby_exprs.begin(), ref_idx - 1);
+        target_expr = var_ref(groupby_expr.get(), Analyzer::Var::kGROUPBY, ref_idx);
+      } else {
+        if (i >= starting_projection_column_idx &&
+            i < get_scalar_sources_size(compound) - 1) {
+          target_expr =
+              cast_to_column_type(translator.translateScalarRex(target_rex_scalar),
+                                  tableId,
+                                  cat,
+                                  colNames[i - starting_projection_column_idx]);
+        } else {
+          target_expr = translator.translateScalarRex(target_rex_scalar);
+        }
+        auto rewritten_expr = rewrite_expr(target_expr.get());
+        target_expr = fold_expr(rewritten_expr.get());
+      }
+    }
+    CHECK(target_expr);
     target_exprs_owned.push_back(target_expr);
     target_exprs.push_back(target_expr.get());
   }
@@ -2272,23 +2386,41 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
                               now_,
                               just_explain,
                               query_features);
-  const auto scalar_sources = translate_scalar_sources(compound, translator);
+  size_t starting_projection_column_idx =
+      get_scalar_sources_size(compound) - compound->getTargetColumnCount() - 1;
+  CHECK_GT(starting_projection_column_idx, 0);
+  const auto scalar_sources =
+      translate_scalar_sources_for_update(compound,
+                                          translator,
+                                          compound->getModifiedTableDescriptor()->tableId,
+                                          cat_,
+                                          compound->getTargetColumns(),
+                                          starting_projection_column_idx);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
   const auto quals_cf = translate_quals(compound, translator);
-  const auto target_exprs = translate_targets(
-      target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
+  decltype(target_exprs_owned_) target_exprs_owned;
+  translate_targets_for_update(target_exprs_owned,
+                               scalar_sources,
+                               groupby_exprs,
+                               compound,
+                               translator,
+                               compound->getModifiedTableDescriptor()->tableId,
+                               cat_,
+                               compound->getTargetColumns(),
+                               starting_projection_column_idx);
+  target_exprs_owned_.insert(
+      target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
+  const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
   CHECK_EQ(compound->size(), target_exprs.size());
 
-  // Filter col descs and drop unneeded col_descs
-  CHECK((target_exprs.size() - compound->getTargetColumnCount() - 1) > 0);
-  const auto update_expr_iter = std::next(
-      target_exprs.cbegin(), target_exprs.size() - compound->getTargetColumnCount() - 1);
+  const auto update_expr_iter =
+      std::next(target_exprs.cbegin(), starting_projection_column_idx);
+  decltype(target_exprs) filtered_target_exprs(update_expr_iter, target_exprs.end());
 
   using ColumnIdSet = std::unordered_set<int>;
   UsedColumnsVisitor<ColumnIdSet> used_columns_visitor;
   ColumnIdSet id_accumulator;
 
-  decltype(target_exprs) filtered_target_exprs(update_expr_iter, target_exprs.end());
   for (auto const& expr :
        boost::make_iterator_range(update_expr_iter, target_exprs.end())) {
     auto used_column_ids = used_columns_visitor.visit(expr);
@@ -2677,14 +2809,23 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
                               now_,
                               just_explain,
                               query_features);
-  const auto target_exprs_owned = translate_scalar_sources(project, translator);
+  size_t starting_projection_column_idx =
+      get_scalar_sources_size(project) - project->getTargetColumnCount() - 1;
+  CHECK_GT(starting_projection_column_idx, 0);
+  auto target_exprs_owned =
+      translate_scalar_sources_for_update(project,
+                                          translator,
+                                          project->getModifiedTableDescriptor()->tableId,
+                                          cat_,
+                                          project->getTargetColumns(),
+                                          starting_projection_column_idx);
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
+  CHECK_EQ(project->size(), target_exprs.size());
 
-  CHECK((target_exprs.size() - project->getTargetColumnCount() - 1) > 0);
-  const auto update_expr_iter = std::next(
-      target_exprs.cbegin(), target_exprs.size() - project->getTargetColumnCount() - 1);
+  const auto update_expr_iter =
+      std::next(target_exprs.cbegin(), starting_projection_column_idx);
   decltype(target_exprs) filtered_target_exprs(update_expr_iter, target_exprs.end());
 
   using ColumnIdSet = std::unordered_set<int>;

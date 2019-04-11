@@ -10922,8 +10922,12 @@ TEST(Update, ImplicitCastToNumericTypes) {
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 12345 as bigint );", dt),
                  std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 'True' as boolean );", dt),
-                 std::runtime_error);
+    EXPECT_NO_THROW(
+        run_multiple_agg("update booltest set b=cast( 'False' as boolean );", dt));
+    EXPECT_EQ(int64_t(0), v<int64_t>(run_simple_agg("select b from booltest;", dt)));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update booltest set b=cast( 'True' as boolean );", dt));
+    EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select b from booltest;", dt)));
     EXPECT_THROW(
         run_multiple_agg("update booltest set b=cast( 1234.00 as decimal );", dt),
         std::runtime_error);
@@ -10952,12 +10956,16 @@ TEST(Update, ImplicitCastToNumericTypes) {
         int64_t(946598400),
         v<int64_t>(run_simple_agg("select cast( d as integer ) from dectest;", dt)));
 
-    // If ConstantFoldingVisitor is allowed to fold FP to DECIMAL casts then
-    // these two tests will pass, otherwise we'll keep hitting cast codegen assert.
-    EXPECT_THROW(run_multiple_agg("update dectest set d=cast( 1234.0 as float );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update dectest set d=cast( 1234.0 as double );", dt),
-                 std::runtime_error);
+    EXPECT_NO_THROW(
+        run_multiple_agg("update dectest set d=cast( 1234.0 as float );", dt));
+    EXPECT_EQ(
+        int64_t(1234),
+        v<int64_t>(run_simple_agg("select cast( d as integer ) from dectest;", dt)));
+    EXPECT_NO_THROW(
+        run_multiple_agg("update dectest set d=cast( 1234.0 as double );", dt));
+    EXPECT_EQ(
+        int64_t(1234),
+        v<int64_t>(run_simple_agg("select cast( d as integer ) from dectest;", dt)));
 
     run_multiple_agg("update dectest set d=cast( 56780 as integer );", dt);
     EXPECT_EQ(
