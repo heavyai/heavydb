@@ -6738,6 +6738,26 @@ TEST(Select, Joins_OneOuterExpression) {
   }
 }
 
+TEST(Select, Joins_UnnestSubquery) {
+  SKIP_ALL_ON_AGGREGATOR();
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    auto result_rows = run_multiple_agg(
+        "SELECT t, n FROM (SELECT UNNEST(arr_str) as t, COUNT(*) as n FROM  array_test "
+        "GROUP BY t ORDER BY n DESC), unnest_join_test WHERE t <> x ORDER BY t "
+        "LIMIT 1;",
+        dt);
+
+    ASSERT_EQ(size_t(1), result_rows->rowCount());
+    auto crt_row = result_rows->getNextRow(true, true);
+    ASSERT_EQ(size_t(2), crt_row.size());
+    ASSERT_EQ("aa", boost::get<std::string>(v<NullableString>(crt_row[0])));
+    ASSERT_EQ(1, v<int64_t>(crt_row[1]));
+  }
+}
+
 class JoinTest : public ::testing::Test {
  protected:
   ~JoinTest() override {}
@@ -14896,6 +14916,24 @@ int create_and_populate_tables(bool with_delete_support = true) {
     } catch (...) {
       LOG(ERROR) << "Failed to (re-)create table 'array_test_inner'";
       return -EEXIST;
+    }
+  }
+  try {
+    const std::string drop_old_unnest_join_test{"DROP TABLE IF EXISTS unnest_join_test;"};
+    run_ddl_statement(drop_old_unnest_join_test);
+    const std::string create_unnest_join_test{
+        "CREATE TABLE unnest_join_test(x TEXT ENCODING DICT(32));"};
+    run_ddl_statement(create_unnest_join_test);
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'unnest_join_test'";
+    return -EEXIST;
+  }
+  {
+    std::array<std::string, 5> strings{"aaa", "bbb", "ccc", "ddd", "NULL"};
+    for (size_t i = 0; i < 10; i++) {
+      const std::string insert_query{"INSERT INTO unnest_join_test VALUES('" +
+                                     strings[i % strings.size()] + "');"};
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     }
   }
   try {
