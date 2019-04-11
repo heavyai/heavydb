@@ -42,6 +42,50 @@
 #include <cmath>
 #include <numeric>
 
+#ifndef __CUDACC__
+namespace {
+
+/**
+ * Joins between two dictionary encoded string columns without a shared string dictionary
+ * are computed by translating the inner dictionary to the outer dictionary while filling
+ * the  hash table. The translation works as follows:
+ *
+ * Given two tables t1 and t2, with t1 the outer table and t2 the inner table, and two
+ * columns t1.x and t2.x, both dictionary encoded strings without a shared dictionary, we
+ * read each value in t2.x and do a lookup in the dictionary for t1.x. If the lookup
+ * returns a valid ID, we insert that ID into the hash table. Otherwise, we skip adding an
+ * entry into the hash table for the inner column. We can also skip adding any entries
+ * that are outside the range of the outer column.
+ *
+ * Consider a join of the form SELECT x, n FROM (SELECT x, COUNT(*) n FROM t1 GROUP BY x
+ * HAVING n > 10), t2 WHERE t1.x = t2.x; Let the result of the subquery be t1_s.
+ * Due to the HAVING clause, the range of all IDs in t1_s must be less than or equal to
+ * the range of all IDs in t1. Suppose we have an element a in t2.x that is also in
+ * t1_s.x. Then the ID of a must be within the range of t1_s. Therefore it is safe to
+ * ignore any element ID that is not in the dictionary corresponding to t1_s.x or is
+ * outside the range of column t1_s.
+ */
+inline int64_t translate_str_id_to_outer_dict(const int64_t elem,
+                                              const int64_t min_elem,
+                                              const int64_t max_elem,
+                                              const void* sd_inner_proxy,
+                                              const void* sd_outer_proxy) {
+  CHECK(sd_outer_proxy);
+  const auto sd_inner_dict_proxy =
+      static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
+  const auto sd_outer_dict_proxy =
+      static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
+  const auto elem_str = sd_inner_dict_proxy->getString(elem);
+  const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
+  if (outer_id > max_elem || outer_id < min_elem) {
+    return StringDictionary::INVALID_STR_ID;
+  }
+  return outer_id;
+}
+
+}  // namespace
+#endif
+
 DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
                                         const int32_t hash_entry_count,
                                         const int32_t invalid_slot_val,
@@ -92,13 +136,8 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
 #ifndef __CUDACC__
     if (sd_inner_proxy &&
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
-      CHECK(sd_outer_proxy);
-      const auto sd_inner_dict_proxy =
-          static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-      const auto sd_outer_dict_proxy =
-          static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
-      const auto elem_str = sd_inner_dict_proxy->getString(elem);
-      const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
+      const auto outer_id = translate_str_id_to_outer_dict(
+          elem, type_info.min_val, type_info.max_val, sd_inner_proxy, sd_outer_proxy);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
         continue;
       }
@@ -147,13 +186,8 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
 #ifndef __CUDACC__
     if (sd_inner_proxy &&
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
-      CHECK(sd_outer_proxy);
-      const auto sd_inner_dict_proxy =
-          static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-      const auto sd_outer_dict_proxy =
-          static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
-      const auto elem_str = sd_inner_dict_proxy->getString(elem);
-      const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
+      const auto outer_id = translate_str_id_to_outer_dict(
+          elem, type_info.min_val, type_info.max_val, sd_inner_proxy, sd_outer_proxy);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
         continue;
       }
@@ -404,13 +438,8 @@ GLOBAL void SUFFIX(count_matches)(int32_t* count_buff,
 #ifndef __CUDACC__
     if (sd_inner_proxy &&
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
-      CHECK(sd_outer_proxy);
-      const auto sd_inner_dict_proxy =
-          static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-      const auto sd_outer_dict_proxy =
-          static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
-      const auto elem_str = sd_inner_dict_proxy->getString(elem);
-      const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
+      const auto outer_id = translate_str_id_to_outer_dict(
+          elem, type_info.min_val, type_info.max_val, sd_inner_proxy, sd_outer_proxy);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
         continue;
       }
@@ -456,13 +485,8 @@ GLOBAL void SUFFIX(count_matches_sharded)(int32_t* count_buff,
 #ifndef __CUDACC__
     if (sd_inner_proxy &&
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
-      CHECK(sd_outer_proxy);
-      const auto sd_inner_dict_proxy =
-          static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-      const auto sd_outer_dict_proxy =
-          static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
-      const auto elem_str = sd_inner_dict_proxy->getString(elem);
-      const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
+      const auto outer_id = translate_str_id_to_outer_dict(
+          elem, type_info.min_val, type_info.max_val, sd_inner_proxy, sd_outer_proxy);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
         continue;
       }
@@ -585,13 +609,8 @@ GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
 #ifndef __CUDACC__
     if (sd_inner_proxy &&
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
-      CHECK(sd_outer_proxy);
-      const auto sd_inner_dict_proxy =
-          static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-      const auto sd_outer_dict_proxy =
-          static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
-      const auto elem_str = sd_inner_dict_proxy->getString(elem);
-      const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
+      const auto outer_id = translate_str_id_to_outer_dict(
+          elem, type_info.min_val, type_info.max_val, sd_inner_proxy, sd_outer_proxy);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
         continue;
       }
@@ -647,13 +666,8 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
 #ifndef __CUDACC__
     if (sd_inner_proxy &&
         (!type_info.uses_bw_eq || elem != type_info.translated_null_val)) {
-      CHECK(sd_outer_proxy);
-      const auto sd_inner_dict_proxy =
-          static_cast<const StringDictionaryProxy*>(sd_inner_proxy);
-      const auto sd_outer_dict_proxy =
-          static_cast<const StringDictionaryProxy*>(sd_outer_proxy);
-      const auto elem_str = sd_inner_dict_proxy->getString(elem);
-      const auto outer_id = sd_outer_dict_proxy->getIdOfString(elem_str);
+      const auto outer_id = translate_str_id_to_outer_dict(
+          elem, type_info.min_val, type_info.max_val, sd_inner_proxy, sd_outer_proxy);
       if (outer_id == StringDictionary::INVALID_STR_ID) {
         continue;
       }

@@ -6738,23 +6738,61 @@ TEST(Select, Joins_OneOuterExpression) {
   }
 }
 
-TEST(Select, Joins_UnnestSubquery) {
+TEST(Select, Joins_Subqueries) {
   SKIP_ALL_ON_AGGREGATOR();
+
+  if (g_enable_columnar_output) {
+    // TODO(adb): fixup these tests under columnar
+    return;
+  }
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    auto result_rows = run_multiple_agg(
-        "SELECT t, n FROM (SELECT UNNEST(arr_str) as t, COUNT(*) as n FROM  array_test "
-        "GROUP BY t ORDER BY n DESC), unnest_join_test WHERE t <> x ORDER BY t "
-        "LIMIT 1;",
-        dt);
+    // Subquery loop join
+    {
+      auto result_rows = run_multiple_agg(
+          "SELECT t, n FROM (SELECT UNNEST(arr_str) as t, COUNT(*) as n FROM  array_test "
+          "GROUP BY t ORDER BY n DESC), unnest_join_test WHERE t <> x ORDER BY t "
+          "LIMIT 1;",
+          dt);
 
-    ASSERT_EQ(size_t(1), result_rows->rowCount());
-    auto crt_row = result_rows->getNextRow(true, true);
-    ASSERT_EQ(size_t(2), crt_row.size());
-    ASSERT_EQ("aa", boost::get<std::string>(v<NullableString>(crt_row[0])));
-    ASSERT_EQ(1, v<int64_t>(crt_row[1]));
+      ASSERT_EQ(size_t(1), result_rows->rowCount());
+      auto crt_row = result_rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(2), crt_row.size());
+      ASSERT_EQ("aa", boost::get<std::string>(v<NullableString>(crt_row[0])));
+      ASSERT_EQ(1, v<int64_t>(crt_row[1]));
+    }
+
+    // Subquery equijoin requiring string translation
+    {
+      const auto table_reordering_state = g_from_table_reordering;
+      g_from_table_reordering = false;  // disable from table reordering
+      ScopeGuard reset_from_table_reordering_state = [&table_reordering_state] {
+        g_from_table_reordering = table_reordering_state;
+      };
+
+      c("SELECT str1, n FROM (SELECT str str1, COUNT(*) n FROM test GROUP BY str HAVING "
+        "COUNT(*) "
+        "> 5), test_inner_x WHERE str1 = test_inner_x.str ORDER BY str;",
+        dt);
+      c("SELECT str1, n FROM (SELECT str str1, COUNT(*) n FROM test GROUP BY str), "
+        "test_inner_y WHERE str1 = test_inner_y.str ORDER BY str;",
+        dt);
+      c("SELECT str1, n FROM (SELECT str str1, COUNT(*) n FROM test GROUP BY str HAVING "
+        "COUNT(*) "
+        "> 5), test_inner_y WHERE str1 = test_inner_y.str  ORDER BY str;",
+        dt);
+      c("WITH table_inner AS (SELECT str FROM test_inner_y LIMIT 1 OFFSET 1) SELECT str, "
+        "n FROM (SELECT str str1, COUNT(*) n FROM test GROUP BY str ORDER BY str ASC "
+        "LIMIT 1), table_inner WHERE str1 = table_inner.str ORDER BY str;",
+        dt);
+      c("WITH table_inner AS (SELECT CASE WHEN str = 'foo' THEN 'hello' ELSE str END "
+        "str2 FROM test_inner_y) SELECT str1, n FROM (SELECT CASE WHEN str = 'foo' THEN "
+        "'hello' ELSE str END str1, COUNT(*) n FROM test GROUP BY str ORDER BY str ASC), "
+        "table_inner WHERE str1 = table_inner.str2 ORDER BY str1;",
+        dt);
+    }
   }
 }
 
@@ -6805,6 +6843,9 @@ class JoinTest : public ::testing::Test {
 TEST_F(JoinTest, EmptyJoinTables) {
   const auto table_reordering_state = g_from_table_reordering;
   g_from_table_reordering = false;  // disable from table reordering
+  ScopeGuard reset_from_table_reordering_state = [&table_reordering_state] {
+    g_from_table_reordering = table_reordering_state;
+  };
 
   SKIP_ALL_ON_AGGREGATOR();  // relevant for single node only
 
@@ -6837,8 +6878,6 @@ TEST_F(JoinTest, EmptyJoinTables) {
                                         "jointest_a a ON a.str = b.str;",
                                         dt)));
   }
-
-  g_from_table_reordering = table_reordering_state;
 }
 
 TEST(Select, Joins_MultipleOuterExpressions) {
@@ -14563,6 +14602,36 @@ int create_and_populate_tables(bool with_delete_support = true) {
     g_sqlite_comparator.query(insert_query);
   }
   try {
+    const std::string drop_old_test{"DROP TABLE IF EXISTS test_inner_y;"};
+    run_ddl_statement(drop_old_test);
+    g_sqlite_comparator.query(drop_old_test);
+    std::string columns_definition{"x int not null, y int, str text encoding dict"};
+    const auto create_test_inner =
+        build_create_table_statement(columns_definition,
+                                     "test_inner_y",
+                                     {g_shard_count ? "x" : "", g_shard_count},
+                                     {},
+                                     2,
+                                     with_delete_support,
+                                     g_aggregator);
+    run_ddl_statement(create_test_inner);
+    g_sqlite_comparator.query(
+        "CREATE TABLE test_inner_y(x int not null, y int, str text);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_inner_y'";
+    return -EEXIST;
+  }
+  {
+    const std::string insert_query{"INSERT INTO test_inner_y VALUES(8, 43, 'bar');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{"INSERT INTO test_inner_y VALUES(7, 43, 'foo');"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  try {
     const std::string drop_old_bar{"DROP TABLE IF EXISTS bar;"};
     run_ddl_statement(drop_old_bar);
     g_sqlite_comparator.query(drop_old_bar);
@@ -15191,6 +15260,9 @@ void drop_tables() {
   const std::string drop_test_inner_x{"DROP TABLE test_inner_x;"};
   run_ddl_statement(drop_test_inner_x);
   g_sqlite_comparator.query(drop_test_inner_x);
+  const std::string drop_test_inner_y{"DROP TABLE test_inner_y;"};
+  run_ddl_statement(drop_test_inner_y);
+  g_sqlite_comparator.query(drop_test_inner_y);
 #if 0
   const std::string drop_test_inner_deleted{"DROP TABLE test_inner_deleted;"};
   run_ddl_statement(drop_test_inner_deleted);

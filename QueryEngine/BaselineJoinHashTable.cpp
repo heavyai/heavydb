@@ -447,6 +447,7 @@ BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDe
     const auto& ti = inner_col->get_type_info();
     join_column_types.emplace_back(JoinColumnTypeInfo{static_cast<size_t>(ti.get_size()),
                                                       0,
+                                                      0,
                                                       inline_fixed_encoding_null_val(ti),
                                                       isBitwiseEq(),
                                                       0,

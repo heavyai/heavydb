@@ -746,6 +746,7 @@ void JoinHashTable::initHashTableOnCpu(
                                               {col_buff, num_elements},
                                               {static_cast<size_t>(ti.get_size()),
                                                col_range_.getIntMin(),
+                                               col_range_.getIntMax(),
                                                inline_fixed_encoding_null_val(ti),
                                                isBitwiseEq(),
                                                col_range_.getIntMax() + 1,
@@ -823,6 +824,7 @@ void JoinHashTable::initOneToManyHashTableOnCpu(
                               {col_buff, num_elements},
                               {static_cast<size_t>(ti.get_size()),
                                col_range_.getIntMin(),
+                               col_range_.getIntMax(),
                                inline_fixed_encoding_null_val(ti),
                                isBitwiseEq(),
                                col_range_.getIntMax() + 1,
@@ -932,6 +934,7 @@ void JoinHashTable::initHashTableForDevice(
     JoinColumn join_column{col_buff, num_elements};
     JoinColumnTypeInfo type_info{static_cast<size_t>(ti.get_size()),
                                  col_range_.getIntMin(),
+                                 col_range_.getIntMax(),
                                  inline_fixed_encoding_null_val(ti),
                                  isBitwiseEq(),
                                  col_range_.getIntMax() + 1,
@@ -1048,6 +1051,7 @@ void JoinHashTable::initOneToManyHashTable(
     JoinColumn join_column{col_buff, num_elements};
     JoinColumnTypeInfo type_info{static_cast<size_t>(ti.get_size()),
                                  col_range_.getIntMin(),
+                                 col_range_.getIntMax(),
                                  inline_fixed_encoding_null_val(ti),
                                  isBitwiseEq(),
                                  col_range_.getIntMax() + 1,
