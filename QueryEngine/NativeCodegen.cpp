@@ -1532,7 +1532,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                      group_by_and_aggregate,
                      query_func,
                      bb,
-                     *query_mem_desc,
+                     *(query_mem_desc.get()),
                      co,
                      eo);
   } else {
