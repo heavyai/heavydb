@@ -26,12 +26,12 @@ import (
 	"time"
 
 	"github.com/Jeffail/gabs"
-	log "github.com/Sirupsen/logrus"
 	"github.com/andrewseidl/viper"
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/sessions"
 	metrics "github.com/rcrowley/go-metrics"
 	"github.com/rs/cors"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	graceful "gopkg.in/tylerb/graceful.v1"
 )
