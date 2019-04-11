@@ -89,6 +89,7 @@ struct JoinColumn {
 struct JoinColumnTypeInfo {
   const size_t elem_sz;
   const int64_t min_val;
+  const int64_t max_val;
   const int64_t null_val;
   const bool uses_bw_eq;
   const int64_t translated_null_val;
