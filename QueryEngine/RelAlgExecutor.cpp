@@ -120,6 +120,11 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
 
   // Dispatch the subqueries first
   for (auto subquery : subqueries_) {
+    const auto subquery_ra = subquery->getRelAlg();
+    CHECK(subquery_ra);
+    if (subquery_ra->hasContextData()) {
+      continue;
+    }
     // Execute the subquery and cache the result.
     RelAlgExecutor ra_executor(executor_, cat_);
     auto result = ra_executor.executeRelAlgSubQuery(subquery.get(), co, eo);
