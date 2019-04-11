@@ -625,6 +625,8 @@ class RelAlgNode {
 
   unsigned getId() const { return id_; }
 
+  bool hasContextData() const { return !(context_data_ == nullptr); }
+
   const void* getContextData() const {
     CHECK(context_data_);
     return context_data_;
