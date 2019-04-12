@@ -2926,3 +2926,11 @@ bool expr_list_match(const std::vector<std::shared_ptr<Analyzer::Expr>>& lhs,
   }
   return true;
 }
+
+std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr>& expr) {
+  const auto uoper = dynamic_cast<const Analyzer::UOper*>(expr.get());
+  if (!uoper || uoper->get_optype() != kCAST) {
+    return expr;
+  }
+  return uoper->get_own_operand();
+}

@@ -1474,4 +1474,7 @@ inline std::shared_ptr<Analyzer::Var> var_ref(const Analyzer::Expr* expr,
 bool expr_list_match(const std::vector<std::shared_ptr<Analyzer::Expr>>& lhs,
                      const std::vector<std::shared_ptr<Analyzer::Expr>>& rhs);
 
+// Remove a cast operator if present.
+std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr>& expr);
+
 #endif  // ANALYZER_H

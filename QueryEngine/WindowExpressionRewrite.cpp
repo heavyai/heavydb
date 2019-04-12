@@ -36,43 +36,17 @@ bool matches_gt_bigint_zero(const Analyzer::BinOper* window_gt_zero) {
          zero->get_constval().bigintval == 0;
 }
 
-// Extract the sum window expression from a cast expression.
-const Analyzer::WindowFunction* extract_sum_window(
-    const Analyzer::UOper* cast_sum_window_expr) {
-  auto redundant_cast_sum_window_expr =
-      dynamic_cast<const Analyzer::UOper*>(cast_sum_window_expr->get_operand());
-  if (redundant_cast_sum_window_expr &&
-      redundant_cast_sum_window_expr->get_optype() != kCAST) {
-    return nullptr;
-  }
-  const auto sum_window_expr = dynamic_cast<const Analyzer::WindowFunction*>(
-      redundant_cast_sum_window_expr ? redundant_cast_sum_window_expr->get_operand()
-                                     : cast_sum_window_expr->get_operand());
-  if (!sum_window_expr ||
-      sum_window_expr->getKind() != SqlWindowFunctionKind::SUM_INTERNAL) {
-    return nullptr;
-  }
-  return sum_window_expr;
-}
-
 // Returns true iff the sum and the count match in type and arguments. Used to replace
 // combination can be replaced with an explicit average.
-bool window_sum_and_count_match(const Analyzer::UOper* cast_sum_window_expr,
+bool window_sum_and_count_match(const Analyzer::WindowFunction* sum_window_expr,
                                 const Analyzer::WindowFunction* count_window_expr) {
-  const auto sum_window_expr = extract_sum_window(cast_sum_window_expr);
-  if (!sum_window_expr) {
-    return false;
-  }
-  auto redundant_cast_sum_window_expr =
-      dynamic_cast<const Analyzer::UOper*>(cast_sum_window_expr->get_operand());
-  const auto& cast_ti = redundant_cast_sum_window_expr
-                            ? redundant_cast_sum_window_expr->get_type_info()
-                            : cast_sum_window_expr->get_type_info();
-  if (sum_window_expr->get_type_info().get_type() != cast_ti.get_type()) {
-    return false;
-  }
   CHECK_EQ(count_window_expr->get_type_info().get_type(), kBIGINT);
   return expr_list_match(sum_window_expr->getArgs(), count_window_expr->getArgs());
+}
+
+bool is_sum_kind(const SqlWindowFunctionKind kind) {
+  return kind == SqlWindowFunctionKind::SUM_INTERNAL ||
+         kind == SqlWindowFunctionKind::SUM;
 }
 
 }  // namespace
@@ -92,9 +66,9 @@ std::shared_ptr<Analyzer::WindowFunction> rewrite_sum_window(const Analyzer::Exp
   if (!window_gt_zero || !matches_gt_bigint_zero(window_gt_zero)) {
     return nullptr;
   }
-  const auto cast_sum_window_expr =
-      dynamic_cast<const Analyzer::UOper*>(expr_pair.second.get());
-  if (!cast_sum_window_expr || cast_sum_window_expr->get_optype() != kCAST) {
+  const auto sum_window_expr =
+      std::dynamic_pointer_cast<Analyzer::WindowFunction>(remove_cast(expr_pair.second));
+  if (!sum_window_expr || !is_sum_kind(sum_window_expr->getKind())) {
     return nullptr;
   }
   const auto count_window_expr =
@@ -103,10 +77,9 @@ std::shared_ptr<Analyzer::WindowFunction> rewrite_sum_window(const Analyzer::Exp
       count_window_expr->getKind() != SqlWindowFunctionKind::COUNT) {
     return nullptr;
   }
-  if (!window_sum_and_count_match(cast_sum_window_expr, count_window_expr)) {
+  if (!window_sum_and_count_match(sum_window_expr.get(), count_window_expr)) {
     return nullptr;
   }
-  const auto sum_window_expr = extract_sum_window(cast_sum_window_expr);
   CHECK(sum_window_expr);
   auto sum_ti = sum_window_expr->get_type_info();
   if (sum_ti.is_integer()) {

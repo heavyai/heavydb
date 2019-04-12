@@ -20,14 +20,6 @@
 
 namespace {
 
-std::shared_ptr<Analyzer::Expr> remove_cast(const std::shared_ptr<Analyzer::Expr>& expr) {
-  const auto uoper = dynamic_cast<const Analyzer::UOper*>(expr.get());
-  if (!uoper || uoper->get_optype() != kCAST) {
-    return expr;
-  }
-  return uoper->get_own_operand();
-}
-
 // Returns true iff crt and prev are both equi-join conditions on the same pair of tables.
 bool can_combine_with(const Analyzer::Expr* crt, const Analyzer::Expr* prev) {
   const auto crt_bin = dynamic_cast<const Analyzer::BinOper*>(crt);
