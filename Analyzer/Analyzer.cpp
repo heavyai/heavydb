@@ -1107,7 +1107,8 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     type_info = new_type_info;
     set_null_value();
   } else {
-    throw std::runtime_error("Invalid cast.");
+    throw std::runtime_error("Cast from " + type_info.get_type_name() + " to " +
+                             new_type_info.get_type_name() + " not supported");
   }
 }
 
