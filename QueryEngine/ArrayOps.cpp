@@ -215,6 +215,20 @@ extern "C" DEVICE int8_t* allocate_varlen_buffer(int64_t element_count,
 #endif
 }
 
+extern "C" DEVICE ALWAYS_INLINE int32_t
+fast_fixlen_array_size(int8_t* chunk_iter_, const uint32_t elem_log_sz) {
+  ChunkIter* it = reinterpret_cast<ChunkIter*>(chunk_iter_);
+  return it->skip_size >> elem_log_sz;
+}
+
+extern "C" DEVICE ALWAYS_INLINE int8_t* fast_fixlen_array_buff(int8_t* chunk_iter_,
+                                                               const uint64_t row_pos) {
+  ChunkIter* it = reinterpret_cast<ChunkIter*>(chunk_iter_);
+  auto n = static_cast<int>(row_pos);
+  int8_t* current_pos = it->start_pos + n * it->skip_size;
+  return current_pos;
+}
+
 extern "C" DEVICE int8_t* array_buff(int8_t* chunk_iter_, const uint64_t row_pos) {
   ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
   ArrayDatum ad;

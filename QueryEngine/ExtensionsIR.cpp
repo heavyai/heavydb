@@ -287,6 +287,7 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
     if (arg_ti.is_array()) {
       bool const_arr = (const_arr_size.count(orig_arg_lvs[k]) > 0);
       const auto elem_ti = arg_ti.get_elem_type();
+      // TODO: switch to fast fixlen variants
       const auto ptr_lv = (const_arr)
                               ? orig_arg_lvs[k]
                               : cgen_state_->emitExternalCall(
@@ -318,20 +319,38 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
                                        0,
                                        SQLTypes::kTINYINT)
                                .get_elem_type();
-      const auto ptr_lv = (const_arr)
-                              ? orig_arg_lvs[k]
-                              : cgen_state_->emitExternalCall(
-                                    "array_buff",
-                                    llvm::Type::getInt8PtrTy(cgen_state_->context_),
-                                    {orig_arg_lvs[k], posArg(arg)});
-      const auto len_lv = (const_arr)
-                              ? const_arr_size.at(orig_arg_lvs[k])
-                              : cgen_state_->emitExternalCall(
-                                    "array_size",
-                                    get_int_type(32, cgen_state_->context_),
-                                    {orig_arg_lvs[k],
-                                     posArg(arg),
-                                     ll_int(log2_bytes(elem_ti.get_logical_size()))});
+      llvm::Value* ptr_lv;
+      llvm::Value* len_lv;
+      if (arg_ti.get_type() == kPOINT) {
+        ptr_lv =
+            cgen_state_->emitExternalCall("fast_fixlen_array_buff",
+                                          llvm::Type::getInt8PtrTy(cgen_state_->context_),
+                                          {orig_arg_lvs[k], posArg(arg)});
+        // Don't have the coords column's typeinfo here to generate an llvm constant,
+        // this is also why the elem_ti is taken from a dummy size-less array type
+        // declared above. Simply going with max coords size ll_int(int64_t(16)) would
+        // work too and would be a little faster - geo extensions know how to work with
+        // point coords and how much to read based on compression arg.
+        // This call gets the actual size of the fixed length coords array from ChunkIter.
+        len_lv = cgen_state_->emitExternalCall(
+            "fast_fixlen_array_size",
+            get_int_type(32, cgen_state_->context_),
+            {orig_arg_lvs[k], ll_int(log2_bytes(elem_ti.get_logical_size()))});
+      } else {
+        // TODO: remove const_arr  and related code if it's not needed
+        ptr_lv = (const_arr) ? orig_arg_lvs[k]
+                             : cgen_state_->emitExternalCall(
+                                   "array_buff",
+                                   llvm::Type::getInt8PtrTy(cgen_state_->context_),
+                                   {orig_arg_lvs[k], posArg(arg)});
+        len_lv = (const_arr) ? const_arr_size.at(orig_arg_lvs[k])
+                             : cgen_state_->emitExternalCall(
+                                   "array_size",
+                                   get_int_type(32, cgen_state_->context_),
+                                   {orig_arg_lvs[k],
+                                    posArg(arg),
+                                    ll_int(log2_bytes(elem_ti.get_logical_size()))});
+      }
       args.push_back(castArrayPointer(ptr_lv, elem_ti));
       args.push_back(cgen_state_->ir_builder_.CreateZExt(
           len_lv, get_int_type(64, cgen_state_->context_)));

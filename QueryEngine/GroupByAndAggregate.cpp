@@ -1733,6 +1733,17 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
 
           const size_t elem_sz = ctr == 0 ? 1 : 4;
           ctr++;
+          if (target_ti.get_type() == kPOINT) {
+            coords.push_back(executor_->cgen_state_->emitExternalCall(
+                "fast_fixlen_array_buff",
+                i8p_ty,
+                {target_lv, executor_->posArg(selected_target_expr)}));
+            coords.push_back(executor_->cgen_state_->emitExternalCall(
+                "fast_fixlen_array_size",
+                i32_ty,
+                {target_lv, executor_->ll_int(log2_bytes(elem_sz))}));
+            continue;
+          }
           coords.push_back(executor_->cgen_state_->emitExternalCall(
               "array_buff",
               i8p_ty,

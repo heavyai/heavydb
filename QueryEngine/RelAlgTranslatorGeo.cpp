@@ -15,6 +15,7 @@
  */
 
 #include "../Shared/geo_types.h"
+#include "ExpressionRewrite.h"
 #include "RelAlgTranslator.h"
 
 std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColumn(
@@ -836,7 +837,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
   auto distance_expr = translateScalarRex(rex_function->getOperand(2));
   const auto& distance_ti = SQLTypeInfo(kDOUBLE, false);
   if (distance_expr->get_type_info().get_type() != kDOUBLE) {
-    distance_expr = makeExpr<Analyzer::UOper>(distance_ti, false, kCAST, distance_expr);
+    distance_expr->add_cast(distance_ti);
   }
 
   // Translate the geo distance function call portion
@@ -854,6 +855,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
                                                   kONE,
                                                   distance_expr,
                                                   distance_expr);
+      distance_expr = fold_expr(distance_expr.get());
     }
   }
 
