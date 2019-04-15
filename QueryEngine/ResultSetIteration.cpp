@@ -1892,6 +1892,8 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) 
     const auto keys_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx);
     switch (query_mem_desc_.getEffectiveKeyWidth()) {
       case 4:
+        CHECK(QueryDescriptionType::GroupByPerfectHash !=
+              query_mem_desc_.getQueryDescriptionType());
         return *reinterpret_cast<const int32_t*>(keys_ptr) == EMPTY_KEY_32;
       case 8:
         return *reinterpret_cast<const int64_t*>(keys_ptr) == EMPTY_KEY_64;
