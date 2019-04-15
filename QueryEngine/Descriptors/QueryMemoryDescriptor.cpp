@@ -969,12 +969,6 @@ bool QueryMemoryDescriptor::usesGetGroupValueFast() const {
           getGroupbyColCount() == 1);
 }
 
-bool QueryMemoryDescriptor::usesCachedContext() const {
-  return allow_multifrag_ &&
-         (usesGetGroupValueFast() ||
-          query_desc_type_ == QueryDescriptionType::GroupByPerfectHash);
-}
-
 bool QueryMemoryDescriptor::threadsShareMemory() const {
   return query_desc_type_ != QueryDescriptionType::NonGroupedAggregate;
 }
@@ -993,7 +987,8 @@ bool QueryMemoryDescriptor::blocksShareMemory() const {
        getGroupbyColCount() > 1)) {
     return true;
   }
-  return usesCachedContext() && !sharedMemBytes(ExecutorDeviceType::GPU) &&
+  return query_desc_type_ == QueryDescriptionType::GroupByPerfectHash &&
+         !sharedMemBytes(ExecutorDeviceType::GPU) &&
          many_entries(max_val_, min_val_, bucket_);
 }
 
@@ -1126,7 +1121,6 @@ std::string QueryMemoryDescriptor::toString() const {
   str += "\tInterleaved Bins on GPU: " + boolToString(interleaved_bins_on_gpu_) + "\n";
   str += "\tBlocks Share Memory: " + boolToString(blocksShareMemory()) + "\n";
   str += "\tThreads Share Memory: " + boolToString(threadsShareMemory()) + "\n";
-  str += "\tUses Cached Context: " + boolToString(usesCachedContext()) + "\n";
   str += "\tUses Fast Group Values: " + boolToString(usesGetGroupValueFast()) + "\n";
   str += "\tLazy Init Groups (GPU): " +
          boolToString(lazyInitGroups(ExecutorDeviceType::GPU)) + "\n";

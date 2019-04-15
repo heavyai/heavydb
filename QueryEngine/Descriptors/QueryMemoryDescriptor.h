@@ -277,9 +277,6 @@ class QueryMemoryDescriptor {
   // TODO(alex): remove
   bool usesGetGroupValueFast() const;
 
-  // TODO(alex): remove
-  bool usesCachedContext() const;
-
   bool blocksShareMemory() const;
   bool threadsShareMemory() const;
 

@@ -67,15 +67,6 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
   CHECK(cb);
   const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
 
-  // could use std::thread::hardware_concurrency(), but some
-  // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
-  // Play it POSIX.1 safe instead.
-  int available_cpus = cpu_threads();
-  auto available_gpus = get_available_gpus(cat);
-
-  const auto context_count =
-      get_context_count(co.device_type_, available_cpus, available_gpus.size());
-
   int error_code = 0;
   ColumnCacheMap column_cache;
 
@@ -92,7 +83,6 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                                        count_all_exe_unit,
                                        table_infos,
                                        cat,
-                                       context_count,
                                        row_set_mem_owner,
                                        &error_code,
                                        nullptr);
@@ -114,7 +104,6 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
         *std::get<QueryCompilationDescriptorOwned>(execution_descriptors),
         *std::get<QueryMemoryDescriptorOwned>(execution_descriptors),
         {{table_id, {fragment_index}}},
-        0,
         -1);
   }
   // Further optimization possible here to skip fragments
@@ -134,14 +123,8 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
     CHECK(count_scalar_tv);
     const auto count_ptr = boost::get<int64_t>(count_scalar_tv);
     CHECK(count_ptr);
-    ExecutionDispatch current_fragment_execution_dispatch(this,
-                                                          ra_exe_unit,
-                                                          table_infos,
-                                                          cat,
-                                                          context_count,
-                                                          row_set_mem_owner,
-                                                          &error_code,
-                                                          nullptr);
+    ExecutionDispatch current_fragment_execution_dispatch(
+        this, ra_exe_unit, table_infos, cat, row_set_mem_owner, &error_code, nullptr);
     const auto execution_descriptors = current_fragment_execution_dispatch.compile(
         *count_ptr, 8, co, eo, column_fetcher, false);
     // We may want to consider in the future allowing this to execute on devices other
@@ -154,7 +137,6 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
         *std::get<QueryCompilationDescriptorOwned>(execution_descriptors),
         *std::get<QueryMemoryDescriptorOwned>(execution_descriptors),
         {FragmentsPerTable{table_id, {fragment_index}}},
-        0,
         -1);
     if (error_code) {
       throw std::runtime_error(RelAlgExecutor::getErrorMessageFromCode(error_code));

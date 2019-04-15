@@ -1141,20 +1141,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
   int8_t crt_min_byte_width{get_min_byte_width()};
   do {
     *error_code = 0;
-    int available_cpus = cpu_threads();
-    auto available_gpus = get_available_gpus(cat);
-
-    const auto context_count =
-        get_context_count(device_type, available_cpus, available_gpus.size());
-
-    ExecutionDispatch execution_dispatch(this,
-                                         ra_exe_unit,
-                                         query_infos,
-                                         cat,
-                                         context_count,
-                                         row_set_mem_owner,
-                                         error_code,
-                                         render_info);
+    ExecutionDispatch execution_dispatch(
+        this, ra_exe_unit, query_infos, cat, row_set_mem_owner, error_code, render_info);
     ColumnFetcher column_fetcher(this, column_cache);
     std::unique_ptr<QueryCompilationDescriptor> query_comp_desc_owned;
     std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
@@ -1191,7 +1179,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                         const QueryCompilationDescriptor& query_comp_desc,
                         const QueryMemoryDescriptor& query_mem_desc,
                         const FragmentsList& frag_list,
-                        const size_t ctx_idx,
                         const int64_t rowid_lookup_key) {
       INJECT_TIMER(execution_dispatch_run);
       execution_dispatch.run(chosen_device_type,
@@ -1201,7 +1188,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                              query_comp_desc,
                              query_mem_desc,
                              frag_list,
-                             ctx_idx,
                              rowid_lookup_key);
     };
 
@@ -1214,6 +1200,11 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         eo.gpu_input_mem_limit_percent);
 
     if (!eo.just_validate) {
+      int available_cpus = cpu_threads();
+      auto available_gpus = get_available_gpus(cat);
+
+      const auto context_count =
+          get_context_count(device_type, available_cpus, available_gpus.size());
       dispatchFragments(dispatch,
                         execution_dispatch,
                         query_infos,
@@ -1284,22 +1275,12 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                                           PerFragmentCB& cb) {
   const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
 
-  int available_cpus = cpu_threads();
-  const auto context_count =
-      get_context_count(co.device_type_, available_cpus, /*gpu_count=*/0);
-
   int error_code = 0;
   ColumnCacheMap column_cache;
 
   std::vector<InputTableInfo> table_infos{table_info};
-  ExecutionDispatch execution_dispatch(this,
-                                       ra_exe_unit,
-                                       table_infos,
-                                       cat,
-                                       context_count,
-                                       row_set_mem_owner_,
-                                       &error_code,
-                                       nullptr);
+  ExecutionDispatch execution_dispatch(
+      this, ra_exe_unit, table_infos, cat, row_set_mem_owner_, &error_code, nullptr);
   ColumnFetcher column_fetcher(this, column_cache);
   std::unique_ptr<QueryCompilationDescriptor> query_comp_desc_owned;
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
@@ -1319,7 +1300,6 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                            *query_comp_desc_owned,
                            *query_mem_desc_owned,
                            {{table_id, {fragment_index}}},
-                           0,
                            -1);
   }
 
@@ -1473,19 +1453,12 @@ ResultSetPtr Executor::collectAllDeviceResults(
     const QueryMemoryDescriptor& query_mem_desc,
     const ExecutorDeviceType device_type,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
-  const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
-  for (const auto& query_exe_context : execution_dispatch.getQueryContexts()) {
-    if (!query_exe_context) {
-      continue;
-    }
-    auto rs = query_exe_context->getRowSet(ra_exe_unit, query_mem_desc);
-    execution_dispatch.getFragmentResults().emplace_back(rs, std::vector<size_t>{});
-  }
   auto& result_per_device = execution_dispatch.getFragmentResults();
   if (result_per_device.empty() && query_mem_desc.getQueryDescriptionType() ==
                                        QueryDescriptionType::NonGroupedAggregate) {
     return build_row_for_empty_input(target_exprs, query_mem_desc, device_type);
   }
+  const auto& ra_exe_unit = execution_dispatch.getExecutionUnit();
   if (use_speculative_top_n(ra_exe_unit, query_mem_desc)) {
     return reduceSpeculativeTopN(
         ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
@@ -1582,7 +1555,6 @@ void Executor::dispatchFragments(
                              const QueryCompilationDescriptor& query_comp_desc,
                              const QueryMemoryDescriptor& query_mem_desc,
                              const FragmentsList& frag_list,
-                             const size_t ctx_idx,
                              const int64_t rowid_lookup_key)> dispatch,
     const ExecutionDispatch& execution_dispatch,
     const std::vector<InputTableInfo>& table_infos,
@@ -1600,17 +1572,11 @@ void Executor::dispatchFragments(
   CHECK(!ra_exe_unit.input_descs.empty());
 
   const auto device_type = query_comp_desc.getDeviceType();
-  const bool allow_multifrag =
-      eo.allow_multifrag &&
-      (ra_exe_unit.groupby_exprs.empty() || query_mem_desc.usesCachedContext() ||
-       query_mem_desc.getQueryDescriptionType() ==
-           QueryDescriptionType::GroupByBaselineHash ||
-       query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection);
   const bool uses_lazy_fetch =
       plan_state_->allow_lazy_fetch_ &&
       has_lazy_fetched_columns(getColLazyFetchInfo(ra_exe_unit.target_exprs));
   const bool use_multifrag_kernel = (device_type == ExecutorDeviceType::GPU) &&
-                                    allow_multifrag && (!uses_lazy_fetch || is_agg);
+                                    eo.allow_multifrag && (!uses_lazy_fetch || is_agg);
 
   const auto device_count = deviceCount(device_type);
   CHECK_GT(device_count, 0);
@@ -1647,7 +1613,6 @@ void Executor::dispatchFragments(
                                              query_comp_desc,
                                              query_mem_desc,
                                              frag_list,
-                                             device_id % context_count,
                                              rowid_lookup_key));
         };
     fragment_descriptor.assignFragsToMultiDispatch(multifrag_kernel_dispatch);
@@ -1691,7 +1656,6 @@ void Executor::dispatchFragments(
                                          query_comp_desc,
                                          query_mem_desc,
                                          frag_list,
-                                         frag_list_idx % context_count,
                                          rowid_lookup_key));
 
       ++frag_list_idx;
@@ -2389,10 +2353,7 @@ int32_t Executor::executePlanWithGroupBy(
   }
 
   if (error_code != Executor::ERR_OVERFLOW_OR_UNDERFLOW &&
-      error_code != Executor::ERR_DIV_BY_ZERO &&
-      !query_exe_context->query_mem_desc_.usesCachedContext() &&
-      !render_allocator_map_ptr) {
-    CHECK(!query_exe_context->query_mem_desc_.sortOnGpu());
+      error_code != Executor::ERR_DIV_BY_ZERO && !render_allocator_map_ptr) {
     results =
         query_exe_context->getRowSet(ra_exe_unit, query_exe_context->query_mem_desc_);
     CHECK(results);

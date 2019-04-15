@@ -824,8 +824,6 @@ class Executor {
     const Catalog_Namespace::Catalog& cat_;
     mutable std::vector<uint64_t> all_frag_row_offsets_;
     mutable std::mutex all_frag_row_offsets_mutex_;
-    std::vector<std::unique_ptr<QueryExecutionContext>> query_contexts_;
-    std::vector<std::mutex> query_context_mutexes_;
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
     int32_t* error_code_;
     RenderInfo* render_info_;
@@ -842,7 +840,6 @@ class Executor {
                  const QueryCompilationDescriptor& query_comp_desc,
                  const QueryMemoryDescriptor& query_mem_desc,
                  const FragmentsList& frag_list,
-                 const size_t ctx_idx,
                  const int64_t rowid_lookup_key);
 
    public:
@@ -850,7 +847,6 @@ class Executor {
                       const RelAlgExecutionUnit& ra_exe_unit,
                       const std::vector<InputTableInfo>& query_infos,
                       const Catalog_Namespace::Catalog& cat,
-                      const size_t context_count,
                       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                       int32_t* error_code,
                       RenderInfo* render_info);
@@ -878,14 +874,11 @@ class Executor {
              const QueryCompilationDescriptor& query_comp_desc,
              const QueryMemoryDescriptor& query_mem_desc,
              const FragmentsList& frag_ids,
-             const size_t ctx_idx,
              const int64_t rowid_lookup_key) noexcept;
 
     const RelAlgExecutionUnit& getExecutionUnit() const;
 
     const std::vector<uint64_t>& getFragOffsets() const;
-
-    const std::vector<std::unique_ptr<QueryExecutionContext>>& getQueryContexts() const;
 
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& getFragmentResults();
 
@@ -949,7 +942,6 @@ class Executor {
                                const QueryCompilationDescriptor& query_comp_desc,
                                const QueryMemoryDescriptor& query_mem_desc,
                                const FragmentsList& frag_list,
-                               const size_t ctx_idx,
                                const int64_t rowid_lookup_key)> dispatch,
       const ExecutionDispatch& execution_dispatch,
       const std::vector<InputTableInfo>& table_infos,
