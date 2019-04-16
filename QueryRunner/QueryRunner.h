@@ -67,14 +67,20 @@ struct IRFileWriter {
 
 class QueryRunner {
  public:
-  static QueryRunner* init(const char* db_path, const std::string& udf_filename = "") {
+  static QueryRunner* init(const char* db_path,
+                           const std::string& udf_filename = "",
+                           const size_t max_gpu_mem = 0,  // use all available mem
+                           const int reserved_gpu_mem = 256 << 20) {
     return QueryRunner::init(db_path,
                              std::string{OMNISCI_ROOT_USER},
                              "HyperInteractive",
                              std::string{OMNISCI_DEFAULT_DB},
                              {},
                              {},
-                             udf_filename);
+                             udf_filename,
+                             true,
+                             max_gpu_mem,
+                             reserved_gpu_mem);
   }
 
   static QueryRunner* init(const char* db_path,
@@ -96,7 +102,8 @@ class QueryRunner {
                            const std::vector<LeafHostInfo>& leaf_servers,
                            const std::string& udf_filename = "",
                            bool uses_gpus = true,
-                           const size_t reserved_gpu_mem = 256 << 20,
+                           const size_t max_gpu_mem = 0,  // use all available mem
+                           const int reserved_gpu_mem = 256 << 20,
                            const bool create_user = false,
                            const bool create_db = false);
 
@@ -156,7 +163,8 @@ class QueryRunner {
               const std::vector<LeafHostInfo>& leaf_servers,
               const std::string& udf_filename,
               bool uses_gpus,
-              const size_t reserved_gpu_mem,
+              const size_t max_gpu_mem,
+              const int reserved_gpu_mem,
               const bool create_user,
               const bool create_db);
 

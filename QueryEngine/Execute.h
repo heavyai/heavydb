@@ -88,6 +88,8 @@ extern bool g_strip_join_covered_quals;
 extern size_t g_constrained_by_in_threshold;
 extern size_t g_big_group_threshold;
 extern bool g_enable_window_functions;
+extern size_t g_max_memory_allocation_size;
+extern double g_bump_allocator_step_reduction;
 
 class QueryCompilationDescriptor;
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
@@ -549,6 +551,7 @@ class Executor {
                  const QueryCompilationDescriptor& query_comp_desc,
                  const QueryMemoryDescriptor& query_mem_desc,
                  const FragmentsList& frag_list,
+                 const ExecutorDispatchMode kernel_dispatch_mode,
                  const int64_t rowid_lookup_key);
 
    public:
@@ -583,6 +586,7 @@ class Executor {
              const QueryCompilationDescriptor& query_comp_desc,
              const QueryMemoryDescriptor& query_mem_desc,
              const FragmentsList& frag_ids,
+             const ExecutorDispatchMode kernel_dispatch_mode,
              const int64_t rowid_lookup_key) noexcept;
 
     const RelAlgExecutionUnit& getExecutionUnit() const;
@@ -652,6 +656,7 @@ class Executor {
                                const QueryCompilationDescriptor& query_comp_desc,
                                const QueryMemoryDescriptor& query_mem_desc,
                                const FragmentsList& frag_list,
+                               const ExecutorDispatchMode kernel_dispatch_mode,
                                const int64_t rowid_lookup_key)> dispatch,
       const ExecutionDispatch& execution_dispatch,
       const std::vector<InputTableInfo>& table_infos,

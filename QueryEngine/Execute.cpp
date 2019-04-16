@@ -86,6 +86,11 @@ bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
 size_t g_big_group_threshold{20000};
 bool g_enable_window_functions{true};
+size_t g_max_memory_allocation_size{2000000000};  // set to max slab size
+size_t g_min_memory_allocation_size{
+    256};  // minimum memory allocation required for projection query output buffer
+           // without pre-flight count
+double g_bump_allocator_step_reduction{0.75};
 
 int const Executor::max_gpu_count;
 
@@ -975,6 +980,11 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
     // Allow a query with no scan limit to run on small tables
     return;
   }
+  if (ra_exe_unit.use_bump_allocator) {
+    // Bump allocator removes the scan limit (and any knowledge of the size of the output
+    // relative to the size of the input), so we bypass this check for now
+    return;
+  }
   if (ra_exe_unit.sort_info.algorithm != SortAlgorithm::StreamingTopN &&
       ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() &&
       (!ra_exe_unit.scan_limit ||
@@ -1037,6 +1047,7 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
           ra_exe_unit_in.estimator,
           ra_exe_unit_in.sort_info,
           new_scan_limit,
+          ra_exe_unit_in.use_bump_allocator,
           ra_exe_unit_in.query_features};
 }
 
@@ -1153,6 +1164,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                         const QueryCompilationDescriptor& query_comp_desc,
                         const QueryMemoryDescriptor& query_mem_desc,
                         const FragmentsList& frag_list,
+                        const ExecutorDispatchMode kernel_dispatch_mode,
                         const int64_t rowid_lookup_key) {
       INJECT_TIMER(execution_dispatch_run);
       execution_dispatch.run(chosen_device_type,
@@ -1162,6 +1174,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                              query_comp_desc,
                              query_mem_desc,
                              frag_list,
+                             kernel_dispatch_mode,
                              rowid_lookup_key);
     };
 
@@ -1272,6 +1285,7 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                            *query_comp_desc_owned,
                            *query_mem_desc_owned,
                            {{table_id, {fragment_index}}},
+                           ExecutorDispatchMode::KernelPerFragment,
                            -1);
   }
 
@@ -1527,6 +1541,7 @@ void Executor::dispatchFragments(
                              const QueryCompilationDescriptor& query_comp_desc,
                              const QueryMemoryDescriptor& query_mem_desc,
                              const FragmentsList& frag_list,
+                             const ExecutorDispatchMode kernel_dispatch_mode,
                              const int64_t rowid_lookup_key)> dispatch,
     const ExecutionDispatch& execution_dispatch,
     const std::vector<InputTableInfo>& table_infos,
@@ -1585,6 +1600,7 @@ void Executor::dispatchFragments(
                                              query_comp_desc,
                                              query_mem_desc,
                                              frag_list,
+                                             ExecutorDispatchMode::MultifragmentKernel,
                                              rowid_lookup_key));
         };
     fragment_descriptor.assignFragsToMultiDispatch(multifrag_kernel_dispatch);
@@ -1593,7 +1609,7 @@ void Executor::dispatchFragments(
     VLOG(1) << "Dispatching kernel per fragment";
     VLOG(1) << query_mem_desc.toString();
 
-    if (allow_single_frag_table_opt &&
+    if (!ra_exe_unit.use_bump_allocator && allow_single_frag_table_opt &&
         (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) &&
         table_infos.size() == 1 && table_infos.front().table_id > 0) {
       const auto max_frag_size =
@@ -1627,6 +1643,7 @@ void Executor::dispatchFragments(
                                          query_comp_desc,
                                          query_mem_desc,
                                          frag_list,
+                                         ExecutorDispatchMode::KernelPerFragment,
                                          rowid_lookup_key));
 
       ++frag_list_idx;

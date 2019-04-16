@@ -1738,10 +1738,12 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
 
 namespace {
 
-// Upper bound estimation for the number of groups. Not strictly correct and not
-// tight, but if the tables involved are really small we shouldn't waste time doing
-// the NDV estimation. We don't account for cross-joins and / or group by unnested
-// array, which is the reason this estimation isn't entirely reliable.
+/**
+ *  Upper bound estimation for the number of groups. Not strictly correct and not tight,
+ * but if the tables involved are really small we shouldn't waste time doing the NDV
+ * estimation. We don't account for cross-joins and / or group by unnested array, which is
+ * the reason this estimation isn't entirely reliable.
+ */
 size_t groups_approx_upper_bound(const std::vector<InputTableInfo>& table_infos) {
   CHECK(!table_infos.empty());
   const auto& first_table = table_infos.front();
@@ -1754,7 +1756,13 @@ size_t groups_approx_upper_bound(const std::vector<InputTableInfo>& table_infos)
   return std::max(max_num_groups, size_t(1));
 }
 
-bool can_use_scan_limit(const RelAlgExecutionUnit& ra_exe_unit) {
+/**
+ * Determines whether a query needs to compute the size of its output buffer. Returns true
+ * for projection queries with no LIMIT or a LIMIT that exceeds the high scan limit
+ * threshold (meaning it would be cheaper to compute the number of rows passing or use the
+ * bump allocator than allocate the current scan limit per GPU)
+ */
+bool compute_output_buffer_size(const RelAlgExecutionUnit& ra_exe_unit) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
       return false;
@@ -1873,6 +1881,12 @@ void build_render_targets(
   }
 }
 
+inline bool can_use_bump_allocator(const RelAlgExecutionUnit& ra_exe_unit,
+                                   const CompilationOptions& co,
+                                   const ExecutionOptions& eo) {
+  return (co.device_type_ == ExecutorDeviceType::GPU) && !eo.output_columnar_hint;
+}
+
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(
@@ -1937,14 +1951,18 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     max_groups_buffer_entry_guess =
         table_infos.front().info.fragments.front().getNumTuples();
     ra_exe_unit.scan_limit = max_groups_buffer_entry_guess;
-  } else if (!eo.just_explain && can_use_scan_limit(ra_exe_unit) &&
-             !isRowidLookup(work_unit)) {
+  } else if (compute_output_buffer_size(ra_exe_unit) && !isRowidLookup(work_unit)) {
     if (previous_count > 0 && !exe_unit_has_quals(ra_exe_unit)) {
       ra_exe_unit.scan_limit = static_cast<size_t>(previous_count);
     } else {
-      const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
-      if (filter_count_all >= 0) {
-        ra_exe_unit.scan_limit = std::max(filter_count_all, ssize_t(1));
+      if (can_use_bump_allocator(ra_exe_unit, co, eo)) {
+        ra_exe_unit.scan_limit = 0;
+        ra_exe_unit.use_bump_allocator = true;
+      } else if (!eo.just_explain) {
+        const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
+        if (filter_count_all >= 0) {
+          ra_exe_unit.scan_limit = std::max(filter_count_all, ssize_t(1));
+        }
       }
     }
   }
@@ -2243,6 +2261,9 @@ void RelAlgExecutor::handlePersistentError(const int32_t error_code) {
 }
 
 std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {
+  if (error_code < 0) {
+    return "Ran out of slots in the query output buffer";
+  }
   switch (error_code) {
     case Executor::ERR_DIV_BY_ZERO:
       return "Division by zero";
@@ -2535,6 +2556,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
                                         nullptr,
                                         sort_info,
                                         0,
+                                        false,
                                         query_features};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
@@ -2610,6 +2632,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                         nullptr,
                                         sort_info,
                                         0,
+                                        false,
                                         query_features};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
@@ -2859,6 +2882,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
            nullptr,
            sort_info,
            0,
+           false,
            query_features},
           aggregate,
           max_groups_buffer_entry_default_guess,
@@ -2939,6 +2963,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
            nullptr,
            sort_info,
            0,
+           false,
            query_features},
           project,
           max_groups_buffer_entry_default_guess,
@@ -3005,6 +3030,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
                                         nullptr,
                                         sort_info,
                                         0,
+                                        false,
                                         query_features};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);

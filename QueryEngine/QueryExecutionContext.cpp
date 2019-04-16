@@ -31,7 +31,9 @@ QueryExecutionContext::QueryExecutionContext(
     const QueryMemoryDescriptor& query_mem_desc,
     const Executor* executor,
     const ExecutorDeviceType device_type,
+    const ExecutorDispatchMode dispatch_mode,
     const int device_id,
+    const int64_t num_rows,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -41,6 +43,7 @@ QueryExecutionContext::QueryExecutionContext(
     : query_mem_desc_(query_mem_desc)
     , executor_(executor)
     , device_type_(device_type)
+    , dispatch_mode_(dispatch_mode)
     , row_set_mem_owner_(row_set_mem_owner)
     , output_columnar_(output_columnar) {
   CHECK(executor);
@@ -58,6 +61,7 @@ QueryExecutionContext::QueryExecutionContext(
                                                             device_type,
                                                             output_columnar,
                                                             sort_on_gpu,
+                                                            num_rows,
                                                             col_buffers,
                                                             frag_offsets,
                                                             render_allocator_map,
@@ -131,21 +135,18 @@ ResultSetPtr QueryExecutionContext::getRowSet(
   const auto group_by_buffers_size = query_buffers_->getNumBuffers();
   if (device_type_ == ExecutorDeviceType::CPU) {
     CHECK_EQ(size_t(1), group_by_buffers_size);
-    return groupBufferToResults(0, ra_exe_unit.target_exprs);
+    return groupBufferToResults(0);
   }
   size_t step{query_mem_desc_.threadsShareMemory() ? executor_->blockSize() : 1};
   for (size_t i = 0; i < group_by_buffers_size; i += step) {
-    results_per_sm.emplace_back(groupBufferToResults(i, ra_exe_unit.target_exprs),
-                                std::vector<size_t>{});
+    results_per_sm.emplace_back(groupBufferToResults(i), std::vector<size_t>{});
   }
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   return executor_->reduceMultiDeviceResults(
       ra_exe_unit, results_per_sm, row_set_mem_owner_, query_mem_desc);
 }
 
-ResultSetPtr QueryExecutionContext::groupBufferToResults(
-    const size_t i,
-    const std::vector<Analyzer::Expr*>& targets) const {
+ResultSetPtr QueryExecutionContext::groupBufferToResults(const size_t i) const {
   if (query_mem_desc_.interleavedBins(device_type_)) {
     return groupBufferToDeinterleavedResults(i);
   }
@@ -258,12 +259,21 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                                             query_mem_desc_,
                                                             kernel_params[INIT_AGG_VALS],
                                                             device_id,
+                                                            dispatch_mode_,
                                                             block_size_x,
                                                             grid_size_x,
                                                             executor_->warpSize(),
                                                             can_sort_on_gpu,
                                                             output_columnar_,
                                                             render_allocator);
+    if (ra_exe_unit.use_bump_allocator) {
+      const auto max_matched = static_cast<int32_t>(gpu_group_by_buffers.entry_count);
+      copy_to_gpu(data_mgr,
+                  kernel_params[MAX_MATCHED],
+                  &max_matched,
+                  sizeof(max_matched),
+                  device_id);
+    }
 
     kernel_params[GROUPBY_BUF] = gpu_group_by_buffers.first;
     std::vector<void*> param_ptrs;
@@ -347,20 +357,50 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                            data_mgr,
                            device_id);
         }
-        if (query_mem_desc_.didOutputColumnar() &&
-            query_mem_desc_.getQueryDescriptionType() ==
-                QueryDescriptionType::Projection) {
-          query_buffers_->compactProjectionBuffersGpu(
-              query_mem_desc_,
-              data_mgr,
-              gpu_group_by_buffers,
-              get_num_allocated_rows_from_gpu(
-                  data_mgr, kernel_params[TOTAL_MATCHED], device_id),
-              device_id);
+        if (query_mem_desc_.getQueryDescriptionType() ==
+            QueryDescriptionType::Projection) {
+          if (query_mem_desc_.didOutputColumnar()) {
+            query_buffers_->compactProjectionBuffersGpu(
+                query_mem_desc_,
+                data_mgr,
+                gpu_group_by_buffers,
+                get_num_allocated_rows_from_gpu(
+                    data_mgr, kernel_params[TOTAL_MATCHED], device_id),
+                device_id);
+          } else {
+            size_t num_allocated_rows{0};
+            if (ra_exe_unit.use_bump_allocator) {
+              num_allocated_rows = get_num_allocated_rows_from_gpu(
+                  data_mgr, kernel_params[TOTAL_MATCHED], device_id);
+              // First, check the error code. If we ran out of slots, don't copy data back
+              // into the ResultSet or update ResultSet entry count
+              if (*error_code < 0) {
+                return {};
+              }
+            }
+            query_buffers_->copyGroupByBuffersFromGpu(
+                data_mgr,
+                query_mem_desc_,
+                ra_exe_unit.use_bump_allocator ? num_allocated_rows
+                                               : query_mem_desc_.getEntryCount(),
+                gpu_group_by_buffers,
+                ra_exe_unit,
+                block_size_x,
+                grid_size_x,
+                device_id,
+                can_sort_on_gpu && query_mem_desc_.hasKeylessHash());
+            if (num_allocated_rows) {
+              CHECK(ra_exe_unit.use_bump_allocator);
+              CHECK(!query_buffers_->result_sets_.empty());
+              query_buffers_->result_sets_.front()->updateStorageEntryCount(
+                  num_allocated_rows);
+            }
+          }
         } else {
           query_buffers_->copyGroupByBuffersFromGpu(
               data_mgr,
               query_mem_desc_,
+              query_mem_desc_.getEntryCount(),
               gpu_group_by_buffers,
               ra_exe_unit,
               block_size_x,
@@ -818,7 +858,10 @@ std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(
               &flatened_frag_offsets[0],
               sizeof(int64_t) * flatened_frag_offsets.size(),
               device_id);
-  int32_t max_matched{scan_limit};
+
+  // Note that this will be overwritten if we are setting the entry count during group by
+  // buffer allocation and initialization
+  const int32_t max_matched{scan_limit};
   params[MAX_MATCHED] =
       reinterpret_cast<CUdeviceptr>(gpu_allocator_->alloc(sizeof(max_matched)));
   copy_to_gpu(

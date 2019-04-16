@@ -104,6 +104,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
         *std::get<QueryCompilationDescriptorOwned>(execution_descriptors),
         *std::get<QueryMemoryDescriptorOwned>(execution_descriptors),
         {{table_id, {fragment_index}}},
+        ExecutorDispatchMode::KernelPerFragment,
         -1);
   }
   // Further optimization possible here to skip fragments
@@ -137,13 +138,18 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
         *std::get<QueryCompilationDescriptorOwned>(execution_descriptors),
         *std::get<QueryMemoryDescriptorOwned>(execution_descriptors),
         {FragmentsPerTable{table_id, {fragment_index}}},
+        ExecutorDispatchMode::KernelPerFragment,
         -1);
     if (error_code) {
       throw std::runtime_error(RelAlgExecutor::getErrorMessageFromCode(error_code));
     }
     const auto& proj_fragment_results =
-        current_fragment_execution_dispatch.getFragmentResults()[0];
-    const auto proj_result_set = proj_fragment_results.first;
+        current_fragment_execution_dispatch.getFragmentResults();
+    if (proj_fragment_results.empty()) {
+      continue;
+    }
+    const auto& proj_fragment_result = proj_fragment_results[0];
+    const auto proj_result_set = proj_fragment_result.first;
     CHECK(proj_result_set);
     cb({outer_fragments[fragment_index], fragment_index, proj_result_set});
   }

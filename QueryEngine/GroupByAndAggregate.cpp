@@ -914,8 +914,8 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
     if (is_group_by) {
       if (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection &&
           !use_streaming_top_n(ra_exe_unit_, query_mem_desc.didOutputColumnar())) {
-        const auto crt_match = get_arg_by_name(ROW_FUNC, "crt_match");
-        LL_BUILDER.CreateStore(LL_INT(int32_t(1)), crt_match);
+        const auto crt_matched = get_arg_by_name(ROW_FUNC, "crt_matched");
+        LL_BUILDER.CreateStore(LL_INT(int32_t(1)), crt_matched);
         auto total_matched_ptr = get_arg_by_name(ROW_FUNC, "total_matched");
         llvm::Value* old_total_matched_val{nullptr};
         if (co.device_type_ == ExecutorDeviceType::GPU) {
@@ -1072,11 +1072,19 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
          null_key_lv,
          order_entry_lv});
   } else {
+    llvm::Value* output_buffer_entry_count_lv{nullptr};
+    if (ra_exe_unit_.use_bump_allocator) {
+      output_buffer_entry_count_lv =
+          LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "max_matched"));
+      CHECK(output_buffer_entry_count_lv);
+    }
     const auto group_expr_lv =
         LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "old_total_matched"));
     std::vector<llvm::Value*> args{
         groups_buffer,
-        LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount())),
+        output_buffer_entry_count_lv
+            ? output_buffer_entry_count_lv
+            : LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount())),
         group_expr_lv,
         code_generator.posArg(nullptr)};
     if (query_mem_desc.didOutputColumnar()) {

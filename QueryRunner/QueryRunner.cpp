@@ -88,7 +88,8 @@ QueryRunner* QueryRunner::init(const char* db_path,
                                const std::vector<LeafHostInfo>& leaf_servers,
                                const std::string& udf_filename,
                                bool uses_gpus,
-                               const size_t reserved_gpu_mem,
+                               const size_t max_gpu_mem,
+                               const int reserved_gpu_mem,
                                const bool create_user,
                                const bool create_db) {
   LOG_IF(FATAL, !leaf_servers.empty()) << "Distributed test runner not supported.";
@@ -101,6 +102,7 @@ QueryRunner* QueryRunner::init(const char* db_path,
                                      leaf_servers,
                                      udf_filename,
                                      uses_gpus,
+                                     max_gpu_mem,
                                      reserved_gpu_mem,
                                      create_user,
                                      create_db));
@@ -115,7 +117,8 @@ QueryRunner::QueryRunner(const char* db_path,
                          const std::vector<LeafHostInfo>& leaf_servers,
                          const std::string& udf_filename,
                          bool uses_gpus,
-                         const size_t reserved_gpu_mem,
+                         const size_t max_gpu_mem,
+                         const int reserved_gpu_mem,
                          const bool create_user,
                          const bool create_db) {
   boost::filesystem::path base_path{db_path};
@@ -137,11 +140,12 @@ QueryRunner::QueryRunner(const char* db_path,
   if (std::is_same<CudaBuildSelector, PreprocessorFalse>::value) {
     uses_gpus = false;
   }
-  MapDParameters mapd_parms;
-  mapd_parms.aggregator = !leaf_servers.empty();
+  MapDParameters mapd_params;
+  mapd_params.gpu_buffer_mem_bytes = max_gpu_mem;
+  mapd_params.aggregator = !leaf_servers.empty();
 
   auto data_mgr = std::make_shared<Data_Namespace::DataMgr>(
-      data_dir.string(), mapd_parms, uses_gpus, -1, 0, reserved_gpu_mem);
+      data_dir.string(), mapd_params, uses_gpus, -1, 0, reserved_gpu_mem);
 
   auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 
@@ -150,7 +154,7 @@ QueryRunner::QueryRunner(const char* db_path,
                {},
                g_calcite,
                false,
-               mapd_parms.aggregator,
+               mapd_params.aggregator,
                string_servers);
 
   if (create_user) {

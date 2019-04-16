@@ -912,7 +912,7 @@ void set_row_func_argnames(llvm::Function* row_func,
   } else {
     arg_it->setName("group_by_buff");
     ++arg_it;
-    arg_it->setName("crt_match");
+    arg_it->setName("crt_matched");
     ++arg_it;
     arg_it->setName("total_matched");
     ++arg_it;

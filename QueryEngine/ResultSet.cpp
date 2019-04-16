@@ -767,15 +767,19 @@ void ResultSet::radixSortOnGpu(
   CudaAllocator cuda_allocator(data_mgr, device_id);
   std::vector<int64_t*> group_by_buffers(executor_->blockSize());
   group_by_buffers[0] = reinterpret_cast<int64_t*>(storage_->getUnderlyingBuffer());
-  auto dev_group_by_buffers = create_dev_group_by_buffers(&cuda_allocator,
-                                                          group_by_buffers,
-                                                          query_mem_desc_,
-                                                          executor_->blockSize(),
-                                                          executor_->gridSize(),
-                                                          device_id,
-                                                          true,
-                                                          true,
-                                                          nullptr);
+  auto dev_group_by_buffers =
+      create_dev_group_by_buffers(&cuda_allocator,
+                                  group_by_buffers,
+                                  query_mem_desc_,
+                                  executor_->blockSize(),
+                                  executor_->gridSize(),
+                                  device_id,
+                                  ExecutorDispatchMode::KernelPerFragment,
+                                  -1,
+                                  true,
+                                  true,
+                                  false,
+                                  nullptr);
   inplace_sort_gpu(
       order_entries, query_mem_desc_, dev_group_by_buffers, data_mgr, device_id);
   copy_group_by_buffers_from_gpu(

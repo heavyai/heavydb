@@ -369,8 +369,6 @@ class ResultSet {
   const ResultSetStorage* allocateStorage(const std::vector<int64_t>&) const;
 
   void updateStorageEntryCount(const size_t new_entry_count) {
-    // currently, should only be used for columnar projections
-    CHECK(query_mem_desc_.didOutputColumnar());
     CHECK(query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection);
     query_mem_desc_.setEntryCount(new_entry_count);
     CHECK(storage_);

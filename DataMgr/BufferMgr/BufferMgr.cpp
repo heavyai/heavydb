@@ -401,7 +401,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
   if (bestEvictionStart == slabSegments_[0].end()) {
     LOG(ERROR) << "ALLOCATION failed to find " << numBytes << "B throwing out of memory "
                << getStringMgrType() << ":" << deviceId_;
-    printSlabs();
+    VLOG(2) << printSlabs();
     throw OutOfMemory(numBytes);
   }
   LOG(INFO) << "ALLOCATION failed to find " << numBytes << "B free. Forcing Eviction."

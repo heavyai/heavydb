@@ -51,6 +51,15 @@ bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk,
   return false;
 }
 
+inline bool query_has_inner_join(const RelAlgExecutionUnit& ra_exe_unit) {
+  for (const auto& join_condition : ra_exe_unit.join_quals) {
+    if (join_condition.type == JoinType::INNER) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 void Executor::ExecutionDispatch::runImpl(
@@ -61,6 +70,7 @@ void Executor::ExecutionDispatch::runImpl(
     const QueryCompilationDescriptor& query_comp_desc,
     const QueryMemoryDescriptor& query_mem_desc,
     const FragmentsList& frag_list,
+    const ExecutorDispatchMode kernel_dispatch_mode,
     const int64_t rowid_lookup_key) {
   const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
                                 ? Data_Namespace::GPU_LEVEL
@@ -116,12 +126,37 @@ void Executor::ExecutionDispatch::runImpl(
   std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
   const bool do_render = render_info_ && render_info_->isPotentialInSituRender();
 
+  int64_t total_num_input_rows{-1};
+  if (kernel_dispatch_mode == ExecutorDispatchMode::KernelPerFragment &&
+      query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
+    total_num_input_rows = 0;
+    std::for_each(fetch_result.num_rows.begin(),
+                  fetch_result.num_rows.end(),
+                  [&total_num_input_rows](const std::vector<int64_t>& frag_row_count) {
+                    total_num_input_rows = std::accumulate(frag_row_count.begin(),
+                                                           frag_row_count.end(),
+                                                           total_num_input_rows);
+                  });
+    // TODO(adb): we may want to take this early out for all queries, but we are most
+    // likely to see this query pattern on the kernel per fragment path (e.g. with HAVING
+    // 0=1)
+    if (total_num_input_rows == 0) {
+      return;
+    }
+
+    if (query_has_inner_join(ra_exe_unit_)) {
+      total_num_input_rows *= ra_exe_unit_.input_descs.size();
+    }
+  }
+
   try {
     query_exe_context_owned =
         query_mem_desc.getQueryExecutionContext(ra_exe_unit_,
                                                 executor_,
                                                 chosen_device_type,
+                                                kernel_dispatch_mode,
                                                 chosen_device_id,
+                                                total_num_input_rows,
                                                 fetch_result.col_buffers,
                                                 fetch_result.frag_offsets,
                                                 row_set_mem_owner_,
@@ -279,6 +314,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                       const QueryCompilationDescriptor& query_comp_desc,
                                       const QueryMemoryDescriptor& query_mem_desc,
                                       const FragmentsList& frag_list,
+                                      const ExecutorDispatchMode kernel_dispatch_mode,
                                       const int64_t rowid_lookup_key) noexcept {
   try {
     runImpl(chosen_device_type,
@@ -288,6 +324,7 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
             query_comp_desc,
             query_mem_desc,
             frag_list,
+            kernel_dispatch_mode,
             rowid_lookup_key);
   } catch (const std::bad_alloc& e) {
     std::lock_guard<std::mutex> lock(reduce_mutex_);

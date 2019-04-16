@@ -40,6 +40,7 @@ class QueryMemoryInitializer {
                          const ExecutorDeviceType device_type,
                          const bool output_columnar,
                          const bool sort_on_gpu,
+                         const int64_t num_rows,
                          const std::vector<std::vector<const int8_t*>>& col_buffers,
                          const std::vector<std::vector<uint64_t>>& frag_offsets,
                          RenderAllocatorMap* render_allocator_map,
@@ -130,6 +131,7 @@ class QueryMemoryInitializer {
       const QueryMemoryDescriptor& query_mem_desc,
       const CUdeviceptr init_agg_vals_dev_ptr,
       const int device_id,
+      const ExecutorDispatchMode dispatch_mode,
       const unsigned block_size_x,
       const unsigned grid_size_x,
       const int8_t warp_size,
@@ -152,6 +154,7 @@ class QueryMemoryInitializer {
 
   void copyGroupByBuffersFromGpu(Data_Namespace::DataMgr* data_mgr,
                                  const QueryMemoryDescriptor& query_mem_desc,
+                                 const size_t entry_count,
                                  const GpuGroupByBuffers& gpu_group_by_buffers,
                                  const RelAlgExecutionUnit& ra_exe_unit,
                                  const unsigned block_size_x,
@@ -168,6 +171,8 @@ class QueryMemoryInitializer {
                                    const RelAlgExecutionUnit& ra_exe_unit,
                                    const unsigned total_thread_count,
                                    const int device_id);
+
+  const int64_t num_rows_;
 
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   std::vector<std::unique_ptr<ResultSet>> result_sets_;

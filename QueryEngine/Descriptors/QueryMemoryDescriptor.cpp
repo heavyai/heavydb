@@ -320,8 +320,13 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       if (use_streaming_top_n(ra_exe_unit, output_columnar_hint)) {
         entry_count = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
       } else {
-        entry_count = ra_exe_unit.scan_limit ? static_cast<size_t>(ra_exe_unit.scan_limit)
-                                             : max_groups_buffer_entry_count;
+        if (ra_exe_unit.use_bump_allocator) {
+          entry_count = 0;
+        } else {
+          entry_count = ra_exe_unit.scan_limit
+                            ? static_cast<size_t>(ra_exe_unit.scan_limit)
+                            : max_groups_buffer_entry_count;
+        }
       }
 
       const auto catalog = executor->getCatalog();
@@ -591,7 +596,9 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     const RelAlgExecutionUnit& ra_exe_unit,
     const Executor* executor,
     const ExecutorDeviceType device_type,
+    const ExecutorDispatchMode dispatch_mode,
     const int device_id,
+    const int64_t num_rows,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -606,7 +613,9 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
                                 *this,
                                 executor,
                                 device_type,
+                                dispatch_mode,
                                 device_id,
+                                num_rows,
                                 col_buffers,
                                 frag_offsets,
                                 row_set_mem_owner,
@@ -886,7 +895,7 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
     const size_t n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
     return streaming_top_n::get_heap_size(getRowSize(), n, thread_count);
   }
-  return getBufferSizeBytes(device_type);
+  return getBufferSizeBytes(device_type, entry_count_);
 }
 
 /**
@@ -900,28 +909,33 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
  * Row-wise:
  *  returns required memory per row multiplied by number of entries
  */
-size_t QueryMemoryDescriptor::getBufferSizeBytes(
-    const ExecutorDeviceType device_type) const {
+size_t QueryMemoryDescriptor::getBufferSizeBytes(const ExecutorDeviceType device_type,
+                                                 const size_t entry_count) const {
   if (keyless_hash_ && !output_columnar_) {
     CHECK_GE(group_col_widths_.size(), size_t(1));
-    auto total_bytes = align_to_int64(getColsSize());
+    auto row_bytes = align_to_int64(getColsSize());
 
-    return (interleavedBins(device_type) ? executor_->warpSize() : 1) * entry_count_ *
-           total_bytes;
+    return (interleavedBins(device_type) ? executor_->warpSize() : 1) * entry_count *
+           row_bytes;
   }
 
   constexpr size_t row_index_width = sizeof(int64_t);
   size_t total_bytes{0};
   if (output_columnar_) {
     total_bytes = (query_desc_type_ == QueryDescriptionType::Projection
-                       ? row_index_width * entry_count_
-                       : sizeof(int64_t) * group_col_widths_.size() * entry_count_) +
+                       ? row_index_width * entry_count
+                       : sizeof(int64_t) * group_col_widths_.size() * entry_count) +
                   getTotalBytesOfColumnarBuffers();
   } else {
-    total_bytes = getRowSize() * entry_count_;
+    total_bytes = getRowSize() * entry_count;
   }
 
   return total_bytes;
+}
+
+size_t QueryMemoryDescriptor::getBufferSizeBytes(
+    const ExecutorDeviceType device_type) const {
+  return getBufferSizeBytes(device_type, entry_count_);
 }
 
 void QueryMemoryDescriptor::setOutputColumnar(const bool val) {
@@ -995,6 +1009,10 @@ bool QueryMemoryDescriptor::interleavedBins(const ExecutorDeviceType device_type
 size_t QueryMemoryDescriptor::sharedMemBytes(const ExecutorDeviceType device_type) const {
   CHECK(device_type == ExecutorDeviceType::CPU || device_type == ExecutorDeviceType::GPU);
   if (device_type == ExecutorDeviceType::CPU) {
+    return 0;
+  }
+  if (entry_count_ == 0 && query_desc_type_ == QueryDescriptionType::Projection) {
+    // Late stage memory allocation
     return 0;
   }
   // if performing keyless aggregate query with a single column group-by:

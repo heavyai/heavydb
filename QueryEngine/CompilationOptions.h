@@ -23,6 +23,8 @@ enum class ExecutorOptLevel { Default, LoopStrengthReduction };
 
 enum class ExecutorExplainType { Default, Optimized };
 
+enum class ExecutorDispatchMode { KernelPerFragment, MultifragmentKernel };
+
 struct CompilationOptions {
   ExecutorDeviceType device_type_;
   const bool hoist_literals_;

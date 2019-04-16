@@ -67,6 +67,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteOverlapsJoin(
           ra_exe_unit_in.estimator,
           ra_exe_unit_in.sort_info,
           ra_exe_unit_in.scan_limit,
+          ra_exe_unit_in.use_bump_allocator,
           ra_exe_unit_in.query_features};
 }
 
