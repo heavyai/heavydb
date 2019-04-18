@@ -814,6 +814,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateOper(
   }
   if (sql_op == kOVERLAPS) {
     return translateOverlapsOper(rex_operator);
+  } else if (IS_COMPARISON(sql_op)) {
+    auto geo_comp = translateGeoComparison(rex_operator);
+    if (geo_comp) {
+      return geo_comp;
+    }
   }
   auto lhs = translateScalarRex(rex_operator->getOperand(0));
   for (size_t i = 1; i < rex_operator->size(); ++i) {

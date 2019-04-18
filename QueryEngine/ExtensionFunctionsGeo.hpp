@@ -124,7 +124,7 @@ DEVICE ALWAYS_INLINE double distance_point_point_squared(double p1x,
   auto x2 = x * x;
   auto y2 = y * y;
   auto d2 = x2 + y2;
-  if (tol_zero(d2)) {
+  if (tol_zero(d2, TOLERANCE_DEFAULT * TOLERANCE_DEFAULT)) {
     return 0.0;
   }
   return d2;

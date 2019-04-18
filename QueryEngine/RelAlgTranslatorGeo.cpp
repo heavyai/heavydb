@@ -863,6 +863,39 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateTernaryGeoFunction(
       kBOOLEAN, kLE, kONE, geo_distance_expr, distance_expr);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoComparison(
+    const RexOperator* rex_operator) const {
+  if (rex_operator->size() != size_t(2)) {
+    return nullptr;
+  }
+
+  auto geo_distance_expr = translateScalarRex(rex_operator->getOperand(0));
+  auto func_oper = dynamic_cast<Analyzer::FunctionOper*>(geo_distance_expr.get());
+  if (func_oper && func_oper->getName() == std::string("ST_Distance_Point_Point")) {
+    const auto& distance_ti = SQLTypeInfo(kDOUBLE, false);
+    std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
+    for (size_t i = 0; i < func_oper->getArity(); i++) {
+      geoargs.push_back(func_oper->getOwnArg(i));
+    }
+    geo_distance_expr = makeExpr<Analyzer::FunctionOper>(
+        distance_ti, std::string("ST_Distance_Point_Point_Squared"), geoargs);
+    auto distance_expr = translateScalarRex(rex_operator->getOperand(1));
+    if (distance_expr->get_type_info().get_type() != kDOUBLE) {
+      distance_expr->add_cast(distance_ti);
+    }
+    distance_expr = makeExpr<Analyzer::BinOper>(distance_ti,
+                                                distance_expr->get_contains_agg(),
+                                                kMULTIPLY,
+                                                kONE,
+                                                distance_expr,
+                                                distance_expr);
+    distance_expr = fold_expr(distance_expr.get());
+    return makeExpr<Analyzer::BinOper>(
+        kBOOLEAN, rex_operator->getOperator(), kONE, geo_distance_expr, distance_expr);
+  }
+  return nullptr;
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
     const RexFunctionOperator* rex_function) const {
   int32_t lindex = 0;

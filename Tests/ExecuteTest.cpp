@@ -13166,7 +13166,7 @@ TEST(Select, GeoSpatial_Projection) {
         v<int64_t>(run_simple_agg(
             "SELECT ST_Contains("
             "ST_GeomFromText('LINESTRING(1 -1.0000000001, 3 -1.0000000001)'), "
-            "ST_GeomFromText('POINT(0.999999999 -1)')) FROM geospatial_test limit 1;",
+            "ST_GeomFromText('POINT(0.9999999992 -1)')) FROM geospatial_test limit 1;",
             dt)));
 
     // ST_DWithin, ST_DFullyWithin
