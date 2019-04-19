@@ -26,12 +26,14 @@
 #include "ConstExprLib.h"
 #include "sqltypes.h"
 
+#include "SQLTypeUtilities.h"
+
 namespace Experimental {
 
 struct UncapturedMetaType {};
 struct UncapturedMetaTypeClass {};
 
-enum MetaTypeClassifications { Geometry, Array, String };
+enum MetaTypeClassifications { Geometry, Array, String, Bucketizable };
 
 template <typename T>
 struct MetaSwitchTraits {
@@ -67,6 +69,14 @@ struct MetaTypeClassDeterminant<Array> {
   template <typename SQL_TYPE_INFO>
   static auto isTargetClass(SQL_TYPE_INFO const& s) {
     return s.is_array();
+  }
+};
+
+template <>
+struct MetaTypeClassDeterminant<Bucketizable> {
+  template <typename SQL_TYPE_INFO>
+  static auto isTargetClass(SQL_TYPE_INFO const& s) {
+    return is_member_of_typeset<kDATE>(s);
   }
 };
 
@@ -252,7 +262,6 @@ class MetaTypeHandler : protected Applicator {
     if (!lhs_ref) {
       return handleMetaType<META_TYPE, ARG_PACKAGING, SECOND_VALUE, REMAINING_VALUES...>(
           meta_type, std::forward<ARG_PACKAGING&&>(arg_packaging));
-      return;
     }
     return internalApply(SPECIALIZED_HANDLER<InspectionValue>(), arg_packaging);
   };
@@ -266,9 +275,11 @@ class MetaTypeClassHandler : protected Applicator {
   static constexpr std::size_t handled_type_count = sizeof...(HANDLED_TYPE_CLASSES_PACK);
 
   template <typename META_TYPE_CLASS, typename... ARG_PACK>
-  void operator()(META_TYPE_CLASS& meta_type_class, ARG_PACK&&... args) {
+  decltype(auto) operator()(META_TYPE_CLASS& meta_type_class, ARG_PACK&&... args) {
     using ArgumentPackaging = decltype(std::forward_as_tuple(args...));
-    handleMetaTypeClass<META_TYPE_CLASS, ArgumentPackaging, HANDLED_TYPE_CLASSES_PACK...>(
+    return handleMetaTypeClass<META_TYPE_CLASS,
+                               ArgumentPackaging,
+                               HANDLED_TYPE_CLASSES_PACK...>(
         meta_type_class, std::forward_as_tuple(args...));
   }
 
@@ -276,19 +287,18 @@ class MetaTypeClassHandler : protected Applicator {
   template <typename META_TYPE_CLASS,
             typename ARG_PACKAGING,
             MetaTypeClassifications HANDLED_TYPE>
-  void handleMetaTypeClass(META_TYPE_CLASS& meta_type_class,
-                           ARG_PACKAGING&& arg_packaging) {
+  decltype(auto) handleMetaTypeClass(META_TYPE_CLASS& meta_type_class,
+                                     ARG_PACKAGING&& arg_packaging) {
     using InspectionClass = MetaTypeClass<HANDLED_TYPE>;
     using CastAssistClass =
         CapturedMetaTypeClassOptional<InspectionClass::sql_type_class>;
 
     auto& lhs_ref = static_cast<CastAssistClass&>(meta_type_class);
     if (!lhs_ref) {
-      internalApply(SPECIALIZED_HANDLER<UncapturedMetaTypeClassOptional>(),
-                    arg_packaging);
-      return;
+      return internalApply(SPECIALIZED_HANDLER<UncapturedMetaTypeClassOptional>(),
+                           arg_packaging);
     }
-    internalApply(SPECIALIZED_HANDLER<InspectionClass>(), arg_packaging);
+    return internalApply(SPECIALIZED_HANDLER<InspectionClass>(), arg_packaging);
   }
 
   template <typename META_TYPE_CLASS,
@@ -296,21 +306,21 @@ class MetaTypeClassHandler : protected Applicator {
             MetaTypeClassifications FIRST_HANDLED_TYPE,
             MetaTypeClassifications SECOND_HANDLED_TYPE,
             MetaTypeClassifications... REMAINING_TYPES>
-  void handleMetaTypeClass(META_TYPE_CLASS& meta_type_class,
-                           ARG_PACKAGING&& arg_packaging) {
+  decltype(auto) handleMetaTypeClass(META_TYPE_CLASS& meta_type_class,
+                                     ARG_PACKAGING&& arg_packaging) {
     using InspectionClass = MetaTypeClass<FIRST_HANDLED_TYPE>;
     using CastAssistClass =
         CapturedMetaTypeClassOptional<InspectionClass::sql_type_class>;
 
     auto& lhs_ref = static_cast<CastAssistClass&>(meta_type_class);
     if (!lhs_ref) {
-      handleMetaTypeClass<META_TYPE_CLASS,
-                          ARG_PACKAGING,
-                          SECOND_HANDLED_TYPE,
-                          REMAINING_TYPES...>(arg_packaging);
-      return;
+      return handleMetaTypeClass<META_TYPE_CLASS,
+                                 ARG_PACKAGING,
+                                 SECOND_HANDLED_TYPE,
+                                 REMAINING_TYPES...>(
+          meta_type_class, std::forward<ARG_PACKAGING>(arg_packaging));
     }
-    internalApply(SPECIALIZED_HANDLER<InspectionClass>(), arg_packaging);
+    return internalApply(SPECIALIZED_HANDLER<InspectionClass>(), arg_packaging);
   }
 };
 
@@ -343,11 +353,13 @@ using FullMetaTypeFactory = MetaTypeFactory<SQLTypes,
                                             kMULTIPOLYGON,
                                             kTINYINT,
                                             kGEOMETRY,
-                                            kGEOGRAPHY>;
+                                            kGEOGRAPHY,
+                                            kEVAL_CONTEXT_TYPE>;
 
 using GeoMetaTypeClassFactory = MetaTypeClassFactory<Geometry>;
 using StringMetaTypeClassFactory = MetaTypeClassFactory<String>;
-using FullMetaTypeClassFactory = MetaTypeClassFactory<Geometry, Array, String>;
+using FullMetaTypeClassFactory =
+    MetaTypeClassFactory<Geometry, Array, String, Bucketizable>;
 
 template <template <class> class SPECIALIZED_HANDLER>
 using GeoMetaTypeHandler = MetaTypeHandler<SPECIALIZED_HANDLER,
@@ -358,7 +370,62 @@ using GeoMetaTypeHandler = MetaTypeHandler<SPECIALIZED_HANDLER,
                                            kMULTIPOLYGON>;
 
 template <template <class> class SPECIALIZED_HANDLER>
+using FullMetaTypeHandler = MetaTypeHandler<SPECIALIZED_HANDLER,
+                                            SQLTypes,
+                                            kNULLT,
+                                            kBOOLEAN,
+                                            kCHAR,
+                                            kVARCHAR,
+                                            kNUMERIC,
+                                            kDECIMAL,
+                                            kINT,
+                                            kSMALLINT,
+                                            kFLOAT,
+                                            kDOUBLE,
+                                            kTIME,
+                                            kTIMESTAMP,
+                                            kBIGINT,
+                                            kTEXT,
+                                            kDATE,
+                                            kARRAY,
+                                            kINTERVAL_DAY_TIME,
+                                            kINTERVAL_YEAR_MONTH,
+                                            kPOINT,
+                                            kLINESTRING,
+                                            kPOLYGON,
+                                            kMULTIPOLYGON,
+                                            kTINYINT,
+                                            kGEOMETRY,
+                                            kGEOGRAPHY,
+                                            kEVAL_CONTEXT_TYPE>;
+
+template <template <class> class SPECIALIZED_HANDLER>
 using GeoVsNonGeoClassHandler = MetaTypeClassHandler<SPECIALIZED_HANDLER, Geometry>;
+
+template <template <class> class SPECIALIZED_HANDLER>
+using FullMetaTypeClassHandler =
+    MetaTypeClassHandler<SPECIALIZED_HANDLER, Geometry, Array, String, Bucketizable>;
+
+template <template <class> class SPECIALIZED_HANDLER,
+          typename SQL_TYPE_INFO,
+          typename... HANDLER_ARGS>
+decltype(auto) FullMetaTypeSwitch(SQL_TYPE_INFO const& ti,
+                                  HANDLER_ARGS&&... handler_args) {
+  auto ti_meta_type = FullMetaTypeFactory::getMetaType(ti.get_type());
+  auto meta_type_handler = FullMetaTypeHandler<SPECIALIZED_HANDLER>();
+  return meta_type_handler(ti_meta_type, std::forward<HANDLER_ARGS>(handler_args)...);
+}
+
+template <template <class> class SPECIALIZED_HANDLER,
+          typename SQL_TYPE_INFO,
+          typename... HANDLER_ARGS>
+decltype(auto) FullMetaTypeClassSwitch(SQL_TYPE_INFO const& ti,
+                                       HANDLER_ARGS&&... handler_args) {
+  auto ti_meta_type_class = FullMetaTypeClassFactory::getMetaTypeClass(ti);
+  auto meta_type_class_handler = FullMetaTypeClassHandler<SPECIALIZED_HANDLER>();
+  return meta_type_class_handler(ti_meta_type_class,
+                                 std::forward<HANDLER_ARGS>(handler_args)...);
+}
 
 }  // namespace Experimental
 
