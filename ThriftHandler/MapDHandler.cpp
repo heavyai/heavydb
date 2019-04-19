@@ -831,6 +831,11 @@ void MapDHandler::sql_execute(TQueryResult& _return,
                        create_params);
     });
   }
+  log_on_return.append_name_value_pairs(
+      "execution_time_ms",
+      _return.execution_time_ms,
+      "total_time_ms",  // BE-3420 - Redundant with duration field
+      log_on_return.duration<std::chrono::milliseconds>());
 }
 
 void MapDHandler::sql_execute_df(TDataFrame& _return,
@@ -5590,13 +5595,16 @@ LogOnReturn::~LogOnReturn() {
   if (name_value_pairs_.empty()) {
     ss << ' ';  // 1 space for final empty names/values arrays
   } else {
-    ss << '{';
-    for (size_t i = 0; i < name_value_pairs_.size(); i += 2) {  // names
-      ss << (i < 2 ? "" : ",") << std::quoted(name_value_pairs_[i], '"', '"');
+    ss << '{';  // names
+    for (auto itr = name_value_pairs_.cbegin(); itr != name_value_pairs_.cend();
+         std::advance(itr, 2)) {
+      ss << (itr == name_value_pairs_.cbegin() ? "" : ",") << std::quoted(*itr, '"', '"');
     }
-    ss << "} {";
-    for (size_t i = 1; i < name_value_pairs_.size(); i += 2) {  // values
-      ss << (i < 2 ? "" : ",") << std::quoted(name_value_pairs_[i], '"', '"');
+    ss << "} {";  // values
+    for (auto itr = name_value_pairs_.cbegin(); itr != name_value_pairs_.cend();
+         std::advance(itr, 2)) {
+      ss << (itr == name_value_pairs_.cbegin() ? "" : ",")
+         << std::quoted(*std::next(itr), '"', '"');
     }
     ss << '}';
   }

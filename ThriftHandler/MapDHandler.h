@@ -86,6 +86,7 @@
 #include <cmath>
 #include <csignal>
 #include <fstream>
+#include <list>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -691,21 +692,19 @@ class LogOnReturn : boost::noncopyable {
   boost::filesystem::path const file_;
   size_t const line_;
   char const* const func_;
-  std::vector<std::string> const name_value_pairs_;
+  std::list<std::string> name_value_pairs_;
   std::chrono::steady_clock::time_point const start_;
   SessionMap::mapped_type session_ptr_;
-  template <typename Units = std::chrono::milliseconds>
-  size_t duration() const {
-    using namespace std::chrono;
-    return duration_cast<Units>(steady_clock::now() - start_).count();
-  }
   template <typename... Pairs>
   LogOnReturn(char const* file, size_t line, char const* func, Pairs&&... pairs)
       : file_(file)
       , line_(line)
       , func_(func)
       , name_value_pairs_{to_string(std::forward<Pairs>(pairs))...}
-      , start_(std::chrono::steady_clock::now()) {}
+      , start_(std::chrono::steady_clock::now()) {
+    static_assert(sizeof...(Pairs) % 2 == 0,
+                  "LogOnReturn() requires an even number of name/value parameters.");
+  }
 
  public:
   template <typename... Pairs>
@@ -735,6 +734,18 @@ class LogOnReturn : boost::noncopyable {
     }
   }
   ~LogOnReturn();
+  template <typename... Pairs>
+  void append_name_value_pairs(Pairs&&... pairs) {
+    static_assert(sizeof...(Pairs) % 2 == 0,
+                  "append_name_value_pairs() requires an even number of parameters.");
+    name_value_pairs_.splice(name_value_pairs_.cend(),
+                             {to_string(std::forward<Pairs>(pairs))...});
+  }
+  template <typename Units = std::chrono::milliseconds>
+  size_t duration() const {
+    using namespace std::chrono;
+    return duration_cast<Units>(steady_clock::now() - start_).count();
+  }
   void set_session(SessionMap::mapped_type&);
 };
 
