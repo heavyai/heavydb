@@ -37,7 +37,7 @@ class OverflowOrUnderflow : public std::runtime_error {
   OverflowOrUnderflow() : std::runtime_error("Overflow or underflow") {}
 };
 
-inline const SQLTypeInfo& get_compact_type(const TargetInfo& target) {
+inline const SQLTypeInfo get_compact_type(const TargetInfo& target) {
   if (!target.is_agg) {
     return target.sql_type;
   }
@@ -49,8 +49,15 @@ inline const SQLTypeInfo& get_compact_type(const TargetInfo& target) {
     return target.sql_type;
   }
 
-  return (agg_type != kCOUNT && agg_type != kAPPROX_COUNT_DISTINCT) ? agg_arg
-                                                                    : target.sql_type;
+  if (is_agg_domain_range_equivalent(agg_type)) {
+    return agg_arg;
+  } else {
+    // Nullability of the target needs to match that of the agg for proper initialization
+    // of target (aggregate) values
+    auto modified_target_type = target.sql_type;
+    modified_target_type.set_notnull(agg_arg.get_notnull());
+    return modified_target_type;
+  }
 }
 
 inline void set_compact_type(TargetInfo& target, const SQLTypeInfo& new_type) {

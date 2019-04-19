@@ -220,7 +220,12 @@ inline double pair_to_double(const std::pair<int64_t, int64_t>& fp_pair,
       break;
     }
     default: {
+#ifndef __CUDACC__
+      LOG_IF(FATAL, !(ti.is_integer() || ti.is_decimal()))
+          << "Unsupported type for pair to double conversion: " << ti.get_type_name();
+#else
       CHECK(ti.is_integer() || ti.is_decimal());
+#endif
       dividend = static_cast<double>(fp_pair.first);
       null_val = inline_int_null_val(ti);
       break;

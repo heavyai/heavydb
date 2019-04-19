@@ -284,6 +284,8 @@ void TargetExprCodegen::codegen(
                                                           chosen_bytes,
                                                           slot_index,
                                                           target_idx);
+      CHECK(agg_col_ptr);
+      agg_col_ptr->setName("agg_col_ptr");
     }
 
     const bool float_argument_input = takes_float_argument(target_info);
@@ -300,9 +302,8 @@ void TargetExprCodegen::codegen(
         target_lv, agg_base_name, query_mem_desc.threadsShareMemory(), co);
     const auto need_skip_null = !needs_unnest_double_patch && target_info.skip_null_val;
     if (!needs_unnest_double_patch) {
-      if (need_skip_null && target_info.agg_kind != kCOUNT) {
-        target_lv = group_by_and_agg->convertNullIfAny(
-            arg_expr->get_type_info(), arg_type, agg_chosen_bytes, target_lv);
+      if (need_skip_null && !is_agg_domain_range_equivalent(target_info.agg_kind)) {
+        target_lv = group_by_and_agg->convertNullIfAny(arg_type, target_info, target_lv);
       } else if (is_fp_arg) {
         target_lv = executor->castToFP(target_lv);
       }
@@ -347,10 +348,17 @@ void TargetExprCodegen::codegen(
       const auto& arg_ti = target_info.agg_arg_type;
       if (need_skip_null && !arg_ti.is_geometry()) {
         agg_fname += "_skip_val";
-        auto null_lv = executor->castToTypeIn(
-            arg_ti.is_fp() ? static_cast<llvm::Value*>(executor->inlineFpNull(arg_ti))
-                           : static_cast<llvm::Value*>(executor->inlineIntNull(arg_ti)),
-            (agg_chosen_bytes << 3));
+        llvm::Value* null_in_lv{nullptr};
+        if (arg_ti.is_fp()) {
+          null_in_lv = static_cast<llvm::Value*>(executor->inlineFpNull(arg_ti));
+        } else {
+          null_in_lv = static_cast<llvm::Value*>(
+              executor->inlineIntNull(is_agg_domain_range_equivalent(target_info.agg_kind)
+                                          ? arg_ti
+                                          : target_info.sql_type));
+        }
+        CHECK(null_in_lv);
+        auto null_lv = executor->castToTypeIn(null_in_lv, (agg_chosen_bytes << 3));
         agg_args.push_back(null_lv);
       }
       if (!target_info.is_distinct) {
@@ -439,7 +447,10 @@ void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
     if (target_info.agg_kind == kSAMPLE) {
       target_info.skip_null_val = false;
     } else if (query_mem_desc.getQueryDescriptionType() ==
-               QueryDescriptionType::NonGroupedAggregate) {
+                   QueryDescriptionType::NonGroupedAggregate &&
+               !arg_expr->get_type_info().is_varlen()) {
+      // TODO: COUNT is currently not null-aware for varlen types. Need to add proper code
+      // generation for handling varlen nulls.
       target_info.skip_null_val = true;
     } else if (constrained_not_null(arg_expr, ra_exe_unit.quals)) {
       target_info.skip_null_val = false;

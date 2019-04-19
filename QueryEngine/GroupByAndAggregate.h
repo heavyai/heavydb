@@ -243,8 +243,7 @@ class GroupByAndAggregate {
                              const bool is_group_by) const;
 
   llvm::Value* convertNullIfAny(const SQLTypeInfo& arg_type,
-                                const SQLTypeInfo& agg_type,
-                                const size_t chosen_bytes,
+                                const TargetInfo& agg_info,
                                 llvm::Value* target);
 
   bool codegenAggCalls(const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,

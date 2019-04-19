@@ -311,7 +311,7 @@ thrust::host_vector<int64_t> collect_order_entry_column(
   if (layout.oe_target_info.agg_kind == kAVG) {
     crt_group_ptr2 = crt_group_ptr1 + layout.col_bytes;
   }
-  const auto& entry_ti = get_compact_type(layout.oe_target_info);
+  const auto entry_ti = get_compact_type(layout.oe_target_info);
   const bool float_argument_input = takes_float_argument(layout.oe_target_info);
   const auto step_bytes = layout.row_bytes * step;
   for (size_t i = start; i < layout.entry_count; i += step) {

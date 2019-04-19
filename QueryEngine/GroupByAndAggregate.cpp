@@ -565,7 +565,7 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
   int32_t index{0};
   for (const auto target_expr : target_expr_list) {
     const auto agg_info = get_target_info(target_expr, g_bigint_count);
-    const auto& chosen_type = get_compact_type(agg_info);
+    const auto chosen_type = get_compact_type(agg_info);
     // TODO(Saman): should be eventually removed, once I make sure what data types can
     // be used in this shared memory setting.
 
@@ -1344,9 +1344,11 @@ llvm::Function* GroupByAndAggregate::codegenPerfectHashFunction() {
 }
 
 llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
-                                                   const SQLTypeInfo& agg_type,
-                                                   const size_t chosen_bytes,
+                                                   const TargetInfo& agg_info,
                                                    llvm::Value* target) {
+  const auto& agg_type = agg_info.sql_type;
+  const size_t chosen_bytes = agg_type.get_size();
+
   bool need_conversion{false};
   llvm::Value* arg_null{nullptr};
   llvm::Value* agg_null{nullptr};
@@ -1360,8 +1362,8 @@ llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
         need_conversion = true;
       }
     } else {
-      // TODO(miyu): invalid case for now
-      CHECK(false);
+      CHECK(agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT);
+      return target;
     }
   } else {
     arg_null = executor_->inlineIntNull(arg_type);

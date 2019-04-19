@@ -1894,6 +1894,12 @@ TEST(Select, Case) {
     c("SELECT CASE WHEN shared_dict is null THEN 'hello' ELSE 'world' END key0, count(*) "
       "val FROM test GROUP BY key0 ORDER BY val;",
       dt);
+    c("WITH distinct_x AS (SELECT x FROM test GROUP BY x) SELECT SUM(CASE WHEN x = 7 "
+      "THEN -32767 ELSE -1 END) FROM distinct_x",
+      dt);
+    c("WITH distinct_x AS (SELECT x FROM test GROUP BY x) SELECT AVG(CASE WHEN x = 7 "
+      "THEN -32767 ELSE -1 END) FROM distinct_x",
+      dt);
 
     const auto constrained_by_in_threshold_state = g_constrained_by_in_threshold;
     g_constrained_by_in_threshold = 0;

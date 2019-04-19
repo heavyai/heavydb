@@ -636,7 +636,7 @@ bool ResultSet::ResultSetComparator<BUFFER_ITERATOR_TYPE>::operator()(
   for (const auto order_entry : order_entries_) {
     CHECK_GE(order_entry.tle_no, 1);
     const auto& agg_info = result_set_->targets_[order_entry.tle_no - 1];
-    const auto& entry_ti = get_compact_type(agg_info);
+    const auto entry_ti = get_compact_type(agg_info);
     bool float_argument_input = takes_float_argument(agg_info);
     // Need to determine if the float value has been stored as float
     // or if it has been compacted to a different (often larger 8 bytes)
