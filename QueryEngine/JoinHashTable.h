@@ -27,6 +27,7 @@
 #include "../Analyzer/Analyzer.h"
 #include "../Catalog/Catalog.h"
 #include "../Chunk/Chunk.h"
+#include "../Shared/ExperimentalTypeUtilities.h"
 #include "Allocators/ThrustAllocator.h"
 #include "ColumnarResults.h"
 #include "Descriptors/InputDescriptors.h"
@@ -46,6 +47,7 @@
 #include <stdexcept>
 
 class Executor;
+class HashEntryInfo;
 
 class JoinHashTable : public JoinHashTableInterface {
  public:
@@ -107,7 +109,8 @@ class JoinHashTable : public JoinHashTableInterface {
       const bool col_is_nullable,
       const bool is_bw_eq,
       const int64_t sub_buff_size,
-      Executor* executor);
+      Executor* executor,
+      const bool is_bucketized = false);
 
   static llvm::Value* codegenHashTableLoad(const size_t table_idx, Executor* executor);
 
@@ -196,7 +199,7 @@ class JoinHashTable : public JoinHashTableInterface {
       const int8_t* col_buff,
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
-      const size_t hash_entry_count,
+      const HashEntryInfo hash_entry_info,
       const int32_t hash_join_invalid_val);
   void initOneToManyHashTableOnCpu(
       const int8_t* col_buff,

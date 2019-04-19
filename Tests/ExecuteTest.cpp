@@ -6193,6 +6193,9 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
       "(test.str IS NULL AND "
       "join_test.dup_str IS NULL));",
       dt);
+    c("SELECT COUNT(*) from test_inner a, bweq_test b where a.x = b.x OR (a.x IS NULL "
+      "and b.x IS NULL);",
+      dt);
     SKIP_ON_AGGREGATOR(
         c("SELECT t1.fixed_null_str FROM (SELECT fixed_null_str, SUM(x) n1 FROM test "
           "GROUP BY fixed_null_str) t1 INNER "
@@ -6820,13 +6823,25 @@ TEST(Select, Joins_TimeAndDate) {
     c("SELECT COUNT(*) FROM test a, test b WHERE a.m = b.m;", dt);
     c("SELECT COUNT(*) FROM test a, test b WHERE a.n = b.n;", dt);
     c("SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;", dt);
-    // TODO(adb): The following tests use too much memory for TSAN. Commenting out for
-    // now, will re-enable once we have bucketed perfect hash or overlaps hash for date
-#if 0
+
     c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.m = b.ts;", dt);
     c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.o = b.dt;", dt);
     c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.o = b.dt32;", dt);
     c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.o = b.dt16;", dt);
+
+    // Bitwise path addition
+    c("SELECT COUNT(*) FROM test a, test_inner b where a.m = b.ts or (a.m is null and "
+      "b.ts is null);",
+      dt);
+    c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.o = b.dt or (a.o is null and "
+      "b.dt is null);",
+      dt);
+    c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.o = b.dt32 or (a.o is null and "
+      "b.dt32 is null);",
+      dt);
+    c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.o = b.dt16 or (a.o is null and "
+      "b.dt16 is null);",
+      dt);
 
     // Inner joins across types
     c("SELECT COUNT(*) FROM test_inner a, test_inner b WHERE a.dt = b.dt;", dt);
@@ -6837,7 +6852,6 @@ TEST(Select, Joins_TimeAndDate) {
     c("SELECT COUNT(*) FROM test_inner a, test_inner b WHERE a.dt = b.dt16;", dt);
     c("SELECT COUNT(*) FROM test_inner a, test_inner b WHERE a.dt32 = b.dt16;", dt);
     c("SELECT COUNT(*) FROM test_inner a, test_inner b WHERE a.dt16 = b.dt16;", dt);
-#endif
 
     // Outer joins
     c("SELECT a.x, a.o, b.dt FROM test a JOIN test_inner b ON a.o = b.dt;", dt);
@@ -14749,6 +14763,41 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "'2014-12-13', '1999-09-09 14:15:16');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
+  }
+  try {
+    using namespace std::string_literals;
+    auto drop_old_bweq_test = "DROP TABLE IF EXISTS bweq_test"s;
+    run_ddl_statement(drop_old_bweq_test);
+    g_sqlite_comparator.query(drop_old_bweq_test);
+
+    auto column_definition = "x int"s;
+    auto create_bweq_test = build_create_table_statement(
+        column_definition, "bweq_test", {g_shard_count ? "x" : "", g_shard_count}, {}, 2);
+    run_ddl_statement(create_bweq_test);
+    g_sqlite_comparator.query("create table bweq_test (x int);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'bweq_test'";
+    return -EEXIST;
+  }
+  {
+    auto insert_non_null_query = "insert into bweq_test values(7);"s;
+    auto insert_null_query = "insert into bweq_test values(NULL);"s;
+
+    auto non_null_insertion = [&] {
+      run_multiple_agg(insert_non_null_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_non_null_query);
+    };
+    auto null_insertion = [&] {
+      run_multiple_agg(insert_null_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_null_query);
+    };
+
+    for (auto i = 0; i < 15; i++) {
+      non_null_insertion();
+    }
+    for (auto i = 0; i < 5; i++) {
+      null_insertion();
+    }
   }
   try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS vacuum_test_alt;"};

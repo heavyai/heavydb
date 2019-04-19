@@ -109,14 +109,16 @@ DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
 #define mapd_cas(address, compare, val) __sync_val_compare_and_swap(address, compare, val)
 #endif
 
-DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
-                                       const int32_t invalid_slot_val,
-                                       const JoinColumn join_column,
-                                       const JoinColumnTypeInfo type_info,
-                                       const void* sd_inner_proxy,
-                                       const void* sd_outer_proxy,
-                                       const int32_t cpu_thread_idx,
-                                       const int32_t cpu_thread_count) {
+template <typename SLOT_SELECTOR>
+DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
+                                     const int32_t invalid_slot_val,
+                                     const JoinColumn join_column,
+                                     const JoinColumnTypeInfo type_info,
+                                     const void* sd_inner_proxy,
+                                     const void* sd_outer_proxy,
+                                     const int32_t cpu_thread_idx,
+                                     const int32_t cpu_thread_count,
+                                     SLOT_SELECTOR slot_sel) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
@@ -146,23 +148,71 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
     CHECK_GE(elem, type_info.min_val)
         << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
-    int32_t* entry_ptr = SUFFIX(get_hash_slot)(buff, elem, type_info.min_val);
+    int32_t* entry_ptr = slot_sel(elem);
     if (mapd_cas(entry_ptr, invalid_slot_val, i) != invalid_slot_val) {
       return -1;
     }
   }
   return 0;
+};
+
+DEVICE int SUFFIX(fill_hash_join_buff_bucketized)(int32_t* buff,
+                                                  const int32_t invalid_slot_val,
+                                                  const JoinColumn join_column,
+                                                  const JoinColumnTypeInfo type_info,
+                                                  const void* sd_inner_proxy,
+                                                  const void* sd_outer_proxy,
+                                                  const int32_t cpu_thread_idx,
+                                                  const int32_t cpu_thread_count,
+                                                  const int64_t bucket_normalization) {
+  auto slot_selector = [&](auto elem) {
+    return SUFFIX(get_bucketized_hash_slot)(
+        buff, elem, type_info.min_val, bucket_normalization);
+  };
+  return fill_hash_join_buff_impl(buff,
+                                  invalid_slot_val,
+                                  join_column,
+                                  type_info,
+                                  sd_inner_proxy,
+                                  sd_outer_proxy,
+                                  cpu_thread_idx,
+                                  cpu_thread_count,
+                                  slot_selector);
 }
 
-DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
-                                               const int32_t invalid_slot_val,
-                                               const JoinColumn join_column,
-                                               const JoinColumnTypeInfo type_info,
-                                               const ShardInfo shard_info,
-                                               const void* sd_inner_proxy,
-                                               const void* sd_outer_proxy,
-                                               const int32_t cpu_thread_idx,
-                                               const int32_t cpu_thread_count) {
+DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
+                                       const int32_t invalid_slot_val,
+                                       const JoinColumn join_column,
+                                       const JoinColumnTypeInfo type_info,
+                                       const void* sd_inner_proxy,
+                                       const void* sd_outer_proxy,
+                                       const int32_t cpu_thread_idx,
+                                       const int32_t cpu_thread_count) {
+  auto slot_selector = [&](auto elem) {
+    return SUFFIX(get_hash_slot)(buff, elem, type_info.min_val);
+  };
+  return fill_hash_join_buff_impl(buff,
+                                  invalid_slot_val,
+                                  join_column,
+                                  type_info,
+                                  sd_inner_proxy,
+                                  sd_outer_proxy,
+                                  cpu_thread_idx,
+                                  cpu_thread_count,
+                                  slot_selector);
+}
+
+template <typename SLOT_SELECTOR>
+DEVICE int fill_hash_join_buff_sharded_impl(int32_t* buff,
+                                            const int32_t invalid_slot_val,
+                                            const JoinColumn join_column,
+                                            const JoinColumnTypeInfo type_info,
+                                            const ShardInfo shard_info,
+                                            const void* sd_inner_proxy,
+                                            const void* sd_outer_proxy,
+                                            const int32_t cpu_thread_idx,
+                                            const int32_t cpu_thread_count,
+                                            SLOT_SELECTOR slot_sel) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t step = blockDim.x * gridDim.x;
@@ -196,17 +246,74 @@ DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
     CHECK_GE(elem, type_info.min_val)
         << "Element " << elem << " less than min val " << type_info.min_val;
 #endif
-    int32_t* entry_ptr = SUFFIX(get_hash_slot_sharded)(buff,
-                                                       elem,
-                                                       type_info.min_val,
-                                                       shard_info.entry_count_per_shard,
-                                                       shard_info.num_shards,
-                                                       shard_info.device_count);
+    int32_t* entry_ptr = slot_sel(elem);
     if (mapd_cas(entry_ptr, invalid_slot_val, i) != invalid_slot_val) {
       return -1;
     }
   }
   return 0;
+}
+
+DEVICE int SUFFIX(fill_hash_join_buff_sharded_bucketized)(
+    int32_t* buff,
+    const int32_t invalid_slot_val,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const ShardInfo shard_info,
+    const void* sd_inner_proxy,
+    const void* sd_outer_proxy,
+    const int32_t cpu_thread_idx,
+    const int32_t cpu_thread_count,
+    const int64_t bucket_normalization) {
+  auto slot_selector = [&](auto elem) -> auto {
+    return SUFFIX(get_bucketized_hash_slot_sharded)(buff,
+                                                    elem,
+                                                    type_info.min_val,
+                                                    shard_info.entry_count_per_shard,
+                                                    shard_info.num_shards,
+                                                    shard_info.device_count,
+                                                    bucket_normalization);
+  };
+
+  return fill_hash_join_buff_sharded_impl(buff,
+                                          invalid_slot_val,
+                                          join_column,
+                                          type_info,
+                                          shard_info,
+                                          sd_inner_proxy,
+                                          sd_outer_proxy,
+                                          cpu_thread_idx,
+                                          cpu_thread_count,
+                                          slot_selector);
+}
+
+DEVICE int SUFFIX(fill_hash_join_buff_sharded)(int32_t* buff,
+                                               const int32_t invalid_slot_val,
+                                               const JoinColumn join_column,
+                                               const JoinColumnTypeInfo type_info,
+                                               const ShardInfo shard_info,
+                                               const void* sd_inner_proxy,
+                                               const void* sd_outer_proxy,
+                                               const int32_t cpu_thread_idx,
+                                               const int32_t cpu_thread_count) {
+  auto slot_selector = [&](auto elem) {
+    return SUFFIX(get_hash_slot_sharded)(buff,
+                                         elem,
+                                         type_info.min_val,
+                                         shard_info.entry_count_per_shard,
+                                         shard_info.num_shards,
+                                         shard_info.device_count);
+  };
+  return fill_hash_join_buff_sharded_impl(buff,
+                                          invalid_slot_val,
+                                          join_column,
+                                          type_info,
+                                          shard_info,
+                                          sd_inner_proxy,
+                                          sd_outer_proxy,
+                                          cpu_thread_idx,
+                                          cpu_thread_count,
+                                          slot_selector);
 }
 
 template <typename T>

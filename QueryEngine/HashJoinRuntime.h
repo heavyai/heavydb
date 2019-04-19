@@ -33,6 +33,22 @@
 struct GenericKeyHandler;
 struct OverlapsKeyHandler;
 
+struct HashEntryInfo {
+  alignas(sizeof(int64_t)) size_t hash_entry_count;
+  alignas(sizeof(int64_t)) int64_t bucket_normalization;
+
+  inline size_t getNormalizedHashEntryCount() const {
+    auto modulo_res = hash_entry_count % static_cast<size_t>(bucket_normalization);
+    auto entry_count = hash_entry_count / static_cast<size_t>(bucket_normalization);
+    if (modulo_res) {
+      return entry_count + 1;
+    }
+    return entry_count;
+  }
+
+  bool operator!() const { return !(this->getNormalizedHashEntryCount()); }
+};
+
 const size_t g_maximum_conditions_to_coalesce{8};
 
 void init_hash_join_buff(int32_t* buff,
@@ -109,6 +125,16 @@ struct JoinBucketInfo {
   bool is_double;  // TODO(adb): assume float otherwise (?)
 };
 
+int fill_hash_join_buff_bucketized(int32_t* buff,
+                                   const int32_t invalid_slot_val,
+                                   const JoinColumn join_column,
+                                   const JoinColumnTypeInfo type_info,
+                                   const void* sd_inner,
+                                   const void* sd_outer,
+                                   const int32_t cpu_thread_idx,
+                                   const int32_t cpu_thread_count,
+                                   const int64_t bucket_normalization);
+
 int fill_hash_join_buff(int32_t* buff,
                         const int32_t invalid_slot_val,
                         const JoinColumn join_column,
@@ -125,6 +151,14 @@ void fill_hash_join_buff_on_device(int32_t* buff,
                                    const JoinColumnTypeInfo type_info,
                                    const size_t block_size_x,
                                    const size_t grid_size_x);
+void fill_hash_join_buff_on_device_bucketized(int32_t* buff,
+                                              const int32_t invalid_slot_val,
+                                              int* dev_err_buff,
+                                              const JoinColumn join_column,
+                                              const JoinColumnTypeInfo type_info,
+                                              const size_t block_size_x,
+                                              const size_t grid_size_x,
+                                              const int64_t bucket_normalization);
 
 struct ShardInfo {
   const size_t shard;
@@ -141,6 +175,16 @@ void fill_hash_join_buff_on_device_sharded(int32_t* buff,
                                            const ShardInfo shard_info,
                                            const size_t block_size_x,
                                            const size_t grid_size_x);
+
+void fill_hash_join_buff_on_device_sharded_bucketized(int32_t* buff,
+                                                      const int32_t invalid_slot_val,
+                                                      int* dev_err_buff,
+                                                      const JoinColumn join_column,
+                                                      const JoinColumnTypeInfo type_info,
+                                                      const ShardInfo shard_info,
+                                                      const size_t block_size_x,
+                                                      const size_t grid_size_x,
+                                                      const int64_t bucket_normalization);
 
 void fill_one_to_many_hash_table(int32_t* buff,
                                  const int32_t hash_entry_count,

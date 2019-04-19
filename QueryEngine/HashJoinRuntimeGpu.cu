@@ -28,6 +28,37 @@ __global__ void fill_hash_join_buff_wrapper(int32_t* buff,
   atomicCAS(err, 0, partial_err);
 }
 
+__global__ void fill_hash_join_buff_bucketized_wrapper(
+    int32_t* buff,
+    const int32_t invalid_slot_val,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    int* err,
+    const int64_t bucket_normalization) {
+  int partial_err = SUFFIX(fill_hash_join_buff_bucketized)(buff,
+                                                           invalid_slot_val,
+                                                           join_column,
+                                                           type_info,
+                                                           NULL,
+                                                           NULL,
+                                                           -1,
+                                                           -1,
+                                                           bucket_normalization);
+  atomicCAS(err, 0, partial_err);
+}
+
+void fill_hash_join_buff_on_device_bucketized(int32_t* buff,
+                                              const int32_t invalid_slot_val,
+                                              int* dev_err_buff,
+                                              const JoinColumn join_column,
+                                              const JoinColumnTypeInfo type_info,
+                                              const size_t block_size_x,
+                                              const size_t grid_size_x,
+                                              const int64_t bucket_normalization) {
+  fill_hash_join_buff_bucketized_wrapper<<<grid_size_x, block_size_x>>>(
+      buff, invalid_slot_val, join_column, type_info, dev_err_buff, bucket_normalization);
+}
+
 void fill_hash_join_buff_on_device(int32_t* buff,
                                    const int32_t invalid_slot_val,
                                    int* dev_err_buff,
@@ -39,6 +70,27 @@ void fill_hash_join_buff_on_device(int32_t* buff,
       buff, invalid_slot_val, join_column, type_info, dev_err_buff);
 }
 
+__global__ void fill_hash_join_buff_wrapper_sharded_bucketized(
+    int32_t* buff,
+    const int32_t invalid_slot_val,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const ShardInfo shard_info,
+    int* err,
+    const int64_t bucket_normalization) {
+  int partial_err = SUFFIX(fill_hash_join_buff_sharded_bucketized)(buff,
+                                                                   invalid_slot_val,
+                                                                   join_column,
+                                                                   type_info,
+                                                                   shard_info,
+                                                                   NULL,
+                                                                   NULL,
+                                                                   -1,
+                                                                   -1,
+                                                                   bucket_normalization);
+  atomicCAS(err, 0, partial_err);
+}
+
 __global__ void fill_hash_join_buff_wrapper_sharded(int32_t* buff,
                                                     const int32_t invalid_slot_val,
                                                     const JoinColumn join_column,
@@ -48,6 +100,26 @@ __global__ void fill_hash_join_buff_wrapper_sharded(int32_t* buff,
   int partial_err = SUFFIX(fill_hash_join_buff_sharded)(
       buff, invalid_slot_val, join_column, type_info, shard_info, NULL, NULL, -1, -1);
   atomicCAS(err, 0, partial_err);
+}
+
+void fill_hash_join_buff_on_device_sharded_bucketized(
+    int32_t* buff,
+    const int32_t invalid_slot_val,
+    int* dev_err_buff,
+    const JoinColumn join_column,
+    const JoinColumnTypeInfo type_info,
+    const ShardInfo shard_info,
+    const size_t block_size_x,
+    const size_t grid_size_x,
+    const int64_t bucket_normalization) {
+  fill_hash_join_buff_wrapper_sharded_bucketized<<<grid_size_x, block_size_x>>>(
+      buff,
+      invalid_slot_val,
+      join_column,
+      type_info,
+      shard_info,
+      dev_err_buff,
+      bucket_normalization);
 }
 
 void fill_hash_join_buff_on_device_sharded(int32_t* buff,

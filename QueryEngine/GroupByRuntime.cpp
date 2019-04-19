@@ -268,6 +268,19 @@ get_columnar_scan_output_offset(int64_t* output_buffer,
   return -1;
 }
 
+extern "C" ALWAYS_INLINE DEVICE int64_t
+bucketized_hash_join_idx(int64_t hash_buff,
+                         int64_t const key,
+                         int64_t const min_key,
+                         int64_t const max_key,
+                         int64_t bucket_normalization) {
+  if (key >= min_key && key <= max_key) {
+    return *SUFFIX(get_bucketized_hash_slot)(
+        reinterpret_cast<int32_t*>(hash_buff), key, min_key, bucket_normalization);
+  }
+  return -1;
+}
+
 extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx(int64_t hash_buff,
                                                       const int64_t key,
                                                       const int64_t min_key,
@@ -278,12 +291,41 @@ extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx(int64_t hash_buff,
   return -1;
 }
 
+extern "C" ALWAYS_INLINE DEVICE int64_t
+bucketized_hash_join_idx_nullable(int64_t hash_buff,
+                                  const int64_t key,
+                                  const int64_t min_key,
+                                  const int64_t max_key,
+                                  const int64_t null_val,
+                                  const int64_t bucket_normalization) {
+  return key != null_val ? bucketized_hash_join_idx(
+                               hash_buff, key, min_key, max_key, bucket_normalization)
+                         : -1;
+}
+
 extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_nullable(int64_t hash_buff,
                                                                const int64_t key,
                                                                const int64_t min_key,
                                                                const int64_t max_key,
                                                                const int64_t null_val) {
   return key != null_val ? hash_join_idx(hash_buff, key, min_key, max_key) : -1;
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t
+bucketized_hash_join_idx_bitwise(int64_t hash_buff,
+                                 const int64_t key,
+                                 const int64_t min_key,
+                                 const int64_t max_key,
+                                 const int64_t null_val,
+                                 const int64_t translated_val,
+                                 const int64_t bucket_normalization) {
+  return key != null_val ? bucketized_hash_join_idx(
+                               hash_buff, key, min_key, max_key, bucket_normalization)
+                         : bucketized_hash_join_idx(hash_buff,
+                                                    translated_val,
+                                                    min_key,
+                                                    translated_val,
+                                                    bucket_normalization);
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t

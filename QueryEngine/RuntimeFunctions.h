@@ -156,6 +156,11 @@ extern "C" int64_t* get_matching_group_value_perfect_hash(int64_t* groups_buffer
                                                           const uint32_t key_qw_count,
                                                           const uint32_t row_size_quad);
 
+extern "C" int32_t* get_bucketized_hash_slot(int32_t* buff,
+                                             const int64_t key,
+                                             const int64_t min_key,
+                                             const int64_t bucket_normalization = 1);
+
 extern "C" int32_t* get_hash_slot(int32_t* buff,
                                   const int64_t key,
                                   const int64_t min_key);
@@ -166,6 +171,14 @@ extern "C" int32_t* get_hash_slot_sharded(int32_t* buff,
                                           const uint32_t entry_count_per_shard,
                                           const uint32_t num_shards,
                                           const uint32_t device_count);
+
+extern "C" int32_t* get_bucketized_hash_slot_sharded(int32_t* buff,
+                                                     const int64_t key,
+                                                     const int64_t min_key,
+                                                     const uint32_t entry_count_per_shard,
+                                                     const uint32_t num_shards,
+                                                     const uint32_t device_count,
+                                                     const int64_t bucket_normalization);
 
 extern "C" void linear_probabilistic_count(uint8_t* bitmap,
                                            const uint32_t bitmap_bytes,
