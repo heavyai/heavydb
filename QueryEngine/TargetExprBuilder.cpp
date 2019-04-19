@@ -553,6 +553,11 @@ void TargetExprCodegenBuilder::codegen(
     if (first_sample_expr.target_info.sql_type.is_varlen()) {
       target_lv_i64 = LL_BUILDER.CreatePtrToInt(target_lvs.front(),
                                                 llvm::Type::getInt64Ty(LL_CONTEXT));
+    } else if (first_sample_expr.target_info.sql_type.is_fp()) {
+      // Initialization value for SAMPLE on a float column should be 0
+      CHECK_EQ(init_val, 0);
+      target_lv_i64 = executor->cgen_state_->ir_builder_.CreateFPToSI(
+          target_lvs.front(), llvm::Type::getInt64Ty(LL_CONTEXT));
     } else if (first_sample_expr.target_info.sql_type.get_size() != 8) {
       target_lv_i64 = executor->cgen_state_->ir_builder_.CreateCast(
           llvm::Instruction::CastOps::SExt,

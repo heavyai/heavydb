@@ -12329,6 +12329,18 @@ TEST(Select, GeoSpatial_Projection) {
       ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(row[0]));
       compare_geo_target(row[1], GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}));
     }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT COUNT(*), SAMPLE(ST_X(p)), SAMPLE(ST_Y(p)) FROM geospatial_test WHERE "
+          "id = 1 GROUP BY id;",
+          dt);
+      rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+      const auto row = rows->getNextRow(false, false);
+      CHECK_EQ(row.size(), size_t(3));
+      ASSERT_EQ(static_cast<int64_t>(1), v<int64_t>(row[0]));
+      ASSERT_EQ(static_cast<double>(1.0), v<double>(row[1]));
+      ASSERT_EQ(static_cast<double>(1.0), v<double>(row[2]));
+    }
 
     ASSERT_EQ(
         static_cast<int64_t>(1),
@@ -13867,6 +13879,100 @@ TEST(Select, Sample) {
       const auto nullable_str = v<NullableString>(crt_row[0]);
       ASSERT_FALSE(boost::get<void*>(nullable_str));
     });
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT z, COUNT(*), SAMPLE(f) FROM test GROUP BY z ORDER BY z;", dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), crt_row.size());
+      ASSERT_EQ(int64_t(-78), v<int64_t>(crt_row[0]));
+      ASSERT_EQ(int64_t(5), v<int64_t>(crt_row[1]));
+      ASSERT_NEAR(float(1.2), v<float>(crt_row[2]), 0.01);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT z, COUNT(*), SAMPLE(fn) FROM test GROUP BY z ORDER BY z;", dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), crt_row.size());
+      ASSERT_EQ(int64_t(-78), v<int64_t>(crt_row[0]));
+      ASSERT_EQ(int64_t(5), v<int64_t>(crt_row[1]));
+      ASSERT_NEAR(float(-101.2), v<float>(crt_row[2]), 0.01);
+      const auto null_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), null_row.size());
+      ASSERT_EQ(int64_t(101), v<int64_t>(null_row[0]));
+      ASSERT_EQ(int64_t(10), v<int64_t>(null_row[1]));
+      ASSERT_NEAR(std::numeric_limits<float>::min(), v<float>(null_row[2]), 0.001);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT z, COUNT(*), SAMPLE(d) FROM test GROUP BY z ORDER BY z;", dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), crt_row.size());
+      ASSERT_EQ(int64_t(-78), v<int64_t>(crt_row[0]));
+      ASSERT_EQ(int64_t(5), v<int64_t>(crt_row[1]));
+      ASSERT_NEAR(double(2.4), v<double>(crt_row[2]), 0.01);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT z, COUNT(*), SAMPLE(dn) FROM test GROUP BY z ORDER BY z;", dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), crt_row.size());
+      ASSERT_EQ(int64_t(-78), v<int64_t>(crt_row[0]));
+      ASSERT_EQ(int64_t(5), v<int64_t>(crt_row[1]));
+      ASSERT_NEAR(double(-2002.4), v<double>(crt_row[2]), 0.01);
+      const auto null_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), null_row.size());
+      ASSERT_EQ(int64_t(101), v<int64_t>(null_row[0]));
+      ASSERT_EQ(int64_t(10), v<int64_t>(null_row[1]));
+      ASSERT_NEAR(std::numeric_limits<double>::min(), v<double>(null_row[2]), 0.001);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT z, COUNT(*), SAMPLE(d), SAMPLE(f) FROM test GROUP BY z ORDER BY z;",
+          dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(4), crt_row.size());
+      ASSERT_EQ(int64_t(-78), v<int64_t>(crt_row[0]));
+      ASSERT_EQ(int64_t(5), v<int64_t>(crt_row[1]));
+      ASSERT_NEAR(double(2.4), v<double>(crt_row[2]), 0.01);
+      ASSERT_NEAR(float(1.2), v<float>(crt_row[3]), 0.01);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT z, COUNT(*), SAMPLE(fn), SAMPLE(dn) FROM test GROUP BY z ORDER BY z;",
+          dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(4), crt_row.size());
+      ASSERT_EQ(int64_t(-78), v<int64_t>(crt_row[0]));
+      ASSERT_EQ(int64_t(5), v<int64_t>(crt_row[1]));
+      ASSERT_NEAR(float(-101.2), v<float>(crt_row[2]), 0.01);
+      ASSERT_NEAR(double(-2002.4), v<double>(crt_row[3]), 0.01);
+      const auto null_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(4), null_row.size());
+      ASSERT_EQ(int64_t(101), v<int64_t>(null_row[0]));
+      ASSERT_EQ(int64_t(10), v<int64_t>(null_row[1]));
+      ASSERT_NEAR(std::numeric_limits<float>::min(), v<float>(null_row[2]), 0.001);
+      ASSERT_NEAR(std::numeric_limits<double>::min(), v<double>(null_row[3]), 0.001);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT z, COUNT(*), SAMPLE(fn), SAMPLE(x), SAMPLE(dn) FROM test GROUP BY z "
+          "ORDER BY z;",
+          dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(5), crt_row.size());
+      ASSERT_EQ(int64_t(-78), v<int64_t>(crt_row[0]));
+      ASSERT_EQ(int64_t(5), v<int64_t>(crt_row[1]));
+      ASSERT_NEAR(float(-101.2), v<float>(crt_row[2]), 0.01);
+      ASSERT_EQ(int64_t(8), v<int64_t>(crt_row[3]));
+      ASSERT_NEAR(double(-2002.4), v<double>(crt_row[4]), 0.01);
+      const auto null_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(5), null_row.size());
+      ASSERT_EQ(int64_t(101), v<int64_t>(null_row[0]));
+      ASSERT_EQ(int64_t(10), v<int64_t>(null_row[1]));
+      ASSERT_NEAR(std::numeric_limits<float>::min(), v<float>(null_row[2]), 0.001);
+      ASSERT_EQ(int64_t(7), v<int64_t>(null_row[3]));
+      ASSERT_NEAR(std::numeric_limits<double>::min(), v<double>(null_row[4]), 0.001);
+    }
   }
 }
 
