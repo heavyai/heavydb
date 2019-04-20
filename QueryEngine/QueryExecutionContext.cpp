@@ -182,7 +182,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     std::vector<std::vector<const int8_t*>> col_buffers,
     const std::vector<std::vector<int64_t>>& num_rows,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
-    const uint32_t frag_stride,
     const int32_t scan_limit,
     Data_Namespace::DataMgr* data_mgr,
     const unsigned block_size_x,
@@ -232,7 +231,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                                            literal_buff,
                                            num_rows,
                                            frag_offsets,
-                                           frag_stride,
                                            scan_limit,
                                            init_agg_vals,
                                            error_codes,
@@ -375,8 +373,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       }
     }
   } else {
-    CHECK_EQ(num_fragments % frag_stride, 0u);
-    const auto num_out_frags = num_fragments / frag_stride;
     std::vector<CUdeviceptr> out_vec_dev_buffers;
     const size_t agg_col_count{ra_exe_unit.estimator ? size_t(1) : init_agg_vals.size()};
     if (ra_exe_unit.estimator) {
@@ -388,8 +384,8 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       OOM_TRACE_PUSH();
       for (size_t i = 0; i < agg_col_count; ++i) {
         auto out_vec_dev_buffer =
-            num_out_frags ? gpu_allocator_->alloc(block_size_x * grid_size_x *
-                                                      sizeof(int64_t) * num_out_frags,
+            num_fragments ? gpu_allocator_->alloc(block_size_x * grid_size_x *
+                                                      sizeof(int64_t) * num_fragments,
                                                   nullptr)
                           : 0;
         out_vec_dev_buffers.push_back(out_vec_dev_buffer);
@@ -474,11 +470,11 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     }
     for (size_t i = 0; i < agg_col_count; ++i) {
       int64_t* host_out_vec =
-          new int64_t[block_size_x * grid_size_x * sizeof(int64_t) * num_out_frags];
+          new int64_t[block_size_x * grid_size_x * sizeof(int64_t) * num_fragments];
       copy_from_gpu(data_mgr,
                     host_out_vec,
                     out_vec_dev_buffers[i],
-                    block_size_x * grid_size_x * sizeof(int64_t) * num_out_frags,
+                    block_size_x * grid_size_x * sizeof(int64_t) * num_fragments,
                     device_id);
       out_vec.push_back(host_out_vec);
     }
@@ -515,7 +511,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
     std::vector<std::vector<const int8_t*>> col_buffers,
     const std::vector<std::vector<int64_t>>& num_rows,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
-    const uint32_t frag_stride,
     const int32_t scan_limit,
     int32_t* error_code,
     const uint32_t num_tables,
@@ -534,8 +529,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
   const uint32_t num_fragments = multifrag_cols_ptr
                                      ? static_cast<uint32_t>(col_buffers.size())
                                      : 0u;  // TODO(miyu): check 0
-  CHECK_EQ(num_fragments % frag_stride, 0u);
-  const auto num_out_frags = multifrag_cols_ptr ? num_fragments / frag_stride : 0u;
+  const auto num_out_frags = multifrag_cols_ptr ? num_fragments : 0u;
 
   const bool is_group_by{query_mem_desc_.isGroupBy()};
   std::vector<int64_t*> out_vec;
@@ -584,7 +578,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
   if (hoist_literals) {
     using agg_query = void (*)(const int8_t***,  // col_buffers
                                const uint32_t*,  // num_fragments
-                               const uint32_t*,  // frag_stride
                                const int8_t*,    // literals
                                const int64_t*,   // num_rows
                                const uint64_t*,  // frag_row_offsets
@@ -600,7 +593,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
       reinterpret_cast<agg_query>(fn_ptrs[0].first)(
           multifrag_cols_ptr,
           &num_fragments,
-          &frag_stride,
           &literal_buff[0],
           num_rows_ptr,
           &flatened_frag_offsets[0],
@@ -615,7 +607,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
       OOM_TRACE_PUSH();
       reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
                                                     &num_fragments,
-                                                    &frag_stride,
                                                     &literal_buff[0],
                                                     num_rows_ptr,
                                                     &flatened_frag_offsets[0],
@@ -630,7 +621,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
   } else {
     using agg_query = void (*)(const int8_t***,  // col_buffers
                                const uint32_t*,  // num_fragments
-                               const uint32_t*,  // frag_stride
                                const int64_t*,   // num_rows
                                const uint64_t*,  // frag_row_offsets
                                const int32_t*,   // max_matched
@@ -645,7 +635,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
       reinterpret_cast<agg_query>(fn_ptrs[0].first)(
           multifrag_cols_ptr,
           &num_fragments,
-          &frag_stride,
           num_rows_ptr,
           &flatened_frag_offsets[0],
           &scan_limit,
@@ -659,7 +648,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
       OOM_TRACE_PUSH();
       reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
                                                     &num_fragments,
-                                                    &frag_stride,
                                                     num_rows_ptr,
                                                     &flatened_frag_offsets[0],
                                                     &scan_limit,
@@ -748,7 +736,6 @@ std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(
     const std::vector<int8_t>& literal_buff,
     const std::vector<std::vector<int64_t>>& num_rows,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
-    const uint32_t frag_stride,
     const int32_t scan_limit,
     const std::vector<int64_t>& init_agg_vals,
     const std::vector<int32_t>& error_codes,
@@ -789,10 +776,6 @@ std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(
   params[NUM_FRAGMENTS] = gpu_allocator_->alloc(sizeof(uint32_t), nullptr);
   copy_to_gpu(
       data_mgr, params[NUM_FRAGMENTS], &num_fragments, sizeof(uint32_t), device_id);
-
-  params[FRAG_STRIDE] = gpu_allocator_->alloc(sizeof(uint32_t), nullptr);
-  copy_to_gpu(data_mgr, params[FRAG_STRIDE], &frag_stride, sizeof(uint32_t), device_id);
-
   CUdeviceptr literals_and_addr_mapping =
       gpu_allocator_->alloc(literal_buff.size() + 2 * sizeof(int64_t), nullptr);
   CHECK_EQ(0, literals_and_addr_mapping % 8);

@@ -32,26 +32,6 @@ bool needs_skip_result(const ResultSetPtr& res) {
   return !res || res->definitelyHasNoRows();
 }
 
-}  // namespace
-
-uint32_t Executor::ExecutionDispatch::getFragmentStride(
-    const FragmentsList& frag_ids) const {
-  if (!ra_exe_unit_.join_quals.empty()) {
-    CHECK_EQ(ra_exe_unit_.input_descs.size(), frag_ids.size());
-    const auto table_count = ra_exe_unit_.input_descs.size();
-    uint32_t stride = 1;
-    for (size_t i = 1; i < table_count; ++i) {
-      if (executor_->plan_state_->join_info_.sharded_range_table_indices_.count(i)) {
-        stride *= frag_ids[i].fragment_ids.size();
-      }
-    }
-    return stride;
-  }
-  return 1u;
-}
-
-namespace {
-
 // The result set of `ra_exe_unit` needs to hold a reference to `chunk` if its
 // column is part of the target expressions, result set iteration needs it alive.
 bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk,
@@ -181,7 +161,6 @@ void Executor::ExecutionDispatch::runImpl(
                                                query_exe_context,
                                                fetch_result.num_rows,
                                                fetch_result.frag_offsets,
-                                               getFragmentStride(frag_list),
                                                &cat_.getDataMgr(),
                                                chosen_device_id,
                                                start_rowid,
@@ -199,7 +178,6 @@ void Executor::ExecutionDispatch::runImpl(
                                             query_exe_context,
                                             fetch_result.num_rows,
                                             fetch_result.frag_offsets,
-                                            getFragmentStride(frag_list),
                                             &cat_.getDataMgr(),
                                             chosen_device_id,
                                             ra_exe_unit_.scan_limit,

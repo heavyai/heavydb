@@ -2126,7 +2126,6 @@ int32_t Executor::executePlanWithoutGroupBy(
     QueryExecutionContext* query_exe_context,
     const std::vector<std::vector<int64_t>>& num_rows,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
-    const uint32_t frag_stride,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id,
     const uint32_t start_rowid,
@@ -2165,7 +2164,6 @@ int32_t Executor::executePlanWithoutGroupBy(
                                                col_buffers,
                                                num_rows,
                                                frag_offsets,
-                                               frag_stride,
                                                0,
                                                &error_code,
                                                num_tables,
@@ -2181,7 +2179,6 @@ int32_t Executor::executePlanWithoutGroupBy(
                                                  col_buffers,
                                                  num_rows,
                                                  frag_offsets,
-                                                 frag_stride,
                                                  0,
                                                  data_mgr,
                                                  blockSize(),
@@ -2211,11 +2208,10 @@ int32_t Executor::executePlanWithoutGroupBy(
     return 0;
   }
   std::vector<int64_t> reduced_outs;
-  CHECK_EQ(col_buffers.size() % frag_stride, size_t(0));
-  const auto num_out_frags = col_buffers.size() / frag_stride;
+  const auto num_frags = col_buffers.size();
   const size_t entry_count = device_type == ExecutorDeviceType::GPU
-                                 ? num_out_frags * blockSize() * gridSize()
-                                 : num_out_frags;
+                                 ? num_frags * blockSize() * gridSize()
+                                 : num_frags;
   if (size_t(1) == entry_count) {
     for (auto out : out_vec) {
       CHECK(out);
@@ -2274,7 +2270,6 @@ int32_t Executor::executePlanWithGroupBy(
     QueryExecutionContext* query_exe_context,
     const std::vector<std::vector<int64_t>>& num_rows,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
-    const uint32_t frag_stride,
     Data_Namespace::DataMgr* data_mgr,
     const int device_id,
     const int64_t scan_limit,
@@ -2311,7 +2306,6 @@ int32_t Executor::executePlanWithGroupBy(
                                      col_buffers,
                                      num_rows,
                                      frag_offsets,
-                                     frag_stride,
                                      scan_limit,
                                      &error_code,
                                      num_tables,
@@ -2325,7 +2319,6 @@ int32_t Executor::executePlanWithGroupBy(
                                        col_buffers,
                                        num_rows,
                                        frag_offsets,
-                                       frag_stride,
                                        scan_limit,
                                        data_mgr,
                                        blockSize(),
