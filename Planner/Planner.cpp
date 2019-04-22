@@ -181,8 +181,11 @@ void Optimizer::optimize_scans() {
     having_pred->collect_column_var(colvar_set, true);
   }
   for (auto colvar : colvar_set) {
-    auto tle = std::make_shared<Analyzer::TargetEntry>("", colvar->deep_copy(), false);
-    base_scans[colvar->get_rte_idx()]->add_tle(tle);
+    if (dynamic_cast<const Analyzer::Var*>(colvar) == nullptr) {
+      // only run omptimizations on true ColumnVars. Skip over Var exprs.
+      auto tle = std::make_shared<Analyzer::TargetEntry>("", colvar->deep_copy(), false);
+      base_scans[colvar->get_rte_idx()]->add_tle(tle);
+    }
   };
 }
 

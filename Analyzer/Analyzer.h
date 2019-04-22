@@ -278,10 +278,6 @@ class Var : public ColumnVar {
   void collect_rte_idx(std::set<int>& rte_idx_set) const override {
     rte_idx_set.insert(-1);
   }
-  void collect_column_var(
-      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
-          colvar_set,
-      bool include_agg) const override {}
   std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
       const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
     return deep_copy();
