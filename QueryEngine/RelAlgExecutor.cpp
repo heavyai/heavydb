@@ -1360,6 +1360,7 @@ std::shared_ptr<Analyzer::Expr> transform_to_inner(const Analyzer::Expr* expr) {
 void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
                                    const CompilationOptions& co,
                                    const ExecutionOptions& eo,
+                                   ColumnCacheMap& column_cache_map,
                                    const int64_t queue_time_ms) {
   auto query_infos = get_table_infos(ra_exe_unit.input_descs, executor_);
   CHECK_EQ(query_infos.size(), size_t(1));
@@ -1393,7 +1394,7 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
                                     partition_key_tuple,
                                     transform_to_inner(partition_key_tuple.get()));
     auto context = createWindowFunctionContext(
-        window_func, partition_key_cond, ra_exe_unit, query_infos, co);
+        window_func, partition_key_cond, ra_exe_unit, query_infos, co, column_cache_map);
     context->compute();
     window_project_node_context->addWindowFunctionContext(std::move(context),
                                                           target_index);
@@ -1405,11 +1406,11 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
     const std::shared_ptr<Analyzer::BinOper>& partition_key_cond,
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
-    const CompilationOptions& co) {
+    const CompilationOptions& co,
+    ColumnCacheMap& column_cache_map) {
   const auto memory_level = co.device_type_ == ExecutorDeviceType::GPU
                                 ? MemoryLevel::GPU_LEVEL
                                 : MemoryLevel::CPU_LEVEL;
-  ColumnCacheMap column_cache_map;
   const auto join_table_or_err =
       executor_->buildHashTableForQualifier(partition_key_cond,
                                             query_infos,
@@ -1810,6 +1811,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     const ssize_t previous_count) {
   INJECT_TIMER(executeWorkUnit);
   auto co = co_in;
+  ColumnCacheMap column_cache;
   if (is_window_execution_unit(work_unit.exe_unit)) {
     if (g_cluster) {
       throw std::runtime_error(
@@ -1819,7 +1821,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       throw std::runtime_error("Window functions support is disabled");
     }
     co.device_type_ = ExecutorDeviceType::CPU;
-    computeWindow(work_unit.exe_unit, co, eo, queue_time_ms);
+    computeWindow(work_unit.exe_unit, co, eo, column_cache, queue_time_ms);
   }
   if (!eo.just_explain && eo.find_push_down_candidates) {
     // find potential candidates:
@@ -1884,7 +1886,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                   cat_,
                   executor_->row_set_mem_owner_,
                   render_info,
-                  groups_approx_upper_bound(table_infos) <= g_big_group_threshold),
+                  groups_approx_upper_bound(table_infos) <= g_big_group_threshold,
+                  column_cache),
               targets_meta};
   } catch (const CardinalityEstimationRequired&) {
     max_groups_buffer_entry_guess =
@@ -1901,7 +1904,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                                          cat_,
                                          executor_->row_set_mem_owner_,
                                          render_info,
-                                         true),
+                                         true,
+                                         column_cache),
               targets_meta};
   }
 
@@ -1968,6 +1972,7 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
   size_t one{1};
   ResultSetPtr count_all_result;
   try {
+    ColumnCacheMap column_cache;
     count_all_result =
         executor_->executeWorkUnit(&error_code,
                                    one,
@@ -1979,7 +1984,8 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
                                    cat_,
                                    executor_->row_set_mem_owner_,
                                    nullptr,
-                                   false);
+                                   false,
+                                   column_cache);
   } catch (...) {
     return -1;
   }
@@ -2068,6 +2074,7 @@ ExecutionResult RelAlgExecutor::handleRetry(
     }
     const auto ra_exe_unit = decide_approx_count_distinct_implementation(
         work_unit.exe_unit, table_infos, executor_, co.device_type_, target_exprs_owned_);
+    ColumnCacheMap column_cache;
     result = {executor_->executeWorkUnit(&error_code,
                                          max_groups_buffer_entry_guess,
                                          is_agg,
@@ -2078,7 +2085,8 @@ ExecutionResult RelAlgExecutor::handleRetry(
                                          cat_,
                                          executor_->row_set_mem_owner_,
                                          nullptr,
-                                         true),
+                                         true,
+                                         column_cache),
               targets_meta};
     result.setQueueTime(queue_time_ms);
     if (!error_code) {
@@ -2106,6 +2114,7 @@ ExecutionResult RelAlgExecutor::handleRetry(
                                                       executor_,
                                                       co_cpu.device_type_,
                                                       target_exprs_owned_);
+      ColumnCacheMap column_cache;
       result = {executor_->executeWorkUnit(&error_code,
                                            max_groups_buffer_entry_guess,
                                            is_agg,
@@ -2116,7 +2125,8 @@ ExecutionResult RelAlgExecutor::handleRetry(
                                            cat_,
                                            executor_->row_set_mem_owner_,
                                            nullptr,
-                                           true),
+                                           true,
+                                           column_cache),
                 targets_meta};
       result.setQueueTime(queue_time_ms);
       if (!error_code) {

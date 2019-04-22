@@ -175,6 +175,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
   void computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
                      const CompilationOptions& co,
                      const ExecutionOptions& eo,
+                     ColumnCacheMap& column_cache_map,
                      const int64_t queue_time_ms);
 
   // Creates the window context for the given window function.
@@ -183,7 +184,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
       const std::shared_ptr<Analyzer::BinOper>& partition_key_cond,
       const RelAlgExecutionUnit& ra_exe_unit,
       const std::vector<InputTableInfo>& query_infos,
-      const CompilationOptions& co);
+      const CompilationOptions& co,
+      ColumnCacheMap& column_cache_map);
 
   ExecutionResult executeFilter(const RelFilter*,
                                 const CompilationOptions&,

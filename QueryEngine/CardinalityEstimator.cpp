@@ -39,6 +39,7 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
   const auto estimator_exe_unit = create_ndv_execution_unit(work_unit.exe_unit);
   int32_t error_code{0};
   size_t one{1};
+  ColumnCacheMap column_cache;
   const auto estimator_result =
       executor_->executeWorkUnit(&error_code,
                                  one,
@@ -50,7 +51,8 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
                                  cat_,
                                  executor_->row_set_mem_owner_,
                                  nullptr,
-                                 false);
+                                 false,
+                                 column_cache);
   if (error_code == Executor::ERR_OUT_OF_TIME) {
     throw std::runtime_error("Cardinality estimation query ran out of time");
   }

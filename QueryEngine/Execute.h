@@ -895,7 +895,8 @@ class Executor {
                                const Catalog_Namespace::Catalog&,
                                std::shared_ptr<RowSetMemoryOwner>,
                                RenderInfo* render_info,
-                               const bool has_cardinality_estimation);
+                               const bool has_cardinality_estimation,
+                               ColumnCacheMap& column_cache);
 
   void executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
                      const InputTableInfo& table_info,
@@ -1076,7 +1077,8 @@ class Executor {
                                    const Catalog_Namespace::Catalog&,
                                    std::shared_ptr<RowSetMemoryOwner>,
                                    RenderInfo* render_info,
-                                   const bool has_cardinality_estimation);
+                                   const bool has_cardinality_estimation,
+                                   ColumnCacheMap& column_cache);
 
   bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
                        std::vector<Analyzer::Expr*>& primary_quals,

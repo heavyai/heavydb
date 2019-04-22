@@ -1082,7 +1082,8 @@ ResultSetPtr Executor::executeWorkUnit(
     const Catalog_Namespace::Catalog& cat,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     RenderInfo* render_info,
-    const bool has_cardinality_estimation) {
+    const bool has_cardinality_estimation,
+    ColumnCacheMap& column_cache) {
   try {
     return executeWorkUnitImpl(error_code,
                                max_groups_buffer_entry_guess,
@@ -1095,7 +1096,8 @@ ResultSetPtr Executor::executeWorkUnit(
                                cat,
                                row_set_mem_owner,
                                render_info,
-                               has_cardinality_estimation);
+                               has_cardinality_estimation,
+                               column_cache);
   } catch (const CompilationRetryNewScanLimit& e) {
     return executeWorkUnitImpl(error_code,
                                max_groups_buffer_entry_guess,
@@ -1108,7 +1110,8 @@ ResultSetPtr Executor::executeWorkUnit(
                                cat,
                                row_set_mem_owner,
                                render_info,
-                               has_cardinality_estimation);
+                               has_cardinality_estimation,
+                               column_cache);
   }
 }
 
@@ -1124,7 +1127,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     const Catalog_Namespace::Catalog& cat,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     RenderInfo* render_info,
-    const bool has_cardinality_estimation) {
+    const bool has_cardinality_estimation,
+    ColumnCacheMap& column_cache) {
   INJECT_TIMER(Exec_executeWorkUnit);
   const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type_);
@@ -1137,7 +1141,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     max_groups_buffer_entry_guess = compute_buffer_entry_guess(query_infos);
   }
 
-  ColumnCacheMap column_cache;
   int8_t crt_min_byte_width{get_min_byte_width()};
   do {
     *error_code = 0;

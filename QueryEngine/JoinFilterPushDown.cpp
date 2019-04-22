@@ -100,6 +100,7 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
   CHECK_EQ(size_t(1), table_infos.size());
   const size_t total_rows_upper_bound = table_infos.front().info.getNumTuplesUpperBound();
   try {
+    ColumnCacheMap column_cache;
     filtered_result = executor_->executeWorkUnit(&error_code,
                                                  one,
                                                  true,
@@ -110,7 +111,8 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
                                                  cat_,
                                                  executor_->getRowSetMemoryOwner(),
                                                  nullptr,
-                                                 false);
+                                                 false,
+                                                 column_cache);
   } catch (...) {
     return {false, 1.0, 0};
   }
