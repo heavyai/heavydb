@@ -462,8 +462,7 @@ void MapDHandler::get_server_status(TServerStatus& _return, const TSessionId& se
   _return.read_only = read_only_;
   _return.version = MAPD_RELEASE;
   _return.rendering_enabled = rendering_enabled;
-  _return.poly_rendering_enabled =
-      rendering_enabled && !(leaf_aggregator_.leafCount() > 0);
+  _return.poly_rendering_enabled = rendering_enabled;
   _return.start_time = start_time_;
   _return.edition = MAPD_EDITION;
   _return.host_name = get_hostname();
@@ -477,7 +476,7 @@ void MapDHandler::get_status(std::vector<TServerStatus>& _return,
   ret.read_only = read_only_;
   ret.version = MAPD_RELEASE;
   ret.rendering_enabled = rendering_enabled;
-  ret.poly_rendering_enabled = rendering_enabled && !(leaf_aggregator_.leafCount() > 0);
+  ret.poly_rendering_enabled = rendering_enabled;
   ret.start_time = start_time_;
   ret.edition = MAPD_EDITION;
   ret.host_name = get_hostname();
