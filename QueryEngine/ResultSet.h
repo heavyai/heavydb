@@ -461,9 +461,10 @@ class ResultSet {
   const std::vector<uint32_t>& getPermutationBuffer() const;
   const bool isPermutationBufferEmpty() const { return permutation_.empty(); };
 
-  std::string serialize() const;
+  TSerializedRows serialize() const;
 
-  static std::unique_ptr<ResultSet> unserialize(const std::string&, const Executor*);
+  static std::unique_ptr<ResultSet> unserialize(const TSerializedRows& serialized_rows,
+                                                const Executor*);
 
   struct SerializedArrowOutput {
     std::shared_ptr<arrow::Buffer> schema;
@@ -759,7 +760,7 @@ class ResultSet {
                                 const std::vector<std::string>& col_names,
                                 const int32_t first_n) const;
 
-  std::string serializeProjection() const;
+  TSerializedRows serializeProjection() const;
   void serializeVarlenAggColumn(int8_t* buf,
                                 std::vector<std::string>& varlen_bufer) const;
 

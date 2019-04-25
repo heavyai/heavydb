@@ -5316,9 +5316,8 @@ void MapDHandler::execute_first_step(TStepResult& _return,
   LOG(INFO) << "execute_first_step-COMPLETED " << time_ms << "ms";
 }
 
-void MapDHandler::broadcast_serialized_rows(const std::string& serialized_rows,
+void MapDHandler::broadcast_serialized_rows(const TSerializedRows& serialized_rows,
                                             const TRowDescriptor& row_desc,
-                                            const int64_t result_size,
                                             const TQueryId query_id) {
   if (!leaf_handler_) {
     THROW_MAPD_EXCEPTION("Distributed support is disabled.");
@@ -5326,8 +5325,7 @@ void MapDHandler::broadcast_serialized_rows(const std::string& serialized_rows,
   LOG(INFO) << "BROADCAST-SERIALIZED-ROWS  id:" << query_id;
   auto time_ms = measure<>::execution([&]() {
     try {
-      leaf_handler_->broadcast_serialized_rows(
-          serialized_rows, row_desc, result_size, query_id);
+      leaf_handler_->broadcast_serialized_rows(serialized_rows, row_desc, query_id);
     } catch (std::exception& e) {
       THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
     }

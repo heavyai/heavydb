@@ -20,8 +20,13 @@ add_custom_command(
         ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/MapD.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp
         ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp
-	${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
-	${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
+        ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen cpp -r -I ${CMAKE_SOURCE_DIR} -o ${CMAKE_CURRENT_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
 add_library(mapd_sample_thrift
@@ -29,7 +34,11 @@ add_library(mapd_sample_thrift
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_constants.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/mapd_types.cpp
     ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
-    ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/completion_hints_types.cpp)
+    ${CMAKE_CURRENT_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp)
 target_link_libraries(mapd_sample_thrift ${Thrift_LIBRARIES})
 
 target_link_libraries(StreamInsertSimple mapd_sample_thrift ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${PROFILER_LIBS})

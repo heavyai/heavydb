@@ -1,49 +1,12 @@
 namespace java com.mapd.thrift.server
 
+include "common.thrift"
 include "completion_hints.thrift"
-
-enum TDatumType {
-  SMALLINT,
-  INT,
-  BIGINT,
-  FLOAT,
-  DECIMAL,
-  DOUBLE,
-  STR,
-  TIME,
-  TIMESTAMP,
-  DATE,
-  BOOL,
-  INTERVAL_DAY_TIME,
-  INTERVAL_YEAR_MONTH,
-  POINT,
-  LINESTRING,
-  POLYGON,
-  MULTIPOLYGON,
-  TINYINT,
-  GEOMETRY,
-  GEOGRAPHY
-}
-
-enum TEncodingType {
-  NONE,
-  FIXED,
-  RL,
-  DIFF,
-  DICT,
-  SPARSE,
-  GEOINT,
-  DATE_IN_DAYS
-}
+include "QueryEngine/serialized_result_set.thrift"
 
 enum TExecuteMode {
   GPU = 1,
   CPU
-}
-
-enum TDeviceType {
-  CPU,
-  GPU
 }
 
 enum TFileType {
@@ -96,20 +59,9 @@ struct TStringValue {
   2: bool is_null
 }
 
-struct TTypeInfo {
-  1: TDatumType type,
-  4: TEncodingType encoding,
-  2: bool nullable,
-  3: bool is_array,
-  5: i32 precision,
-  6: i32 scale,
-  7: i32 comp_param,
-  8: optional i32 size=-1
-}
-
 struct TColumnType {
   1: string col_name,
-  2: TTypeInfo col_type,
+  2: common.TTypeInfo col_type,
   3: bool is_reserved_keyword,
   4: string src_name,
   5: bool is_system,
@@ -133,7 +85,6 @@ struct TColumn {
   2: list<bool> nulls
 }
 
-
 struct TStringRow {
   1: list<TStringValue> cols
 }
@@ -149,7 +100,7 @@ enum TMergeType {
 }
 
 struct TStepResult {
-  1: binary serialized_rows
+  1: serialized_result_set.TSerializedRows serialized_rows
   2: i64 uncompressed_size
   3: bool execution_finished
   4: TMergeType merge_type
@@ -204,9 +155,9 @@ struct TCopyParams {
   13: string s3_access_key
   14: string s3_secret_key
   15: string s3_region
-  16: TEncodingType geo_coords_encoding=TEncodingType.GEOINT
+  16: common.TEncodingType geo_coords_encoding=TEncodingType.GEOINT
   17: i32 geo_coords_comp_param=32
-  18: TDatumType geo_coords_type=TDatumType.GEOMETRY
+  18: common.TDatumType geo_coords_type=TDatumType.GEOMETRY
   19: i32 geo_coords_srid=4326
   20: bool sanitize_column_names=true
   21: string geo_layer_name
@@ -325,7 +276,7 @@ struct TNodeMemoryInfo {
 struct TTableMeta {
   1: string table_name
   2: i64 num_cols
-  3: list<TDatumType> col_datum_types
+  3: list<common.TDatumType> col_datum_types
   4: bool is_view
   5: bool is_replicated
   6: i64 shard_count
@@ -432,7 +383,7 @@ struct TRawPixelData {
 }
 
 struct TRenderDatum {
-  1: TDatumType type
+  1: common.TDatumType type
   2: i32 cnt
   3: binary value
 }
@@ -553,9 +504,9 @@ service MapD {
   TSessionInfo get_session_info(1: TSessionId session) throws (1: TMapDException e)
   # query, render
   TQueryResult sql_execute(1: TSessionId session, 2: string query 3: bool column_format, 4: string nonce, 5: i32 first_n = -1, 6: i32 at_most_n = -1) throws (1: TMapDException e)
-  TDataFrame sql_execute_df(1: TSessionId session, 2: string query 3: TDeviceType device_type 4: i32 device_id = 0 5: i32 first_n = -1) throws (1: TMapDException e)
+  TDataFrame sql_execute_df(1: TSessionId session, 2: string query 3: common.TDeviceType device_type 4: i32 device_id = 0 5: i32 first_n = -1) throws (1: TMapDException e)
   TDataFrame sql_execute_gdf(1: TSessionId session, 2: string query 3: i32 device_id = 0, 4: i32 first_n = -1) throws (1: TMapDException e)
-  void deallocate_df(1: TSessionId session, 2: TDataFrame df, 3: TDeviceType device_type, 4: i32 device_id = 0) throws (1: TMapDException e)
+  void deallocate_df(1: TSessionId session, 2: TDataFrame df, 3: common.TDeviceType device_type, 4: i32 device_id = 0) throws (1: TMapDException e)
   void interrupt(1: TSessionId session) throws (1: TMapDException e)
   TTableDescriptor sql_validate(1: TSessionId session, 2: string query) throws (1: TMapDException e)
   list<completion_hints.TCompletionHint> get_completion_hints(1: TSessionId session, 2:string sql, 3:i32 cursor) throws (1: TMapDException e)
@@ -596,7 +547,7 @@ service MapD {
   TTableMeta check_table_consistency(1: TSessionId session, 2: i32 table_id) throws (1: TMapDException e)
   TPendingQuery start_query(1: TSessionId session, 2: string query_ra, 3: bool just_explain) throws (1: TMapDException e)
   TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e)
-  void broadcast_serialized_rows(1: string serialized_rows, 2: TRowDescriptor row_desc, 3: i64 uncompressed_size, 4: TQueryId query_id) throws (1: TMapDException e)
+  void broadcast_serialized_rows(1: serialized_result_set.TSerializedRows serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e)
   TPendingRenderQuery start_render_query(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx, 4: string vega_json) throws (1: TMapDException e)
   TRenderStepResult execute_next_render_step(1: TPendingRenderQuery pending_render, 2: TRenderAggDataMap merged_data) throws (1: TMapDException e)
   void insert_data(1: TSessionId session, 2: TInsertData insert_data) throws (1: TMapDException e)

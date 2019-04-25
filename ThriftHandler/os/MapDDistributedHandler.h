@@ -70,9 +70,8 @@ class MapDLeafHandler {
     CHECK(false);
   }
 
-  void broadcast_serialized_rows(const std::string& serialized_rows,
+  void broadcast_serialized_rows(const TSerializedRows& serialized_rows,
                                  const TRowDescriptor& row_desc,
-                                 const int64_t uncompressed_size,
                                  const TQueryId query_id) {
     CHECK(false);
   }
