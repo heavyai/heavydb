@@ -831,6 +831,8 @@ class Executor {
     std::atomic_flag dynamic_watchdog_set_ = ATOMIC_FLAG_INIT;
     static std::mutex reduce_mutex_;
 
+    uint32_t getFragmentStride(const FragmentsList& frag_list) const;
+
     void runImpl(const ExecutorDeviceType chosen_device_type,
                  int chosen_device_id,
                  const ExecutionOptions& eo,
@@ -1009,6 +1011,7 @@ class Executor {
                                  QueryExecutionContext*,
                                  const std::vector<std::vector<int64_t>>& num_rows,
                                  const std::vector<std::vector<uint64_t>>& frag_offsets,
+                                 const uint32_t frag_stride,
                                  Data_Namespace::DataMgr*,
                                  const int device_id,
                                  const int64_t limit,
@@ -1026,6 +1029,7 @@ class Executor {
       QueryExecutionContext* query_exe_context,
       const std::vector<std::vector<int64_t>>& num_rows,
       const std::vector<std::vector<uint64_t>>& frag_offsets,
+      const uint32_t frag_stride,
       Data_Namespace::DataMgr* data_mgr,
       const int device_id,
       const uint32_t start_rowid,
