@@ -354,6 +354,7 @@ endif()
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
+    DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
     OUTPUT
         ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/MapD.h
@@ -361,6 +362,10 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
@@ -371,7 +376,12 @@ add_library(mapd_thrift
     ${CMAKE_BINARY_DIR}/gen-cpp/mapd_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/mapd_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_constants.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp)
+    ${CMAKE_BINARY_DIR}/gen-cpp/completion_hints_types.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp)
+    
 target_compile_options(mapd_thrift PRIVATE -fPIC)
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
 
@@ -504,12 +514,31 @@ add_custom_command(
     ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/mapd.thrift)
 
 add_custom_command(
+    DEPENDS ${CMAKE_SOURCE_DIR}/common.thrift
+    OUTPUT
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/common.java
+    COMMAND mkdir
+    ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
+    COMMAND ${Thrift_EXECUTABLE}
+    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/common.thrift) 
+
+add_custom_command(
+    DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
+    OUTPUT
+        ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/server/serialized_result_set.java
+    COMMAND mkdir
+    ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
+    COMMAND ${Thrift_EXECUTABLE}
+    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift)       
+
+add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift
     OUTPUT ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/com/mapd/thrift/calciteserver/CalciteServer.java
     COMMAND mkdir
     ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen java -r -I ${CMAKE_SOURCE_DIR} -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift)
+
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/)
 
 execute_process(

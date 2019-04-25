@@ -365,9 +365,8 @@ class MapDHandler : public MapDIf {
                    const bool just_explain) override;
   void execute_first_step(TStepResult& _return,
                           const TPendingQuery& pending_query) override;
-  void broadcast_serialized_rows(const std::string& serialized_rows,
+  void broadcast_serialized_rows(const TSerializedRows& serialized_rows,
                                  const TRowDescriptor& row_desc,
-                                 const int64_t result_size,
                                  const TQueryId query_id) override;
 
   void start_render_query(TPendingRenderQuery& _return,
