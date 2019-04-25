@@ -1668,6 +1668,16 @@ static ImportStatus import_thread_delimited(
     std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers =
         importer->get_import_buffers(thread_id);
     auto us = measure<std::chrono::microseconds>::execution([&]() {});
+    int phys_cols = 0;
+    int point_cols = 0;
+    for (const auto cd : col_descs) {
+      const auto& col_ti = cd->columnType;
+      phys_cols += col_ti.get_physical_cols();
+      if (cd->columnType.get_type() == kPOINT) {
+        point_cols++;
+      }
+    }
+    auto num_cols = col_descs.size() - phys_cols;
     for (const auto& p : import_buffers) {
       p->clear();
     }
@@ -1698,16 +1708,6 @@ static ImportStatus import_thread_delimited(
                     try_single_thread);
       }
       row_index_plus_one++;
-      int phys_cols = 0;
-      int point_cols = 0;
-      for (const auto cd : col_descs) {
-        const auto& col_ti = cd->columnType;
-        phys_cols += col_ti.get_physical_cols();
-        if (cd->columnType.get_type() == kPOINT) {
-          point_cols++;
-        }
-      }
-      auto num_cols = col_descs.size() - phys_cols;
       // Each POINT could consume two separate coords instead of a single WKT
       if (row.size() < num_cols || (num_cols + point_cols) < row.size()) {
         import_status.rows_rejected++;
