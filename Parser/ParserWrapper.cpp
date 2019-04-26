@@ -112,7 +112,7 @@ ParserWrapper::ParserWrapper(std::string query_string) {
       } else if (ddl == "COPY") {
         is_copy = true;
         // now check if it is COPY TO
-        boost::regex copy_to{R"(COPY\s*\(([^#])(.+)\)\s+TO\s)",
+        boost::regex copy_to{R"(COPY\s*\(([^#])(.+)\)\s+TO\s+.*)",
                              boost::regex::extended | boost::regex::icase};
         if (boost::regex_match(query_string, copy_to)) {
           is_copy_to = true;
