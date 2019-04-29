@@ -95,5 +95,5 @@ std::string to_string(char const*&& v) {
 
 template <>
 std::string to_string(std::string&& v) {
-  return v;
+  return std::move(v);
 }

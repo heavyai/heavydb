@@ -1605,7 +1605,7 @@ void Executor::dispatchFragments(
     // GPU, we want the multifrag kernel path to save the overhead of allocating an output
     // buffer per fragment.
     auto multifrag_kernel_dispatch =
-        [&query_threads, &dispatch, &context_count, query_comp_desc, query_mem_desc](
+        [&query_threads, &dispatch, query_comp_desc, query_mem_desc](
             const int device_id,
             const FragmentsList& frag_list,
             const int64_t rowid_lookup_key) {
@@ -1640,7 +1640,6 @@ void Executor::dispatchFragments(
     size_t frag_list_idx{0};
     auto fragment_per_kernel_dispatch = [&query_threads,
                                          &dispatch,
-                                         &context_count,
                                          &frag_list_idx,
                                          &device_type,
                                          query_comp_desc,
