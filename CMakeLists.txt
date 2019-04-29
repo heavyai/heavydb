@@ -38,11 +38,11 @@ string(TOLOWER "${MAPD_EDITION}" MAPD_EDITION_LOWER)
 
 set(MAPD_VERSION_MAJOR "4")
 set(MAPD_VERSION_MINOR "6")
-set(MAPD_VERSION_PATCH "0")
+set(MAPD_VERSION_PATCH "1")
 set(MAPD_VERSION_EXTRA "")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
 set(MAPD_IMMERSE_URL "http://builds.mapd.com/frontend/mapd2-dashboard-v2-137-release-prod.zip")
-set(MAPD_DOCS_URL "http://docs.builds.mapd.com/v4.6.0/docs-v4.6.0.zip")
+set(MAPD_DOCS_URL "http://docs.builds.mapd.com/v4.6.1/docs-v4.6.1.zip")
 string(TIMESTAMP MAPD_BUILD_DATE "%Y%m%d")
 
 if($ENV{BUILD_NUMBER})
