@@ -100,6 +100,16 @@ class ResultSetStorage {
     query_mem_desc_.setEntryCount(new_entry_count);
   }
 
+  // Reduces results for a single row when using interleaved bin layouts
+  static bool reduceSingleRow(const int8_t* row_ptr,
+                              const int8_t warp_count,
+                              const bool is_columnar,
+                              const bool replace_bitmap_ptr_with_bitmap_sz,
+                              std::vector<int64_t>& agg_vals,
+                              const QueryMemoryDescriptor& query_mem_desc,
+                              const std::vector<TargetInfo>& targets,
+                              const std::vector<int64_t>& agg_init_vals);
+
  private:
   void reduceEntriesNoCollisionsColWise(
       int8_t* this_buff,

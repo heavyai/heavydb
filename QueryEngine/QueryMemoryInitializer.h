@@ -41,7 +41,6 @@ class QueryMemoryInitializer {
                          const bool output_columnar,
                          const bool sort_on_gpu,
                          const std::vector<std::vector<const int8_t*>>& col_buffers,
-                         const std::vector<int64_t>& consistent_frag_sizes,
                          const std::vector<std::vector<uint64_t>>& frag_offsets,
                          RenderAllocatorMap* render_allocator_map,
                          RenderInfo* render_info,

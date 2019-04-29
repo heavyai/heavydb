@@ -19,10 +19,10 @@
 #include "../Analyzer/Analyzer.h"
 #include "../DataMgr/MemoryLevel.h"
 #include "ColumnarResults.h"
+#include "Descriptors/RowSetMemoryOwner.h"
 #include "HashJoinRuntime.h"
 #include "InputMetadata.h"
 #include "JoinHashTableInterface.h"
-#include "ResultRows.h"
 
 #ifdef HAVE_CUDA
 #include <cuda.h>

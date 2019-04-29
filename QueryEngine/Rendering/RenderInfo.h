@@ -17,8 +17,9 @@
 #ifndef QUERYENGINE_RENDERINFO_H
 #define QUERYENGINE_RENDERINFO_H
 
+#include <Analyzer/Analyzer.h>
 #include <Catalog/Catalog.h>
-#include "../ResultRows.h"
+#include "../Descriptors/RowSetMemoryOwner.h"
 #include "RenderAllocator.h"
 
 namespace QueryRenderer {

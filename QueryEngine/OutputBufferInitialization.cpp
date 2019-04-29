@@ -16,11 +16,12 @@
 
 #include "OutputBufferInitialization.h"
 #include "BufferCompaction.h"
-#include "ResultRows.h"
+#include "Descriptors/QueryMemoryDescriptor.h"
 #include "TypePunning.h"
 
 #include "../Analyzer/Analyzer.h"
 
+extern bool g_bigint_count;
 namespace {
 
 inline std::vector<int64_t> init_agg_val_vec(

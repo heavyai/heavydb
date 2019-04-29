@@ -61,17 +61,6 @@ struct TargetExprCodegen {
   bool is_group_by;
 };
 
-inline bool should_skip_null_val(
-    const QueryMemoryDescriptor& query_mem_desc,
-    const TargetInfo& target_info,
-    const Analyzer::Expr* target_expr,
-    const std::list<std::shared_ptr<Analyzer::Expr>>& quals) {
-  return !((target_info.agg_kind == kSAMPLE) ||
-           (query_mem_desc.getQueryDescriptionType() ==
-            QueryDescriptionType::NonGroupedAggregate) ||
-           (constrained_not_null(target_expr, quals)));
-}
-
 struct TargetExprCodegenBuilder {
   TargetExprCodegenBuilder(const QueryMemoryDescriptor& query_mem_desc,
                            const RelAlgExecutionUnit& ra_exe_unit,

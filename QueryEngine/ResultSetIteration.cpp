@@ -25,7 +25,6 @@
 #include "../Shared/geo_types.h"
 #include "../Shared/likely.h"
 #include "Execute.h"
-#include "ResultRows.h"
 #include "ResultSet.h"
 #include "ResultSetGeoSerialization.h"
 #include "RuntimeFunctions.h"
@@ -1035,6 +1034,35 @@ struct GeoTargetValueBuilder {
     }
   }
 };
+
+inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(
+    const std::vector<uint64_t>& frag_offsets,
+    const int64_t global_idx) {
+  CHECK_GE(global_idx, int64_t(0));
+  for (int64_t frag_id = frag_offsets.size() - 1; frag_id >= 0; --frag_id) {
+    const auto frag_off = static_cast<int64_t>(frag_offsets[frag_id]);
+    if (frag_off <= global_idx) {
+      return {frag_id, global_idx - frag_off};
+    }
+  }
+  return {-1, -1};
+}
+
+template <typename T>
+inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(
+    const std::vector<std::vector<T>>& frag_offsets,
+    const size_t tab_or_col_idx,
+    const int64_t global_idx) {
+  CHECK_GE(global_idx, int64_t(0));
+  for (int64_t frag_id = frag_offsets.size() - 1; frag_id > 0; --frag_id) {
+    CHECK_LT(tab_or_col_idx, frag_offsets[frag_id].size());
+    const auto frag_off = static_cast<int64_t>(frag_offsets[frag_id][tab_or_col_idx]);
+    if (frag_off < global_idx) {
+      return {frag_id, global_idx - frag_off};
+    }
+  }
+  return {-1, -1};
+}
 
 }  // namespace
 

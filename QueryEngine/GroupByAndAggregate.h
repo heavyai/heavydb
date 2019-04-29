@@ -40,6 +40,7 @@
 #include <vector>
 
 extern bool g_enable_smem_group_by;
+extern bool g_bigint_count;
 
 class ReductionRanOutOfSlots : public std::runtime_error {
  public:

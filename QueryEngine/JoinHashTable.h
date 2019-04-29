@@ -30,10 +30,10 @@
 #include "Allocators/ThrustAllocator.h"
 #include "ColumnarResults.h"
 #include "Descriptors/InputDescriptors.h"
+#include "Descriptors/RowSetMemoryOwner.h"
 #include "ExpressionRange.h"
 #include "InputMetadata.h"
 #include "JoinHashTableInterface.h"
-#include "ResultRows.h"
 
 #include <llvm/IR/Value.h>
 

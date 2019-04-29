@@ -15,7 +15,7 @@
  */
 
 #include "ColumnarResults.h"
-#include "ResultRows.h"
+#include "Descriptors/RowSetMemoryOwner.h"
 
 #include "../Shared/thread_count.h"
 

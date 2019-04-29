@@ -17,6 +17,7 @@
 #include "Execute.h"
 #include "ExtensionFunctionsWhitelist.h"
 #include "LLVMFunctionAttributesUtil.h"
+#include "OutputBufferInitialization.h"
 #include "QueryTemplateGenerator.h"
 
 #include "Shared/mapdpath.h"

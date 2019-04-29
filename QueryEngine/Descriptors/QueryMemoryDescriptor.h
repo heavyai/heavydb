@@ -27,8 +27,8 @@
 
 #include "../CompilationOptions.h"
 #include "../CountDistinct.h"
-
 #include "ColSlotContext.h"
+#include "Types.h"
 
 #include <glog/logging.h>
 #include <boost/optional.hpp>
@@ -52,14 +52,6 @@ class QueryExecutionContext;
 class RenderInfo;
 class RowSetMemoryOwner;
 struct InputTableInfo;
-
-enum class QueryDescriptionType {
-  GroupByPerfectHash,
-  GroupByBaselineHash,
-  Projection,
-  NonGroupedAggregate,
-  Estimator
-};
 
 // Shared: threads in the same block share memory, atomic operations required
 // SharedForKeylessOneColumnKnownRange: special case of "Shared", but for keyless

@@ -23,7 +23,7 @@
  */
 #include "ResultSetTestUtils.h"
 
-#include "../QueryEngine/ResultRows.h"
+#include "../QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "../QueryEngine/ResultSet.h"
 #include "../QueryEngine/RuntimeFunctions.h"
 #include "../StringDictionary/StringDictionary.h"

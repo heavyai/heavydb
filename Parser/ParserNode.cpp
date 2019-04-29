@@ -2065,10 +2065,10 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       session.get_currentUser(), td.tableName, TableDBObjectType, catalog);
 }
 
-std::shared_ptr<ResultSet> getResultRows(const Catalog_Namespace::SessionInfo& session,
-                                         const std::string select_stmt,
-                                         std::vector<TargetMetaInfo>& targets,
-                                         bool validate_only = false) {
+std::shared_ptr<ResultSet> getResultSet(const Catalog_Namespace::SessionInfo& session,
+                                        const std::string select_stmt,
+                                        std::vector<TargetMetaInfo>& targets,
+                                        bool validate_only = false) {
   auto& catalog = session.getCatalog();
 
   auto executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
@@ -2135,9 +2135,9 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
       std::vector<TargetMetaInfo> target_metainfos;
 
-      auto result_rows =
-          getResultRows(session, sql_query_string, target_metainfos, validate_only);
-      AggregatedResult res = {result_rows, target_metainfos};
+      auto result_set =
+          getResultSet(session, sql_query_string, target_metainfos, validate_only);
+      AggregatedResult res = {result_set, target_metainfos};
       return res;
     }
     AggregatedResult query(const Catalog_Namespace::SessionInfo& session,
@@ -3864,7 +3864,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
   }
   std::vector<TargetMetaInfo> targets;
-  const auto results = getResultRows(session, *select_stmt, targets);
+  const auto results = getResultSet(session, *select_stmt, targets);
   TargetMetaInfo* td = targets.data();
 
   std::ofstream outfile;

@@ -22,7 +22,7 @@
  * Copyright (c) 2016 MapD Technologies, Inc.  All rights reserved.
  */
 #include "ProfileTest.h"
-#include "../QueryEngine/ResultRows.h"
+#include "../QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "../QueryEngine/ResultSet.h"
 #include "Shared/measure.h"
 

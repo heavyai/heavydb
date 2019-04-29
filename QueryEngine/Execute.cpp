@@ -838,10 +838,10 @@ ResultSetPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
     return std::make_shared<ResultSet>(
         targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor(), nullptr, nullptr);
   }
-  using IndexedResultRows = std::pair<ResultSetPtr, std::vector<size_t>>;
+  using IndexedResultSet = std::pair<ResultSetPtr, std::vector<size_t>>;
   std::sort(results_per_device.begin(),
             results_per_device.end(),
-            [](const IndexedResultRows& lhs, const IndexedResultRows& rhs) {
+            [](const IndexedResultSet& lhs, const IndexedResultSet& rhs) {
               CHECK_GE(lhs.second.size(), size_t(1));
               CHECK_GE(rhs.second.size(), size_t(1));
               return lhs.second.front() < rhs.second.front();

@@ -25,6 +25,7 @@
 #include "Execute.h"
 #include "GroupByAndAggregate.h"
 #include "MaxwellCodegenPatch.h"
+#include "OutputBufferInitialization.h"
 
 #include <glog/logging.h>
 

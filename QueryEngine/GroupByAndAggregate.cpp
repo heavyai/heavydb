@@ -35,7 +35,6 @@
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Execute.h"
 #include "QueryTemplateGenerator.h"
-#include "ResultRows.h"
 #include "RuntimeFunctions.h"
 #include "StreamingTopN.h"
 #include "TopKSort.h"

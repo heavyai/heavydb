@@ -25,12 +25,13 @@
 #include "ColSlotContext.h"
 
 #include "../BufferCompaction.h"
-#include "../ResultRows.h"
 
 #include <Analyzer/Analyzer.h>
 #include <Shared/SqlTypesLayout.h>
 
 #include <numeric>
+
+extern bool g_bigint_count;
 
 ColSlotContext::ColSlotContext(const std::vector<Analyzer::Expr*>& col_expr_list,
                                const std::vector<ssize_t>& col_exprs_to_not_project) {

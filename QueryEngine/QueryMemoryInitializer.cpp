@@ -19,7 +19,6 @@
 #include "Execute.h"
 #include "GpuInitGroups.h"
 #include "GpuMemUtils.h"
-#include "ResultRows.h"
 #include "ResultSet.h"
 #include "StreamingTopN.h"
 
@@ -72,6 +71,81 @@ int64_t* alloc_group_by_buffer(const size_t numBytes,
   }
 }
 
+inline int64_t get_consistent_frag_size(const std::vector<uint64_t>& frag_offsets) {
+  if (frag_offsets.size() < 2) {
+    return ssize_t(-1);
+  }
+  const auto frag_size = frag_offsets[1] - frag_offsets[0];
+  for (size_t i = 2; i < frag_offsets.size(); ++i) {
+    const auto curr_size = frag_offsets[i] - frag_offsets[i - 1];
+    if (curr_size != frag_size) {
+      return int64_t(-1);
+    }
+  }
+  return !frag_size ? std::numeric_limits<int64_t>::max()
+                    : static_cast<int64_t>(frag_size);
+}
+
+inline std::vector<int64_t> get_consistent_frags_sizes(
+    const std::vector<std::vector<uint64_t>>& frag_offsets) {
+  if (frag_offsets.empty()) {
+    return {};
+  }
+  std::vector<int64_t> frag_sizes;
+  for (size_t tab_idx = 0; tab_idx < frag_offsets[0].size(); ++tab_idx) {
+    std::vector<uint64_t> tab_offs;
+    for (auto& offsets : frag_offsets) {
+      tab_offs.push_back(offsets[tab_idx]);
+    }
+    frag_sizes.push_back(get_consistent_frag_size(tab_offs));
+  }
+  return frag_sizes;
+}
+
+inline std::vector<int64_t> get_consistent_frags_sizes(
+    const std::vector<Analyzer::Expr*>& target_exprs,
+    const std::vector<int64_t>& table_frag_sizes) {
+  std::vector<int64_t> col_frag_sizes;
+  for (auto expr : target_exprs) {
+    if (const auto col_var = dynamic_cast<Analyzer::ColumnVar*>(expr)) {
+      if (col_var->get_rte_idx() < 0) {
+        CHECK_EQ(-1, col_var->get_rte_idx());
+        col_frag_sizes.push_back(int64_t(-1));
+      } else {
+        col_frag_sizes.push_back(table_frag_sizes[col_var->get_rte_idx()]);
+      }
+    } else {
+      col_frag_sizes.push_back(int64_t(-1));
+    }
+  }
+  return col_frag_sizes;
+}
+
+inline std::vector<std::vector<int64_t>> get_col_frag_offsets(
+    const std::vector<Analyzer::Expr*>& target_exprs,
+    const std::vector<std::vector<uint64_t>>& table_frag_offsets) {
+  std::vector<std::vector<int64_t>> col_frag_offsets;
+  for (auto& table_offsets : table_frag_offsets) {
+    std::vector<int64_t> col_offsets;
+    for (auto expr : target_exprs) {
+      if (const auto col_var = dynamic_cast<Analyzer::ColumnVar*>(expr)) {
+        if (col_var->get_rte_idx() < 0) {
+          CHECK_EQ(-1, col_var->get_rte_idx());
+          col_offsets.push_back(int64_t(-1));
+        } else {
+          CHECK_LT(static_cast<size_t>(col_var->get_rte_idx()), table_offsets.size());
+          col_offsets.push_back(
+              static_cast<int64_t>(table_offsets[col_var->get_rte_idx()]));
+        }
+      } else {
+        col_offsets.push_back(int64_t(-1));
+      }
+    }
+    col_frag_offsets.push_back(col_offsets);
+  }
+  return col_frag_offsets;
+}
+
 }  // namespace
 
 QueryMemoryInitializer::QueryMemoryInitializer(
@@ -82,7 +156,6 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     const bool output_columnar,
     const bool sort_on_gpu,
     const std::vector<std::vector<const int8_t*>>& col_buffers,
-    const std::vector<int64_t>& consistent_frag_sizes,
     const std::vector<std::vector<uint64_t>>& frag_offsets,
     RenderAllocatorMap* render_allocator_map,
     RenderInfo* render_info,
@@ -99,6 +172,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     , device_allocator_(device_allocator) {
   CHECK(!sort_on_gpu || output_columnar);
 
+  const auto& consistent_frag_sizes = get_consistent_frags_sizes(frag_offsets);
   if (consistent_frag_sizes.empty()) {
     // No fragments in the input, no underlying buffers will be needed.
     return;

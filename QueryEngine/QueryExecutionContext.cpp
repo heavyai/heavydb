@@ -22,6 +22,7 @@
 #include "InPlaceSort.h"
 #include "QueryMemoryInitializer.h"
 #include "RelAlgExecutionUnit.h"
+#include "ResultSet.h"
 #include "SpeculativeTopN.h"
 #include "StreamingTopN.h"
 
@@ -51,21 +52,19 @@ QueryExecutionContext::QueryExecutionContext(
   auto render_allocator_map = render_info && render_info->isPotentialInSituRender()
                                   ? render_info->render_allocator_map_ptr.get()
                                   : nullptr;
-  query_buffers_ =
-      std::make_unique<QueryMemoryInitializer>(ra_exe_unit,
-                                               query_mem_desc,
-                                               device_id,
-                                               device_type,
-                                               output_columnar,
-                                               sort_on_gpu,
-                                               col_buffers,
-                                               get_consistent_frags_sizes(frag_offsets),
-                                               frag_offsets,
-                                               render_allocator_map,
-                                               render_info,
-                                               row_set_mem_owner,
-                                               gpu_allocator_.get(),
-                                               executor);
+  query_buffers_ = std::make_unique<QueryMemoryInitializer>(ra_exe_unit,
+                                                            query_mem_desc,
+                                                            device_id,
+                                                            device_type,
+                                                            output_columnar,
+                                                            sort_on_gpu,
+                                                            col_buffers,
+                                                            frag_offsets,
+                                                            render_allocator_map,
+                                                            render_info,
+                                                            row_set_mem_owner,
+                                                            gpu_allocator_.get(),
+                                                            executor);
 }
 
 ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
@@ -102,14 +101,14 @@ ResultSetPtr QueryExecutionContext::groupBufferToDeinterleavedResults(
     memcpy(&agg_vals[0],
            &executor_->plan_state_->init_agg_vals_[0],
            agg_col_count * sizeof(agg_vals[0]));
-    ResultRows::reduceSingleRow(rows_ptr + bin_base_off,
-                                executor_->warpSize(),
-                                false,
-                                true,
-                                agg_vals,
-                                query_mem_desc_,
-                                result_set->getTargetInfos(),
-                                executor_->plan_state_->init_agg_vals_);
+    ResultSetStorage::reduceSingleRow(rows_ptr + bin_base_off,
+                                      executor_->warpSize(),
+                                      false,
+                                      true,
+                                      agg_vals,
+                                      query_mem_desc_,
+                                      result_set->getTargetInfos(),
+                                      executor_->plan_state_->init_agg_vals_);
     for (size_t agg_idx = 0; agg_idx < agg_col_count;
          ++agg_idx, ++deinterleaved_buffer_idx) {
       deinterleaved_buffer[deinterleaved_buffer_idx] = agg_vals[agg_idx];

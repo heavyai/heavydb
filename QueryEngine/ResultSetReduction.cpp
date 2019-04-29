@@ -23,7 +23,6 @@
  */
 
 #include "DynamicWatchdog.h"
-#include "ResultRows.h"
 #include "ResultSet.h"
 #include "RuntimeFunctions.h"
 #include "Shared/SqlTypesLayout.h"
@@ -96,6 +95,36 @@ void fill_empty_key_64(int64_t* key_ptr_i64, const size_t key_count) {
   for (size_t i = 0; i < key_count; ++i) {
     key_ptr_i64[i] = EMPTY_KEY_64;
   }
+}
+
+inline int64_t get_component(const int8_t* group_by_buffer,
+                             const size_t comp_sz,
+                             const size_t index = 0) {
+  int64_t ret = std::numeric_limits<int64_t>::min();
+  switch (comp_sz) {
+    case 1: {
+      ret = group_by_buffer[index];
+      break;
+    }
+    case 2: {
+      const int16_t* buffer_ptr = reinterpret_cast<const int16_t*>(group_by_buffer);
+      ret = buffer_ptr[index];
+      break;
+    }
+    case 4: {
+      const int32_t* buffer_ptr = reinterpret_cast<const int32_t*>(group_by_buffer);
+      ret = buffer_ptr[index];
+      break;
+    }
+    case 8: {
+      const int64_t* buffer_ptr = reinterpret_cast<const int64_t*>(group_by_buffer);
+      ret = buffer_ptr[index];
+      break;
+    }
+    default:
+      CHECK(false);
+  }
+  return ret;
 }
 
 }  // namespace
@@ -1355,14 +1384,14 @@ void ResultSetStorage::reduceOneCountDistinctSlot(int8_t* this_ptr1,
       *new_set_ptr, *old_set_ptr, new_count_distinct_desc, old_count_distinct_desc);
 }
 
-bool ResultRows::reduceSingleRow(const int8_t* row_ptr,
-                                 const int8_t warp_count,
-                                 const bool is_columnar,
-                                 const bool replace_bitmap_ptr_with_bitmap_sz,
-                                 std::vector<int64_t>& agg_vals,
-                                 const QueryMemoryDescriptor& query_mem_desc,
-                                 const std::vector<TargetInfo>& targets,
-                                 const std::vector<int64_t>& agg_init_vals) {
+bool ResultSetStorage::reduceSingleRow(const int8_t* row_ptr,
+                                       const int8_t warp_count,
+                                       const bool is_columnar,
+                                       const bool replace_bitmap_ptr_with_bitmap_sz,
+                                       std::vector<int64_t>& agg_vals,
+                                       const QueryMemoryDescriptor& query_mem_desc,
+                                       const std::vector<TargetInfo>& targets,
+                                       const std::vector<int64_t>& agg_init_vals) {
   const size_t agg_col_count{agg_vals.size()};
   const auto row_size = query_mem_desc.getRowSize();
   CHECK_EQ(agg_col_count, query_mem_desc.getSlotCount());
