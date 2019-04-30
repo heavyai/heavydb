@@ -5536,6 +5536,10 @@ TEST(Select, DecimalCompression) {
         "big_dec ORDER BY small_dec_sum;";
     c(mapd_sql, sqlite_sql, dt);
     c(sqlite_sql, sqlite_sql, dt);
+
+    c("SELECT CASE WHEN big_dec > 0 THEN med_dec ELSE NULL END FROM "
+      "decimal_compression_test WHERE big_dec < 0;",
+      dt);
   }
 }
 

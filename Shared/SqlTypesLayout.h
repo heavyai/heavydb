@@ -169,7 +169,7 @@ inline uint64_t exp_to_scale(const unsigned exp) {
 }
 
 inline size_t get_bit_width(const SQLTypeInfo& ti) {
-  const auto int_type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+  const auto int_type = ti.is_decimal() ? kBIGINT : ti.get_type();
   switch (int_type) {
     case kBOOLEAN:
       return 8;
