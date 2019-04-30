@@ -57,6 +57,9 @@ FORCE_INLINE DEVICE int64_t baseline_hash_join_idx_impl(const int8_t* hash_buff,
                                                         const int8_t* key,
                                                         const size_t key_bytes,
                                                         const size_t entry_count) {
+  if (!entry_count) {
+    return kNoMatch;
+  }
   const uint32_t h = MurmurHash1(key, key_bytes, 0) % entry_count;
   int64_t matching_slot = get_matching_slot<T>(hash_buff, h, key, key_bytes);
   if (matching_slot != kNoMatch) {

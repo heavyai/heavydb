@@ -6888,6 +6888,11 @@ TEST_F(JoinTest, EmptyJoinTables) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM jointest_b b INNER JOIN "
                                         "jointest_a a ON a.str = b.str;",
                                         dt)));
+
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM jointest_a a INNER JOIN "
+                                        "jointest_b b ON a.x = b.x AND a.y = b.y;",
+                                        dt)));
   }
 }
 
