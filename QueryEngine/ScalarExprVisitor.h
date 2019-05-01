@@ -60,6 +60,10 @@ class ScalarExprVisitor {
     if (char_length) {
       return visitCharLength(char_length);
     }
+    const auto key_for_string = dynamic_cast<const Analyzer::KeyForStringExpr*>(expr);
+    if (key_for_string) {
+      return visitKeyForString(key_for_string);
+    }
     const auto cardinality = dynamic_cast<const Analyzer::CardinalityExpr*>(expr);
     if (cardinality) {
       return visitCardinality(cardinality);
@@ -164,6 +168,12 @@ class ScalarExprVisitor {
   virtual T visitCharLength(const Analyzer::CharLengthExpr* char_length) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(char_length->get_arg()));
+    return result;
+  }
+
+  virtual T visitKeyForString(const Analyzer::KeyForStringExpr* key_for_string) const {
+    T result = defaultResult();
+    result = aggregateResult(result, visit(key_for_string->get_arg()));
     return result;
   }
 

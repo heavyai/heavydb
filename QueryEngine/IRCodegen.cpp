@@ -75,6 +75,10 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   if (charlength_expr) {
     return {codegen(charlength_expr, co)};
   }
+  auto keyforstring_expr = dynamic_cast<const Analyzer::KeyForStringExpr*>(expr);
+  if (keyforstring_expr) {
+    return {codegen(keyforstring_expr, co)};
+  }
   auto cardinality_expr = dynamic_cast<const Analyzer::CardinalityExpr*>(expr);
   if (cardinality_expr) {
     return {codegen(cardinality_expr, co)};

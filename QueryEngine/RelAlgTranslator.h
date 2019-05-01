@@ -101,6 +101,8 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateLength(const RexFunctionOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateKeyForString(const RexFunctionOperator*) const;
+
   std::shared_ptr<Analyzer::Expr> translateCardinality(const RexFunctionOperator*) const;
 
   std::shared_ptr<Analyzer::Expr> translateItem(const RexFunctionOperator*) const;

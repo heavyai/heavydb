@@ -24,6 +24,7 @@
 #include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <string>
+#include <utility>
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -42,15 +43,91 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
   return QueryRunner::run_multiple_agg(
       query_str, g_session, device_type, false, false, nullptr);
 }
+#define ASSERT_METADATA(type, tag)                                   \
+  template <typename T, bool enabled = std::is_same<T, type>::value> \
+  void assert_metadata(const ChunkStats& chunkStats,                 \
+                       const T min,                                  \
+                       const T max,                                  \
+                       const bool has_nulls,                         \
+                       const std::enable_if_t<enabled, type>* = 0) { \
+    ASSERT_EQ(chunkStats.min.tag##val, min);                         \
+    ASSERT_EQ(chunkStats.max.tag##val, max);                         \
+    ASSERT_EQ(chunkStats.has_nulls, has_nulls);                      \
+  }
 
-template <typename FUNC>
-void run_op_per_fragment(const TableDescriptor* td, FUNC f) {
+ASSERT_METADATA(bool, bool)
+ASSERT_METADATA(int8_t, tinyint)
+ASSERT_METADATA(int16_t, smallint)
+ASSERT_METADATA(int32_t, int)
+ASSERT_METADATA(int64_t, bigint)
+ASSERT_METADATA(float, float)
+ASSERT_METADATA(double, double)
+
+template <typename T, typename... Args>
+void check_column_metadata_impl(const std::map<int, ChunkMetadata>& metadata_map,
+                                const int column_idx,  // -1 is $deleted
+                                const T min,
+                                const T max,
+                                const bool has_nulls) {
+  auto chunk_metadata_itr = metadata_map.find(column_idx);
+  if (column_idx < 0) {
+    chunk_metadata_itr--;
+  }
+  CHECK(chunk_metadata_itr != metadata_map.end());
+  const auto& chunk_metadata = chunk_metadata_itr->second;
+  assert_metadata<T>(chunk_metadata.chunkStats, min, max, has_nulls);
+}
+
+template <typename T, typename... Args>
+void check_column_metadata_impl(const std::map<int, ChunkMetadata>& metadata_map,
+                                const int column_idx,  // -1 is $deleted
+                                const T min,
+                                const T max,
+                                const bool has_nulls,
+                                Args&&... args) {
+  check_column_metadata_impl(metadata_map, column_idx, min, max, has_nulls);
+  using T1 = typename std::tuple_element<1, std::tuple<Args...>>::type;
+  check_column_metadata_impl<T1>(metadata_map, std::forward<Args>(args)...);
+}
+
+template <typename... Args>
+auto check_column_metadata =
+    [](const Fragmenter_Namespace::FragmentInfo& fragment, Args&&... args) {
+      const auto metadata_map = fragment.getChunkMetadataMapPhysical();
+      using T = typename std::tuple_element<1, std::tuple<Args...>>::type;
+      check_column_metadata_impl<T>(metadata_map, std::forward<Args>(args)...);
+    };
+
+template <typename... Args>
+auto check_fragment_metadata(Args&&... args) -> auto {
+  static_assert(sizeof...(Args) % 4 == 0);
+  return std::make_tuple(check_column_metadata<Args...>,
+                         std::make_tuple<Args...>(std::move(args)...));
+}
+
+template <typename FUNC, typename... Args>
+void run_op_per_fragment(const TableDescriptor* td, FUNC f, Args&&... args) {
   auto* fragmenter = td->fragmenter;
   CHECK(fragmenter);
   const auto table_info = fragmenter->getFragmentsForQuery();
   for (const auto& fragment : table_info.fragments) {
-    f(fragment);
+    f(fragment, std::forward<Args>(args)...);
   }
+}
+
+template <typename FUNC, typename... Args, std::size_t... Is>
+void run_op_per_fragment(const TableDescriptor* td,
+                         FUNC f,
+                         std::tuple<Args...> tuple,
+                         std::index_sequence<Is...>) {
+  run_op_per_fragment(td, f, std::forward<Args>(std::get<Is>(tuple))...);
+}
+
+template <typename FUNC, typename... Args>
+void run_op_per_fragment(const TableDescriptor* td,
+                         std::tuple<FUNC, std::tuple<Args...>> tuple) {
+  run_op_per_fragment(
+      td, std::get<0>(tuple), std::get<1>(tuple), std::index_sequence_for<Args...>{});
 }
 
 void recompute_metadata(const TableDescriptor* td,
@@ -206,81 +283,56 @@ TEST_F(MetadataUpdate, InitialMetadata) {
   const auto& cat = g_session->getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
-  auto check_initial_metadata_values =
-      [](const Fragmenter_Namespace::FragmentInfo& fragment) {
-        const auto metadata_map = fragment.getChunkMetadataMapPhysical();
-        // Check int col: expected range 1,2 nulls
-        {
-          const auto chunk_metadata_itr = metadata_map.find(1);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.intval, 1);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.intval, 2);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, true);
-        }
+  run_op_per_fragment(
+      td,
+      check_fragment_metadata(
+          // Check int col: expected range 1,2 nulls
+          /* id = */ 1,
+          /* min = */ 1,
+          /* max = 2 */ 2,
+          /* has_nulls = */ true,
 
-        // Check int not null col: expected range 1,2 no nulls
-        {
-          const auto chunk_metadata_itr = metadata_map.find(2);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.intval, 1);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.intval, 2);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
-        }
+          // Check int not null col: expected range 1,2 no nulls
+          2,
+          1,
+          2,
+          false,
 
-        // Check int encoded call: expected range 1,2 nulls
-        {
-          const auto chunk_metadata_itr = metadata_map.find(3);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.intval, 1);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.intval, 2);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, true);
-        }
+          // Check int encoded call: expected range 1,2 nulls
+          3,
+          1,
+          2,
+          true,
 
-        // Check double col: expected range 1.0,2.0 nulls
-        {
-          const auto chunk_metadata_itr = metadata_map.find(4);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.doubleval, static_cast<double>(1.0));
-          ASSERT_EQ(chunk_metadata.chunkStats.max.doubleval, static_cast<double>(2.0));
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, true);
-        }
+          // Check double col: expected range 1.0,2.0 nulls
+          4,
+          (double)1.0,
+          2.0,
+          true,
 
-        // Check float col: expected range 1.0,2.0 nulls
-        {
-          const auto chunk_metadata_itr = metadata_map.find(5);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.floatval, static_cast<float>(1.0));
-          ASSERT_EQ(chunk_metadata.chunkStats.max.floatval, static_cast<float>(2.0));
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, true);
-        }
+          // Check float col: expected range 1.0,2.0 nulls
+          5,
+          (float)1.0,
+          2.0,
+          true,
 
-        // Check date in days 32 col: expected range 1262304000,1356912000 nulls
-        {
-          const auto chunk_metadata_itr = metadata_map.find(6);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.bigintval, 1262304000);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.bigintval, 1356912000);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, true);
-        }
+          // Check date in days 32 col: expected range 1262304000,1356912000 nulls
+          6,
+          1262304000,
+          1356912000,
+          true,
 
-        // Check date in days 16 col: expected range -946771200,1356912000 nulls
-        {
-          const auto chunk_metadata_itr = metadata_map.find(7);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.bigintval, -946771200);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.bigintval, 1356912000);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
-        }
-      };
+          // Check date in days 16 col: expected range -946771200,1356912000 nulls
+          7,
+          -946771200,
+          1356912000,
+          false,
 
-  run_op_per_fragment(td, check_initial_metadata_values);
+          // Check col c TEXT ENCODING DICT(32): expected range [0, 0]
+          8,
+          0,
+          0,
+          false));
 }
 
 TEST_F(MetadataUpdate, IntUpdate) {
@@ -290,42 +342,15 @@ TEST_F(MetadataUpdate, IntUpdate) {
   run_multiple_agg("UPDATE " + g_table_name + " SET x = 3 WHERE x = 1;",
                    ExecutorDeviceType::CPU);
 
-  auto check_initial_metadata_values =
-      [](const Fragmenter_Namespace::FragmentInfo& fragment) {
-        const auto metadata_map = fragment.getChunkMetadataMapPhysical();
-        // Check int col: expected range 1,3 nulls
-        {
-          const auto chunk_metadata_itr = metadata_map.find(1);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.intval, 1);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.intval, 3);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, true);
-        }
-      };
-
-  run_op_per_fragment(td, check_initial_metadata_values);
+  // Check int col: expected range 1,3 nulls
+  run_op_per_fragment(td, check_fragment_metadata(1, (int32_t)1, 3, true));
 
   run_multiple_agg("UPDATE " + g_table_name + " SET x = 0 WHERE x = 3;",
                    ExecutorDeviceType::CPU);
 
   recompute_metadata(td, cat);
-
-  auto check_recomputed_metadata_values =
-      [](const Fragmenter_Namespace::FragmentInfo& fragment) {
-        const auto metadata_map = fragment.getChunkMetadataMapPhysical();
-        // Check int col: expected range 1,2 nulls
-        {
-          const auto chunk_metadata_itr = metadata_map.find(1);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.intval, 0);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.intval, 2);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, true);
-        }
-      };
-
-  run_op_per_fragment(td, check_recomputed_metadata_values);
+  // Check int col: expected range 1,2 nulls
+  run_op_per_fragment(td, check_fragment_metadata(1, (int32_t)0, 2, true));
 }
 
 TEST_F(MetadataUpdate, IntRemoveNull) {
@@ -335,22 +360,8 @@ TEST_F(MetadataUpdate, IntRemoveNull) {
   run_multiple_agg("UPDATE " + g_table_name + " SET x = 3;", ExecutorDeviceType::CPU);
 
   recompute_metadata(td, cat);
-
-  auto check_recomputed_metadata_values =
-      [](const Fragmenter_Namespace::FragmentInfo& fragment) {
-        const auto metadata_map = fragment.getChunkMetadataMapPhysical();
-        // Check int col: expected range 1,2 nulls
-        {
-          const auto chunk_metadata_itr = metadata_map.find(1);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.intval, 3);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.intval, 3);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
-        }
-      };
-
-  run_op_per_fragment(td, check_recomputed_metadata_values);
+  // Check int col: expected range 1,2 nulls
+  run_op_per_fragment(td, check_fragment_metadata(1, (int32_t)3, 3, false));
 }
 
 TEST_F(MetadataUpdate, NotNullInt) {
@@ -361,43 +372,15 @@ TEST_F(MetadataUpdate, NotNullInt) {
                        std::to_string(std::numeric_limits<int32_t>::lowest() + 1) +
                        " WHERE y = 1;",
                    ExecutorDeviceType::CPU);
-
-  auto check_initial_metadata_values =
-      [](const Fragmenter_Namespace::FragmentInfo& fragment) {
-        const auto metadata_map = fragment.getChunkMetadataMapPhysical();
-        // Check int col: expected range 1,3 nulls
-        {
-          const auto chunk_metadata_itr = metadata_map.find(2);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.intval,
-                    std::numeric_limits<int32_t>::lowest() + 1);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.intval, 2);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
-        }
-      };
-
-  run_op_per_fragment(td, check_initial_metadata_values);
+  // Check int col: expected range 1,3 nulls
+  run_op_per_fragment(
+      td,
+      check_fragment_metadata(2, std::numeric_limits<int32_t>::lowest() + 1, 2, false));
 
   run_multiple_agg("UPDATE " + g_table_name + " SET y = 1;", ExecutorDeviceType::CPU);
 
   recompute_metadata(td, cat);
-
-  auto check_recomputed_metadata_values =
-      [](const Fragmenter_Namespace::FragmentInfo& fragment) {
-        const auto metadata_map = fragment.getChunkMetadataMapPhysical();
-        // Check int col: expected range 1,2 nulls
-        {
-          const auto chunk_metadata_itr = metadata_map.find(2);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.intval, 1);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.intval, 1);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
-        }
-      };
-
-  run_op_per_fragment(td, check_recomputed_metadata_values);
+  run_op_per_fragment(td, check_fragment_metadata(2, (int32_t)1, 1, false));
 }
 
 TEST_F(MetadataUpdate, DateNarrowRange) {
@@ -408,22 +391,9 @@ TEST_F(MetadataUpdate, DateNarrowRange) {
                    ExecutorDeviceType::CPU);
 
   recompute_metadata(td, cat);
-
-  auto check_recomputed_metadata_values =
-      [](const Fragmenter_Namespace::FragmentInfo& fragment) {
-        const auto metadata_map = fragment.getChunkMetadataMapPhysical();
-        // Check date in days 32 col: expected range 1262304000,1262304000 nulls
-        {
-          const auto chunk_metadata_itr = metadata_map.find(6);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.bigintval, 1262304000);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.bigintval, 1262304000);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
-        }
-      };
-
-  run_op_per_fragment(td, check_recomputed_metadata_values);
+  // Check date in days 32 col: expected range 1262304000,1262304000 nulls
+  run_op_per_fragment(td,
+                      check_fragment_metadata(6, (int64_t)1262304000, 1262304000, false));
 }
 
 TEST_F(MetadataUpdate, SmallDateNarrowMin) {
@@ -435,21 +405,8 @@ TEST_F(MetadataUpdate, SmallDateNarrowMin) {
       ExecutorDeviceType::CPU);
 
   recompute_metadata(td, cat);
-
-  auto check_recomputed_metadata_values =
-      [](const Fragmenter_Namespace::FragmentInfo& fragment) {
-        const auto metadata_map = fragment.getChunkMetadataMapPhysical();
-        {
-          const auto chunk_metadata_itr = metadata_map.find(7);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.bigintval, 1262304000);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.bigintval, 1356912000);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
-        }
-      };
-
-  run_op_per_fragment(td, check_recomputed_metadata_values);
+  run_op_per_fragment(td,
+                      check_fragment_metadata(7, (int64_t)1262304000, 1356912000, false));
 }
 
 TEST_F(MetadataUpdate, SmallDateNarrowMax) {
@@ -461,21 +418,8 @@ TEST_F(MetadataUpdate, SmallDateNarrowMax) {
       ExecutorDeviceType::CPU);
 
   recompute_metadata(td, cat);
-
-  auto check_recomputed_metadata_values =
-      [](const Fragmenter_Namespace::FragmentInfo& fragment) {
-        const auto metadata_map = fragment.getChunkMetadataMapPhysical();
-        {
-          const auto chunk_metadata_itr = metadata_map.find(7);
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.bigintval, -946771200);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.bigintval, 1262304000);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
-        }
-      };
-
-  run_op_per_fragment(td, check_recomputed_metadata_values);
+  run_op_per_fragment(td,
+                      check_fragment_metadata(7, (int64_t)-946771200, 1262304000, false));
 }
 
 TEST_F(MetadataUpdate, DeleteReset) {
@@ -484,43 +428,26 @@ TEST_F(MetadataUpdate, DeleteReset) {
 
   run_multiple_agg("DELETE FROM  " + g_table_name + " WHERE dd = '12/31/2012';",
                    ExecutorDeviceType::CPU);
-
-  auto check_initial_metadata_values =
-      [](const Fragmenter_Namespace::FragmentInfo& fragment) {
-        const auto metadata_map = fragment.getChunkMetadataMapPhysical();
-        {
-          // last col should be deleted col
-          auto chunk_metadata_itr = metadata_map.end();
-          chunk_metadata_itr--;
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          CHECK(chunk_metadata_itr->second.sqlType.get_type() == kBOOLEAN);
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.boolval, false);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.boolval, true);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
-        }
-      };
-  run_op_per_fragment(td, check_initial_metadata_values);
+  run_op_per_fragment(td, check_fragment_metadata(-1, false, true, false));
 
   vacuum_and_recompute_metadata(td, cat);
+  run_op_per_fragment(td, check_fragment_metadata(-1, false, false, false));
+}
 
-  auto check_recomputed_metadata_values =
-      [](const Fragmenter_Namespace::FragmentInfo& fragment) {
-        const auto metadata_map = fragment.getChunkMetadataMapPhysical();
-        // last col should be deleted col
-        {
-          auto chunk_metadata_itr = metadata_map.end();
-          chunk_metadata_itr--;
-          CHECK(chunk_metadata_itr != metadata_map.end());
-          CHECK(chunk_metadata_itr->second.sqlType.get_type() == kBOOLEAN);
-          const auto& chunk_metadata = chunk_metadata_itr->second;
-          ASSERT_EQ(chunk_metadata.chunkStats.min.boolval, false);
-          ASSERT_EQ(chunk_metadata.chunkStats.max.boolval, false);
-          ASSERT_EQ(chunk_metadata.chunkStats.has_nulls, false);
-        }
-      };
+TEST_F(MetadataUpdate, EncodedStringNull) {
+  const auto& cat = g_session->getCatalog();
+  const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
-  run_op_per_fragment(td, check_recomputed_metadata_values);
+  TestHelpers::ValuesGenerator gen(g_table_name);
+  run_multiple_agg(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "'abc'"),
+                   ExecutorDeviceType::CPU);
+  vacuum_and_recompute_metadata(td, cat);
+  run_op_per_fragment(td, check_fragment_metadata(8, 0, 1, false));
+
+  run_multiple_agg(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "null"),
+                   ExecutorDeviceType::CPU);
+  vacuum_and_recompute_metadata(td, cat);
+  run_op_per_fragment(td, check_fragment_metadata(8, 0, 1, true));
 }
 
 int main(int argc, char** argv) {

@@ -410,6 +410,7 @@ declare i32 @char_length(i8*, i32);
 declare i32 @char_length_nullable(i8*, i32, i32);
 declare i32 @char_length_encoded(i8*, i32);
 declare i32 @char_length_encoded_nullable(i8*, i32, i32);
+declare i32 @key_for_string_encoded(i32);
 declare i1 @string_like(i8*, i32, i8*, i32, i8);
 declare i1 @string_ilike(i8*, i32, i8*, i32, i8);
 declare i8 @string_like_nullable(i8*, i32, i8*, i32, i8, i8);

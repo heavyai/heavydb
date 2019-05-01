@@ -233,7 +233,7 @@ void TableOptimizer::recomputeMetadata() const {
       const auto ti = cd->columnType;
       const auto column_id = cd->columnId;
 
-      if (ti.is_varlen() || (ti.is_string() && ti.get_compression() == kENCODING_DICT)) {
+      if (ti.is_varlen()) {
         LOG(INFO) << "Skipping varlen column " << cd->columnName;
         continue;
       }
@@ -242,13 +242,19 @@ void TableOptimizer::recomputeMetadata() const {
           std::make_shared<const InputColDescriptor>(column_id, table_id, 0);
       const auto col_expr =
           makeExpr<Analyzer::ColumnVar>(cd->columnType, table_id, column_id, 0);
-      const auto max_expr =
+      auto max_expr =
           makeExpr<Analyzer::AggExpr>(cd->columnType, kMAX, col_expr, false, nullptr);
-      const auto min_expr =
+      auto min_expr =
           makeExpr<Analyzer::AggExpr>(cd->columnType, kMIN, col_expr, false, nullptr);
-      const auto count_expr =
+      auto count_expr =
           makeExpr<Analyzer::AggExpr>(cd->columnType, kCOUNT, col_expr, false, nullptr);
 
+      if (ti.is_string()) {
+        const SQLTypeInfo fun_ti(kINT);
+        const auto fun_expr = makeExpr<Analyzer::KeyForStringExpr>(col_expr);
+        max_expr = makeExpr<Analyzer::AggExpr>(fun_ti, kMAX, fun_expr, false, nullptr);
+        min_expr = makeExpr<Analyzer::AggExpr>(fun_ti, kMIN, fun_expr, false, nullptr);
+      }
       const auto ra_exe_unit = build_ra_exe_unit(
           input_col_desc, {min_expr.get(), max_expr.get(), count_expr.get()});
       const auto table_infos = get_table_infos(ra_exe_unit, executor_);

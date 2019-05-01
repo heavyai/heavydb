@@ -217,6 +217,11 @@ class CalciteAdapter {
       return makeExpr<Analyzer::CharLengthExpr>(str_arg->decompress(),
                                                 op_str == std::string("CHAR_LENGTH"));
     }
+    if (op_str == std::string("KEY_FOR_STRING")) {
+      CHECK_EQ(unsigned(1), operands.Size());
+      auto str_arg = getExprFromNode(operands[0], scan_targets);
+      return makeExpr<Analyzer::KeyForStringExpr>(str_arg);
+    }
     if (op_str == std::string("CARDINALITY") || op_str == std::string("ARRAY_LENGTH")) {
       CHECK_EQ(unsigned(1), operands.Size());
       auto str_arg = getExprFromNode(operands[0], scan_targets);
@@ -984,6 +989,12 @@ void collect_used_columns(std::vector<std::shared_ptr<Analyzer::ColumnVar>>& use
   const auto charlength_expr = std::dynamic_pointer_cast<Analyzer::CharLengthExpr>(expr);
   if (charlength_expr) {
     collect_used_columns(used_cols, charlength_expr->get_own_arg());
+    return;
+  }
+  const auto keyforstring_expr =
+      std::dynamic_pointer_cast<Analyzer::KeyForStringExpr>(expr);
+  if (keyforstring_expr) {
+    collect_used_columns(used_cols, keyforstring_expr->get_own_arg());
     return;
   }
   const auto cardinality_expr =

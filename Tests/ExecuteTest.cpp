@@ -644,6 +644,105 @@ TEST(Insert, DictBoundary) {
   }
 }
 
+TEST(KeyForString, KeyForString) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("drop table if exists kfs;");
+    EXPECT_NO_THROW(run_ddl_statement(
+        "create table kfs(ts text encoding dict(8), ss text encoding "
+        "dict(16), ws text encoding dict, ns text not null encoding dict, sa text[]);"));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into kfs values('0', '0', '0', '0', {'0','0'});",
+                         ExecutorDeviceType::CPU));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into kfs values('1', '1', '1', '1', {'1','1'});",
+                         ExecutorDeviceType::CPU));
+    EXPECT_NO_THROW(
+        run_multiple_agg("insert into kfs values(null, null, null, '2', {'2','2'});",
+                         ExecutorDeviceType::CPU));
+    ASSERT_EQ(3, v<int64_t>(run_simple_agg("select count() from kfs;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "select count() from kfs where key_for_string(ts) is not null;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "select count() from kfs where key_for_string(ss) is not null;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg(
+                  "select count() from kfs where key_for_string(ws) is not null;", dt)));
+    ASSERT_EQ(3,
+              v<int64_t>(run_simple_agg(
+                  "select count() from kfs where key_for_string(ns) is not null;", dt)));
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg(
+            "select count() from kfs where key_for_string(sa[1]) is not null;", dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "select count() from kfs where key_for_string(ts) = key_for_string(ss);",
+            dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "select count() from kfs where key_for_string(ss) = key_for_string(ws);",
+            dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "select count() from kfs where key_for_string(ws) = key_for_string(ts);",
+            dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "select count() from kfs where key_for_string(ws) = key_for_string(ns);",
+            dt)));
+    ASSERT_EQ(
+        2,
+        v<int64_t>(run_simple_agg(
+            "select count() from kfs where key_for_string(ws) = key_for_string(sa[1]);",
+            dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("select min(key_for_string(ts)) from kfs;", dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("select min(key_for_string(ss)) from kfs;", dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("select min(key_for_string(ws)) from kfs;", dt)));
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg("select min(key_for_string(ns)) from kfs;", dt)));
+    ASSERT_EQ(
+        0, v<int64_t>(run_simple_agg("select min(key_for_string(sa[1])) from kfs;", dt)));
+    ASSERT_EQ(
+        0, v<int64_t>(run_simple_agg("select min(key_for_string(sa[2])) from kfs;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("select max(key_for_string(ts)) from kfs;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("select max(key_for_string(ss)) from kfs;", dt)));
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg("select max(key_for_string(ws)) from kfs;", dt)));
+    ASSERT_EQ(2,
+              v<int64_t>(run_simple_agg("select max(key_for_string(ns)) from kfs;", dt)));
+    ASSERT_EQ(
+        2, v<int64_t>(run_simple_agg("select max(key_for_string(sa[1])) from kfs;", dt)));
+    ASSERT_EQ(
+        2, v<int64_t>(run_simple_agg("select max(key_for_string(sa[2])) from kfs;", dt)));
+    ASSERT_EQ(
+        2, v<int64_t>(run_simple_agg("select count(key_for_string(ts)) from kfs;", dt)));
+    ASSERT_EQ(
+        2, v<int64_t>(run_simple_agg("select count(key_for_string(ss)) from kfs;", dt)));
+    ASSERT_EQ(
+        2, v<int64_t>(run_simple_agg("select count(key_for_string(ws)) from kfs;", dt)));
+    ASSERT_EQ(
+        3, v<int64_t>(run_simple_agg("select count(key_for_string(ns)) from kfs;", dt)));
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg("select count(key_for_string(sa[1])) from kfs;", dt)));
+    ASSERT_EQ(
+        3,
+        v<int64_t>(run_simple_agg("select count(key_for_string(sa[2])) from kfs;", dt)));
+  }
+}
+
 TEST(Select, NullGroupBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

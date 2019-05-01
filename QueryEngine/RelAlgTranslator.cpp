@@ -1148,6 +1148,19 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLength(
       str_arg->decompress(), rex_function->getName() == std::string("CHAR_LENGTH"));
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateKeyForString(
+    const RexFunctionOperator* rex_function) const {
+  const auto& args = translateFunctionArgs(rex_function);
+  CHECK_EQ(size_t(1), args.size());
+  const auto expr = dynamic_cast<Analyzer::Expr*>(args[0].get());
+  if (nullptr == expr || !expr->get_type_info().is_string() ||
+      expr->get_type_info().is_varlen()) {
+    throw std::runtime_error(rex_function->getName() +
+                             " expects a dictionary encoded text column.");
+  }
+  return makeExpr<Analyzer::KeyForStringExpr>(args[0]);
+}
+
 Analyzer::ExpressionPtr RelAlgTranslator::translateCardinality(
     const RexFunctionOperator* rex_function) const {
   const auto ret_ti = rex_function->getType();
@@ -1341,6 +1354,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (rex_function->getName() == std::string("LENGTH") ||
       rex_function->getName() == std::string("CHAR_LENGTH")) {
     return translateLength(rex_function);
+  }
+  if (rex_function->getName() == std::string("KEY_FOR_STRING")) {
+    return translateKeyForString(rex_function);
   }
   if (rex_function->getName() == std::string("CARDINALITY") ||
       rex_function->getName() == std::string("ARRAY_LENGTH")) {

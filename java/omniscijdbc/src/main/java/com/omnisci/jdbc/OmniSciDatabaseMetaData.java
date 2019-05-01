@@ -241,7 +241,7 @@ class OmniSciDatabaseMetaData implements DatabaseMetaData {
   @Override
   public String getStringFunctions() throws SQLException {
     MAPDLOGGER.debug("Entered");
-    return "CHAR_LENGTH, CHAR";
+    return "CHAR_LENGTH, CHAR, KEY_FOR_STRING";
   }
 
   @Override

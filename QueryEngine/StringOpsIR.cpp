@@ -83,6 +83,13 @@ llvm::Value* Executor::codegen(const Analyzer::CharLengthExpr* expr,
              : cgen_state_->emitCall(fn_name, charlength_args);
 }
 
+llvm::Value* Executor::codegen(const Analyzer::KeyForStringExpr* expr,
+                               const CompilationOptions& co) {
+  auto str_lv = codegen(expr->get_arg(), true, co);
+  CHECK_EQ(size_t(1), str_lv.size());
+  return cgen_state_->emitCall("key_for_string_encoded", str_lv);
+}
+
 llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr,
                                const CompilationOptions& co) {
   if (is_unnest(extract_cast_arg(expr->get_arg()))) {
