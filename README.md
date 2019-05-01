@@ -193,7 +193,7 @@ Contributed code should compile without generating warnings by recent compilers 
 
 ## clang-format
 
-A [`.clang-format`](https://clang.llvm.org/docs/ClangFormat.html) style configuration, based on the Chromium style guide, is provided at the top level of the repository. Please format your code using a recent version (6.0+ preferred) of ClangFormat before submitting.
+A [`.clang-format`](https://clang.llvm.org/docs/ClangFormat.html) style configuration, based on the Chromium style guide, is provided at the top level of the repository. Please format your code using a recent version (8.0+ preferred) of ClangFormat before submitting.
 
 To use:
 
@@ -219,11 +219,11 @@ OmniSciDB has the following dependencies:
 | ------- | ----------- | -------- |
 | [CMake](https://cmake.org/) | 3.3 | yes |
 | [LLVM](http://llvm.org/) | 4.0 (8.0 recommended) | yes |
-| [GCC](http://gcc.gnu.org/) | 5.1 | no, if building with clang |
+| [GCC](http://gcc.gnu.org/) | 6.1 | no, if building with clang |
 | [Go](https://golang.org/) | 1.6 | yes |
 | [Boost](http://www.boost.org/) | 1.65.0 | yes |
 | [OpenJDK](http://openjdk.java.net/) | 1.7 | yes |
-| [CUDA](http://nvidia.com/cuda) | 8.0 | yes, if compiling with GPU support |
+| [CUDA](http://nvidia.com/cuda) | 9.0 | yes, if compiling with GPU support |
 | [gperftools](https://github.com/gperftools/gperftools) | | yes |
 | [gdal](http://gdal.org/) | 2.3 | yes |
 | [Arrow](https://arrow.apache.org/) | 0.11.0 | yes |
