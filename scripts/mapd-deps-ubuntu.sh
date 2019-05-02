@@ -135,24 +135,16 @@ make -j $(nproc)
 make install
 popd
 
-VERS=2018.05.07.00
-wget --continue https://github.com/facebook/folly/archive/v$VERS.tar.gz
-tar xvf v$VERS.tar.gz
-pushd folly-$VERS/folly
-/usr/bin/autoreconf -ivf
-./configure --prefix=$PREFIX
-make -j $(nproc)
+VERS=2019.04.29.00
+download https://github.com/facebook/folly/archive/v$VERS.tar.gz
+extract v$VERS.tar.gz
+pushd folly-$VERS/build/
+CXXFLAGS="-fPIC -pthread" cmake -DCMAKE_INSTALL_PREFIX=$PREFIX -DBUILD_SHARED_LIBS=on ..
+makej
 make install
 popd
 
-VERS=1.21-45
-wget --continue https://github.com/jarro2783/bisonpp/archive/$VERS.tar.gz
-tar xvf $VERS.tar.gz
-pushd bisonpp-$VERS
-./configure --prefix=$PREFIX
-make -j $(nproc)
-make install
-popd
+download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 
 # Apache Arrow (see common-functions.sh)
 ARROW_BOOST_USE_SHARED="ON"
@@ -224,7 +216,7 @@ VERS=1.1.101.0 # 3/1/19
 rm -rf vulkan
 mkdir -p vulkan
 pushd vulkan
-wget --continue --no-cookies https://vulkan.lunarg.com/sdk/download/$VERS/linux/vulkansdk-linux-x86_64-$VERS.tar.gz -O vulkansdk-linux-x86_64-$VERS.tar.gz
+wget --continue --no-cookies ${HTTP_DEPS}/vulkansdk-linux-x86_64-$VERS.tar.gz -O vulkansdk-linux-x86_64-$VERS.tar.gz
 tar xvf vulkansdk-linux-x86_64-$VERS.tar.gz
 rsync -av $VERS/x86_64/* $PREFIX
 popd # vulkan

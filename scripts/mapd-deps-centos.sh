@@ -121,8 +121,8 @@ pushd boost_$VERS
 ./b2 cxxflags=-fPIC install --prefix=$PREFIX || true
 popd
 
-# https://cmake.org/files/v3.12/cmake-3.12.2.tar.gz
-CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-3.12.2.tar.gz
+# https://github.com/Kitware/CMake/releases/download/v3.14.3/cmake-3.14.3.tar.gz
+CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-3.14.3.tar.gz
 
 VERS=3.1.0
 download https://github.com/google/double-conversion/archive/v$VERS.tar.gz
@@ -151,15 +151,11 @@ CXXFLAGS="-fPIC" download_make_install https://github.com/google/glog/archive/v$
 VERS=2.1.8
 download_make_install https://github.com/libevent/libevent/releases/download/release-$VERS-stable/libevent-$VERS-stable.tar.gz
 
-VERS=2018.05.07.00
+VERS=2019.04.29.00
 download https://github.com/facebook/folly/archive/v$VERS.tar.gz
 extract v$VERS.tar.gz
-pushd folly-$VERS/folly
-OLDPATH=$PATH
-PATH=/usr/bin
-/usr/bin/autoreconf -ivf
-PATH=$OLDPATH
-CXXFLAGS="-fPIC -pthread" ./configure --prefix=$PREFIX --with-boost=$PREFIX --with-boost-libdir=$PREFIX/lib --enable-shared=no
+pushd folly-$VERS/build/
+CXXFLAGS="-fPIC -pthread" cmake -DCMAKE_INSTALL_PREFIX=$PREFIX ..
 makej
 make install
 popd
@@ -170,7 +166,7 @@ download_make_install ${HTTP_DEPS}/libedit-20170329-3.1.tar.gz
 # (see common-functions.sh)
 install_llvm
 
-VERS=7.60.0
+VERS=7.64.1
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
 download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
 

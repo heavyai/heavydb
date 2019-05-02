@@ -149,24 +149,16 @@ make -j $(nproc)
 make install
 popd
 
-VERS=2018.05.07.00
-wget --continue https://github.com/facebook/folly/archive/v$VERS.tar.gz
-tar xvf v$VERS.tar.gz
-pushd folly-$VERS/folly
-/usr/bin/autoreconf -ivf
-./configure --prefix=$PREFIX --with-boost=$PREFIX/
-make -j $(nproc)
+VERS=2019.04.29.00
+download https://github.com/facebook/folly/archive/v$VERS.tar.gz
+extract v$VERS.tar.gz
+pushd folly-$VERS/build/
+cmake -DCMAKE_INSTALL_PREFIX=$PREFIX ..
+makej
 make install
 popd
 
-VERS=1.21-45
-wget --continue https://github.com/jarro2783/bisonpp/archive/$VERS.tar.gz
-tar xvf $VERS.tar.gz
-pushd bisonpp-$VERS
-./configure --prefix=$PREFIX
-make -j $(nproc)
-make install
-popd
+download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 
 # Apache Arrow (see common-functions.sh)
 ARROW_BOOST_USE_SHARED="ON"

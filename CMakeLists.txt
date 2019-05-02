@@ -70,7 +70,7 @@ if(PREFER_STATIC_LIBS)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -static-libgcc -static-libstdc++")
   endif()
 
-  set(CUDA_USE_STATIC_CUDA_RUNTIME ON)
+  set(CUDA_USE_STATIC_CUDA_RUNTIME ON CACHE STRING "Use static CUDA runtime")
 endif()
 
 option(ENABLE_JAVA_REMOTE_DEBUG "Enable Java Remote Debug" OFF )
