@@ -22,12 +22,12 @@
 
 #include "Shared/mapdpath.h"
 
-#if LLVM_VERSION_MAJOR >= 4
+#if LLVM_VERSION_MAJOR < 4
+static_assert(false, "LLVM Version >= 4 is required.");
+#endif
+
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/Bitcode/BitcodeWriter.h>
-#else
-#include <llvm/Bitcode/ReaderWriter.h>
-#endif
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/GlobalValue.h>
@@ -35,6 +35,7 @@
 #include <llvm/IR/LegacyPassManager.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/IRReader/IRReader.h>
+#include <llvm/Support/Casting.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/FormattedStream.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -43,17 +44,14 @@
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Transforms/IPO.h>
+#include <llvm/Transforms/IPO/AlwaysInliner.h>
 #include <llvm/Transforms/InstCombine/InstCombine.h>
 #include <llvm/Transforms/Instrumentation.h>
+#include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
-#if LLVM_VERSION_MAJOR >= 4
-#include <llvm/Transforms/IPO/AlwaysInliner.h>
-#endif
-#include <llvm/Support/Casting.h>
-#include <llvm/Transforms/Scalar.h>
-#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
 #if LLVM_VERSION_MAJOR >= 7
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
@@ -107,15 +105,10 @@ void eliminate_dead_self_recursive_funcs(
 void optimize_ir(llvm::Function* query_func,
                  llvm::Module* module,
                  std::unordered_set<llvm::Function*>& live_funcs,
-                 const CompilationOptions& co,
-                 const std::string& debug_dir,
-                 const std::string& debug_file) {
+                 const CompilationOptions& co) {
   llvm::legacy::PassManager pass_manager;
-#if LLVM_VERSION_MAJOR < 4
-  pass_manager.add(llvm::createAlwaysInlinerPass());
-#else
+
   pass_manager.add(llvm::createAlwaysInlinerLegacyPass());
-#endif
   pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
 #if LLVM_VERSION_MAJOR >= 7
   pass_manager.add(llvm::createInstSimplifyLegacyPass());
@@ -124,13 +117,7 @@ void optimize_ir(llvm::Function* query_func,
 #endif
   pass_manager.add(llvm::createInstructionCombiningPass());
   pass_manager.add(llvm::createGlobalOptimizerPass());
-// FIXME(miyu): need investigate how 3.7+ dump debug IR.
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
-  if (!debug_dir.empty()) {
-    CHECK(!debug_file.empty());
-    pass_manager.add(llvm::createDebugIRPass(false, false, debug_dir, debug_file));
-  }
-#endif
+
   if (co.opt_level_ == ExecutorOptLevel::LoopStrengthReduction) {
     pass_manager.add(llvm::createLoopStrengthReducePass());
   }
@@ -205,7 +192,7 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
 
   // run optimizations
 #ifndef WITH_JIT_DEBUG
-  optimize_ir(query_func, module, live_funcs, co, debug_dir_, debug_file_);
+  optimize_ir(query_func, module, live_funcs, co);
 #endif  // WITH_JIT_DEBUG
 
   llvm::ExecutionEngine* execution_engine{nullptr};
@@ -218,13 +205,8 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
   llvm::InitializeNativeTargetAsmParser();
 
   std::string err_str;
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
-  llvm::EngineBuilder eb(module);
-  eb.setUseMCJIT(true);
-#else
   std::unique_ptr<llvm::Module> owner(module);
   llvm::EngineBuilder eb(std::move(owner));
-#endif
   eb.setErrorStr(&err_str);
   eb.setEngineKind(llvm::EngineKind::JIT);
   llvm::TargetOptions to;
@@ -568,7 +550,7 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
   }
 
   // run optimizations
-  optimize_ir(query_func, module, live_funcs, co, "", "");
+  optimize_ir(query_func, module, live_funcs, co);
   legalize_nvvm_ir(query_func);
 
   std::stringstream ss;
@@ -578,16 +560,11 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
   // Get "nvvm.annotations" metadata node
   llvm::NamedMDNode* md = module->getOrInsertNamedMetadata("nvvm.annotations");
 
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
-  llvm::Value* md_vals[] = {multifrag_query_func,
-                            llvm::MDString::get(ctx, "kernel"),
-                            llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), 1)};
-#else
   llvm::Metadata* md_vals[] = {llvm::ConstantAsMetadata::get(multifrag_query_func),
                                llvm::MDString::get(ctx, "kernel"),
                                llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(
                                    llvm::Type::getInt32Ty(ctx), 1))};
-#endif
+
   // Append metadata to nvvm.annotations
   md->addOperand(llvm::MDNode::get(ctx, md_vals));
 
@@ -674,31 +651,17 @@ std::string Executor::generatePTX(const std::string& cuda_llir) const {
 
   llvm::SMDiagnostic err;
 
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
-  auto module = llvm::ParseIR(mem_buff, err, cgen_state_->context_);
-#else
   auto module = llvm::parseIR(mem_buff->getMemBufferRef(), err, cgen_state_->context_);
-#endif
   if (!module) {
     LOG(FATAL) << err.getMessage().str();
   }
 
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
-  std::stringstream ss;
-  llvm::raw_os_ostream raw_os(ss);
-  llvm::formatted_raw_ostream formatted_os(raw_os);
-#else
   llvm::SmallString<256> code_str;
   llvm::raw_svector_ostream formatted_os(code_str);
-#endif
   CHECK(nvptx_target_machine_);
   {
     llvm::legacy::PassManager ptxgen_pm;
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
-    ptxgen_pm.add(new llvm::DataLayoutPass(module));
-#else
     module->setDataLayout(nvptx_target_machine_->createDataLayout());
-#endif
 
 #if LLVM_VERSION_MAJOR >= 7
     nvptx_target_machine_->addPassesToEmitFile(
@@ -708,16 +671,9 @@ std::string Executor::generatePTX(const std::string& cuda_llir) const {
         ptxgen_pm, formatted_os, llvm::TargetMachine::CGFT_AssemblyFile);
 #endif
     ptxgen_pm.run(*module);
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
-    formatted_os.flush();
-#endif
   }
 
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
-  return ss.str();
-#else
   return code_str.str();
-#endif
 }
 
 void Executor::initializeNVPTXBackend() const {
@@ -745,17 +701,10 @@ llvm::Module* read_template_module(llvm::LLVMContext& context) {
                                                      "/QueryEngine/RuntimeFunctions.bc");
   CHECK(!buffer_or_error.getError());
   llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5
-  auto module = llvm::parseBitcodeFile(buffer, context).get();
-#else
+
   auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
-#if LLVM_VERSION_MAJOR < 4
-  CHECK(!owner.getError());
-#else
   CHECK(!owner.takeError());
-#endif
   auto module = owner.get().release();
-#endif
   CHECK(module);
 
   return module;
@@ -1611,7 +1560,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       throw std::runtime_error(
           "Explain optimized not available when JIT runtime debug symbols are enabled");
 #else
-      optimize_ir(query_func, cgen_state_->module_, live_funcs, co, "", "");
+      optimize_ir(query_func, cgen_state_->module_, live_funcs, co);
 #endif  // WITH_JIT_DEBUG
     }
     llvm_ir =

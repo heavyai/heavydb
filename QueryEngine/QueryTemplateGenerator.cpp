@@ -647,13 +647,7 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   const PointerType* Ty = dyn_cast<PointerType>(group_by_buffers->getType());
   CHECK(Ty);
   GetElementPtrInst* group_by_buffers_gep = GetElementPtrInst::Create(
-#if !(LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 5)
-      Ty->getElementType(),
-#endif
-      group_by_buffers,
-      group_buff_idx,
-      "",
-      bb_entry);
+      Ty->getElementType(), group_by_buffers, group_buff_idx, "", bb_entry);
   LoadInst* col_buffer = new LoadInst(group_by_buffers_gep, "", false, bb_entry);
   col_buffer->setName("col_buffer");
   col_buffer->setAlignment(8);

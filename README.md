@@ -218,7 +218,7 @@ MapD has the following dependencies:
 | Package | Min Version | Required |
 | ------- | ----------- | -------- |
 | [CMake](https://cmake.org/) | 3.3 | yes |
-| [LLVM](http://llvm.org/) | 3.8-4.0, 6.0 | yes |
+| [LLVM](http://llvm.org/) | 4.0 (8.0 recommended) | yes |
 | [GCC](http://gcc.gnu.org/) | 5.1 | no, if building with clang |
 | [Go](https://golang.org/) | 1.6 | yes |
 | [Boost](http://www.boost.org/) | 1.65.0 | yes |
