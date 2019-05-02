@@ -1421,12 +1421,6 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   cgen_state_->module_ = rt_module_copy.release();
 
-  // LOG(INFO) << "g_rt_module after linking with udf module";
-  // g_rt_module->print(llvm::errs(), nullptr);
-
-  // LOG(INFO) << "cgen_state module after linking with udf module";
-  // cgen_state_->module_->print(llvm::errs(), nullptr);
-
   auto agg_fnames =
       get_agg_fnames(ra_exe_unit.target_exprs, !ra_exe_unit.groupby_exprs.empty());
 
