@@ -417,7 +417,11 @@ StandardCommand(ListColumns, {
       if (table_details.shard_count) {
         auto shard_count = table_details.shard_count;
         if (context.cluster_status.size() > 1) {
-          shard_count = table_details.shard_count * (context.cluster_status.size() - 1);
+          size_t leaf_count = 0;
+          for (const auto& node : context.cluster_status) {
+            leaf_count += node.role == TRole::type::LEAF ? 1 : 0;
+          }
+          shard_count *= leaf_count;
         }
         frag += comma_or_blank + "SHARD_COUNT = " + std::to_string(shard_count);
         comma_or_blank = ", ";
