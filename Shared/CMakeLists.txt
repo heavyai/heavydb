@@ -6,6 +6,7 @@ set(shared_source_files
     geo_types.cpp
     SysInfo.cpp
     File.cpp
+    StackTrace.cpp
 )
 
 add_library(Shared ${shared_source_files})
