@@ -1217,6 +1217,9 @@ TEST(Select, GroupBy) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
+    c("SELECT COUNT(*) FROM test_ranges GROUP BY i, b;", dt);
+    c("SELECT i, b FROM test_ranges GROUP BY i, b;", dt);
+
     {
       const auto big_group_threshold = g_big_group_threshold;
       ScopeGuard reset_big_group_threshold = [&big_group_threshold] {
@@ -15082,6 +15085,31 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "null, null, null, "
         "-2147483647, "
         "9223372036854775807, -9223372036854775808);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  try {
+    const std::string drop_old_test{"DROP TABLE IF EXISTS test_ranges;"};
+    run_ddl_statement(drop_old_test);
+    g_sqlite_comparator.query(drop_old_test);
+    std::string columns_definition{"i INT, b BIGINT"};
+    const std::string create_test = build_create_table_statement(
+        columns_definition, "test_ranges", {"", 0}, {}, 2, with_delete_support);
+    run_ddl_statement(create_test);
+    g_sqlite_comparator.query("CREATE TABLE test_ranges(i INT, b BIGINT);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_ranges'";
+    return -EEXIST;
+  }
+  {
+    const std::string insert_query{
+        "INSERT INTO test_ranges VALUES(2147483647, 9223372036854775806);"};
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+  {
+    const std::string insert_query{
+        "INSERT INTO test_ranges VALUES(-2147483647, -9223372036854775807);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }

@@ -204,11 +204,13 @@ ColRangeInfo GroupByAndAggregate::getExprRangeInfo(const Analyzer::Expr* expr) c
 }
 
 int64_t GroupByAndAggregate::getBucketedCardinality(const ColRangeInfo& col_range_info) {
-  auto crt_col_cardinality = col_range_info.max - col_range_info.min;
+  checked_int64_t crt_col_cardinality =
+      checked_int64_t(col_range_info.max) - checked_int64_t(col_range_info.min);
   if (col_range_info.bucket) {
     crt_col_cardinality /= col_range_info.bucket;
   }
-  return crt_col_cardinality + (1 + (col_range_info.has_nulls ? 1 : 0));
+  return static_cast<int64_t>(crt_col_cardinality +
+                              (1 + (col_range_info.has_nulls ? 1 : 0)));
 }
 
 #define LL_CONTEXT executor_->cgen_state_->context_
