@@ -1798,6 +1798,37 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
   return ra_exe_unit;
 }
 
+void build_render_targets(
+    RenderInfo& render_info,
+    const std::vector<Analyzer::Expr*>& work_unit_target_exprs,
+    const std::vector<std::shared_ptr<Analyzer::Expr>>& owned_target_exprs,
+    const std::vector<TargetMetaInfo>& targets_meta) {
+  CHECK_EQ(work_unit_target_exprs.size(), targets_meta.size());
+  render_info.targets.clear();
+  for (size_t i = 0; i < targets_meta.size(); ++i) {
+    // TODO(croot): find a better way to iterate through these or a better data
+    // structure for faster lookup to avoid the double for-loop. These vectors should
+    // be small tho and have no real impact on performance.
+    size_t j{0};
+    for (j = 0; j < owned_target_exprs.size(); ++j) {
+      if (owned_target_exprs[j].get() == work_unit_target_exprs[i]) {
+        break;
+      }
+    }
+    CHECK_LT(j, owned_target_exprs.size());
+
+    const auto& meta_ti = targets_meta[i].get_physical_type_info();
+    const auto& expr_ti = owned_target_exprs[j]->get_type_info();
+    CHECK(meta_ti == expr_ti) << targets_meta[i].get_resname() << " " << i << "," << j
+                              << ", targets meta: " << meta_ti.get_type_name() << "("
+                              << meta_ti.get_compression_name()
+                              << "), target_expr: " << expr_ti.get_type_name() << "("
+                              << expr_ti.get_compression_name() << ")";
+    render_info.targets.emplace_back(std::make_shared<Analyzer::TargetEntry>(
+        targets_meta[i].get_resname(), owned_target_exprs[j], false));
+  }
+}
+
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(
@@ -1810,6 +1841,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     const int64_t queue_time_ms,
     const ssize_t previous_count) {
   INJECT_TIMER(executeWorkUnit);
+
   auto co = co_in;
   ColumnCacheMap column_cache;
   if (is_window_execution_unit(work_unit.exe_unit)) {
@@ -1840,6 +1872,12 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     auto& result_rows = aggregated_result.rs;
     ExecutionResult result(result_rows, aggregated_result.targets_meta);
     body->setOutputMetainfo(aggregated_result.targets_meta);
+    if (render_info) {
+      build_render_targets(*render_info,
+                           work_unit.exe_unit.target_exprs,
+                           target_exprs_owned_,
+                           targets_meta);
+    }
     return result;
   }
   int32_t error_code{0};
@@ -1911,31 +1949,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
 
   result.setQueueTime(queue_time_ms);
   if (render_info) {
-    const auto& target_exprs = work_unit.exe_unit.target_exprs;
-    CHECK_EQ(target_exprs.size(), targets_meta.size());
-    render_info->targets.clear();
-    for (size_t i = 0; i < targets_meta.size(); ++i) {
-      // TODO(croot): find a better way to iterate through these or a better data
-      // structure for faster lookup to avoid the double for-loop. These vectors should
-      // be small tho and have no impact on overall performance.
-      size_t j{0};
-      for (j = 0; j < target_exprs_owned_.size(); ++j) {
-        if (target_exprs_owned_[j].get() == target_exprs[i]) {
-          break;
-        }
-      }
-      CHECK_LT(j, target_exprs_owned_.size());
-
-      const auto& meta_ti = targets_meta[i].get_physical_type_info();
-      const auto& expr_ti = target_exprs_owned_[j]->get_type_info();
-      CHECK(meta_ti == expr_ti) << targets_meta[i].get_resname() << " " << i << "," << j
-                                << ", targets meta: " << meta_ti.get_type_name() << "("
-                                << meta_ti.get_compression_name()
-                                << "), target_expr: " << expr_ti.get_type_name() << "("
-                                << expr_ti.get_compression_name() << ")";
-      render_info->targets.emplace_back(std::make_shared<Analyzer::TargetEntry>(
-          targets_meta[i].get_resname(), target_exprs_owned_[j], false));
-    }
+    build_render_targets(
+        *render_info, work_unit.exe_unit.target_exprs, target_exprs_owned_, targets_meta);
     if (render_info->isPotentialInSituRender()) {
       // return an empty result (with the same queue time, and zero render time)
       return {
