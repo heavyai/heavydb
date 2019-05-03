@@ -1936,9 +1936,13 @@ static ImportStatus import_thread_shapefile(
         // is this a geo column?
         const auto& col_ti = cd->columnType;
         if (col_ti.is_geometry()) {
-          // if we're here, we MUST have geometry
-          CHECK(pGeometry) << "No geometry for column '" << cd->columnName << "', type "
-                           << cd->columnType.get_type_name();
+          // some Shapefiles get us here, but the OGRGeometryRef is null
+          if (!pGeometry) {
+            std::string msg = "Geometry feature " +
+                              std::to_string(firstFeature + iFeature + 1) +
+                              " has null GeometryRef";
+            throw std::runtime_error(msg);
+          }
 
           // Note that this assumes there is one and only one geo column in the table.
           // Currently, the importer only supports reading a single geospatial feature
