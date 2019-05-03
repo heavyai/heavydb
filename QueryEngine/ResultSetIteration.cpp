@@ -363,8 +363,8 @@ void ResultSet::RowWiseTargetAccessor::initializeOffsetsForStorage() {
 
       auto ptr1 = rowwise_target_ptr;
       const auto compact_sz1 =
-          result_set_->query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx)
-              ? result_set_->query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx)
+          result_set_->query_mem_desc_.getPaddedSlotWidthBytes(agg_col_idx)
+              ? result_set_->query_mem_desc_.getPaddedSlotWidthBytes(agg_col_idx)
               : key_width_;
 
       const int8_t* ptr2{nullptr};
@@ -372,14 +372,14 @@ void ResultSet::RowWiseTargetAccessor::initializeOffsetsForStorage() {
       if ((agg_info.is_agg && agg_info.agg_kind == kAVG)) {
         ptr2 = ptr1 + compact_sz1;
         compact_sz2 =
-            result_set_->query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx + 1);
+            result_set_->query_mem_desc_.getPaddedSlotWidthBytes(agg_col_idx + 1);
       } else if (is_real_str_or_array(agg_info)) {
         ptr2 = ptr1 + compact_sz1;
         if (!result_set_->separate_varlen_storage_valid_) {
           // None encoded strings explicitly attached to ResultSetStorage do not have a
           // second slot in the QueryMemoryDescriptor col width vector
           compact_sz2 =
-              result_set_->query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx + 1);
+              result_set_->query_mem_desc_.getPaddedSlotWidthBytes(agg_col_idx + 1);
         }
       }
       offsets_for_storage_[storage_idx].push_back(
@@ -501,8 +501,8 @@ void ResultSet::ColumnWiseTargetAccessor::initializeOffsetsForStorage() {
       const auto& agg_info = result_set_->storage_->targets_[target_idx];
 
       const auto compact_sz1 =
-          crt_query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx)
-              ? crt_query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx)
+          crt_query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx)
+              ? crt_query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx)
               : key_width;
 
       const auto next_col_ptr = advance_to_next_columnar_target_buff(
@@ -512,7 +512,7 @@ void ResultSet::ColumnWiseTargetAccessor::initializeOffsetsForStorage() {
       const auto col2_ptr = uses_two_slots ? next_col_ptr : nullptr;
       const auto compact_sz2 =
           (agg_info.is_agg && agg_info.agg_kind == kAVG) || is_real_str_or_array(agg_info)
-              ? crt_query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx + 1)
+              ? crt_query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx + 1)
               : 0;
 
       offsets_for_storage_[storage_idx].push_back(
@@ -1102,7 +1102,7 @@ void ResultSet::copyColumnIntoBuffer(const size_t column_idx,
   CHECK_LT(column_idx, query_mem_desc_.getSlotCount());
   CHECK(output_buffer_size > 0);
   CHECK(output_buffer);
-  const auto column_width_size = query_mem_desc_.getPaddedColumnWidthBytes(column_idx);
+  const auto column_width_size = query_mem_desc_.getPaddedSlotWidthBytes(column_idx);
   size_t out_buff_offset = 0;
 
   // the main storage:
@@ -1283,7 +1283,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
     // adjusting the column pointer to represent a pointer to the geo target value
     return crt_geo_col_ptr +
            storage_info.fixedup_entry_idx *
-               storage_info.storage_ptr->query_mem_desc_.getPaddedColumnWidthBytes(
+               storage_info.storage_ptr->query_mem_desc_.getPaddedSlotWidthBytes(
                    slot_idx + range);
   };
 
@@ -1295,32 +1295,32 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
 
   auto getCoordsDataPtr = [&](const int8_t* geo_target_ptr) {
     return read_int_from_buff(getNextTargetBuffer(slot_idx, 0),
-                              query_mem_desc_.getPaddedColumnWidthBytes(slot_idx));
+                              query_mem_desc_.getPaddedSlotWidthBytes(slot_idx));
   };
 
   auto getCoordsLength = [&](const int8_t* geo_target_ptr) {
     return read_int_from_buff(getNextTargetBuffer(slot_idx, 1),
-                              query_mem_desc_.getPaddedColumnWidthBytes(slot_idx + 1));
+                              query_mem_desc_.getPaddedSlotWidthBytes(slot_idx + 1));
   };
 
   auto getRingSizesPtr = [&](const int8_t* geo_target_ptr) {
     return read_int_from_buff(getNextTargetBuffer(slot_idx, 2),
-                              query_mem_desc_.getPaddedColumnWidthBytes(slot_idx + 2));
+                              query_mem_desc_.getPaddedSlotWidthBytes(slot_idx + 2));
   };
 
   auto getRingSizesLength = [&](const int8_t* geo_target_ptr) {
     return read_int_from_buff(getNextTargetBuffer(slot_idx, 3),
-                              query_mem_desc_.getPaddedColumnWidthBytes(slot_idx + 3));
+                              query_mem_desc_.getPaddedSlotWidthBytes(slot_idx + 3));
   };
 
   auto getPolyRingsPtr = [&](const int8_t* geo_target_ptr) {
     return read_int_from_buff(getNextTargetBuffer(slot_idx, 4),
-                              query_mem_desc_.getPaddedColumnWidthBytes(slot_idx + 4));
+                              query_mem_desc_.getPaddedSlotWidthBytes(slot_idx + 4));
   };
 
   auto getPolyRingsLength = [&](const int8_t* geo_target_ptr) {
     return read_int_from_buff(getNextTargetBuffer(slot_idx, 5),
-                              query_mem_desc_.getPaddedColumnWidthBytes(slot_idx + 5));
+                              query_mem_desc_.getPaddedSlotWidthBytes(slot_idx + 5));
   };
 
   auto getFragColBuffers = [&]() {
@@ -1676,7 +1676,7 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(
     const bool decimal_to_double) const {
   CHECK(query_mem_desc_.didOutputColumnar());
   const auto col1_ptr = col_ptr;
-  const auto compact_sz1 = query_mem_desc.getPaddedColumnWidthBytes(slot_idx);
+  const auto compact_sz1 = query_mem_desc.getPaddedSlotWidthBytes(slot_idx);
   const auto next_col_ptr =
       advance_to_next_columnar_target_buff(col1_ptr, query_mem_desc, slot_idx);
   const auto col2_ptr = ((target_info.is_agg && target_info.agg_kind == kAVG) ||
@@ -1685,7 +1685,7 @@ TargetValue ResultSet::getTargetValueFromBufferColwise(
                             : nullptr;
   const auto compact_sz2 = ((target_info.is_agg && target_info.agg_kind == kAVG) ||
                             is_real_str_or_array(target_info))
-                               ? query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1)
+                               ? query_mem_desc.getPaddedSlotWidthBytes(slot_idx + 1)
                                : 0;
 
   // TODO(Saman): add required logics for count distinct
@@ -1778,20 +1778,20 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
   }
 
   auto ptr1 = rowwise_target_ptr;
-  int8_t compact_sz1 = query_mem_desc_.getPaddedColumnWidthBytes(slot_idx);
+  int8_t compact_sz1 = query_mem_desc_.getPaddedSlotWidthBytes(slot_idx);
   if (query_mem_desc_.isSingleColumnGroupByWithPerfectHash() &&
       !query_mem_desc_.hasKeylessHash() && !target_info.is_agg) {
     // Single column perfect hash group by can utilize one slot for both the key and the
     // target value if both values fit in 8 bytes. Use the target value actual size for
     // this case. If they don't, the target value should be 8 bytes, so we can still use
     // the actual size rather than the compact size.
-    compact_sz1 = query_mem_desc_.getLogicalColumnWidthBytes(slot_idx);
+    compact_sz1 = query_mem_desc_.getLogicalSlotWidthBytes(slot_idx);
   }
 
   // logic for deciding width of column
   if (target_info.agg_kind == kAVG || is_real_str_or_array(target_info)) {
     const auto ptr2 =
-        rowwise_target_ptr + query_mem_desc_.getPaddedColumnWidthBytes(slot_idx);
+        rowwise_target_ptr + query_mem_desc_.getPaddedSlotWidthBytes(slot_idx);
     int8_t compact_sz2 = 0;
     // Skip reading the second slot if we have a none encoded string and are using
     // the none encoded strings buffer attached to ResultSetStorage
@@ -1799,7 +1799,7 @@ TargetValue ResultSet::getTargetValueFromBufferRowwise(
           (target_info.sql_type.is_array() ||
            (target_info.sql_type.is_string() &&
             target_info.sql_type.get_compression() == kENCODING_NONE)))) {
-      compact_sz2 = query_mem_desc_.getPaddedColumnWidthBytes(slot_idx + 1);
+      compact_sz2 = query_mem_desc_.getPaddedSlotWidthBytes(slot_idx + 1);
     }
     if (separate_varlen_storage_valid_ && target_info.is_agg) {
       compact_sz2 = 8;  // TODO(adb): is there a better way to do this?
@@ -1859,7 +1859,7 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) 
     const auto target_slot_off =
         get_byteoff_of_slot(query_mem_desc_.getTargetIdxForKey(), query_mem_desc_);
     return read_int_from_buff(rowwise_target_ptr + target_slot_off,
-                              query_mem_desc_.getPaddedColumnWidthBytes(
+                              query_mem_desc_.getPaddedSlotWidthBytes(
                                   query_mem_desc_.getTargetIdxForKey())) ==
            target_init_vals_[query_mem_desc_.getTargetIdxForKey()];
   } else {
@@ -1898,10 +1898,10 @@ bool ResultSetStorage::isEmptyEntryColumnar(const size_t entry_idx,
     const auto col_buff = advance_col_buff_to_slot(
         buff, query_mem_desc_, targets_, query_mem_desc_.getTargetIdxForKey(), false);
     const auto entry_buff =
-        col_buff + entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(
+        col_buff + entry_idx * query_mem_desc_.getPaddedSlotWidthBytes(
                                    query_mem_desc_.getTargetIdxForKey());
     return read_int_from_buff(entry_buff,
-                              query_mem_desc_.getPaddedColumnWidthBytes(
+                              query_mem_desc_.getPaddedSlotWidthBytes(
                                   query_mem_desc_.getTargetIdxForKey())) ==
            target_init_vals_[query_mem_desc_.getTargetIdxForKey()];
   } else {

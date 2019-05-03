@@ -44,7 +44,7 @@ inline std::vector<int64_t> init_agg_val_vec(
                                 query_mem_desc.getCompactByteWidth()));
         continue;
       }
-      if (query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx) > 0) {
+      if (query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx) > 0) {
         agg_init_vals.push_back(0);
       }
       if (agg_info.sql_type.is_array() ||
@@ -61,7 +61,7 @@ inline std::vector<int64_t> init_agg_val_vec(
       }
       continue;
     }
-    CHECK_GT(query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx), 0);
+    CHECK_GT(query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx), 0);
     const bool float_argument_input = takes_float_argument(agg_info);
     const auto chosen_bytes = query_mem_desc.getCompactByteWidth();
     auto init_ti = get_compact_type(agg_info);

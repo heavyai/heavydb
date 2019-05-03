@@ -320,20 +320,18 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
         copyKeyColWise(entry_idx, this_buff, that_buff);
       }
       auto this_ptr1 = this_crt_col_ptr +
-                       entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx);
+                       entry_idx * query_mem_desc_.getPaddedSlotWidthBytes(agg_col_idx);
       auto that_ptr1 = that_crt_col_ptr +
-                       entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx);
+                       entry_idx * query_mem_desc_.getPaddedSlotWidthBytes(agg_col_idx);
       int8_t* this_ptr2{nullptr};
       const int8_t* that_ptr2{nullptr};
       if (agg_info.is_agg &&
           (agg_info.agg_kind == kAVG ||
            (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_varlen()))) {
-        this_ptr2 =
-            this_next_col_ptr +
-            entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx + 1);
-        that_ptr2 =
-            that_next_col_ptr +
-            entry_idx * query_mem_desc_.getPaddedColumnWidthBytes(agg_col_idx + 1);
+        this_ptr2 = this_next_col_ptr +
+                    entry_idx * query_mem_desc_.getPaddedSlotWidthBytes(agg_col_idx + 1);
+        that_ptr2 = that_next_col_ptr +
+                    entry_idx * query_mem_desc_.getPaddedSlotWidthBytes(agg_col_idx + 1);
       }
       reduceOneSlot(this_ptr1,
                     this_ptr2,
@@ -430,7 +428,7 @@ void ResultSetStorage::rewriteAggregateBufferOffsets(
         CHECK(target_info.agg_kind == kSAMPLE);
         auto ptr1 = rowwise_targets_ptr;
         auto slot_idx = target_slot_idx;
-        auto ptr2 = ptr1 + query_mem_desc_.getPaddedColumnWidthBytes(slot_idx);
+        auto ptr2 = ptr1 + query_mem_desc_.getPaddedSlotWidthBytes(slot_idx);
         auto offset = *reinterpret_cast<const int64_t*>(ptr1);
 
         const auto& elem_ti = target_info.sql_type.get_elem_type();
@@ -441,8 +439,8 @@ void ResultSetStorage::rewriteAggregateBufferOffsets(
         if (target_info.sql_type.is_geometry()) {
           for (int j = 0; j < target_info.sql_type.get_physical_coord_cols(); j++) {
             if (j > 0) {
-              ptr1 = ptr2 + query_mem_desc_.getPaddedColumnWidthBytes(slot_idx + 1);
-              ptr2 = ptr1 + query_mem_desc_.getPaddedColumnWidthBytes(slot_idx + 2);
+              ptr1 = ptr2 + query_mem_desc_.getPaddedSlotWidthBytes(slot_idx + 1);
+              ptr2 = ptr1 + query_mem_desc_.getPaddedSlotWidthBytes(slot_idx + 2);
               slot_idx += 2;
               length_to_elems = 4;
             }
@@ -512,9 +510,9 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
         (target_info.agg_kind == kAVG ||
          (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()))) {
       this_ptr2 =
-          this_targets_ptr + query_mem_desc_.getPaddedColumnWidthBytes(target_slot_idx);
+          this_targets_ptr + query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx);
       that_ptr2 =
-          that_targets_ptr + query_mem_desc_.getPaddedColumnWidthBytes(target_slot_idx);
+          that_targets_ptr + query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx);
     }
     reduceOneSlot(this_targets_ptr,
                   this_ptr2,
@@ -1228,7 +1226,7 @@ int8_t get_width_for_slot(const size_t target_slot_idx,
   if (float_argument_input) {
     return sizeof(float);
   }
-  return query_mem_desc.getPaddedColumnWidthBytes(target_slot_idx);
+  return query_mem_desc.getPaddedSlotWidthBytes(target_slot_idx);
 }
 
 }  // namespace
@@ -1271,7 +1269,7 @@ void ResultSetStorage::reduceOneSlot(
         // Ignore float argument compaction for count component for fear of its overflow
         AGGREGATE_ONE_COUNT(this_ptr2,
                             that_ptr2,
-                            query_mem_desc_.getPaddedColumnWidthBytes(target_slot_idx));
+                            query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx));
       }
       // fall thru
       case kSUM: {
@@ -1318,8 +1316,8 @@ void ResultSetStorage::reduceOneSlot(
           if (target_info.sql_type.is_geometry()) {
             for (int j = 0; j < target_info.sql_type.get_physical_coord_cols(); j++) {
               if (j > 0) {
-                ptr1 = ptr2 + query_mem_desc_.getPaddedColumnWidthBytes(++slot_idx);
-                ptr2 = ptr1 + query_mem_desc_.getPaddedColumnWidthBytes(++slot_idx);
+                ptr1 = ptr2 + query_mem_desc_.getPaddedSlotWidthBytes(++slot_idx);
+                ptr2 = ptr1 + query_mem_desc_.getPaddedSlotWidthBytes(++slot_idx);
                 length_to_elems = 4;
               }
               CHECK_LT(rhs_proj_col, serialized_varlen_buffer.size());
@@ -1407,9 +1405,9 @@ bool ResultSetStorage::reduceSingleRow(const int8_t* row_ptr,
          ++target_idx, ++agg_col_idx) {
       const auto& agg_info = targets[target_idx];
       const bool float_argument_input = takes_float_argument(agg_info);
-      const auto chosen_bytes =
-          float_argument_input ? sizeof(float)
-                               : query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx);
+      const auto chosen_bytes = float_argument_input
+                                    ? sizeof(float)
+                                    : query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx);
       auto partial_bin_val = get_component(
           row_ptr + query_mem_desc.getColOnlyOffInBytes(agg_col_idx), chosen_bytes);
       partial_agg_vals[agg_col_idx] = partial_bin_val;
@@ -1428,7 +1426,7 @@ bool ResultSetStorage::reduceSingleRow(const int8_t* row_ptr,
         ++agg_col_idx;
         partial_bin_val = partial_agg_vals[agg_col_idx] =
             get_component(row_ptr + query_mem_desc.getColOnlyOffInBytes(agg_col_idx),
-                          query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx));
+                          query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx));
       }
       if (agg_col_idx == static_cast<size_t>(query_mem_desc.getTargetIdxForKey()) &&
           partial_bin_val != agg_init_vals[query_mem_desc.getTargetIdxForKey()]) {
@@ -1447,9 +1445,9 @@ bool ResultSetStorage::reduceSingleRow(const int8_t* row_ptr,
       auto partial_bin_val = partial_agg_vals[agg_col_idx];
       const auto& agg_info = targets[target_idx];
       const bool float_argument_input = takes_float_argument(agg_info);
-      const auto chosen_bytes =
-          float_argument_input ? sizeof(float)
-                               : query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx);
+      const auto chosen_bytes = float_argument_input
+                                    ? sizeof(float)
+                                    : query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx);
       const auto& chosen_type = get_compact_type(agg_info);
       if (agg_info.is_agg && agg_info.agg_kind != kSAMPLE) {
         try {
@@ -1469,7 +1467,7 @@ bool ResultSetStorage::reduceSingleRow(const int8_t* row_ptr,
               AGGREGATE_ONE_COUNT(
                   reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx + 1]),
                   reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx + 1]),
-                  query_mem_desc.getPaddedColumnWidthBytes(agg_col_idx));
+                  query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx));
             // fall thru
             case kSUM:
               AGGREGATE_ONE_NULLABLE_VALUE(

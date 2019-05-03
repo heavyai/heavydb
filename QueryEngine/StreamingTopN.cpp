@@ -104,7 +104,7 @@ std::vector<int8_t> pick_top_n_rows_from_dev_heaps(
   GroupByBufferLayoutInfo oe_layout{
       n * thread_count,
       query_mem_desc.getColOffInBytes(key_slot_idx),
-      static_cast<size_t>(query_mem_desc.getPaddedColumnWidthBytes(oe_col_idx)),
+      static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(oe_col_idx)),
       query_mem_desc.getRowSize(),
       get_target_info(ra_exe_unit.target_exprs[oe_col_idx], g_bigint_count),
       -1};

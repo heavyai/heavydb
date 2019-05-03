@@ -805,7 +805,7 @@ size_t QueryMemoryDescriptor::getColOffInBytes(const size_t col_idx) const {
       offset += getPrependedGroupBufferSizeInBytes();
     }
     for (size_t index = 0; index < col_idx; ++index) {
-      offset += align_to_int64(getPaddedColumnWidthBytes(index) * entry_count_);
+      offset += align_to_int64(getPaddedSlotWidthBytes(index) * entry_count_);
     }
     return offset;
   }
@@ -859,7 +859,7 @@ size_t QueryMemoryDescriptor::getColOffInBytesInNextBin(const size_t col_idx) co
   if (output_columnar_) {
     CHECK_EQ(size_t(1), group_col_widths_.size());
     CHECK_EQ(size_t(1), warp_count);
-    return getPaddedColumnWidthBytes(col_idx);
+    return getPaddedSlotWidthBytes(col_idx);
   }
 
   return warp_count * getRowSize();
@@ -871,7 +871,7 @@ size_t QueryMemoryDescriptor::getNextColOffInBytes(const int8_t* col_ptr,
   CHECK(!output_columnar_ || bin < entry_count_);
   size_t offset{0};
   auto warp_count = getWarpCount();
-  const auto chosen_bytes = getPaddedColumnWidthBytes(col_idx);
+  const auto chosen_bytes = getPaddedSlotWidthBytes(col_idx);
   const auto total_slot_count = getSlotCount();
   if (col_idx + 1 == total_slot_count) {
     if (output_columnar_) {
@@ -881,7 +881,7 @@ size_t QueryMemoryDescriptor::getNextColOffInBytes(const int8_t* col_ptr,
     }
   }
 
-  const auto next_chosen_bytes = getPaddedColumnWidthBytes(col_idx + 1);
+  const auto next_chosen_bytes = getPaddedSlotWidthBytes(col_idx + 1);
   if (output_columnar_) {
     CHECK_EQ(size_t(1), group_col_widths_.size());
     CHECK_EQ(size_t(1), warp_count);
@@ -1043,12 +1043,12 @@ size_t QueryMemoryDescriptor::getSlotCount() const {
   return col_slot_context_.getSlotCount();
 }
 
-const int8_t QueryMemoryDescriptor::getPaddedColumnWidthBytes(
+const int8_t QueryMemoryDescriptor::getPaddedSlotWidthBytes(
     const size_t slot_idx) const {
   return col_slot_context_.getSlotInfo(slot_idx).padded_size;
 }
 
-const int8_t QueryMemoryDescriptor::getLogicalColumnWidthBytes(
+const int8_t QueryMemoryDescriptor::getLogicalSlotWidthBytes(
     const size_t slot_idx) const {
   return col_slot_context_.getSlotInfo(slot_idx).logical_size;
 }

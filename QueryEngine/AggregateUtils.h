@@ -75,7 +75,7 @@ inline std::vector<int64_t> compact_init_vals(
        col_idx < col_count;
        ++col_idx) {
     const auto chosen_bytes =
-        static_cast<unsigned>(query_mem_desc.getPaddedColumnWidthBytes(col_idx));
+        static_cast<unsigned>(query_mem_desc.getPaddedSlotWidthBytes(col_idx));
     if (chosen_bytes == 0) {
       continue;
     }

@@ -994,7 +994,7 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
     CHECK_LT(target_idx, ra_exe_unit_.target_exprs.size());
     const auto order_entry_expr = ra_exe_unit_.target_exprs[target_idx];
     const auto chosen_bytes =
-        static_cast<size_t>(query_mem_desc.getPaddedColumnWidthBytes(target_idx));
+        static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(target_idx));
     auto order_entry_lv = executor_->castToTypeIn(
         executor_->codegen(order_entry_expr, true, co).front(), chosen_bytes * 8);
     const uint32_t n = ra_exe_unit_.sort_info.offset + ra_exe_unit_.sort_info.limit;

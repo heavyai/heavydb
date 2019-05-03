@@ -168,7 +168,7 @@ void TargetExprCodegen::codegen(
   if (co.device_type_ == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory() &&
       is_simple_count && (!arg_expr || arg_expr->get_type_info().get_notnull())) {
     CHECK_EQ(size_t(1), agg_fn_names.size());
-    const auto chosen_bytes = query_mem_desc.getPaddedColumnWidthBytes(slot_index);
+    const auto chosen_bytes = query_mem_desc.getPaddedSlotWidthBytes(slot_index);
     llvm::Value* agg_col_ptr{nullptr};
     if (is_group_by) {
       if (query_mem_desc.didOutputColumnar()) {
@@ -240,7 +240,7 @@ void TargetExprCodegen::codegen(
 
   for (const auto& agg_base_name : agg_fn_names) {
     if (target_info.is_distinct && arg_expr->get_type_info().is_array()) {
-      CHECK_EQ(static_cast<size_t>(query_mem_desc.getLogicalColumnWidthBytes(slot_index)),
+      CHECK_EQ(static_cast<size_t>(query_mem_desc.getLogicalSlotWidthBytes(slot_index)),
                sizeof(int64_t));
       // TODO(miyu): check if buffer may be columnar here
       CHECK(!query_mem_desc.didOutputColumnar());
@@ -268,7 +268,7 @@ void TargetExprCodegen::codegen(
 
     llvm::Value* agg_col_ptr{nullptr};
     const auto chosen_bytes =
-        static_cast<size_t>(query_mem_desc.getPaddedColumnWidthBytes(slot_index));
+        static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(slot_index));
     const auto& chosen_type = get_compact_type(target_info);
     const auto& arg_type =
         ((arg_expr && arg_expr->get_type_info().get_type() != kNULLT) &&
@@ -424,7 +424,7 @@ void TargetExprCodegen::codegen(
 void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
                                           const Executor* executor,
                                           const CompilationOptions& co) {
-  if (query_mem_desc.getPaddedColumnWidthBytes(slot_index_counter) == 0) {
+  if (query_mem_desc.getPaddedSlotWidthBytes(slot_index_counter) == 0) {
     CHECK(!dynamic_cast<const Analyzer::AggExpr*>(target_expr));
     ++slot_index_counter;
     ++target_index_counter;
@@ -435,7 +435,7 @@ void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
     throw std::runtime_error("UNNEST not supported in the projection list yet.");
   }
   if ((executor->plan_state_->isLazyFetchColumn(target_expr) || !is_group_by) &&
-      (static_cast<size_t>(query_mem_desc.getPaddedColumnWidthBytes(slot_index_counter)) <
+      (static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(slot_index_counter)) <
        sizeof(int64_t)) &&
       !is_columnar_projection(query_mem_desc)) {
     // TODO(miyu): enable different byte width in the layout w/o padding

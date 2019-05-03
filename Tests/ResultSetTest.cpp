@@ -130,7 +130,7 @@ int8_t* fill_one_entry_no_collisions(int8_t* buff,
   int8_t* slot_ptr = buff;
   int64_t vv = 0;
   for (const auto& target_info : target_infos) {
-    const auto slot_bytes = query_mem_desc.getLogicalColumnWidthBytes(target_idx);
+    const auto slot_bytes = query_mem_desc.getLogicalSlotWidthBytes(target_idx);
     CHECK_LE(target_info.sql_type.get_size(), slot_bytes);
     bool isNullable = !target_info.sql_type.get_notnull();
     if (target_info.agg_kind == kCOUNT) {
@@ -161,7 +161,7 @@ int8_t* fill_one_entry_no_collisions(int8_t* buff,
     slot_ptr += slot_bytes;
     if (target_info.agg_kind == kAVG) {
       const auto count_slot_bytes =
-          query_mem_desc.getLogicalColumnWidthBytes(target_idx + 1);
+          query_mem_desc.getLogicalSlotWidthBytes(target_idx + 1);
       if (empty) {
         write_int(slot_ptr, query_mem_desc.hasKeylessHash() ? 0 : 0, count_slot_bytes);
       } else {
@@ -307,7 +307,7 @@ void fill_storage_buffer_perfect_hash_colwise(int8_t* buff,
   size_t slot_idx = 0;
   for (const auto& target_info : target_infos) {
     auto col_entry_ptr = col_ptr;
-    const auto col_bytes = query_mem_desc.getPaddedColumnWidthBytes(slot_idx);
+    const auto col_bytes = query_mem_desc.getPaddedSlotWidthBytes(slot_idx);
     for (size_t i = 0; i < query_mem_desc.getEntryCount(); ++i) {
       int8_t* ptr2{nullptr};
       const bool read_secondary_buffer{target_info.is_agg &&
@@ -318,25 +318,25 @@ void fill_storage_buffer_perfect_hash_colwise(int8_t* buff,
       if (i % 2 == 0) {
         const auto gen_val = generator.getNextValue();
         const auto val = target_info.sql_type.is_string() ? -(gen_val + 2) : gen_val;
-        fill_one_entry_one_col(
-            col_entry_ptr,
-            col_bytes,
-            ptr2,
-            read_secondary_buffer ? query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1)
-                                  : -1,
-            val,
-            target_info,
-            false);
+        fill_one_entry_one_col(col_entry_ptr,
+                               col_bytes,
+                               ptr2,
+                               read_secondary_buffer
+                                   ? query_mem_desc.getPaddedSlotWidthBytes(slot_idx + 1)
+                                   : -1,
+                               val,
+                               target_info,
+                               false);
       } else {
-        fill_one_entry_one_col(
-            col_entry_ptr,
-            col_bytes,
-            ptr2,
-            read_secondary_buffer ? query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1)
-                                  : -1,
-            query_mem_desc.hasKeylessHash() ? 0 : 0xdeadbeef,
-            target_info,
-            true);
+        fill_one_entry_one_col(col_entry_ptr,
+                               col_bytes,
+                               ptr2,
+                               read_secondary_buffer
+                                   ? query_mem_desc.getPaddedSlotWidthBytes(slot_idx + 1)
+                                   : -1,
+                               query_mem_desc.hasKeylessHash() ? 0 : 0xdeadbeef,
+                               target_info,
+                               true);
       }
       col_entry_ptr += col_bytes;
     }
@@ -876,7 +876,7 @@ void ResultSetEmulator::rse_fill_storage_buffer_perfect_hash_colwise(
   size_t slot_idx = 0;
   for (const auto& target_info : rs_target_infos) {
     auto col_entry_ptr = col_ptr;
-    const auto col_bytes = rs_query_mem_desc.getPaddedColumnWidthBytes(slot_idx);
+    const auto col_bytes = rs_query_mem_desc.getPaddedSlotWidthBytes(slot_idx);
     for (size_t i = 0; i < rs_entry_count; i++) {
       int8_t* ptr2{nullptr};
       if (target_info.agg_kind == kAVG) {
@@ -894,7 +894,7 @@ void ResultSetEmulator::rse_fill_storage_buffer_perfect_hash_colwise(
                 col_entry_ptr,
                 col_bytes,
                 ptr2,
-                rs_query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1),
+                rs_query_mem_desc.getPaddedSlotWidthBytes(slot_idx + 1),
                 v,
                 target_info,
                 false,
@@ -904,22 +904,21 @@ void ResultSetEmulator::rse_fill_storage_buffer_perfect_hash_colwise(
                 col_entry_ptr,
                 col_bytes,
                 ptr2,
-                rs_query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1),
+                rs_query_mem_desc.getPaddedSlotWidthBytes(slot_idx + 1),
                 v,
                 target_info,
                 false,
                 false);
           }
         } else {
-          fill_one_entry_one_col(
-              col_entry_ptr,
-              col_bytes,
-              ptr2,
-              rs_query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1),
-              v,
-              target_info,
-              false,
-              false);
+          fill_one_entry_one_col(col_entry_ptr,
+                                 col_bytes,
+                                 ptr2,
+                                 rs_query_mem_desc.getPaddedSlotWidthBytes(slot_idx + 1),
+                                 v,
+                                 target_info,
+                                 false,
+                                 false);
         }
       } else {
         if (rs_flow == 2) {               // null_val test-cases
@@ -927,25 +926,23 @@ void ResultSetEmulator::rse_fill_storage_buffer_perfect_hash_colwise(
                                           // exersized for null_val test
             rs_values[i] = -1;
           }
-          fill_one_entry_one_col(
-              col_entry_ptr,
-              col_bytes,
-              ptr2,
-              rs_query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1),
-              rs_query_mem_desc.hasKeylessHash() ? 0 : 0xdeadbeef,
-              target_info,
-              true,
-              true);
+          fill_one_entry_one_col(col_entry_ptr,
+                                 col_bytes,
+                                 ptr2,
+                                 rs_query_mem_desc.getPaddedSlotWidthBytes(slot_idx + 1),
+                                 rs_query_mem_desc.hasKeylessHash() ? 0 : 0xdeadbeef,
+                                 target_info,
+                                 true,
+                                 true);
         } else {
-          fill_one_entry_one_col(
-              col_entry_ptr,
-              col_bytes,
-              ptr2,
-              rs_query_mem_desc.getPaddedColumnWidthBytes(slot_idx + 1),
-              rs_query_mem_desc.hasKeylessHash() ? 0 : 0xdeadbeef,
-              target_info,
-              true,
-              false);
+          fill_one_entry_one_col(col_entry_ptr,
+                                 col_bytes,
+                                 ptr2,
+                                 rs_query_mem_desc.getPaddedSlotWidthBytes(slot_idx + 1),
+                                 rs_query_mem_desc.hasKeylessHash() ? 0 : 0xdeadbeef,
+                                 target_info,
+                                 true,
+                                 false);
         }
       }
       col_entry_ptr += col_bytes;

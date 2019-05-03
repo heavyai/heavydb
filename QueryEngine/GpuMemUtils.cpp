@@ -224,9 +224,9 @@ void copy_projection_buffer_from_gpu_columnar(
   size_t buffer_offset_cpu{projection_count * row_index_width};
   // other columns are actual non-lazy columns for the projection:
   for (size_t i = 0; i < query_mem_desc.getSlotCount(); i++) {
-    if (query_mem_desc.getPaddedColumnWidthBytes(i) > 0) {
+    if (query_mem_desc.getPaddedSlotWidthBytes(i) > 0) {
       const auto column_proj_size =
-          projection_count * query_mem_desc.getPaddedColumnWidthBytes(i);
+          projection_count * query_mem_desc.getPaddedSlotWidthBytes(i);
       copy_from_gpu(data_mgr,
                     projection_buffer + buffer_offset_cpu,
                     gpu_group_by_buffers.second + query_mem_desc.getColOffInBytes(i),
