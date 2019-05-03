@@ -63,9 +63,14 @@ class ColSlotContext {
   size_t getColCount() const;
   size_t getSlotCount() const;
 
-  const SlotSize getSlotInfo(const size_t slot_idx) const {
+  const SlotSize& getSlotInfo(const size_t slot_idx) const {
     CHECK_LT(slot_idx, slot_sizes_.size());
     return slot_sizes_[slot_idx];
+  }
+
+  const std::vector<size_t>& getSlotsForCol(const size_t col_idx) const {
+    CHECK_LT(col_idx, col_to_slot_map_.size());
+    return col_to_slot_map_[col_idx];
   }
 
   size_t getAllSlotsPaddedSize() const;

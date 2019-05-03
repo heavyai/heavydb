@@ -1601,6 +1601,19 @@ TEST(Select, ApproxCountDistinct) {
       "SELECT COUNT(*), MIN(x), MAX(x), AVG(y), SUM(z) AS n, COUNT(distinct x + 1) FROM "
       "test GROUP BY y ORDER BY n;",
       dt);
+    // Test approx_count_distinct buffer allocation with multi-slot targets
+    // sqlite does not support SAMPLE, grab the first row only
+    c("SELECT SAMPLE(real_str), str, APPROX_COUNT_DISTINCT(x) FROM test WHERE real_str = "
+      "'real_bar' GROUP BY str;",
+      "SELECT real_str, str, COUNT( distinct x) FROM test WHERE real_str = "
+      "'real_bar' GROUP BY str;",
+      dt);
+    c("SELECT SAMPLE(real_str), str, APPROX_COUNT_DISTINCT(x) FROM test WHERE real_str = "
+      "'real_foo' GROUP BY str;",
+      "SELECT real_str, str, COUNT(distinct x) FROM test WHERE real_str = "
+      "'real_foo' GROUP BY str, real_str;",
+      dt);
+
     EXPECT_NO_THROW(run_multiple_agg(
         "SELECT APPROX_COUNT_DISTINCT(x), SAMPLE(real_str) FROM test GROUP BY x;", dt));
     EXPECT_THROW(

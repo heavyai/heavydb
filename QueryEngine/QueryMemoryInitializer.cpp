@@ -492,15 +492,18 @@ std::vector<ssize_t> QueryMemoryInitializer::allocateCountDistinctBuffers(
   std::vector<ssize_t> agg_bitmap_size(deferred ? agg_col_count : 0);
 
   CHECK_GE(agg_col_count, executor->plan_state_->target_exprs_.size());
-  for (size_t target_idx = 0, agg_col_idx = 0;
-       target_idx < executor->plan_state_->target_exprs_.size() &&
-       agg_col_idx < agg_col_count;
-       ++target_idx, ++agg_col_idx) {
+  for (size_t target_idx = 0; target_idx < executor->plan_state_->target_exprs_.size();
+       ++target_idx) {
     const auto target_expr = executor->plan_state_->target_exprs_[target_idx];
     const auto agg_info = get_target_info(target_expr, g_bigint_count);
     if (is_distinct_target(agg_info)) {
       CHECK(agg_info.is_agg &&
             (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT));
+      CHECK(!agg_info.sql_type.is_varlen());
+
+      const auto agg_col_idx = query_mem_desc.getSlotIndexForSingleSlotCol(target_idx);
+      CHECK_LT(agg_col_idx, agg_col_count);
+
       CHECK_EQ(static_cast<size_t>(query_mem_desc.getLogicalSlotWidthBytes(agg_col_idx)),
                sizeof(int64_t));
       const auto& count_distinct_desc =
@@ -521,9 +524,6 @@ std::vector<ssize_t> QueryMemoryInitializer::allocateCountDistinctBuffers(
           init_agg_vals_[agg_col_idx] = allocateCountDistinctSet();
         }
       }
-    }
-    if (agg_info.agg_kind == kAVG) {
-      ++agg_col_idx;
     }
   }
 

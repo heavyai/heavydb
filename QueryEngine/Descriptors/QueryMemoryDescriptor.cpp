@@ -1043,14 +1043,20 @@ size_t QueryMemoryDescriptor::getSlotCount() const {
   return col_slot_context_.getSlotCount();
 }
 
-const int8_t QueryMemoryDescriptor::getPaddedSlotWidthBytes(
-    const size_t slot_idx) const {
+const int8_t QueryMemoryDescriptor::getPaddedSlotWidthBytes(const size_t slot_idx) const {
   return col_slot_context_.getSlotInfo(slot_idx).padded_size;
 }
 
 const int8_t QueryMemoryDescriptor::getLogicalSlotWidthBytes(
     const size_t slot_idx) const {
   return col_slot_context_.getSlotInfo(slot_idx).logical_size;
+}
+
+const int8_t QueryMemoryDescriptor::getSlotIndexForSingleSlotCol(
+    const size_t col_idx) const {
+  const auto& col_slots = col_slot_context_.getSlotsForCol(col_idx);
+  CHECK_EQ(col_slots.size(), size_t(1));
+  return col_slots.front();
 }
 
 void QueryMemoryDescriptor::useConsistentSlotWidthSize(const int8_t slot_width_size) {
