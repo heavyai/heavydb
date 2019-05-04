@@ -38,6 +38,7 @@
 #include <list>
 #include <memory>
 #include <mutex>
+#include <numeric>
 #include <stack>
 #include <stdexcept>
 #include <thread>
@@ -822,17 +823,102 @@ void TypedImportBuffer::pop_value() {
   }
 }
 
+struct GeoImportException : std::runtime_error {
+  using std::runtime_error::runtime_error;
+};
+
+// appends (streams) a slice of Arrow array of values (RHS) to TypedImportBuffer (LHS)
+template <typename DATA_TYPE>
+size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
+    const ColumnDescriptor* cd,
+    const Array& array,
+    std::vector<DATA_TYPE>& buffer,
+    const ArraySliceRange& slice_range,
+    Importer_NS::BadRowsTracker* const bad_rows_tracker) {
+  auto data =
+      std::make_unique<DataBuffer<DATA_TYPE>>(cd, array, buffer, bad_rows_tracker);
+  auto f_value_getter = value_getter(array, cd, bad_rows_tracker);
+  std::function<void(const int64_t)> f_add_geo_phy_cols = [&](const int64_t row) {};
+  if (bad_rows_tracker && cd->columnType.is_geometry()) {
+    f_add_geo_phy_cols = [&](const int64_t row) {
+      // Populate physical columns (ref. MapDHandler::load_table)
+      std::vector<double> coords, bounds;
+      std::vector<int> ring_sizes, poly_rings;
+      int render_group = 0;
+      SQLTypeInfo ti;
+      // replace any unexpected exception from getGeoColumns or other
+      // on this path with a GeoImportException so that we wont over
+      // push a null to the logical column...
+      try {
+        arrow_throw_if<GeoImportException>(
+            array.IsNull(row) ||
+                !Geo_namespace::GeoTypesFactory::getGeoColumns(geo_string_buffer_->back(),
+                                                               ti,
+                                                               coords,
+                                                               bounds,
+                                                               ring_sizes,
+                                                               poly_rings,
+                                                               false),
+            error_context(cd, bad_rows_tracker) + "Invalid geometry");
+        arrow_throw_if<GeoImportException>(
+            cd->columnType.get_type() != ti.get_type(),
+            error_context(cd, bad_rows_tracker) + "Geometry type mismatch");
+        auto col_idx_workpad = col_idx;  // what a pitfall!!
+        Importer_NS::Importer::set_geo_physical_import_buffer(
+            bad_rows_tracker->importer->getCatalog(),
+            cd,
+            *import_buffers,
+            col_idx_workpad,
+            coords,
+            bounds,
+            ring_sizes,
+            poly_rings,
+            render_group);
+      } catch (GeoImportException&) {
+        throw;
+      } catch (std::runtime_error& e) {
+        throw GeoImportException(e.what());
+      } catch (const std::exception& e) {
+        throw GeoImportException(e.what());
+      } catch (...) {
+        throw GeoImportException("unknown exception");
+      }
+    };
+  }
+  auto f_mark_a_bad_row = [&](const auto row) {
+    std::unique_lock<std::mutex> lck(bad_rows_tracker->mutex);
+    bad_rows_tracker->rows.insert(row - slice_range.first);
+  };
+  buffer.reserve(slice_range.second - slice_range.first);
+  for (size_t row = slice_range.first; row < slice_range.second; ++row) {
+    try {
+      *data << (array.IsNull(row) ? nullptr : f_value_getter(array, row));
+      f_add_geo_phy_cols(row);
+    } catch (GeoImportException&) {
+      f_mark_a_bad_row(row);
+    } catch (ArrowImporterException&) {
+      // trace bad rows of each column; otherwise rethrow.
+      if (bad_rows_tracker) {
+        *data << nullptr;
+        f_mark_a_bad_row(row);
+      } else {
+        throw;
+      }
+    }
+  }
+  return buffer.size();
+}
+
 size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
                                            const Array& col,
                                            const bool exact_type_match,
+                                           const ArraySliceRange& slice_range,
                                            BadRowsTracker* const bad_rows_tracker) {
   const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType)
                                                 : cd->columnType.get_type();
   if (cd->columnType.get_notnull()) {
     // We can't have any null values for this column; to have them is an error
-    if (col.null_count() > 0) {
-      throw std::runtime_error("NULL not allowed for column " + cd->columnName);
-    }
+    arrow_throw_if(col.null_count() > 0, "NULL not allowed for column " + cd->columnName);
   }
 
   switch (type) {
@@ -840,42 +926,44 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::BOOL, "Expected boolean type");
       }
-      return convert_arrow_val_to_import_buffer(cd, col, *bool_buffer_, bad_rows_tracker);
+      return convert_arrow_val_to_import_buffer(
+          cd, col, *bool_buffer_, slice_range, bad_rows_tracker);
     case kTINYINT:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::INT8, "Expected int8 type");
       }
       return convert_arrow_val_to_import_buffer(
-          cd, col, *tinyint_buffer_, bad_rows_tracker);
+          cd, col, *tinyint_buffer_, slice_range, bad_rows_tracker);
     case kSMALLINT:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::INT16, "Expected int16 type");
       }
       return convert_arrow_val_to_import_buffer(
-          cd, col, *smallint_buffer_, bad_rows_tracker);
+          cd, col, *smallint_buffer_, slice_range, bad_rows_tracker);
     case kINT:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::INT32, "Expected int32 type");
       }
-      return convert_arrow_val_to_import_buffer(cd, col, *int_buffer_, bad_rows_tracker);
+      return convert_arrow_val_to_import_buffer(
+          cd, col, *int_buffer_, slice_range, bad_rows_tracker);
     case kBIGINT:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::INT64, "Expected int64 type");
       }
       return convert_arrow_val_to_import_buffer(
-          cd, col, *bigint_buffer_, bad_rows_tracker);
+          cd, col, *bigint_buffer_, slice_range, bad_rows_tracker);
     case kFLOAT:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::FLOAT, "Expected float type");
       }
       return convert_arrow_val_to_import_buffer(
-          cd, col, *float_buffer_, bad_rows_tracker);
+          cd, col, *float_buffer_, slice_range, bad_rows_tracker);
     case kDOUBLE:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::DOUBLE, "Expected double type");
       }
       return convert_arrow_val_to_import_buffer(
-          cd, col, *double_buffer_, bad_rows_tracker);
+          cd, col, *double_buffer_, slice_range, bad_rows_tracker);
     case kTEXT:
     case kVARCHAR:
     case kCHAR:
@@ -884,27 +972,35 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
                        "Expected string type");
       }
       return convert_arrow_val_to_import_buffer(
-          cd, col, *string_buffer_, bad_rows_tracker);
+          cd, col, *string_buffer_, slice_range, bad_rows_tracker);
     case kTIME:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::TIME32 && col.type_id() != Type::TIME64,
                        "Expected time32 or time64 type");
       }
       return convert_arrow_val_to_import_buffer(
-          cd, col, *bigint_buffer_, bad_rows_tracker);
+          cd, col, *bigint_buffer_, slice_range, bad_rows_tracker);
     case kTIMESTAMP:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::TIMESTAMP, "Expected timestamp type");
       }
       return convert_arrow_val_to_import_buffer(
-          cd, col, *bigint_buffer_, bad_rows_tracker);
+          cd, col, *bigint_buffer_, slice_range, bad_rows_tracker);
     case kDATE:
       if (exact_type_match) {
         arrow_throw_if(col.type_id() != Type::DATE32 && col.type_id() != Type::DATE64,
                        "Expected date32 or date64 type");
       }
       return convert_arrow_val_to_import_buffer(
-          cd, col, *bigint_buffer_, bad_rows_tracker);
+          cd, col, *bigint_buffer_, slice_range, bad_rows_tracker);
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON:
+      arrow_throw_if(col.type_id() != Type::BINARY && col.type_id() != Type::STRING,
+                     "Expected string type");
+      return convert_arrow_val_to_import_buffer(
+          cd, col, *geo_string_buffer_, slice_range, bad_rows_tracker);
     case kARRAY:
       throw std::runtime_error("Arrow array appends not yet supported");
     default:
@@ -2974,6 +3070,10 @@ void Detector::import_local_parquet(const std::string& file_path) {
     copy_params.has_header = ImportHeaderRow::HAS_HEADER;
     copy_params.line_delim = '\n';
     copy_params.delimiter = ',';
+    // must quote values to skip any embedded delimiter
+    copy_params.quoted = true;
+    copy_params.quote = '"';
+    copy_params.escape = '"';
     for (int c = 0; c < num_columns; ++c) {
       if (c) {
         raw_data += copy_params.delimiter;
@@ -3001,7 +3101,10 @@ void Detector::import_local_parquet(const std::string& file_path) {
           raw_data += copy_params.delimiter;
         }
         if (!arrays[c]->IsNull(r)) {
-          raw_data += (data << getters[c](*arrays[c], r)).buffer.front();
+          raw_data += copy_params.quote;
+          raw_data += boost::replace_all_copy(
+              (data << getters[c](*arrays[c], r)).buffer.front(), "\"", "\"\"");
+          raw_data += copy_params.quote;
         }
       }
       raw_data += copy_params.line_delim;
@@ -3015,137 +3118,200 @@ void Detector::import_local_parquet(const std::string& file_path) {
   }
 }
 
-void Importer::import_local_parquet(const std::string& file_path) {
-  const auto& column_list = get_column_descs();
-  max_threads = copy_params.threads ? copy_params.threads : cpu_threads();
+template <typename DATA_TYPE>
+size_t TypedImportBuffer::del_values(
+    std::vector<DATA_TYPE>& buffer,
+    Importer_NS::BadRowsTracker* const bad_rows_tracker) {
+  // erase backward to minimize memory movement overhead
+  for (auto rit = bad_rows_tracker->rows.crbegin(); rit != bad_rows_tracker->rows.crend();
+       ++rit) {
+    buffer.erase(buffer.begin() + *rit);
+  }
+  return buffer.size();
+}
 
+size_t TypedImportBuffer::del_values(const SQLTypes type,
+                                     BadRowsTracker* const bad_rows_tracker) {
+  switch (type) {
+    case kBOOLEAN:
+      return del_values(*bool_buffer_, bad_rows_tracker);
+    case kTINYINT:
+      return del_values(*tinyint_buffer_, bad_rows_tracker);
+    case kSMALLINT:
+      return del_values(*smallint_buffer_, bad_rows_tracker);
+    case kINT:
+      return del_values(*int_buffer_, bad_rows_tracker);
+    case kBIGINT:
+    case kNUMERIC:
+    case kDECIMAL:
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      return del_values(*bigint_buffer_, bad_rows_tracker);
+    case kFLOAT:
+      return del_values(*float_buffer_, bad_rows_tracker);
+    case kDOUBLE:
+      return del_values(*double_buffer_, bad_rows_tracker);
+    case kTEXT:
+    case kVARCHAR:
+    case kCHAR:
+      return del_values(*string_buffer_, bad_rows_tracker);
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON:
+      return del_values(*geo_string_buffer_, bad_rows_tracker);
+    case kARRAY:
+      return del_values(*array_buffer_, bad_rows_tracker);
+    default:
+      throw std::runtime_error("Invalid Type");
+  }
+}
+
+void Importer::import_local_parquet(const std::string& file_path) {
   std::shared_ptr<arrow::io::ReadableFile> infile;
   std::unique_ptr<parquet::arrow::FileReader> reader;
   std::shared_ptr<arrow::Table> table;
   int num_row_groups, num_columns;
-  int64_t num_rows;
-  std::tie(num_row_groups, num_columns, num_rows) =
+  int64_t nrow_in_file;
+  std::tie(num_row_groups, num_columns, nrow_in_file) =
       open_parquet_table(file_path, infile, reader, table);
-
   // column_list has no $deleted
-  CHECK_EQ(num_columns, column_list.size());
+  const auto& column_list = get_column_descs();
+  // for now geo columns expect a wkt string
   std::vector<const ColumnDescriptor*> cds;
+  int num_physical_cols = 0;
   for (auto& cd : column_list) {
     cds.push_back(cd);
+    num_physical_cols += cd->columnType.get_physical_cols();
   }
-
-  std::vector<std::vector<size_t>> nrow(num_row_groups, std::vector<size_t>(num_columns));
-  std::vector<std::unique_ptr<std::atomic<exprtype(num_columns)>>> ncol(num_row_groups);
-  for (auto& p : ncol) {
-    p = std::make_unique<std::atomic<exprtype(num_columns)>>(0);
-  }
-
-  // orient import_buffers_vec in rowgroup wise not thread wise
-  import_buffers_vec.resize(num_row_groups);
-  for (auto g = 0; g < num_row_groups; g++) {
-    // unlike csv import that acts as one single stream and initialize this only once,
-    // parquet import initialize this for each file, so must clear this
-    import_buffers_vec[g].clear();
-    for (const auto cd : cds) {
-      import_buffers_vec[g].emplace_back(
-          new TypedImportBuffer(cd, loader->get_string_dict(cd)));
+  arrow_throw_if(num_columns != (int)(column_list.size() - num_physical_cols),
+                 "Unmatched numbers of columns in parquet file " + file_path + ": " +
+                     std::to_string(num_columns) + " columns in file vs " +
+                     std::to_string(column_list.size() - num_physical_cols) +
+                     " columns in table.");
+  // slice each group to import slower columns faster, eg. geo or string
+  max_threads = copy_params.threads ? copy_params.threads : cpu_threads();
+  const int num_slices = std::max<decltype(max_threads)>(max_threads, num_columns);
+  std::vector<size_t> nrow_in_slice(num_slices);
+  // init row estimate for this file
+  const auto filesize = get_filesize(file_path);
+  size_t nrow_completed{0};
+  file_offsets.push_back(0);
+  // map logic column index to physical column index
+  auto get_physical_col_idx = [&cds](const int logic_col_idx) -> auto {
+    int physical_col_idx = 0;
+    for (int i = 0; i < logic_col_idx; ++i) {
+      physical_col_idx += 1 + cds[physical_col_idx]->columnType.get_physical_cols();
     }
-  }
-
-  auto flush_row_groups = [&]() {
-    for (auto g = 0; g < num_row_groups; ++g) {
-      if (num_columns == *ncol[g]) {
-        *ncol[g] = 0;
-        load(import_buffers_vec[g], nrow[g][0]);
+    return physical_col_idx;
+  };
+  // load a file = nested iteration of row groups, row slices and logical columns
+  auto ms_load_a_file = measure<>::execution([&]() {
+    for (int row_group = 0; row_group < num_row_groups && !load_failed; ++row_group) {
+      // a sliced row group will be handled like a (logic) parquet file, with
+      // a entirely clean set of bad_rows_tracker, import_buffers_vec, ... etc
+      import_buffers_vec.resize(num_slices);
+      for (int slice = 0; slice < num_slices; slice++) {
+        import_buffers_vec[slice].clear();
+        for (const auto cd : cds) {
+          import_buffers_vec[slice].emplace_back(
+              new TypedImportBuffer(cd, loader->get_string_dict(cd)));
+        }
+      }
+      /*
+       * A caveat here is: Parquet files or arrow data is imported column wise.
+       * Unlike importing row-wise csv files, a error on any row of any column
+       * forces to give up entire row group of all columns, unless there is a
+       * sophisticated method to trace erroneous rows in individual columns so
+       * that we can union bad rows and drop them from corresponding
+       * import_buffers_vec; otherwise, we may exceed maximum number of
+       * truncated rows easily even with very sparse errors in the files.
+       */
+      std::vector<BadRowsTracker> bad_rows_trackers(num_slices);
+      for (size_t slice = 0; slice < bad_rows_trackers.size(); ++slice) {
+        auto& bad_rows_tracker = bad_rows_trackers[slice];
+        bad_rows_tracker.file_name = file_path;
+        bad_rows_tracker.row_group = slice;
+        bad_rows_tracker.importer = this;
+      }
+      // process arrow arrays to import buffers
+      for (int logic_col_idx = 0; logic_col_idx < num_columns; ++logic_col_idx) {
+        const auto physical_col_idx = get_physical_col_idx(logic_col_idx);
+        const auto cd = cds[physical_col_idx];
+        std::shared_ptr<arrow::Array> array;
+        PARQUET_THROW_NOT_OK(
+            reader->RowGroup(row_group)->Column(logic_col_idx)->Read(&array));
+        const size_t array_size = array->length();
+        const size_t slice_size = (array_size + num_slices - 1) / num_slices;
+        ThreadController_NS::SimpleThreadController<void> thread_controller(num_slices);
+        for (int slice = 0; slice < num_slices; ++slice) {
+          thread_controller.startThread([&, slice] {
+            const auto slice_offset = slice % num_slices;
+            ArraySliceRange slice_range(
+                std::min<size_t>((slice_offset + 0) * slice_size, array_size),
+                std::min<size_t>((slice_offset + 1) * slice_size, array_size));
+            auto& bad_rows_tracker = bad_rows_trackers[slice];
+            auto& import_buffer = import_buffers_vec[slice][physical_col_idx];
+            import_buffer->import_buffers = &import_buffers_vec[slice];
+            import_buffer->col_idx = physical_col_idx + 1;
+            import_buffer->add_arrow_values(
+                cd, *array, false, slice_range, &bad_rows_tracker);
+          });
+        }
+        thread_controller.finish();
+      }
+      // trim bad rows from import buffers
+      for (int logic_col_idx = 0; logic_col_idx < num_columns; ++logic_col_idx) {
+        const auto physical_col_idx = get_physical_col_idx(logic_col_idx);
+        const auto cd = cds[physical_col_idx];
+        for (int slice = 0; slice < num_slices; ++slice) {
+          auto& bad_rows_tracker = bad_rows_trackers[slice];
+          auto& import_buffer = import_buffers_vec[slice][physical_col_idx];
+          nrow_in_slice[slice] =
+              import_buffer->del_values(cd->columnType.get_type(), &bad_rows_tracker);
+        }
+      }
+      // flush slices of this row group to chunks
+      for (int slice = 0; slice < num_slices; ++slice) {
+        load(import_buffers_vec[slice], nrow_in_slice[slice]);
+      }
+      // update import stats
+      const auto nrow_imported =
+          std::accumulate(nrow_in_slice.begin(), nrow_in_slice.end(), 0);
+      const auto nrow_dropped = nrow_in_file - nrow_imported;
+      LOG(INFO) << "row group " << row_group << ": add " << nrow_imported
+                << " rows, drop " << nrow_dropped << " rows.";
+      mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
+      import_status.rows_completed += nrow_imported;
+      import_status.rows_rejected += nrow_dropped;
+      if (import_status.rows_rejected > copy_params.max_reject) {
+        import_status.load_truncated = true;
+        load_failed = true;
+        LOG(ERROR) << "Maximum (" << copy_params.max_reject
+                   << ") rows rejected exceeded. Halting load.";
+      }
+      // row estimate
+      std::unique_lock<std::mutex> lock(file_offsets_mutex);
+      nrow_completed += nrow_imported;
+      file_offsets.back() =
+          nrow_in_file ? (float)filesize * nrow_completed / nrow_in_file : 0;
+      // sum up current total file offsets
+      const auto total_file_offset =
+          std::accumulate(file_offsets.begin(), file_offsets.end(), 0);
+      // estimate number of rows per current total file offset
+      if (total_file_offset) {
+        import_status.rows_estimated =
+            (float)total_file_size / total_file_offset * import_status.rows_completed;
+        VLOG(3) << "rows_completed " << import_status.rows_completed
+                << ", rows_estimated " << import_status.rows_estimated
+                << ", total_file_size " << total_file_size << ", total_file_offset "
+                << total_file_offset;
       }
     }
-  };
-
-  ThreadController_NS::SimpleRunningThreadController<void> running_thread_controller(
-      max_threads);
-  std::vector<BadRowsTracker> bad_rows_trackers(num_row_groups);
-  for (size_t row_group = 0; row_group < bad_rows_trackers.size(); ++row_group) {
-    auto& bad_rows_tracker = bad_rows_trackers[row_group];
-    bad_rows_tracker.ncol = num_columns;
-    bad_rows_tracker.file_name = file_path;
-    bad_rows_tracker.row_group = row_group;
-    bad_rows_tracker.running_thread_controller = &running_thread_controller;
-  }
-
-  const auto filesize = get_filesize(file_path);
-  size_t rows_completed{0};
-  file_offsets.push_back(0);
-
-  auto ms_load_a_file = measure<>::execution([&]() {
-    const auto work_for_all = num_row_groups * num_columns;
-    for (auto iwork = 0; iwork < work_for_all && !load_failed; ++iwork) {
-      const auto row_group = iwork / num_columns;
-      const auto column = iwork % num_columns;
-      const auto cd = cds[column];
-      running_thread_controller.startThread([=,
-                                             &ncol,
-                                             &nrow,
-                                             &reader,
-                                             &bad_rows_trackers,
-                                             &rows_completed,
-                                             &running_thread_controller] {
-        std::shared_ptr<arrow::Array> array;
-        PARQUET_THROW_NOT_OK(reader->RowGroup(row_group)->Column(column)->Read(&array));
-        /*
-         * A caveat here is: Parquet files or arrow data is imported column wise.
-         * Unlike importing row-wise csv files, a error on any row of any column
-         * forces to give up entire row group of all columns, unless there is a
-         * sophisticated method to trace erroneous rows in individual columns so that
-         * we can union bad rows and drop them from corresponding import_buffers_vec;
-         * otherwise, we may exceed maximum number of truncated rows easily even with
-         * very sparse errors in the files.
-         */
-        auto& bad_rows_tracker = bad_rows_trackers[row_group];
-        nrow[row_group][column] = import_buffers_vec[row_group][column]->add_arrow_values(
-            cd, *array, false, &bad_rows_tracker);
-        ++*ncol[row_group];
-        if (0 == column) {
-          const auto ndrop = array->length() - nrow[row_group][0];
-          LOG(INFO) << "row group " << row_group << ": add " << nrow[row_group][0]
-                    << " rows, drop " << ndrop << " rows.";
-          mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
-          import_status.rows_completed += nrow[row_group][0];
-          import_status.rows_rejected += ndrop;
-          if (import_status.rows_rejected > copy_params.max_reject) {
-            import_status.load_truncated = true;
-            load_failed = true;
-            LOG(ERROR) << "Maximum (" << copy_params.max_reject
-                       << ") rows rejected exceeded. Halting load.";
-          }
-          // row estimate
-          std::unique_lock<std::mutex> lock(file_offsets_mutex);
-          rows_completed += nrow[row_group][0];
-          file_offsets.back() =
-              num_rows ? (float)filesize * rows_completed / num_rows : 0;
-          // sum up current total file offsets
-          size_t total_file_offset{0};
-          for (const auto file_offset : file_offsets) {
-            total_file_offset += file_offset;
-          }
-          // estimate number of rows per current total file offset
-          if (total_file_offset) {
-            import_status.rows_estimated =
-                (float)total_file_size / total_file_offset * import_status.rows_completed;
-            VLOG(3) << "rows_completed " << import_status.rows_completed
-                    << ", rows_estimated " << import_status.rows_estimated
-                    << ", total_file_size " << total_file_size << ", total_file_offset "
-                    << total_file_offset;
-          }
-        }
-      });
-      running_thread_controller.checkThreadsStatus();
-      flush_row_groups();
-    }
-    running_thread_controller.finish();
-    flush_row_groups();
   });
-  LOG(INFO) << "Import " << num_rows << " rows of parquet file " << file_path << " took "
-            << (double)ms_load_a_file / 1000.0 << " secs";
+  LOG(INFO) << "Import " << nrow_in_file << " rows of parquet file " << file_path
+            << " took " << (double)ms_load_a_file / 1000.0 << " secs";
 }
 
 void DataStreamSink::import_parquet(std::vector<std::string>& file_paths) {

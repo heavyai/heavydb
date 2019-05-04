@@ -234,6 +234,24 @@ bool import_test_s3_parquet(const string& prefix,
 #endif  // HAVE_AWS_S3
 #endif  // ENABLE_IMPORT_PARQUET
 
+#ifdef ENABLE_IMPORT_PARQUET
+bool import_test_local_parquet_with_geo_point(const string& prefix,
+                                              const string& filename,
+                                              const int64_t cnt,
+                                              const double avg) {
+  run_ddl_statement("alter table trips add column pt_dropoff point;");
+  EXPECT_TRUE(import_test_local_parquet(prefix, filename, cnt, avg));
+  std::string query_str =
+      "select count() from trips where abs(dropoff_longitude-st_x(pt_dropoff))<0.01 and "
+      "abs(dropoff_latitude-st_y(pt_dropoff))<0.01;";
+  auto rows = run_query(query_str);
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size());
+  auto r_cnt = v<int64_t>(crt_row[0]);
+  return r_cnt == cnt;
+}
+#endif  // ENABLE_IMPORT_PARQUET
+
 class SQLTestEnv : public ::testing::Environment {
  public:
   void SetUp() override {
@@ -672,6 +690,13 @@ TEST_F(ImportTest, All_parquet_file) {
 }
 TEST_F(ImportTest, All_parquet_file_drop) {
   EXPECT_TRUE(import_test_local_parquet("trip+1.parquet", "*.parquet", 1200, 1.0));
+}
+TEST_F(ImportTest, One_parquet_file_with_geo_point) {
+  EXPECT_TRUE(import_test_local_parquet_with_geo_point(
+      "trip_data_with_point.parquet",
+      "part-00000-6dbefb0c-abbd-4c39-93e7-0026e36b7b7c-c000.snappy.parquet",
+      100,
+      1.0));
 }
 #ifdef HAVE_AWS_S3
 // s3 parquet test cases

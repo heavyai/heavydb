@@ -44,6 +44,7 @@
 #include <mutex>
 #include <set>
 #include <string>
+#include <utility>
 
 #include "../Catalog/Catalog.h"
 #include "../Catalog/TableDescriptor.h"
@@ -67,15 +68,17 @@ class Array;
 
 namespace Importer_NS {
 
+class Importer;
+
+using ArraySliceRange = std::pair<size_t, size_t>;
+
 struct BadRowsTracker {
   std::mutex mutex;
-  std::condition_variable condv;
   std::set<int64_t> rows;
-  std::atomic<int> ncol;
   std::atomic<int> nerrors;
   std::string file_name;
   int row_group;
-  ThreadController_NS::SimpleRunningThreadController<void>* running_thread_controller;
+  Importer* importer;
 };
 
 enum class FileType {
@@ -569,6 +572,7 @@ class TypedImportBuffer : boost::noncopyable {
   size_t add_arrow_values(const ColumnDescriptor* cd,
                           const arrow::Array& data,
                           const bool exact_type_match,
+                          const ArraySliceRange& slice_range,
                           BadRowsTracker* bad_rows_tracker);
 
   void add_value(const ColumnDescriptor* cd,
@@ -586,6 +590,18 @@ class TypedImportBuffer : boost::noncopyable {
   void set_replicate_count(const int64_t replicate_count) {
     replicate_count_ = replicate_count;
   }
+  template <typename DATA_TYPE>
+  size_t convert_arrow_val_to_import_buffer(const ColumnDescriptor* cd,
+                                            const arrow::Array& array,
+                                            std::vector<DATA_TYPE>& buffer,
+                                            const ArraySliceRange& slice_range,
+                                            BadRowsTracker* const bad_rows_tracker);
+  template <typename DATA_TYPE>
+  size_t del_values(std::vector<DATA_TYPE>& buffer,
+                    BadRowsTracker* const bad_rows_tracker);
+  size_t del_values(const SQLTypes type, BadRowsTracker* const bad_rows_tracker);
+  std::vector<std::unique_ptr<TypedImportBuffer>>* import_buffers;
+  size_t col_idx;
 
  private:
   union {

@@ -32,13 +32,18 @@
 
 using namespace arrow;
 
+struct ArrowImporterException : std::runtime_error {
+  using std::runtime_error::runtime_error;
+};
+
+template <typename T = ArrowImporterException>
 inline void arrow_throw_if(const bool cond, const std::string& message) {
   if (cond) {
     // work around race from goooogle log
     static std::mutex mtx;
     std::unique_lock<std::mutex> lock(mtx);
     LOG(ERROR) << message;
-    throw std::runtime_error(message);
+    throw T(message);
   }
 }
 
@@ -485,50 +490,6 @@ inline auto& operator<<(DataBuffer<DATA_TYPE>& data, const VarValue& var) {
       },
       var);
   return data;
-}
-
-// appends (streams) a Arrow array of values (RHS) to TypedImportBuffer (LHS)
-template <typename DATA_TYPE>
-size_t convert_arrow_val_to_import_buffer(
-    const ColumnDescriptor* cd,
-    const Array& array,
-    std::vector<DATA_TYPE>& buffer,
-    Importer_NS::BadRowsTracker* const bad_rows_tracker) {
-  auto data =
-      std::make_unique<DataBuffer<DATA_TYPE>>(cd, array, buffer, bad_rows_tracker);
-  auto f = value_getter(array, cd, bad_rows_tracker);
-  buffer.reserve(array.length());
-  for (auto row = 0; row < array.length(); ++row) {
-    try {
-      *data << (array.IsNull(row) ? nullptr : f(array, row));
-    } catch (...) {
-      // trace bad rows of each column; otherwise rethrow.
-      if (bad_rows_tracker) {
-        *data << nullptr;
-        std::unique_lock<std::mutex> lck(bad_rows_tracker->mutex);
-        bad_rows_tracker->rows.insert(row);
-      } else {
-        throw;
-      }
-    }
-  }
-  // when all columns finish remove bad rows while DATA_TYPE is known
-  if (bad_rows_tracker) {
-    bad_rows_tracker->running_thread_controller->notify_thread_is_completed();
-    if (--bad_rows_tracker->ncol > 0) {
-      std::unique_lock<std::mutex> lck(bad_rows_tracker->mutex);
-      bad_rows_tracker->condv.wait(
-          lck, [bad_rows_tracker] { return 0 == bad_rows_tracker->ncol; });
-    }
-    bad_rows_tracker->condv.notify_all();
-    // erase backward to minimize memory movement overhead
-    for (auto rit = bad_rows_tracker->rows.crbegin();
-         rit != bad_rows_tracker->rows.crend();
-         ++rit) {
-      buffer.erase(buffer.begin() + *rit);
-    }
-  }
-  return buffer.size();
 }
 
 }  // namespace
