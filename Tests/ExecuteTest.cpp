@@ -14771,8 +14771,14 @@ int create_and_populate_tables(bool with_delete_support = true) {
     g_sqlite_comparator.query(drop_old_bweq_test);
 
     auto column_definition = "x int"s;
-    auto create_bweq_test = build_create_table_statement(
-        column_definition, "bweq_test", {g_shard_count ? "x" : "", g_shard_count}, {}, 2);
+    auto create_bweq_test =
+        build_create_table_statement(column_definition,
+                                     "bweq_test",
+                                     {g_shard_count ? "x" : "", g_shard_count},
+                                     {},
+                                     2,
+                                     with_delete_support,
+                                     g_aggregator);
     run_ddl_statement(create_bweq_test);
     g_sqlite_comparator.query("create table bweq_test (x int);");
   } catch (...) {
