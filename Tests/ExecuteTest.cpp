@@ -14268,6 +14268,14 @@ TEST(Select, WindowFunctionOneRowPartitions) {
   c(part1 + " NULLS FIRST) " + part2 + " NULLS FIRST;", part1 + ") " + part2 + ";", dt);
 }
 
+TEST(Select, WindowFunctionEmptyPartitions) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  EXPECT_THROW(
+      run_simple_agg("SELECT x, ROW_NUMBER() OVER () FROM test_window_func;", dt),
+      std::runtime_error);
+}
+
 TEST(Select, WindowFunctionPercentRank) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;

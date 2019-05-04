@@ -1383,6 +1383,10 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
     if (partition_keys.size() > 1) {
       partition_key_tuple = makeExpr<Analyzer::ExpressionTuple>(partition_keys);
     } else {
+      if (partition_keys.empty()) {
+        throw std::runtime_error(
+            "Empty window function partitions are not supported yet");
+      }
       CHECK_EQ(partition_keys.size(), size_t(1));
       partition_key_tuple = partition_keys.front();
     }
