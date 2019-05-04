@@ -471,7 +471,7 @@ class ResultSet {
   const std::vector<uint32_t>& getPermutationBuffer() const;
   const bool isPermutationBufferEmpty() const { return permutation_.empty(); };
 
-  TSerializedRows serialize() const;
+  void serialize(TSerializedRows& serialized_rows) const;
 
   static std::unique_ptr<ResultSet> unserialize(const TSerializedRows& serialized_rows,
                                                 const Executor*);
@@ -770,7 +770,7 @@ class ResultSet {
                                 const std::vector<std::string>& col_names,
                                 const int32_t first_n) const;
 
-  TSerializedRows serializeProjection() const;
+  void serializeProjection(TSerializedRows& serialized_rows) const;
   void serializeVarlenAggColumn(int8_t* buf,
                                 std::vector<std::string>& varlen_bufer) const;
 
