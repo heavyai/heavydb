@@ -133,6 +133,7 @@ llvm::Function* row_process(llvm::Module* mod,
     func_args.push_back(pi32_type);  // 1 iff current row matched, else 0
     func_args.push_back(pi32_type);  // total rows matched from the caller
     func_args.push_back(pi32_type);  // total rows matched before atomic increment
+    func_args.push_back(pi32_type);  // max number of slots in the output buffer
   }
 
   func_args.push_back(pi64_type);  // aggregate init values
@@ -620,6 +621,7 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
 
   LoadInst* max_matched = new LoadInst(max_matched_ptr, "", false, bb_entry);
   max_matched->setAlignment(4);
+
   auto crt_matched_ptr = new AllocaInst(i32_type, 0, "crt_matched", bb_entry);
   auto old_total_matched_ptr = new AllocaInst(i32_type, 0, "old_total_matched", bb_entry);
   CallInst* pos_start = CallInst::Create(func_pos_start, "", bb_entry);
@@ -691,6 +693,7 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   row_process_params.push_back(crt_matched_ptr);
   row_process_params.push_back(total_matched);
   row_process_params.push_back(old_total_matched_ptr);
+  row_process_params.push_back(max_matched_ptr);
   row_process_params.push_back(agg_init_val);
   row_process_params.push_back(pos);
   row_process_params.push_back(frag_row_off_ptr);
@@ -734,8 +737,11 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
     new_total_matched =
         BinaryOperator::CreateAdd(new_total_matched, crt_matched, "", filter_match);
     CHECK(new_total_matched);
-    ICmpInst* limit_not_reached = new ICmpInst(
-        *filter_match, ICmpInst::ICMP_SLT, new_total_matched, max_matched, "");
+    ICmpInst* limit_not_reached = new ICmpInst(*filter_match,
+                                               ICmpInst::ICMP_SLT,
+                                               new_total_matched,
+                                               max_matched,
+                                               "limit_not_reached");
     BranchInst::Create(
         bb_forbody,
         bb_crit_edge,

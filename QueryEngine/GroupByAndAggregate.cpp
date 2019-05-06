@@ -1302,6 +1302,7 @@ GroupByAndAggregate::codegenMultiColumnBaselineHash(
   ++arg_it;                             // current match count
   ++arg_it;                             // total match count
   ++arg_it;                             // old match count
+  ++arg_it;                             // output buffer slots count
   ++arg_it;                             // aggregate init values
   CHECK(arg_it->getName() == "agg_init_val");
   if (group_key->getType() != llvm::Type::getInt64PtrTy(LL_CONTEXT)) {

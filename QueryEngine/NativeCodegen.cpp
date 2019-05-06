@@ -918,6 +918,8 @@ void set_row_func_argnames(llvm::Function* row_func,
     ++arg_it;
     arg_it->setName("old_total_matched");
     ++arg_it;
+    arg_it->setName("max_matched");
+    ++arg_it;
   }
 
   arg_it->setName("agg_init_val");
@@ -967,6 +969,8 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     // total match count passed from the caller
     row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
     // old total match count returned to the caller
+    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    // max matched (total number of slots in the output buffer)
     row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
   }
 
