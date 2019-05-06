@@ -30,9 +30,9 @@
 #include <vector>
 
 namespace QueryRenderer {
+class JSONLocation;
 class QueryRenderManager;
 struct QueryDataLayout;
-struct JSONLocation;
 }  // namespace QueryRenderer
 
 class OutOfRenderMemory : public std::runtime_error {

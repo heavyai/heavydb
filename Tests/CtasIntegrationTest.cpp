@@ -185,11 +185,10 @@ class NumberColumnDescriptor : public TestColumnDescriptor {
 
 class BooleanColumnDescriptor : public TestColumnDescriptor {
   std::string column_definition;
-  SQLTypes rs_type;
 
  public:
   BooleanColumnDescriptor(std::string col_type, SQLTypes sql_type)
-      : column_definition(col_type), rs_type(sql_type){};
+      : column_definition(col_type){};
 
   bool skip_test(std::string name) override {
     return "UpdateColumnByColumn" == name || "UpdateColumnByLiteral" == name ||
@@ -228,12 +227,11 @@ class BooleanColumnDescriptor : public TestColumnDescriptor {
 
 class StringColumnDescriptor : public TestColumnDescriptor {
   std::string column_definition;
-  SQLTypes rs_type;
   std::string prefix;
 
  public:
   StringColumnDescriptor(std::string col_type, SQLTypes sql_type, std::string pfix)
-      : column_definition(col_type), rs_type(sql_type), prefix(pfix){};
+      : column_definition(col_type), prefix(pfix){};
 
   bool skip_test(std::string name) override {
     return "Array.UpdateColumnByLiteral" == name;
@@ -412,11 +410,10 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
 };
 
 class GeoPointColumnDescriptor : public TestColumnDescriptor {
-  SQLTypes rs_type;
   std::string prefix;
 
  public:
-  GeoPointColumnDescriptor(SQLTypes sql_type = kPOINT) : rs_type(sql_type){};
+  GeoPointColumnDescriptor(SQLTypes sql_type = kPOINT){};
 
   bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
 
@@ -446,11 +443,10 @@ class GeoPointColumnDescriptor : public TestColumnDescriptor {
 };
 
 class GeoLinestringColumnDescriptor : public TestColumnDescriptor {
-  SQLTypes rs_type;
   std::string prefix;
 
  public:
-  GeoLinestringColumnDescriptor(SQLTypes sql_type = kLINESTRING) : rs_type(sql_type){};
+  GeoLinestringColumnDescriptor(SQLTypes sql_type = kLINESTRING){};
 
   bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
 
@@ -485,12 +481,10 @@ class GeoLinestringColumnDescriptor : public TestColumnDescriptor {
 };
 
 class GeoMultiPolygonColumnDescriptor : public TestColumnDescriptor {
-  SQLTypes rs_type;
   std::string prefix;
 
  public:
-  GeoMultiPolygonColumnDescriptor(SQLTypes sql_type = kMULTIPOLYGON)
-      : rs_type(sql_type){};
+  GeoMultiPolygonColumnDescriptor(SQLTypes sql_type = kMULTIPOLYGON){};
 
   bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
 
@@ -527,11 +521,10 @@ class GeoMultiPolygonColumnDescriptor : public TestColumnDescriptor {
 };
 
 class GeoPolygonColumnDescriptor : public TestColumnDescriptor {
-  SQLTypes rs_type;
   std::string prefix;
 
  public:
-  GeoPolygonColumnDescriptor(SQLTypes sql_type = kPOLYGON) : rs_type(sql_type){};
+  GeoPolygonColumnDescriptor(SQLTypes sql_type = kPOLYGON){};
 
   bool skip_test(std::string name) override { return "CreateTableAsSelect" != name; }
 
