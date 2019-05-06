@@ -47,7 +47,7 @@
 #include <stdexcept>
 
 class Executor;
-class HashEntryInfo;
+struct HashEntryInfo;
 
 class JoinHashTable : public JoinHashTableInterface {
  public:

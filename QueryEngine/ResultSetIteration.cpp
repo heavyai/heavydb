@@ -1035,19 +1035,6 @@ struct GeoTargetValueBuilder {
   }
 };
 
-inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(
-    const std::vector<uint64_t>& frag_offsets,
-    const int64_t global_idx) {
-  CHECK_GE(global_idx, int64_t(0));
-  for (int64_t frag_id = frag_offsets.size() - 1; frag_id >= 0; --frag_id) {
-    const auto frag_off = static_cast<int64_t>(frag_offsets[frag_id]);
-    if (frag_off <= global_idx) {
-      return {frag_id, global_idx - frag_off};
-    }
-  }
-  return {-1, -1};
-}
-
 template <typename T>
 inline std::pair<int64_t, int64_t> get_frag_id_and_local_idx(
     const std::vector<std::vector<T>>& frag_offsets,
