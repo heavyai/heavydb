@@ -12,14 +12,6 @@ import time
 '''
 Contact support@mapd.com with any questions
 
-Python 2.x instructions (with fix for recursive data structs)
-pip install redbaron
-pip install thrift
-thrift -gen py mapd.thrift
-mv gen-py/mapd/ttypes.py gen-py/mapd/ttypes-backup.py
-python fix_recursive_structs.py gen-py/mapd/ttypes-backup.py gen-py/mapd/ttypes.py
-export PYTHONPATH=/path/to/mapd2-1.x-gen-py:$PYTHONPATH
-
 Python 3.x instructions (manual build of latest Thrift)
 sudo apt-get install build-essential
 git clone https://git-wip-us.apache.org/repos/asf/thrift.git
