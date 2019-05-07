@@ -557,6 +557,7 @@ else:
     run_version_short = run_version
 conn_machine_name = re.search(r"@(.*?):", run_connection).group(1)
 # Set GPU info fields
+conn_gpu_count = None
 source_db_gpu_count = None
 source_db_gpu_mem = None
 source_db_gpu_driver_ver = ""
@@ -575,14 +576,15 @@ else:
     )
     conn_hardware_info = con._client.get_hardware_info(con._session)
     conn_gpu_count = conn_hardware_info.hardware_info[0].num_gpu_allocated
-if conn_gpu_count == 0:
-    logging.warning(
-        "0 GPUs detected from connection info, "
-        + "using blank values for source database GPU info fields "
-        + "If running against cpu-only server, make sure to set "
-        + "--no-gather-nvml-gpu-info and --no-gather-conn-gpu-info."
-    )
+if conn_gpu_count == 0 or conn_gpu_count is None:
     no_gather_nvml_gpu_info = True
+    if conn_gpu_count == 0:
+        logging.warning(
+            "0 GPUs detected from connection info, "
+            + "using blank values for source database GPU info fields "
+            + "If running against cpu-only server, make sure to set "
+            + "--no-gather-nvml-gpu-info and --no-gather-conn-gpu-info."
+        )
 else:
     source_db_gpu_count = conn_gpu_count
     try:
