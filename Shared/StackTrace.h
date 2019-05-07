@@ -19,8 +19,8 @@
 
 #include <string>
 
-std::string getCurrentStackTrace(const char* stop_at_this_frame = nullptr,
-                                 bool skip_void_and_stl_frames = true,
-                                 bool omit_current_frame = true);
+std::string getCurrentStackTrace(uint32_t num_frames_to_skip = 1,
+                                 const char* stop_at_this_frame = nullptr,
+                                 bool skip_void_and_stl_frames = true);
 
 #endif  // SHARED_STACKTRACE_H
