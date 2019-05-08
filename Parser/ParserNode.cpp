@@ -29,10 +29,12 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/function.hpp>
 #include <cassert>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
+#include <type_traits>
 #include <typeinfo>
 #include "../Analyzer/RangeTableEntry.h"
 #include "../Catalog/Catalog.h"
@@ -60,6 +62,8 @@ bool g_use_date_in_days_default_encoding{true};
 using namespace Lock_Namespace;
 using Catalog_Namespace::SysCatalog;
 using namespace std::string_literals;
+
+using TableDefFuncPtr = boost::function<void(TableDescriptor&, const NameValueAssign*)>;
 
 namespace Importer_NS {
 
@@ -1901,6 +1905,91 @@ std::string serialize_key_metainfo(
   return buffer.GetString();
 }
 
+template <typename LITERAL_TYPE,
+          typename ASSIGNMENT,
+          typename VALIDATE = DefaultValidate<LITERAL_TYPE>>
+decltype(auto) get_property_value(const NameValueAssign* p,
+                                  ASSIGNMENT op,
+                                  VALIDATE validate = VALIDATE()) {
+  const auto val = validate(p);
+  return op(val);
+}
+
+decltype(auto) get_frag_size_def(TableDescriptor& td, const NameValueAssign* p) {
+  return get_property_value<IntLiteral>(p,
+                                        [&td](const auto val) { td.maxFragRows = val; });
+}
+
+decltype(auto) get_max_chunk_size_def(TableDescriptor& td, const NameValueAssign* p) {
+  return get_property_value<IntLiteral>(p,
+                                        [&td](const auto val) { td.maxChunkSize = val; });
+}
+
+decltype(auto) get_page_size_def(TableDescriptor& td, const NameValueAssign* p) {
+  return get_property_value<IntLiteral>(p,
+                                        [&td](const auto val) { td.fragPageSize = val; });
+}
+decltype(auto) get_max_rows_def(TableDescriptor& td, const NameValueAssign* p) {
+  return get_property_value<IntLiteral>(p, [&td](const auto val) { td.maxRows = val; });
+}
+decltype(auto) get_partions_def(TableDescriptor& td, const NameValueAssign* p) {
+  return get_property_value<StringLiteral>(p, [&td](const auto partitions_uc) {
+    if (partitions_uc != "SHARDED" && partitions_uc != "REPLICATED") {
+      throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
+    }
+    if (td.shardedColumnId != 0 && partitions_uc == "REPLICATED") {
+      throw std::runtime_error(
+          "A table cannot be sharded and replicated at the same time");
+    };
+    td.partitions = partitions_uc;
+  });
+}
+decltype(auto) get_shard_count_def(TableDescriptor& td, const NameValueAssign* p) {
+  if (!td.shardedColumnId) {
+    throw std::runtime_error("SHARD KEY must be defined.");
+  }
+  return get_property_value<IntLiteral>(p, [&td](const auto shard_count) {
+    if (g_leaf_count && shard_count % g_leaf_count) {
+      throw std::runtime_error(
+          "SHARD_COUNT must be a multiple of the number of leaves in the cluster.");
+    }
+    td.nShards = g_leaf_count ? shard_count / g_leaf_count : shard_count;
+    if (!td.shardedColumnId && !td.nShards) {
+      throw std::runtime_error(
+          "Must specify the number of shards through the SHARD_COUNT option");
+    };
+  });
+}
+
+decltype(auto) get_vacuum_def(TableDescriptor& td, const NameValueAssign* p) {
+  return get_property_value<StringLiteral>(p, [&td](const auto vacuum_uc) {
+    if (vacuum_uc != "IMMEDIATE" && vacuum_uc != "DELAYED") {
+      throw std::runtime_error("VACUUM must be IMMEDIATE or DELAYED");
+    }
+    td.hasDeletedCol = boost::iequals(vacuum_uc, "IMMEDIATE") ? false : true;
+  });
+}
+
+static const std::map<const std::string, const TableDefFuncPtr> tableDefFuncMap = {
+    {"fragment_size"s, get_frag_size_def},
+    {"max_chunk_size"s, get_max_chunk_size_def},
+    {"page_size"s, get_page_size_def},
+    {"max_rows"s, get_max_rows_def},
+    {"partitions"s, get_partions_def},
+    {"shard_count"s, get_shard_count_def},
+    {"vacuum"s, get_vacuum_def}};
+
+void get_table_definitions(TableDescriptor& td,
+                           const std::unique_ptr<NameValueAssign>& p) {
+  const auto it = tableDefFuncMap.find(boost::to_lower_copy<std::string>(*p->get_name()));
+  if (it == tableDefFuncMap.end()) {
+    throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() +
+                             ". Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_ROWS, "
+                             "PARTITIONS, VACUUM or SHARD_COUNT.");
+  }
+  return it->second(td, p.get());
+}
+
 }  // namespace
 
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -1908,21 +1997,21 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   // check access privileges
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
                                        AccessPrivileges::CREATE_TABLE)) {
-    throw std::runtime_error("Table " + *table +
+    throw std::runtime_error("Table " + *table_ +
                              " will not be created. User has no create privileges.");
   }
 
-  if (catalog.getMetadataForTable(*table) != nullptr) {
+  if (catalog.getMetadataForTable(*table_) != nullptr) {
     if (if_not_exists_) {
       return;
     }
-    throw std::runtime_error("Table " + *table + " already exists.");
+    throw std::runtime_error("Table " + *table_ + " already exists.");
   }
   std::list<ColumnDescriptor> columns;
   std::unordered_set<std::string> uc_col_names;
   std::vector<SharedDictionaryDef> shared_dict_defs;
   const ShardKeyDef* shard_key_def{nullptr};
-  for (auto& e : table_element_list) {
+  for (auto& e : table_element_list_) {
     if (dynamic_cast<SharedDictionaryDef*>(e.get())) {
       auto shared_dict_def = static_cast<SharedDictionaryDef*>(e.get());
       validate_shared_dictionary(
@@ -1958,7 +2047,7 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
 
   TableDescriptor td;
-  td.tableName = *table;
+  td.tableName = *table_;
   td.userId = session.get_currentUser().userId;
   td.nColumns = columns.size();
   td.isView = false;
@@ -1980,106 +2069,10 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   } else {
     td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
   }
-  if (!storage_options.empty()) {
-    for (auto& p : storage_options) {
-      if (boost::iequals(*p->get_name(), "fragment_size")) {
-        if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
-          throw std::runtime_error("FRAGMENT_SIZE must be an integer literal.");
-        }
-        int frag_size = static_cast<const IntLiteral*>(p->get_value())->get_intval();
-        if (frag_size <= 0) {
-          throw std::runtime_error("FRAGMENT_SIZE must be a positive number.");
-        }
-        td.maxFragRows = frag_size;
-      } else if (boost::iequals(*p->get_name(), "max_chunk_size")) {
-        if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
-          throw std::runtime_error("MAX_CHUNK_SIZE must be an integer literal.");
-        }
-        int64_t max_chunk_size =
-            static_cast<const IntLiteral*>(p->get_value())->get_intval();
-        if (max_chunk_size <= 0) {
-          throw std::runtime_error("MAX_CHUNK_SIZE must be a positive number.");
-        }
-        td.maxChunkSize = max_chunk_size;
-      } else if (boost::iequals(*p->get_name(), "page_size")) {
-        if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
-          throw std::runtime_error("PAGE_SIZE must be an integer literal.");
-        }
-        int page_size = static_cast<const IntLiteral*>(p->get_value())->get_intval();
-        if (page_size <= 0) {
-          throw std::runtime_error("PAGE_SIZE must be a positive number.");
-        }
-        td.fragPageSize = page_size;
-      } else if (boost::iequals(*p->get_name(), "max_rows")) {
-        if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
-          throw std::runtime_error("MAX_ROWS must be an integer literal.");
-        }
-        auto max_rows = static_cast<const IntLiteral*>(p->get_value())->get_intval();
-        if (max_rows <= 0) {
-          throw std::runtime_error("MAX_ROWS must be a positive number.");
-        }
-        td.maxRows = max_rows;
-      } else if (boost::iequals(*p->get_name(), "partitions")) {
-        const auto partitions =
-            static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-        CHECK(partitions);
-        const auto partitions_uc = boost::to_upper_copy<std::string>(*partitions);
-        if (partitions_uc != "SHARDED" && partitions_uc != "REPLICATED") {
-          throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
-        }
-        if (shard_key_def && partitions_uc == "REPLICATED") {
-          throw std::runtime_error(
-              "A table cannot be sharded and replicated at the same time");
-        }
-        td.partitions = partitions_uc;
-      } else if (boost::iequals(*p->get_name(), "sort_column")) {
-        const auto sort_column =
-            static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-        td.sortedColumnId = sort_column_index(*sort_column, columns);
-        if (!td.sortedColumnId) {
-          throw std::runtime_error("Specified sort column " + *sort_column +
-                                   " doesn't exist");
-        }
-      } else if (boost::iequals(*p->get_name(), "shard_count")) {
-        if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
-          throw std::runtime_error("SHARD_COUNT must be an integer literal.");
-        }
-        int shard_count = static_cast<const IntLiteral*>(p->get_value())->get_intval();
-        if (shard_count <= 0) {
-          throw std::runtime_error("SHARD_COUNT must be a positive number.");
-        }
-        if (g_leaf_count) {
-          if (shard_count % g_leaf_count) {
-            throw std::runtime_error(
-                "SHARD_COUNT must be a multiple of the number of leaves in the cluster.");
-          }
-          td.nShards = shard_count / g_leaf_count;
-        } else {
-          td.nShards = shard_count;
-        }
-      } else if (boost::iequals(*p->get_name(), "vacuum")) {
-        const auto vacuum =
-            static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-        CHECK(vacuum);
-        const auto vacuum_uc = boost::to_upper_copy<std::string>(*vacuum);
-        if (vacuum_uc != "IMMEDIATE" && vacuum_uc != "DELAYED") {
-          throw std::runtime_error("VACUUM must be IMMEDIATE or DELAYED");
-        }
-        if (boost::iequals(vacuum_uc, "IMMEDIATE")) {
-          td.hasDeletedCol = false;
-        } else {
-          td.hasDeletedCol = true;
-        }
-      } else {
-        throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() +
-                                 ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_ROWS, "
-                                 "PARTITIONS, VACUUM or SHARD_COUNT.");
-      }
+  if (!storage_options_.empty()) {
+    for (auto& p : storage_options_) {
+      get_table_definitions(td, p);
     }
-  }
-  if (shard_key_def && !td.nShards) {
-    throw std::runtime_error(
-        "Must specify the number of shards through the SHARD_COUNT option");
   }
   td.keyMetainfo = serialize_key_metainfo(shard_key_def, shared_dict_defs);
   catalog.createShardedTable(td, columns, shared_dict_defs);
@@ -2564,88 +2557,9 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
       td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
     }
 
-    auto shard_key_def = false;
-
     if (!storage_options_.empty()) {
       for (auto& p : storage_options_) {
-        if (boost::iequals(*p->get_name(), "fragment_size")) {
-          if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
-            throw std::runtime_error("FRAGMENT_SIZE must be an integer literal.");
-          }
-          int frag_size = static_cast<const IntLiteral*>(p->get_value())->get_intval();
-          if (frag_size <= 0) {
-            throw std::runtime_error("FRAGMENT_SIZE must be a positive number.");
-          }
-          td.maxFragRows = frag_size;
-        } else if (boost::iequals(*p->get_name(), "max_chunk_size")) {
-          if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
-            throw std::runtime_error("MAX_CHUNK_SIZE must be an integer literal.");
-          }
-          int64_t max_chunk_size =
-              static_cast<const IntLiteral*>(p->get_value())->get_intval();
-          if (max_chunk_size <= 0) {
-            throw std::runtime_error("MAX_CHUNK_SIZE must be a positive number.");
-          }
-          td.maxChunkSize = max_chunk_size;
-        } else if (boost::iequals(*p->get_name(), "page_size")) {
-          if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
-            throw std::runtime_error("PAGE_SIZE must be an integer literal.");
-          }
-          int page_size = static_cast<const IntLiteral*>(p->get_value())->get_intval();
-          if (page_size <= 0) {
-            throw std::runtime_error("PAGE_SIZE must be a positive number.");
-          }
-          td.fragPageSize = page_size;
-        } else if (boost::iequals(*p->get_name(), "max_rows")) {
-          if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
-            throw std::runtime_error("MAX_ROWS must be an integer literal.");
-          }
-          auto max_rows = static_cast<const IntLiteral*>(p->get_value())->get_intval();
-          if (max_rows <= 0) {
-            throw std::runtime_error("MAX_ROWS must be a positive number.");
-          }
-          td.maxRows = max_rows;
-        } else if (boost::iequals(*p->get_name(), "partitions")) {
-          const auto partitions =
-              static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-          CHECK(partitions);
-          const auto partitions_uc = boost::to_upper_copy<std::string>(*partitions);
-          if (partitions_uc != "SHARDED" && partitions_uc != "REPLICATED") {
-            throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
-          }
-          if (shard_key_def && partitions_uc == "REPLICATED") {
-            throw std::runtime_error(
-                "A table cannot be sharded and replicated at the same time");
-          }
-          td.partitions = partitions_uc;
-        } else if (boost::iequals(*p->get_name(), "sort_column")) {
-          const auto sort_column =
-              static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-          td.sortedColumnId =
-              sort_column_index(*sort_column, column_descriptors_for_create);
-          if (!td.sortedColumnId) {
-            throw std::runtime_error("Specified sort column " + *sort_column +
-                                     " doesn't exist");
-          }
-        } else if (boost::iequals(*p->get_name(), "vacuum")) {
-          const auto vacuum =
-              static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-          CHECK(vacuum);
-          const auto vacuum_uc = boost::to_upper_copy<std::string>(*vacuum);
-          if (vacuum_uc != "IMMEDIATE" && vacuum_uc != "DELAYED") {
-            throw std::runtime_error("VACUUM must be IMMEDIATE or DELAYED");
-          }
-          if (boost::iequals(vacuum_uc, "IMMEDIATE")) {
-            td.hasDeletedCol = false;
-          } else {
-            td.hasDeletedCol = true;
-          }
-        } else {
-          throw std::runtime_error(
-              "Invalid CREATE TABLE option " + *p->get_name() +
-              ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_CHUNK_SIZE, MAX_ROWS, "
-              "PARTITIONS, SORT_COLUMN or VACUUM.");
-        }
+        get_table_definitions(td, p);
       }
     }
 
@@ -2830,9 +2744,9 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
         case kINT:
           if (compression->get_encoding_param() != 8 &&
               compression->get_encoding_param() != 16) {
-            throw std::runtime_error(
-                cd.columnName +
-                ": Compression parameter for Fixed encoding on INTEGER must be 8 or 16.");
+            throw std::runtime_error(cd.columnName +
+                                     ": Compression parameter for Fixed encoding on "
+                                     "INTEGER must be 8 or 16.");
           }
           break;
         case kBIGINT:
@@ -2904,9 +2818,9 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
       // throw std::runtime_error("DIFF(differential) encoding not supported yet.");
     } else if (boost::iequals(comp, "dict")) {
       if (!cd.columnType.is_string() && !cd.columnType.is_string_array()) {
-        throw std::runtime_error(
-            cd.columnName +
-            ": Dictionary encoding is only supported on string or string array columns.");
+        throw std::runtime_error(cd.columnName +
+                                 ": Dictionary encoding is only supported on string or "
+                                 "string array columns.");
       }
       if (compression->get_encoding_param() == 0) {
         comp_param = 32;  // default to 32-bits
@@ -3763,7 +3677,8 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
   if (!currentUser.isSuper) {
     if (!SysCatalog::instance().verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
       throw std::runtime_error(
-          "GRANT failed. It can only be executed by super user or owner of the object.");
+          "GRANT failed. It can only be executed by super user or owner of the "
+          "object.");
     }
   }
   /* set proper values of privileges & grant them to the object */
@@ -3790,7 +3705,8 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
   if (!currentUser.isSuper) {
     if (!SysCatalog::instance().verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
       throw std::runtime_error(
-          "REVOKE failed. It can only be executed by super user or owner of the object.");
+          "REVOKE failed. It can only be executed by super user or owner of the "
+          "object.");
     }
   }
   /* set proper values of privileges & grant them to the object */

@@ -956,32 +956,32 @@ class CreateTableStmt : public DDLStmt {
                   bool is_temporary,
                   bool if_not_exists,
                   std::list<NameValueAssign*>* s)
-      : table(tab), is_temporary_(is_temporary), if_not_exists_(if_not_exists) {
+      : table_(tab), is_temporary_(is_temporary), if_not_exists_(if_not_exists) {
     CHECK(table_elems);
     for (const auto e : *table_elems) {
-      table_element_list.emplace_back(e);
+      table_element_list_.emplace_back(e);
     }
     delete table_elems;
     if (s) {
       for (const auto e : *s) {
-        storage_options.emplace_back(e);
+        storage_options_.emplace_back(e);
       }
       delete s;
     }
   }
-  const std::string* get_table() const { return table.get(); }
+  const std::string* get_table() const { return table_.get(); }
   const std::list<std::unique_ptr<TableElement>>& get_table_element_list() const {
-    return table_element_list;
+    return table_element_list_;
   }
 
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
-  std::unique_ptr<std::string> table;
-  std::list<std::unique_ptr<TableElement>> table_element_list;
+  std::unique_ptr<std::string> table_;
+  std::list<std::unique_ptr<TableElement>> table_element_list_;
   bool is_temporary_;
   bool if_not_exists_;
-  std::list<std::unique_ptr<NameValueAssign>> storage_options;
+  std::list<std::unique_ptr<NameValueAssign>> storage_options_;
 };
 
 /*
@@ -1886,5 +1886,37 @@ class DeleteStmt : public DMLStmt {
   std::unique_ptr<std::string> table;
   std::unique_ptr<Expr> where_clause;
 };
+
+template <typename LITERAL_TYPE>
+struct DefaultValidate {};
+
+template <>
+struct DefaultValidate<IntLiteral> {
+  template <typename T>
+  decltype(auto) operator()(T t) {
+    const std::string property_name(boost::to_upper_copy<std::string>(*t->get_name()));
+    if (!dynamic_cast<const IntLiteral*>(t->get_value())) {
+      throw std::runtime_error(property_name + " must be an integer literal.");
+    }
+    const auto val = static_cast<const IntLiteral*>(t->get_value())->get_intval();
+    if (val <= 0) {
+      throw std::runtime_error(property_name + " must be a positive number.");
+    }
+    return val;
+  }
+};
+
+template <>
+struct DefaultValidate<StringLiteral> {
+  template <typename T>
+  decltype(auto) operator()(T t) {
+    const auto val = static_cast<const StringLiteral*>(t->get_value())->get_stringval();
+    CHECK(val);
+    const auto val_upper = boost::to_upper_copy<std::string>(*val);
+    return val_upper;
+  }
+};
+
 }  // namespace Parser
+
 #endif  // PARSERNODE_H_
