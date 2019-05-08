@@ -947,6 +947,11 @@ std::vector<Analyzer::Expr*> translate_targets(
         target_expr = translator.translateScalarRex(target_rex_scalar);
         auto rewritten_expr = rewrite_expr(target_expr.get());
         target_expr = fold_expr(rewritten_expr.get());
+        try {
+          target_expr = set_transient_dict(target_expr);
+        } catch (...) {
+          // noop
+        }
       }
     }
     CHECK(target_expr);
