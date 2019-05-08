@@ -993,7 +993,7 @@ class RelFilter : public RelAlgNode {
   std::string toString() const override {
     std::string result =
         "(RelFilter<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
-    result += filter_->toString();
+    result += filter_ ? filter_->toString() : "null";
     return result + ")";
   }
 

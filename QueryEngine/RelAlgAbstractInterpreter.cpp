@@ -925,6 +925,8 @@ void mark_nops(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   }
 }
 
+namespace {
+
 std::vector<const Rex*> reproject_targets(
     const RelProject* simple_project,
     const std::vector<const Rex*>& target_exprs) noexcept {
@@ -937,6 +939,36 @@ std::vector<const Rex*> reproject_targets(
   }
   return result;
 }
+
+/**
+ * The RexInputReplacement visitor visits each node in a given relational algebra
+ * expression and replaces the inputs to that expression with inputs from a different node
+ * in the RA tree. Used for coalescing nodes with complex expressions.
+ */
+class RexInputReplacementVisitor : public RexDeepCopyVisitor {
+ public:
+  RexInputReplacementVisitor(
+      const RelAlgNode* node_to_keep,
+      const std::vector<std::unique_ptr<const RexScalar>>& scalar_sources)
+      : node_to_keep_(node_to_keep), scalar_sources_(scalar_sources) {}
+
+  // Reproject the RexInput from its current RA Node to the RA Node we intend to keep
+  RetType visitInput(const RexInput* input) const final {
+    if (input->getSourceNode() == node_to_keep_) {
+      const auto index = input->getIndex();
+      CHECK_LT(index, scalar_sources_.size());
+      return visit(scalar_sources_[index].get());
+    } else {
+      return input->deepCopy();
+    }
+  }
+
+ private:
+  const RelAlgNode* node_to_keep_;
+  const std::vector<std::unique_ptr<const RexScalar>>& scalar_sources_;
+};
+
+}  // namespace
 
 void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                      const std::vector<size_t>& pattern) noexcept {
@@ -951,6 +983,7 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
   std::vector<const Rex*> target_exprs;
   bool first_project{true};
   bool is_agg{false};
+  RelAlgNode* last_node{nullptr};
 
   std::shared_ptr<ModifyManipulationTarget> manipulation_target;
 
@@ -961,6 +994,7 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
       CHECK(!filter_rex);
       filter_rex.reset(ra_filter->getAndReleaseCondition());
       CHECK(filter_rex);
+      last_node = ra_node.get();
       continue;
     }
     const auto ra_project = std::dynamic_pointer_cast<RelProject>(ra_node);
@@ -985,9 +1019,28 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
         }
         first_project = false;
       } else {
-        CHECK(ra_project->isSimple());
-        target_exprs = reproject_targets(ra_project.get(), target_exprs);
+        if (ra_project->isSimple()) {
+          target_exprs = reproject_targets(ra_project.get(), target_exprs);
+        } else {
+          // TODO(adb): This is essentially a more general case of simple project, we
+          // could likely merge the two
+          std::vector<const Rex*> result;
+          RexInputReplacementVisitor visitor(last_node, scalar_sources);
+          for (size_t i = 0; i < ra_project->size(); ++i) {
+            const auto rex = ra_project->getProjectAt(i);
+            if (auto rex_input = dynamic_cast<const RexInput*>(rex)) {
+              const auto index = rex_input->getIndex();
+              CHECK_LT(index, target_exprs.size());
+              result.push_back(target_exprs[index]);
+            } else {
+              scalar_sources.push_back(visitor.visit(rex));
+              result.push_back(scalar_sources.back().get());
+            }
+          }
+          target_exprs = result;
+        }
       }
+      last_node = ra_node.get();
       continue;
     }
     const auto ra_aggregate = std::dynamic_pointer_cast<RelAggregate>(ra_node);
@@ -1006,6 +1059,7 @@ void create_compound(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
       for (const auto rex_agg : agg_exprs) {
         target_exprs.push_back(rex_agg);
       }
+      last_node = ra_node.get();
       continue;
     }
   }
@@ -1119,6 +1173,54 @@ class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_it
   std::unordered_set<size_t> visited_;
 };
 
+namespace {
+
+bool input_can_be_coalesced(const RelAlgNode* parent_node,
+                            const size_t index,
+                            const bool first_rex_is_input) {
+  if (auto agg_node = dynamic_cast<const RelAggregate*>(parent_node)) {
+    if (index == 0 && agg_node->getGroupByCount() > 0) {
+      return true;
+    } else {
+      // Is an aggregated target, only allow the project to be elided if the aggregate
+      // target is simply passed through (i.e. if the top level expression attached to
+      // the project node is a RexInput expression)
+      return first_rex_is_input;
+    }
+  }
+  return first_rex_is_input;
+}
+
+/**
+ * CoalesceSecondaryProjectVisitor visits each relational algebra expression node in a
+ * given input and determines whether or not the input is a candidate for coalescing into
+ * the parent RA node. Intended for use only on the inputs of a RelProject node.
+ */
+class CoalesceSecondaryProjectVisitor : public RexVisitor<bool> {
+ public:
+  bool visitInput(const RexInput* input) const final {
+    // The top level expression node is checked before we apply the visitor. If we get
+    // here, this input rex is a child of another rex node, and we handle the can be
+    // coalesced check slightly differently
+    return input_can_be_coalesced(input->getSourceNode(), input->getIndex(), false);
+  }
+
+  bool visitLiteral(const RexLiteral*) const final { return true; }
+
+  bool visitSubQuery(const RexSubQuery*) const final { return false; }
+
+  bool visitRef(const RexRef*) const final { return false; }
+
+ protected:
+  bool aggregateResult(const bool& aggregate, const bool& next_result) const final {
+    return aggregate && next_result;
+  }
+
+  bool defaultResult() const final { return true; }
+};
+
+}  // namespace
+
 void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                     const std::vector<const RelAlgNode*>& left_deep_joins) {
   enum class CoalesceState { Initial, Filter, FirstProject, Aggregate };
@@ -1170,10 +1272,30 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
         break;
       }
       case CoalesceState::Aggregate: {
-        if (std::dynamic_pointer_cast<const RelProject>(ra_node) &&
-            std::static_pointer_cast<RelProject>(ra_node)->isSimple()) {
-          crt_pattern.push_back(size_t(nodeIt));
-          nodeIt.advance(RANodeIterator::AdvancingMode::InOrder);
+        if (auto project_node = std::dynamic_pointer_cast<const RelProject>(ra_node)) {
+          // TODO(adb): overloading the simple project terminology again here
+          bool is_simple_project{true};
+          for (size_t i = 0; i < project_node->size(); i++) {
+            const auto scalar_rex = project_node->getProjectAt(i);
+            // If the top level scalar rex is an input node, we can bypass the visitor
+            if (auto input_rex = dynamic_cast<const RexInput*>(scalar_rex)) {
+              if (!input_can_be_coalesced(
+                      input_rex->getSourceNode(), input_rex->getIndex(), true)) {
+                is_simple_project = false;
+                break;
+              }
+              continue;
+            }
+            CoalesceSecondaryProjectVisitor visitor;
+            if (!visitor.visit(project_node->getProjectAt(i))) {
+              is_simple_project = false;
+              break;
+            }
+          }
+          if (is_simple_project) {
+            crt_pattern.push_back(size_t(nodeIt));
+            nodeIt.advance(RANodeIterator::AdvancingMode::InOrder);
+          }
         }
         crt_state = CoalesceState::Initial;
         CHECK_GE(crt_pattern.size(), size_t(2));
@@ -1288,7 +1410,6 @@ class RelAlgAbstractInterpreter {
     CHECK(nodes_.back().unique());
     create_left_deep_join(nodes_);
     create_implicit_subquery_node(nodes_, ra_executor_);
-
     return nodes_.back();
   }
 
