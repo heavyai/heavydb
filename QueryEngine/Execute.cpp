@@ -70,7 +70,7 @@ bool g_allow_cpu_retry{true};
 bool g_null_div_by_zero{false};
 unsigned g_trivial_loop_join_threshold{1000};
 bool g_from_table_reordering{true};
-bool g_inner_join_fragment_skipping{false};
+bool g_inner_join_fragment_skipping{true};
 extern bool g_enable_smem_group_by;
 extern std::unique_ptr<llvm::Module> g_rt_module;
 extern std::unique_ptr<llvm::Module> udf_gpu_module;

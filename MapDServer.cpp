@@ -406,7 +406,9 @@ void MapDProgramOptions::fillOptions() {
                           po::value<bool>(&g_inner_join_fragment_skipping)
                               ->default_value(g_inner_join_fragment_skipping)
                               ->implicit_value(true),
-                          "Enable/disable inner join fragment skipping.");
+                          "Enable/disable inner join fragment skipping. This feature is "
+                          "considered stable and is enabled by default, and this "
+                          "parameter will be removed in a future release.");
   help_desc.add_options()(
       "max-session-duration",
       po::value<int>(&max_session_duration)->default_value(max_session_duration),
