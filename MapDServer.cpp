@@ -210,6 +210,7 @@ class MapDProgramOptions {
 
   MapDParameters mapd_parameters;
   bool enable_rendering = false;
+  bool enable_spirv = false;
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
   unsigned dynamic_watchdog_time_limit = 10000;
@@ -812,6 +813,7 @@ int main(int argc, char** argv) {
                                                   prog_config_opts.read_only,
                                                   prog_config_opts.allow_loop_joins,
                                                   prog_config_opts.enable_rendering,
+                                                  prog_config_opts.enable_spirv,
                                                   prog_config_opts.render_mem_bytes,
                                                   prog_config_opts.num_gpus,
                                                   prog_config_opts.start_gpu,
