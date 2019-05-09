@@ -104,9 +104,9 @@ ParserWrapper::ParserWrapper(std::string query_string) {
     is_ddl = boost::istarts_with(query_string, ddl);
     if (is_ddl) {
       if (ddl == "CREATE") {
-        boost::regex copy_to{R"(CREATE\s+TABLE.*AS.*SELECT.*)",
-                             boost::regex::extended | boost::regex::icase};
-        if (boost::regex_match(query_string, copy_to)) {
+        boost::regex ctas_regex{R"(CREATE\s+TABLE.*AS.*SELECT.*)",
+                                boost::regex::extended | boost::regex::icase};
+        if (boost::regex_match(query_string, ctas_regex)) {
           is_ctas = true;
         }
       } else if (ddl == "COPY") {
@@ -126,7 +126,19 @@ ParserWrapper::ParserWrapper(std::string query_string) {
     is_update_dml = boost::istarts_with(query_string, ParserWrapper::update_dml_cmd[i]);
     if (is_update_dml) {
       dml_type_ = (DMLType)(i);
-      return;
+      break;
+    }
+  }
+
+  if (dml_type_ == DMLType::Insert) {
+    boost::regex insert_regex{R"(INSERT\s+INTO.*VALUES\s*\(.*)",
+                              boost::regex::extended | boost::regex::icase};
+    if (!boost::regex_match(query_string, insert_regex)) {
+      boost::regex itas_regex{R"(INSERT\s+INTO.*SELECT.*)",
+                              boost::regex::extended | boost::regex::icase};
+      if (boost::regex_match(query_string, itas_regex)) {
+        is_itas = true;
+      }
     }
   }
 }

@@ -377,10 +377,6 @@ TEST(ParseAnalyzePlan, Insert) {
     unique_ptr<RootPlan> plan_ptr(
         plan_dml("insert into skinny values (12345, 100000000, 100000000000);"));
   });
-  EXPECT_NO_THROW({
-    unique_ptr<RootPlan> plan_ptr(
-        plan_dml("insert into skinny select 2*a, 2*b, 2*c from skinny;"));
-  });
 }
 
 TEST(DISABLED_ParseAnalyzePlan, Views) {

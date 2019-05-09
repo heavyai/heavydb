@@ -36,6 +36,9 @@ using namespace ::apache::thrift::transport;
 #include <ctime>
 #include <iostream>
 
+// uncomment to run full test suite
+// #define RUN_ALL_TEST
+
 TSessionId g_session_id;
 std::shared_ptr<MapDClient> g_client;
 
@@ -568,6 +571,14 @@ struct Ctas
   Ctas() { columnDescriptors = GetParam(); }
 };
 
+struct Itas
+    : testing::Test,
+      testing::WithParamInterface<std::vector<std::shared_ptr<TestColumnDescriptor>>> {
+  std::vector<std::shared_ptr<TestColumnDescriptor>> columnDescriptors;
+
+  Itas() { columnDescriptors = GetParam(); }
+};
+
 struct Update
     : testing::Test,
       testing::WithParamInterface<std::vector<std::shared_ptr<TestColumnDescriptor>>> {
@@ -702,15 +713,102 @@ TEST_P(Ctas, CreateTableAsSelect) {
   }
 }
 
+TEST_P(Itas, InsertIntoTableFromSelect) {
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+
+  std::string create_source_sql = "CREATE TABLE ITAS_SOURCE (id int";
+  std::string create_target_sql = "CREATE TABLE ITAS_TARGET (id int";
+  for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
+    auto tcd = columnDescriptors[col];
+    if (tcd->skip_test("CreateTableAsSelect")) {
+      LOG(ERROR) << "not supported... skipping";
+      return;
+    }
+
+    create_source_sql +=
+        ", col_" + std::to_string(col) + " " + tcd->get_column_definition();
+    create_target_sql +=
+        ", col_" + std::to_string(col) + " " + tcd->get_column_definition();
+  }
+  create_source_sql += ");";
+  create_target_sql += ");";
+
+  LOG(INFO) << create_source_sql;
+  LOG(INFO) << create_target_sql;
+
+  run_ddl_statement(create_source_sql);
+  run_ddl_statement(create_target_sql);
+
+  size_t num_rows = 25;
+
+  // fill source table
+  for (unsigned int row = 0; row < num_rows; row++) {
+    std::string insert_sql = "INSERT INTO ITAS_SOURCE VALUES (" + std::to_string(row);
+    for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
+      auto tcd = columnDescriptors[col];
+      insert_sql += ", " + tcd->get_column_value(row);
+    }
+    insert_sql += ");";
+
+    //    LOG(INFO) << "insert_sql: " << insert_sql;
+
+    run_multiple_agg(insert_sql);
+  }
+
+  // execute CTAS
+  std::string insert_itas_sql = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
+  LOG(INFO) << insert_itas_sql;
+
+  run_ddl_statement(insert_itas_sql);
+
+  // compare source against CTAS
+  std::string select_sql = "SELECT * FROM ITAS_SOURCE ORDER BY id;";
+  std::string select_itas_sql = "SELECT * FROM ITAS_TARGET ORDER BY id;";
+
+  LOG(INFO) << select_sql;
+  auto select_result = run_multiple_agg(select_sql);
+
+  LOG(INFO) << select_itas_sql;
+  auto select_itas_result = run_multiple_agg(select_itas_sql);
+
+  ASSERT_EQ(num_rows, select_result.row_set.rows.size());
+  ASSERT_EQ(num_rows, select_itas_result.row_set.rows.size());
+
+  for (unsigned int row = 0; row < num_rows; row++) {
+    const auto select_crt_row = select_result.row_set.rows[row];
+    const auto select_itas_crt_row = select_itas_result.row_set.rows[row];
+
+    for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
+      auto tcd = columnDescriptors[col];
+
+      {
+        const auto mapd_variant = select_crt_row.cols[col + 1];
+        ASSERT_EQ(true, tcd->check_column_value(row, &mapd_variant));
+      }
+      {
+        const auto mapd_variant = select_itas_crt_row.cols[col + 1];
+        ASSERT_EQ(true, tcd->check_column_value(row, &mapd_variant));
+      }
+    }
+  }
+}
+
 const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =
     std::make_shared<StringColumnDescriptor>("TEXT ENCODING NONE",
                                              kTEXT,
                                              "STRING_NONE_BASE");
 
+#ifdef RUN_ALL_TEST
+
 #define INSTANTIATE_DATA_INGESTION_TEST(CDT)                                           \
   INSTANTIATE_TEST_CASE_P(                                                             \
       CDT,                                                                             \
       Ctas,                                                                            \
+      testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{CDT}));       \
+  INSTANTIATE_TEST_CASE_P(                                                             \
+      CDT,                                                                             \
+      Itas,                                                                            \
       testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{CDT}));       \
   INSTANTIATE_TEST_CASE_P(                                                             \
       CDT,                                                                             \
@@ -726,6 +824,12 @@ const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =
       Update,                                                                          \
       testing::Values(                                                                 \
           std::vector<std::shared_ptr<TestColumnDescriptor>>{CDT, STRING_NONE_BASE}))
+
+#else
+
+#define INSTANTIATE_DATA_INGESTION_TEST(CDT)
+
+#endif
 
 #define BOOLEAN_COLUMN_TEST(name, c_type, definition, sql_type, null)  \
   const std::shared_ptr<TestColumnDescriptor> name =                   \
@@ -871,6 +975,25 @@ INSTANTIATE_DATA_INGESTION_TEST(GEO_MULTI_POLYGON);
 INSTANTIATE_TEST_CASE_P(
     MIXED_NO_GEO,
     Ctas,
+    testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{BOOLEAN,
+                                                                       TINYINT,
+                                                                       SMALLINT,
+                                                                       INTEGER,
+                                                                       BIGINT,
+                                                                       FLOAT,
+                                                                       DOUBLE,
+                                                                       NUMERIC,
+                                                                       DECIMAL,
+                                                                       CHAR,
+                                                                       VARCHAR,
+                                                                       TEXT,
+                                                                       TIME,
+                                                                       DATE,
+                                                                       TIMESTAMP}));
+
+INSTANTIATE_TEST_CASE_P(
+    MIXED_NO_GEO,
+    Itas,
     testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{BOOLEAN,
                                                                        TINYINT,
                                                                        SMALLINT,

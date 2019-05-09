@@ -1,7 +1,7 @@
 %option c++
 %option noyywrap case-insensitive yylineno
 
-%Start STATE_CREATE STATE_CREATE_AS
+%Start STATE_CREATE STATE_CREATE_AS STATE_INSERT STATE_INSERT_INTO
 
 %{
 #undef yyFlexLexer
@@ -87,8 +87,9 @@ HAVING        TOK(HAVING)
 IF            TOK(IF)
 ILIKE         TOK(ILIKE)
 IN            TOK(IN)
-INSERT        TOK(INSERT)
+INSERT        { BEGIN STATE_INSERT; return SQLParser::INSERT; }
 INT(EGER)?		TOK(INTEGER)
+<STATE_INSERT>INTO    { BEGIN STATE_INSERT_INTO; return SQLParser::INTO; }
 INTO          TOK(INTO)
 IS            TOK(IS)
 LANGUAGE      TOK(LANGUAGE)
@@ -146,7 +147,7 @@ UNION         TOK(UNION)
 UNIQUE        TOK(UNIQUE)
 UPDATE        TOK(UPDATE)
 USER          TOK(USER)
-VALUES        TOK(VALUES)
+VALUES        { BEGIN 0; return SQLParser::VALUES; }
 VALIDATE      TOK(VALIDATE)
 VARCHAR       TOK(CHARACTER)	/* XXX don't distinguish char and varchar for now */
 VIEW          TOK(VIEW)
@@ -228,6 +229,19 @@ WORK          TOK(WORK)
     }
   }
 
+<STATE_INSERT_INTO>[( ]*([Ss][Ee][Ll][Ee][Cc][Tt]).+/[;] {
+    int len = yyleng;
+    const std::string keyword = "values";
+    std::string tmp(yytext, len);
+    if (boost::algorithm::ifind_first(tmp, keyword)) {
+      REJECT;
+    } else {
+      yylval.stringval = new std::string(yytext, len);
+      boost::trim(*yylval.stringval);
+      BEGIN 0;
+      return SQLParser::SELECTSTRING;
+    }
+  }
 
 #~#.*#~# {
 		int len = yyleng - 6;

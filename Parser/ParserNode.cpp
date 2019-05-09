@@ -2114,232 +2114,224 @@ std::shared_ptr<ResultSet> getResultSet(const Catalog_Namespace::SessionInfo& se
   return result.getRows();
 }
 
-void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  struct LocalConnector : public DistributedConnector {
-    virtual ~LocalConnector() {}
-    AggregatedResult query(const Catalog_Namespace::SessionInfo& session,
-                           std::string& sql_query_string,
-                           bool validate_only) {
-      auto& catalog = session.getCatalog();
-      // get read UpdateDeleteLock on tables involved in SELECT subquery
-      std::string pg_shimmed_select_query = pg_shim(sql_query_string);
-      const auto query_ra = parse_to_ra(catalog, pg_shimmed_select_query, session);
-      std::vector<std::shared_ptr<VLock>> readUpdateDeleteLocks;
-      Lock_Namespace::getTableLocks<mapd_shared_mutex>(
-          session.getCatalog(),
-          query_ra,
-          readUpdateDeleteLocks,
-          Lock_Namespace::LockType::UpdateDeleteLock);
-      // [ write UpdateDeleteLocks ] lock is deferred in
-      // InsertOrderFragmenter::deleteFragments
-
-      std::vector<TargetMetaInfo> target_metainfos;
-
-      auto result_set =
-          getResultSet(session, sql_query_string, target_metainfos, validate_only);
-      AggregatedResult res = {result_set, target_metainfos};
-      return res;
-    }
-    AggregatedResult query(const Catalog_Namespace::SessionInfo& session,
-                           std::string& sql_query_string) override {
-      return query(session, sql_query_string, false);
-    }
-    size_t leafCount() override { return 1; };
-    void insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
-                          const size_t leaf_idx,
-                          Fragmenter_Namespace::InsertData& insert_data) override {
-      CHECK(leaf_idx == 0);
-      auto& catalog = session.getCatalog();
-      auto created_td = catalog.getMetadataForTable(insert_data.tableId);
-      // get CheckpointLock+UpdateDeleteLock locks on the table before trying to create
-      // its 1st fragment
-      ChunkKey chunkKey = {catalog.getCurrentDB().dbId, created_td->tableId};
-      mapd_unique_lock<mapd_shared_mutex> chkptlLock(
-          *Lock_Namespace::LockMgr<mapd_shared_mutex, ChunkKey>::getMutex(
-              Lock_Namespace::LockType::CheckpointLock, chunkKey));
-      // [ write UpdateDeleteLocks ] lock is deferred in
-      // InsertOrderFragmenter::deleteFragments
-      created_td->fragmenter->insertDataNoCheckpoint(insert_data);
-    }
-
-    void checkpoint(const Catalog_Namespace::SessionInfo& session, int tableId) override {
-      auto& catalog = session.getCatalog();
-      auto dbId = catalog.getCurrentDB().dbId;
-      catalog.getDataMgr().checkpoint(dbId, tableId);
-    }
-
-    std::list<ColumnDescriptor> getColumnDescriptors(AggregatedResult& result,
-                                                     bool for_create) {
-      std::list<ColumnDescriptor> column_descriptors;
-      std::list<ColumnDescriptor> column_descriptors_for_create;
-
-      int rowid_suffix = 0;
-      for (const auto& target_metainfo : result.targets_meta) {
-        ColumnDescriptor cd;
-        cd.columnName = target_metainfo.get_resname();
-        if (cd.columnName == "rowid") {
-          cd.columnName += std::to_string(rowid_suffix++);
-        }
-        cd.columnType = target_metainfo.get_physical_type_info();
-
-        ColumnDescriptor cd_for_create = cd;
-
-        if (cd.columnType.get_compression() == kENCODING_DICT) {
-          // we need to reset the comp param (as this points to the actual dictionary)
-          if (cd.columnType.is_array()) {
-            // for dict encoded arrays, it is always 4 bytes
-            cd_for_create.columnType.set_comp_param(32);
-          } else {
-            cd_for_create.columnType.set_comp_param(cd.columnType.get_size() * 8);
-          }
-        }
-
-        column_descriptors_for_create.push_back(cd_for_create);
-        column_descriptors.push_back(cd);
-      }
-
-      if (for_create) {
-        return column_descriptors_for_create;
-      }
-
-      return column_descriptors;
-    }
-  };
-
-  LocalConnector local_connector;
+AggregatedResult InsertIntoTableAsSelectStmt::LocalConnector::query(
+    const Catalog_Namespace::SessionInfo& session,
+    std::string& sql_query_string,
+    bool validate_only) {
   auto& catalog = session.getCatalog();
+  // get read UpdateDeleteLock on tables involved in SELECT subquery
+  std::string pg_shimmed_select_query = pg_shim(sql_query_string);
+  const auto query_ra = parse_to_ra(catalog, pg_shimmed_select_query, session);
+  std::vector<std::shared_ptr<VLock>> readUpdateDeleteLocks;
+  Lock_Namespace::getTableLocks<mapd_shared_mutex>(
+      session.getCatalog(),
+      query_ra,
+      readUpdateDeleteLocks,
+      Lock_Namespace::LockType::UpdateDeleteLock);
+  // [ write UpdateDeleteLocks ] lock is deferred in
+  // InsertOrderFragmenter::deleteFragments
 
-  bool create_table = false;
+  std::vector<TargetMetaInfo> target_metainfos;
+
+  auto result_rows =
+      getResultSet(session, sql_query_string, target_metainfos, validate_only);
+  AggregatedResult res = {result_rows, target_metainfos};
+  return res;
+}
+void InsertIntoTableAsSelectStmt::LocalConnector::insertDataToLeaf(
+    const Catalog_Namespace::SessionInfo& session,
+    const size_t leaf_idx,
+    Fragmenter_Namespace::InsertData& insert_data) {
+  CHECK(leaf_idx == 0);
+  auto& catalog = session.getCatalog();
+  auto created_td = catalog.getMetadataForTable(insert_data.tableId);
+  // get CheckpointLock+UpdateDeleteLock locks on the table before trying to create
+  // its 1st fragment
+  ChunkKey chunkKey = {catalog.getCurrentDB().dbId, created_td->tableId};
+  mapd_unique_lock<mapd_shared_mutex> chkptlLock(
+      *Lock_Namespace::LockMgr<mapd_shared_mutex, ChunkKey>::getMutex(
+          Lock_Namespace::LockType::CheckpointLock, chunkKey));
+  // [ write UpdateDeleteLocks ] lock is deferred in
+  // InsertOrderFragmenter::deleteFragments
+  created_td->fragmenter->insertDataNoCheckpoint(insert_data);
+}
+
+void InsertIntoTableAsSelectStmt::LocalConnector::checkpoint(
+    const Catalog_Namespace::SessionInfo& session,
+    int tableId) {
+  auto& catalog = session.getCatalog();
+  auto dbId = catalog.getCurrentDB().dbId;
+  catalog.getDataMgr().checkpoint(dbId, tableId);
+}
+
+void InsertIntoTableAsSelectStmt::LocalConnector::rollback(
+    const Catalog_Namespace::SessionInfo& session,
+    int tableId) {
+  auto& catalog = session.getCatalog();
+  auto dbId = catalog.getCurrentDB().dbId;
+  catalog.getDataMgr().checkpoint(dbId, tableId);
+}
+
+std::list<ColumnDescriptor>
+InsertIntoTableAsSelectStmt::LocalConnector::getColumnDescriptors(
+    AggregatedResult& result,
+    bool for_create) {
+  std::list<ColumnDescriptor> column_descriptors;
+  std::list<ColumnDescriptor> column_descriptors_for_create;
+
+  int rowid_suffix = 0;
+  for (const auto& target_metainfo : result.targets_meta) {
+    ColumnDescriptor cd;
+    cd.columnName = target_metainfo.get_resname();
+    if (cd.columnName == "rowid") {
+      cd.columnName += std::to_string(rowid_suffix++);
+    }
+    cd.columnType = target_metainfo.get_physical_type_info();
+
+    ColumnDescriptor cd_for_create = cd;
+
+    if (cd.columnType.get_compression() == kENCODING_DICT) {
+      // we need to reset the comp param (as this points to the actual dictionary)
+      if (cd.columnType.is_array()) {
+        // for dict encoded arrays, it is always 4 bytes
+        cd_for_create.columnType.set_comp_param(32);
+      } else {
+        cd_for_create.columnType.set_comp_param(cd.columnType.get_size() * 8);
+      }
+    }
+
+    column_descriptors_for_create.push_back(cd_for_create);
+    column_descriptors.push_back(cd);
+  }
+
+  if (for_create) {
+    return column_descriptors_for_create;
+  }
+
+  return column_descriptors;
+}
+
+void InsertIntoTableAsSelectStmt::populateData(
+    const Catalog_Namespace::SessionInfo& session,
+    bool is_temporary,
+    bool validate_table) {
+  LocalConnector local_connector;
+
   bool populate_table = false;
 
   if (leafs_connector_) {
     populate_table = true;
   } else {
     leafs_connector_ = &local_connector;
-    create_table = true;
     if (!g_cluster) {
       populate_table = true;
     }
   }
 
-  if (create_table) {
+  auto& catalog = session.getCatalog();
+
+  if (validate_table) {
     // check access privileges
-    if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
-                                         AccessPrivileges::CREATE_TABLE)) {
-      throw std::runtime_error("CTAS failed. Table " + table_name_ +
-                               " will not be created. User has no create privileges.");
+    const TableDescriptor* td = catalog.getMetadataForTable(table_name_);
+
+    if (td == nullptr) {
+      throw std::runtime_error("Table " + table_name_ + " does not exist.");
+    }
+    if (td->isView) {
+      throw std::runtime_error("Insert to views is not supported yet.");
+    }
+    if (td->partitions == "SHARDED") {
+      throw std::runtime_error("Insert to sharded tables is not supported yet.");
     }
 
-    if (catalog.getMetadataForTable(table_name_) != nullptr) {
-      throw std::runtime_error("Table " + table_name_ +
-                               " already exists and no data was loaded.");
+    if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                         AccessPrivileges::INSERT_INTO_TABLE,
+                                         table_name_)) {
+      throw std::runtime_error("User has no insert privileges on " + table_name_ + ".");
     }
 
     // only validate the select query so we get the target types
     // correctly, but do not populate the result set
     auto result = local_connector.query(session, select_query_, true);
-    auto column_descriptors_for_create =
-        local_connector.getColumnDescriptors(result, true);
+    auto source_column_descriptors = local_connector.getColumnDescriptors(result, false);
 
-    TableDescriptor td;
-    td.tableName = table_name_;
-    td.userId = session.get_currentUser().userId;
-    td.nColumns = column_descriptors_for_create.size();
-    td.isView = false;
-    td.fragmenter = nullptr;
-    td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
-    td.maxFragRows = DEFAULT_FRAGMENT_ROWS;
-    td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
-    td.fragPageSize = DEFAULT_PAGE_SIZE;
-    td.maxRows = DEFAULT_MAX_ROWS;
-    td.keyMetainfo = "[]";
-    if (is_temporary_) {
-      td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
+    std::vector<const ColumnDescriptor*> target_column_descriptors;
+    if (column_list_.empty()) {
+      auto list = catalog.getAllColumnMetadataForTable(td->tableId, false, false, false);
+      target_column_descriptors = {std::begin(list), std::end(list)};
+
     } else {
-      td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
-    }
-
-    auto shard_key_def = false;
-
-    if (!storage_options_.empty()) {
-      for (auto& p : storage_options_) {
-        if (boost::iequals(*p->get_name(), "fragment_size")) {
-          if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
-            throw std::runtime_error("FRAGMENT_SIZE must be an integer literal.");
-          }
-          int frag_size = static_cast<const IntLiteral*>(p->get_value())->get_intval();
-          if (frag_size <= 0) {
-            throw std::runtime_error("FRAGMENT_SIZE must be a positive number.");
-          }
-          td.maxFragRows = frag_size;
-        } else if (boost::iequals(*p->get_name(), "max_chunk_size")) {
-          if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
-            throw std::runtime_error("MAX_CHUNK_SIZE must be an integer literal.");
-          }
-          int64_t max_chunk_size =
-              static_cast<const IntLiteral*>(p->get_value())->get_intval();
-          if (max_chunk_size <= 0) {
-            throw std::runtime_error("MAX_CHUNK_SIZE must be a positive number.");
-          }
-          td.maxChunkSize = max_chunk_size;
-        } else if (boost::iequals(*p->get_name(), "page_size")) {
-          if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
-            throw std::runtime_error("PAGE_SIZE must be an integer literal.");
-          }
-          int page_size = static_cast<const IntLiteral*>(p->get_value())->get_intval();
-          if (page_size <= 0) {
-            throw std::runtime_error("PAGE_SIZE must be a positive number.");
-          }
-          td.fragPageSize = page_size;
-        } else if (boost::iequals(*p->get_name(), "max_rows")) {
-          if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
-            throw std::runtime_error("MAX_ROWS must be an integer literal.");
-          }
-          auto max_rows = static_cast<const IntLiteral*>(p->get_value())->get_intval();
-          if (max_rows <= 0) {
-            throw std::runtime_error("MAX_ROWS must be a positive number.");
-          }
-          td.maxRows = max_rows;
-        } else if (boost::iequals(*p->get_name(), "partitions")) {
-          const auto partitions =
-              static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-          CHECK(partitions);
-          const auto partitions_uc = boost::to_upper_copy<std::string>(*partitions);
-          if (partitions_uc != "SHARDED" && partitions_uc != "REPLICATED") {
-            throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
-          }
-          if (shard_key_def && partitions_uc == "REPLICATED") {
-            throw std::runtime_error(
-                "A table cannot be sharded and replicated at the same time");
-          }
-          td.partitions = partitions_uc;
-        } else if (boost::iequals(*p->get_name(), "vacuum")) {
-          const auto vacuum =
-              static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-          CHECK(vacuum);
-          const auto vacuum_uc = boost::to_upper_copy<std::string>(*vacuum);
-          if (vacuum_uc != "IMMEDIATE" && vacuum_uc != "DELAYED") {
-            throw std::runtime_error("VACUUM must be IMMEDIATE or DELAYED");
-          }
-          if (boost::iequals(vacuum_uc, "IMMEDIATE")) {
-            td.hasDeletedCol = false;
-          } else {
-            td.hasDeletedCol = true;
-          }
-        } else {
-          throw std::runtime_error(
-              "Invalid CREATE TABLE option " + *p->get_name() +
-              ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_CHUNK_SIZE, MAX_ROWS, "
-              "PARTITIONS or VACUUM.");
+      for (auto& c : column_list_) {
+        const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, c);
+        if (cd == nullptr) {
+          throw std::runtime_error("Column " + c + " does not exist.");
         }
+        target_column_descriptors.push_back(cd);
+      }
+      if (catalog.getAllColumnMetadataForTable(td->tableId, false, false, false).size() !=
+          target_column_descriptors.size()) {
+        throw std::runtime_error("Insert into a subset of columns is not supported yet.");
       }
     }
 
-    catalog.createTable(td, column_descriptors_for_create, {}, true);
-    // TODO (max): It's transactionally unsafe, should be fixed: we may create object
-    // w/o privileges
-    SysCatalog::instance().createDBObject(
-        session.get_currentUser(), td.tableName, TableDBObjectType, catalog);
+    if (source_column_descriptors.size() != target_column_descriptors.size()) {
+      throw std::runtime_error("The number of source and target columns does not match.");
+    }
+
+    for (int i = 0; i < source_column_descriptors.size(); i++) {
+      const ColumnDescriptor* source_cd =
+          &(*std::next(source_column_descriptors.begin(), i));
+      const ColumnDescriptor* target_cd = target_column_descriptors.at(i);
+
+      if ((!source_cd->columnType.is_string() && !target_cd->columnType.is_string()) &&
+          (source_cd->columnType.get_type() != target_cd->columnType.get_type())) {
+        throw std::runtime_error("Source '" + source_cd->columnName + " " +
+                                 source_cd->columnType.get_type_name() +
+                                 "' and target '" + target_cd->columnName + " " +
+                                 target_cd->columnType.get_type_name() +
+                                 "' columns do not match.");
+      }
+      if (source_cd->columnType.is_array()) {
+        if (source_cd->columnType.get_subtype() != target_cd->columnType.get_subtype()) {
+          throw std::runtime_error("Source '" + source_cd->columnName + " " +
+                                   source_cd->columnType.get_type_name() +
+                                   "' and target '" + target_cd->columnName + " " +
+                                   target_cd->columnType.get_type_name() +
+                                   "' columns do not match.");
+        }
+      }
+
+      if (source_cd->columnType.is_decimal() ||
+          source_cd->columnType.get_elem_type().is_decimal()) {
+        SQLTypeInfo sourceType = source_cd->columnType;
+        SQLTypeInfo targetType = target_cd->columnType;
+
+        if (source_cd->columnType.is_array()) {
+          sourceType = source_cd->columnType.get_elem_type();
+          targetType = target_cd->columnType.get_elem_type();
+        }
+
+        if ((sourceType.get_dimension() != targetType.get_dimension()) ||
+            (sourceType.get_scale() != targetType.get_scale())) {
+          throw std::runtime_error("Source '" + source_cd->columnName + " " +
+                                   source_cd->columnType.get_type_name() +
+                                   "' and target '" + target_cd->columnName + " " +
+                                   target_cd->columnType.get_type_name() +
+                                   "' columns do not match.");
+        }
+      }
+
+      if (source_cd->columnType.is_string()) {
+        if (source_cd->columnType.get_compression() !=
+            target_cd->columnType.get_compression()) {
+          throw std::runtime_error("Source '" + source_cd->columnName + " " +
+                                   source_cd->columnType.get_type_name() +
+                                   "' and target '" + target_cd->columnName + " " +
+                                   target_cd->columnType.get_type_name() +
+                                   "' columns string encodings do not match.");
+        }
+      }
+    }
   }
 
   if (!populate_table) {
@@ -2493,9 +2485,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
       leafs_connector_->insertDataToLeaf(session, current_leaf, insert_data);
     } catch (...) {
-      if (created_td) {
-        catalog.dropTable(created_td);
-      }
+      leafs_connector_->rollback(session, created_td->tableId);
       throw;
     }
     current_leaf = (current_leaf + 1) % leaf_count;
@@ -2503,8 +2493,146 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     num_rows_to_process = std::min(num_rows - start_row, max_number_of_rows_per_package);
   }
 
-  if (!is_temporary_) {
+  if (!is_temporary) {
     leafs_connector_->checkpoint(session, created_td->tableId);
+  }
+}
+
+void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  LocalConnector local_connector;
+  auto& catalog = session.getCatalog();
+  bool create_table = nullptr == leafs_connector_;
+
+  if (create_table) {
+    // check access privileges
+    if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                         AccessPrivileges::CREATE_TABLE)) {
+      throw std::runtime_error("CTAS failed. Table " + table_name_ +
+                               " will not be created. User has no create privileges.");
+    }
+
+    if (catalog.getMetadataForTable(table_name_) != nullptr) {
+      throw std::runtime_error("Table " + table_name_ +
+                               " already exists and no data was loaded.");
+    }
+
+    // only validate the select query so we get the target types
+    // correctly, but do not populate the result set
+    auto result = local_connector.query(session, select_query_, true);
+    auto column_descriptors_for_create =
+        local_connector.getColumnDescriptors(result, true);
+
+    TableDescriptor td;
+    td.tableName = table_name_;
+    td.userId = session.get_currentUser().userId;
+    td.nColumns = column_descriptors_for_create.size();
+    td.isView = false;
+    td.fragmenter = nullptr;
+    td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
+    td.maxFragRows = DEFAULT_FRAGMENT_ROWS;
+    td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
+    td.fragPageSize = DEFAULT_PAGE_SIZE;
+    td.maxRows = DEFAULT_MAX_ROWS;
+    td.keyMetainfo = "[]";
+    if (is_temporary_) {
+      td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
+    } else {
+      td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
+    }
+
+    auto shard_key_def = false;
+
+    if (!storage_options_.empty()) {
+      for (auto& p : storage_options_) {
+        if (boost::iequals(*p->get_name(), "fragment_size")) {
+          if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
+            throw std::runtime_error("FRAGMENT_SIZE must be an integer literal.");
+          }
+          int frag_size = static_cast<const IntLiteral*>(p->get_value())->get_intval();
+          if (frag_size <= 0) {
+            throw std::runtime_error("FRAGMENT_SIZE must be a positive number.");
+          }
+          td.maxFragRows = frag_size;
+        } else if (boost::iequals(*p->get_name(), "max_chunk_size")) {
+          if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
+            throw std::runtime_error("MAX_CHUNK_SIZE must be an integer literal.");
+          }
+          int64_t max_chunk_size =
+              static_cast<const IntLiteral*>(p->get_value())->get_intval();
+          if (max_chunk_size <= 0) {
+            throw std::runtime_error("MAX_CHUNK_SIZE must be a positive number.");
+          }
+          td.maxChunkSize = max_chunk_size;
+        } else if (boost::iequals(*p->get_name(), "page_size")) {
+          if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
+            throw std::runtime_error("PAGE_SIZE must be an integer literal.");
+          }
+          int page_size = static_cast<const IntLiteral*>(p->get_value())->get_intval();
+          if (page_size <= 0) {
+            throw std::runtime_error("PAGE_SIZE must be a positive number.");
+          }
+          td.fragPageSize = page_size;
+        } else if (boost::iequals(*p->get_name(), "max_rows")) {
+          if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
+            throw std::runtime_error("MAX_ROWS must be an integer literal.");
+          }
+          auto max_rows = static_cast<const IntLiteral*>(p->get_value())->get_intval();
+          if (max_rows <= 0) {
+            throw std::runtime_error("MAX_ROWS must be a positive number.");
+          }
+          td.maxRows = max_rows;
+        } else if (boost::iequals(*p->get_name(), "partitions")) {
+          const auto partitions =
+              static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+          CHECK(partitions);
+          const auto partitions_uc = boost::to_upper_copy<std::string>(*partitions);
+          if (partitions_uc != "SHARDED" && partitions_uc != "REPLICATED") {
+            throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
+          }
+          if (shard_key_def && partitions_uc == "REPLICATED") {
+            throw std::runtime_error(
+                "A table cannot be sharded and replicated at the same time");
+          }
+          td.partitions = partitions_uc;
+        } else if (boost::iequals(*p->get_name(), "vacuum")) {
+          const auto vacuum =
+              static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+          CHECK(vacuum);
+          const auto vacuum_uc = boost::to_upper_copy<std::string>(*vacuum);
+          if (vacuum_uc != "IMMEDIATE" && vacuum_uc != "DELAYED") {
+            throw std::runtime_error("VACUUM must be IMMEDIATE or DELAYED");
+          }
+          if (boost::iequals(vacuum_uc, "IMMEDIATE")) {
+            td.hasDeletedCol = false;
+          } else {
+            td.hasDeletedCol = true;
+          }
+        } else {
+          throw std::runtime_error(
+              "Invalid CREATE TABLE option " + *p->get_name() +
+              ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_CHUNK_SIZE, MAX_ROWS, "
+              "PARTITIONS or VACUUM.");
+        }
+      }
+    }
+
+    catalog.createTable(td, column_descriptors_for_create, {}, true);
+    // TODO (max): It's transactionally unsafe, should be fixed: we may create object
+    // w/o privileges
+    SysCatalog::instance().createDBObject(
+        session.get_currentUser(), td.tableName, TableDBObjectType, catalog);
+  }
+
+  try {
+    populateData(session, is_temporary_, false);
+  } catch (...) {
+    if (!g_cluster) {
+      const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
+      if (created_td) {
+        catalog.dropTable(created_td);
+      }
+    }
+    throw;
   }
 }
 

@@ -985,32 +985,33 @@ class CreateTableStmt : public DDLStmt {
 };
 
 /*
- * @type CreateTableAsSelectStmt
- * @brief CREATE TABLE AS SELECT statement
+ * @type InsertIntoTableAsSelectStmt
+ * @brief INSERT INTO TABLE SELECT statement
  */
-class CreateTableAsSelectStmt : public DDLStmt {
+class InsertIntoTableAsSelectStmt : public DDLStmt {
  public:
-  CreateTableAsSelectStmt(const std::string* table_name,
-                          const std::string* select_query,
-                          const bool is_temporary,
-                          const bool if_not_exists,
-                          std::list<NameValueAssign*>* s)
-      : table_name_(*table_name)
-      , select_query_(*select_query)
-      , is_temporary_(is_temporary)
-      , if_not_exists_(if_not_exists) {
-    if (s) {
-      for (const auto e : *s) {
-        storage_options_.emplace_back(e);
+  // ITAS constructor
+  InsertIntoTableAsSelectStmt(const std::string* table_name,
+                              const std::string* select_query,
+                              std::list<std::string*>* c)
+      : table_name_(*table_name), select_query_(*select_query) {
+    if (c) {
+      for (const auto e : *c) {
+        column_list_.emplace_back(*e);
       }
-      delete s;
+      delete c;
     }
 
     delete table_name;
     delete select_query;
   }
 
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void populateData(const Catalog_Namespace::SessionInfo& session,
+                    bool is_temporary,
+                    bool validate_table);
+  void execute(const Catalog_Namespace::SessionInfo& session) override {
+    populateData(session, false, true);
+  }
 
   std::string& get_table() { return table_name_; }
 
@@ -1027,13 +1028,62 @@ class CreateTableAsSelectStmt : public DDLStmt {
         Fragmenter_Namespace::InsertData& insert_data) = 0;
     virtual void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
                             int tableId) = 0;
+    virtual void rollback(const Catalog_Namespace::SessionInfo& parent_session_info,
+                          int tableId) = 0;
+  };
+
+  struct LocalConnector : public DistributedConnector {
+    virtual ~LocalConnector() {}
+    AggregatedResult query(const Catalog_Namespace::SessionInfo& session,
+                           std::string& sql_query_string,
+                           bool validate_only);
+    AggregatedResult query(const Catalog_Namespace::SessionInfo& session,
+                           std::string& sql_query_string) override {
+      return query(session, sql_query_string, false);
+    }
+    size_t leafCount() override { return 1; };
+    void insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
+                          const size_t leaf_idx,
+                          Fragmenter_Namespace::InsertData& insert_data) override;
+    void checkpoint(const Catalog_Namespace::SessionInfo& session, int tableId) override;
+    void rollback(const Catalog_Namespace::SessionInfo& session, int tableId) override;
+    std::list<ColumnDescriptor> getColumnDescriptors(AggregatedResult& result,
+                                                     bool for_create);
   };
 
   DistributedConnector* leafs_connector_ = nullptr;
 
- private:
+ protected:
+  std::vector<std::string> column_list_;
   std::string table_name_;
   std::string select_query_;
+};
+
+/*
+ * @type CreateTableAsSelectStmt
+ * @brief CREATE TABLE AS SELECT statement
+ */
+class CreateTableAsSelectStmt : public InsertIntoTableAsSelectStmt {
+ public:
+  CreateTableAsSelectStmt(const std::string* table_name,
+                          const std::string* select_query,
+                          const bool is_temporary,
+                          const bool if_not_exists,
+                          std::list<NameValueAssign*>* s)
+      : InsertIntoTableAsSelectStmt(table_name, select_query, nullptr)
+      , is_temporary_(is_temporary)
+      , if_not_exists_(if_not_exists) {
+    if (s) {
+      for (const auto& e : *s) {
+        storage_options_.emplace_back(e);
+      }
+      delete s;
+    }
+  }
+
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
+
+ private:
   const bool is_temporary_;
   const bool if_not_exists_;
   std::list<std::unique_ptr<NameValueAssign>> storage_options_;

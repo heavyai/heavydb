@@ -622,9 +622,9 @@ insert_statement:
 		{
 			$<nodeval>$ = new InsertValuesStmt($<stringval>3, $<slistval>4, reinterpret_cast<std::list<Expr*>*>($<listval>7));
 		}
-		| INSERT INTO table opt_column_commalist query_spec
+		| INSERT INTO table opt_column_commalist SELECTSTRING
 		{
-			$<nodeval>$ = new InsertQueryStmt($<stringval>3, $<slistval>4, dynamic_cast<QuerySpec*>($<nodeval>5));
+			$<nodeval>$ = new InsertIntoTableAsSelectStmt($<stringval>3, $<stringval>5, $<slistval>4);
 		}
 	;
 

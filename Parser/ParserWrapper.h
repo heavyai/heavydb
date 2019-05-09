@@ -66,6 +66,7 @@ class ParserWrapper {
   bool is_ddl = false;
   bool is_update_dml = false;
   bool is_ctas = false;
+  bool is_itas = false;
   bool is_copy = false;
   bool is_copy_to = false;
   bool is_optimize = false;
