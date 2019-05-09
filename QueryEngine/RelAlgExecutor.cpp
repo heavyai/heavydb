@@ -36,7 +36,8 @@
 #include <algorithm>
 #include <numeric>
 
-bool g_skip_intermediate_count{false};
+bool g_skip_intermediate_count{true};
+
 namespace {
 
 bool node_is_aggregate(const RelAlgNode* ra) {
