@@ -285,11 +285,11 @@ void MapDProgramOptions::fillOptions() {
                           "Calcite port number.");
   help_desc.add_options()("config",
                           po::value<std::string>(&config_file),
-                          R"(Path to server configuration file.)");
+                          "Path to server configuration file.");
   help_desc.add_options()("cpu-buffer-mem-bytes",
                           po::value<size_t>(&mapd_parameters.cpu_buffer_mem_bytes)
                               ->default_value(mapd_parameters.cpu_buffer_mem_bytes),
-                          R"(Size of memory reserved for CPU buffers, in bytes.)");
+                          "Size of memory reserved for CPU buffers, in bytes.");
   help_desc.add_options()(
       "cpu-only",
       po::value<bool>(&cpu_only)->default_value(cpu_only)->implicit_value(true),
@@ -374,7 +374,8 @@ void MapDProgramOptions::fillOptions() {
   help_desc.add_options()(
       "flush-log",
       po::value<bool>(&flush_log)->default_value(flush_log)->implicit_value(true),
-      R"(Immediately flush logs to disk. Set to false if this is a performance bottleneck.)");
+      "Immediately flush logs to disk. Set to false if this is a performance "
+      "bottleneck.");
   help_desc.add_options()("from-table-reordering",
                           po::value<bool>(&g_from_table_reordering)
                               ->default_value(g_from_table_reordering)
@@ -407,7 +408,7 @@ void MapDProgramOptions::fillOptions() {
                               ->default_value(g_inner_join_fragment_skipping)
                               ->implicit_value(true),
                           "Enable/disable inner join fragment skipping. This feature is "
-                          "considered stable and is enabled by default, and this "
+                          "considered stable and is enabled by default. This "
                           "parameter will be removed in a future release.");
   help_desc.add_options()(
       "max-session-duration",
@@ -470,12 +471,14 @@ void MapDProgramOptions::fillAdvancedOptions() {
       po::value<bool>(&mapd_parameters.enable_calcite_view_optimize)
           ->default_value(mapd_parameters.enable_calcite_view_optimize)
           ->implicit_value(true),
-      "Enable calcite to optimize when a view is part of the query.");
-  developer_desc.add_options()("enable-columnar-output",
-                               po::value<bool>(&g_enable_columnar_output)
-                                   ->default_value(g_enable_columnar_output)
-                                   ->implicit_value(true),
-                               "Enable columnar output for intermediate query steps.");
+      "Enable additional calcite (query plan) optimizations when a view is part of the "
+      "query.");
+  developer_desc.add_options()(
+      "enable-columnar-output",
+      po::value<bool>(&g_enable_columnar_output)
+          ->default_value(g_enable_columnar_output)
+          ->implicit_value(true),
+      "Enable columnar output for intermediate/final query steps.");
   developer_desc.add_options()("enable-legacy-syntax",
                                po::value<bool>(&enable_legacy_syntax)
                                    ->default_value(enable_legacy_syntax)
@@ -502,9 +505,7 @@ void MapDProgramOptions::fillAdvancedOptions() {
       "jit-debug-ir",
       po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),
       "Enable runtime debugger support for the JIT. Note that this flag is incompatible "
-      "with "
-      "the "
-      "`ENABLE_JIT_DEBUG` build flag. The generated code can be found at "
+      "with the `ENABLE_JIT_DEBUG` build flag. The generated code can be found at "
       "`/tmp/mapdquery`.");
   developer_desc.add_options()(
       "skip-intermediate-count",
@@ -537,10 +538,11 @@ void MapDProgramOptions::fillAdvancedOptions() {
                                po::value<std::string>(&mapd_parameters.ssl_trust_password)
                                    ->default_value(std::string("")),
                                "SSL java trust store password.");
-  developer_desc.add_options()("udf",
-                               po::value<std::string>(&udf_file_name),
-                               "Path to User Defined Extension Function file (expected "
-                               "to be a C++ file with extension .cpp).");
+  developer_desc.add_options()(
+      "udf",
+      po::value<std::string>(&udf_file_name),
+      "Load user defined extension functions from this file at startup. The file is "
+      "expected to be a C/C++ file with extension .cpp.");
 };
 
 namespace {
