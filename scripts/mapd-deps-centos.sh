@@ -324,6 +324,27 @@ popd # build
 popd # glslang-$VERS
 popd # glslang
 
+# spirv-cross
+VERS=2019-04-26
+rm -rf spirv-cross
+mkdir -p spirv-cross
+pushd spirv-cross
+wget --continue https://github.com/KhronosGroup/SPIRV-Cross/archive/$VERS.tar.gz
+tar xvf $VERS.tar.gz
+pushd SPIRV-Cross-$VERS
+mkdir build
+pushd build
+cmake \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DCMAKE_INSTALL_PREFIX=$PREFIX \
+    -DSPIRV_CROSS_ENABLE_TESTS=off \
+    ..
+make -j $(nproc)
+make install
+popd # build
+popd # SPIRV-Cross-$VERS
+popd # spirv-cross
+
 # Vulkan
 VERS=1.1.101.0 # 3/1/19
 rm -rf vulkan
