@@ -61,4 +61,6 @@ inline std::string to_upper(const std::string& str) {
   return str_uc;
 }
 
+std::string generate_random_string(const size_t len);
+
 #endif  // SHARED_STRINGTRANSFORM_H

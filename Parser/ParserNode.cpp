@@ -4297,9 +4297,6 @@ void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                ".  Should be PASSWORD, IS_SUPER, or DEFAULT_DB.");
     }
   }
-  if (passwd.empty()) {
-    throw std::runtime_error("Must have a password for CREATE USER.");
-  }
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("Only super user can create new users.");
   }

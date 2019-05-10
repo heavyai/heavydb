@@ -178,6 +178,7 @@ void SysCatalog::checkAndExecuteMigrations() {
   migrateDBAccessPrivileges();
   updateUserSchema();  // must come before updatePasswordsToHashes()
   updatePasswordsToHashes();
+  updateBlankPasswordsToRandom();  // must come after updatePasswordsToHashes()
 }
 
 void SysCatalog::updateUserSchema() {
@@ -497,6 +498,52 @@ void SysCatalog::updatePasswordsToHashes() {
   sqliteConnector_->query("END TRANSACTION");
   sqliteConnector_->query("VACUUM");  // physically delete plain text passwords
   LOG(INFO) << "Passwords were successfully hashed";
+}
+
+void SysCatalog::updateBlankPasswordsToRandom() {
+  const std::string UPDATE_BLANK_PASSWORDS_TO_RANDOM = "update_blank_passwords_to_random";
+  sqliteConnector_->query_with_text_params(
+      "SELECT migration_history FROM mapd_version_history WHERE migration_history = ?",
+      std::vector<std::string>{UPDATE_BLANK_PASSWORDS_TO_RANDOM});
+  if (sqliteConnector_->getNumRows()) {
+    return;
+  }
+
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_->query(
+        "SELECT userid, passwd_hash, name FROM mapd_users WHERE name <> 'mapd'");
+    auto numRows = sqliteConnector_->getNumRows();
+    vector<std::string> users, passwords, names;
+    for (size_t i = 0; i < numRows; i++) {
+      users.push_back(sqliteConnector_->getData<std::string>(i, 0));
+      passwords.push_back(sqliteConnector_->getData<std::string>(i, 1));
+      names.push_back(sqliteConnector_->getData<std::string>(i, 2));
+    }
+    for (size_t i = 0; i < users.size(); ++i) {
+      int pwd_check_result = bcrypt_checkpw("", passwords[i].c_str());
+      // if the check fails there is a good chance that data on disc is broken
+      CHECK(pwd_check_result >= 0);
+      if (pwd_check_result != 0) {
+        continue;
+      }
+      LOG(WARNING) << "resetting blank password for user " << names[i] << " (" << users[i]
+                   << ") to a random password";
+      sqliteConnector_->query_with_text_params(
+          "UPDATE mapd_users SET passwd_hash = ? WHERE userid = ?",
+          std::vector<std::string>{hash_with_bcrypt(generate_random_string(15)),
+                                   users[i]});
+    }
+    sqliteConnector_->query_with_text_params(
+        "INSERT INTO mapd_version_history(version, migration_history) values(?,?)",
+        std::vector<std::string>{std::to_string(MAPD_VERSION),
+                                 UPDATE_BLANK_PASSWORDS_TO_RANDOM});
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Failed to fix blank passwords: " << e.what();
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
 }
 
 void SysCatalog::migrateDBAccessPrivileges() {
@@ -1936,7 +1983,7 @@ void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
                                             bool* is_super) {
   UserMetadata user_meta;
   if (!getMetadataForUser(user_name, user_meta)) {
-    createUser(user_name, "", is_super ? *is_super : false, "");
+    createUser(user_name, generate_random_string(15), is_super ? *is_super : false, "");
   } else if (is_super && *is_super != user_meta.isSuper) {
     alterUser(user_meta.userId, nullptr, is_super, nullptr);
   }

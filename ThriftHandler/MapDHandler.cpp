@@ -120,8 +120,6 @@ using namespace Lock_Namespace;
   LOG(ERROR) << ex.error_msg;        \
   throw ex;
 
-std::string generate_random_string(const size_t len);
-
 namespace {
 
 SessionMap::iterator get_session_from_map(const TSessionId& session,
@@ -281,23 +279,6 @@ void MapDHandler::check_read_only(const std::string& str) {
   if (MapDHandler::read_only_) {
     THROW_MAPD_EXCEPTION(str + " disabled: server running in read-only mode.");
   }
-}
-
-std::string generate_random_string(const size_t len) {
-  static char charset[] =
-      "0123456789"
-      "abcdefghijklmnopqrstuvwxyz"
-      "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-
-  static std::mt19937 prng{std::random_device{}()};
-  static std::uniform_int_distribution<size_t> dist(0, strlen(charset) - 1);
-
-  std::string str;
-  str.reserve(len);
-  for (size_t i = 0; i < len; i++) {
-    str += charset[dist(prng)];
-  }
-  return str;
 }
 
 // internal connection for connections with no password

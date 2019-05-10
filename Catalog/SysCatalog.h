@@ -259,6 +259,7 @@ class SysCatalog {
   void migratePrivileged_old();
   void updateUserSchema();
   void updatePasswordsToHashes();
+  void updateBlankPasswordsToRandom();
   void migrateDBAccessPrivileges();
 
   // Here go functions not wrapped into transactions (necessary for nested calls)

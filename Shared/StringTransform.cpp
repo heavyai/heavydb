@@ -17,6 +17,7 @@
 #include "StringTransform.h"
 
 #include <numeric>
+#include <random>
 #include <regex>
 
 void apply_shim(std::string& result,
@@ -96,4 +97,21 @@ std::string to_string(char const*&& v) {
 template <>
 std::string to_string(std::string&& v) {
   return std::move(v);
+}
+
+std::string generate_random_string(const size_t len) {
+  static char charset[] =
+      "0123456789"
+      "abcdefghijklmnopqrstuvwxyz"
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+  static std::mt19937 prng{std::random_device{}()};
+  static std::uniform_int_distribution<size_t> dist(0, strlen(charset) - 1);
+
+  std::string str;
+  str.reserve(len);
+  for (size_t i = 0; i < len; i++) {
+    str += charset[dist(prng)];
+  }
+  return str;
 }
