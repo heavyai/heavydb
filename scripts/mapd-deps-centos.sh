@@ -21,6 +21,27 @@ SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $SCRIPTS_DIR/common-functions.sh
 
 
+sudo yum groupinstall -y "Development Tools"
+sudo yum install -y \
+    zlib-devel \
+    epel-release \
+    libssh \
+    openssl-devel \
+    ncurses-devel \
+    git \
+    maven \
+    java-1.8.0-openjdk-devel \
+    java-1.8.0-openjdk-headless \
+    gperftools \
+    gperftools-devel \
+    gperftools-libs \
+    python-devel \
+    wget \
+    curl \
+    openldap-devel
+sudo yum install -y \
+    jq
+
 # gmp, mpc, mpfr, autoconf, automake
 # note: if gmp fails on POWER8:
 # wget https://gmplib.org/repo/gmp/raw-rev/4a6d258b467f
