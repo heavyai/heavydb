@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "CodeGenerator.h"
 #include "Execute.h"
 
 #include "Parser/ParserNode.h"
@@ -32,8 +33,8 @@ std::string numeric_or_time_interval_type_name(const SQLTypeInfo& ti1,
 
 }  // namespace
 
-llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper,
-                                    const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenArith(const Analyzer::BinOper* bin_oper,
+                                         const CompilationOptions& co) {
   const auto optype = bin_oper->get_optype();
   CHECK(IS_ARITHMETIC(optype));
   const auto lhs = bin_oper->get_left_operand();
@@ -48,14 +49,14 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper,
     }
   }
 
-  auto lhs_lv = codegen(lhs, true, co).front();
-  auto rhs_lv = codegen(rhs, true, co).front();
+  auto lhs_lv = executor_->codegen(lhs, true, co).front();
+  auto rhs_lv = executor_->codegen(rhs, true, co).front();
   // Handle operations when a time interval operand is involved, an operation
   // between an integer and a time interval isn't normalized by the analyzer.
   if (lhs_type.is_timeinterval()) {
-    rhs_lv = codegenCastBetweenIntTypes(rhs_lv, rhs_type, lhs_type);
+    rhs_lv = executor_->codegenCastBetweenIntTypes(rhs_lv, rhs_type, lhs_type);
   } else if (rhs_type.is_timeinterval()) {
-    lhs_lv = codegenCastBetweenIntTypes(lhs_lv, lhs_type, rhs_type);
+    lhs_lv = executor_->codegenCastBetweenIntTypes(lhs_lv, lhs_type, rhs_type);
   } else {
     CHECK_EQ(lhs_type.get_type(), rhs_type.get_type());
   }
@@ -70,9 +71,9 @@ llvm::Value* Executor::codegenArith(const Analyzer::BinOper* bin_oper,
 }
 
 // Handle integer or integer-like (decimal, time, date) operand types.
-llvm::Value* Executor::codegenIntArith(const Analyzer::BinOper* bin_oper,
-                                       llvm::Value* lhs_lv,
-                                       llvm::Value* rhs_lv) {
+llvm::Value* CodeGenerator::codegenIntArith(const Analyzer::BinOper* bin_oper,
+                                            llvm::Value* lhs_lv,
+                                            llvm::Value* rhs_lv) {
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
@@ -122,17 +123,18 @@ llvm::Value* Executor::codegenIntArith(const Analyzer::BinOper* bin_oper,
 }
 
 // Handle floating point operand types.
-llvm::Value* Executor::codegenFpArith(const Analyzer::BinOper* bin_oper,
-                                      llvm::Value* lhs_lv,
-                                      llvm::Value* rhs_lv) {
+llvm::Value* CodeGenerator::codegenFpArith(const Analyzer::BinOper* bin_oper,
+                                           llvm::Value* lhs_lv,
+                                           llvm::Value* rhs_lv) {
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
   const auto& rhs_type = rhs->get_type_info();
   const auto fp_typename = numeric_type_name(lhs_type);
   const auto null_check_suffix = get_null_check_suffix(lhs_type, rhs_type);
-  llvm::ConstantFP* fp_null{lhs_type.get_type() == kFLOAT ? ll_fp(NULL_FLOAT)
-                                                          : ll_fp(NULL_DOUBLE)};
+  llvm::ConstantFP* fp_null{lhs_type.get_type() == kFLOAT
+                                ? executor_->ll_fp(NULL_FLOAT)
+                                : executor_->ll_fp(NULL_DOUBLE)};
   switch (bin_oper->get_optype()) {
     case kMINUS:
       return null_check_suffix.empty()
@@ -175,9 +177,9 @@ bool is_temporary_column(const Analyzer::Expr* expr) {
 }  // namespace
 
 // Returns true iff runtime overflow checks aren't needed thanks to range information.
-bool Executor::checkExpressionRanges(const Analyzer::BinOper* bin_oper,
-                                     int64_t min,
-                                     int64_t max) {
+bool CodeGenerator::checkExpressionRanges(const Analyzer::BinOper* bin_oper,
+                                          int64_t min,
+                                          int64_t max) {
   if (is_temporary_column(bin_oper->get_left_operand()) ||
       is_temporary_column(bin_oper->get_right_operand())) {
     // Computing the range for temporary columns is a lot more expensive than the overflow
@@ -190,7 +192,7 @@ bool Executor::checkExpressionRanges(const Analyzer::BinOper* bin_oper,
 
   auto expr_range_info =
       cgen_state_->query_infos_.size() > 0
-          ? getExpressionRange(bin_oper, cgen_state_->query_infos_, this)
+          ? getExpressionRange(bin_oper, cgen_state_->query_infos_, executor_)
           : ExpressionRange::makeInvalidRange();
   if (expr_range_info.getType() != ExpressionRangeType::Integer) {
     return false;
@@ -202,17 +204,17 @@ bool Executor::checkExpressionRanges(const Analyzer::BinOper* bin_oper,
   return false;
 }
 
-llvm::Value* Executor::codegenAdd(const Analyzer::BinOper* bin_oper,
-                                  llvm::Value* lhs_lv,
-                                  llvm::Value* rhs_lv,
-                                  const std::string& null_typename,
-                                  const std::string& null_check_suffix,
-                                  const SQLTypeInfo& ti) {
+llvm::Value* CodeGenerator::codegenAdd(const Analyzer::BinOper* bin_oper,
+                                       llvm::Value* lhs_lv,
+                                       llvm::Value* rhs_lv,
+                                       const std::string& null_typename,
+                                       const std::string& null_check_suffix,
+                                       const SQLTypeInfo& ti) {
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
   llvm::Value* chosen_max{nullptr};
   llvm::Value* chosen_min{nullptr};
-  std::tie(chosen_max, chosen_min) = inlineIntMaxMin(ti.get_size(), true);
+  std::tie(chosen_max, chosen_min) = executor_->inlineIntMaxMin(ti.get_size(), true);
   auto need_overflow_check =
       !checkExpressionRanges(bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
@@ -242,30 +244,31 @@ llvm::Value* Executor::codegenAdd(const Analyzer::BinOper* bin_oper,
     cgen_state_->ir_builder_.CreateCondBr(detected, add_fail, add_ok);
     cgen_state_->ir_builder_.SetInsertPoint(add_ok);
   }
-  auto ret =
-      null_check_suffix.empty()
-          ? cgen_state_->ir_builder_.CreateAdd(lhs_lv, rhs_lv)
-          : cgen_state_->emitCall("add_" + null_typename + null_check_suffix,
-                                  {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))});
+  auto ret = null_check_suffix.empty()
+                 ? cgen_state_->ir_builder_.CreateAdd(lhs_lv, rhs_lv)
+                 : cgen_state_->emitCall(
+                       "add_" + null_typename + null_check_suffix,
+                       {lhs_lv, rhs_lv, executor_->ll_int(inline_int_null_val(ti))});
   if (need_overflow_check) {
     cgen_state_->ir_builder_.SetInsertPoint(add_fail);
-    cgen_state_->ir_builder_.CreateRet(ll_int(ERR_OVERFLOW_OR_UNDERFLOW));
+    cgen_state_->ir_builder_.CreateRet(
+        executor_->ll_int(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
     cgen_state_->ir_builder_.SetInsertPoint(add_ok);
   }
   return ret;
 }
 
-llvm::Value* Executor::codegenSub(const Analyzer::BinOper* bin_oper,
-                                  llvm::Value* lhs_lv,
-                                  llvm::Value* rhs_lv,
-                                  const std::string& null_typename,
-                                  const std::string& null_check_suffix,
-                                  const SQLTypeInfo& ti) {
+llvm::Value* CodeGenerator::codegenSub(const Analyzer::BinOper* bin_oper,
+                                       llvm::Value* lhs_lv,
+                                       llvm::Value* rhs_lv,
+                                       const std::string& null_typename,
+                                       const std::string& null_check_suffix,
+                                       const SQLTypeInfo& ti) {
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
   llvm::Value* chosen_max{nullptr};
   llvm::Value* chosen_min{nullptr};
-  std::tie(chosen_max, chosen_min) = inlineIntMaxMin(ti.get_size(), true);
+  std::tie(chosen_max, chosen_min) = executor_->inlineIntMaxMin(ti.get_size(), true);
   auto need_overflow_check =
       !checkExpressionRanges(bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
@@ -297,27 +300,28 @@ llvm::Value* Executor::codegenSub(const Analyzer::BinOper* bin_oper,
     cgen_state_->ir_builder_.CreateCondBr(detected, sub_fail, sub_ok);
     cgen_state_->ir_builder_.SetInsertPoint(sub_ok);
   }
-  auto ret =
-      null_check_suffix.empty()
-          ? cgen_state_->ir_builder_.CreateSub(lhs_lv, rhs_lv)
-          : cgen_state_->emitCall("sub_" + null_typename + null_check_suffix,
-                                  {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))});
+  auto ret = null_check_suffix.empty()
+                 ? cgen_state_->ir_builder_.CreateSub(lhs_lv, rhs_lv)
+                 : cgen_state_->emitCall(
+                       "sub_" + null_typename + null_check_suffix,
+                       {lhs_lv, rhs_lv, executor_->ll_int(inline_int_null_val(ti))});
   if (need_overflow_check) {
     cgen_state_->ir_builder_.SetInsertPoint(sub_fail);
-    cgen_state_->ir_builder_.CreateRet(ll_int(ERR_OVERFLOW_OR_UNDERFLOW));
+    cgen_state_->ir_builder_.CreateRet(
+        executor_->ll_int(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
     cgen_state_->ir_builder_.SetInsertPoint(sub_ok);
   }
   return ret;
 }
 
-void Executor::codegenSkipOverflowCheckForNull(llvm::Value* lhs_lv,
-                                               llvm::Value* rhs_lv,
-                                               llvm::BasicBlock* no_overflow_bb,
-                                               const SQLTypeInfo& ti) {
-  const auto lhs_is_null_lv = codegenIsNullNumber(lhs_lv, ti);
+void CodeGenerator::codegenSkipOverflowCheckForNull(llvm::Value* lhs_lv,
+                                                    llvm::Value* rhs_lv,
+                                                    llvm::BasicBlock* no_overflow_bb,
+                                                    const SQLTypeInfo& ti) {
+  const auto lhs_is_null_lv = executor_->codegenIsNullNumber(lhs_lv, ti);
   const auto has_null_operand_lv =
-      rhs_lv ? cgen_state_->ir_builder_.CreateOr(lhs_is_null_lv,
-                                                 codegenIsNullNumber(rhs_lv, ti))
+      rhs_lv ? cgen_state_->ir_builder_.CreateOr(
+                   lhs_is_null_lv, executor_->codegenIsNullNumber(rhs_lv, ti))
              : lhs_is_null_lv;
   auto operands_not_null = llvm::BasicBlock::Create(
       cgen_state_->context_, "operands_not_null", cgen_state_->row_func_);
@@ -326,18 +330,18 @@ void Executor::codegenSkipOverflowCheckForNull(llvm::Value* lhs_lv,
   cgen_state_->ir_builder_.SetInsertPoint(operands_not_null);
 }
 
-llvm::Value* Executor::codegenMul(const Analyzer::BinOper* bin_oper,
-                                  llvm::Value* lhs_lv,
-                                  llvm::Value* rhs_lv,
-                                  const std::string& null_typename,
-                                  const std::string& null_check_suffix,
-                                  const SQLTypeInfo& ti,
-                                  bool downscale) {
+llvm::Value* CodeGenerator::codegenMul(const Analyzer::BinOper* bin_oper,
+                                       llvm::Value* lhs_lv,
+                                       llvm::Value* rhs_lv,
+                                       const std::string& null_typename,
+                                       const std::string& null_check_suffix,
+                                       const SQLTypeInfo& ti,
+                                       bool downscale) {
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
   llvm::Value* chosen_max{nullptr};
   llvm::Value* chosen_min{nullptr};
-  std::tie(chosen_max, chosen_min) = inlineIntMaxMin(ti.get_size(), true);
+  std::tie(chosen_max, chosen_min) = executor_->inlineIntMaxMin(ti.get_size(), true);
   auto need_overflow_check =
       !checkExpressionRanges(bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
@@ -378,22 +382,24 @@ llvm::Value* Executor::codegenMul(const Analyzer::BinOper* bin_oper,
   const auto ret =
       null_check_suffix.empty()
           ? cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv)
-          : cgen_state_->emitCall("mul_" + null_typename + null_check_suffix,
-                                  {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))});
+          : cgen_state_->emitCall(
+                "mul_" + null_typename + null_check_suffix,
+                {lhs_lv, rhs_lv, executor_->ll_int(inline_int_null_val(ti))});
   if (need_overflow_check) {
     cgen_state_->ir_builder_.SetInsertPoint(mul_fail);
-    cgen_state_->ir_builder_.CreateRet(ll_int(ERR_OVERFLOW_OR_UNDERFLOW));
+    cgen_state_->ir_builder_.CreateRet(
+        executor_->ll_int(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
     cgen_state_->ir_builder_.SetInsertPoint(mul_ok);
   }
   return ret;
 }
 
-llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
-                                  llvm::Value* rhs_lv,
-                                  const std::string& null_typename,
-                                  const std::string& null_check_suffix,
-                                  const SQLTypeInfo& ti,
-                                  bool upscale) {
+llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
+                                       llvm::Value* rhs_lv,
+                                       const std::string& null_typename,
+                                       const std::string& null_check_suffix,
+                                       const SQLTypeInfo& ti,
+                                       bool upscale) {
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   if (ti.is_decimal()) {
     if (upscale) {
@@ -405,7 +411,7 @@ llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
           lhs_lv, get_int_type(64, cgen_state_->context_));
       llvm::Value* chosen_max{nullptr};
       llvm::Value* chosen_min{nullptr};
-      std::tie(chosen_max, chosen_min) = inlineIntMaxMin(8, true);
+      std::tie(chosen_max, chosen_min) = executor_->inlineIntMaxMin(8, true);
       auto decimal_div_ok = llvm::BasicBlock::Create(
           cgen_state_->context_, "decimal_div_ok", cgen_state_->row_func_);
       if (!null_check_suffix.empty()) {
@@ -421,17 +427,18 @@ llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
       if (ti.get_notnull()) {
         detected = cgen_state_->ir_builder_.CreateICmpSGT(lhs_lv, lhs_max_lv);
       } else {
-        detected =
-            toBool(cgen_state_->emitCall("gt_" + numeric_type_name(ti) + "_nullable",
-                                         {lhs_lv,
-                                          lhs_max_lv,
-                                          ll_int(inline_int_null_val(ti)),
-                                          inlineIntNull(SQLTypeInfo(kBOOLEAN, false))}));
+        detected = executor_->toBool(cgen_state_->emitCall(
+            "gt_" + numeric_type_name(ti) + "_nullable",
+            {lhs_lv,
+             lhs_max_lv,
+             executor_->ll_int(inline_int_null_val(ti)),
+             executor_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))}));
       }
       cgen_state_->ir_builder_.CreateCondBr(detected, decimal_div_fail, decimal_div_ok);
 
       cgen_state_->ir_builder_.SetInsertPoint(decimal_div_fail);
-      cgen_state_->ir_builder_.CreateRet(ll_int(ERR_OVERFLOW_OR_UNDERFLOW));
+      cgen_state_->ir_builder_.CreateRet(
+          executor_->ll_int(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
 
       cgen_state_->ir_builder_.SetInsertPoint(decimal_div_ok);
 
@@ -439,15 +446,16 @@ llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
                    ? cgen_state_->ir_builder_.CreateMul(lhs_lv, scale_lv)
                    : cgen_state_->emitCall(
                          "mul_" + numeric_type_name(ti) + null_check_suffix,
-                         {lhs_lv, scale_lv, ll_int(inline_int_null_val(ti))});
+                         {lhs_lv, scale_lv, executor_->ll_int(inline_int_null_val(ti))});
     }
   }
   if (g_null_div_by_zero) {
     llvm::Value* null_lv{nullptr};
     if (ti.is_fp()) {
-      null_lv = ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE);
+      null_lv = ti.get_type() == kFLOAT ? executor_->ll_fp(NULL_FLOAT)
+                                        : executor_->ll_fp(NULL_DOUBLE);
     } else {
-      null_lv = ll_int(inline_int_null_val(ti));
+      null_lv = executor_->ll_int(inline_int_null_val(ti));
     }
     return cgen_state_->emitCall("safe_div_" + numeric_type_name(ti),
                                  {lhs_lv, rhs_lv, null_lv});
@@ -478,16 +486,17 @@ llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
                  ? cgen_state_->ir_builder_.CreateSDiv(lhs_lv, rhs_lv)
                  : cgen_state_->emitCall(
                        "div_" + null_typename + null_check_suffix,
-                       {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))}))
+                       {lhs_lv, rhs_lv, executor_->ll_int(inline_int_null_val(ti))}))
           : (null_typename.empty()
                  ? cgen_state_->ir_builder_.CreateFDiv(lhs_lv, rhs_lv)
-                 : cgen_state_->emitCall("div_" + null_typename + null_check_suffix,
-                                         {lhs_lv,
-                                          rhs_lv,
-                                          ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT)
-                                                                  : ll_fp(NULL_DOUBLE)}));
+                 : cgen_state_->emitCall(
+                       "div_" + null_typename + null_check_suffix,
+                       {lhs_lv,
+                        rhs_lv,
+                        ti.get_type() == kFLOAT ? executor_->ll_fp(NULL_FLOAT)
+                                                : executor_->ll_fp(NULL_DOUBLE)}));
   cgen_state_->ir_builder_.SetInsertPoint(div_zero);
-  cgen_state_->ir_builder_.CreateRet(ll_int(ERR_DIV_BY_ZERO));
+  cgen_state_->ir_builder_.CreateRet(executor_->ll_int(Executor::ERR_DIV_BY_ZERO));
   cgen_state_->ir_builder_.SetInsertPoint(div_ok);
   return ret;
 }
@@ -497,8 +506,8 @@ llvm::Value* Executor::codegenDiv(llvm::Value* lhs_lv,
 // For said patterns, we can simply divide the decimal operand by the non-scaled
 // integer value instead of using the scaled value preceded by a multiplication.
 // It is both more efficient and avoids the overflow for a lot of practical cases.
-llvm::Value* Executor::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
-                                      const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
+                                           const CompilationOptions& co) {
   auto lhs = bin_oper->get_left_operand();
   auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
@@ -520,20 +529,20 @@ llvm::Value* Executor::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
     return nullptr;
   }
 
-  auto lhs_lv = codegen(lhs, true, co).front();
+  auto lhs_lv = executor_->codegen(lhs, true, co).front();
   llvm::Value* rhs_lv{nullptr};
   if (rhs_constant) {
     const auto rhs_lit = Parser::IntLiteral::analyzeValue(
         rhs_constant->get_constval().bigintval / exp_to_scale(rhs_type.get_scale()));
-    auto rhs_lit_lv =
-        codegenIntConst(dynamic_cast<const Analyzer::Constant*>(rhs_lit.get()));
-    rhs_lv = codegenCastBetweenIntTypes(
+    auto rhs_lit_lv = executor_->codegenIntConst(
+        dynamic_cast<const Analyzer::Constant*>(rhs_lit.get()));
+    rhs_lv = executor_->codegenCastBetweenIntTypes(
         rhs_lit_lv, rhs_lit->get_type_info(), lhs_type, /*upscale*/ false);
   } else if (rhs_cast) {
     auto rhs_cast_oper = rhs_cast->get_operand();
     const auto& rhs_cast_oper_ti = rhs_cast_oper->get_type_info();
-    auto rhs_cast_oper_lv = codegen(rhs_cast_oper, true, co).front();
-    rhs_lv = codegenCastBetweenIntTypes(
+    auto rhs_cast_oper_lv = executor_->codegen(rhs_cast_oper, true, co).front();
+    rhs_lv = executor_->codegenCastBetweenIntTypes(
         rhs_cast_oper_lv, rhs_cast_oper_ti, lhs_type, /*upscale*/ false);
   } else {
     CHECK(false);
@@ -548,11 +557,11 @@ llvm::Value* Executor::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
                     /*upscale*/ false);
 }
 
-llvm::Value* Executor::codegenMod(llvm::Value* lhs_lv,
-                                  llvm::Value* rhs_lv,
-                                  const std::string& null_typename,
-                                  const std::string& null_check_suffix,
-                                  const SQLTypeInfo& ti) {
+llvm::Value* CodeGenerator::codegenMod(llvm::Value* lhs_lv,
+                                       llvm::Value* rhs_lv,
+                                       const std::string& null_typename,
+                                       const std::string& null_check_suffix,
+                                       const SQLTypeInfo& ti) {
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   CHECK(ti.is_integer());
   cgen_state_->needs_error_check_ = true;
@@ -567,28 +576,29 @@ llvm::Value* Executor::codegenMod(llvm::Value* lhs_lv,
       mod_ok,
       mod_zero);
   cgen_state_->ir_builder_.SetInsertPoint(mod_ok);
-  auto ret =
-      null_typename.empty()
-          ? cgen_state_->ir_builder_.CreateSRem(lhs_lv, rhs_lv)
-          : cgen_state_->emitCall("mod_" + null_typename + null_check_suffix,
-                                  {lhs_lv, rhs_lv, ll_int(inline_int_null_val(ti))});
+  auto ret = null_typename.empty()
+                 ? cgen_state_->ir_builder_.CreateSRem(lhs_lv, rhs_lv)
+                 : cgen_state_->emitCall(
+                       "mod_" + null_typename + null_check_suffix,
+                       {lhs_lv, rhs_lv, executor_->ll_int(inline_int_null_val(ti))});
   cgen_state_->ir_builder_.SetInsertPoint(mod_zero);
-  cgen_state_->ir_builder_.CreateRet(ll_int(ERR_DIV_BY_ZERO));
+  cgen_state_->ir_builder_.CreateRet(executor_->ll_int(Executor::ERR_DIV_BY_ZERO));
   cgen_state_->ir_builder_.SetInsertPoint(mod_ok);
   return ret;
 }
 
 // Returns true iff runtime overflow checks aren't needed thanks to range information.
-bool Executor::checkExpressionRanges(const Analyzer::UOper* uoper,
-                                     int64_t min,
-                                     int64_t max) {
+bool CodeGenerator::checkExpressionRanges(const Analyzer::UOper* uoper,
+                                          int64_t min,
+                                          int64_t max) {
   if (uoper->get_type_info().is_decimal()) {
     return false;
   }
 
-  auto expr_range_info = cgen_state_->query_infos_.size() > 0
-                             ? getExpressionRange(uoper, cgen_state_->query_infos_, this)
-                             : ExpressionRange::makeInvalidRange();
+  auto expr_range_info =
+      cgen_state_->query_infos_.size() > 0
+          ? getExpressionRange(uoper, cgen_state_->query_infos_, executor_)
+          : ExpressionRange::makeInvalidRange();
   if (expr_range_info.getType() != ExpressionRangeType::Integer) {
     return false;
   }
@@ -599,16 +609,16 @@ bool Executor::checkExpressionRanges(const Analyzer::UOper* uoper,
   return false;
 }
 
-llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper,
-                                     const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenUMinus(const Analyzer::UOper* uoper,
+                                          const CompilationOptions& co) {
   CHECK_EQ(uoper->get_optype(), kUMINUS);
-  const auto operand_lv = codegen(uoper->get_operand(), true, co).front();
+  const auto operand_lv = executor_->codegen(uoper->get_operand(), true, co).front();
   const auto& ti = uoper->get_type_info();
   llvm::Value* chosen_max{nullptr};
   llvm::Value* chosen_min{nullptr};
   bool need_overflow_check = false;
   if (ti.is_integer() || ti.is_decimal() || ti.is_timeinterval()) {
-    std::tie(chosen_max, chosen_min) = inlineIntMaxMin(ti.get_size(), true);
+    std::tie(chosen_max, chosen_min) = executor_->inlineIntMaxMin(ti.get_size(), true);
     need_overflow_check = !checkExpressionRanges(
         uoper,
         static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
@@ -633,17 +643,19 @@ llvm::Value* Executor::codegenUMinus(const Analyzer::UOper* uoper,
     cgen_state_->ir_builder_.CreateCondBr(overflow, uminus_fail, uminus_ok);
     cgen_state_->ir_builder_.SetInsertPoint(uminus_ok);
   }
-  auto ret = ti.get_notnull()
-                 ? (ti.is_fp() ? cgen_state_->ir_builder_.CreateFNeg(operand_lv)
-                               : cgen_state_->ir_builder_.CreateNeg(operand_lv))
-                 : cgen_state_->emitCall(
-                       "uminus_" + numeric_type_name(ti) + "_nullable",
-                       {operand_lv,
-                        ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(ti))
-                                   : static_cast<llvm::Value*>(inlineIntNull(ti))});
+  auto ret =
+      ti.get_notnull()
+          ? (ti.is_fp() ? cgen_state_->ir_builder_.CreateFNeg(operand_lv)
+                        : cgen_state_->ir_builder_.CreateNeg(operand_lv))
+          : cgen_state_->emitCall(
+                "uminus_" + numeric_type_name(ti) + "_nullable",
+                {operand_lv,
+                 ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(ti))
+                            : static_cast<llvm::Value*>(executor_->inlineIntNull(ti))});
   if (need_overflow_check) {
     cgen_state_->ir_builder_.SetInsertPoint(uminus_fail);
-    cgen_state_->ir_builder_.CreateRet(ll_int(ERR_OVERFLOW_OR_UNDERFLOW));
+    cgen_state_->ir_builder_.CreateRet(
+        executor_->ll_int(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
     cgen_state_->ir_builder_.SetInsertPoint(uminus_ok);
   }
   return ret;

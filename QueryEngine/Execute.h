@@ -631,42 +631,6 @@ class Executor {
                                           const CompilationOptions&);
   llvm::Value* codegenLogical(const Analyzer::BinOper*, const CompilationOptions&);
   llvm::Value* toBool(llvm::Value*);
-  llvm::Value* codegenArith(const Analyzer::BinOper*, const CompilationOptions&);
-  llvm::Value* codegenIntArith(const Analyzer::BinOper*, llvm::Value*, llvm::Value*);
-  llvm::Value* codegenFpArith(const Analyzer::BinOper*, llvm::Value*, llvm::Value*);
-  bool checkExpressionRanges(const Analyzer::UOper*, int64_t, int64_t);
-  bool checkExpressionRanges(const Analyzer::BinOper*, int64_t, int64_t);
-  llvm::Value* codegenAdd(const Analyzer::BinOper*,
-                          llvm::Value*,
-                          llvm::Value*,
-                          const std::string& null_typename,
-                          const std::string& null_check_suffix,
-                          const SQLTypeInfo&);
-  llvm::Value* codegenSub(const Analyzer::BinOper*,
-                          llvm::Value*,
-                          llvm::Value*,
-                          const std::string& null_typename,
-                          const std::string& null_check_suffix,
-                          const SQLTypeInfo&);
-  llvm::Value* codegenMul(const Analyzer::BinOper*,
-                          llvm::Value*,
-                          llvm::Value*,
-                          const std::string& null_typename,
-                          const std::string& null_check_suffix,
-                          const SQLTypeInfo&,
-                          bool downscale = true);
-  llvm::Value* codegenDiv(llvm::Value*,
-                          llvm::Value*,
-                          const std::string& null_typename,
-                          const std::string& null_check_suffix,
-                          const SQLTypeInfo&,
-                          bool upscale = true);
-  llvm::Value* codegenDeciDiv(const Analyzer::BinOper*, const CompilationOptions&);
-  llvm::Value* codegenMod(llvm::Value*,
-                          llvm::Value*,
-                          const std::string& null_typename,
-                          const std::string& null_check_suffix,
-                          const SQLTypeInfo&);
   llvm::Value* codegenLogical(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenCast(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenCast(llvm::Value* operand_lv,
@@ -696,11 +660,6 @@ class Executor {
   llvm::Value* codegenCastFromFp(llvm::Value* operand_lv,
                                  const SQLTypeInfo& operand_ti,
                                  const SQLTypeInfo& ti);
-  llvm::Value* codegenUMinus(const Analyzer::UOper*, const CompilationOptions&);
-  void codegenSkipOverflowCheckForNull(llvm::Value* lhs_lv,
-                                       llvm::Value* rhs_lv,
-                                       llvm::BasicBlock* no_overflow_bb,
-                                       const SQLTypeInfo& ti);
   llvm::Value* codegenIsNull(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenIsNullNumber(llvm::Value*, const SQLTypeInfo&);
   llvm::Value* codegenUnnest(const Analyzer::UOper*, const CompilationOptions&);
@@ -1669,6 +1628,7 @@ class Executor {
   static const int32_t ERR_STRING_CONST_IN_RESULTSET{13};
   static const int32_t ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY{14};
   friend class BaselineJoinHashTable;
+  friend class CodeGenerator;
   friend class ColumnFetcher;
   friend class OverlapsJoinHashTable;
   friend class GroupByAndAggregate;

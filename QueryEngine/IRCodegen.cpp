@@ -15,6 +15,7 @@
  */
 
 #include "../Parser/ParserNode.h"
+#include "CodeGenerator.h"
 #include "Execute.h"
 #include "MaxwellCodegenPatch.h"
 #include "RelAlgTranslator.h"
@@ -130,7 +131,8 @@ llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper,
                                const CompilationOptions& co) {
   const auto optype = bin_oper->get_optype();
   if (IS_ARITHMETIC(optype)) {
-    return codegenArith(bin_oper, co);
+    CodeGenerator code_generator(cgen_state_.get(), this);
+    return code_generator.codegenArith(bin_oper, co);
   }
   if (IS_COMPARISON(optype)) {
     return codegenCmp(bin_oper, co);
@@ -152,8 +154,10 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper,
       return codegenLogical(u_oper, co);
     case kCAST:
       return codegenCast(u_oper, co);
-    case kUMINUS:
-      return codegenUMinus(u_oper, co);
+    case kUMINUS: {
+      CodeGenerator code_generator(cgen_state_.get(), this);
+      return code_generator.codegenUMinus(u_oper, co);
+    }
     case kISNULL:
       return codegenIsNull(u_oper, co);
     case kUNNEST:
