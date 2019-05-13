@@ -71,7 +71,7 @@ size_t choose_shard_count() {
   CHECK(g_session);
   const auto cuda_mgr = g_session->getCatalog().getDataMgr().getCudaMgr();
   const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 0;
-  return g_num_leafs * (device_count > 1 ? device_count : 0);
+  return g_num_leafs * (device_count > 1 ? device_count : 1);
 }
 
 struct ShardInfo {
@@ -479,31 +479,61 @@ bool validate_statement_syntax(const std::string& stmt) {
   return parser.parse(stmt, parse_trees, last_parsed) == 0;
 }
 
-TEST(Create, PageSize) {
-  std::vector<std::string> page_sizes = {"2097152", "4194304", "10485760"};
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    for (const auto& page_size : page_sizes) {
-      run_ddl_statement("DROP TABLE IF EXISTS test1;");
-      EXPECT_NO_THROW(run_ddl_statement(
-          "CREATE TABLE test1 (t1 TEXT) WITH (page_size=" + page_size + ");"));
-      EXPECT_NO_THROW(run_multiple_agg("INSERT INTO test1 VALUES('hello, MapD');", dt));
-      EXPECT_NO_THROW(run_multiple_agg("SELECT * FROM test1;", dt));
+namespace {
+
+void validate_storage_options(
+    const std::pair<std::string, bool> type_meta,
+    const std::pair<std::string, std::vector<std::string>> values) {
+  auto validate = [&type_meta](const std::string& add_column, const std::string& val) {
+    ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS chelsea_storage;"));
+    const std::string query =
+        "CREATE TABLE chelsea_storage(id TEXT ENCODING DICT(32), val INT " + add_column +
+        ") WITH (" + type_meta.first + "=" + val + ");";
+    ASSERT_EQ(true, validate_statement_syntax(query));
+    if (type_meta.second) {
+      ASSERT_THROW(run_ddl_statement(query), std::runtime_error);
+    } else {
+      ASSERT_NO_THROW(run_ddl_statement(query));
     }
+  };
+  for (const auto& val : values.second) {
+    validate(values.first, val);
   }
 }
 
-// Code is commented out while we resolve the leak in parser
-// TEST(Create, PageSize_NegativeCase) {
-//  run_ddl_statement("DROP TABLE IF EXISTS test1;");
-//  ASSERT_EQ(validate_statement_syntax("CREATE TABLE test1 (t1 TEXT) WITH
-//  (page_size=null);"), false); ASSERT_EQ(validate_statement_syntax("CREATE TABLE test1
-//  (t1 TEXT) WITH (page_size=);"), false); EXPECT_THROW(run_ddl_statement("CREATE TABLE
-//  test1 (t1 TEXT) WITH (page_size=-1);"), std::runtime_error);
-//  EXPECT_THROW(run_ddl_statement("CREATE TABLE test1 (t1 TEXT) WITH (page_size=0);"),
-//  std::runtime_error); EXPECT_THROW(run_ddl_statement("CREATE TABLE test1 (t1 TEXT) WITH
-//  (page_size=2147483648);"), std::runtime_error);
-//}
+}  // namespace
+
+TEST(Create, StorageOptions) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    const auto shard_count = choose_shard_count();
+    static const std::map<std::pair<std::string, bool>,
+                          std::pair<std::string, std::vector<std::string>>>
+        params{
+            {{"fragment_size"s, true}, {"", {"-1", "0"}}},
+            {{"fragment_size"s, false},
+             {"", {"2097152", "4194304", "10485760", "2147483648"}}},
+            {{"max_rows"s, true}, {"", {"-1", "0"}}},
+            {{"max_rows"s, false},
+             {"", {"2097152", "4194304", "10485760", "2147483648"}}},
+            {{"page_size"s, true}, {"", {"-1", "0"}}},
+            {{"page_size"s, false},
+             {"", {"2097152", "4194304", "10485760", "2147483648"}}},
+            {{"max_chunk_size"s, true}, {"", {"-1", "0"}}},
+            {{"max_chunk_size"s, false},
+             {"", {"2097152", "4194304", "10485760", "2147483648"}}},
+            {{"partitions"s, true}, {"", {"'No'", "'null'", "'-1'"}}},
+            {{"partitions"s, false}, {"", {"'SHARDED'", "'REPLICATED'"}}},
+            {{"shard_count"s, true}, {"", {std::to_string(shard_count)}}},
+            {{"shard_count"s, false}, {", SHARD KEY(id)", {std::to_string(shard_count)}}},
+            {{"vacuum"s, true}, {"", {"'-1'", "'0'", "'null'"}}},
+            {{"vacuum"s, false}, {"", {"'IMMEDIATE'", "'delayed'"}}}};
+
+    for (auto& elem : params) {
+      validate_storage_options(elem.first, elem.second);
+    }
+  }
+}
 
 TEST(Insert, NullArrayNullEmpty) {
   const char* create_table_array_with_nulls =
@@ -9796,7 +9826,7 @@ TEST(Select, TimestampCastAggregates) {
                          "22:23:15.123450', '2014-12-14 22:23:15.123456780');",
                          dt));
 
-    const std::vector<std::tuple<std::string, int64_t, double, int64_t>> params_{
+    const std::vector<std::tuple<std::string, int64_t, double, int64_t>> params{
         // Date
         std::make_tuple("CAST(dt as timestamp(0))", 1418428800, 125.0, 2),
         std::make_tuple("CAST(dt as timestamp(3))", 1418428800000, 125.0, 2),
@@ -9843,7 +9873,7 @@ TEST(Select, TimestampCastAggregates) {
         std::make_tuple("DATE_TRUNC(microsecond, ts9)", 1418509395123456000, 262.5, 4),
         std::make_tuple("DATE_TRUNC(nanosecond, ts9)", 1418509395123456780, 400.0, 2)};
 
-    for (auto& param : params_) {
+    for (auto& param : params) {
       const auto row =
           run_multiple_agg("SELECT " + std::get<0>(param) +
                                " as tg, avg(val), count(*) from timestamp_agg group by "
