@@ -135,7 +135,8 @@ llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper,
     return code_generator.codegenArith(bin_oper, co);
   }
   if (IS_COMPARISON(optype)) {
-    return codegenCmp(bin_oper, co);
+    CodeGenerator code_generator(cgen_state_.get(), this);
+    return code_generator.codegenCmp(bin_oper, co);
   }
   if (IS_LOGIC(optype)) {
     return codegenLogical(bin_oper, co);

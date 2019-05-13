@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "CodeGenerator.h"
 #include "Execute.h"
 
 #include <future>
@@ -47,17 +48,18 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr,
           ->codegen(lhs_lvs.front(), this);
     }
   }
+  CodeGenerator code_generator(cgen_state_.get(), this);
   if (expr_ti.get_notnull()) {
     for (auto in_val : expr->get_value_list()) {
       result = cgen_state_->ir_builder_.CreateOr(
           result,
-          toBool(
-              codegenCmp(kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co)));
+          toBool(code_generator.codegenCmp(
+              kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co)));
     }
   } else {
     for (auto in_val : expr->get_value_list()) {
-      const auto crt =
-          codegenCmp(kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co);
+      const auto crt = code_generator.codegenCmp(
+          kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co);
       result = cgen_state_->emitCall("logical_or", {result, crt, inlineIntNull(expr_ti)});
     }
   }

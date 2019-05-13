@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "CodeGenerator.h"
 #include "Execute.h"
 
 #include <typeinfo>
@@ -180,22 +181,22 @@ std::shared_ptr<Analyzer::BinOper> lower_multicol_compare(
 
 }  // namespace
 
-llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper,
-                                  const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
+                                       const CompilationOptions& co) {
   const auto qualifier = bin_oper->get_qualifier();
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
   if (dynamic_cast<const Analyzer::ExpressionTuple*>(lhs)) {
     CHECK(dynamic_cast<const Analyzer::ExpressionTuple*>(rhs));
     const auto lowered = lower_multicol_compare(bin_oper);
-    const auto lowered_lvs = codegen(lowered.get(), true, co);
+    const auto lowered_lvs = executor_->codegen(lowered.get(), true, co);
     CHECK_EQ(size_t(1), lowered_lvs.size());
     return lowered_lvs.front();
   }
   const auto optype = bin_oper->get_optype();
   if (optype == kBW_EQ) {
     const auto bw_eq_oper = lower_bw_eq(bin_oper);
-    return codegenLogical(bw_eq_oper.get(), co);
+    return executor_->codegenLogical(bw_eq_oper.get(), co);
   }
   if (optype == kOVERLAPS) {
     return codegenOverlaps(optype,
@@ -230,15 +231,15 @@ llvm::Value* Executor::codegenCmp(const Analyzer::BinOper* bin_oper,
     }
   }
 
-  auto lhs_lvs = codegen(lhs, true, co);
+  auto lhs_lvs = executor_->codegen(lhs, true, co);
   return codegenCmp(optype, qualifier, lhs_lvs, lhs_ti, rhs, co);
 }
 
-llvm::Value* Executor::codegenOverlaps(const SQLOps optype,
-                                       const SQLQualifier qualifier,
-                                       const std::shared_ptr<Analyzer::Expr> lhs,
-                                       const std::shared_ptr<Analyzer::Expr> rhs,
-                                       const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
+                                            const SQLQualifier qualifier,
+                                            const std::shared_ptr<Analyzer::Expr> lhs,
+                                            const std::shared_ptr<Analyzer::Expr> rhs,
+                                            const CompilationOptions& co) {
   // TODO(adb): we should never get here, but going to leave this in place for now since
   // it will likely be useful in factoring the bounds check out of ST_Contains
   const auto lhs_ti = lhs->get_type_info();
@@ -251,8 +252,8 @@ llvm::Value* Executor::codegenOverlaps(const SQLOps optype,
     CHECK(lhs_col);
 
     // Get the actual point data column descriptor
-    const auto coords_cd = catalog_->getMetadataForColumn(lhs_col->get_table_id(),
-                                                          lhs_col->get_column_id() + 1);
+    const auto coords_cd = executor_->getCatalog()->getMetadataForColumn(
+        lhs_col->get_table_id(), lhs_col->get_column_id() + 1);
     CHECK(coords_cd);
 
     std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
@@ -284,7 +285,7 @@ llvm::Value* Executor::codegenOverlaps(const SQLOps optype,
     const auto rhs_col = dynamic_cast<Analyzer::ColumnVar*>(rhs.get());
     CHECK(rhs_col);
 
-    const auto poly_bounds_cd = catalog_->getMetadataForColumn(
+    const auto poly_bounds_cd = executor_->getCatalog()->getMetadataForColumn(
         rhs_col->get_table_id(),
         rhs_col->get_column_id() + rhs_ti.get_physical_coord_cols() + 1);
     CHECK(poly_bounds_cd);
@@ -300,18 +301,18 @@ llvm::Value* Executor::codegenOverlaps(const SQLOps optype,
                                          std::vector<std::shared_ptr<Analyzer::Expr>>{
                                              bbox_col_var, x_ptr_oper, y_ptr_oper});
 
-    return codegenFunctionOper(bbox_contains_func_oper.get(), co);
+    return executor_->codegenFunctionOper(bbox_contains_func_oper.get(), co);
   }
 
   CHECK(false) << "Unsupported type for overlaps operator: " << lhs_ti.get_type_name();
   return nullptr;
 }
 
-llvm::Value* Executor::codegenStrCmp(const SQLOps optype,
-                                     const SQLQualifier qualifier,
-                                     const std::shared_ptr<Analyzer::Expr> lhs,
-                                     const std::shared_ptr<Analyzer::Expr> rhs,
-                                     const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenStrCmp(const SQLOps optype,
+                                          const SQLQualifier qualifier,
+                                          const std::shared_ptr<Analyzer::Expr> lhs,
+                                          const std::shared_ptr<Analyzer::Expr> rhs,
+                                          const CompilationOptions& co) {
   const auto lhs_ti = lhs->get_type_info();
   const auto rhs_ti = rhs->get_type_info();
 
@@ -326,7 +327,7 @@ llvm::Value* Executor::codegenStrCmp(const SQLOps optype,
 
       // check if query is trying to compare a columnt against literal
 
-      auto ir = codegenDictStrCmp(lhs, rhs, optype, co);
+      auto ir = executor_->codegenDictStrCmp(lhs, rhs, optype, co);
       if (ir) {
         return ir;
       }
@@ -337,12 +338,12 @@ llvm::Value* Executor::codegenStrCmp(const SQLOps optype,
   }
   return nullptr;
 }
-llvm::Value* Executor::codegenCmpDecimalConst(const SQLOps optype,
-                                              const SQLQualifier qualifier,
-                                              const Analyzer::Expr* lhs,
-                                              const SQLTypeInfo& lhs_ti,
-                                              const Analyzer::Expr* rhs,
-                                              const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenCmpDecimalConst(const SQLOps optype,
+                                                   const SQLQualifier qualifier,
+                                                   const Analyzer::Expr* lhs,
+                                                   const SQLTypeInfo& lhs_ti,
+                                                   const Analyzer::Expr* rhs,
+                                                   const CompilationOptions& co) {
   auto u_oper = dynamic_cast<const Analyzer::UOper*>(lhs);
   if (!u_oper || u_oper->get_optype() != kCAST) {
     return nullptr;
@@ -382,23 +383,23 @@ llvm::Value* Executor::codegenCmpDecimalConst(const SQLOps optype,
   d.bigintval = truncated_decimal;
   const auto new_rhs_lit =
       makeExpr<Analyzer::Constant>(new_ti, rhs_constant->get_is_null(), d);
-  const auto operand_lv = codegen(operand, true, co).front();
-  const auto lhs_lv = codegenCast(operand_lv, operand_ti, new_ti, false, co);
+  const auto operand_lv = executor_->codegen(operand, true, co).front();
+  const auto lhs_lv = executor_->codegenCast(operand_lv, operand_ti, new_ti, false, co);
   return codegenCmp(optype, qualifier, {lhs_lv}, new_ti, new_rhs_lit.get(), co);
 }
 
-llvm::Value* Executor::codegenCmp(const SQLOps optype,
-                                  const SQLQualifier qualifier,
-                                  std::vector<llvm::Value*> lhs_lvs,
-                                  const SQLTypeInfo& lhs_ti,
-                                  const Analyzer::Expr* rhs,
-                                  const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
+                                       const SQLQualifier qualifier,
+                                       std::vector<llvm::Value*> lhs_lvs,
+                                       const SQLTypeInfo& lhs_ti,
+                                       const Analyzer::Expr* rhs,
+                                       const CompilationOptions& co) {
   CHECK(IS_COMPARISON(optype));
   const auto& rhs_ti = rhs->get_type_info();
   if (rhs_ti.is_array()) {
     return codegenQualifierCmp(optype, qualifier, lhs_lvs, rhs, co);
   }
-  auto rhs_lvs = codegen(rhs, true, co);
+  auto rhs_lvs = executor_->codegen(rhs, true, co);
   CHECK_EQ(kONE, qualifier);
   if (optype == kOVERLAPS) {
     CHECK(lhs_ti.is_geometry());
@@ -429,7 +430,7 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
         std::vector<llvm::Value*> str_cmp_args{
             lhs_lvs[1], lhs_lvs[2], rhs_lvs[1], rhs_lvs[2]};
         if (!null_check_suffix.empty()) {
-          str_cmp_args.push_back(inlineIntNull(SQLTypeInfo(kBOOLEAN, false)));
+          str_cmp_args.push_back(executor_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false)));
         }
         return cgen_state_->emitCall(
             string_cmp_func(optype) + (null_check_suffix.empty() ? "" : "_nullable"),
@@ -441,34 +442,36 @@ llvm::Value* Executor::codegenCmp(const SQLOps optype,
     return null_check_suffix.empty()
                ? cgen_state_->ir_builder_.CreateICmp(
                      llvm_icmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
-               : cgen_state_->emitCall(icmp_name(optype) + "_" +
-                                           numeric_type_name(lhs_ti) + null_check_suffix,
-                                       {lhs_lvs.front(),
-                                        rhs_lvs.front(),
-                                        ll_int(inline_int_null_val(lhs_ti)),
-                                        inlineIntNull(SQLTypeInfo(kBOOLEAN, false))});
+               : cgen_state_->emitCall(
+                     icmp_name(optype) + "_" + numeric_type_name(lhs_ti) +
+                         null_check_suffix,
+                     {lhs_lvs.front(),
+                      rhs_lvs.front(),
+                      executor_->ll_int(inline_int_null_val(lhs_ti)),
+                      executor_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))});
   }
   if (lhs_ti.get_type() == kFLOAT || lhs_ti.get_type() == kDOUBLE) {
     return null_check_suffix.empty()
                ? cgen_state_->ir_builder_.CreateFCmp(
                      llvm_fcmp_pred(optype), lhs_lvs.front(), rhs_lvs.front())
-               : cgen_state_->emitCall(icmp_name(optype) + "_" +
-                                           numeric_type_name(lhs_ti) + null_check_suffix,
-                                       {lhs_lvs.front(),
-                                        rhs_lvs.front(),
-                                        lhs_ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT)
-                                                                    : ll_fp(NULL_DOUBLE),
-                                        inlineIntNull(SQLTypeInfo(kBOOLEAN, false))});
+               : cgen_state_->emitCall(
+                     icmp_name(optype) + "_" + numeric_type_name(lhs_ti) +
+                         null_check_suffix,
+                     {lhs_lvs.front(),
+                      rhs_lvs.front(),
+                      lhs_ti.get_type() == kFLOAT ? executor_->ll_fp(NULL_FLOAT)
+                                                  : executor_->ll_fp(NULL_DOUBLE),
+                      executor_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))});
   }
   CHECK(false);
   return nullptr;
 }
 
-llvm::Value* Executor::codegenQualifierCmp(const SQLOps optype,
-                                           const SQLQualifier qualifier,
-                                           std::vector<llvm::Value*> lhs_lvs,
-                                           const Analyzer::Expr* rhs,
-                                           const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenQualifierCmp(const SQLOps optype,
+                                                const SQLQualifier qualifier,
+                                                std::vector<llvm::Value*> lhs_lvs,
+                                                const Analyzer::Expr* rhs,
+                                                const CompilationOptions& co) {
   const auto& rhs_ti = rhs->get_type_info();
   const Analyzer::Expr* arr_expr{rhs};
   if (dynamic_cast<const Analyzer::UOper*>(rhs)) {
@@ -478,7 +481,7 @@ llvm::Value* Executor::codegenQualifierCmp(const SQLOps optype,
   }
   const auto& arr_ti = arr_expr->get_type_info();
   const auto& elem_ti = arr_ti.get_elem_type();
-  auto rhs_lvs = codegen(arr_expr, true, co);
+  auto rhs_lvs = executor_->codegen(arr_expr, true, co);
   CHECK_NE(kONE, qualifier);
   std::string fname{std::string("array_") + (qualifier == kANY ? "any" : "all") + "_" +
                     icmp_arr_name(optype)};
@@ -514,12 +517,12 @@ llvm::Value* Executor::codegenQualifierCmp(const SQLOps optype,
         fname,
         get_int_type(1, cgen_state_->context_),
         {rhs_lvs.front(),
-         posArg(arr_expr),
+         executor_->posArg(arr_expr),
          lhs_lvs[1],
          lhs_lvs[2],
-         ll_int(int64_t(getStringDictionaryProxy(
-             elem_ti.get_comp_param(), row_set_mem_owner_, true))),
-         inlineIntNull(elem_ti)});
+         executor_->ll_int(int64_t(executor_->getStringDictionaryProxy(
+             elem_ti.get_comp_param(), executor_->getRowSetMemoryOwner(), true))),
+         executor_->inlineIntNull(elem_ti)});
   }
   if (target_ti.is_integer() || target_ti.is_boolean() || target_ti.is_string()) {
     fname += ("_" + numeric_type_name(target_ti));
@@ -531,8 +534,8 @@ llvm::Value* Executor::codegenQualifierCmp(const SQLOps optype,
       fname,
       get_int_type(1, cgen_state_->context_),
       {rhs_lvs.front(),
-       posArg(arr_expr),
+       executor_->posArg(arr_expr),
        lhs_lvs.front(),
-       elem_ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(elem_ti))
-                       : static_cast<llvm::Value*>(inlineIntNull(elem_ti))});
+       elem_ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(elem_ti))
+                       : static_cast<llvm::Value*>(executor_->inlineIntNull(elem_ti))});
 }

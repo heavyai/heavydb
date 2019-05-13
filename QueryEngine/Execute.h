@@ -595,38 +595,10 @@ class Executor {
   llvm::Value* codegen(const Analyzer::InIntegerSet* expr, const CompilationOptions& co);
   std::unique_ptr<InValuesBitmap> createInValuesBitmap(const Analyzer::InValues*,
                                                        const CompilationOptions&);
-  llvm::Value* codegenCmp(const Analyzer::BinOper*, const CompilationOptions&);
-  llvm::Value* codegenCmpDecimalConst(const SQLOps,
-                                      const SQLQualifier,
-                                      const Analyzer::Expr*,
-                                      const SQLTypeInfo&,
-                                      const Analyzer::Expr*,
-                                      const CompilationOptions&);
-  llvm::Value* codegenCmp(const SQLOps,
-                          const SQLQualifier,
-                          std::vector<llvm::Value*>,
-                          const SQLTypeInfo&,
-                          const Analyzer::Expr*,
-                          const CompilationOptions&);
-  llvm::Value* codegenOverlaps(const SQLOps,
-                               const SQLQualifier,
-                               const std::shared_ptr<Analyzer::Expr>,
-                               const std::shared_ptr<Analyzer::Expr>,
-                               const CompilationOptions&);
-  llvm::Value* codegenStrCmp(const SQLOps,
-                             const SQLQualifier,
-                             const std::shared_ptr<Analyzer::Expr>,
-                             const std::shared_ptr<Analyzer::Expr>,
-                             const CompilationOptions&);
   llvm::Value* codegenDictStrCmp(const std::shared_ptr<Analyzer::Expr>,
                                  const std::shared_ptr<Analyzer::Expr>,
                                  const SQLOps,
                                  const CompilationOptions& co);
-  llvm::Value* codegenQualifierCmp(const SQLOps,
-                                   const SQLQualifier,
-                                   std::vector<llvm::Value*>,
-                                   const Analyzer::Expr*,
-                                   const CompilationOptions&);
   llvm::Value* codegenLogicalShortCircuit(const Analyzer::BinOper*,
                                           const CompilationOptions&);
   llvm::Value* codegenLogical(const Analyzer::BinOper*, const CompilationOptions&);

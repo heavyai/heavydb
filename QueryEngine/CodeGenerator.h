@@ -30,6 +30,15 @@ class CodeGenerator {
 
   llvm::Value* codegenUMinus(const Analyzer::UOper*, const CompilationOptions&);
 
+  llvm::Value* codegenCmp(const Analyzer::BinOper*, const CompilationOptions&);
+
+  llvm::Value* codegenCmp(const SQLOps,
+                          const SQLQualifier,
+                          std::vector<llvm::Value*>,
+                          const SQLTypeInfo&,
+                          const Analyzer::Expr*,
+                          const CompilationOptions&);
+
  private:
   llvm::Value* codegenIntArith(const Analyzer::BinOper*, llvm::Value*, llvm::Value*);
 
@@ -80,6 +89,31 @@ class CodeGenerator {
                           const SQLTypeInfo&);
 
   bool checkExpressionRanges(const Analyzer::UOper*, int64_t, int64_t);
+
+  llvm::Value* codegenCmpDecimalConst(const SQLOps,
+                                      const SQLQualifier,
+                                      const Analyzer::Expr*,
+                                      const SQLTypeInfo&,
+                                      const Analyzer::Expr*,
+                                      const CompilationOptions&);
+
+  llvm::Value* codegenOverlaps(const SQLOps,
+                               const SQLQualifier,
+                               const std::shared_ptr<Analyzer::Expr>,
+                               const std::shared_ptr<Analyzer::Expr>,
+                               const CompilationOptions&);
+
+  llvm::Value* codegenStrCmp(const SQLOps,
+                             const SQLQualifier,
+                             const std::shared_ptr<Analyzer::Expr>,
+                             const std::shared_ptr<Analyzer::Expr>,
+                             const CompilationOptions&);
+
+  llvm::Value* codegenQualifierCmp(const SQLOps,
+                                   const SQLQualifier,
+                                   std::vector<llvm::Value*>,
+                                   const Analyzer::Expr*,
+                                   const CompilationOptions&);
 
   Executor::CgenState* cgen_state_;
   Executor* executor_;
