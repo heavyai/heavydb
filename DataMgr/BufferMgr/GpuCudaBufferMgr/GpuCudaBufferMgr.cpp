@@ -53,7 +53,7 @@ void GpuCudaBufferMgr::addSlab(const size_t slabSize) {
     slabs_.back() = cudaMgr_->allocateDeviceMem(slabSize, deviceId_);
   } catch (std::runtime_error& error) {
     slabs_.resize(slabs_.size() - 1);
-    throw FailedToCreateSlab();
+    throw FailedToCreateSlab(slabSize);
   }
   slabSegments_.resize(slabSegments_.size() + 1);
   slabSegments_[slabSegments_.size() - 1].push_back(BufferSeg(0, slabSize / pageSize_));

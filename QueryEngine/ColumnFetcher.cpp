@@ -44,7 +44,6 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
                        fragment.physicalTableId,
                        hash_col.get_column_id(),
                        fragment.fragmentId};
-    OOM_TRACE_PUSH(+": chunk key [" + showChunk(chunk_key) + "]");
     const auto chunk = Chunk_NS::Chunk::getChunk(
         cd,
         &catalog.getDataMgr(),
@@ -120,7 +119,6 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getAllColumnFragments(
   CHECK_EQ(col_frags.size(), elem_counts.size());
   const auto total_elem_count =
       std::accumulate(elem_counts.begin(), elem_counts.end(), size_t(0));
-  OOM_TRACE_PUSH(+": col_buff " + std::to_string(total_elem_count * elem_width));
   auto col_buff =
       reinterpret_cast<int8_t*>(checked_malloc(total_elem_count * elem_width));
   for (size_t i = 0, offset = 0; i < col_frags.size(); ++i) {
@@ -169,7 +167,6 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
     if (is_varlen) {
       varlen_chunk_lock.reset(new std::lock_guard<std::mutex>(varlen_chunk_mutex));
     }
-    OOM_TRACE_PUSH(+": chunk key [" + showChunk(chunk_key) + "]");
     chunk = Chunk_NS::Chunk::getChunk(
         cd,
         &cat.getDataMgr(),
@@ -280,8 +277,6 @@ const int8_t* ColumnFetcher::transferColumnIfNeeded(
   if (memory_level == Data_Namespace::GPU_LEVEL) {
     const auto& col_ti = columnar_results->getColumnType(col_id);
     const auto num_bytes = columnar_results->size() * col_ti.get_size();
-    OOM_TRACE_PUSH(+": device_id " + std::to_string(device_id) + ", num_bytes " +
-                   std::to_string(num_bytes) + ", col_id " + std::to_string(col_id));
     auto gpu_col_buffer = CudaAllocator::alloc(data_mgr, num_bytes, device_id, nullptr);
     copy_to_gpu(data_mgr, gpu_col_buffer, col_buffers[col_id], num_bytes, device_id);
     return reinterpret_cast<const int8_t*>(gpu_col_buffer);

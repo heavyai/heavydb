@@ -30,24 +30,6 @@
 
 using namespace std;
 
-static thread_local std::vector<std::string> oom_trace;
-
-void oom_trace_dump() {
-  std::ostringstream oss;
-  for (const auto& t : oom_trace) {
-    oss << t << std::endl;
-  }
-  LOG(INFO) << "OOM trace:" << std::endl << oss.str();
-}
-
-void oom_trace_push(const std::string& trace) {
-  oom_trace.push_back(trace);
-}
-
-void oom_trace_pop() {
-  oom_trace.pop_back();
-}
-
 namespace Buffer_Namespace {
 
 std::string BufferMgr::keyToString(const ChunkKey& key) {
@@ -282,7 +264,7 @@ BufferList::iterator BufferMgr::findFreeBufferInSlab(const size_t slabNum,
 BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
   size_t numPagesRequested = (numBytes + pageSize_ - 1) / pageSize_;
   if (numPagesRequested > maxNumPagesPerSlab_) {
-    throw SlabTooBig();  //@todo change to requested allocation too big
+    throw TooBigForSlab(numBytes);
   }
 
   size_t numSlabs = slabSegments_.size();
@@ -345,7 +327,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
   }
 
   if (numPagesAllocated_ == 0 && allocationsCapped_) {
-    throw FailedToCreateFirstSlab();
+    throw FailedToCreateFirstSlab(numBytes);
   }
 
   // If here then we can't add a slab - so we need to evict
@@ -420,7 +402,7 @@ BufferList::iterator BufferMgr::findFreeBuffer(size_t numBytes) {
     LOG(ERROR) << "ALLOCATION failed to find " << numBytes << "B throwing out of memory "
                << getStringMgrType() << ":" << deviceId_;
     printSlabs();
-    throw OutOfMemory();
+    throw OutOfMemory(numBytes);
   }
   LOG(INFO) << "ALLOCATION failed to find " << numBytes << "B free. Forcing Eviction."
             << " Eviction start " << bestEvictionStart->startPage

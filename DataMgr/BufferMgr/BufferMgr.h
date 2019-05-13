@@ -25,6 +25,9 @@
 #ifndef DATAMGR_MEMORY_BUFFER_BUFFERMGR_H
 #define DATAMGR_MEMORY_BUFFER_BUFFERMGR_H
 
+#define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED 1
+
+#include <boost/stacktrace.hpp>
 #include <iostream>
 #include <list>
 #include <map>
@@ -36,24 +39,36 @@
 
 class OutOfMemory : public std::runtime_error {
  public:
-  OutOfMemory() : std::runtime_error("OutOfMemory") { OOM_TRACE_DUMP; }
+  OutOfMemory(size_t numBytes) : std::runtime_error("OutOfMemory") {
+    VLOG(1) << "Failed to allocate " << numBytes << " bytes";
+    VLOG(1) << boost::stacktrace::stacktrace();
+  };
 
-  OutOfMemory(const std::string& err) : std::runtime_error(err) { OOM_TRACE_DUMP; }
+  OutOfMemory(const std::string& err) : std::runtime_error(err) {
+    VLOG(1) << "Failed with OutOfMemory, condition " << err;
+    VLOG(1) << boost::stacktrace::stacktrace();
+  };
+
+  OutOfMemory(const std::string& err, size_t numBytes) : std::runtime_error(err) {
+    VLOG(1) << "Failed to allocate " << numBytes << " bytes with condition " << err;
+    VLOG(1) << boost::stacktrace::stacktrace();
+  };
 };
 
 class FailedToCreateFirstSlab : public OutOfMemory {
  public:
-  FailedToCreateFirstSlab() : OutOfMemory("FailedToCreateFirstSlab") {}
+  FailedToCreateFirstSlab(size_t numBytes)
+      : OutOfMemory("FailedToCreateFirstSlab", numBytes) {}
 };
 
 class FailedToCreateSlab : public OutOfMemory {
  public:
-  FailedToCreateSlab() : OutOfMemory("FailedToCreateSlab") {}
+  FailedToCreateSlab(size_t numBytes) : OutOfMemory("FailedToCreateSlab", numBytes) {}
 };
 
-class SlabTooBig : public OutOfMemory {
+class TooBigForSlab : public OutOfMemory {
  public:
-  SlabTooBig() : OutOfMemory("SlabTooBig") {}
+  TooBigForSlab(size_t numBytes) : OutOfMemory("TooBigForSlab", numBytes) {}
 };
 
 using namespace Data_Namespace;

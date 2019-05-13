@@ -42,22 +42,4 @@ inline std::string showChunk(const ChunkKey& key) {
   return tss.str();
 }
 
-#ifndef NO_OOM_TRACE
-void oom_trace_push(const std::string&);
-void oom_trace_pop();
-void oom_trace_dump();
-
-struct OomStub {
-  ~OomStub() { oom_trace_pop(); }
-};
-
-#define OOM_TRACE_PUSH(...)     \
-  OomStub oomStub##__COUNTER__; \
-  oom_trace_push(std::string(__func__) + ":" + std::to_string(__LINE__) + " " __VA_ARGS__)
-#define OOM_TRACE_DUMP oom_trace_dump()
-#else
-#define OOM_TRACE_PUSH(...)
-#define OOM_TRACE_DUMP
-#endif  // OOM_TRACE
-
 #endif /* _TYPES_H */

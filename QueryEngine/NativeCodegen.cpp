@@ -1342,7 +1342,6 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                           ColumnCacheMap& column_cache,
                           RenderInfo* render_info) {
   nukeOldState(allow_lazy_fetch, query_infos, ra_exe_unit);
-  OOM_TRACE_PUSH(+": " + (co.device_type_ == ExecutorDeviceType::GPU ? "gpu" : "cpu"));
 
   GroupByAndAggregate group_by_and_aggregate(
       this, co.device_type_, ra_exe_unit, query_infos, row_set_mem_owner);

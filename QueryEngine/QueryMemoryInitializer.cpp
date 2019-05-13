@@ -202,7 +202,6 @@ QueryMemoryInitializer::QueryMemoryInitializer(
 
   std::unique_ptr<int64_t, CheckedAllocDeleter> group_by_buffer_template;
   if (!query_mem_desc.lazyInitGroups(device_type)) {
-    OOM_TRACE_PUSH(+": group_buffer_size " + std::to_string(group_buffer_size));
     group_by_buffer_template.reset(
         static_cast<int64_t*>(checked_malloc(group_buffer_size)));
 
@@ -253,7 +252,6 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   const auto group_buffers_count = !query_mem_desc.isGroupBy() ? 1 : num_buffers_;
 
   for (size_t i = 0; i < group_buffers_count; i += step) {
-    OOM_TRACE_PUSH(+": group_by_buffer " + std::to_string(actual_group_buffer_size));
     auto group_by_buffer =
         alloc_group_by_buffer(actual_group_buffer_size, render_allocator_map);
     if (!query_mem_desc.lazyInitGroups(device_type)) {
@@ -538,7 +536,6 @@ int64_t QueryMemoryInitializer::allocateCountDistinctBitmap(const size_t bitmap_
     row_set_mem_owner_->addCountDistinctBuffer(ptr, bitmap_byte_sz, false);
     return reinterpret_cast<int64_t>(ptr);
   }
-  OOM_TRACE_PUSH(+": count_distinct_buffer " + std::to_string(bitmap_byte_sz));
   auto count_distinct_buffer = static_cast<int8_t*>(checked_calloc(bitmap_byte_sz, 1));
   row_set_mem_owner_->addCountDistinctBuffer(count_distinct_buffer, bitmap_byte_sz, true);
   return reinterpret_cast<int64_t>(count_distinct_buffer);
@@ -655,7 +652,6 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     }
     const int8_t warp_count =
         query_mem_desc.interleavedBins(ExecutorDeviceType::GPU) ? warp_size : 1;
-    OOM_TRACE_PUSH();
     for (size_t i = 0; i < getGroupByBuffersSize(); i += step) {
       if (output_columnar) {
         init_columnar_group_by_buffer_on_device(

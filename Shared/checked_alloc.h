@@ -17,7 +17,12 @@
 #ifndef CHECKED_ALLOC_H
 #define CHECKED_ALLOC_H
 
+#define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED 1
+
+#include <glog/logging.h>
+#include <boost/stacktrace.hpp>
 #include <cstdlib>
+#include <ostream>
 #include <stdexcept>
 #include <string>
 #include "../Shared/types.h"
@@ -27,7 +32,8 @@ class OutOfHostMemory : public std::runtime_error {
   OutOfHostMemory(const size_t size)
       : std::runtime_error("Failed to allocate " + std::to_string(size) +
                            " bytes of memory") {
-    OOM_TRACE_DUMP;
+    VLOG(1) << "Failed to allocate " << size << " bytes " << std::endl
+            << boost::stacktrace::stacktrace();
   }
 };
 

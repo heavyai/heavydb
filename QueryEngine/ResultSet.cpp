@@ -169,8 +169,6 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     data_mgr->getCudaMgr()->zeroDeviceMem(
         estimator_buffer_, estimator_->getBufferSize(), device_id_);
   } else {
-    OOM_TRACE_PUSH(+": host_estimator_buffer_ " +
-                   std::to_string(estimator_->getBufferSize()));
     host_estimator_buffer_ =
         static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
   }
@@ -229,8 +227,6 @@ ExecutorDeviceType ResultSet::getDeviceType() const {
 
 const ResultSetStorage* ResultSet::allocateStorage() const {
   CHECK(!storage_);
-  OOM_TRACE_PUSH(+": size " +
-                 std::to_string(query_mem_desc_.getBufferSizeBytes(device_type_)));
   auto buff = static_cast<int8_t*>(
       checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
   storage_.reset(new ResultSetStorage(targets_, query_mem_desc_, buff, false));
@@ -250,8 +246,6 @@ const ResultSetStorage* ResultSet::allocateStorage(
 const ResultSetStorage* ResultSet::allocateStorage(
     const std::vector<int64_t>& target_init_vals) const {
   CHECK(!storage_);
-  OOM_TRACE_PUSH(+": size " +
-                 std::to_string(query_mem_desc_.getBufferSizeBytes(device_type_)));
   auto buff = static_cast<int8_t*>(
       checked_malloc(query_mem_desc_.getBufferSizeBytes(device_type_)));
   storage_.reset(new ResultSetStorage(targets_, query_mem_desc_, buff, false));
@@ -411,8 +405,6 @@ void ResultSet::syncEstimatorBuffer() const {
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   CHECK(!host_estimator_buffer_);
   CHECK_EQ(size_t(0), estimator_->getBufferSize() % sizeof(int64_t));
-  OOM_TRACE_PUSH(+": host_estimator_buffer_ " +
-                 std::to_string(estimator_->getBufferSize()));
   host_estimator_buffer_ =
       static_cast<int8_t*>(checked_calloc(estimator_->getBufferSize(), 1));
   copy_from_gpu(data_mgr_,
@@ -471,7 +463,6 @@ void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
 #endif  // HAVE_CUDA
   if (query_mem_desc_.sortOnGpu()) {
     try {
-      OOM_TRACE_PUSH();
       radixSortOnGpu(order_entries);
     } catch (const OutOfMemory&) {
       LOG(WARNING) << "Out of GPU memory during sort, finish on CPU";

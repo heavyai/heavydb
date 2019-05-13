@@ -1238,7 +1238,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     }
     if (is_agg) {
       try {
-        OOM_TRACE_PUSH();
         return collectAllDeviceResults(execution_dispatch,
                                        ra_exe_unit.target_exprs,
                                        *query_mem_desc_owned,
@@ -1258,7 +1257,6 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         continue;
       }
     }
-    OOM_TRACE_PUSH();
     return resultsUnion(execution_dispatch);
 
   } while (static_cast<size_t>(crt_min_byte_width) <= sizeof(int64_t));
@@ -2155,7 +2153,6 @@ int32_t Executor::executePlanWithoutGroupBy(
     return ERR_INTERRUPTED;
   }
   if (device_type == ExecutorDeviceType::CPU) {
-    OOM_TRACE_PUSH();
     out_vec = query_exe_context->launchCpuCode(ra_exe_unit,
                                                compilation_result.native_functions,
                                                hoist_literals,
@@ -2170,7 +2167,6 @@ int32_t Executor::executePlanWithoutGroupBy(
     output_memory_scope.reset(new OutVecOwner(out_vec));
   } else {
     try {
-      OOM_TRACE_PUSH();
       out_vec = query_exe_context->launchGpuCode(ra_exe_unit,
                                                  compilation_result.native_functions,
                                                  hoist_literals,
@@ -2750,7 +2746,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
   }
   try {
     if (qual_bin_oper->is_overlaps_oper()) {
-      OOM_TRACE_PUSH();
       join_hash_table = OverlapsJoinHashTable::getInstance(qual_bin_oper,
                                                            query_infos,
                                                            ra_exe_unit,
@@ -2760,7 +2755,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                            this);
     } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
                    qual_bin_oper->get_left_operand())) {
-      OOM_TRACE_PUSH();
       join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
                                                            query_infos,
                                                            ra_exe_unit,
@@ -2771,7 +2765,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                            this);
     } else {
       try {
-        OOM_TRACE_PUSH();
         join_hash_table = JoinHashTable::getInstance(qual_bin_oper,
                                                      query_infos,
                                                      ra_exe_unit,
@@ -2781,7 +2774,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
                                                      column_cache,
                                                      this);
       } catch (TooManyHashEntries&) {
-        OOM_TRACE_PUSH();
         const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
         CHECK_EQ(join_quals.size(), size_t(1));
         const auto join_qual =

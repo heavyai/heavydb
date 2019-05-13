@@ -60,8 +60,6 @@ void Chunk::getChunkBuffer(DataMgr* data_mgr,
                            const int device_id,
                            const size_t num_bytes,
                            const size_t num_elems) {
-  OOM_TRACE_PUSH(+": chunk key [" + showChunk(key) + "], level " +
-                 std::to_string(static_cast<int>(mem_level)));
   if (column_desc->columnType.is_varlen() && !column_desc->columnType.is_fixlen_array()) {
     ChunkKey subKey = key;
     subKey.push_back(1);  // 1 for the main buffer
@@ -112,8 +110,6 @@ void Chunk::createChunkBuffer(DataMgr* data_mgr,
                               const MemoryLevel mem_level,
                               const int device_id,
                               const size_t page_size) {
-  OOM_TRACE_PUSH(+": chunk key [" + showChunk(key) + "], level " +
-                 std::to_string(static_cast<int>(mem_level)));
   if (column_desc->columnType.is_varlen() && !column_desc->columnType.is_fixlen_array()) {
     ChunkKey subKey = key;
     subKey.push_back(1);  // 1 for the main buffer

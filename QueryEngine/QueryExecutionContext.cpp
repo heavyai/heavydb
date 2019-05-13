@@ -283,7 +283,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     }
 
     if (hoist_literals) {
-      OOM_TRACE_PUSH();
       checkCudaErrors(
           cuLaunchKernel(cu_func,
                          grid_size_x,
@@ -297,7 +296,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                          &param_ptrs[0],
                          nullptr));
     } else {
-      OOM_TRACE_PUSH();
       param_ptrs.erase(param_ptrs.begin() + LITERALS);  // TODO(alex): remove
       checkCudaErrors(
           cuLaunchKernel(cu_func,
@@ -380,7 +378,6 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
       out_vec_dev_buffers.push_back(reinterpret_cast<CUdeviceptr>(
           estimator_result_set_->getDeviceEstimatorBuffer()));
     } else {
-      OOM_TRACE_PUSH();
       for (size_t i = 0; i < agg_col_count; ++i) {
         auto out_vec_dev_buffer =
             num_fragments ? gpu_allocator_->alloc(block_size_x * grid_size_x *
@@ -547,7 +544,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
 
   CHECK_EQ(num_rows.size(), col_buffers.size());
   std::vector<int64_t> flatened_num_rows;
-  OOM_TRACE_PUSH();
   for (auto& nums : num_rows) {
     flatened_num_rows.insert(flatened_num_rows.end(), nums.begin(), nums.end());
   }
@@ -587,7 +583,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                                const uint32_t*,  // num_tables
                                const int64_t*);  // join_hash_tables_ptr
     if (is_group_by) {
-      OOM_TRACE_PUSH();
       reinterpret_cast<agg_query>(fn_ptrs[0].first)(
           multifrag_cols_ptr,
           &num_fragments,
@@ -602,7 +597,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
           &num_tables,
           join_hash_tables_ptr);
     } else {
-      OOM_TRACE_PUSH();
       reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
                                                     &num_fragments,
                                                     &literal_buff[0],
@@ -629,7 +623,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
                                const uint32_t*,  // num_tables
                                const int64_t*);  // join_hash_tables_ptr
     if (is_group_by) {
-      OOM_TRACE_PUSH();
       reinterpret_cast<agg_query>(fn_ptrs[0].first)(
           multifrag_cols_ptr,
           &num_fragments,
@@ -643,7 +636,6 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
           &num_tables,
           join_hash_tables_ptr);
     } else {
-      OOM_TRACE_PUSH();
       reinterpret_cast<agg_query>(fn_ptrs[0].first)(multifrag_cols_ptr,
                                                     &num_fragments,
                                                     num_rows_ptr,

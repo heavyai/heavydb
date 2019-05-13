@@ -33,7 +33,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
   const auto cat = executor->getCatalog();
   try {
-    OOM_TRACE_PUSH();
     std::tie(compilation_result_, query_mem_desc) = executor->compileWorkUnit(
         table_infos,
         ra_exe_unit,
@@ -48,7 +47,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
         column_fetcher.columnarized_table_cache_,
         render_info);
   } catch (const CompilationRetryNoLazyFetch&) {
-    OOM_TRACE_PUSH();
     if (executor->cgen_state_->module_) {
       delete executor->cgen_state_->module_;
     }

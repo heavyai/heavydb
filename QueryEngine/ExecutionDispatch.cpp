@@ -85,7 +85,6 @@ void Executor::ExecutionDispatch::runImpl(
     QueryFragmentDescriptor::computeAllTablesFragments(
         all_tables_fragments, ra_exe_unit_, query_infos_);
 
-    OOM_TRACE_PUSH();
     fetch_result = executor_->fetchChunks(column_fetcher,
                                           ra_exe_unit_,
                                           chosen_device_id,
@@ -118,7 +117,6 @@ void Executor::ExecutionDispatch::runImpl(
   const bool do_render = render_info_ && render_info_->isPotentialInSituRender();
 
   try {
-    OOM_TRACE_PUSH();
     query_exe_context_owned =
         query_mem_desc.getQueryExecutionContext(ra_exe_unit_,
                                                 executor_,
@@ -150,7 +148,6 @@ void Executor::ExecutionDispatch::runImpl(
 
   ResultSetPtr device_results;
   if (ra_exe_unit_.groupby_exprs.empty()) {
-    OOM_TRACE_PUSH();
     err = executor_->executePlanWithoutGroupBy(ra_exe_unit_,
                                                compilation_result,
                                                query_comp_desc.hoistLiterals(),
@@ -167,7 +164,6 @@ void Executor::ExecutionDispatch::runImpl(
                                                ra_exe_unit_.input_descs.size(),
                                                do_render ? render_info_ : nullptr);
   } else {
-    OOM_TRACE_PUSH();
     err = executor_->executePlanWithGroupBy(ra_exe_unit_,
                                             compilation_result,
                                             query_comp_desc.hoistLiterals(),
