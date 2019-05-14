@@ -5829,9 +5829,10 @@ TEST(Select, Subqueries) {
     c("SELECT str, SUM(y) AS n FROM test WHERE x > (SELECT COUNT(*) FROM test) - 14 "
       "GROUP BY str ORDER BY str ASC;",
       dt);
-    c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) AS inner_x WHERE test.x "
-      "= inner_x.x;",
-      dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) AS inner_x WHERE test.x "
+          "= inner_x.x;",
+          dt));
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test WHERE y > 42);", dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test GROUP BY x ORDER BY "
       "COUNT(*) DESC LIMIT 1);",
@@ -5959,6 +5960,9 @@ TEST(Select, Subqueries) {
     c("SELECT R.y, R.d, count(*) FROM (SELECT x,y,z,t,f,d FROM test WHERE y > 42 AND f > "
       "1.0 ORDER BY x DESC LIMIT 2) AS R WHERE R.x > 0 AND t > 1001 AND f > 1.0 GROUP BY "
       "R.y, R.d ORDER BY R.y;",
+      dt);
+    c("SELECT x FROM test WHERE x = (SELECT MIN(X) m FROM test GROUP BY x HAVING x <= "
+      "(SELECT MIN(x) FROM test));",
       dt);
   }
 }
@@ -6436,6 +6440,9 @@ TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
     c("SELECT a.x, b.str, c.str, d.y FROM hash_join_test a JOIN test b ON a.x = b.x JOIN "
       "join_test c ON b.x = c.x JOIN "
       "test_inner d ON b.x = d.x ORDER BY a.x, b.str;",
+      dt);
+    c("SELECT a.f, b.y, c.x from test AS a JOIN join_test AS b ON 40*a.f-1 = b.y JOIN "
+      "test_inner AS c ON b.x = c.x;",
       dt);
   }
 
@@ -11674,6 +11681,7 @@ TEST(Delete, Joins_InnerJoin_TwoTables) {
       "((t1.fixed_null_str = "
       "t2.fixed_null_str) OR (t1.fixed_null_str IS NULL AND t2.fixed_null_str IS NULL));",
       dt);
+    c("SELECT a.f, b.y from test AS a JOIN join_test AS b ON 40*a.f-1 = b.y;", dt);
   }
 }
 

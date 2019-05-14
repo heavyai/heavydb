@@ -46,6 +46,7 @@ void RexSubQuery::setExecutionResult(
     const std::shared_ptr<const ExecutionResult> result) {
   auto row_set = result->getRows();
   CHECK(row_set);
+  CHECK_EQ(size_t(1), row_set->colCount());
   *(type_.get()) = row_set->getColType(0);
   (*(result_.get())) = result;
 }
@@ -1315,32 +1316,6 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
   }
 }
 
-// Recognize the pattern for subqueries in 'FROM' clause. We try to detect RelJoin with
-// RelCompound as input. The RA for these subquery will contain a project node. Which is
-// not present in filter push down RA. Run this function after we generate RelCompound.
-void create_implicit_subquery_node(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
-                                   RelAlgExecutor* ra_executor) {
-  for (auto&& node : nodes) {
-    auto join_node = dynamic_cast<const RelJoin*>(node.get());
-    if (join_node) {
-      // check if any of the input is a RelCompound
-      auto lhs = join_node->getAndOwnInput(0);
-      auto rhs = join_node->getAndOwnInput(1);
-
-      if (!(dynamic_cast<const RelScan*>(lhs.get()) ||
-            dynamic_cast<const RelJoin*>(lhs.get()))) {
-        auto subquery = std::make_shared<RexSubQuery>(lhs);
-        ra_executor->registerSubquery(subquery);
-      }
-      if (!(dynamic_cast<const RelScan*>(rhs.get()) ||
-            dynamic_cast<const RelJoin*>(rhs.get()))) {
-        auto subquery = std::make_shared<RexSubQuery>(rhs);
-        ra_executor->registerSubquery(subquery);
-      }
-    }
-  }
-}
-
 int64_t get_int_literal_field(const rapidjson::Value& obj,
                               const char field[],
                               const int64_t default_val) noexcept {
@@ -1409,7 +1384,6 @@ class RelAlgAbstractInterpreter {
     coalesce_nodes(nodes_, left_deep_joins);
     CHECK(nodes_.back().unique());
     create_left_deep_join(nodes_);
-    create_implicit_subquery_node(nodes_, ra_executor_);
     return nodes_.back();
   }
 
