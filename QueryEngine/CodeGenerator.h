@@ -47,6 +47,19 @@ class CodeGenerator {
 
   llvm::Value* codegenLogical(const Analyzer::UOper*, const CompilationOptions&);
 
+  llvm::Value* codegenCast(const Analyzer::UOper*, const CompilationOptions&);
+
+  llvm::Value* codegenCast(llvm::Value* operand_lv,
+                           const SQLTypeInfo& operand_ti,
+                           const SQLTypeInfo& ti,
+                           const bool operand_is_const,
+                           const CompilationOptions& co);
+
+  llvm::Value* codegenCastBetweenIntTypes(llvm::Value* operand_lv,
+                                          const SQLTypeInfo& operand_ti,
+                                          const SQLTypeInfo& ti,
+                                          bool upscale = true);
+
   llvm::Value* toBool(llvm::Value*);
 
   static bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
@@ -59,6 +72,29 @@ class CodeGenerator {
   llvm::Value* codegenFpArith(const Analyzer::BinOper*, llvm::Value*, llvm::Value*);
 
   bool checkExpressionRanges(const Analyzer::BinOper*, int64_t, int64_t);
+
+  llvm::Value* codegenCastTimestampToDate(llvm::Value* ts_lv,
+                                          const int dimen,
+                                          const bool nullable);
+
+  llvm::Value* codegenCastBetweenTimestamps(llvm::Value* ts_lv,
+                                            const int operand_dimen,
+                                            const int target_dimen,
+                                            const bool nullable);
+
+  llvm::Value* codegenCastFromString(llvm::Value* operand_lv,
+                                     const SQLTypeInfo& operand_ti,
+                                     const SQLTypeInfo& ti,
+                                     const bool operand_is_const,
+                                     const CompilationOptions& co);
+
+  llvm::Value* codegenCastToFp(llvm::Value* operand_lv,
+                               const SQLTypeInfo& operand_ti,
+                               const SQLTypeInfo& ti);
+
+  llvm::Value* codegenCastFromFp(llvm::Value* operand_lv,
+                                 const SQLTypeInfo& operand_ti,
+                                 const SQLTypeInfo& ti);
 
   llvm::Value* codegenAdd(const Analyzer::BinOper*,
                           llvm::Value*,

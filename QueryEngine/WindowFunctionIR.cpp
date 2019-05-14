@@ -248,7 +248,8 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
     const auto arg_lvs = codegen(args.front().get(), true, co);
     CHECK_EQ(arg_lvs.size(), size_t(1));
     if (window_func->getKind() == SqlWindowFunctionKind::SUM && !window_func_ti.is_fp()) {
-      crt_val = codegenCastBetweenIntTypes(
+      CodeGenerator code_generator(cgen_state_.get(), this);
+      crt_val = code_generator.codegenCastBetweenIntTypes(
           arg_lvs.front(), args.front()->get_type_info(), window_func_ti, false);
     } else {
       crt_val = window_func_ti.get_type() == kFLOAT ? arg_lvs.front()

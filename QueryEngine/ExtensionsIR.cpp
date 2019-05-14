@@ -237,7 +237,9 @@ llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
       const auto arg1_lvs = codegen(arg1, true, co);
       auto arg1_lv = arg1_lvs.front();
       if (arg1_ti.get_type() != kINT) {
-        arg1_lv = codegenCast(arg1_lv, arg1_ti, SQLTypeInfo(kINT, true), false, co);
+        CodeGenerator code_generator(cgen_state_.get(), this);
+        arg1_lv = code_generator.codegenCast(
+            arg1_lv, arg1_ti, SQLTypeInfo(kINT, true), false, co);
       }
 
       const auto bbs0 = beginArgsNullcheck(function_oper, {arg0_lv, arg1_lvs.front()});
@@ -459,7 +461,9 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
     } else {
       const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[k + j]);
       if (arg_ti.get_type() != arg_target_ti.get_type()) {
-        arg_lv = codegenCast(orig_arg_lvs[k], arg_ti, arg_target_ti, false, co);
+        CodeGenerator code_generator(cgen_state_.get(), this);
+        arg_lv =
+            code_generator.codegenCast(orig_arg_lvs[k], arg_ti, arg_target_ti, false, co);
       } else {
         arg_lv = orig_arg_lvs[k];
       }

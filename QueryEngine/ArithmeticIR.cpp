@@ -54,9 +54,9 @@ llvm::Value* CodeGenerator::codegenArith(const Analyzer::BinOper* bin_oper,
   // Handle operations when a time interval operand is involved, an operation
   // between an integer and a time interval isn't normalized by the analyzer.
   if (lhs_type.is_timeinterval()) {
-    rhs_lv = executor_->codegenCastBetweenIntTypes(rhs_lv, rhs_type, lhs_type);
+    rhs_lv = codegenCastBetweenIntTypes(rhs_lv, rhs_type, lhs_type);
   } else if (rhs_type.is_timeinterval()) {
-    lhs_lv = executor_->codegenCastBetweenIntTypes(lhs_lv, lhs_type, rhs_type);
+    lhs_lv = codegenCastBetweenIntTypes(lhs_lv, lhs_type, rhs_type);
   } else {
     CHECK_EQ(lhs_type.get_type(), rhs_type.get_type());
   }
@@ -536,13 +536,13 @@ llvm::Value* CodeGenerator::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
         rhs_constant->get_constval().bigintval / exp_to_scale(rhs_type.get_scale()));
     auto rhs_lit_lv = executor_->codegenIntConst(
         dynamic_cast<const Analyzer::Constant*>(rhs_lit.get()));
-    rhs_lv = executor_->codegenCastBetweenIntTypes(
+    rhs_lv = codegenCastBetweenIntTypes(
         rhs_lit_lv, rhs_lit->get_type_info(), lhs_type, /*upscale*/ false);
   } else if (rhs_cast) {
     auto rhs_cast_oper = rhs_cast->get_operand();
     const auto& rhs_cast_oper_ti = rhs_cast_oper->get_type_info();
     auto rhs_cast_oper_lv = executor_->codegen(rhs_cast_oper, true, co).front();
-    rhs_lv = executor_->codegenCastBetweenIntTypes(
+    rhs_lv = codegenCastBetweenIntTypes(
         rhs_cast_oper_lv, rhs_cast_oper_ti, lhs_type, /*upscale*/ false);
   } else {
     CHECK(false);

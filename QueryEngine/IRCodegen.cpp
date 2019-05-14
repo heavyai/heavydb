@@ -156,8 +156,10 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper,
       CodeGenerator code_generator(cgen_state_.get(), this);
       return code_generator.codegenLogical(u_oper, co);
     }
-    case kCAST:
-      return codegenCast(u_oper, co);
+    case kCAST: {
+      CodeGenerator code_generator(cgen_state_.get(), this);
+      return code_generator.codegenCast(u_oper, co);
+    }
     case kUMINUS: {
       CodeGenerator code_generator(cgen_state_.get(), this);
       return code_generator.codegenUMinus(u_oper, co);
