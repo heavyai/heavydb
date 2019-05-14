@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef FRONTEND_VIEW_DESCRIPTOR_H
-#define FRONTEND_VIEW_DESCRIPTOR_H
+#pragma once
 
 #include <cstdint>
 #include <regex>
@@ -23,31 +22,33 @@
 #include "../Shared/sqldefs.h"
 
 /**
- * @type FrontendViewDescriptor
- * @brief specifies the content in-memory of a row in the frontend view metadata view
+ * @type DashboardDescriptor
+ * @brief specifies the content in-memory of a row in the dashboard
  *
  */
 
 static const std::string SYSTEM_ROLE_TAG("#dash_system_role");
 
-struct FrontendViewDescriptor {
-  int32_t viewId;       /**< viewId starts at 0 for valid views. */
-  std::string viewName; /**< viewName is the name of the view view -must be unique */
-  std::string viewState;
+struct DashboardDescriptor {
+  int32_t dashboardId;       /**< dashboardId starts at 0 for valid dashboard. */
+  std::string dashboardName; /**< dashboardName is the name of the dashboard. dashboard
+                                -must be unique */
+  std::string dashboardState;
   std::string imageHash;
   std::string updateTime;
-  std::string viewMetadata;
+  std::string dashboardMetadata;
   int32_t userId;
   std::string user;
-  std::string viewSystemRoleName; /** Stores system role name */
+  std::string dashboardSystemRoleName; /** Stores system role name */
 };
 
-inline std::string generate_dash_system_rolename(const std::string& db_id,
-                                                 const std::string& dash_id) {
+inline std::string generate_dashboard_system_rolename(const std::string& db_id,
+                                                      const std::string& dash_id) {
   return db_id + "_" + dash_id + SYSTEM_ROLE_TAG;
 }
 
-inline std::vector<std::string> parse_underlying_dash_objects(const std::string& meta) {
+inline std::vector<std::string> parse_underlying_dashboard_objects(
+    const std::string& meta) {
   /** Parses underlying Tables/Views */
   std::regex extract_objects_expr(".*table\":\"(.*?)\"");
   std::smatch match;
@@ -65,5 +66,3 @@ inline std::vector<std::string> parse_underlying_dash_objects(const std::string&
   }
   return {};
 }
-
-#endif  // FRONTEND_VIEW_DESCRIPTOR

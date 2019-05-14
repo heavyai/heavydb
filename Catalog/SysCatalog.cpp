@@ -938,10 +938,10 @@ void SysCatalog::dropDatabase(const DBMetadata& db) {
       revokeDBObjectPrivilegesFromAll_unsafe(
           DBObject(table->tableName, TableDBObjectType), cat.get());
     }
-    const auto dashboards = cat->getAllFrontendViewMetadata();
+    const auto dashboards = cat->getAllDashboardsMetadata();
     for (const auto dashboard : dashboards) {
       revokeDBObjectPrivilegesFromAll_unsafe(
-          DBObject(dashboard->viewId, DashboardDBObjectType), cat.get());
+          DBObject(dashboard->dashboardId, DashboardDBObjectType), cat.get());
     }
     /* revoke object privileges to the database being dropped */
     for (const auto& grantee : granteeMap_) {

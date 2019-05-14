@@ -738,9 +738,9 @@ void Catalog::createDashboardSystemRoles() {
       LOG(INFO) << "Performing dashboard internal roles Migration.";
       sqliteConnector_.query("select id, userid, metadata from mapd_dashboards");
       for (size_t i = 0; i < sqliteConnector_.getNumRows(); ++i) {
-        if (SysCatalog::instance().getRoleGrantee(
-                generate_dash_system_rolename(std::to_string(currentDB_.dbId),
-                                              sqliteConnector_.getData<string>(i, 0)))) {
+        if (SysCatalog::instance().getRoleGrantee(generate_dashboard_system_rolename(
+                std::to_string(currentDB_.dbId),
+                sqliteConnector_.getData<string>(i, 0)))) {
           // Successfully created roles during previous migration/crash
           // No need to include them
           continue;
@@ -762,14 +762,15 @@ void Catalog::createDashboardSystemRoles() {
   try {
     // NOTE(wamsi): Transactionally unsafe
     for (auto dash : dashboards) {
-      createOrUpdateDashboardSystemRole(
-          dash.second.second,
-          dash.second.first,
-          generate_dash_system_rolename(std::to_string(currentDB_.dbId), dash.first));
+      createOrUpdateDashboardSystemRole(dash.second.second,
+                                        dash.second.first,
+                                        generate_dashboard_system_rolename(
+                                            std::to_string(currentDB_.dbId), dash.first));
       auto result = active_grantees.find(dash.first);
       if (result != active_grantees.end()) {
         SysCatalog::instance().grantRoleBatch(
-            {generate_dash_system_rolename(std::to_string(currentDB_.dbId), dash.first)},
+            {generate_dashboard_system_rolename(std::to_string(currentDB_.dbId),
+                                                dash.first)},
             result->second);
       }
     }
@@ -941,19 +942,18 @@ void Catalog::buildMaps() {
   sqliteConnector_.query(frontendViewQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
-    std::shared_ptr<FrontendViewDescriptor> vd =
-        std::make_shared<FrontendViewDescriptor>();
-    vd->viewId = sqliteConnector_.getData<int>(r, 0);
-    vd->viewState = sqliteConnector_.getData<string>(r, 1);
-    vd->viewName = sqliteConnector_.getData<string>(r, 2);
+    std::shared_ptr<DashboardDescriptor> vd = std::make_shared<DashboardDescriptor>();
+    vd->dashboardId = sqliteConnector_.getData<int>(r, 0);
+    vd->dashboardState = sqliteConnector_.getData<string>(r, 1);
+    vd->dashboardName = sqliteConnector_.getData<string>(r, 2);
     vd->imageHash = sqliteConnector_.getData<string>(r, 3);
     vd->updateTime = sqliteConnector_.getData<string>(r, 4);
     vd->userId = sqliteConnector_.getData<int>(r, 5);
-    vd->viewMetadata = sqliteConnector_.getData<string>(r, 6);
+    vd->dashboardMetadata = sqliteConnector_.getData<string>(r, 6);
     vd->user = getUserFromId(vd->userId);
-    vd->viewSystemRoleName = generate_dash_system_rolename(
+    vd->dashboardSystemRoleName = generate_dashboard_system_rolename(
         std::to_string(currentDB_.dbId), sqliteConnector_.getData<string>(r, 0));
-    dashboardDescriptorMap_[std::to_string(vd->userId) + ":" + vd->viewName] = vd;
+    dashboardDescriptorMap_[std::to_string(vd->userId) + ":" + vd->dashboardName] = vd;
   }
 
   string linkQuery(
@@ -1119,15 +1119,15 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
   }
 }
 
-void Catalog::addFrontendViewToMap(FrontendViewDescriptor& vd) {
+void Catalog::addFrontendViewToMap(DashboardDescriptor& vd) {
   cat_write_lock write_lock(this);
   addFrontendViewToMapNoLock(vd);
 }
 
-void Catalog::addFrontendViewToMapNoLock(FrontendViewDescriptor& vd) {
+void Catalog::addFrontendViewToMapNoLock(DashboardDescriptor& vd) {
   cat_write_lock write_lock(this);
-  dashboardDescriptorMap_[std::to_string(vd.userId) + ":" + vd.viewName] =
-      std::make_shared<FrontendViewDescriptor>(vd);
+  dashboardDescriptorMap_[std::to_string(vd.userId) + ":" + vd.dashboardName] =
+      std::make_shared<DashboardDescriptor>(vd);
 }
 
 std::vector<DBObject> Catalog::parseDashboardObjects(const std::string& view_meta,
@@ -1140,7 +1140,7 @@ std::vector<DBObject> Catalog::parseDashboardObjects(const std::string& view_met
     key.objectId = id;
     return key;
   };
-  for (auto object_name : parse_underlying_dash_objects(view_meta)) {
+  for (auto object_name : parse_underlying_dashboard_objects(view_meta)) {
     auto td = getMetadataForTable(object_name);
     if (!td) {
       // Parsed object source is not present in current database
@@ -1369,16 +1369,16 @@ const ColumnDescriptor* Catalog::getMetadataForColumnBySpi(const int tableId,
   return columnDescriptorMapById_.end() == colDescIt ? nullptr : colDescIt->second;
 }
 
-void Catalog::deleteMetadataForFrontendView(const std::string& userId,
-                                            const std::string& viewName) {
+void Catalog::deleteMetadataForDashboard(const std::string& userId,
+                                         const std::string& dashName) {
   cat_write_lock write_lock(this);
 
-  auto viewDescIt = dashboardDescriptorMap_.find(userId + ":" + viewName);
+  auto viewDescIt = dashboardDescriptorMap_.find(userId + ":" + dashName);
   if (viewDescIt == dashboardDescriptorMap_.end()) {  // check to make sure view exists
     LOG(ERROR) << "No metadata for dashboard for user " << userId << " dashboard "
-               << viewName << " does not exist in map";
+               << dashName << " does not exist in map";
     throw runtime_error("No metadata for dashboard for user " + userId + " dashboard " +
-                        viewName + " does not exist in map");
+                        dashName + " does not exist in map");
   }
   // found view in Map now remove it
   dashboardDescriptorMap_.erase(viewDescIt);
@@ -1388,7 +1388,7 @@ void Catalog::deleteMetadataForFrontendView(const std::string& userId,
   try {
     sqliteConnector_.query_with_text_params(
         "DELETE FROM mapd_dashboards WHERE name = ? and userid = ?",
-        std::vector<std::string>{viewName, userId});
+        std::vector<std::string>{dashName, userId});
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
@@ -1396,19 +1396,19 @@ void Catalog::deleteMetadataForFrontendView(const std::string& userId,
   sqliteConnector_.query("END TRANSACTION");
 }
 
-const FrontendViewDescriptor* Catalog::getMetadataForFrontendView(
+const DashboardDescriptor* Catalog::getMetadataForDashboard(
     const string& userId,
-    const string& viewName) const {
+    const string& dashName) const {
   cat_read_lock read_lock(this);
 
-  auto viewDescIt = dashboardDescriptorMap_.find(userId + ":" + viewName);
+  auto viewDescIt = dashboardDescriptorMap_.find(userId + ":" + dashName);
   if (viewDescIt == dashboardDescriptorMap_.end()) {  // check to make sure view exists
     return nullptr;
   }
   return viewDescIt->second.get();  // returns pointer to view descriptor
 }
 
-const FrontendViewDescriptor* Catalog::getMetadataForDashboard(const int32_t id) const {
+const DashboardDescriptor* Catalog::getMetadataForDashboard(const int32_t id) const {
   cat_read_lock read_lock(this);
   std::string userId;
   std::string name;
@@ -1416,16 +1416,16 @@ const FrontendViewDescriptor* Catalog::getMetadataForDashboard(const int32_t id)
   {
     for (auto descp : dashboardDescriptorMap_) {
       auto dash = descp.second.get();
-      if (dash->viewId == id) {
+      if (dash->dashboardId == id) {
         userId = std::to_string(dash->userId);
-        name = dash->viewName;
+        name = dash->dashboardName;
         found = true;
         break;
       }
     }
   }
   if (found) {
-    return getMetadataForFrontendView(userId, name);
+    return getMetadataForDashboard(userId, name);
   }
   return nullptr;
 }
@@ -1438,9 +1438,9 @@ void Catalog::deleteMetadataForDashboard(const int32_t id) {
     cat_read_lock read_lock(this);
     for (auto descp : dashboardDescriptorMap_) {
       auto dash = descp.second.get();
-      if (dash->viewId == id) {
+      if (dash->dashboardId == id) {
         userId = std::to_string(dash->userId);
-        name = dash->viewName;
+        name = dash->dashboardName;
         found = true;
         break;
       }
@@ -1450,7 +1450,7 @@ void Catalog::deleteMetadataForDashboard(const int32_t id) {
     // TODO: transactionally unsafe
     SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
         DBObject(id, DashboardDBObjectType), this);
-    deleteMetadataForFrontendView(userId, name);
+    deleteMetadataForDashboard(userId, name);
   }
 }
 
@@ -1529,8 +1529,8 @@ list<const TableDescriptor*> Catalog::getAllTableMetadata() const {
   return table_list;
 }
 
-list<const FrontendViewDescriptor*> Catalog::getAllFrontendViewMetadata() const {
-  list<const FrontendViewDescriptor*> view_list;
+list<const DashboardDescriptor*> Catalog::getAllDashboardsMetadata() const {
+  list<const DashboardDescriptor*> view_list;
   for (auto p : dashboardDescriptorMap_) {
     view_list.push_back(p.second.get());
   }
@@ -2616,7 +2616,7 @@ void Catalog::renameColumn(const TableDescriptor* td,
   calciteMgr_->updateMetadata(currentDB_.dbName, td->tableName);
 }
 
-int32_t Catalog::createFrontendView(FrontendViewDescriptor& vd) {
+int32_t Catalog::createDashboard(DashboardDescriptor& vd) {
   {
     cat_write_lock write_lock(this);
     cat_sqlite_lock sqlite_lock(this);
@@ -2625,17 +2625,17 @@ int32_t Catalog::createFrontendView(FrontendViewDescriptor& vd) {
       // TODO(andrew): this should be an upsert
       sqliteConnector_.query_with_text_params(
           "SELECT id FROM mapd_dashboards WHERE name = ? and userid = ?",
-          std::vector<std::string>{vd.viewName, std::to_string(vd.userId)});
+          std::vector<std::string>{vd.dashboardName, std::to_string(vd.userId)});
       if (sqliteConnector_.getNumRows() > 0) {
         sqliteConnector_.query_with_text_params(
             "UPDATE mapd_dashboards SET state = ?, image_hash = ?, metadata = ?, "
             "update_time = "
             "datetime('now') where name = ? "
             "and userid = ?",
-            std::vector<std::string>{vd.viewState,
+            std::vector<std::string>{vd.dashboardState,
                                      vd.imageHash,
-                                     vd.viewMetadata,
-                                     vd.viewName,
+                                     vd.dashboardMetadata,
+                                     vd.dashboardName,
                                      std::to_string(vd.userId)});
       } else {
         sqliteConnector_.query_with_text_params(
@@ -2645,10 +2645,10 @@ int32_t Catalog::createFrontendView(FrontendViewDescriptor& vd) {
             "VALUES "
             "(?,?,?,?, "
             "datetime('now'), ?)",
-            std::vector<std::string>{vd.viewName,
-                                     vd.viewState,
+            std::vector<std::string>{vd.dashboardName,
+                                     vd.dashboardState,
                                      vd.imageHash,
-                                     vd.viewMetadata,
+                                     vd.dashboardMetadata,
                                      std::to_string(vd.userId)});
       }
     } catch (std::exception& e) {
@@ -2657,27 +2657,28 @@ int32_t Catalog::createFrontendView(FrontendViewDescriptor& vd) {
     }
     sqliteConnector_.query("END TRANSACTION");
 
-    // now get the auto generated viewid
+    // now get the auto generated dashboardId
     try {
       sqliteConnector_.query_with_text_params(
           "SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ', update_time) FROM mapd_dashboards "
           "WHERE name = ? and userid = ?",
-          std::vector<std::string>{vd.viewName, std::to_string(vd.userId)});
-      vd.viewId = sqliteConnector_.getData<int>(0, 0);
+          std::vector<std::string>{vd.dashboardName, std::to_string(vd.userId)});
+      vd.dashboardId = sqliteConnector_.getData<int>(0, 0);
       vd.updateTime = sqliteConnector_.getData<std::string>(0, 1);
     } catch (std::exception& e) {
       throw;
     }
-    vd.viewSystemRoleName = generate_dash_system_rolename(std::to_string(currentDB_.dbId),
-                                                          std::to_string(vd.viewId));
+    vd.dashboardSystemRoleName = generate_dashboard_system_rolename(
+        std::to_string(currentDB_.dbId), std::to_string(vd.dashboardId));
     addFrontendViewToMap(vd);
   }
   // NOTE(wamsi): Transactionally unsafe
-  createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId, vd.viewSystemRoleName);
-  return vd.viewId;
+  createOrUpdateDashboardSystemRole(
+      vd.dashboardMetadata, vd.userId, vd.dashboardSystemRoleName);
+  return vd.dashboardId;
 }
 
-void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
+void Catalog::replaceDashboard(DashboardDescriptor& vd) {
   cat_write_lock write_lock(this);
   cat_sqlite_lock sqlite_lock(this);
 
@@ -2685,22 +2686,22 @@ void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
   try {
     sqliteConnector_.query_with_text_params(
         "SELECT id FROM mapd_dashboards WHERE id = ?",
-        std::vector<std::string>{std::to_string(vd.viewId)});
+        std::vector<std::string>{std::to_string(vd.dashboardId)});
     if (sqliteConnector_.getNumRows() > 0) {
       sqliteConnector_.query_with_text_params(
           "UPDATE mapd_dashboards SET name = ?, state = ?, image_hash = ?, metadata = ?, "
           "update_time = "
           "datetime('now') where id = ? ",
-          std::vector<std::string>{vd.viewName,
-                                   vd.viewState,
+          std::vector<std::string>{vd.dashboardName,
+                                   vd.dashboardState,
                                    vd.imageHash,
-                                   vd.viewMetadata,
-                                   std::to_string(vd.viewId)});
+                                   vd.dashboardMetadata,
+                                   std::to_string(vd.dashboardId)});
     } else {
-      LOG(ERROR) << "Error replacing dashboard id " << vd.viewId
+      LOG(ERROR) << "Error replacing dashboard id " << vd.dashboardId
                  << " does not exist in db";
-      throw runtime_error("Error replacing dashboard id " + std::to_string(vd.viewId) +
-                          " does not exist in db");
+      throw runtime_error("Error replacing dashboard id " +
+                          std::to_string(vd.dashboardId) + " does not exist in db");
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -2711,26 +2712,26 @@ void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
   bool found{false};
   for (auto descp : dashboardDescriptorMap_) {
     auto dash = descp.second.get();
-    if (dash->viewId == vd.viewId) {
+    if (dash->dashboardId == vd.dashboardId) {
       found = true;
       auto viewDescIt = dashboardDescriptorMap_.find(std::to_string(dash->userId) + ":" +
-                                                     dash->viewName);
+                                                     dash->dashboardName);
       if (viewDescIt ==
           dashboardDescriptorMap_.end()) {  // check to make sure view exists
         LOG(ERROR) << "No metadata for dashboard for user " << dash->userId
-                   << " dashboard " << dash->viewName << " does not exist in map";
+                   << " dashboard " << dash->dashboardName << " does not exist in map";
         throw runtime_error("No metadata for dashboard for user " +
                             std::to_string(dash->userId) + " dashboard " +
-                            dash->viewName + " does not exist in map");
+                            dash->dashboardName + " does not exist in map");
       }
       dashboardDescriptorMap_.erase(viewDescIt);
       break;
     }
   }
   if (!found) {
-    LOG(ERROR) << "Error replacing dashboard id " << vd.viewId
+    LOG(ERROR) << "Error replacing dashboard id " << vd.dashboardId
                << " does not exist in map";
-    throw runtime_error("Error replacing dashboard id " + std::to_string(vd.viewId) +
+    throw runtime_error("Error replacing dashboard id " + std::to_string(vd.dashboardId) +
                         " does not exist in map");
   }
 
@@ -2739,13 +2740,14 @@ void Catalog::replaceDashboard(FrontendViewDescriptor& vd) {
       "SELECT id, strftime('%Y-%m-%dT%H:%M:%SZ', update_time)  FROM "
       "mapd_dashboards "
       "WHERE id = ?",
-      std::vector<std::string>{std::to_string(vd.viewId)});
+      std::vector<std::string>{std::to_string(vd.dashboardId)});
   vd.updateTime = sqliteConnector_.getData<string>(0, 1);
-  vd.viewSystemRoleName = generate_dash_system_rolename(std::to_string(currentDB_.dbId),
-                                                        std::to_string(vd.viewId));
+  vd.dashboardSystemRoleName = generate_dashboard_system_rolename(
+      std::to_string(currentDB_.dbId), std::to_string(vd.dashboardId));
   addFrontendViewToMapNoLock(vd);
   // NOTE(wamsi): Transactionally unsafe
-  createOrUpdateDashboardSystemRole(vd.viewMetadata, vd.userId, vd.viewSystemRoleName);
+  createOrUpdateDashboardSystemRole(
+      vd.dashboardMetadata, vd.userId, vd.dashboardSystemRoleName);
 }
 
 std::string Catalog::calculateSHA1(const std::string& data) {
@@ -2783,7 +2785,7 @@ std::string Catalog::createLink(LinkDescriptor& ld, size_t min_length) {
           std::vector<std::string>{
               std::to_string(ld.userId), ld.link, ld.viewState, ld.viewMetadata});
     }
-    // now get the auto generated viewid
+    // now get the auto generated dashid
     sqliteConnector_.query_with_text_param(
         "SELECT linkid, strftime('%Y-%m-%dT%H:%M:%SZ', update_time) FROM mapd_links "
         "WHERE link = ?",

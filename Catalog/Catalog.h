@@ -41,8 +41,8 @@
 #include <vector>
 
 #include "ColumnDescriptor.h"
+#include "DashboardDescriptor.h"
 #include "DictDescriptor.h"
-#include "FrontendViewDescriptor.h"
 #include "LinkDescriptor.h"
 #include "TableDescriptor.h"
 
@@ -113,8 +113,8 @@ class Catalog {
       TableDescriptor& td,
       const std::list<ColumnDescriptor>& columns,
       const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs);
-  int32_t createFrontendView(FrontendViewDescriptor& vd);
-  void replaceDashboard(FrontendViewDescriptor& vd);
+  int32_t createDashboard(DashboardDescriptor& vd);
+  void replaceDashboard(DashboardDescriptor& vd);
   std::string createLink(LinkDescriptor& ld, size_t min_length);
   void dropTable(const TableDescriptor* td);
   void truncateTable(const TableDescriptor* td);
@@ -147,13 +147,11 @@ class Catalog {
   const ColumnDescriptor* getMetadataForColumnBySpi(const int tableId,
                                                     const size_t spi) const;
 
-  const FrontendViewDescriptor* getMetadataForFrontendView(
-      const std::string& userId,
-      const std::string& viewName) const;
-  void deleteMetadataForFrontendView(const std::string& userId,
-                                     const std::string& viewName);
+  const DashboardDescriptor* getMetadataForDashboard(const std::string& userId,
+                                                     const std::string& dashName) const;
+  void deleteMetadataForDashboard(const std::string& userId, const std::string& dashName);
 
-  const FrontendViewDescriptor* getMetadataForDashboard(const int32_t dashboard_id) const;
+  const DashboardDescriptor* getMetadataForDashboard(const int32_t dashboard_id) const;
   void deleteMetadataForDashboard(const int32_t dashboard_id);
 
   const LinkDescriptor* getMetadataForLink(const std::string& link) const;
@@ -174,7 +172,7 @@ class Catalog {
       const bool fetchPhysicalColumns) const;
 
   std::list<const TableDescriptor*> getAllTableMetadata() const;
-  std::list<const FrontendViewDescriptor*> getAllFrontendViewMetadata() const;
+  std::list<const DashboardDescriptor*> getAllDashboardsMetadata() const;
   const DBMetadata& getCurrentDB() const { return currentDB_; }
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
   Calcite& getCalciteMgr() const { return *calciteMgr_; }
@@ -232,8 +230,8 @@ class Catalog {
   typedef std::tuple<int, int> ColumnIdKey;
   typedef std::map<ColumnIdKey, ColumnDescriptor*> ColumnDescriptorMapById;
   typedef std::map<DictRef, std::unique_ptr<DictDescriptor>> DictDescriptorMapById;
-  typedef std::map<std::string, std::shared_ptr<FrontendViewDescriptor>>
-      FrontendViewDescriptorMap;
+  typedef std::map<std::string, std::shared_ptr<DashboardDescriptor>>
+      DashboardDescriptorMap;
   typedef std::map<std::string, LinkDescriptor*> LinkDescriptorMap;
   typedef std::map<int, LinkDescriptor*> LinkDescriptorMapById;
   typedef std::unordered_map<const TableDescriptor*, const ColumnDescriptor*>
@@ -271,8 +269,8 @@ class Catalog {
                            std::list<DictDescriptor>& dds,
                            const TableDescriptor& td,
                            const bool isLogicalTable);
-  void addFrontendViewToMap(FrontendViewDescriptor& vd);
-  void addFrontendViewToMapNoLock(FrontendViewDescriptor& vd);
+  void addFrontendViewToMap(DashboardDescriptor& vd);
+  void addFrontendViewToMapNoLock(DashboardDescriptor& vd);
   void addLinkToMap(LinkDescriptor& ld);
   void removeTableFromMap(const std::string& tableName, int tableId);
   void doDropTable(const TableDescriptor* td);
@@ -301,7 +299,7 @@ class Catalog {
   ColumnDescriptorMap columnDescriptorMap_;
   ColumnDescriptorMapById columnDescriptorMapById_;
   DictDescriptorMapById dictDescriptorMapByRef_;
-  FrontendViewDescriptorMap dashboardDescriptorMap_;
+  DashboardDescriptorMap dashboardDescriptorMap_;
   LinkDescriptorMap linkDescriptorMap_;
   LinkDescriptorMapById linkDescriptorMapById_;
   SqliteConnector sqliteConnector_;

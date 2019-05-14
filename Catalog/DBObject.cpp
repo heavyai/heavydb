@@ -210,7 +210,7 @@ void DBObject::loadKey(const Catalog_Namespace::Catalog& catalog) {
               "Failure generating DB object key. Dashboard with ID " +
               std::to_string(objectKey_.objectId) + " does not exist.");
         }
-        objectName_ = dashboard->viewName;
+        objectName_ = dashboard->dashboardName;
         ownerId_ = dashboard->userId;
       } else {
         ownerId_ = catalog.getCurrentDB().dbOwner;

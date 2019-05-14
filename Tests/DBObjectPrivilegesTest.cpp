@@ -253,16 +253,16 @@ struct DashboardObject : testing::Test {
   Users user_;
   Roles role_;
 
-  FrontendViewDescriptor vd1;
+  DashboardDescriptor vd1;
   void setup_dashboards() {
     auto& gcat = g_session->getCatalog();
-    vd1.viewName = dname1;
-    vd1.viewState = dstate;
+    vd1.dashboardName = dname1;
+    vd1.dashboardState = dstate;
     vd1.imageHash = dhash;
-    vd1.viewMetadata = dmeta;
+    vd1.dashboardMetadata = dmeta;
     vd1.userId = g_session->get_currentUser().userId;
     vd1.user = g_session->get_currentUser().userName;
-    id = gcat.createFrontendView(vd1);
+    id = gcat.createDashboard(vd1);
     sys_cat.createDBObject(g_session->get_currentUser(),
                            dname1,
                            DBObjectType::DashboardDBObjectType,
@@ -1322,20 +1322,20 @@ void create_dashboards(std::string prefix, int max) {
   auto& cat = g_session->getCatalog();
   for (int i = 0; i < max; i++) {
     std::string name = "dash_" + prefix + std::to_string(i);
-    FrontendViewDescriptor vd;
-    vd.viewName = name;
-    vd.viewState = name;
+    DashboardDescriptor vd;
+    vd.dashboardName = name;
+    vd.dashboardState = name;
     vd.imageHash = name;
-    vd.viewMetadata = name;
+    vd.dashboardMetadata = name;
     vd.userId = g_session->get_currentUser().userId;
     ASSERT_EQ(0, g_session->get_currentUser().userId);
     vd.user = g_session->get_currentUser().userName;
-    cat.createFrontendView(vd);
+    cat.createDashboard(vd);
 
-    auto fvd = cat.getMetadataForFrontendView(
+    auto fvd = cat.getMetadataForDashboard(
         std::to_string(g_session->get_currentUser().userId), name);
     ASSERT_TRUE(fvd);
-    ASSERT_EQ(fvd->viewName, name);
+    ASSERT_EQ(fvd->dashboardName, name);
   }
 }
 
@@ -1362,9 +1362,9 @@ void assert_grants(std::string prefix, int i, bool expected) {
       viewPermission.getPrivileges().hasPermission(ViewPrivileges::SELECT_FROM_VIEW));
 
   auto fvd =
-      cat.getMetadataForFrontendView(std::to_string(g_session->get_currentUser().userId),
-                                     "dash_" + prefix + std::to_string(i));
-  DBObject dashPermission(fvd->viewId, DBObjectType::DashboardDBObjectType);
+      cat.getMetadataForDashboard(std::to_string(g_session->get_currentUser().userId),
+                                  "dash_" + prefix + std::to_string(i));
+  DBObject dashPermission(fvd->dashboardId, DBObjectType::DashboardDBObjectType);
   try {
     sys_cat.getDBObjectPrivileges("bob", dashPermission, cat);
   } catch (std::runtime_error& e) {
@@ -1380,13 +1380,13 @@ void check_grant_access(std::string prefix, int max) {
   for (int i = 0; i < max; i++) {
     assert_grants(prefix, i, false);
 
-    auto fvd = cat.getMetadataForFrontendView(
-        std::to_string(g_session->get_currentUser().userId),
-        "dash_" + prefix + std::to_string(i));
+    auto fvd =
+        cat.getMetadataForDashboard(std::to_string(g_session->get_currentUser().userId),
+                                    "dash_" + prefix + std::to_string(i));
     run_ddl_statement("GRANT SELECT ON TABLE " + prefix + std::to_string(i) + " TO bob;");
     run_ddl_statement("GRANT SELECT ON VIEW view_" + prefix + std::to_string(i) +
                       " TO bob;");
-    run_ddl_statement("GRANT VIEW ON DASHBOARD " + std::to_string(fvd->viewId) +
+    run_ddl_statement("GRANT VIEW ON DASHBOARD " + std::to_string(fvd->dashboardId) +
                       " TO bob;");
     assert_grants(prefix, i, true);
 
@@ -1394,7 +1394,7 @@ void check_grant_access(std::string prefix, int max) {
                       " FROM bob;");
     run_ddl_statement("REVOKE SELECT ON VIEW view_" + prefix + std::to_string(i) +
                       " FROM bob;");
-    run_ddl_statement("REVOKE VIEW ON DASHBOARD " + std::to_string(fvd->viewId) +
+    run_ddl_statement("REVOKE VIEW ON DASHBOARD " + std::to_string(fvd->dashboardId) +
                       " FROM bob;");
     assert_grants(prefix, i, false);
   }
@@ -1406,9 +1406,9 @@ void drop_dashboards(std::string prefix, int max) {
   for (int i = 0; i < max; i++) {
     std::string name = "dash_" + prefix + std::to_string(i);
 
-    cat.deleteMetadataForFrontendView(std::to_string(g_session->get_currentUser().userId),
-                                      name);
-    auto fvd = cat.getMetadataForFrontendView(
+    cat.deleteMetadataForDashboard(std::to_string(g_session->get_currentUser().userId),
+                                   name);
+    auto fvd = cat.getMetadataForDashboard(
         std::to_string(g_session->get_currentUser().userId), name);
     ASSERT_FALSE(fvd);
   }

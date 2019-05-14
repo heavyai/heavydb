@@ -1696,18 +1696,21 @@ void MapDHandler::get_frontend_view(TFrontendView& _return,
                                     const TSessionId& session,
                                     const std::string& view_name) {
   LOG_ON_RETURN(session);
+  LOG(WARNING)
+      << "'get_frontend_view' will be deprecated in the next release, please use "
+         "'get_dashboard'.";
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
-  auto vd = cat.getMetadataForFrontendView(
+  auto vd = cat.getMetadataForDashboard(
       std::to_string(session_info.get_currentUser().userId), view_name);
   if (!vd) {
     THROW_MAPD_EXCEPTION("Dashboard " + view_name + " doesn't exist");
   }
   _return.view_name = view_name;
-  _return.view_state = vd->viewState;
+  _return.view_state = vd->dashboardState;
   _return.image_hash = vd->imageHash;
   _return.update_time = vd->updateTime;
-  _return.view_metadata = vd->viewMetadata;
+  _return.view_metadata = vd->dashboardMetadata;
 }
 
 void MapDHandler::get_link_view(TFrontendView& _return,
@@ -2005,16 +2008,18 @@ void MapDHandler::get_databases(std::vector<TDBInfo>& dbinfos,
 void MapDHandler::get_frontend_views(std::vector<TFrontendView>& view_names,
                                      const TSessionId& session) {
   LOG_ON_RETURN(session);
+  LOG(WARNING) << "'get_frontend_views' will be deprecated in the next release, please "
+                  "use 'get_dashboards'.";
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
-  const auto views = cat.getAllFrontendViewMetadata();
+  const auto views = cat.getAllDashboardsMetadata();
   for (const auto vd : views) {
     if (vd->userId == session_info.get_currentUser().userId) {
       TFrontendView fv;
-      fv.view_name = vd->viewName;
+      fv.view_name = vd->dashboardName;
       fv.image_hash = vd->imageHash;
       fv.update_time = vd->updateTime;
-      fv.view_metadata = vd->viewMetadata;
+      fv.view_metadata = vd->dashboardMetadata;
       view_names.push_back(fv);
     }
   }
@@ -3000,7 +3005,7 @@ void MapDHandler::get_dashboard(TDashboard& dashboard,
                          " doesn't exist");
   }
   if (!is_allowed_on_dashboard(
-          session_info, dash->viewId, AccessPrivileges::VIEW_DASHBOARD)) {
+          session_info, dash->dashboardId, AccessPrivileges::VIEW_DASHBOARD)) {
     THROW_MAPD_EXCEPTION("User has no view privileges for the dashboard with id " +
                          std::to_string(dashboard_id));
   }
@@ -3010,13 +3015,13 @@ void MapDHandler::get_dashboard(TDashboard& dashboard,
       cat.getCurrentDB().dbId,
       static_cast<int>(DBObjectType::DashboardDBObjectType),
       dashboard_id);
-  dashboard.dashboard_name = dash->viewName;
-  dashboard.dashboard_state = dash->viewState;
+  dashboard.dashboard_name = dash->dashboardName;
+  dashboard.dashboard_state = dash->dashboardState;
   dashboard.image_hash = dash->imageHash;
   dashboard.update_time = dash->updateTime;
-  dashboard.dashboard_metadata = dash->viewMetadata;
+  dashboard.dashboard_metadata = dash->dashboardMetadata;
   dashboard.dashboard_owner = dash->user;
-  dashboard.dashboard_id = dash->viewId;
+  dashboard.dashboard_id = dash->dashboardId;
   if (objects_list.empty() ||
       (objects_list.size() == 1 && objects_list[0]->roleName == user_meta.userName)) {
     dashboard.is_dash_shared = false;
@@ -3031,24 +3036,24 @@ void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards,
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
   Catalog_Namespace::UserMetadata user_meta;
-  const auto dashes = cat.getAllFrontendViewMetadata();
+  const auto dashes = cat.getAllDashboardsMetadata();
   user_meta.userName = "";
   for (const auto d : dashes) {
     SysCatalog::instance().getMetadataForUserById(d->userId, user_meta);
     if (is_allowed_on_dashboard(
-            session_info, d->viewId, AccessPrivileges::VIEW_DASHBOARD)) {
+            session_info, d->dashboardId, AccessPrivileges::VIEW_DASHBOARD)) {
       auto objects_list = SysCatalog::instance().getMetadataForObject(
           cat.getCurrentDB().dbId,
           static_cast<int>(DBObjectType::DashboardDBObjectType),
-          d->viewId);
+          d->dashboardId);
       TDashboard dash;
-      dash.dashboard_name = d->viewName;
+      dash.dashboard_name = d->dashboardName;
       dash.image_hash = d->imageHash;
       dash.update_time = d->updateTime;
-      dash.dashboard_metadata = d->viewMetadata;
-      dash.dashboard_id = d->viewId;
+      dash.dashboard_metadata = d->dashboardMetadata;
+      dash.dashboard_id = d->dashboardId;
       dash.dashboard_owner = d->user;
-      // viewState is intentionally not populated here
+      // dashboardState is intentionally not populated here
       // for payload reasons
       // use get_dashboard call to get state
       if (objects_list.empty() ||
@@ -3077,22 +3082,22 @@ int32_t MapDHandler::create_dashboard(const TSessionId& session,
     THROW_MAPD_EXCEPTION("Not enough privileges to create a dashboard.");
   }
 
-  auto dash = cat.getMetadataForFrontendView(
+  auto dash = cat.getMetadataForDashboard(
       std::to_string(session_info.get_currentUser().userId), dashboard_name);
   if (dash) {
     THROW_MAPD_EXCEPTION("Dashboard with name: " + dashboard_name + " already exists.");
   }
 
-  FrontendViewDescriptor vd;
-  vd.viewName = dashboard_name;
-  vd.viewState = dashboard_state;
-  vd.imageHash = image_hash;
-  vd.viewMetadata = dashboard_metadata;
-  vd.userId = session_info.get_currentUser().userId;
-  vd.user = session_info.get_currentUser().userName;
+  DashboardDescriptor dd;
+  dd.dashboardName = dashboard_name;
+  dd.dashboardState = dashboard_state;
+  dd.imageHash = image_hash;
+  dd.dashboardMetadata = dashboard_metadata;
+  dd.userId = session_info.get_currentUser().userId;
+  dd.user = session_info.get_currentUser().userName;
 
   try {
-    auto id = cat.createFrontendView(vd);
+    auto id = cat.createDashboard(dd);
     // TODO: transactionally unsafe
     SysCatalog::instance().createDBObject(
         session_info.get_currentUser(), dashboard_name, DashboardDBObjectType, cat, id);
@@ -3119,22 +3124,22 @@ void MapDHandler::replace_dashboard(const TSessionId& session,
     THROW_MAPD_EXCEPTION("Not enough privileges to replace a dashboard.");
   }
 
-  FrontendViewDescriptor vd;
-  vd.viewName = dashboard_name;
-  vd.viewState = dashboard_state;
-  vd.imageHash = image_hash;
-  vd.viewMetadata = dashboard_metadata;
+  DashboardDescriptor dd;
+  dd.dashboardName = dashboard_name;
+  dd.dashboardState = dashboard_state;
+  dd.imageHash = image_hash;
+  dd.dashboardMetadata = dashboard_metadata;
   Catalog_Namespace::UserMetadata user;
   if (!SysCatalog::instance().getMetadataForUser(dashboard_owner, user)) {
     THROW_MAPD_EXCEPTION(std::string("Dashboard owner ") + dashboard_owner +
                          " does not exist");
   }
-  vd.userId = user.userId;
-  vd.user = dashboard_owner;
-  vd.viewId = dashboard_id;
+  dd.userId = user.userId;
+  dd.user = dashboard_owner;
+  dd.dashboardId = dashboard_id;
 
   try {
-    cat.replaceDashboard(vd);
+    cat.replaceDashboard(dd);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
@@ -3152,7 +3157,7 @@ void MapDHandler::delete_dashboard(const TSessionId& session,
                          " doesn't exist, so cannot delete it");
   }
   if (!is_allowed_on_dashboard(
-          session_info, dash->viewId, AccessPrivileges::DELETE_DASHBOARD)) {
+          session_info, dash->dashboardId, AccessPrivileges::DELETE_DASHBOARD)) {
     THROW_MAPD_EXCEPTION("Not enough privileges to delete a dashboard.");
   }
   try {
@@ -3234,7 +3239,7 @@ void MapDHandler::share_dashboard(const TSessionId& session,
   // grant system_role to grantees for underlying objects
   if (grant_role) {
     auto dash = cat.getMetadataForDashboard(dashboard_id);
-    SysCatalog::instance().grantRoleBatch({dash->viewSystemRoleName}, valid_groups);
+    SysCatalog::instance().grantRoleBatch({dash->dashboardSystemRoleName}, valid_groups);
   }
 }
 
@@ -3280,7 +3285,7 @@ void MapDHandler::unshare_dashboard(const TSessionId& session,
   SysCatalog::instance().revokeDBObjectPrivilegesBatch(valid_groups, {object}, cat);
   // revoke system_role from grantees for underlying objects
   const auto dash = cat.getMetadataForDashboard(dashboard_id);
-  SysCatalog::instance().revokeDashboardSystemRole(dash->viewSystemRoleName,
+  SysCatalog::instance().revokeDashboardSystemRole(dash->dashboardSystemRoleName,
                                                    valid_groups);
 }
 
@@ -3334,19 +3339,22 @@ void MapDHandler::create_frontend_view(const TSessionId& session,
                                        const std::string& image_hash,
                                        const std::string& view_metadata) {
   LOG_ON_RETURN(session);
+  LOG(WARNING)
+      << "'create_frontend_view' will be deprecated in the next release, please use "
+         "'create_dashboard'.";
   check_read_only("create_frontend_view");
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
-  FrontendViewDescriptor vd;
-  vd.viewName = view_name;
-  vd.viewState = view_state;
-  vd.imageHash = image_hash;
-  vd.viewMetadata = view_metadata;
-  vd.userId = session_info.get_currentUser().userId;
-  vd.user = session_info.get_currentUser().userName;
+  DashboardDescriptor dd;
+  dd.dashboardName = view_name;
+  dd.dashboardState = view_state;
+  dd.imageHash = image_hash;
+  dd.dashboardMetadata = view_metadata;
+  dd.userId = session_info.get_currentUser().userId;
+  dd.user = session_info.get_currentUser().userName;
 
   try {
-    auto id = cat.createFrontendView(vd);
+    auto id = cat.createDashboard(dd);
     SysCatalog::instance().createDBObject(
         session_info.get_currentUser(), view_name, DashboardDBObjectType, cat, id);
   } catch (const std::exception& e) {
@@ -3358,17 +3366,19 @@ void MapDHandler::create_frontend_view(const TSessionId& session,
 void MapDHandler::delete_frontend_view(const TSessionId& session,
                                        const std::string& view_name) {
   LOG_ON_RETURN(session);
-  check_read_only("delete_frontend_view");
+  LOG(WARNING)
+      << "'delete_frontend_view' will be deprecated in the next release, please use "
+         "'delete_dashboard'.";
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
-  auto vd = cat.getMetadataForFrontendView(
+  auto dd = cat.getMetadataForDashboard(
       std::to_string(session_info.get_currentUser().userId), view_name);
-  if (!vd) {
+  if (!dd) {
     THROW_MAPD_EXCEPTION("View " + view_name + " doesn't exist");
   }
   try {
-    cat.deleteMetadataForFrontendView(
-        std::to_string(session_info.get_currentUser().userId), view_name);
+    cat.deleteMetadataForDashboard(std::to_string(session_info.get_currentUser().userId),
+                                   view_name);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
