@@ -6,35 +6,23 @@ set -e
 PREFIX=/usr/local/mapd-deps
 
 # Establish distro
-if cat /etc/os-release | grep -i -q debian ; then
-  if cat /etc/os-release | grep VERSION_ID | grep -i -q 18.04 ; then
-    DISTRO="u18.04"
-    PACKAGER="apt -y"
-  else 
-    echo "Ubuntu 18.04 is the only debian-based release supported by this script"
+source /etc/os-release
+if [ "$ID" == "ubuntu" ] ; then
+  PACKAGER="apt -y"
+  if [ "$VERSION_ID" != "19.04" ] && [ "$VERSION_ID" != "18.04" ] && [ "$VERSION_ID" != "16.04" ]; then
+    echo "Ubuntu 19.04, 18.04, and 16.04 are the only debian-based releases supported by this script"
     exit 1
   fi
-elif cat /etc/os-release | grep -i -q fedora ; then
-  if cat /etc/os-release | grep VERSION_ID | grep -i -q 7 ; then
-    DISTRO="c7"
-    MODPATH=/etc/modulefiles
-    PACKAGER="yum -y"
-  else 
+elif [ "$ID" == "centos" ] ; then
+  MODPATH=/etc/modulefiles
+  PACKAGER="yum -y"
+  if [ "$VERSION_ID" != "7" ] ; then
     echo "CentOS 7 is the only fedora-based release supported by this script"
     exit 1
   fi
 else
   echo "Only debian- and fedora-based OSs are supported by this script"
   exit 1
-fi
-
-# Establish file download tool
-if hash wget 2>/dev/null; then
-  GETTER="wget --continue"
-elif hash curl 2>/dev/null; then
-  GETTER="curl --continue - --remote-name --location"
-else
-  GETTER="echo Please download: "
 fi
 
 # Parse inputs
@@ -60,9 +48,10 @@ while (( $# )); do
 done
 
 # Distro-specific installations
-if [ "$DISTRO" = "u18.04" ] ; then
+if [ "$ID" == "ubuntu" ] ; then
   sudo $PACKAGER update
   sudo $PACKAGER install \
+      software-properties-common \
       build-essential \
       ccache \
       cmake \
@@ -70,11 +59,6 @@ if [ "$DISTRO" = "u18.04" ] ; then
       git \
       wget \
       curl \
-      clang \
-      libclang-dev \
-      llvm \
-      llvm-dev \
-      clang-format \
       gcc \
       g++ \
       libboost-all-dev \
@@ -103,6 +87,7 @@ if [ "$DISTRO" = "u18.04" ] ; then
       libbz2-dev \
       libarchive-dev \
       libcurl4-openssl-dev \
+      libedit-dev \
       uuid-dev \
       libsnappy-dev \
       zlib1g-dev \
@@ -115,15 +100,30 @@ if [ "$DISTRO" = "u18.04" ] ; then
       rsync \
       unzip \
       jq \
+      python-dev \
       python-yaml \
+      swig
+
+  if [ "$VERSION_ID" == "19.04" ] || [ "$VERSION_ID" == "18.04" ] ; then
+    sudo $PACKAGER install \
       libxerces-c-dev \
       libxmlsec1-dev
+  elif [ "$VERSION_ID" == "16.04" ]; then
+    sudo $PACKAGER install libtool
+     # Install gcc 6
+    sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
+    sudo $PACKAGER update
+    sudo $PACKAGER install g++-6
+    sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-6 60 \
+                             --slave /usr/bin/g++ g++ /usr/bin/g++-6
+    sudo update-alternatives --config gcc
+  fi
 
   sudo mkdir -p $PREFIX
   pushd $PREFIX
-  sudo $GETTER https://dependencies.mapd.com/mapd-deps/mapd-deps-ubuntu-$FLAG.tar.xz
-  sudo tar xvf mapd-deps-ubuntu-$FLAG.tar.xz
-  sudo rm -f mapd-deps-ubuntu-$FLAG.tar.xz
+  sudo wget --continue https://dependencies.mapd.com/mapd-deps/mapd-deps-ubuntu-${VERSION_ID}-$FLAG.tar.xz
+  sudo tar xvf mapd-deps-ubuntu-${VERSION_ID}-$FLAG.tar.xz
+  sudo rm -f mapd-deps-ubuntu-${VERSION_ID}-$FLAG.tar.xz
   popd
 
   cat << EOF | sudo tee -a $PREFIX/mapd-deps.sh
@@ -153,7 +153,7 @@ EOF
     echo "Done. Be sure to source the 'mapd-deps.sh' file to pick up the required environment variables:"
     echo "    source $PREFIX/mapd-deps.sh"
   fi
-elif [ "$DISTRO" = "c7" ] ; then
+elif [ "$ID" == "centos" ] ; then
   sudo yum groupinstall -y "Development Tools"
   sudo yum install -y \
     zlib-devel \
@@ -182,7 +182,7 @@ elif [ "$DISTRO" = "c7" ] ; then
 
   sudo mkdir -p $PREFIX
   pushd $PREFIX
-  sudo $GETTER https://dependencies.mapd.com/mapd-deps/mapd-deps-$FLAG.tar.xz
+  sudo wget --continue https://dependencies.mapd.com/mapd-deps/mapd-deps-$FLAG.tar.xz
   DIRNAME=$(tar tf mapd-deps-$FLAG.tar.xz | head -n 2 | tail -n 1 | xargs dirname)
   sudo tar xvf mapd-deps-$FLAG.tar.xz
   sudo rm -f mapd-deps-$FLAG.tar.xz
@@ -194,7 +194,7 @@ elif [ "$DISTRO" = "c7" ] ; then
 
   if [ ! -e "$MODPATH/cuda" ]; then
     pushd $MODPATH
-    sudo $GETTER https://dependencies.mapd.com/mapd-deps/cuda
+    sudo wget --continue https://dependencies.mapd.com/mapd-deps/cuda
     popd
   fi
 

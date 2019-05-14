@@ -3,10 +3,12 @@
 set -e
 set -x
 
+SUFFIX=${SUFFIX:=$(date +%Y%m%d)}
 PREFIX=/usr/local/mapd-deps
 
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $SCRIPTS_DIR/common-functions.sh
+source /etc/os-release
 
 sudo mkdir -p $PREFIX
 sudo chown -R $(id -u) $PREFIX
@@ -95,7 +97,7 @@ download_make_install ${HTTP_DEPS}/gdal-2.3.2.tar.xz "" "--without-geos --with-l
 
 VERS=1_67_0
 # http://downloads.sourceforge.net/project/boost/boost/${VERS//_/.}/boost_$VERS.tar.bz2
-download https://internal-dependencies.mapd.com/thirdparty/boost_$VERS.tar.bz2
+download ${HTTP_DEPS}/boost_$VERS.tar.bz2
 extract boost_$VERS.tar.bz2
 pushd boost_$VERS
 ./bootstrap.sh --prefix=$PREFIX
@@ -220,3 +222,7 @@ EOF
 echo
 echo "Done. Be sure to source the 'mapd-deps.sh' file to pick up the required environment variables:"
 echo "    source $PREFIX/mapd-deps.sh"
+
+if [ "$1" = "--compress" ] ; then
+    tar acf mapd-deps-ubuntu-$VERSION_ID-$SUFFIX.tar.xz -C $PREFIX .
+fi

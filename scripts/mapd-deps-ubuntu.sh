@@ -10,6 +10,7 @@ PREFIX=/usr/local/mapd-deps
 
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 source $SCRIPTS_DIR/common-functions.sh
+source /etc/os-release
 
 sudo mkdir -p $PREFIX
 sudo chown -R $(id -u) $PREFIX
@@ -250,5 +251,5 @@ echo "Done. Be sure to source the 'mapd-deps.sh' file to pick up the required en
 echo "    source $PREFIX/mapd-deps.sh"
 
 if [ "$1" = "--compress" ] ; then
-    tar acf mapd-deps-ubuntu-$SUFFIX.tar.xz -C $PREFIX .
+    tar acf mapd-deps-ubuntu-$VERSION_ID-$SUFFIX.tar.xz -C $PREFIX .
 fi
