@@ -26,6 +26,10 @@ class CodeGenerator {
   CodeGenerator(Executor::CgenState* cgen_state, Executor* executor)
       : cgen_state_(cgen_state), executor_(executor) {}
 
+  std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*,
+                                    const bool fetch_column,
+                                    const CompilationOptions&);
+
   llvm::Value* codegenArith(const Analyzer::BinOper*, const CompilationOptions&);
 
   llvm::Value* codegenUMinus(const Analyzer::UOper*, const CompilationOptions&);
@@ -62,11 +66,61 @@ class CodeGenerator {
 
   llvm::Value* toBool(llvm::Value*);
 
+  llvm::Value* posArg(const Analyzer::Expr*) const;
+
   static bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
                               std::vector<Analyzer::Expr*>& primary_quals,
                               std::vector<Analyzer::Expr*>& deferred_quals);
 
  private:
+  std::vector<llvm::Value*> codegenColVar(const Analyzer::ColumnVar*,
+                                          const bool fetch_column,
+                                          const bool update_query_plan,
+                                          const CompilationOptions&);
+
+  llvm::Value* codegenFixedLengthColVar(const Analyzer::ColumnVar* col_var,
+                                        llvm::Value* col_byte_stream,
+                                        llvm::Value* pos_arg);
+
+  // Generates code for a fixed length column when a window function is active.
+  llvm::Value* codegenFixedLengthColVarInWindow(const Analyzer::ColumnVar* col_var,
+                                                llvm::Value* col_byte_stream,
+                                                llvm::Value* pos_arg);
+
+  // Generate the position for the given window function and the query iteration position.
+  llvm::Value* codegenWindowPosition(WindowFunctionContext* window_func_context,
+                                     llvm::Value* pos_arg);
+
+  std::vector<llvm::Value*> codegenVariableLengthStringColVar(
+      llvm::Value* col_byte_stream,
+      llvm::Value* pos_arg);
+
+  llvm::Value* codegenRowId(const Analyzer::ColumnVar* col_var,
+                            const CompilationOptions& co);
+
+  llvm::Value* codgenAdjustFixedEncNull(llvm::Value*, const SQLTypeInfo&);
+
+  std::vector<llvm::Value*> codegenOuterJoinNullPlaceholder(
+      const Analyzer::ColumnVar* col_var,
+      const bool fetch_column,
+      const CompilationOptions& co);
+
+  // Returns the IR value which holds true iff at least one match has been found for outer
+  // join, null if there's no outer join condition on the given nesting level.
+  llvm::Value* foundOuterJoinMatch(const ssize_t nesting_level) const;
+
+  llvm::Value* resolveGroupedColumnReference(const Analyzer::ColumnVar*);
+
+  llvm::Value* colByteStream(const Analyzer::ColumnVar* col_var,
+                             const bool fetch_column,
+                             const bool hoist_literals);
+
+  std::shared_ptr<const Analyzer::Expr> hashJoinLhs(const Analyzer::ColumnVar* rhs) const;
+
+  std::shared_ptr<const Analyzer::ColumnVar> hashJoinLhsTuple(
+      const Analyzer::ColumnVar* rhs,
+      const Analyzer::BinOper* tautological_eq) const;
+
   llvm::Value* codegenIntArith(const Analyzer::BinOper*, llvm::Value*, llvm::Value*);
 
   llvm::Value* codegenFpArith(const Analyzer::BinOper*, llvm::Value*, llvm::Value*);

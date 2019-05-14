@@ -19,6 +19,7 @@
 #include "Allocators/CudaAllocator.h"
 
 #include "CardinalityEstimator.h"
+#include "CodeGenerator.h"
 #include "Descriptors/QueryMemoryDescriptor.h"
 #include "ExpressionRange.h"
 #include "ExpressionRewrite.h"
@@ -937,9 +938,10 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
           // Ignore rejection on pushing current row to top-K heap.
           LL_BUILDER.CreateRet(LL_INT(int32_t(0)));
         } else {
+          CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
           LL_BUILDER.CreateRet(LL_BUILDER.CreateNeg(LL_BUILDER.CreateTrunc(
               // TODO(alex): remove the trunc once pos is converted to 32 bits
-              executor_->posArg(nullptr),
+              code_generator.posArg(nullptr),
               get_int_type(32, LL_CONTEXT))));
         }
       }
@@ -1041,11 +1043,12 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
   } else {
     const auto group_expr_lv =
         LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "old_total_matched"));
+    CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
     std::vector<llvm::Value*> args{
         groups_buffer,
         LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount())),
         group_expr_lv,
-        executor_->posArg(nullptr)};
+        code_generator.posArg(nullptr)};
     if (query_mem_desc.didOutputColumnar()) {
       const auto columnar_output_offset =
           emitCall("get_columnar_scan_output_offset", args);
@@ -1405,19 +1408,20 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
                                       : query_mem_desc.getRowSize() / sizeof(int64_t);
     auto arg_it = ROW_FUNC->arg_begin();
     auto groups_buffer = arg_it++;
+    CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
     if (!window_func_context->getRowNumber()) {
       CHECK(window_func->getKind() == SqlWindowFunctionKind::COUNT);
       window_func_context->setRowNumber(emitCall(
           "row_number_window_func",
           {LL_INT(reinterpret_cast<const int64_t>(window_func_context->output())),
-           executor_->posArg(nullptr)}));
+           code_generator.posArg(nullptr)}));
     }
     const auto pos_in_window = LL_BUILDER.CreateTrunc(window_func_context->getRowNumber(),
                                                       get_int_type(32, LL_CONTEXT));
     llvm::Value* entry_count_lv =
         LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount()));
     std::vector<llvm::Value*> args{
-        &*groups_buffer, entry_count_lv, pos_in_window, executor_->posArg(nullptr)};
+        &*groups_buffer, entry_count_lv, pos_in_window, code_generator.posArg(nullptr)};
     if (query_mem_desc.didOutputColumnar()) {
       const auto columnar_output_offset =
           emitCall("get_columnar_scan_output_offset", args);
@@ -1680,6 +1684,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
     const CompilationOptions& co) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   // TODO(alex): handle arrays uniformly?
+  CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
   if (target_expr) {
     const auto& target_ti = target_expr->get_type_info();
     if (target_ti.is_array() && !executor_->plan_state_->isLazyFetchColumn(target_expr)) {
@@ -1699,12 +1704,12 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
         return {executor_->cgen_state_->emitExternalCall(
                     "array_buff",
                     i8p_ty,
-                    {target_lvs.front(), executor_->posArg(target_expr)}),
+                    {target_lvs.front(), code_generator.posArg(target_expr)}),
                 executor_->cgen_state_->emitExternalCall(
                     "array_size",
                     i32_ty,
                     {target_lvs.front(),
-                     executor_->posArg(target_expr),
+                     code_generator.posArg(target_expr),
                      executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))})};
       } else if (target_ti.isStandardBufferPackaging()) {
         if (agg_expr) {
@@ -1750,19 +1755,19 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
             coords.push_back(executor_->cgen_state_->emitExternalCall(
                 "fast_fixlen_array_buff",
                 i8p_ty,
-                {target_lv, executor_->posArg(selected_target_expr)}));
+                {target_lv, code_generator.posArg(selected_target_expr)}));
             coords.push_back(executor_->ll_int(int64_t(fixlen)));
             continue;
           }
           coords.push_back(executor_->cgen_state_->emitExternalCall(
               "array_buff",
               i8p_ty,
-              {target_lv, executor_->posArg(selected_target_expr)}));
+              {target_lv, code_generator.posArg(selected_target_expr)}));
           coords.push_back(executor_->cgen_state_->emitExternalCall(
               "array_size",
               i32_ty,
               {target_lv,
-               executor_->posArg(selected_target_expr),
+               code_generator.posArg(selected_target_expr),
                executor_->ll_int(log2_bytes(elem_sz))}));
         }
         return coords;

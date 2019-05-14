@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "CodeGenerator.h"
 #include "Execute.h"
 
 llvm::Value* Executor::codegenUnnest(const Analyzer::UOper* uoper,
@@ -52,11 +53,12 @@ llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at,
           : get_int_type(elem_ti.get_logical_size() * 8, cgen_state_->context_);
   const auto arr_lvs = codegen(arr_expr, true, co);
   CHECK_EQ(size_t(1), arr_lvs.size());
+  CodeGenerator code_generator(cgen_state_.get(), this);
   return cgen_state_->emitExternalCall(
       array_at_fname,
       ret_ty,
       {arr_lvs.front(),
-       posArg(arr_expr),
+       code_generator.posArg(arr_expr),
        idx_lv,
        elem_ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(elem_ti))
                        : static_cast<llvm::Value*>(inlineIntNull(elem_ti))});
@@ -71,8 +73,11 @@ llvm::Value* Executor::codegen(const Analyzer::CardinalityExpr* expr,
   auto arr_lv = codegen(arr_expr, true, co);
   std::string fn_name("array_size");
 
+  CodeGenerator code_generator(cgen_state_.get(), this);
   std::vector<llvm::Value*> array_size_args{
-      arr_lv.front(), posArg(arr_expr), ll_int(log2_bytes(elem_ti.get_logical_size()))};
+      arr_lv.front(),
+      code_generator.posArg(arr_expr),
+      ll_int(log2_bytes(elem_ti.get_logical_size()))};
   const bool is_nullable{!arr_expr->get_type_info().get_notnull()};
   if (is_nullable) {
     fn_name += "_nullable";

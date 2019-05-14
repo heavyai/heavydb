@@ -22,6 +22,7 @@
 
 #include "TargetExprBuilder.h"
 
+#include "CodeGenerator.h"
 #include "Execute.h"
 #include "GroupByAndAggregate.h"
 #include "MaxwellCodegenPatch.h"
@@ -238,6 +239,7 @@ void TargetExprCodegen::codegen(
   size_t target_lv_idx = 0;
   const bool lazy_fetched{executor->plan_state_->isLazyFetchColumn(target_expr)};
 
+  CodeGenerator code_generator(executor->cgen_state_.get(), executor);
   for (const auto& agg_base_name : agg_fn_names) {
     if (target_info.is_distinct && arg_expr->get_type_info().is_array()) {
       CHECK_EQ(static_cast<size_t>(query_mem_desc.getLogicalSlotWidthBytes(slot_index)),
@@ -257,7 +259,7 @@ void TargetExprCodegen::codegen(
                ? LL_BUILDER.CreateGEP(std::get<0>(agg_out_ptr_w_idx), LL_INT(col_off))
                : agg_out_vec[slot_index],
            target_lvs[target_lv_idx],
-           executor->posArg(arg_expr),
+           code_generator.posArg(arg_expr),
            elem_ti.is_fp()
                ? static_cast<llvm::Value*>(executor->inlineFpNull(elem_ti))
                : static_cast<llvm::Value*>(executor->inlineIntNull(elem_ti))});
@@ -408,12 +410,13 @@ void TargetExprCodegen::codegen(
       }
       const auto partition_end =
           LL_INT(reinterpret_cast<int64_t>(window_func_context->partitionEnd()));
+      CodeGenerator code_generator(executor->cgen_state_.get(), executor);
       executor->cgen_state_->emitExternalCall(apply_window_pending_outputs_name,
                                               llvm::Type::getVoidTy(LL_CONTEXT),
                                               {pending_outputs,
                                                target_lvs.front(),
                                                partition_end,
-                                               executor->posArg(nullptr)});
+                                               code_generator.posArg(nullptr)});
     }
 
     ++slot_index;

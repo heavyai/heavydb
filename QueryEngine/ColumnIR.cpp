@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "CodeGenerator.h"
 #include "Codec.h"
 #include "Execute.h"
 #include "WindowContext.h"
@@ -88,9 +89,9 @@ int adjusted_range_table_index(const Analyzer::ColumnVar* col_var) {
 
 }  // namespace
 
-std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
-                                            const bool fetch_column,
-                                            const CompilationOptions& co) {
+std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::ColumnVar* col_var,
+                                                 const bool fetch_column,
+                                                 const CompilationOptions& co) {
   if (col_var->get_rte_idx() <= 0 ||
       cgen_state_->outer_join_match_found_per_level_.empty() ||
       !foundOuterJoinMatch(col_var->get_rte_idx())) {
@@ -99,16 +100,18 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::ColumnVar* col_var,
   return codegenOuterJoinNullPlaceholder(col_var, fetch_column, co);
 }
 
-std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col_var,
-                                                  const bool fetch_column,
-                                                  const bool update_query_plan,
-                                                  const CompilationOptions& co) {
+std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar* col_var,
+                                                       const bool fetch_column,
+                                                       const bool update_query_plan,
+                                                       const CompilationOptions& co) {
   const bool hoist_literals = co.hoist_literals_;
   auto col_id = col_var->get_column_id();
   const int rte_idx = adjusted_range_table_index(col_var);
   CHECK_LT(rte_idx, cgen_state_->frag_offsets_.size());
+  const auto catalog = executor_->getCatalog();
+  CHECK(catalog);
   if (col_var->get_table_id() > 0) {
-    auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog_);
+    auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog);
     if (cd->isVirtualCol) {
       CHECK(cd->columnName == "rowid");
       return {codegenRowId(col_var, co)};
@@ -118,23 +121,23 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
       std::vector<llvm::Value*> cols;
       for (auto i = 0; i < col_ti.get_physical_coord_cols(); i++) {
         auto cd0 =
-            get_column_descriptor(col_id + i + 1, col_var->get_table_id(), *catalog_);
+            get_column_descriptor(col_id + i + 1, col_var->get_table_id(), *catalog);
         auto col0_ti = cd0->columnType;
         CHECK(!cd0->isVirtualCol);
         auto col0_var = makeExpr<Analyzer::ColumnVar>(
             col0_ti, col_var->get_table_id(), cd0->columnId, rte_idx);
         auto col = codegenColVar(col0_var.get(), fetch_column, false, co);
         cols.insert(cols.end(), col.begin(), col.end());
-        if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
-          plan_state_->columns_to_not_fetch_.insert(
+        if (!fetch_column && executor_->plan_state_->isLazyFetchColumn(col_var)) {
+          executor_->plan_state_->columns_to_not_fetch_.insert(
               std::make_pair(col_var->get_table_id(), col0_var->get_column_id()));
         }
       }
-      if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
-        plan_state_->columns_to_not_fetch_.insert(
+      if (!fetch_column && executor_->plan_state_->isLazyFetchColumn(col_var)) {
+        executor_->plan_state_->columns_to_not_fetch_.insert(
             std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
       } else {
-        plan_state_->columns_to_fetch_.insert(
+        executor_->plan_state_->columns_to_fetch_.insert(
             std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
       }
       return cols;
@@ -149,7 +152,7 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   if (grouped_col_lv) {
     return {grouped_col_lv};
   }
-  const int local_col_id = getLocalColumnId(col_var, fetch_column);
+  const int local_col_id = executor_->getLocalColumnId(col_var, fetch_column);
   const auto window_func_context =
       WindowProjectNodeContext::getActiveWindowFunctionContext();
   // only generate the decoding code once; if a column has been previously
@@ -164,20 +167,20 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   // Use the already fetched left-hand side of an equi-join if the types are identical.
   // Currently, types can only be different because of different underlying dictionaries.
   if (hash_join_lhs && hash_join_lhs->get_type_info() == col_var->get_type_info()) {
-    if (plan_state_->isLazyFetchColumn(col_var)) {
-      plan_state_->columns_to_fetch_.insert(
+    if (executor_->plan_state_->isLazyFetchColumn(col_var)) {
+      executor_->plan_state_->columns_to_fetch_.insert(
           std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
     }
-    return codegen(hash_join_lhs.get(), fetch_column, co);
+    return executor_->codegen(hash_join_lhs.get(), fetch_column, co);
   }
   auto pos_arg = posArg(col_var);
   if (window_func_context) {
     pos_arg = codegenWindowPosition(window_func_context, pos_arg);
   }
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
-  if (plan_state_->isLazyFetchColumn(col_var)) {
+  if (executor_->plan_state_->isLazyFetchColumn(col_var)) {
     if (update_query_plan) {
-      plan_state_->columns_to_not_fetch_.insert(
+      executor_->plan_state_->columns_to_not_fetch_.insert(
           std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
     }
     if (rte_idx > 0) {
@@ -215,20 +218,22 @@ std::vector<llvm::Value*> Executor::codegenColVar(const Analyzer::ColumnVar* col
   return {it_ok.first->second};
 }
 
-llvm::Value* Executor::codegenWindowPosition(WindowFunctionContext* window_func_context,
-                                             llvm::Value* pos_arg) {
+llvm::Value* CodeGenerator::codegenWindowPosition(
+    WindowFunctionContext* window_func_context,
+    llvm::Value* pos_arg) {
   const auto window_position = cgen_state_->emitCall(
       "row_number_window_func",
-      {ll_int(reinterpret_cast<const int64_t>(window_func_context->output())), pos_arg});
+      {executor_->ll_int(reinterpret_cast<const int64_t>(window_func_context->output())),
+       pos_arg});
   window_func_context->setRowNumber(window_position);
   return window_position;
 }
 
 // Generate code for fixed length column types (number, timestamp or date,
 // dictionary-encoded string)
-llvm::Value* Executor::codegenFixedLengthColVar(const Analyzer::ColumnVar* col_var,
-                                                llvm::Value* col_byte_stream,
-                                                llvm::Value* pos_arg) {
+llvm::Value* CodeGenerator::codegenFixedLengthColVar(const Analyzer::ColumnVar* col_var,
+                                                     llvm::Value* col_byte_stream,
+                                                     llvm::Value* pos_arg) {
   const auto decoder = get_col_decoder(col_var);
   auto dec_val = decoder->codegenDecode(col_byte_stream, pos_arg, cgen_state_->module_);
   cgen_state_->ir_builder_.Insert(dec_val);
@@ -262,13 +267,13 @@ llvm::Value* Executor::codegenFixedLengthColVar(const Analyzer::ColumnVar* col_v
   return dec_val_cast;
 }
 
-llvm::Value* Executor::codegenFixedLengthColVarInWindow(
+llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
     const Analyzer::ColumnVar* col_var,
     llvm::Value* col_byte_stream,
     llvm::Value* pos_arg) {
   const auto orig_bb = cgen_state_->ir_builder_.GetInsertBlock();
   const auto pos_is_valid =
-      cgen_state_->ir_builder_.CreateICmpSGE(pos_arg, ll_int(int64_t(0)));
+      cgen_state_->ir_builder_.CreateICmpSGE(pos_arg, executor_->ll_int(int64_t(0)));
   const auto pos_valid_bb = llvm::BasicBlock::Create(
       cgen_state_->context_, "window.pos_valid", cgen_state_->row_func_);
   const auto pos_notvalid_bb = llvm::BasicBlock::Create(
@@ -283,13 +288,14 @@ llvm::Value* Executor::codegenFixedLengthColVarInWindow(
       cgen_state_->ir_builder_.CreatePHI(fixed_length_column_lv->getType(), 2);
   window_func_call_phi->addIncoming(fixed_length_column_lv, pos_valid_bb);
   const auto& col_ti = col_var->get_type_info();
-  const auto null_lv = col_ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(col_ti))
-                                      : static_cast<llvm::Value*>(inlineIntNull(col_ti));
+  const auto null_lv = col_ti.is_fp()
+                           ? static_cast<llvm::Value*>(executor_->inlineFpNull(col_ti))
+                           : static_cast<llvm::Value*>(executor_->inlineIntNull(col_ti));
   window_func_call_phi->addIncoming(null_lv, orig_bb);
   return window_func_call_phi;
 }
 
-std::vector<llvm::Value*> Executor::codegenVariableLengthStringColVar(
+std::vector<llvm::Value*> CodeGenerator::codegenVariableLengthStringColVar(
     llvm::Value* col_byte_stream,
     llvm::Value* pos_arg) {
   // real (not dictionary-encoded) strings; store the pointer to the payload
@@ -303,18 +309,19 @@ std::vector<llvm::Value*> Executor::codegenVariableLengthStringColVar(
   return {ptr_and_len, str_lv, len_lv};
 }
 
-llvm::Value* Executor::codegenRowId(const Analyzer::ColumnVar* col_var,
-                                    const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenRowId(const Analyzer::ColumnVar* col_var,
+                                         const CompilationOptions& co) {
   const auto offset_lv = cgen_state_->frag_offsets_[adjusted_range_table_index(col_var)];
   llvm::Value* start_rowid_lv{nullptr};
-  const auto& table_generation = getTableGeneration(col_var->get_table_id());
+  const auto& table_generation = executor_->getTableGeneration(col_var->get_table_id());
   if (table_generation.start_rowid > 0) {
     // Handle the multi-node case: each leaf receives a start rowid used
     // to offset the local rowid and generate a cluster-wide unique rowid.
     Datum d;
     d.bigintval = table_generation.start_rowid;
     const auto start_rowid = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
-    const auto start_rowid_lvs = codegen(start_rowid.get(), kENCODING_NONE, -1, co);
+    const auto start_rowid_lvs =
+        executor_->codegen(start_rowid.get(), kENCODING_NONE, -1, co);
     CHECK_EQ(size_t(1), start_rowid_lvs.size());
     start_rowid_lv = start_rowid_lvs.front();
   }
@@ -324,7 +331,7 @@ llvm::Value* Executor::codegenRowId(const Analyzer::ColumnVar* col_var,
   } else if (col_var->get_rte_idx() > 0) {
     auto frag_off_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
     auto input_off_ptr = cgen_state_->ir_builder_.CreateGEP(
-        frag_off_ptr, ll_int(int32_t(col_var->get_rte_idx())));
+        frag_off_ptr, executor_->ll_int(int32_t(col_var->get_rte_idx())));
     auto rowid_offset_lv = cgen_state_->ir_builder_.CreateLoad(input_off_ptr);
     rowid_lv = cgen_state_->ir_builder_.CreateAdd(rowid_lv, rowid_offset_lv);
   }
@@ -356,8 +363,8 @@ SQLTypes get_phys_int_type(const size_t byte_sz) {
 
 }  // namespace
 
-llvm::Value* Executor::codgenAdjustFixedEncNull(llvm::Value* val,
-                                                const SQLTypeInfo& col_ti) {
+llvm::Value* CodeGenerator::codgenAdjustFixedEncNull(llvm::Value* val,
+                                                     const SQLTypeInfo& col_ti) {
   CHECK_LT(col_ti.get_size(), col_ti.get_logical_size());
   const auto col_phys_width = col_ti.get_size() * 8;
   auto from_typename = "int" + std::to_string(col_phys_width) + "_t";
@@ -370,17 +377,17 @@ llvm::Value* Executor::codgenAdjustFixedEncNull(llvm::Value* val,
     llvm::Value* from_null{nullptr};
     switch (col_ti.get_size()) {
       case 1:
-        from_null = ll_int(std::numeric_limits<uint8_t>::max());
+        from_null = executor_->ll_int(std::numeric_limits<uint8_t>::max());
         break;
       case 2:
-        from_null = ll_int(std::numeric_limits<uint16_t>::max());
+        from_null = executor_->ll_int(std::numeric_limits<uint16_t>::max());
         break;
       default:
         CHECK(false);
     }
     return cgen_state_->emitCall(
         "cast_" + from_typename + "_to_" + numeric_type_name(col_ti) + "_nullable",
-        {adjusted, from_null, inlineIntNull(col_ti)});
+        {adjusted, from_null, executor_->inlineIntNull(col_ti)});
   }
   SQLTypeInfo col_phys_ti(get_phys_int_type(col_ti.get_size()),
                           col_ti.get_dimension(),
@@ -391,16 +398,18 @@ llvm::Value* Executor::codgenAdjustFixedEncNull(llvm::Value* val,
                           col_ti.get_subtype());
   return cgen_state_->emitCall(
       "cast_" + from_typename + "_to_" + numeric_type_name(col_ti) + "_nullable",
-      {adjusted, inlineIntNull(col_phys_ti), inlineIntNull(col_ti)});
+      {adjusted,
+       executor_->inlineIntNull(col_phys_ti),
+       executor_->inlineIntNull(col_ti)});
 }
 
-llvm::Value* Executor::foundOuterJoinMatch(const ssize_t nesting_level) const {
+llvm::Value* CodeGenerator::foundOuterJoinMatch(const ssize_t nesting_level) const {
   CHECK_GE(nesting_level, size_t(0));
   CHECK_LE(nesting_level, cgen_state_->outer_join_match_found_per_level_.size());
   return cgen_state_->outer_join_match_found_per_level_[nesting_level - 1];
 }
 
-std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(
+std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
     const Analyzer::ColumnVar* col_var,
     const bool fetch_column,
     const CompilationOptions& co) {
@@ -423,7 +432,7 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(
   const auto back_from_outer_join_bb = llvm::BasicBlock::Create(
       cgen_state_->context_, "back_from_outer_join", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_args_bb);
-  FetchCacheAnchor anchor(cgen_state_.get());
+  Executor::FetchCacheAnchor anchor(cgen_state_);
   const auto orig_lvs = codegenColVar(col_var, fetch_column, true, co);
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   cgen_state_->ir_builder_.SetInsertPoint(outer_join_nulls_bb);
@@ -434,11 +443,11 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(
                              " not supported for outer joins yet");
   }
   const auto null_constant = makeExpr<Analyzer::Constant>(null_ti, true, Datum{0});
-  const auto null_target_lvs =
-      codegen(null_constant.get(),
-              false,
-              CompilationOptions{
-                  ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false});
+  const auto null_target_lvs = executor_->codegen(
+      null_constant.get(),
+      false,
+      CompilationOptions{
+          ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false});
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   CHECK_EQ(orig_lvs.size(), null_target_lvs.size());
   cgen_state_->ir_builder_.SetInsertPoint(phi_bb);
@@ -456,9 +465,10 @@ std::vector<llvm::Value*> Executor::codegenOuterJoinNullPlaceholder(
   return target_lvs;
 }
 
-llvm::Value* Executor::resolveGroupedColumnReference(const Analyzer::ColumnVar* col_var) {
+llvm::Value* CodeGenerator::resolveGroupedColumnReference(
+    const Analyzer::ColumnVar* col_var) {
   auto col_id = col_var->get_column_id();
-  if (col_var->get_rte_idx() >= 0 && !is_nested_) {
+  if (col_var->get_rte_idx() >= 0 && !executor_->is_nested_) {
     return nullptr;
   }
   CHECK((col_id == 0) || (col_var->get_rte_idx() >= 0 && col_var->get_table_id() > 0));
@@ -474,12 +484,12 @@ llvm::Value* Executor::resolveGroupedColumnReference(const Analyzer::ColumnVar* 
 }
 
 // returns the byte stream argument and the position for the given column
-llvm::Value* Executor::colByteStream(const Analyzer::ColumnVar* col_var,
-                                     const bool fetch_column,
-                                     const bool hoist_literals) {
+llvm::Value* CodeGenerator::colByteStream(const Analyzer::ColumnVar* col_var,
+                                          const bool fetch_column,
+                                          const bool hoist_literals) {
   CHECK_GE(cgen_state_->row_func_->arg_size(), size_t(3));
   const auto stream_arg_name =
-      "col_buf" + std::to_string(getLocalColumnId(col_var, fetch_column));
+      "col_buf" + std::to_string(executor_->getLocalColumnId(col_var, fetch_column));
   for (auto& arg : cgen_state_->row_func_->args()) {
     if (arg.getName() == stream_arg_name) {
       CHECK(arg.getType() == llvm::Type::getInt8PtrTy(cgen_state_->context_));
@@ -490,7 +500,7 @@ llvm::Value* Executor::colByteStream(const Analyzer::ColumnVar* col_var,
   return nullptr;
 }
 
-llvm::Value* Executor::posArg(const Analyzer::Expr* expr) const {
+llvm::Value* CodeGenerator::posArg(const Analyzer::Expr* expr) const {
   const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (col_var && col_var->get_rte_idx() > 0) {
     const auto hash_pos_it =
@@ -526,9 +536,10 @@ const Analyzer::Expr* remove_cast_to_int(const Analyzer::Expr* expr) {
   return uoper->get_operand();
 }
 
-std::shared_ptr<const Analyzer::Expr> Executor::hashJoinLhs(
+std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
     const Analyzer::ColumnVar* rhs) const {
-  for (const auto tautological_eq : plan_state_->join_info_.equi_join_tautologies_) {
+  for (const auto tautological_eq :
+       executor_->plan_state_->join_info_.equi_join_tautologies_) {
     CHECK(IS_EQUIVALENCE(tautological_eq->get_optype()));
     if (dynamic_cast<const Analyzer::ExpressionTuple*>(
             tautological_eq->get_left_operand())) {
@@ -573,7 +584,7 @@ std::shared_ptr<const Analyzer::Expr> Executor::hashJoinLhs(
   return nullptr;
 }
 
-std::shared_ptr<const Analyzer::ColumnVar> Executor::hashJoinLhsTuple(
+std::shared_ptr<const Analyzer::ColumnVar> CodeGenerator::hashJoinLhsTuple(
     const Analyzer::ColumnVar* rhs,
     const Analyzer::BinOper* tautological_eq) const {
   const auto lhs_tuple_expr =

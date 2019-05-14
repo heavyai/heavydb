@@ -384,7 +384,7 @@ llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
   if (ti.is_array()) {
     return cgen_state_->emitExternalCall("array_is_null",
                                          get_int_type(1, cgen_state_->context_),
-                                         {operand_lv, executor_->posArg(operand)});
+                                         {operand_lv, posArg(operand)});
   }
   return codegenIsNullNumber(operand_lv, ti);
 }

@@ -15,6 +15,7 @@
  */
 
 #include "OverlapsJoinHashTable.h"
+#include "CodeGenerator.h"
 #include "ExpressionRewrite.h"
 #include "HashJoinKeyHandlers.h"
 #include "JoinHashTableGpuUtils.h"
@@ -656,10 +657,11 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
         outer_col_var->get_table_id(), outer_col_var->get_column_id() + 1);
     CHECK(coords_cd);
 
+    CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
     const auto array_ptr = executor_->cgen_state_->emitExternalCall(
         "array_buff",
         llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_),
-        {col_lvs.front(), executor_->posArg(outer_col)});
+        {col_lvs.front(), code_generator.posArg(outer_col)});
     CHECK(coords_cd->columnType.get_elem_type().get_type() == kTINYINT)
         << "Only TINYINT coordinates columns are supported in geo overlaps hash join.";
     const auto arr_ptr =

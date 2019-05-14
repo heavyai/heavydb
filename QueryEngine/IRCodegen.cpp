@@ -25,8 +25,9 @@
 std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
                                             const bool fetch_columns,
                                             const CompilationOptions& co) {
+  CodeGenerator code_generator(cgen_state_.get(), this);
   if (!expr) {
-    return {posArg(expr)};
+    return {code_generator.posArg(expr)};
   }
   auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper) {
@@ -38,7 +39,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (col_var) {
-    return codegen(col_var, fetch_columns, co);
+    return code_generator.codegen(col_var, fetch_columns, co);
   }
   auto constant = dynamic_cast<const Analyzer::Constant*>(expr);
   if (constant) {
@@ -119,7 +120,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
     return {codegenFunctionOper(function_oper_expr, co)};
   }
   if (dynamic_cast<const Analyzer::OffsetInFragment*>(expr)) {
-    return {posArg(nullptr)};
+    return {code_generator.posArg(nullptr)};
   }
   if (dynamic_cast<const Analyzer::WindowFunction*>(expr)) {
     throw std::runtime_error("Window expression not supported in this context");
@@ -463,6 +464,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
   cgen_state_->ir_builder_.SetInsertPoint(exit_bb);
   cgen_state_->ir_builder_.CreateRet(ll_int<int32_t>(0));
   cgen_state_->ir_builder_.SetInsertPoint(entry_bb);
+  CodeGenerator code_generator(cgen_state_.get(), this);
   const auto loops_entry_bb = JoinLoop::codegen(
       join_loops,
       [this,
@@ -487,7 +489,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
         }
         return loop_body_bb;
       },
-      posArg(nullptr),
+      code_generator.posArg(nullptr),
       exit_bb,
       cgen_state_->ir_builder_);
   cgen_state_->ir_builder_.SetInsertPoint(entry_bb);
@@ -522,13 +524,14 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     const auto& array_ti = arr_expr->get_type_info();
     CHECK(array_ti.is_array());
     const auto& elem_ti = array_ti.get_elem_type();
+    CodeGenerator code_generator(cgen_state_.get(), this);
     auto array_len = (array_ti.get_size() > 0)
                          ? ll_int(array_ti.get_size() / elem_ti.get_size())
                          : cgen_state_->emitExternalCall(
                                "array_size",
                                ret_ty,
                                {group_key,
-                                posArg(arr_expr),
+                                code_generator.posArg(arr_expr),
                                 ll_int(log2_bytes(elem_ti.get_logical_size()))});
     cgen_state_->ir_builder_.CreateBr(array_loop_head);
     cgen_state_->ir_builder_.SetInsertPoint(array_loop_head);
@@ -553,7 +556,9 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
                    : llvm::Type::getFloatTy(cgen_state_->context_))
             : get_int_type(elem_ti.get_logical_size() * 8, cgen_state_->context_);
     group_key = cgen_state_->emitExternalCall(
-        array_at_fname, ar_ret_ty, {group_key, posArg(arr_expr), array_idx});
+        array_at_fname,
+        ar_ret_ty,
+        {group_key, code_generator.posArg(arr_expr), array_idx});
     if (need_patch_unnest_double(
             elem_ti, isArchMaxwell(co.device_type_), thread_mem_shared)) {
       key_to_cache = spillDoubleElement(group_key, ar_ret_ty);

@@ -20,6 +20,7 @@
 
 llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
                                              const CompilationOptions& co) {
+  CodeGenerator code_generator(cgen_state_.get(), this);
   const auto window_func_context =
       WindowProjectNodeContext::get()->activateWindowFunctionContext(target_index);
   const auto window_func = window_func_context->getWindowFunction();
@@ -31,14 +32,14 @@ llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
       return cgen_state_->emitCall(
           "row_number_window_func",
           {ll_int(reinterpret_cast<const int64_t>(window_func_context->output())),
-           posArg(nullptr)});
+           code_generator.posArg(nullptr)});
     }
     case SqlWindowFunctionKind::PERCENT_RANK:
     case SqlWindowFunctionKind::CUME_DIST: {
       return cgen_state_->emitCall(
           "percent_window_func",
           {ll_int(reinterpret_cast<const int64_t>(window_func_context->output())),
-           posArg(nullptr)});
+           code_generator.posArg(nullptr)});
     }
     case SqlWindowFunctionKind::LAG:
     case SqlWindowFunctionKind::LEAD:
@@ -169,9 +170,14 @@ llvm::BasicBlock* Executor::codegenWindowResetStateControlFlow() {
   const auto null_val = ll_int(inline_int_null_value<int64_t>());
   const auto null_bool_val = ll_int<int8_t>(inline_int_null_value<int8_t>());
   CodeGenerator code_generator(cgen_state_.get(), this);
-  const auto reset_state = code_generator.toBool(cgen_state_->emitCall(
-      "bit_is_set",
-      {bitset, posArg(nullptr), min_val, max_val, null_val, null_bool_val}));
+  const auto reset_state =
+      code_generator.toBool(cgen_state_->emitCall("bit_is_set",
+                                                  {bitset,
+                                                   code_generator.posArg(nullptr),
+                                                   min_val,
+                                                   max_val,
+                                                   null_val,
+                                                   null_bool_val}));
   const auto reset_state_true_bb = llvm::BasicBlock::Create(
       cgen_state_->context_, "reset_state.true", cgen_state_->row_func_);
   const auto reset_state_false_bb = llvm::BasicBlock::Create(

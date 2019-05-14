@@ -517,7 +517,7 @@ llvm::Value* CodeGenerator::codegenQualifierCmp(const SQLOps optype,
         fname,
         get_int_type(1, cgen_state_->context_),
         {rhs_lvs.front(),
-         executor_->posArg(arr_expr),
+         posArg(arr_expr),
          lhs_lvs[1],
          lhs_lvs[2],
          executor_->ll_int(int64_t(executor_->getStringDictionaryProxy(
@@ -534,7 +534,7 @@ llvm::Value* CodeGenerator::codegenQualifierCmp(const SQLOps optype,
       fname,
       get_int_type(1, cgen_state_->context_),
       {rhs_lvs.front(),
-       executor_->posArg(arr_expr),
+       posArg(arr_expr),
        lhs_lvs.front(),
        elem_ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(elem_ti))
                        : static_cast<llvm::Value*>(executor_->inlineIntNull(elem_ti))});

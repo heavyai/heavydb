@@ -295,6 +295,7 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
   // i: argument in RA for the function op
   // j: extra offset in orig_arg_lvs (to account for additional values required for a col,
   // e.g. array cols) k: origin_arg_lvs counter
+  CodeGenerator code_generator(cgen_state_.get(), this);
   for (size_t i = 0, j = 0, k = 0; i < function_oper->getArity(); ++i, ++k) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
@@ -308,14 +309,14 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
                               : cgen_state_->emitExternalCall(
                                     "array_buff",
                                     llvm::Type::getInt8PtrTy(cgen_state_->context_),
-                                    {orig_arg_lvs[k], posArg(arg)});
+                                    {orig_arg_lvs[k], code_generator.posArg(arg)});
       const auto len_lv = (const_arr)
                               ? const_arr_size.at(orig_arg_lvs[k])
                               : cgen_state_->emitExternalCall(
                                     "array_size",
                                     get_int_type(32, cgen_state_->context_),
                                     {orig_arg_lvs[k],
-                                     posArg(arg),
+                                     code_generator.posArg(arg),
                                      ll_int(log2_bytes(elem_ti.get_logical_size()))});
       args.push_back(castArrayPointer(ptr_lv, elem_ti));
       args.push_back(cgen_state_->ir_builder_.CreateZExt(
@@ -350,7 +351,7 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
         ptr_lv =
             cgen_state_->emitExternalCall("fast_fixlen_array_buff",
                                           llvm::Type::getInt8PtrTy(cgen_state_->context_),
-                                          {orig_arg_lvs[k], posArg(arg)});
+                                          {orig_arg_lvs[k], code_generator.posArg(arg)});
         len_lv = ll_int(int64_t(fixlen));
       } else {
         // TODO: remove const_arr  and related code if it's not needed
@@ -358,13 +359,13 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
                              : cgen_state_->emitExternalCall(
                                    "array_buff",
                                    llvm::Type::getInt8PtrTy(cgen_state_->context_),
-                                   {orig_arg_lvs[k], posArg(arg)});
+                                   {orig_arg_lvs[k], code_generator.posArg(arg)});
         len_lv = (const_arr) ? const_arr_size.at(orig_arg_lvs[k])
                              : cgen_state_->emitExternalCall(
                                    "array_size",
                                    get_int_type(32, cgen_state_->context_),
                                    {orig_arg_lvs[k],
-                                    posArg(arg),
+                                    code_generator.posArg(arg),
                                     ll_int(log2_bytes(elem_ti.get_logical_size()))});
       }
       args.push_back(castArrayPointer(ptr_lv, elem_ti));
@@ -389,12 +390,12 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
           const auto ptr_lv = cgen_state_->emitExternalCall(
               "array_buff",
               llvm::Type::getInt32PtrTy(cgen_state_->context_),
-              {orig_arg_lvs[k], posArg(arg)});
+              {orig_arg_lvs[k], code_generator.posArg(arg)});
           const auto len_lv = cgen_state_->emitExternalCall(
               "array_size",
               get_int_type(32, cgen_state_->context_),
               {orig_arg_lvs[k],
-               posArg(arg),
+               code_generator.posArg(arg),
                ll_int(log2_bytes(elem_ti.get_logical_size()))});
           args.push_back(castArrayPointer(ptr_lv, elem_ti));
           args.push_back(cgen_state_->ir_builder_.CreateZExt(
@@ -416,12 +417,12 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
             const auto ptr_lv = cgen_state_->emitExternalCall(
                 "array_buff",
                 llvm::Type::getInt32PtrTy(cgen_state_->context_),
-                {orig_arg_lvs[k], posArg(arg)});
+                {orig_arg_lvs[k], code_generator.posArg(arg)});
             const auto len_lv = cgen_state_->emitExternalCall(
                 "array_size",
                 get_int_type(32, cgen_state_->context_),
                 {orig_arg_lvs[k],
-                 posArg(arg),
+                 code_generator.posArg(arg),
                  ll_int(log2_bytes(elem_ti.get_logical_size()))});
             args.push_back(castArrayPointer(ptr_lv, elem_ti));
             args.push_back(cgen_state_->ir_builder_.CreateZExt(
@@ -442,12 +443,12 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
             const auto ptr_lv = cgen_state_->emitExternalCall(
                 "array_buff",
                 llvm::Type::getInt32PtrTy(cgen_state_->context_),
-                {orig_arg_lvs[k], posArg(arg)});
+                {orig_arg_lvs[k], code_generator.posArg(arg)});
             const auto len_lv = cgen_state_->emitExternalCall(
                 "array_size",
                 get_int_type(32, cgen_state_->context_),
                 {orig_arg_lvs[k],
-                 posArg(arg),
+                 code_generator.posArg(arg),
                  ll_int(log2_bytes(elem_ti.get_logical_size()))});
             args.push_back(castArrayPointer(ptr_lv, elem_ti));
             args.push_back(cgen_state_->ir_builder_.CreateZExt(
