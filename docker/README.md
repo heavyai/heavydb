@@ -41,7 +41,7 @@ The config file lives at `/omnisci-storage/omnisci.conf`.
       -v /path/to/omnisci-storage:/omnisci-storage \
       omnisci/omnisci:v4.5.0
 
-This starts the OmniSci Core Database inside a container named `omnisci`, and exposes the Immerse visualization client on port 6273..
+This starts OmniSciDB inside a container named `omnisci`, and exposes the Immerse visualization client on port 6273..
 
 Data will be persisted to the host directory `/path/to/omnisci-storage`.
 

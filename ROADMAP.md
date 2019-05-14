@@ -1,4 +1,4 @@
-The MapD Core database is being intensively developed and is evolving quickly. In order to help the MapD developer community understand our near term priorities, this document shares work targeted for the next 3-6 months. Many of these items are the result of community requests.
+OmniSciDB is being intensively developed and is evolving quickly. In order to help the MapD developer community understand our near term priorities, this document shares work targeted for the next 3-6 months. Many of these items are the result of community requests.
 
 We welcome and encourage developer contributions to the project. Please see the [contribution guidelines](https://github.com/mapd/mapd-core#contributing) and [GitHub issues](https://github.com/mapd/mapd-core/issues).
 

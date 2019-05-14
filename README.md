@@ -1,7 +1,7 @@
-MapD Core
+OmniSciDB
 =========
 
-MapD Core is an in-memory, column store, SQL relational database designed from the ground up to run on GPUs. MapD Core is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+OmniSciDB is an in-memory, column store, SQL relational database designed from the ground up to run on GPUs. OmniSciDB is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
 The repository includes a number of third party packages provided under separate licenses. Details about these packages and their respective licenses is at [ThirdParty/licenses/index.md](ThirdParty/licenses/index.md).
 
@@ -20,7 +20,7 @@ OmniSci provides pre-built binaries for Linux for stable releases of the project
 
 *** 
 
-# Developing MapD Core: Table of Contents
+# Developing OmniSciDB: Table of Contents
 
 - [Links](#links)
 - [License](#license)
@@ -54,9 +54,9 @@ In order to clarify the intellectual property license granted with Contributions
 
 # Building
 
-If this is your first time building MapD Core, install the dependencies mentioned in the [Dependencies](#dependencies) section below.
+If this is your first time building OmniSciDB, install the dependencies mentioned in the [Dependencies](#dependencies) section below.
 
-MapD uses CMake for its build system.
+OmniSciDB uses CMake for its build system.
 
     mkdir build
     cd build
@@ -89,7 +89,7 @@ The following `cmake`/`ccmake` options can enable/disable different features:
 
 # Testing
 
-MapD Core uses [Google Test](https://github.com/google/googletest) as its main testing framework. Tests reside under the [Tests](Tests) directory.
+OmniSciDB uses [Google Test](https://github.com/google/googletest) as its main testing framework. Tests reside under the [Tests](Tests) directory.
 
 The `sanity_tests` target runs the most common tests. If using Makefiles to build, the tests may be run using:
 
@@ -126,9 +126,9 @@ Finally run the tests:
 
 # Generating Packages
 
-MapD Core uses [CPack](https://cmake.org/cmake/help/latest/manual/cpack.1.html) to generate packages for distribution. Packages generated on CentOS with static linking enabled can be used on most other recent Linux distributions.
+OmniSciDB uses [CPack](https://cmake.org/cmake/help/latest/manual/cpack.1.html) to generate packages for distribution. Packages generated on CentOS with static linking enabled can be used on most other recent Linux distributions.
 
-To generate packages on CentOS (assuming starting from top level of the mapd-core repository):
+To generate packages on CentOS (assuming starting from top level of the omniscidb repository):
 
     mkdir build-package && cd build-package
     cmake -DPREFER_STATIC_LIBS=on -DCMAKE_BUILD_TYPE=release ..
@@ -143,15 +143,15 @@ The last command generates a `.tar.gz` package. The `TGZ` can be replaced with, 
 
 # Using
 
-The [`startomnisci`](startomnisci) wrapper script may be used to start MapD Core in a testing environment. This script performs the following tasks:
+The [`startomnisci`](startomnisci) wrapper script may be used to start OmniSciDB in a testing environment. This script performs the following tasks:
 
 - initializes the `data` storage directory via `initdb`, if required
-- starts the main MapD Core server, `omnisci_server`
-- starts the MapD Core web server, `omnisci_web_server`, for serving MapD Immerse
+- starts the main OmniSciDB server, `omnisci_server`
+- starts the OmniSci web server, `omnisci_web_server`, for serving OmniSci Immerse
 - offers to download and import a sample dataset, using the `insert_sample_data` script
-- attempts to open MapD Immerse in your web browser
+- attempts to open OmniSci Immerse in your web browser
 
-Assuming you are in the `build` directory, and it is a subdirectory of the `mapd-core` repository, `startomnisci` may be run by:
+Assuming you are in the `build` directory, and it is a subdirectory of the `omniscidb` repository, `startomnisci` may be run by:
 
     ../startomnisci
 
@@ -163,11 +163,11 @@ Initialize the `data` storage directory. This command only needs to be run once.
 
     mkdir data && ./bin/initdb data
 
-Start the MapD Core server:
+Start the OmniSciDB server:
 
     ./bin/omnisci_server
 
-In a new terminal, start the MapD Core web server:
+In a new terminal, start the OmniSci web server:
 
     ./bin/omnisci_web_server
 
@@ -181,7 +181,7 @@ You can now start using the database. The `omnisql` utility may be used to inter
 
 where `HyperInteractive` is the default password. The default user `mapd` is assumed if not provided.
 
-You can also interact with the database using the web-based MapD Immerse frontend by visiting the web server's default port of `6273`:
+You can also interact with the database using the web-based OmniSci Immerse frontend by visiting the web server's default port of `6273`:
 
 [http://localhost:6273](http://localhost:6273)
 
@@ -213,7 +213,7 @@ Note: the `clang-tidy` target uses the `run-clang-tidy.py` script provided with 
 
 # Dependencies
 
-MapD has the following dependencies:
+OmniSciDB has the following dependencies:
 
 | Package | Min Version | Required |
 | ------- | ----------- | -------- |
@@ -232,7 +232,7 @@ Dependencies for `omnisci_web_server` and other Go utils are in [`ThirdParty/go`
 
 ## CentOS 7
 
-MapD Core requires a number of dependencies which are not provided in the common CentOS/RHEL package repositories. A prebuilt package containing all these dependencies is provided for CentOS 7 (x86_64).
+OmniSciDB requires a number of dependencies which are not provided in the common CentOS/RHEL package repositories. A prebuilt package containing all these dependencies is provided for CentOS 7 (x86_64).
 
 Use the [scripts/mapd-deps-prebuilt.sh](scripts/mapd-deps-prebuilt.sh) build script to install prebuilt dependencies.
 
@@ -286,11 +286,11 @@ The [scripts/mapd-deps-centos.sh](scripts/mapd-deps-centos.sh) script is used to
 
 ## Ubuntu
 
-Most build dependencies required by MapD Core are available via APT. Certain dependencies such as Thrift, Blosc, and Folly must be built as they either do not exist in the default repositories or have outdated versions. A prebuilt package containing all these dependencies is provided for Ubuntu 18.04 (x86_64). The dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
+Most build dependencies required by OmniSciDB are available via APT. Certain dependencies such as Thrift, Blosc, and Folly must be built as they either do not exist in the default repositories or have outdated versions. A prebuilt package containing all these dependencies is provided for Ubuntu 18.04 (x86_64). The dependencies will be installed to `/usr/local/mapd-deps/` by default; see the Environment Variables section below for how to add these dependencies to your environment.
 
 ### Ubuntu 16.04
 
-MapD Core requires a newer version of Boost than the version which is provided by Ubuntu 16.04. The [scripts/mapd-deps-ubuntu1604.sh](scripts/mapd-deps-ubuntu1604.sh) build script will compile and install a newer version of Boost into the `/usr/local/mapd-deps/` directory.
+OmniSciDB requires a newer version of Boost than the version which is provided by Ubuntu 16.04. The [scripts/mapd-deps-ubuntu1604.sh](scripts/mapd-deps-ubuntu1604.sh) build script will compile and install a newer version of Boost into the `/usr/local/mapd-deps/` directory.
 
 ### Ubuntu 18.04
 
