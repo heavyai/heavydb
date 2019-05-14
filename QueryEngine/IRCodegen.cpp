@@ -139,7 +139,8 @@ llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper,
     return code_generator.codegenCmp(bin_oper, co);
   }
   if (IS_LOGIC(optype)) {
-    return codegenLogical(bin_oper, co);
+    CodeGenerator code_generator(cgen_state_.get(), this);
+    return code_generator.codegenLogical(bin_oper, co);
   }
   if (optype == kARRAY_AT) {
     return codegenArrayAt(bin_oper, co);
@@ -151,16 +152,20 @@ llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper,
                                const CompilationOptions& co) {
   const auto optype = u_oper->get_optype();
   switch (optype) {
-    case kNOT:
-      return codegenLogical(u_oper, co);
+    case kNOT: {
+      CodeGenerator code_generator(cgen_state_.get(), this);
+      return code_generator.codegenLogical(u_oper, co);
+    }
     case kCAST:
       return codegenCast(u_oper, co);
     case kUMINUS: {
       CodeGenerator code_generator(cgen_state_.get(), this);
       return code_generator.codegenUMinus(u_oper, co);
     }
-    case kISNULL:
-      return codegenIsNull(u_oper, co);
+    case kISNULL: {
+      CodeGenerator code_generator(cgen_state_.get(), this);
+      return code_generator.codegenIsNull(u_oper, co);
+    }
     case kUNNEST:
       return codegenUnnest(u_oper, co);
     default:
@@ -288,9 +293,11 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             FetchCacheAnchor anchor(cgen_state_.get());
             addJoinLoopIterator(prev_iters, level_idx + 1);
             llvm::Value* left_join_cond = ll_bool(true);
+            CodeGenerator code_generator(cgen_state_.get(), this);
             for (auto expr : current_level_join_conditions.quals) {
               left_join_cond = cgen_state_->ir_builder_.CreateAnd(
-                  left_join_cond, toBool(codegen(expr.get(), true, co).front()));
+                  left_join_cond,
+                  code_generator.toBool(codegen(expr.get(), true, co).front()));
             }
             return left_join_cond;
           };
@@ -361,7 +368,9 @@ Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
     const auto row_is_deleted_bb = llvm::BasicBlock::Create(
         cgen_state_->context_, "row_is_deleted", cgen_state_->row_func_);
     cgen_state_->ir_builder_.SetInsertPoint(it_valid_bb);
-    const auto row_is_deleted = toBool(codegen(deleted_expr.get(), true, co).front());
+    CodeGenerator code_generator(cgen_state_.get(), this);
+    const auto row_is_deleted =
+        code_generator.toBool(codegen(deleted_expr.get(), true, co).front());
     cgen_state_->ir_builder_.CreateBr(row_is_deleted_bb);
     cgen_state_->ir_builder_.SetInsertPoint(it_not_valid_bb);
     const auto row_is_deleted_default = ll_bool(false);

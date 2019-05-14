@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "CodeGenerator.h"
 #include "Execute.h"
 #include "ExtensionFunctions.hpp"
 #include "ExtensionFunctionsBinding.h"
@@ -263,6 +264,7 @@ llvm::Value* Executor::codegenFunctionOperNullArg(
     const std::vector<llvm::Value*>& orig_arg_lvs) {
   llvm::Value* one_arg_null =
       llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
+  CodeGenerator code_generator(cgen_state_.get(), this);
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
@@ -271,7 +273,7 @@ llvm::Value* Executor::codegenFunctionOperNullArg(
     }
     CHECK(arg_ti.is_number());
     one_arg_null = cgen_state_->ir_builder_.CreateOr(
-        one_arg_null, codegenIsNullNumber(orig_arg_lvs[i], arg_ti));
+        one_arg_null, code_generator.codegenIsNullNumber(orig_arg_lvs[i], arg_ti));
   }
   return one_arg_null;
 }

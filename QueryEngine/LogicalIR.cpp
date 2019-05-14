@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "CodeGenerator.h"
 #include "Execute.h"
 #include "NullableValue.h"
 
@@ -153,9 +154,9 @@ Weight get_weight(const Analyzer::Expr* expr, int depth = 0) {
 
 }  // namespace
 
-bool Executor::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
-                               std::vector<Analyzer::Expr*>& primary_quals,
-                               std::vector<Analyzer::Expr*>& deferred_quals) {
+bool CodeGenerator::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
+                                    std::vector<Analyzer::Expr*>& primary_quals,
+                                    std::vector<Analyzer::Expr*>& deferred_quals) {
   for (auto expr : ra_exe_unit.simple_quals) {
     if (should_defer_eval(expr)) {
       deferred_quals.push_back(expr.get());
@@ -184,8 +185,8 @@ bool Executor::prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
   return short_circuit;
 }
 
-llvm::Value* Executor::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_oper,
-                                                  const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_oper,
+                                                       const CompilationOptions& co) {
   const auto optype = bin_oper->get_optype();
   auto lhs = bin_oper->get_left_operand();
   auto rhs = bin_oper->get_right_operand();
@@ -211,14 +212,14 @@ llvm::Value* Executor::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_o
   }
 
   const auto& ti = bin_oper->get_type_info();
-  auto lhs_lv = codegen(lhs, true, co).front();
+  auto lhs_lv = executor_->codegen(lhs, true, co).front();
 
   // Here the linear control flow will diverge and expressions cached during the
   // code branch code generation (currently just column decoding) are not going
   // to be available once we're done generating the short-circuited logic.
   // Take a snapshot of the cache with FetchCacheAnchor and restore it once
   // the control flow converges.
-  FetchCacheAnchor anchor(cgen_state_.get());
+  Executor::FetchCacheAnchor anchor(cgen_state_);
 
   auto rhs_bb =
       llvm::BasicBlock::Create(cgen_state_->context_, "rhs_bb", cgen_state_->row_func_);
@@ -234,9 +235,10 @@ llvm::Value* Executor::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_o
     nullcheck_fail_bb = llvm::BasicBlock::Create(
         cgen_state_->context_, "nullcheck_fail_bb", cgen_state_->row_func_);
     if (lhs_lv->getType()->isIntegerTy(1)) {
-      lhs_lv = castToTypeIn(lhs_lv, 8);
+      lhs_lv = executor_->castToTypeIn(lhs_lv, 8);
     }
-    auto lhs_nullcheck = cgen_state_->ir_builder_.CreateICmpEQ(lhs_lv, inlineIntNull(ti));
+    auto lhs_nullcheck =
+        cgen_state_->ir_builder_.CreateICmpEQ(lhs_lv, executor_->inlineIntNull(ti));
     cgen_state_->ir_builder_.CreateCondBr(
         lhs_nullcheck, nullcheck_fail_bb, nullcheck_ok_bb);
     cgen_state_->ir_builder_.SetInsertPoint(nullcheck_ok_bb);
@@ -254,13 +256,14 @@ llvm::Value* Executor::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_o
 
   // Codegen rhs when unable to short circuit.
   cgen_state_->ir_builder_.SetInsertPoint(rhs_bb);
-  auto rhs_lv = codegen(rhs, true, co).front();
+  auto rhs_lv = executor_->codegen(rhs, true, co).front();
   if (!ti.get_notnull()) {
     // need rhs nullcheck as well
     if (rhs_lv->getType()->isIntegerTy(1)) {
-      rhs_lv = castToTypeIn(rhs_lv, 8);
+      rhs_lv = executor_->castToTypeIn(rhs_lv, 8);
     }
-    auto rhs_nullcheck = cgen_state_->ir_builder_.CreateICmpEQ(rhs_lv, inlineIntNull(ti));
+    auto rhs_nullcheck =
+        cgen_state_->ir_builder_.CreateICmpEQ(rhs_lv, executor_->inlineIntNull(ti));
     cgen_state_->ir_builder_.CreateCondBr(rhs_nullcheck, nullcheck_fail_bb, ret_bb);
   } else {
     cgen_state_->ir_builder_.CreateBr(ret_bb);
@@ -276,15 +279,15 @@ llvm::Value* Executor::codegenLogicalShortCircuit(const Analyzer::BinOper* bin_o
   auto result_phi =
       cgen_state_->ir_builder_.CreatePHI(lhs_lv->getType(), (!ti.get_notnull()) ? 3 : 2);
   if (!ti.get_notnull()) {
-    result_phi->addIncoming(inlineIntNull(ti), nullcheck_fail_bb);
+    result_phi->addIncoming(executor_->inlineIntNull(ti), nullcheck_fail_bb);
   }
   result_phi->addIncoming(cnst_lv, sc_check_bb);
   result_phi->addIncoming(rhs_lv, rhs_codegen_bb);
   return result_phi;
 }
 
-llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper,
-                                      const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenLogical(const Analyzer::BinOper* bin_oper,
+                                           const CompilationOptions& co) {
   const auto optype = bin_oper->get_optype();
   CHECK(IS_LOGIC(optype));
 
@@ -294,8 +297,8 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper,
 
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
-  auto lhs_lv = codegen(lhs, true, co).front();
-  auto rhs_lv = codegen(rhs, true, co).front();
+  auto lhs_lv = executor_->codegen(lhs, true, co).front();
+  auto rhs_lv = executor_->codegen(rhs, true, co).front();
   const auto& ti = bin_oper->get_type_info();
   if (ti.get_notnull()) {
     switch (optype) {
@@ -310,22 +313,24 @@ llvm::Value* Executor::codegenLogical(const Analyzer::BinOper* bin_oper,
   CHECK(lhs_lv->getType()->isIntegerTy(1) || lhs_lv->getType()->isIntegerTy(8));
   CHECK(rhs_lv->getType()->isIntegerTy(1) || rhs_lv->getType()->isIntegerTy(8));
   if (lhs_lv->getType()->isIntegerTy(1)) {
-    lhs_lv = castToTypeIn(lhs_lv, 8);
+    lhs_lv = executor_->castToTypeIn(lhs_lv, 8);
   }
   if (rhs_lv->getType()->isIntegerTy(1)) {
-    rhs_lv = castToTypeIn(rhs_lv, 8);
+    rhs_lv = executor_->castToTypeIn(rhs_lv, 8);
   }
   switch (optype) {
     case kAND:
-      return cgen_state_->emitCall("logical_and", {lhs_lv, rhs_lv, inlineIntNull(ti)});
+      return cgen_state_->emitCall("logical_and",
+                                   {lhs_lv, rhs_lv, executor_->inlineIntNull(ti)});
     case kOR:
-      return cgen_state_->emitCall("logical_or", {lhs_lv, rhs_lv, inlineIntNull(ti)});
+      return cgen_state_->emitCall("logical_or",
+                                   {lhs_lv, rhs_lv, executor_->inlineIntNull(ti)});
     default:
       abort();
   }
 }
 
-llvm::Value* Executor::toBool(llvm::Value* lv) {
+llvm::Value* CodeGenerator::toBool(llvm::Value* lv) {
   CHECK(lv->getType()->isIntegerTy());
   if (static_cast<llvm::IntegerType*>(lv->getType())->getBitWidth() > 1) {
     return cgen_state_->ir_builder_.CreateICmp(
@@ -343,24 +348,25 @@ bool is_qualified_bin_oper(const Analyzer::Expr* expr) {
 
 }  // namespace
 
-llvm::Value* Executor::codegenLogical(const Analyzer::UOper* uoper,
-                                      const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenLogical(const Analyzer::UOper* uoper,
+                                           const CompilationOptions& co) {
   const auto optype = uoper->get_optype();
   CHECK_EQ(kNOT, optype);
   const auto operand = uoper->get_operand();
   const auto& operand_ti = operand->get_type_info();
   CHECK(operand_ti.is_boolean());
-  const auto operand_lv = codegen(operand, true, co).front();
+  const auto operand_lv = executor_->codegen(operand, true, co).front();
   CHECK(operand_lv->getType()->isIntegerTy());
   const bool not_null = (operand_ti.get_notnull() || is_qualified_bin_oper(operand));
   CHECK(not_null || operand_lv->getType()->isIntegerTy(8));
-  return not_null ? cgen_state_->ir_builder_.CreateNot(toBool(operand_lv))
-                  : cgen_state_->emitCall("logical_not",
-                                          {operand_lv, inlineIntNull(operand_ti)});
+  return not_null
+             ? cgen_state_->ir_builder_.CreateNot(toBool(operand_lv))
+             : cgen_state_->emitCall("logical_not",
+                                     {operand_lv, executor_->inlineIntNull(operand_ti)});
 }
 
-llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper,
-                                     const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
+                                          const CompilationOptions& co) {
   const auto operand = uoper->get_operand();
   if (dynamic_cast<const Analyzer::Constant*>(operand) &&
       dynamic_cast<const Analyzer::Constant*>(operand)->get_is_null()) {
@@ -374,23 +380,24 @@ llvm::Value* Executor::codegenIsNull(const Analyzer::UOper* uoper,
   if (ti.get_notnull() && !ti.is_array()) {
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
   }
-  const auto operand_lv = codegen(operand, true, co).front();
+  const auto operand_lv = executor_->codegen(operand, true, co).front();
   if (ti.is_array()) {
     return cgen_state_->emitExternalCall("array_is_null",
                                          get_int_type(1, cgen_state_->context_),
-                                         {operand_lv, posArg(operand)});
+                                         {operand_lv, executor_->posArg(operand)});
   }
   return codegenIsNullNumber(operand_lv, ti);
 }
 
-llvm::Value* Executor::codegenIsNullNumber(llvm::Value* operand_lv,
-                                           const SQLTypeInfo& ti) {
+llvm::Value* CodeGenerator::codegenIsNullNumber(llvm::Value* operand_lv,
+                                                const SQLTypeInfo& ti) {
   if (ti.is_fp()) {
-    return cgen_state_->ir_builder_.CreateFCmp(
-        llvm::FCmpInst::FCMP_OEQ,
-        operand_lv,
-        ti.get_type() == kFLOAT ? ll_fp(NULL_FLOAT) : ll_fp(NULL_DOUBLE));
+    return cgen_state_->ir_builder_.CreateFCmp(llvm::FCmpInst::FCMP_OEQ,
+                                               operand_lv,
+                                               ti.get_type() == kFLOAT
+                                                   ? executor_->ll_fp(NULL_FLOAT)
+                                                   : executor_->ll_fp(NULL_DOUBLE));
   }
   return cgen_state_->ir_builder_.CreateICmp(
-      llvm::ICmpInst::ICMP_EQ, operand_lv, inlineIntNull(ti));
+      llvm::ICmpInst::ICMP_EQ, operand_lv, executor_->inlineIntNull(ti));
 }

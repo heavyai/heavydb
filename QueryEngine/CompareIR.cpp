@@ -196,7 +196,7 @@ llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
   const auto optype = bin_oper->get_optype();
   if (optype == kBW_EQ) {
     const auto bw_eq_oper = lower_bw_eq(bin_oper);
-    return executor_->codegenLogical(bw_eq_oper.get(), co);
+    return codegenLogical(bw_eq_oper.get(), co);
   }
   if (optype == kOVERLAPS) {
     return codegenOverlaps(optype,

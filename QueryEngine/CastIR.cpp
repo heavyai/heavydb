@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "CodeGenerator.h"
 #include "Execute.h"
 
 llvm::Value* Executor::codegenCast(const Analyzer::UOper* uoper,
@@ -239,7 +240,8 @@ llvm::Value* Executor::codegenCastBetweenIntTypes(llvm::Value* operand_lv,
         if (operand_ti.get_notnull()) {
           detected = cgen_state_->ir_builder_.CreateICmpSGT(operand_lv, operand_max_lv);
         } else {
-          detected = toBool(
+          CodeGenerator code_generator(cgen_state_.get(), this);
+          detected = code_generator.toBool(
               cgen_state_->emitCall("gt_" + numeric_type_name(ti) + "_nullable_lhs",
                                     {operand_lv,
                                      operand_max_lv,

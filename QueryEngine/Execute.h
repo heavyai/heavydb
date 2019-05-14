@@ -599,11 +599,6 @@ class Executor {
                                  const std::shared_ptr<Analyzer::Expr>,
                                  const SQLOps,
                                  const CompilationOptions& co);
-  llvm::Value* codegenLogicalShortCircuit(const Analyzer::BinOper*,
-                                          const CompilationOptions&);
-  llvm::Value* codegenLogical(const Analyzer::BinOper*, const CompilationOptions&);
-  llvm::Value* toBool(llvm::Value*);
-  llvm::Value* codegenLogical(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenCast(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenCast(llvm::Value* operand_lv,
                            const SQLTypeInfo& operand_ti,
@@ -632,8 +627,6 @@ class Executor {
   llvm::Value* codegenCastFromFp(llvm::Value* operand_lv,
                                  const SQLTypeInfo& operand_ti,
                                  const SQLTypeInfo& ti);
-  llvm::Value* codegenIsNull(const Analyzer::UOper*, const CompilationOptions&);
-  llvm::Value* codegenIsNullNumber(llvm::Value*, const SQLTypeInfo&);
   llvm::Value* codegenUnnest(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenArrayAt(const Analyzer::BinOper*, const CompilationOptions&);
 
@@ -1010,10 +1003,6 @@ class Executor {
                                    RenderInfo* render_info,
                                    const bool has_cardinality_estimation,
                                    ColumnCacheMap& column_cache);
-
-  bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
-                       std::vector<Analyzer::Expr*>& primary_quals,
-                       std::vector<Analyzer::Expr*>& deferred_quals);
 
   std::vector<llvm::Value*> inlineHoistedLiterals();
   std::tuple<Executor::CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>

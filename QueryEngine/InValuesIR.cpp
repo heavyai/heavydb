@@ -53,7 +53,7 @@ llvm::Value* Executor::codegen(const Analyzer::InValues* expr,
     for (auto in_val : expr->get_value_list()) {
       result = cgen_state_->ir_builder_.CreateOr(
           result,
-          toBool(code_generator.codegenCmp(
+          code_generator.toBool(code_generator.codegenCmp(
               kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co)));
     }
   } else {

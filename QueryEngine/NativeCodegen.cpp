@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "CodeGenerator.h"
 #include "Execute.h"
 #include "ExtensionFunctionsWhitelist.h"
 #include "LLVMFunctionAttributesUtil.h"
@@ -1601,7 +1602,9 @@ llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
                                     outer_input_desc.getTableId(),
                                     deleted_cd->columnId,
                                     outer_input_desc.getNestLevel());
-  const auto is_deleted = toBool(codegen(deleted_expr.get(), true, co).front());
+  CodeGenerator code_generator(cgen_state_.get(), this);
+  const auto is_deleted =
+      code_generator.toBool(codegen(deleted_expr.get(), true, co).front());
   const auto is_deleted_bb = llvm::BasicBlock::Create(
       cgen_state_->context_, "is_deleted", cgen_state_->row_func_);
   llvm::BasicBlock* bb = llvm::BasicBlock::Create(
@@ -1620,7 +1623,8 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
   // generate the code for the filter
   std::vector<Analyzer::Expr*> primary_quals;
   std::vector<Analyzer::Expr*> deferred_quals;
-  bool short_circuited = prioritizeQuals(ra_exe_unit, primary_quals, deferred_quals);
+  bool short_circuited =
+      CodeGenerator::prioritizeQuals(ra_exe_unit, primary_quals, deferred_quals);
   if (short_circuited) {
     VLOG(1) << "Prioritized " << std::to_string(primary_quals.size()) << " quals, "
             << "short-circuited and deferred " << std::to_string(deferred_quals.size())
@@ -1628,9 +1632,10 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
   }
 
   llvm::Value* filter_lv = ll_bool(true);
+  CodeGenerator code_generator(cgen_state_.get(), this);
   for (auto expr : primary_quals) {
     // Generate the filter for primary quals
-    auto cond = toBool(codegen(expr, true, co).front());
+    auto cond = code_generator.toBool(codegen(expr, true, co).front());
     filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, cond);
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
@@ -1652,7 +1657,7 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
 
   for (auto expr : deferred_quals) {
     filter_lv = cgen_state_->ir_builder_.CreateAnd(
-        filter_lv, toBool(codegen(expr, true, co).front()));
+        filter_lv, code_generator.toBool(codegen(expr, true, co).front()));
   }
 
   CHECK(filter_lv->getType()->isIntegerTy(1));

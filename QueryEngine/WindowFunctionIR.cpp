@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "CodeGenerator.h"
 #include "Execute.h"
 #include "WindowContext.h"
 
@@ -167,7 +168,8 @@ llvm::BasicBlock* Executor::codegenWindowResetStateControlFlow() {
   const auto max_val = ll_int(window_func_context->elementCount() - 1);
   const auto null_val = ll_int(inline_int_null_value<int64_t>());
   const auto null_bool_val = ll_int<int8_t>(inline_int_null_value<int8_t>());
-  const auto reset_state = toBool(cgen_state_->emitCall(
+  CodeGenerator code_generator(cgen_state_.get(), this);
+  const auto reset_state = code_generator.toBool(cgen_state_->emitCall(
       "bit_is_set",
       {bitset, posArg(nullptr), min_val, max_val, null_val, null_bool_val}));
   const auto reset_state_true_bb = llvm::BasicBlock::Create(

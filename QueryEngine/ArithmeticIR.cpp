@@ -318,10 +318,10 @@ void CodeGenerator::codegenSkipOverflowCheckForNull(llvm::Value* lhs_lv,
                                                     llvm::Value* rhs_lv,
                                                     llvm::BasicBlock* no_overflow_bb,
                                                     const SQLTypeInfo& ti) {
-  const auto lhs_is_null_lv = executor_->codegenIsNullNumber(lhs_lv, ti);
+  const auto lhs_is_null_lv = codegenIsNullNumber(lhs_lv, ti);
   const auto has_null_operand_lv =
-      rhs_lv ? cgen_state_->ir_builder_.CreateOr(
-                   lhs_is_null_lv, executor_->codegenIsNullNumber(rhs_lv, ti))
+      rhs_lv ? cgen_state_->ir_builder_.CreateOr(lhs_is_null_lv,
+                                                 codegenIsNullNumber(rhs_lv, ti))
              : lhs_is_null_lv;
   auto operands_not_null = llvm::BasicBlock::Create(
       cgen_state_->context_, "operands_not_null", cgen_state_->row_func_);
@@ -427,7 +427,7 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
       if (ti.get_notnull()) {
         detected = cgen_state_->ir_builder_.CreateICmpSGT(lhs_lv, lhs_max_lv);
       } else {
-        detected = executor_->toBool(cgen_state_->emitCall(
+        detected = toBool(cgen_state_->emitCall(
             "gt_" + numeric_type_name(ti) + "_nullable",
             {lhs_lv,
              lhs_max_lv,

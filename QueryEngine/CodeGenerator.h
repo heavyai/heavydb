@@ -39,6 +39,20 @@ class CodeGenerator {
                           const Analyzer::Expr*,
                           const CompilationOptions&);
 
+  llvm::Value* codegenIsNull(const Analyzer::UOper*, const CompilationOptions&);
+
+  llvm::Value* codegenIsNullNumber(llvm::Value*, const SQLTypeInfo&);
+
+  llvm::Value* codegenLogical(const Analyzer::BinOper*, const CompilationOptions&);
+
+  llvm::Value* codegenLogical(const Analyzer::UOper*, const CompilationOptions&);
+
+  llvm::Value* toBool(llvm::Value*);
+
+  static bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
+                              std::vector<Analyzer::Expr*>& primary_quals,
+                              std::vector<Analyzer::Expr*>& deferred_quals);
+
  private:
   llvm::Value* codegenIntArith(const Analyzer::BinOper*, llvm::Value*, llvm::Value*);
 
@@ -114,6 +128,9 @@ class CodeGenerator {
                                    std::vector<llvm::Value*>,
                                    const Analyzer::Expr*,
                                    const CompilationOptions&);
+
+  llvm::Value* codegenLogicalShortCircuit(const Analyzer::BinOper*,
+                                          const CompilationOptions&);
 
   Executor::CgenState* cgen_state_;
   Executor* executor_;
