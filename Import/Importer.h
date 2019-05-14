@@ -597,9 +597,8 @@ class TypedImportBuffer : boost::noncopyable {
                                             const ArraySliceRange& slice_range,
                                             BadRowsTracker* const bad_rows_tracker);
   template <typename DATA_TYPE>
-  size_t del_values(std::vector<DATA_TYPE>& buffer,
-                    BadRowsTracker* const bad_rows_tracker);
-  size_t del_values(const SQLTypes type, BadRowsTracker* const bad_rows_tracker);
+  auto del_values(std::vector<DATA_TYPE>& buffer, BadRowsTracker* const bad_rows_tracker);
+  auto del_values(const SQLTypes type, BadRowsTracker* const bad_rows_tracker);
   std::vector<std::unique_ptr<TypedImportBuffer>>* import_buffers;
   size_t col_idx;
 

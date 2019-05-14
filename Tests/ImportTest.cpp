@@ -669,6 +669,10 @@ class ImportTest : public ::testing::Test {
 
 #ifdef ENABLE_IMPORT_PARQUET
 // parquet test cases
+TEST_F(ImportTest, One_parquet_file_1k_rows_in_10_groups) {
+  EXPECT_TRUE(
+      import_test_local_parquet(".", "trip_data_1k_rows_in_10_grps.parquet", 1000, 1.0));
+}
 TEST_F(ImportTest, One_parquet_file) {
   EXPECT_TRUE(import_test_local_parquet(
       "trip.parquet",

@@ -3054,7 +3054,7 @@ inline auto open_parquet_table(const std::string& file_path,
   const auto num_rows = table->num_rows();
   LOG(INFO) << "File " << file_path << " has " << num_rows << " rows and " << num_columns
             << " columns in " << num_row_groups << " groups.";
-  return std::tie(num_row_groups, num_columns, num_rows);
+  return std::make_tuple(num_row_groups, num_columns, num_rows);
 }
 
 void Detector::import_local_parquet(const std::string& file_path) {
@@ -3119,19 +3119,19 @@ void Detector::import_local_parquet(const std::string& file_path) {
 }
 
 template <typename DATA_TYPE>
-size_t TypedImportBuffer::del_values(
-    std::vector<DATA_TYPE>& buffer,
-    Importer_NS::BadRowsTracker* const bad_rows_tracker) {
+auto TypedImportBuffer::del_values(std::vector<DATA_TYPE>& buffer,
+                                   Importer_NS::BadRowsTracker* const bad_rows_tracker) {
+  const auto old_size = buffer.size();
   // erase backward to minimize memory movement overhead
   for (auto rit = bad_rows_tracker->rows.crbegin(); rit != bad_rows_tracker->rows.crend();
        ++rit) {
     buffer.erase(buffer.begin() + *rit);
   }
-  return buffer.size();
+  return std::make_tuple(old_size, buffer.size());
 }
 
-size_t TypedImportBuffer::del_values(const SQLTypes type,
-                                     BadRowsTracker* const bad_rows_tracker) {
+auto TypedImportBuffer::del_values(const SQLTypes type,
+                                   BadRowsTracker* const bad_rows_tracker) {
   switch (type) {
     case kBOOLEAN:
       return del_values(*bool_buffer_, bad_rows_tracker);
@@ -3193,7 +3193,6 @@ void Importer::import_local_parquet(const std::string& file_path) {
   // slice each group to import slower columns faster, eg. geo or string
   max_threads = copy_params.threads ? copy_params.threads : cpu_threads();
   const int num_slices = std::max<decltype(max_threads)>(max_threads, num_columns);
-  std::vector<size_t> nrow_in_slice(num_slices);
   // init row estimate for this file
   const auto filesize = get_filesize(file_path);
   size_t nrow_completed{0};
@@ -3261,6 +3260,8 @@ void Importer::import_local_parquet(const std::string& file_path) {
         }
         thread_controller.finish();
       }
+      std::vector<size_t> nrow_in_slice_raw(num_slices);
+      std::vector<size_t> nrow_in_slice_successfully_loaded(num_slices);
       // trim bad rows from import buffers
       for (int logic_col_idx = 0; logic_col_idx < num_columns; ++logic_col_idx) {
         const auto physical_col_idx = get_physical_col_idx(logic_col_idx);
@@ -3268,18 +3269,22 @@ void Importer::import_local_parquet(const std::string& file_path) {
         for (int slice = 0; slice < num_slices; ++slice) {
           auto& bad_rows_tracker = bad_rows_trackers[slice];
           auto& import_buffer = import_buffers_vec[slice][physical_col_idx];
-          nrow_in_slice[slice] =
+          std::tie(nrow_in_slice_raw[slice], nrow_in_slice_successfully_loaded[slice]) =
               import_buffer->del_values(cd->columnType.get_type(), &bad_rows_tracker);
         }
       }
       // flush slices of this row group to chunks
       for (int slice = 0; slice < num_slices; ++slice) {
-        load(import_buffers_vec[slice], nrow_in_slice[slice]);
+        load(import_buffers_vec[slice], nrow_in_slice_successfully_loaded[slice]);
       }
       // update import stats
+      const auto nrow_original =
+          std::accumulate(nrow_in_slice_raw.begin(), nrow_in_slice_raw.end(), 0);
       const auto nrow_imported =
-          std::accumulate(nrow_in_slice.begin(), nrow_in_slice.end(), 0);
-      const auto nrow_dropped = nrow_in_file - nrow_imported;
+          std::accumulate(nrow_in_slice_successfully_loaded.begin(),
+                          nrow_in_slice_successfully_loaded.end(),
+                          0);
+      const auto nrow_dropped = nrow_original - nrow_imported;
       LOG(INFO) << "row group " << row_group << ": add " << nrow_imported
                 << " rows, drop " << nrow_dropped << " rows.";
       mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
