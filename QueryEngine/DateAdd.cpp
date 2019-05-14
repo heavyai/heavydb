@@ -34,7 +34,7 @@ int64_t skip_months(int64_t timeval, int64_t months_to_go) {
       {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31},
       {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31}};
   tm tm_struct;
-  gmtime_r_newlib(&timeval, &tm_struct);
+  gmtime_r_newlib(timeval, tm_struct);
   auto tod = timeval % kSecsPerDay;
   auto day = (timeval / kSecsPerDay) * kSecsPerDay;
   // calculate the day of month offset
@@ -81,7 +81,7 @@ int64_t skip_months(int64_t timeval, int64_t months_to_go) {
 
   int64_t new_timeval = month + dom * kSecsPerDay + tod;
   tm new_tm_struct;
-  gmtime_r_newlib(&new_timeval, &new_tm_struct);
+  gmtime_r_newlib(new_timeval, new_tm_struct);
   int32_t new_dom = new_tm_struct.tm_mday;
   if (dom > new_dom) {
     // Landed on a month with fewer days, overshot by a few days,

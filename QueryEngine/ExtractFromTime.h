@@ -86,9 +86,9 @@ enum ExtractField {
 };
 
 // Shared by DateTruncate
-DEVICE int32_t extract_dow(const int64_t* tim_p);
+DEVICE int32_t extract_dow(const int64_t lcltime);
 
-DEVICE tm* gmtime_r_newlib(const int64_t* tim_p, tm* res);
+DEVICE tm gmtime_r_newlib(const int64_t lcltime, tm& res);
 
 extern "C" DEVICE NEVER_INLINE int64_t ExtractFromTime(ExtractField field,
                                                        const int64_t timeval);

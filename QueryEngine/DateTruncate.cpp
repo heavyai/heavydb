@@ -151,7 +151,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
           day -= kSecsPerDay;
         }
       }
-      int32_t dow = extract_dow(&day);
+      int32_t dow = extract_dow(day);
       return day - (dow * kSecsPerDay);
     }
     case dtMONTH: {
@@ -224,7 +224,7 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
   // use ExtractFromTime functions where available
   // have to do some extra work for these ones
   tm tm_struct;
-  gmtime_r_newlib(&timeval, &tm_struct);
+  gmtime_r_newlib(timeval, tm_struct);
   switch (field) {
     case dtMONTH: {
       // clear the time
