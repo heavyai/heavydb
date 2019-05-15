@@ -187,7 +187,7 @@ llvm::Value* CodeGenerator::codegenDictLike(
   std::copy(matching_ids.begin(), matching_ids.end(), matching_ids_64.begin());
   const auto in_values = std::make_shared<Analyzer::InIntegerSet>(
       dict_like_arg, matching_ids_64, dict_like_arg_ti.get_notnull());
-  return executor_->codegen(in_values.get(), co);
+  return codegen(in_values.get(), co);
 }
 
 namespace {
@@ -302,7 +302,7 @@ llvm::Value* CodeGenerator::codegenDictStrCmp(const std::shared_ptr<Analyzer::Ex
 
   const auto in_values = std::make_shared<Analyzer::InIntegerSet>(
       col_var, matching_ids_64, col_ti.get_notnull());
-  return executor_->codegen(in_values.get(), co);
+  return codegen(in_values.get(), co);
 }
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::RegexpExpr* expr,
@@ -392,5 +392,5 @@ llvm::Value* CodeGenerator::codegenDictRegexp(
   std::copy(matching_ids.begin(), matching_ids.end(), matching_ids_64.begin());
   const auto in_values = std::make_shared<Analyzer::InIntegerSet>(
       dict_regexp_arg, matching_ids_64, dict_regexp_arg_ti.get_notnull());
-  return executor_->codegen(in_values.get(), co);
+  return codegen(in_values.get(), co);
 }

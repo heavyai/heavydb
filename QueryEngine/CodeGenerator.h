@@ -76,6 +76,10 @@ class CodeGenerator {
                                           const SQLTypeInfo& ti,
                                           bool upscale = true);
 
+  llvm::Value* codegen(const Analyzer::InValues*, const CompilationOptions&);
+
+  llvm::Value* codegen(const Analyzer::InIntegerSet* expr, const CompilationOptions& co);
+
   std::vector<llvm::Value*> codegen(const Analyzer::CaseExpr*, const CompilationOptions&);
 
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const CompilationOptions&);
@@ -255,6 +259,9 @@ class CodeGenerator {
                            llvm::Type* case_llvm_type,
                            const bool is_real_str,
                            const CompilationOptions&);
+
+  std::unique_ptr<InValuesBitmap> createInValuesBitmap(const Analyzer::InValues*,
+                                                       const CompilationOptions&);
 
   llvm::Value* codegenExtractHighPrecisionTimestamps(llvm::Value*,
                                                      const SQLTypeInfo&,

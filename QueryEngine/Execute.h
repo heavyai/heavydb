@@ -507,11 +507,6 @@ class Executor {
   int deviceCount(const ExecutorDeviceType) const;
   int deviceCountForMemoryLevel(const Data_Namespace::MemoryLevel memory_level) const;
 
-  llvm::Value* codegen(const Analyzer::InValues*, const CompilationOptions&);
-  llvm::Value* codegen(const Analyzer::InIntegerSet* expr, const CompilationOptions& co);
-  std::unique_ptr<InValuesBitmap> createInValuesBitmap(const Analyzer::InValues*,
-                                                       const CompilationOptions&);
-
   // Generate code for a window function target.
   llvm::Value* codegenWindowFunction(const size_t target_index,
                                      const CompilationOptions& co);

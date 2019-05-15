@@ -19,55 +19,56 @@
 
 #include <future>
 
-llvm::Value* Executor::codegen(const Analyzer::InValues* expr,
-                               const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
+                                    const CompilationOptions& co) {
   const auto in_arg = expr->get_arg();
   if (is_unnest(in_arg)) {
     throw std::runtime_error("IN not supported for unnested expressions");
   }
   const auto& expr_ti = expr->get_type_info();
   CHECK(expr_ti.is_boolean());
-  const auto lhs_lvs = codegen(in_arg, true, co);
+  const auto lhs_lvs = executor_->codegen(in_arg, true, co);
   llvm::Value* result{nullptr};
   if (expr_ti.get_notnull()) {
     result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_),
                                     false);
   } else {
-    result = ll_int(int8_t(0));
+    result = executor_->ll_int(int8_t(0));
   }
   CHECK(result);
   if (co.hoist_literals_) {  // TODO(alex): remove this constraint
     auto in_vals_bitmap = createInValuesBitmap(expr, co);
     if (in_vals_bitmap) {
       if (in_vals_bitmap->isEmpty()) {
-        return in_vals_bitmap->hasNull() ? inlineIntNull(SQLTypeInfo(kBOOLEAN, false))
-                                         : result;
+        return in_vals_bitmap->hasNull()
+                   ? executor_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))
+                   : result;
       }
       CHECK_EQ(size_t(1), lhs_lvs.size());
       return cgen_state_->addInValuesBitmap(in_vals_bitmap)
-          ->codegen(lhs_lvs.front(), this);
+          ->codegen(lhs_lvs.front(), executor_);
     }
   }
-  CodeGenerator code_generator(cgen_state_.get(), this);
   if (expr_ti.get_notnull()) {
     for (auto in_val : expr->get_value_list()) {
       result = cgen_state_->ir_builder_.CreateOr(
           result,
-          code_generator.toBool(code_generator.codegenCmp(
-              kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co)));
+          toBool(
+              codegenCmp(kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co)));
     }
   } else {
     for (auto in_val : expr->get_value_list()) {
-      const auto crt = code_generator.codegenCmp(
-          kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co);
-      result = cgen_state_->emitCall("logical_or", {result, crt, inlineIntNull(expr_ti)});
+      const auto crt =
+          codegenCmp(kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co);
+      result = cgen_state_->emitCall("logical_or",
+                                     {result, crt, executor_->inlineIntNull(expr_ti)});
     }
   }
   return result;
 }
 
-llvm::Value* Executor::codegen(const Analyzer::InIntegerSet* in_integer_set,
-                               const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set,
+                                    const CompilationOptions& co) {
   const auto in_arg = in_integer_set->get_arg();
   if (is_unnest(in_arg)) {
     throw std::runtime_error("IN not supported for unnested expressions");
@@ -86,28 +87,30 @@ llvm::Value* Executor::codegen(const Analyzer::InIntegerSet* in_integer_set,
       needle_null_val,
       co.device_type_ == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                  : Data_Namespace::CPU_LEVEL,
-      deviceCount(co.device_type_),
-      &catalog_->getDataMgr());
+      executor_->deviceCount(co.device_type_),
+      &executor_->getCatalog()->getDataMgr());
   const auto& in_integer_set_ti = in_integer_set->get_type_info();
   CHECK(in_integer_set_ti.is_boolean());
-  const auto lhs_lvs = codegen(in_arg, true, co);
+  const auto lhs_lvs = executor_->codegen(in_arg, true, co);
   llvm::Value* result{nullptr};
   if (in_integer_set_ti.get_notnull()) {
     result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_),
                                     false);
   } else {
-    result = ll_int(int8_t(0));
+    result = executor_->ll_int(int8_t(0));
   }
   CHECK(result);
   if (in_vals_bitmap->isEmpty()) {
-    return in_vals_bitmap->hasNull() ? inlineIntNull(SQLTypeInfo(kBOOLEAN, false))
-                                     : result;
+    return in_vals_bitmap->hasNull()
+               ? executor_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))
+               : result;
   }
   CHECK_EQ(size_t(1), lhs_lvs.size());
-  return cgen_state_->addInValuesBitmap(in_vals_bitmap)->codegen(lhs_lvs.front(), this);
+  return cgen_state_->addInValuesBitmap(in_vals_bitmap)
+      ->codegen(lhs_lvs.front(), executor_);
 }
 
-std::unique_ptr<InValuesBitmap> Executor::createInValuesBitmap(
+std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
     const Analyzer::InValues* in_values,
     const CompilationOptions& co) {
   const auto& value_list = in_values->get_value_list();
@@ -116,9 +119,10 @@ std::unique_ptr<InValuesBitmap> Executor::createInValuesBitmap(
   if (!(ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT))) {
     return nullptr;
   }
-  const auto sdp = ti.is_string() ? getStringDictionaryProxy(
-                                        ti.get_comp_param(), row_set_mem_owner_, true)
-                                  : nullptr;
+  const auto sdp = ti.is_string()
+                       ? executor_->getStringDictionaryProxy(
+                             ti.get_comp_param(), executor_->getRowSetMemoryOwner(), true)
+                       : nullptr;
   if (val_count > 3) {
     using ListIterator = decltype(value_list.begin());
     std::vector<int64_t> values;
@@ -156,9 +160,7 @@ std::unique_ptr<InValuesBitmap> Executor::createInValuesBitmap(
               out_vals.push_back(string_id);
             }
           } else {
-            CodeGenerator code_generator(cgen_state_.get(), this);
-            out_vals.push_back(
-                code_generator.codegenIntConst(in_val_const)->getSExtValue());
+            out_vals.push_back(codegenIntConst(in_val_const)->getSExtValue());
           }
         }
         return true;
@@ -193,8 +195,8 @@ std::unique_ptr<InValuesBitmap> Executor::createInValuesBitmap(
                                                 co.device_type_ == ExecutorDeviceType::GPU
                                                     ? Data_Namespace::GPU_LEVEL
                                                     : Data_Namespace::CPU_LEVEL,
-                                                deviceCount(co.device_type_),
-                                                &catalog_->getDataMgr());
+                                                executor_->deviceCount(co.device_type_),
+                                                &executor_->getCatalog()->getDataMgr());
     } catch (...) {
       return nullptr;
     }

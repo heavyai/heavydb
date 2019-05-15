@@ -100,11 +100,11 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto in_expr = dynamic_cast<const Analyzer::InValues*>(expr);
   if (in_expr) {
-    return {codegen(in_expr, co)};
+    return {code_generator.codegen(in_expr, co)};
   }
   auto in_integer_set_expr = dynamic_cast<const Analyzer::InIntegerSet*>(expr);
   if (in_integer_set_expr) {
-    return {codegen(in_integer_set_expr, co)};
+    return {code_generator.codegen(in_integer_set_expr, co)};
   }
   auto function_oper_with_custom_type_handling_expr =
       dynamic_cast<const Analyzer::FunctionOperWithCustomTypeHandling*>(expr);
