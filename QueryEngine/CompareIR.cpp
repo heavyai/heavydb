@@ -301,7 +301,7 @@ llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
                                          std::vector<std::shared_ptr<Analyzer::Expr>>{
                                              bbox_col_var, x_ptr_oper, y_ptr_oper});
 
-    return executor_->codegenFunctionOper(bbox_contains_func_oper.get(), co);
+    return codegenFunctionOper(bbox_contains_func_oper.get(), co);
   }
 
   CHECK(false) << "Unsupported type for overlaps operator: " << lhs_ti.get_type_name();

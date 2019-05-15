@@ -101,6 +101,15 @@ class CodeGenerator {
   std::vector<llvm::Value*> codegenArrayExpr(const Analyzer::ArrayExpr*,
                                              const CompilationOptions&);
 
+  llvm::Value* codegenFunctionOper(const Analyzer::FunctionOper*,
+                                   const CompilationOptions&);
+
+  llvm::Value* codegenFunctionOperWithCustomTypeHandling(
+      const Analyzer::FunctionOperWithCustomTypeHandling*,
+      const CompilationOptions&);
+
+  llvm::Value* castArrayPointer(llvm::Value* ptr, const SQLTypeInfo& elem_ti);
+
   llvm::Value* toBool(llvm::Value*);
 
   llvm::Value* posArg(const Analyzer::Expr*) const;
@@ -294,6 +303,29 @@ class CodeGenerator {
                                  const Analyzer::Constant* pattern,
                                  const char escape_char,
                                  const CompilationOptions&);
+
+  struct ArgNullcheckBBs {
+    llvm::BasicBlock* args_null_bb;
+    llvm::BasicBlock* args_notnull_bb;
+    llvm::BasicBlock* orig_bb;
+  };
+
+  ArgNullcheckBBs beginArgsNullcheck(const Analyzer::FunctionOper* function_oper,
+                                     const std::vector<llvm::Value*>& orig_arg_lvs);
+
+  llvm::Value* endArgsNullcheck(const ArgNullcheckBBs&,
+                                llvm::Value*,
+                                const Analyzer::FunctionOper*);
+
+  llvm::Value* codegenFunctionOperNullArg(const Analyzer::FunctionOper*,
+                                          const std::vector<llvm::Value*>&);
+
+  std::vector<llvm::Value*> codegenFunctionOperCastArgs(
+      const Analyzer::FunctionOper*,
+      const ExtensionFunction*,
+      const std::vector<llvm::Value*>&,
+      const std::unordered_map<llvm::Value*, llvm::Value*>&,
+      const CompilationOptions&);
 
   Executor::CgenState* cgen_state_;
   Executor* executor_;

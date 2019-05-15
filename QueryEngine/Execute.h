@@ -517,9 +517,6 @@ class Executor {
   std::unique_ptr<InValuesBitmap> createInValuesBitmap(const Analyzer::InValues*,
                                                        const CompilationOptions&);
 
-  llvm::Value* codegenFunctionOper(const Analyzer::FunctionOper*,
-                                   const CompilationOptions&);
-
   // Generate code for a window function target.
   llvm::Value* codegenWindowFunction(const size_t target_index,
                                      const CompilationOptions& co);
@@ -550,31 +547,6 @@ class Executor {
 
   llvm::Value* aggregateWindowStatePtr();
 
-  struct ArgNullcheckBBs {
-    llvm::BasicBlock* args_null_bb;
-    llvm::BasicBlock* args_notnull_bb;
-    llvm::BasicBlock* orig_bb;
-  };
-
-  ArgNullcheckBBs beginArgsNullcheck(const Analyzer::FunctionOper* function_oper,
-                                     const std::vector<llvm::Value*>& orig_arg_lvs);
-
-  llvm::Value* endArgsNullcheck(const ArgNullcheckBBs&,
-                                llvm::Value*,
-                                const Analyzer::FunctionOper*);
-
-  llvm::Value* codegenFunctionOperWithCustomTypeHandling(
-      const Analyzer::FunctionOperWithCustomTypeHandling*,
-      const CompilationOptions&);
-  llvm::Value* codegenFunctionOperNullArg(const Analyzer::FunctionOper*,
-                                          const std::vector<llvm::Value*>&);
-  std::vector<llvm::Value*> codegenFunctionOperCastArgs(
-      const Analyzer::FunctionOper*,
-      const ExtensionFunction*,
-      const std::vector<llvm::Value*>&,
-      const std::unordered_map<llvm::Value*, llvm::Value*>&,
-      const CompilationOptions&);
-  llvm::Value* castArrayPointer(llvm::Value* ptr, const SQLTypeInfo& elem_ti);
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
   llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
   std::pair<llvm::ConstantInt*, llvm::ConstantInt*> inlineIntMaxMin(

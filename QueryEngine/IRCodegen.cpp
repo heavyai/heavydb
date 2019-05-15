@@ -109,7 +109,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   auto function_oper_with_custom_type_handling_expr =
       dynamic_cast<const Analyzer::FunctionOperWithCustomTypeHandling*>(expr);
   if (function_oper_with_custom_type_handling_expr) {
-    return {codegenFunctionOperWithCustomTypeHandling(
+    return {code_generator.codegenFunctionOperWithCustomTypeHandling(
         function_oper_with_custom_type_handling_expr, co)};
   }
   auto array_oper_expr = dynamic_cast<const Analyzer::ArrayExpr*>(expr);
@@ -118,7 +118,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto function_oper_expr = dynamic_cast<const Analyzer::FunctionOper*>(expr);
   if (function_oper_expr) {
-    return {codegenFunctionOper(function_oper_expr, co)};
+    return {code_generator.codegenFunctionOper(function_oper_expr, co)};
   }
   if (dynamic_cast<const Analyzer::OffsetInFragment*>(expr)) {
     return {code_generator.posArg(nullptr)};

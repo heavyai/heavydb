@@ -665,7 +665,7 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
     CHECK(coords_cd->columnType.get_elem_type().get_type() == kTINYINT)
         << "Only TINYINT coordinates columns are supported in geo overlaps hash join.";
     const auto arr_ptr =
-        executor_->castArrayPointer(array_ptr, coords_cd->columnType.get_elem_type());
+        code_generator.castArrayPointer(array_ptr, coords_cd->columnType.get_elem_type());
 
     for (size_t i = 0; i < 2; i++) {
       const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(key_buff_lv, LL_INT(i));

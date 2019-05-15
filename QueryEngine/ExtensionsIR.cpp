@@ -65,8 +65,9 @@ extern "C" void register_buffer_with_executor_rsm(int64_t exec, int8_t* buffer) 
   }
 }
 
-llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* function_oper,
-                                           const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenFunctionOper(
+    const Analyzer::FunctionOper* function_oper,
+    const CompilationOptions& co) {
   auto ext_func_sigs = ExtensionFunctionsWhitelist::get(function_oper->getName());
   if (!ext_func_sigs) {
     ext_func_sigs = ExtensionFunctionsWhitelist::get_udf(function_oper->getName());
@@ -102,7 +103,7 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
-    const auto arg_lvs = codegen(arg, true, co);
+    const auto arg_lvs = executor_->codegen(arg, true, co);
     // TODO(adb / d): Assuming no const array cols for geo (for now)
     if (arg_ti.is_geometry()) {
       CHECK_EQ(arg_ti.get_physical_coord_cols(), arg_lvs.size());
@@ -136,7 +137,7 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
 }
 
 // Start the control flow needed for a call site check of NULL arguments.
-Executor::ArgNullcheckBBs Executor::beginArgsNullcheck(
+CodeGenerator::ArgNullcheckBBs CodeGenerator::beginArgsNullcheck(
     const Analyzer::FunctionOper* function_oper,
     const std::vector<llvm::Value*>& orig_arg_lvs) {
   llvm::BasicBlock* args_null_bb{nullptr};
@@ -157,9 +158,10 @@ Executor::ArgNullcheckBBs Executor::beginArgsNullcheck(
 }
 
 // Wrap up the control flow needed for NULL argument handling.
-llvm::Value* Executor::endArgsNullcheck(const ArgNullcheckBBs& bbs,
-                                        llvm::Value* fn_ret_lv,
-                                        const Analyzer::FunctionOper* function_oper) {
+llvm::Value* CodeGenerator::endArgsNullcheck(
+    const ArgNullcheckBBs& bbs,
+    llvm::Value* fn_ret_lv,
+    const Analyzer::FunctionOper* function_oper) {
   if (bbs.args_null_bb) {
     CHECK(bbs.args_notnull_bb);
     cgen_state_->ir_builder_.CreateBr(bbs.args_null_bb);
@@ -167,9 +169,9 @@ llvm::Value* Executor::endArgsNullcheck(const ArgNullcheckBBs& bbs,
     auto ext_call_phi = cgen_state_->ir_builder_.CreatePHI(fn_ret_lv->getType(), 2);
     ext_call_phi->addIncoming(fn_ret_lv, bbs.args_notnull_bb);
     const auto& ret_ti = function_oper->get_type_info();
-    const auto null_lv = ret_ti.is_fp()
-                             ? static_cast<llvm::Value*>(inlineFpNull(ret_ti))
-                             : static_cast<llvm::Value*>(inlineIntNull(ret_ti));
+    const auto null_lv =
+        ret_ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(ret_ti))
+                       : static_cast<llvm::Value*>(executor_->inlineIntNull(ret_ti));
     ext_call_phi->addIncoming(null_lv, bbs.orig_bb);
     return ext_call_phi;
   }
@@ -195,7 +197,7 @@ bool call_requires_custom_type_handling(const Analyzer::FunctionOper* function_o
 
 }  // namespace
 
-llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
+llvm::Value* CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
     const Analyzer::FunctionOperWithCustomTypeHandling* function_oper,
     const CompilationOptions& co) {
   if (call_requires_custom_type_handling(function_oper)) {
@@ -205,7 +207,7 @@ llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
       const auto arg = function_oper->getArg(0);
       const auto& arg_ti = arg->get_type_info();
       CHECK(arg_ti.is_decimal());
-      const auto arg_lvs = codegen(arg, true, co);
+      const auto arg_lvs = executor_->codegen(arg, true, co);
       CHECK_EQ(size_t(1), arg_lvs.size());
       const auto arg_lv = arg_lvs.front();
       CHECK(arg_lv->getType()->isIntegerTy(64));
@@ -213,12 +215,12 @@ llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
       const std::string func_name =
           (function_oper->getName() == "FLOOR") ? "decimal_floor" : "decimal_ceil";
       const auto covar_result_lv = cgen_state_->emitCall(
-          func_name, {arg_lv, ll_int(exp_to_scale(arg_ti.get_scale()))});
+          func_name, {arg_lv, executor_->ll_int(exp_to_scale(arg_ti.get_scale()))});
       const auto ret_ti = function_oper->get_type_info();
       CHECK(ret_ti.is_decimal());
       CHECK_EQ(0, ret_ti.get_scale());
       const auto result_lv = cgen_state_->ir_builder_.CreateSDiv(
-          covar_result_lv, ll_int(exp_to_scale(arg_ti.get_scale())));
+          covar_result_lv, executor_->ll_int(exp_to_scale(arg_ti.get_scale())));
       return endArgsNullcheck(bbs, result_lv, function_oper);
     } else if (function_oper->getName() == "ROUND" &&
                function_oper->getArg(0)->get_type_info().is_decimal()) {
@@ -226,7 +228,7 @@ llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
 
       const auto arg0 = function_oper->getArg(0);
       const auto& arg0_ti = arg0->get_type_info();
-      const auto arg0_lvs = codegen(arg0, true, co);
+      const auto arg0_lvs = executor_->codegen(arg0, true, co);
       CHECK_EQ(size_t(1), arg0_lvs.size());
       const auto arg0_lv = arg0_lvs.front();
       CHECK(arg0_lv->getType()->isIntegerTy(64));
@@ -234,12 +236,10 @@ llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
       const auto arg1 = function_oper->getArg(1);
       const auto& arg1_ti = arg1->get_type_info();
       CHECK(arg1_ti.is_integer());
-      const auto arg1_lvs = codegen(arg1, true, co);
+      const auto arg1_lvs = executor_->codegen(arg1, true, co);
       auto arg1_lv = arg1_lvs.front();
       if (arg1_ti.get_type() != kINT) {
-        CodeGenerator code_generator(cgen_state_.get(), this);
-        arg1_lv = code_generator.codegenCast(
-            arg1_lv, arg1_ti, SQLTypeInfo(kINT, true), false, co);
+        arg1_lv = codegenCast(arg1_lv, arg1_ti, SQLTypeInfo(kINT, true), false, co);
       }
 
       const auto bbs0 = beginArgsNullcheck(function_oper, {arg0_lv, arg1_lvs.front()});
@@ -247,10 +247,10 @@ llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
       const std::string func_name = "Round__4";
       const auto ret_ti = function_oper->get_type_info();
       CHECK(ret_ti.is_decimal());
-      const auto result_lv =
-          cgen_state_->emitExternalCall(func_name,
-                                        get_int_type(64, cgen_state_->context_),
-                                        {arg0_lv, arg1_lv, ll_int(arg0_ti.get_scale())});
+      const auto result_lv = cgen_state_->emitExternalCall(
+          func_name,
+          get_int_type(64, cgen_state_->context_),
+          {arg0_lv, arg1_lv, executor_->ll_int(arg0_ti.get_scale())});
 
       return endArgsNullcheck(bbs0, result_lv, function_oper);
     }
@@ -261,12 +261,11 @@ llvm::Value* Executor::codegenFunctionOperWithCustomTypeHandling(
 }
 
 // Generates code which returns true iff at least one of the arguments is NULL.
-llvm::Value* Executor::codegenFunctionOperNullArg(
+llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
     const Analyzer::FunctionOper* function_oper,
     const std::vector<llvm::Value*>& orig_arg_lvs) {
   llvm::Value* one_arg_null =
       llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_), false);
-  CodeGenerator code_generator(cgen_state_.get(), this);
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
@@ -275,14 +274,14 @@ llvm::Value* Executor::codegenFunctionOperNullArg(
     }
     CHECK(arg_ti.is_number());
     one_arg_null = cgen_state_->ir_builder_.CreateOr(
-        one_arg_null, code_generator.codegenIsNullNumber(orig_arg_lvs[i], arg_ti));
+        one_arg_null, codegenIsNullNumber(orig_arg_lvs[i], arg_ti));
   }
   return one_arg_null;
 }
 
 // Generate CAST operations for arguments in `orig_arg_lvs` to the types required by
 // `ext_func_sig`.
-std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
+std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
     const Analyzer::FunctionOper* function_oper,
     const ExtensionFunction* ext_func_sig,
     const std::vector<llvm::Value*>& orig_arg_lvs,
@@ -295,7 +294,6 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
   // i: argument in RA for the function op
   // j: extra offset in orig_arg_lvs (to account for additional values required for a col,
   // e.g. array cols) k: origin_arg_lvs counter
-  CodeGenerator code_generator(cgen_state_.get(), this);
   for (size_t i = 0, j = 0, k = 0; i < function_oper->getArity(); ++i, ++k) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
@@ -309,15 +307,15 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
                               : cgen_state_->emitExternalCall(
                                     "array_buff",
                                     llvm::Type::getInt8PtrTy(cgen_state_->context_),
-                                    {orig_arg_lvs[k], code_generator.posArg(arg)});
-      const auto len_lv = (const_arr)
-                              ? const_arr_size.at(orig_arg_lvs[k])
-                              : cgen_state_->emitExternalCall(
-                                    "array_size",
-                                    get_int_type(32, cgen_state_->context_),
-                                    {orig_arg_lvs[k],
-                                     code_generator.posArg(arg),
-                                     ll_int(log2_bytes(elem_ti.get_logical_size()))});
+                                    {orig_arg_lvs[k], posArg(arg)});
+      const auto len_lv =
+          (const_arr) ? const_arr_size.at(orig_arg_lvs[k])
+                      : cgen_state_->emitExternalCall(
+                            "array_size",
+                            get_int_type(32, cgen_state_->context_),
+                            {orig_arg_lvs[k],
+                             posArg(arg),
+                             executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))});
       args.push_back(castArrayPointer(ptr_lv, elem_ti));
       args.push_back(cgen_state_->ir_builder_.CreateZExt(
           len_lv, get_int_type(64, cgen_state_->context_)));
@@ -341,7 +339,7 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
       if (arg_ti.get_type() == kPOINT) {
         const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(arg);
         if (col_var) {
-          const auto coords_cd = getPhysicalColumnDescriptor(col_var, 1);
+          const auto coords_cd = executor_->getPhysicalColumnDescriptor(col_var, 1);
           if (coords_cd && coords_cd->columnType.get_type() == kARRAY) {
             fixlen = coords_cd->columnType.get_size();
           }
@@ -351,22 +349,23 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
         ptr_lv =
             cgen_state_->emitExternalCall("fast_fixlen_array_buff",
                                           llvm::Type::getInt8PtrTy(cgen_state_->context_),
-                                          {orig_arg_lvs[k], code_generator.posArg(arg)});
-        len_lv = ll_int(int64_t(fixlen));
+                                          {orig_arg_lvs[k], posArg(arg)});
+        len_lv = executor_->ll_int(int64_t(fixlen));
       } else {
         // TODO: remove const_arr  and related code if it's not needed
         ptr_lv = (const_arr) ? orig_arg_lvs[k]
                              : cgen_state_->emitExternalCall(
                                    "array_buff",
                                    llvm::Type::getInt8PtrTy(cgen_state_->context_),
-                                   {orig_arg_lvs[k], code_generator.posArg(arg)});
-        len_lv = (const_arr) ? const_arr_size.at(orig_arg_lvs[k])
-                             : cgen_state_->emitExternalCall(
-                                   "array_size",
-                                   get_int_type(32, cgen_state_->context_),
-                                   {orig_arg_lvs[k],
-                                    code_generator.posArg(arg),
-                                    ll_int(log2_bytes(elem_ti.get_logical_size()))});
+                                   {orig_arg_lvs[k], posArg(arg)});
+        len_lv = (const_arr)
+                     ? const_arr_size.at(orig_arg_lvs[k])
+                     : cgen_state_->emitExternalCall(
+                           "array_size",
+                           get_int_type(32, cgen_state_->context_),
+                           {orig_arg_lvs[k],
+                            posArg(arg),
+                            executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))});
       }
       args.push_back(castArrayPointer(ptr_lv, elem_ti));
       args.push_back(cgen_state_->ir_builder_.CreateZExt(
@@ -390,13 +389,13 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
           const auto ptr_lv = cgen_state_->emitExternalCall(
               "array_buff",
               llvm::Type::getInt32PtrTy(cgen_state_->context_),
-              {orig_arg_lvs[k], code_generator.posArg(arg)});
+              {orig_arg_lvs[k], posArg(arg)});
           const auto len_lv = cgen_state_->emitExternalCall(
               "array_size",
               get_int_type(32, cgen_state_->context_),
               {orig_arg_lvs[k],
-               code_generator.posArg(arg),
-               ll_int(log2_bytes(elem_ti.get_logical_size()))});
+               posArg(arg),
+               executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))});
           args.push_back(castArrayPointer(ptr_lv, elem_ti));
           args.push_back(cgen_state_->ir_builder_.CreateZExt(
               len_lv, get_int_type(64, cgen_state_->context_)));
@@ -417,13 +416,13 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
             const auto ptr_lv = cgen_state_->emitExternalCall(
                 "array_buff",
                 llvm::Type::getInt32PtrTy(cgen_state_->context_),
-                {orig_arg_lvs[k], code_generator.posArg(arg)});
+                {orig_arg_lvs[k], posArg(arg)});
             const auto len_lv = cgen_state_->emitExternalCall(
                 "array_size",
                 get_int_type(32, cgen_state_->context_),
                 {orig_arg_lvs[k],
-                 code_generator.posArg(arg),
-                 ll_int(log2_bytes(elem_ti.get_logical_size()))});
+                 posArg(arg),
+                 executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))});
             args.push_back(castArrayPointer(ptr_lv, elem_ti));
             args.push_back(cgen_state_->ir_builder_.CreateZExt(
                 len_lv, get_int_type(64, cgen_state_->context_)));
@@ -443,13 +442,13 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
             const auto ptr_lv = cgen_state_->emitExternalCall(
                 "array_buff",
                 llvm::Type::getInt32PtrTy(cgen_state_->context_),
-                {orig_arg_lvs[k], code_generator.posArg(arg)});
+                {orig_arg_lvs[k], posArg(arg)});
             const auto len_lv = cgen_state_->emitExternalCall(
                 "array_size",
                 get_int_type(32, cgen_state_->context_),
                 {orig_arg_lvs[k],
-                 code_generator.posArg(arg),
-                 ll_int(log2_bytes(elem_ti.get_logical_size()))});
+                 posArg(arg),
+                 executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))});
             args.push_back(castArrayPointer(ptr_lv, elem_ti));
             args.push_back(cgen_state_->ir_builder_.CreateZExt(
                 len_lv, get_int_type(64, cgen_state_->context_)));
@@ -462,9 +461,7 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
     } else {
       const auto arg_target_ti = ext_arg_type_to_type_info(ext_func_args[k + j]);
       if (arg_ti.get_type() != arg_target_ti.get_type()) {
-        CodeGenerator code_generator(cgen_state_.get(), this);
-        arg_lv =
-            code_generator.codegenCast(orig_arg_lvs[k], arg_ti, arg_target_ti, false, co);
+        arg_lv = codegenCast(orig_arg_lvs[k], arg_ti, arg_target_ti, false, co);
       } else {
         arg_lv = orig_arg_lvs[k];
       }
@@ -476,7 +473,8 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
   return args;
 }
 
-llvm::Value* Executor::castArrayPointer(llvm::Value* ptr, const SQLTypeInfo& elem_ti) {
+llvm::Value* CodeGenerator::castArrayPointer(llvm::Value* ptr,
+                                             const SQLTypeInfo& elem_ti) {
   if (elem_ti.get_type() == kFLOAT) {
     return cgen_state_->ir_builder_.CreatePointerCast(
         ptr, llvm::Type::getFloatPtrTy(cgen_state_->context_));
