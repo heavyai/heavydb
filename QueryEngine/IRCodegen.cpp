@@ -56,7 +56,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
   if (case_expr) {
-    return {codegen(case_expr, co)};
+    return {code_generator.codegen(case_expr, co)};
   }
   auto extract_expr = dynamic_cast<const Analyzer::ExtractExpr*>(expr);
   if (extract_expr) {

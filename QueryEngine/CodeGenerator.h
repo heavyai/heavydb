@@ -76,6 +76,8 @@ class CodeGenerator {
                                           const SQLTypeInfo& ti,
                                           bool upscale = true);
 
+  std::vector<llvm::Value*> codegen(const Analyzer::CaseExpr*, const CompilationOptions&);
+
   llvm::Value* codegen(const Analyzer::ExtractExpr*, const CompilationOptions&);
 
   llvm::Value* codegen(const Analyzer::DateaddExpr*, const CompilationOptions&);
@@ -248,6 +250,11 @@ class CodeGenerator {
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
                           const SQLTypeInfo&);
+
+  llvm::Value* codegenCase(const Analyzer::CaseExpr*,
+                           llvm::Type* case_llvm_type,
+                           const bool is_real_str,
+                           const CompilationOptions&);
 
   llvm::Value* codegenExtractHighPrecisionTimestamps(llvm::Value*,
                                                      const SQLTypeInfo&,

@@ -17,8 +17,8 @@
 #include "CodeGenerator.h"
 #include "Execute.h"
 
-std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
-                                            const CompilationOptions& co) {
+std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::CaseExpr* case_expr,
+                                                 const CompilationOptions& co) {
   const auto case_ti = case_expr->get_type_info();
   llvm::Type* case_llvm_type = nullptr;
   bool is_real_str = false;
@@ -51,30 +51,29 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::CaseExpr* case_expr,
   return ret_vals;
 }
 
-llvm::Value* Executor::codegenCase(const Analyzer::CaseExpr* case_expr,
-                                   llvm::Type* case_llvm_type,
-                                   const bool is_real_str,
-                                   const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenCase(const Analyzer::CaseExpr* case_expr,
+                                        llvm::Type* case_llvm_type,
+                                        const bool is_real_str,
+                                        const CompilationOptions& co) {
   // Here the linear control flow will diverge and expressions cached during the
   // code branch code generation (currently just column decoding) are not going
   // to be available once we're done generating the case. Take a snapshot of
   // the cache with FetchCacheAnchor and restore it once we're done with CASE.
-  FetchCacheAnchor anchor(cgen_state_.get());
+  Executor::FetchCacheAnchor anchor(cgen_state_);
   const auto& expr_pair_list = case_expr->get_expr_pair_list();
   std::vector<llvm::Value*> then_lvs;
   std::vector<llvm::BasicBlock*> then_bbs;
   const auto end_bb =
       llvm::BasicBlock::Create(cgen_state_->context_, "end_case", cgen_state_->row_func_);
-  CodeGenerator code_generator(cgen_state_.get(), this);
   for (const auto& expr_pair : expr_pair_list) {
-    FetchCacheAnchor branch_anchor(cgen_state_.get());
+    Executor::FetchCacheAnchor branch_anchor(cgen_state_);
     const auto when_lv =
-        code_generator.toBool(codegen(expr_pair.first.get(), true, co).front());
+        toBool(executor_->codegen(expr_pair.first.get(), true, co).front());
     const auto cmp_bb = cgen_state_->ir_builder_.GetInsertBlock();
     const auto then_bb = llvm::BasicBlock::Create(
         cgen_state_->context_, "then_case", cgen_state_->row_func_);
     cgen_state_->ir_builder_.SetInsertPoint(then_bb);
-    auto then_bb_lvs = codegen(expr_pair.second.get(), true, co);
+    auto then_bb_lvs = executor_->codegen(expr_pair.second.get(), true, co);
     if (is_real_str) {
       if (then_bb_lvs.size() == 3) {
         then_lvs.push_back(
@@ -96,7 +95,7 @@ llvm::Value* Executor::codegenCase(const Analyzer::CaseExpr* case_expr,
   }
   const auto else_expr = case_expr->get_else_expr();
   CHECK(else_expr);
-  auto else_lvs = codegen(else_expr, true, co);
+  auto else_lvs = executor_->codegen(else_expr, true, co);
   llvm::Value* else_lv{nullptr};
   if (else_lvs.size() == 3) {
     else_lv = cgen_state_->emitCall("string_pack", {else_lvs[1], else_lvs[2]});
