@@ -925,7 +925,7 @@ void JoinHashTable::initHashTableForDevice(
 #endif
   const int32_t hash_join_invalid_val{-1};
   if (effective_memory_level == Data_Namespace::CPU_LEVEL) {
-    CHECK(!chunk_key.empty() && col_buff);
+    CHECK(!chunk_key.empty());
     initHashTableOnCpuFromCache(chunk_key, num_elements, cols);
     {
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
