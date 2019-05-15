@@ -65,19 +65,25 @@ class CalciteServerHandler implements CalciteServer.Iface {
 
   private final String extSigsJson;
 
-  private String udfSigsJson = "";
+  private final String udfSigsJson;
 
-  // TODO MAT we need to merge this into common code base for these funictions with
+  private String udfRTSigsJson = "";
+  Map<String, ExtensionFunction> udfRTSigs = null;
+
+  private SockTransportProperties skT;
+  private Map<String, ExtensionFunction> extSigs = null;
+  private String dataDir;
+  // TODO MAT we need to merge this into common code base for these functions with
   // CalciteDirect since we are not deprecating this stuff yet
   CalciteServerHandler(int mapdPort,
           String dataDir,
           String extensionFunctionsAstFile,
           SockTransportProperties skT,
           String udfAstFile) {
-    this.parserPool = new GenericObjectPool();
     this.mapdPort = mapdPort;
+    this.skT = skT;
+    this.dataDir = dataDir;
 
-    Map<String, ExtensionFunction> extSigs = null;
     Map<String, ExtensionFunction> udfSigs = null;
 
     try {
@@ -86,36 +92,27 @@ class CalciteServerHandler implements CalciteServer.Iface {
       MAPDLOGGER.error(
               "Could not load extension function signatures: " + ex.getMessage());
     }
+    extSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(extSigs);
 
     try {
       if (!udfAstFile.isEmpty()) {
         udfSigs = ExtensionFunctionSignatureParser.parse(udfAstFile);
-        udfSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(udfSigs);
       }
     } catch (IOException ex) {
       MAPDLOGGER.error("Could not load udf function signatures: " + ex.getMessage());
     }
-
-    this.extSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(extSigs);
-
-    // Put all the udf functions signatures in extSigs so Calcite has a view of
-    // extendsion functions and udf functions
-
-    if (!udfAstFile.isEmpty()) {
-      extSigs.putAll(udfSigs);
-    }
+    udfSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(udfSigs);
 
     // Put all the udf functions signatures in extSigs so Calcite has a view of
-    // extendsion functions and udf functions
-
+    // extension functions and udf functions
     if (!udfAstFile.isEmpty()) {
       extSigs.putAll(udfSigs);
     }
 
     PoolableObjectFactory parserFactory =
             new CalciteParserFactory(dataDir, extSigs, mapdPort, skT);
-
-    parserPool.setFactory(parserFactory);
+    // GenericObjectPool::setFactory is deprecated
+    this.parserPool = new GenericObjectPool(parserFactory);
   }
 
   @Override
@@ -158,7 +155,6 @@ class CalciteServerHandler implements CalciteServer.Iface {
     SqlIdentifierCapturer capturer;
     TAccessedQueryObjects primaryAccessedObjects = new TAccessedQueryObjects();
     TAccessedQueryObjects resolvedAccessedObjects = new TAccessedQueryObjects();
-
     try {
       final List<MapDParserOptions.FilterPushDownInfo> filterPushDownInfo =
               new ArrayList<>();
@@ -245,6 +241,11 @@ class CalciteServerHandler implements CalciteServer.Iface {
     return this.udfSigsJson;
   }
 
+  @Override
+  public String getRuntimeUserDefinedFunctionWhitelist() {
+    return this.udfRTSigsJson;
+  }
+
   void setServer(TServer s) {
     server = s;
   }
@@ -325,6 +326,35 @@ class CalciteServerHandler implements CalciteServer.Iface {
               completion_result.replaced));
     }
     return result;
+  }
+
+  @Override
+  public void setRuntimeUserDefinedFunction(String udfString) {
+    // Clean up previously defined Runtime UDFs
+    if (udfRTSigs != null) {
+      for (String name : udfRTSigs.keySet()) extSigs.remove(name);
+      udfRTSigsJson = "";
+    }
+
+    if (!udfString.isEmpty()) {
+      try {
+        udfRTSigs = ExtensionFunctionSignatureParser.parseFromString(udfString);
+      } catch (IOException ex) {
+        MAPDLOGGER.error(
+                "Could not parse extension function signatures: " + ex.getMessage());
+      }
+      // Avoid overwritting compiled and Loadtime UDFs:
+      for (String name : udfRTSigs.keySet()) {
+        if (extSigs.containsKey(name)) {
+          MAPDLOGGER.error("Extension function `" + name
+                  + "` exists. Skipping Runtime UDF with the same name.");
+          udfRTSigs.remove(name);
+        }
+      }
+      udfRTSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(udfRTSigs);
+      // Expose RT UDFs to Calcite server:
+      extSigs.putAll(udfRTSigs);
+    }
   }
 
   private static TCompletionHintType hintTypeToThrift(final SqlMonikerType type) {

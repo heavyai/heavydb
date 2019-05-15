@@ -15,6 +15,7 @@
  */
 
 #include "ExtensionFunctionsWhitelist.h"
+#include <iostream>
 #include "JsonAccessors.h"
 
 #include "../Shared/StringTransform.h"
@@ -30,7 +31,6 @@ std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get(
   }
   return &it->second;
 }
-
 std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get_udf(
     const std::string& name) {
   const auto it = udf_functions_.find(to_upper(name));
@@ -38,6 +38,76 @@ std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get_udf(
     return nullptr;
   }
   return &it->second;
+}
+
+std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
+    const std::string& name) {
+  std::vector<ExtensionFunction> ext_funcs = {};
+  const auto collections = {&functions_, &udf_functions_, &rt_udf_functions_};
+  const auto uname = to_upper(name);
+  for (auto funcs : collections) {
+    const auto it = funcs->find(uname);
+    if (it == funcs->end()) {
+      continue;
+    }
+    auto ext_func_sigs = it->second;
+    std::copy(ext_func_sigs.begin(), ext_func_sigs.end(), std::back_inserter(ext_funcs));
+  }
+  return ext_funcs;
+}
+
+std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
+    const std::string& name,
+    size_t arity) {
+  std::vector<ExtensionFunction> ext_funcs = {};
+  const auto collections = {&functions_, &udf_functions_, &rt_udf_functions_};
+  const auto uname = to_upper(name);
+  for (auto funcs : collections) {
+    const auto it = funcs->find(uname);
+    if (it == funcs->end()) {
+      continue;
+    }
+    auto ext_func_sigs = it->second;
+    std::copy_if(ext_func_sigs.begin(),
+                 ext_func_sigs.end(),
+                 std::back_inserter(ext_funcs),
+                 [arity](auto sig) { return arity == sig.getArgs().size(); });
+  }
+  return ext_funcs;
+}
+
+std::vector<ExtensionFunction> ExtensionFunctionsWhitelist::get_ext_funcs(
+    const std::string& name,
+    size_t arity,
+    const SQLTypeInfo& rtype) {
+  std::vector<ExtensionFunction> ext_funcs = {};
+  const auto collections = {&functions_, &udf_functions_, &rt_udf_functions_};
+  const auto uname = to_upper(name);
+  for (auto funcs : collections) {
+    const auto it = funcs->find(uname);
+    if (it == funcs->end()) {
+      continue;
+    }
+    auto ext_func_sigs = it->second;
+    std::copy_if(ext_func_sigs.begin(),
+                 ext_func_sigs.end(),
+                 std::back_inserter(ext_funcs),
+                 [arity, rtype](auto sig) {
+                   // Ideally, arity should be equal to the number of
+                   // sig arguments but there seems to be many cases
+                   // where some sig arguments will be represented
+                   // with multiple arguments, for instance, array
+                   // argument is translated to data pointer and array
+                   // size arguments.
+                   if (arity > sig.getArgs().size()) {
+                     return false;
+                   }
+                   auto rt = rtype.get_type();
+                   auto st = ext_arg_type_to_type_info(sig.getRet()).get_type();
+                   return (st == rt || (st == kTINYINT && rt == kBOOLEAN));
+                 });
+  }
+  return ext_funcs;
 }
 
 namespace {
@@ -79,6 +149,75 @@ std::string serialize_type(const ExtArgumentType type) {
 }
 
 }  // namespace
+
+SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
+  /* This function is mostly used for scalar types.
+     For non-scalar types, NULL is returned as a placeholder.
+   */
+  switch (ext_arg_type) {
+    case ExtArgumentType::Bool:
+      return SQLTypeInfo(kBOOLEAN, true);
+    case ExtArgumentType::Int8:
+      return SQLTypeInfo(kTINYINT, true);
+    case ExtArgumentType::Int16:
+      return SQLTypeInfo(kSMALLINT, true);
+    case ExtArgumentType::Int32:
+      return SQLTypeInfo(kINT, true);
+    case ExtArgumentType::Int64:
+      return SQLTypeInfo(kBIGINT, true);
+    case ExtArgumentType::Float:
+      return SQLTypeInfo(kFLOAT, true);
+    case ExtArgumentType::Double:
+      return SQLTypeInfo(kDOUBLE, true);
+    default:;
+      std::cerr << "ext_arg_type_to_type_info: ExtArgumentType `"
+                << serialize_type(ext_arg_type)
+                << "` cannot be converted to SQLTypeInfo, returning NULL" << std::endl;
+      CHECK(false);  // should never reach here
+  }
+  return SQLTypeInfo(kNULLT, false);
+}
+
+std::string ExtensionFunctionsWhitelist::toString(
+    const std::vector<ExtensionFunction>& ext_funcs,
+    std::string tab) {
+  std::string r = "";
+  for (auto sig : ext_funcs) {
+    r += tab + sig.toString() + "\n";
+  }
+  return r;
+}
+
+std::string ExtensionFunctionsWhitelist::toString(
+    const std::vector<SQLTypeInfo>& arg_types) {
+  std::string r = "";
+  for (auto sig = arg_types.begin(); sig != arg_types.end();) {
+    r += sig->get_type_name();
+    sig++;
+    if (sig != arg_types.end()) {
+      r += ", ";
+    }
+  }
+  return r;
+}
+
+std::string ExtensionFunctionsWhitelist::toString(
+    const std::vector<ExtArgumentType>& sig_types) {
+  std::string r = "";
+  for (auto t = sig_types.begin(); t != sig_types.end();) {
+    r += serialize_type(*t);
+    t++;
+    if (t != sig_types.end()) {
+      r += ", ";
+    }
+  }
+  return r;
+}
+
+std::string ExtensionFunction::toString() const {
+  return getName() + "(" + ExtensionFunctionsWhitelist::toString(getArgs()) + ") -> " +
+         serialize_type(getRet());
+}
 
 // Converts the extension function signatures to their LLVM representation.
 std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations() {
@@ -207,8 +346,21 @@ void ExtensionFunctionsWhitelist::addUdfs(const std::string& json_func_sigs) {
   }
 }
 
+void ExtensionFunctionsWhitelist::clearRTUdfs() {
+  rt_udf_functions_.clear();
+}
+
+void ExtensionFunctionsWhitelist::addRTUdfs(const std::string& json_func_sigs) {
+  if (!json_func_sigs.empty()) {
+    addCommon(rt_udf_functions_, json_func_sigs);
+  }
+}
+
 std::unordered_map<std::string, std::vector<ExtensionFunction>>
     ExtensionFunctionsWhitelist::functions_;
 
 std::unordered_map<std::string, std::vector<ExtensionFunction>>
     ExtensionFunctionsWhitelist::udf_functions_;
+
+std::unordered_map<std::string, std::vector<ExtensionFunction>>
+    ExtensionFunctionsWhitelist::rt_udf_functions_;

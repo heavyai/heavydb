@@ -49,6 +49,8 @@
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
+#include <llvm/Linker/Linker.h>
+#include <llvm/Transforms/Utils/ValueMapper.h>
 #include <rapidjson/document.h>
 #include <boost/functional/hash.hpp>
 
@@ -92,9 +94,12 @@ using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescript
 class QueryMemoryDescriptor;
 using QueryMemoryDescriptorOwned = std::unique_ptr<QueryMemoryDescriptor>;
 
-extern void read_udf_gpu_module(std::string& udf_ir_filename);
-extern void read_udf_cpu_module(std::string& udf_ir_filename);
-extern bool is_udf_module_present();
+extern void read_udf_gpu_module(const std::string& udf_ir_filename);
+extern void read_udf_cpu_module(const std::string& udf_ir_filename);
+extern bool is_udf_module_present(bool cpu_only = false);
+extern void read_rt_udf_gpu_module(const std::string& udf_ir);
+extern void read_rt_udf_cpu_module(const std::string& udf_ir);
+extern bool is_rt_udf_module_present(bool cpu_only = false);
 
 class ColumnFetcher;
 class ExecutionResult;
@@ -783,6 +788,7 @@ class Executor {
                                    ColumnCacheMap& column_cache);
 
   std::vector<llvm::Value*> inlineHoistedLiterals();
+
   std::tuple<Executor::CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
   compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                   const RelAlgExecutionUnit& ra_exe_unit,

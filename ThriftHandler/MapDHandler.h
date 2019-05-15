@@ -422,6 +422,22 @@ class MapDHandler : public MapDIf {
   void get_license_claims(TLicenseInfo& _return,
                           const TSessionId& session,
                           const std::string& nonce) override;
+  // user-defined functions
+  /*
+    Returns a mapping of device (CPU, GPU) parameters (name, LLVM IR
+    triplet, features, etc)
+   */
+  void get_device_parameters(std::map<std::string, std::string>& _return) override;
+  /*
+    Register UDFs with given signatures. The UDF implementations are
+    given in a mapping of a device and the corresponding LLVM IR
+    string.
+   */
+  void register_runtime_udf(
+      const TSessionId& session,
+      const std::string& signatures,
+      const std::map<std::string, std::string>& device_ir_map) override;
+
   void shutdown();
   // end of sync block for HAHandler and mapd.thrift
 

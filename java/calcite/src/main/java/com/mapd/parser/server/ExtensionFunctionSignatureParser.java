@@ -19,6 +19,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.StringReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -50,6 +51,25 @@ class ExtensionFunctionSignatureParser {
     return sigs;
   }
 
+  static Map<String, ExtensionFunction> parseFromString(final String udf_string)
+          throws IOException {
+    StringReader stringReader = new StringReader(udf_string);
+    BufferedReader bufferedReader = new BufferedReader(stringReader);
+    String line;
+    Pattern r = Pattern.compile("([\\w]+)\\s+'([\\w]+)\\s*\\((.*)\\)'");
+    Map<String, ExtensionFunction> sigs = new HashMap<String, ExtensionFunction>();
+    while ((line = bufferedReader.readLine()) != null) {
+      Matcher m = r.matcher(line);
+      if (m.find()) {
+        final String name = m.group(1);
+        final String ret = m.group(2);
+        final String cs_param_list = m.group(3);
+        sigs.put(name, toSignature(ret, cs_param_list));
+      }
+    }
+    return sigs;
+  }
+
   static String signaturesToJson(final Map<String, ExtensionFunction> sigs) {
     List<String> json_sigs = new ArrayList<String>();
     if (sigs != null) {
@@ -62,11 +82,11 @@ class ExtensionFunctionSignatureParser {
 
   private static ExtensionFunction toSignature(
           final String ret, final String cs_param_list) {
-    String[] params = cs_param_list.split(", ");
+    String[] params = cs_param_list.split(",");
     List<ExtensionFunction.ExtArgumentType> args =
             new ArrayList<ExtensionFunction.ExtArgumentType>();
     for (final String param : params) {
-      final ExtensionFunction.ExtArgumentType arg_type = deserializeType(param);
+      final ExtensionFunction.ExtArgumentType arg_type = deserializeType(param.trim());
       if (arg_type != ExtensionFunction.ExtArgumentType.Void) {
         args.add(arg_type);
       }
@@ -83,23 +103,26 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("bool") || type_name.equals("_Bool")) {
       return ExtensionFunction.ExtArgumentType.Bool;
     }
-    if (type_name.equals("int8_t") || type_name.equals("char")) {
+    if (type_name.equals("int8_t") || type_name.equals("char")
+            || type_name.equals("int8")) {
       return ExtensionFunction.ExtArgumentType.Int8;
     }
-    if (type_name.equals("int16_t") || type_name.equals("short")) {
+    if (type_name.equals("int16_t") || type_name.equals("short")
+            || type_name.equals("int16")) {
       return ExtensionFunction.ExtArgumentType.Int16;
     }
-    if (type_name.equals("int32_t") || type_name.equals("int")) {
+    if (type_name.equals("int32_t") || type_name.equals("int")
+            || type_name.equals("int32")) {
       return ExtensionFunction.ExtArgumentType.Int32;
     }
     if (type_name.equals("int64_t") || type_name.equals("size_t")
-            || type_name.equals("long")) {
+            || type_name.equals("int64") || type_name.equals("long")) {
       return ExtensionFunction.ExtArgumentType.Int64;
     }
-    if (type_name.equals("float")) {
+    if (type_name.equals("float") || type_name.equals("float32")) {
       return ExtensionFunction.ExtArgumentType.Float;
     }
-    if (type_name.equals("double")) {
+    if (type_name.equals("double") || type_name.equals("float64")) {
       return ExtensionFunction.ExtArgumentType.Double;
     }
     if (type_name.isEmpty() || type_name.equals("void")) {
@@ -107,6 +130,9 @@ class ExtensionFunctionSignatureParser {
     }
     if (type_name.endsWith(" *")) {
       return pointerType(deserializeType(type_name.substring(0, type_name.length() - 2)));
+    }
+    if (type_name.endsWith("*")) {
+      return pointerType(deserializeType(type_name.substring(0, type_name.length() - 1)));
     }
     assert false;
     return null;

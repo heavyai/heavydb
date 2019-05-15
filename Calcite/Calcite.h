@@ -73,7 +73,8 @@ class Calcite {
   void updateMetadata(std::string catalog, std::string table);
   void close_calcite_server(bool log = true);
   virtual ~Calcite();
-
+  std::string getRuntimeUserDefinedFunctionWhitelist();
+  void setRuntimeUserDefinedFunction(std::string udf_string);
   std::string& get_session_prefix() { return session_prefix_; }
 
  private:

@@ -188,8 +188,7 @@ void Calcite::runServer(const int mapd_port,
     LOG(ERROR) << "Please check that you are not trying to run two servers on same port";
     LOG(ERROR) << "Attempting to shutdown orphaned Calcite server";
     try {
-      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
-          clientP = get_client(remote_calcite_port_);
+      auto clientP = get_client(remote_calcite_port_);
       clientP.first->shutdown();
       clientP.second->close();
       LOG(ERROR) << "orphaned Calcite server shutdown";
@@ -231,8 +230,7 @@ void Calcite::runServer(const int mapd_port,
 int Calcite::ping() {
   try {
     auto ms = measure<>::execution([&]() {
-      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
-          clientP = get_client(remote_calcite_port_);
+      auto clientP = get_client(remote_calcite_port_);
       clientP.first->ping();
       clientP.second->close();
     });
@@ -291,8 +289,7 @@ Calcite::Calcite(const MapDParameters& mapd_parameter,
 void Calcite::updateMetadata(std::string catalog, std::string table) {
   if (server_available_) {
     auto ms = measure<>::execution([&]() {
-      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
-          clientP = get_client(remote_calcite_port_);
+      auto clientP = get_client(remote_calcite_port_);
       clientP.first->updateMetadata(catalog, table);
       clientP.second->close();
     });
@@ -433,8 +430,7 @@ TPlanResult Calcite::processImpl(
   if (server_available_) {
     try {
       auto ms = measure<>::execution([&]() {
-        std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
-            clientP = get_client(remote_calcite_port_);
+        auto clientP = get_client(remote_calcite_port_);
         clientP.first->process(ret,
                                user,
                                session,
@@ -472,8 +468,7 @@ std::string Calcite::getExtensionFunctionWhitelist() {
     TPlanResult ret;
     std::string whitelist;
 
-    std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
-        clientP = get_client(remote_calcite_port_);
+    auto clientP = get_client(remote_calcite_port_);
     clientP.first->getExtensionFunctionWhitelist(whitelist);
     clientP.second->close();
     VLOG(1) << whitelist;
@@ -491,8 +486,7 @@ std::string Calcite::getUserDefinedFunctionWhitelist() {
     TPlanResult ret;
     std::string whitelist;
 
-    std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
-        clientP = get_client(remote_calcite_port_);
+    auto clientP = get_client(remote_calcite_port_);
     clientP.first->getUserDefinedFunctionWhitelist(whitelist);
     clientP.second->close();
     VLOG(1) << "User defined functions whitelist loaded from Calcite: " << whitelist;
@@ -509,8 +503,7 @@ void Calcite::close_calcite_server(bool log) {
   if (server_available_) {
     LOG_IF(INFO, log) << "Shutting down Calcite server";
     try {
-      std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
-          clientP = get_client(remote_calcite_port_);
+      auto clientP = get_client(remote_calcite_port_);
       clientP.first->shutdown();
       clientP.second->close();
     } catch (const std::exception& e) {
@@ -526,4 +519,32 @@ void Calcite::close_calcite_server(bool log) {
 
 Calcite::~Calcite() {
   close_calcite_server(false);
+}
+
+std::string Calcite::getRuntimeUserDefinedFunctionWhitelist() {
+  if (server_available_) {
+    TPlanResult ret;
+    std::string whitelist;
+    auto clientP = get_client(remote_calcite_port_);
+    clientP.first->getRuntimeUserDefinedFunctionWhitelist(whitelist);
+    clientP.second->close();
+    VLOG(1) << "Runtime user defined functions whitelist loaded from Calcite: "
+            << whitelist;
+    return whitelist;
+  } else {
+    LOG(FATAL) << "Not routing to Calcite, server is not up";
+    return "";
+  }
+  UNREACHABLE();
+  return "";
+}
+
+void Calcite::setRuntimeUserDefinedFunction(std::string udf_string) {
+  if (server_available_) {
+    auto clientP = get_client(remote_calcite_port_);
+    clientP.first->setRuntimeUserDefinedFunction(udf_string);
+    clientP.second->close();
+  } else {
+    LOG(FATAL) << "Not routing to Calcite, server is not up";
+  }
 }

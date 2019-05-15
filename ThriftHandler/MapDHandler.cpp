@@ -5586,3 +5586,54 @@ LogSession::~LogSession() {
 void LogSession::set_session(SessionMap::mapped_type const& session_ptr) {
   session_ptr_ = session_ptr;
 }
+
+extern std::map<std::string, std::string> get_device_parameters();
+
+void MapDHandler::get_device_parameters(std::map<std::string, std::string>& _return) {
+  auto params = ::get_device_parameters();
+  for (auto item : params) {
+    _return.insert(item);
+  }
+}
+
+void MapDHandler::register_runtime_udf(
+    const TSessionId& session,
+    const std::string& signatures,
+    const std::map<std::string, std::string>& device_ir_map) {
+  const auto session_info = get_session_copy(session);
+  /* TODO: check if an user has permission to register
+     UDFs. Currently, UDFs are registered globally, that means that
+     all users can use as well as overwrite UDFs that was created
+     possibly by anoher user.
+   */
+
+  LOG(INFO) << "register_runtime_udf:signatures:\n" << signatures << std::endl;
+  /* Changing a UDF implementation (but not the signature) requires
+     cleaning code caches. Nuking executors does that but at the cost
+     of loosing all of the caches. TODO: implement more refined code
+     cache cleaning. */
+  Executor::nukeCacheOfExecutors();
+
+  /* Parse IR strings and store it as LLVM module. */
+  for (auto i = device_ir_map.begin(); i != device_ir_map.end(); ++i) {
+    std::string device = i->first;
+    std::string ir = i->second;
+    if (device == "cpu") {
+      read_rt_udf_cpu_module(ir);
+    } else if (device == "gpu") {
+      read_rt_udf_gpu_module(ir);
+    } else {
+      THROW_MAPD_EXCEPTION(std::string("unsupported device name: ") + device);
+    }
+  }
+
+  /* Register UDFs in Calcite server */
+  if (calcite_) {
+    calcite_->setRuntimeUserDefinedFunction(signatures);
+    /* Update the extension function whitelist */
+    std::string whitelist = calcite_->getRuntimeUserDefinedFunctionWhitelist();
+    LOG(INFO) << "register_runtime_udf:whitelist:\n" << whitelist << std::endl;
+    ExtensionFunctionsWhitelist::clearRTUdfs();
+    ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
+  }
+}

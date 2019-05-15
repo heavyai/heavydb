@@ -22,16 +22,17 @@
 #include "DateTimeTranslator.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "ExpressionRewrite.h"
+#include "ExtensionFunctionsBinding.h"
 #include "ExtensionFunctionsWhitelist.h"
 #include "RelAlgAbstractInterpreter.h"
 #include "WindowContext.h"
 
+#include <future>
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"
 #include "../Shared/likely.h"
+#include "../Shared/sql_type_to_string.h"
 #include "../Shared/thread_count.h"
-
-#include <future>
 
 extern bool g_enable_watchdog;
 
@@ -240,7 +241,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
       }
       auto lit_expr = scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision)
                             : Parser::IntLiteral::analyzeValue(val);
-      return scale && lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
+      auto ret = scale && lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
+      return ret;
     }
     case kTEXT: {
       return Parser::StringLiteral::analyzeValue(rex_literal->getVal<std::string>());
@@ -1389,8 +1391,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     return translateSign(rex_function);
   }
   if (rex_function->getName() == std::string("CEIL") ||
-      rex_function->getName() == std::string("FLOOR") ||
-      rex_function->getName() == std::string("TRUNCATE")) {
+      rex_function->getName() == std::string("FLOOR")) {
     return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
         rex_function->getType(),
         rex_function->getName(),
@@ -1494,20 +1495,22 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     // Var args; currently no check.  Possible fix-me -- can array have 0 elements?
     return translateArrayFunction(rex_function);
   }
-
   if (rex_function->getName() == std::string("ST_GeomFromText") ||
       rex_function->getName() == std::string("ST_GeogFromText") ||
       rex_function->getName() == std::string("ST_Point")) {
     throw QueryNotSupported("Geo constructor " + rex_function->getName() +
                             " currently not supported in this context");
   }
-  if (!ExtensionFunctionsWhitelist::get(rex_function->getName()) &&
-      !ExtensionFunctionsWhitelist::get_udf(rex_function->getName())) {
-    throw QueryNotSupported("Function " + rex_function->getName() + " not supported");
-  }
-  return makeExpr<Analyzer::FunctionOper>(rex_function->getType(),
-                                          rex_function->getName(),
-                                          translateFunctionArgs(rex_function));
+
+  auto atypes = translateFunctionArgs(rex_function);
+  // Reset possibly wrong return type of rex_function to the return
+  // type of the optimal valid implementation. The return type can be
+  // wrong in the case of multiple implementations of UDF functions
+  // that have different return types but Calcite specifies the return
+  // type according to the first implementation.
+  auto ext_func_sig = bind_function(rex_function->getName(), atypes);
+  auto rtype = ext_arg_type_to_type_info(ext_func_sig.getRet());
+  return makeExpr<Analyzer::FunctionOper>(rtype, rex_function->getName(), atypes);
 }
 
 namespace {

@@ -58,6 +58,8 @@ bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_ope
 
 }  // namespace
 
+#include "../Shared/sql_type_to_string.h"
+
 extern "C" void register_buffer_with_executor_rsm(int64_t exec, int8_t* buffer) {
   Executor* exec_ptr = reinterpret_cast<Executor*>(exec);
   if (buffer != nullptr) {
@@ -68,27 +70,12 @@ extern "C" void register_buffer_with_executor_rsm(int64_t exec, int8_t* buffer) 
 llvm::Value* CodeGenerator::codegenFunctionOper(
     const Analyzer::FunctionOper* function_oper,
     const CompilationOptions& co) {
-  auto ext_func_sigs = ExtensionFunctionsWhitelist::get(function_oper->getName());
-  if (!ext_func_sigs) {
-    ext_func_sigs = ExtensionFunctionsWhitelist::get_udf(function_oper->getName());
-    if (!ext_func_sigs) {
-      throw std::runtime_error("Runtime function " + function_oper->getName() +
-                               " not supported");
-    }
-  }
+  auto ext_func_sig = bind_function(function_oper);
 
-  CHECK(!ext_func_sigs->empty());
-  const auto& ext_func_sig = bind_function(function_oper, *ext_func_sigs);
   const auto& ret_ti = function_oper->get_type_info();
   CHECK(ret_ti.is_integer() || ret_ti.is_fp() || ret_ti.is_boolean());
   const auto ret_ty =
-      ret_ti.is_fp()
-          ? (ret_ti.get_type() == kDOUBLE ? llvm::Type::getDoubleTy(cgen_state_->context_)
-                                          : llvm::Type::getFloatTy(cgen_state_->context_))
-          : get_int_type(ret_ti.get_logical_size() * 8, cgen_state_->context_);
-  if (ret_ty != ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_)) {
-    throw std::runtime_error("Inconsistent return type for " + function_oper->getName());
-  }
+      ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_);
   const auto current_bb = cgen_state_->ir_builder_.GetInsertBlock();
   for (auto it : cgen_state_->ext_call_cache_) {
     if (*it.foper == *function_oper) {

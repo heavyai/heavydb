@@ -29,6 +29,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "../Shared/sqltypes.h"
+
 enum class ExtArgumentType {
   Int8,
   Int16,
@@ -45,6 +47,8 @@ enum class ExtArgumentType {
   Bool
 };
 
+SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type);
+
 class ExtensionFunction {
  public:
   ExtensionFunction(const std::string& name,
@@ -57,6 +61,7 @@ class ExtensionFunction {
   const std::vector<ExtArgumentType>& getArgs() const { return args_; }
 
   const ExtArgumentType getRet() const { return ret_; }
+  std::string toString() const;
 
  private:
   const std::string name_;
@@ -70,9 +75,26 @@ class ExtensionFunctionsWhitelist {
 
   static void addUdfs(const std::string& json_func_sigs);
 
+  static void clearRTUdfs();
+  static void addRTUdfs(const std::string& json_func_sigs);
+
   static std::vector<ExtensionFunction>* get(const std::string& name);
 
   static std::vector<ExtensionFunction>* get_udf(const std::string& name);
+
+  static std::vector<ExtensionFunction> get_ext_funcs(const std::string& name);
+
+  static std::vector<ExtensionFunction> get_ext_funcs(const std::string& name,
+                                                      size_t arity);
+
+  static std::vector<ExtensionFunction> get_ext_funcs(const std::string& name,
+                                                      size_t arity,
+                                                      const SQLTypeInfo& rtype);
+
+  static std::string toString(const std::vector<ExtensionFunction>& ext_funcs,
+                              std::string tab = "");
+  static std::string toString(const std::vector<SQLTypeInfo>& arg_types);
+  static std::string toString(const std::vector<ExtArgumentType>& sig_types);
 
   static std::vector<std::string> getLLVMDeclarations();
 
@@ -85,6 +107,8 @@ class ExtensionFunctionsWhitelist {
   // Function overloading not supported, they're uniquely identified by name.
   static std::unordered_map<std::string, std::vector<ExtensionFunction>> functions_;
   static std::unordered_map<std::string, std::vector<ExtensionFunction>> udf_functions_;
+  static std::unordered_map<std::string, std::vector<ExtensionFunction>>
+      rt_udf_functions_;
 };
 
 #endif  // QUERYENGINE_EXTENSIONFUNCTIONSWHITELIST_H
