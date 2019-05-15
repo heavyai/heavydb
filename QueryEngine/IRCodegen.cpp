@@ -75,11 +75,11 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto charlength_expr = dynamic_cast<const Analyzer::CharLengthExpr*>(expr);
   if (charlength_expr) {
-    return {codegen(charlength_expr, co)};
+    return {code_generator.codegen(charlength_expr, co)};
   }
   auto keyforstring_expr = dynamic_cast<const Analyzer::KeyForStringExpr*>(expr);
   if (keyforstring_expr) {
-    return {codegen(keyforstring_expr, co)};
+    return {code_generator.codegen(keyforstring_expr, co)};
   }
   auto cardinality_expr = dynamic_cast<const Analyzer::CardinalityExpr*>(expr);
   if (cardinality_expr) {
@@ -87,11 +87,11 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
   if (like_expr) {
-    return {codegen(like_expr, co)};
+    return {code_generator.codegen(like_expr, co)};
   }
   auto regexp_expr = dynamic_cast<const Analyzer::RegexpExpr*>(expr);
   if (regexp_expr) {
-    return {codegen(regexp_expr, co)};
+    return {code_generator.codegen(regexp_expr, co)};
   }
   auto likelihood_expr = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
   if (likelihood_expr) {

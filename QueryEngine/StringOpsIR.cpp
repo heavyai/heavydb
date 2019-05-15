@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "CodeGenerator.h"
 #include "Execute.h"
 
 #include "../Shared/sqldefs.h"
@@ -52,9 +53,9 @@ extern "C" int32_t string_compress(const int64_t ptr_and_len,
   return string_dict_proxy->getIdOfString(raw_str);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::CharLengthExpr* expr,
-                               const CompilationOptions& co) {
-  auto str_lv = codegen(expr->get_arg(), true, co);
+llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
+                                    const CompilationOptions& co) {
+  auto str_lv = executor_->codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
     if (g_enable_watchdog) {
@@ -75,7 +76,7 @@ llvm::Value* Executor::codegen(const Analyzer::CharLengthExpr* expr,
   const bool is_nullable{!expr->get_arg()->get_type_info().get_notnull()};
   if (is_nullable) {
     fn_name += "_nullable";
-    charlength_args.push_back(inlineIntNull(expr->get_type_info()));
+    charlength_args.push_back(executor_->inlineIntNull(expr->get_type_info()));
   }
   return expr->get_calc_encoded_length()
              ? cgen_state_->emitExternalCall(
@@ -83,15 +84,15 @@ llvm::Value* Executor::codegen(const Analyzer::CharLengthExpr* expr,
              : cgen_state_->emitCall(fn_name, charlength_args);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::KeyForStringExpr* expr,
-                               const CompilationOptions& co) {
-  auto str_lv = codegen(expr->get_arg(), true, co);
+llvm::Value* CodeGenerator::codegen(const Analyzer::KeyForStringExpr* expr,
+                                    const CompilationOptions& co) {
+  auto str_lv = executor_->codegen(expr->get_arg(), true, co);
   CHECK_EQ(size_t(1), str_lv.size());
   return cgen_state_->emitCall("key_for_string_encoded", str_lv);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr,
-                               const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
+                                    const CompilationOptions& co) {
   if (is_unnest(extract_cast_arg(expr->get_arg()))) {
     throw std::runtime_error("LIKE not supported for unnested expressions");
   }
@@ -122,7 +123,7 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr,
         "Cannot do LIKE / ILIKE on this dictionary encoded column, its cardinality is "
         "too high");
   }
-  auto str_lv = codegen(expr->get_arg(), true, co);
+  auto str_lv = executor_->codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
     str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
@@ -131,7 +132,7 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr,
       throw QueryMustRunOnCpu();
     }
   }
-  auto like_expr_arg_lvs = codegen(expr->get_like_expr(), true, co);
+  auto like_expr_arg_lvs = executor_->codegen(expr->get_like_expr(), true, co);
   CHECK_EQ(size_t(3), like_expr_arg_lvs.size());
   const bool is_nullable{!expr->get_arg()->get_type_info().get_notnull()};
   std::vector<llvm::Value*> str_like_args{
@@ -140,21 +141,22 @@ llvm::Value* Executor::codegen(const Analyzer::LikeExpr* expr,
   if (expr->get_is_simple()) {
     fn_name += "_simple";
   } else {
-    str_like_args.push_back(ll_int(int8_t(escape_char)));
+    str_like_args.push_back(executor_->ll_int(int8_t(escape_char)));
   }
   if (is_nullable) {
     fn_name += "_nullable";
-    str_like_args.push_back(inlineIntNull(expr->get_type_info()));
+    str_like_args.push_back(executor_->inlineIntNull(expr->get_type_info()));
   }
   return cgen_state_->emitCall(fn_name, str_like_args);
 }
 
-llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> like_arg,
-                                       const Analyzer::Constant* pattern,
-                                       const bool ilike,
-                                       const bool is_simple,
-                                       const char escape_char,
-                                       const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenDictLike(
+    const std::shared_ptr<Analyzer::Expr> like_arg,
+    const Analyzer::Constant* pattern,
+    const bool ilike,
+    const bool is_simple,
+    const char escape_char,
+    const CompilationOptions& co) {
   const auto cast_oper = std::dynamic_pointer_cast<Analyzer::UOper>(like_arg);
   if (!cast_oper) {
     return nullptr;
@@ -169,8 +171,8 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
                              " not supported"));
   }
   CHECK_EQ(kENCODING_DICT, dict_like_arg_ti.get_compression());
-  const auto sdp = getStringDictionaryProxy(
-      dict_like_arg_ti.get_comp_param(), row_set_mem_owner_, true);
+  const auto sdp = executor_->getStringDictionaryProxy(
+      dict_like_arg_ti.get_comp_param(), executor_->getRowSetMemoryOwner(), true);
   if (sdp->storageEntryCount() > 200000000) {
     return nullptr;
   }
@@ -185,7 +187,7 @@ llvm::Value* Executor::codegenDictLike(const std::shared_ptr<Analyzer::Expr> lik
   std::copy(matching_ids.begin(), matching_ids.end(), matching_ids_64.begin());
   const auto in_values = std::make_shared<Analyzer::InIntegerSet>(
       dict_like_arg, matching_ids_64, dict_like_arg_ti.get_notnull());
-  return codegen(in_values.get(), co);
+  return executor_->codegen(in_values.get(), co);
 }
 
 namespace {
@@ -221,10 +223,10 @@ std::vector<int32_t> get_compared_ids(const StringDictionaryProxy* dict,
 }
 }  // namespace
 
-llvm::Value* Executor::codegenDictStrCmp(const std::shared_ptr<Analyzer::Expr> lhs,
-                                         const std::shared_ptr<Analyzer::Expr> rhs,
-                                         const SQLOps compare_operator,
-                                         const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenDictStrCmp(const std::shared_ptr<Analyzer::Expr> lhs,
+                                              const std::shared_ptr<Analyzer::Expr> rhs,
+                                              const SQLOps compare_operator,
+                                              const CompilationOptions& co) {
   auto rhs_cast_oper = std::dynamic_pointer_cast<const Analyzer::UOper>(rhs);
   auto lhs_cast_oper = std::dynamic_pointer_cast<const Analyzer::UOper>(lhs);
   auto rhs_col_var = std::dynamic_pointer_cast<const Analyzer::ColumnVar>(rhs);
@@ -283,8 +285,8 @@ llvm::Value* Executor::codegenDictStrCmp(const std::shared_ptr<Analyzer::Expr> l
   const auto col_ti = col_var->get_type_info();
   CHECK(col_ti.is_string());
   CHECK_EQ(kENCODING_DICT, col_ti.get_compression());
-  const auto sdp =
-      getStringDictionaryProxy(col_ti.get_comp_param(), row_set_mem_owner_, true);
+  const auto sdp = executor_->getStringDictionaryProxy(
+      col_ti.get_comp_param(), executor_->getRowSetMemoryOwner(), true);
 
   if (sdp->storageEntryCount() > 200000000) {
     std::runtime_error("Cardinality for string dictionary is too high");
@@ -300,11 +302,11 @@ llvm::Value* Executor::codegenDictStrCmp(const std::shared_ptr<Analyzer::Expr> l
 
   const auto in_values = std::make_shared<Analyzer::InIntegerSet>(
       col_var, matching_ids_64, col_ti.get_notnull());
-  return codegen(in_values.get(), co);
+  return executor_->codegen(in_values.get(), co);
 }
 
-llvm::Value* Executor::codegen(const Analyzer::RegexpExpr* expr,
-                               const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegen(const Analyzer::RegexpExpr* expr,
+                                    const CompilationOptions& co) {
   if (is_unnest(extract_cast_arg(expr->get_arg()))) {
     throw std::runtime_error("REGEXP not supported for unnested expressions");
   }
@@ -335,22 +337,22 @@ llvm::Value* Executor::codegen(const Analyzer::RegexpExpr* expr,
   if (co.device_type_ == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
-  auto str_lv = codegen(expr->get_arg(), true, co);
+  auto str_lv = executor_->codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
     str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
     str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
   }
-  auto regexp_expr_arg_lvs = codegen(expr->get_pattern_expr(), true, co);
+  auto regexp_expr_arg_lvs = executor_->codegen(expr->get_pattern_expr(), true, co);
   CHECK_EQ(size_t(3), regexp_expr_arg_lvs.size());
   const bool is_nullable{!expr->get_arg()->get_type_info().get_notnull()};
   std::vector<llvm::Value*> regexp_args{
       str_lv[1], str_lv[2], regexp_expr_arg_lvs[1], regexp_expr_arg_lvs[2]};
   std::string fn_name("regexp_like");
-  regexp_args.push_back(ll_int(int8_t(escape_char)));
+  regexp_args.push_back(executor_->ll_int(int8_t(escape_char)));
   if (is_nullable) {
     fn_name += "_nullable";
-    regexp_args.push_back(inlineIntNull(expr->get_type_info()));
+    regexp_args.push_back(executor_->inlineIntNull(expr->get_type_info()));
     return cgen_state_->emitExternalCall(
         fn_name, get_int_type(8, cgen_state_->context_), regexp_args);
   }
@@ -358,7 +360,7 @@ llvm::Value* Executor::codegen(const Analyzer::RegexpExpr* expr,
       fn_name, get_int_type(1, cgen_state_->context_), regexp_args);
 }
 
-llvm::Value* Executor::codegenDictRegexp(
+llvm::Value* CodeGenerator::codegenDictRegexp(
     const std::shared_ptr<Analyzer::Expr> pattern_arg,
     const Analyzer::Constant* pattern,
     const char escape_char,
@@ -374,7 +376,8 @@ llvm::Value* Executor::codegenDictRegexp(
   CHECK(dict_regexp_arg_ti.is_string());
   CHECK_EQ(kENCODING_DICT, dict_regexp_arg_ti.get_compression());
   const auto comp_param = dict_regexp_arg_ti.get_comp_param();
-  const auto sdp = getStringDictionaryProxy(comp_param, row_set_mem_owner_, true);
+  const auto sdp = executor_->getStringDictionaryProxy(
+      comp_param, executor_->getRowSetMemoryOwner(), true);
   if (sdp->storageEntryCount() > 15000000) {
     return nullptr;
   }
@@ -389,5 +392,5 @@ llvm::Value* Executor::codegenDictRegexp(
   std::copy(matching_ids.begin(), matching_ids.end(), matching_ids_64.begin());
   const auto in_values = std::make_shared<Analyzer::InIntegerSet>(
       dict_regexp_arg, matching_ids_64, dict_regexp_arg_ti.get_notnull());
-  return codegen(in_values.get(), co);
+  return executor_->codegen(in_values.get(), co);
 }

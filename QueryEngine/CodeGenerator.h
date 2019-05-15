@@ -72,6 +72,14 @@ class CodeGenerator {
 
   llvm::Value* codegen(const Analyzer::DatetruncExpr*, const CompilationOptions&);
 
+  llvm::Value* codegen(const Analyzer::CharLengthExpr*, const CompilationOptions&);
+
+  llvm::Value* codegen(const Analyzer::KeyForStringExpr*, const CompilationOptions&);
+
+  llvm::Value* codegen(const Analyzer::LikeExpr*, const CompilationOptions&);
+
+  llvm::Value* codegen(const Analyzer::RegexpExpr*, const CompilationOptions&);
+
   llvm::Value* toBool(llvm::Value*);
 
   llvm::Value* posArg(const Analyzer::Expr*) const;
@@ -237,6 +245,23 @@ class CodeGenerator {
 
   llvm::Value* codegenLogicalShortCircuit(const Analyzer::BinOper*,
                                           const CompilationOptions&);
+
+  llvm::Value* codegenDictLike(const std::shared_ptr<Analyzer::Expr> arg,
+                               const Analyzer::Constant* pattern,
+                               const bool ilike,
+                               const bool is_simple,
+                               const char escape_char,
+                               const CompilationOptions&);
+
+  llvm::Value* codegenDictStrCmp(const std::shared_ptr<Analyzer::Expr>,
+                                 const std::shared_ptr<Analyzer::Expr>,
+                                 const SQLOps,
+                                 const CompilationOptions& co);
+
+  llvm::Value* codegenDictRegexp(const std::shared_ptr<Analyzer::Expr> arg,
+                                 const Analyzer::Constant* pattern,
+                                 const char escape_char,
+                                 const CompilationOptions&);
 
   Executor::CgenState* cgen_state_;
   Executor* executor_;

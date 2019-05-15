@@ -533,29 +533,11 @@ class Executor {
                            llvm::Type* case_llvm_type,
                            const bool is_real_str,
                            const CompilationOptions&);
-  llvm::Value* codegen(const Analyzer::CharLengthExpr*, const CompilationOptions&);
-  llvm::Value* codegen(const Analyzer::KeyForStringExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::CardinalityExpr*, const CompilationOptions&);
-  llvm::Value* codegen(const Analyzer::LikeExpr*, const CompilationOptions&);
-  llvm::Value* codegenDictLike(const std::shared_ptr<Analyzer::Expr> arg,
-                               const Analyzer::Constant* pattern,
-                               const bool ilike,
-                               const bool is_simple,
-                               const char escape_char,
-                               const CompilationOptions&);
-  llvm::Value* codegen(const Analyzer::RegexpExpr*, const CompilationOptions&);
-  llvm::Value* codegenDictRegexp(const std::shared_ptr<Analyzer::Expr> arg,
-                                 const Analyzer::Constant* pattern,
-                                 const char escape_char,
-                                 const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::InValues*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::InIntegerSet* expr, const CompilationOptions& co);
   std::unique_ptr<InValuesBitmap> createInValuesBitmap(const Analyzer::InValues*,
                                                        const CompilationOptions&);
-  llvm::Value* codegenDictStrCmp(const std::shared_ptr<Analyzer::Expr>,
-                                 const std::shared_ptr<Analyzer::Expr>,
-                                 const SQLOps,
-                                 const CompilationOptions& co);
   llvm::Value* codegenUnnest(const Analyzer::UOper*, const CompilationOptions&);
   llvm::Value* codegenArrayAt(const Analyzer::BinOper*, const CompilationOptions&);
 

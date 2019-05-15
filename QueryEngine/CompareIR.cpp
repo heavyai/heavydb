@@ -327,7 +327,7 @@ llvm::Value* CodeGenerator::codegenStrCmp(const SQLOps optype,
 
       // check if query is trying to compare a columnt against literal
 
-      auto ir = executor_->codegenDictStrCmp(lhs, rhs, optype, co);
+      auto ir = codegenDictStrCmp(lhs, rhs, optype, co);
       if (ir) {
         return ir;
       }
