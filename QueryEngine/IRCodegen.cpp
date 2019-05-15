@@ -84,7 +84,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto cardinality_expr = dynamic_cast<const Analyzer::CardinalityExpr*>(expr);
   if (cardinality_expr) {
-    return {codegen(cardinality_expr, co)};
+    return {code_generator.codegen(cardinality_expr, co)};
   }
   auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
   if (like_expr) {
@@ -114,7 +114,7 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto array_oper_expr = dynamic_cast<const Analyzer::ArrayExpr*>(expr);
   if (array_oper_expr) {
-    return {codegenArrayExpr(array_oper_expr, co)};
+    return {code_generator.codegenArrayExpr(array_oper_expr, co)};
   }
   auto function_oper_expr = dynamic_cast<const Analyzer::FunctionOper*>(expr);
   if (function_oper_expr) {
@@ -132,20 +132,18 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
 llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper,
                                const CompilationOptions& co) {
   const auto optype = bin_oper->get_optype();
+  CodeGenerator code_generator(cgen_state_.get(), this);
   if (IS_ARITHMETIC(optype)) {
-    CodeGenerator code_generator(cgen_state_.get(), this);
     return code_generator.codegenArith(bin_oper, co);
   }
   if (IS_COMPARISON(optype)) {
-    CodeGenerator code_generator(cgen_state_.get(), this);
     return code_generator.codegenCmp(bin_oper, co);
   }
   if (IS_LOGIC(optype)) {
-    CodeGenerator code_generator(cgen_state_.get(), this);
     return code_generator.codegenLogical(bin_oper, co);
   }
   if (optype == kARRAY_AT) {
-    return codegenArrayAt(bin_oper, co);
+    return code_generator.codegenArrayAt(bin_oper, co);
   }
   abort();
 }
@@ -153,25 +151,22 @@ llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper,
 llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper,
                                const CompilationOptions& co) {
   const auto optype = u_oper->get_optype();
+  CodeGenerator code_generator(cgen_state_.get(), this);
   switch (optype) {
     case kNOT: {
-      CodeGenerator code_generator(cgen_state_.get(), this);
       return code_generator.codegenLogical(u_oper, co);
     }
     case kCAST: {
-      CodeGenerator code_generator(cgen_state_.get(), this);
       return code_generator.codegenCast(u_oper, co);
     }
     case kUMINUS: {
-      CodeGenerator code_generator(cgen_state_.get(), this);
       return code_generator.codegenUMinus(u_oper, co);
     }
     case kISNULL: {
-      CodeGenerator code_generator(cgen_state_.get(), this);
       return code_generator.codegenIsNull(u_oper, co);
     }
     case kUNNEST:
-      return codegenUnnest(u_oper, co);
+      return code_generator.codegenUnnest(u_oper, co);
     default:
       abort();
   }

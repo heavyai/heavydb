@@ -92,6 +92,15 @@ class CodeGenerator {
 
   llvm::Value* codegen(const Analyzer::RegexpExpr*, const CompilationOptions&);
 
+  llvm::Value* codegenUnnest(const Analyzer::UOper*, const CompilationOptions&);
+
+  llvm::Value* codegenArrayAt(const Analyzer::BinOper*, const CompilationOptions&);
+
+  llvm::Value* codegen(const Analyzer::CardinalityExpr*, const CompilationOptions&);
+
+  std::vector<llvm::Value*> codegenArrayExpr(const Analyzer::ArrayExpr*,
+                                             const CompilationOptions&);
+
   llvm::Value* toBool(llvm::Value*);
 
   llvm::Value* posArg(const Analyzer::Expr*) const;

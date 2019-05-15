@@ -17,18 +17,18 @@
 #include "CodeGenerator.h"
 #include "Execute.h"
 
-llvm::Value* Executor::codegenUnnest(const Analyzer::UOper* uoper,
-                                     const CompilationOptions& co) {
-  return codegen(uoper->get_operand(), true, co).front();
+llvm::Value* CodeGenerator::codegenUnnest(const Analyzer::UOper* uoper,
+                                          const CompilationOptions& co) {
+  return executor_->codegen(uoper->get_operand(), true, co).front();
 }
 
-llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at,
-                                      const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegenArrayAt(const Analyzer::BinOper* array_at,
+                                           const CompilationOptions& co) {
   const auto arr_expr = array_at->get_left_operand();
   const auto idx_expr = array_at->get_right_operand();
   const auto& idx_ti = idx_expr->get_type_info();
   CHECK(idx_ti.is_integer());
-  auto idx_lvs = codegen(idx_expr, true, co);
+  auto idx_lvs = executor_->codegen(idx_expr, true, co);
   CHECK_EQ(size_t(1), idx_lvs.size());
   auto idx_lv = idx_lvs.front();
   if (idx_ti.get_logical_size() < 8) {
@@ -51,43 +51,41 @@ llvm::Value* Executor::codegenArrayAt(const Analyzer::BinOper* array_at,
                  ? llvm::Type::getDoubleTy(cgen_state_->context_)
                  : llvm::Type::getFloatTy(cgen_state_->context_))
           : get_int_type(elem_ti.get_logical_size() * 8, cgen_state_->context_);
-  const auto arr_lvs = codegen(arr_expr, true, co);
+  const auto arr_lvs = executor_->codegen(arr_expr, true, co);
   CHECK_EQ(size_t(1), arr_lvs.size());
-  CodeGenerator code_generator(cgen_state_.get(), this);
   return cgen_state_->emitExternalCall(
       array_at_fname,
       ret_ty,
       {arr_lvs.front(),
-       code_generator.posArg(arr_expr),
+       posArg(arr_expr),
        idx_lv,
-       elem_ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(elem_ti))
-                       : static_cast<llvm::Value*>(inlineIntNull(elem_ti))});
+       elem_ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(elem_ti))
+                       : static_cast<llvm::Value*>(executor_->inlineIntNull(elem_ti))});
 }
 
-llvm::Value* Executor::codegen(const Analyzer::CardinalityExpr* expr,
-                               const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegen(const Analyzer::CardinalityExpr* expr,
+                                    const CompilationOptions& co) {
   const auto arr_expr = expr->get_arg();
   const auto& array_ti = arr_expr->get_type_info();
   CHECK(array_ti.is_array());
   const auto& elem_ti = array_ti.get_elem_type();
-  auto arr_lv = codegen(arr_expr, true, co);
+  auto arr_lv = executor_->codegen(arr_expr, true, co);
   std::string fn_name("array_size");
 
-  CodeGenerator code_generator(cgen_state_.get(), this);
   std::vector<llvm::Value*> array_size_args{
       arr_lv.front(),
-      code_generator.posArg(arr_expr),
-      ll_int(log2_bytes(elem_ti.get_logical_size()))};
+      posArg(arr_expr),
+      executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))};
   const bool is_nullable{!arr_expr->get_type_info().get_notnull()};
   if (is_nullable) {
     fn_name += "_nullable";
-    array_size_args.push_back(inlineIntNull(expr->get_type_info()));
+    array_size_args.push_back(executor_->inlineIntNull(expr->get_type_info()));
   }
   return cgen_state_->emitExternalCall(
       fn_name, get_int_type(32, cgen_state_->context_), array_size_args);
 }
 
-std::vector<llvm::Value*> Executor::codegenArrayExpr(
+std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
     Analyzer::ArrayExpr const* array_expr,
     CompilationOptions const& co) {
   using ValueVector = std::vector<llvm::Value*>;
@@ -97,7 +95,7 @@ std::vector<llvm::Value*> Executor::codegenArrayExpr(
   const auto& return_type = array_expr->get_type_info();
   for (size_t i = 0; i < array_expr->getElementCount(); i++) {
     const auto arg = array_expr->getElement(i);
-    const auto arg_lvs = codegen(arg, true, co);
+    const auto arg_lvs = executor_->codegen(arg, true, co);
     if (arg_lvs.size() == 1) {
       argument_list.push_back(arg_lvs.front());
     } else {
@@ -113,21 +111,24 @@ std::vector<llvm::Value*> Executor::codegenArrayExpr(
   auto* array_type = get_int_array_type(
       array_element_size_bytes * 8, array_expr->getElementCount(), cgen_state_->context_);
 
-  llvm::Value* allocated_target_buffer = cgen_state_->emitExternalCall(
-      "allocate_varlen_buffer",
-      llvm::Type::getInt8PtrTy(cgen_state_->context_),
-      {ll_int(array_expr->getElementCount()), ll_int(array_element_size_bytes)});
+  llvm::Value* allocated_target_buffer =
+      cgen_state_->emitExternalCall("allocate_varlen_buffer",
+                                    llvm::Type::getInt8PtrTy(cgen_state_->context_),
+                                    {executor_->ll_int(array_expr->getElementCount()),
+                                     executor_->ll_int(array_element_size_bytes)});
   cgen_state_->emitExternalCall(
       "register_buffer_with_executor_rsm",
       llvm::Type::getVoidTy(cgen_state_->context_),
-      {ll_int(reinterpret_cast<int64_t>(this)), allocated_target_buffer});
+      {executor_->ll_int(reinterpret_cast<int64_t>(executor_)), allocated_target_buffer});
   llvm::Value* casted_allocated_target_buffer =
       ir_builder.CreatePointerCast(allocated_target_buffer, array_type->getPointerTo());
 
   for (size_t i = 0; i < array_expr->getElementCount(); i++) {
     auto* element = argument_list[i];
-    auto* element_ptr = ir_builder.CreateGEP(
-        array_type, casted_allocated_target_buffer, {ll_int(0), ll_int(i)});
+    auto* element_ptr =
+        ir_builder.CreateGEP(array_type,
+                             casted_allocated_target_buffer,
+                             {executor_->ll_int(0), executor_->ll_int(i)});
 
     if (is_member_of_typeset<kTINYINT,
                              kSMALLINT,
@@ -161,6 +162,7 @@ std::vector<llvm::Value*> Executor::codegenArrayExpr(
     }
   }
 
-  return {ir_builder.CreateGEP(array_type, casted_allocated_target_buffer, ll_int(0)),
-          ll_int(array_expr->getElementCount())};
+  return {ir_builder.CreateGEP(
+              array_type, casted_allocated_target_buffer, executor_->ll_int(0)),
+          executor_->ll_int(array_expr->getElementCount())};
 }
