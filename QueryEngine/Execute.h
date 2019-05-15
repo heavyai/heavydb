@@ -507,24 +507,6 @@ class Executor {
   std::vector<llvm::Value*> codegenArrayExpr(const Analyzer::ArrayExpr*,
                                              const CompilationOptions&);
 
-  std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
-                                    const EncodingType enc_type,
-                                    const int dict_id,
-                                    const CompilationOptions&);
-  std::vector<llvm::Value*> codegenHoistedConstants(
-      const std::vector<const Analyzer::Constant*>& constants,
-      const EncodingType enc_type,
-      const int dict_id);
-  std::vector<llvm::Value*> codegenHoistedConstantsLoads(const SQLTypeInfo& type_info,
-                                                         const EncodingType enc_type,
-                                                         const int dict_id,
-                                                         const int16_t lit_off);
-  std::vector<llvm::Value*> codegenHoistedConstantsPlaceholders(
-      const SQLTypeInfo& type_info,
-      const EncodingType enc_type,
-      const int16_t lit_off,
-      const std::vector<llvm::Value*>& literal_loads);
-
   int deviceCount(const ExecutorDeviceType) const;
   int deviceCountForMemoryLevel(const Data_Namespace::MemoryLevel memory_level) const;
 
@@ -599,7 +581,6 @@ class Executor {
       const std::unordered_map<llvm::Value*, llvm::Value*>&,
       const CompilationOptions&);
   llvm::Value* castArrayPointer(llvm::Value* ptr, const SQLTypeInfo& elem_ti);
-  llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
   llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
   llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
   std::pair<llvm::ConstantInt*, llvm::ConstantInt*> inlineIntMaxMin(

@@ -15,6 +15,7 @@
  */
 
 #include "InValuesBitmap.h"
+#include "CodeGenerator.h"
 #include "Execute.h"
 #ifdef HAVE_CUDA
 #include "GpuMemUtils.h"
@@ -128,8 +129,9 @@ llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) co
     constants_owned.push_back(bitset_handle_literal);
     constants.push_back(bitset_handle_literal.get());
   }
+  CodeGenerator code_generator(executor->cgen_state_.get(), executor);
   const auto bitset_handle_lvs =
-      executor->codegenHoistedConstants(constants, kENCODING_NONE, 0);
+      code_generator.codegenHoistedConstants(constants, kENCODING_NONE, 0);
   CHECK_EQ(size_t(1), bitset_handle_lvs.size());
   const auto needle_i64 = executor->castToTypeIn(needle, 64);
   const auto null_bool_val =

@@ -320,8 +320,7 @@ llvm::Value* CodeGenerator::codegenRowId(const Analyzer::ColumnVar* col_var,
     Datum d;
     d.bigintval = table_generation.start_rowid;
     const auto start_rowid = makeExpr<Analyzer::Constant>(kBIGINT, false, d);
-    const auto start_rowid_lvs =
-        executor_->codegen(start_rowid.get(), kENCODING_NONE, -1, co);
+    const auto start_rowid_lvs = codegen(start_rowid.get(), kENCODING_NONE, -1, co);
     CHECK_EQ(size_t(1), start_rowid_lvs.size());
     start_rowid_lv = start_rowid_lvs.front();
   }

@@ -18,6 +18,7 @@
 
 #include "AggregateUtils.h"
 #include "BaselineJoinHashTable.h"
+#include "CodeGenerator.h"
 #include "ColumnFetcher.h"
 #include "Descriptors/QueryCompilationDescriptor.h"
 #include "Descriptors/QueryFragmentDescriptor.h"
@@ -3094,7 +3095,8 @@ std::pair<bool, int64_t> Executor::skipFragment(
       chunk_min = get_hpt_scaled_value(chunk_min, lhs_dimen, rhs_dimen);
       chunk_max = get_hpt_scaled_value(chunk_max, lhs_dimen, rhs_dimen);
     }
-    const auto rhs_val = codegenIntConst(rhs_const)->getSExtValue();
+    CodeGenerator code_generator(cgen_state_.get(), this);
+    const auto rhs_val = code_generator.codegenIntConst(rhs_const)->getSExtValue();
     switch (comp_expr->get_optype()) {
       case kGE:
         if (chunk_max < rhs_val) {

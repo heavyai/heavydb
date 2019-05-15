@@ -51,7 +51,8 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
     // The dictionary encoding case should be handled by the parent expression
     // (cast, for now), here is too late to know the dictionary id
     CHECK_NE(kENCODING_DICT, constant->get_type_info().get_compression());
-    return {codegen(constant, constant->get_type_info().get_compression(), 0, co)};
+    return {code_generator.codegen(
+        constant, constant->get_type_info().get_compression(), 0, co)};
   }
   auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
   if (case_expr) {

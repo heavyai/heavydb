@@ -534,8 +534,8 @@ llvm::Value* CodeGenerator::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
   if (rhs_constant) {
     const auto rhs_lit = Parser::IntLiteral::analyzeValue(
         rhs_constant->get_constval().bigintval / exp_to_scale(rhs_type.get_scale()));
-    auto rhs_lit_lv = executor_->codegenIntConst(
-        dynamic_cast<const Analyzer::Constant*>(rhs_lit.get()));
+    auto rhs_lit_lv =
+        codegenIntConst(dynamic_cast<const Analyzer::Constant*>(rhs_lit.get()));
     rhs_lv = codegenCastBetweenIntTypes(
         rhs_lit_lv, rhs_lit->get_type_info(), lhs_type, /*upscale*/ false);
   } else if (rhs_cast) {

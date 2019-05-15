@@ -27,8 +27,8 @@ llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
   // information as the compression parameter; handle this case separately.
   llvm::Value* operand_lv{nullptr};
   if (operand_as_const) {
-    const auto operand_lvs = executor_->codegen(
-        operand_as_const, ti.get_compression(), ti.get_comp_param(), co);
+    const auto operand_lvs =
+        codegen(operand_as_const, ti.get_compression(), ti.get_comp_param(), co);
     if (operand_lvs.size() == 3) {
       operand_lv = cgen_state_->emitCall("string_pack", {operand_lvs[1], operand_lvs[2]});
     } else {

@@ -26,6 +26,18 @@ class CodeGenerator {
   CodeGenerator(Executor::CgenState* cgen_state, Executor* executor)
       : cgen_state_(cgen_state), executor_(executor) {}
 
+  std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
+                                    const EncodingType enc_type,
+                                    const int dict_id,
+                                    const CompilationOptions&);
+
+  llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
+
+  std::vector<llvm::Value*> codegenHoistedConstants(
+      const std::vector<const Analyzer::Constant*>& constants,
+      const EncodingType enc_type,
+      const int dict_id);
+
   std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*,
                                     const bool fetch_column,
                                     const CompilationOptions&);
@@ -89,6 +101,17 @@ class CodeGenerator {
                               std::vector<Analyzer::Expr*>& deferred_quals);
 
  private:
+  std::vector<llvm::Value*> codegenHoistedConstantsLoads(const SQLTypeInfo& type_info,
+                                                         const EncodingType enc_type,
+                                                         const int dict_id,
+                                                         const int16_t lit_off);
+
+  std::vector<llvm::Value*> codegenHoistedConstantsPlaceholders(
+      const SQLTypeInfo& type_info,
+      const EncodingType enc_type,
+      const int16_t lit_off,
+      const std::vector<llvm::Value*>& literal_loads);
+
   std::vector<llvm::Value*> codegenColVar(const Analyzer::ColumnVar*,
                                           const bool fetch_column,
                                           const bool update_query_plan,
