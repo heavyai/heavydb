@@ -1,5 +1,5 @@
-OmniSciDB
-=========
+OmniSciDB (formerly MapD Core)
+==============================
 
 OmniSciDB is an in-memory, column store, SQL relational database designed from the ground up to run on GPUs. OmniSciDB is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).
 
