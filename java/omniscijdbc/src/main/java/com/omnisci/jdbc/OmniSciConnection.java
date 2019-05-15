@@ -15,9 +15,20 @@
  */
 package com.omnisci.jdbc;
 
+import com.mapd.common.SockTransportProperties;
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TServerStatus;
+
+import org.apache.thrift.TException;
+import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.protocol.TJSONProtocol;
+import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.transport.TTransport;
+import org.apache.thrift.transport.TTransportException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.CallableStatement;
@@ -35,15 +46,6 @@ import java.sql.Statement;
 import java.sql.Struct;
 import java.util.*;
 import java.util.concurrent.Executor;
-import org.apache.thrift.TException;
-import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.protocol.TJSONProtocol;
-import org.apache.thrift.protocol.TProtocol;
-import org.apache.thrift.transport.TTransport;
-import org.apache.thrift.transport.TTransportException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import com.mapd.common.SockTransportProperties;
 
 /**
  *

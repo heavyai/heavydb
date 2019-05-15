@@ -1,20 +1,20 @@
 package flavors;
 
 // Swing/AWT Interface classes
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.awt.EventQueue;
-import javax.swing.JButton;
-import javax.swing.JFrame;
-import javax.swing.JLabel;
-
-// Generic Java properties object
-import java.util.Properties;
-
 // Kafka Producer-specific classes
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+
+import java.awt.EventQueue;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+// Generic Java properties object
+import java.util.Properties;
+
+import javax.swing.JButton;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
 
 public class FlavorPicker {
   private JFrame frmFlavors;

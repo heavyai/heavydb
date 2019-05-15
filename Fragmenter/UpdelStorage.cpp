@@ -521,15 +521,15 @@ void InsertOrderFragmenter::updateColumns(
          i < num_worker_threads && start_entry < num_rows;
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, num_rows);
-      worker_threads.push_back(
-          std::async(std::launch::async,
-                     [&row_converter](const size_t start, const size_t end) {
-                       for (size_t indexOfRow = start; indexOfRow < end; ++indexOfRow) {
-                         row_converter(indexOfRow);
-                       }
-                     },
-                     start_entry,
-                     end_entry));
+      worker_threads.push_back(std::async(
+          std::launch::async,
+          [&row_converter](const size_t start, const size_t end) {
+            for (size_t indexOfRow = start; indexOfRow < end; ++indexOfRow) {
+              row_converter(indexOfRow);
+            }
+          },
+          start_entry,
+          end_entry));
     }
 
     for (auto& child : worker_threads) {

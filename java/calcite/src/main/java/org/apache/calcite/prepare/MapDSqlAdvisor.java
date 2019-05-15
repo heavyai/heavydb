@@ -16,12 +16,13 @@
  */
 package org.apache.calcite.prepare;
 
-import java.util.ArrayList;
-import java.util.List;
 import org.apache.calcite.sql.advise.SqlAdvisor;
 import org.apache.calcite.sql.validate.SqlMoniker;
 import org.apache.calcite.sql.validate.SqlMonikerImpl;
 import org.apache.calcite.sql.validate.SqlMonikerType;
+
+import java.util.ArrayList;
+import java.util.List;
 
 class MapDSqlAdvisor extends SqlAdvisor {
   public MapDSqlAdvisor(MapDSqlAdvisorValidator validator) {

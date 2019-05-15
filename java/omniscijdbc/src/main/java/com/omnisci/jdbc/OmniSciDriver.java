@@ -16,6 +16,8 @@
 
 package com.omnisci.jdbc;
 
+import org.slf4j.LoggerFactory;
+
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.DriverPropertyInfo;
@@ -23,7 +25,6 @@ import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
 import java.util.Properties;
 import java.util.logging.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  *
@@ -70,7 +71,7 @@ public class OmniSciDriver implements java.sql.Driver {
   private static boolean isValidURL(String url) {
     return url != null
             && (url.toLowerCase().startsWith(OMNISCI_PREFIX)
-                       || url.toLowerCase().startsWith(MAPD_PREFIX));
+                    || url.toLowerCase().startsWith(MAPD_PREFIX));
   }
 
   @Override

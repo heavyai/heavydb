@@ -1455,25 +1455,25 @@ TEST(Reduction, Baseline) {
       std::vector<std::future<void>> reducer_threads;
       for (size_t device_id = 0; device_id + stride < result_count;
            device_id += stride * 2) {
-        reducer_threads.push_back(
-            std::async(std::launch::async,
-                       [&](const size_t dev_id) {
-                         if (has_multi_gpus) {
-                           cudaSetDevice(dev_id);
-                         }
-                         reduce_on_device(dev_reduced_buffers[dev_id],
-                                          dev_id,
-                                          rs_entry_count[dev_id],
-                                          dev_reduced_buffers[dev_id + stride],
-                                          has_multi_gpus ? dev_id + stride : dev_id,
-                                          rs_entry_count[dev_id + stride],
-                                          rs_row_counts[dev_id + stride],
-                                          col_widths,
-                                          agg_ops,
-                                          init_vals,
-                                          is_columnar);
-                       },
-                       device_id));
+        reducer_threads.push_back(std::async(
+            std::launch::async,
+            [&](const size_t dev_id) {
+              if (has_multi_gpus) {
+                cudaSetDevice(dev_id);
+              }
+              reduce_on_device(dev_reduced_buffers[dev_id],
+                               dev_id,
+                               rs_entry_count[dev_id],
+                               dev_reduced_buffers[dev_id + stride],
+                               has_multi_gpus ? dev_id + stride : dev_id,
+                               rs_entry_count[dev_id + stride],
+                               rs_row_counts[dev_id + stride],
+                               col_widths,
+                               agg_ops,
+                               init_vals,
+                               is_columnar);
+            },
+            device_id));
       }
       for (auto& child : reducer_threads) {
         child.get();
@@ -1703,21 +1703,21 @@ TEST(Reduction, PerfectHash) {
   elapsedTime = measure<>::execution([&]() {
     std::vector<std::future<void>> uploader_threads;
     for (size_t device_id = 0; device_id < result_count; ++device_id) {
-      uploader_threads.push_back(std::async(std::launch::async,
-                                            [&](const size_t dev_id) {
-                                              if (has_multi_gpus) {
-                                                cudaSetDevice(dev_id);
-                                              }
-                                              int8_t* dev_reduced_buffer = nullptr;
-                                              cudaMalloc(&dev_reduced_buffer, input_size);
-                                              cudaMemcpy(dev_reduced_buffer,
-                                                         host_reduced_buffers[dev_id],
-                                                         input_size,
-                                                         cudaMemcpyHostToDevice);
-                                              dev_reduced_buffers[dev_id] =
-                                                  dev_reduced_buffer;
-                                            },
-                                            device_id));
+      uploader_threads.push_back(std::async(
+          std::launch::async,
+          [&](const size_t dev_id) {
+            if (has_multi_gpus) {
+              cudaSetDevice(dev_id);
+            }
+            int8_t* dev_reduced_buffer = nullptr;
+            cudaMalloc(&dev_reduced_buffer, input_size);
+            cudaMemcpy(dev_reduced_buffer,
+                       host_reduced_buffers[dev_id],
+                       input_size,
+                       cudaMemcpyHostToDevice);
+            dev_reduced_buffers[dev_id] = dev_reduced_buffer;
+          },
+          device_id));
     }
     for (auto& child : uploader_threads) {
       child.get();
@@ -1761,25 +1761,25 @@ TEST(Reduction, PerfectHash) {
     for (size_t device_id = 0, start_entry = 0; device_id < seg_count;
          ++device_id, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entry_count);
-      reducer_threads.push_back(
-          std::async(std::launch::async,
-                     [&](const size_t dev_id, const size_t start, const size_t end) {
-                       if (has_multi_gpus) {
-                         cudaSetDevice(dev_id);
-                       }
-                       reduce_segment_on_device(dev_reduced_buffers[dev_id],
-                                                dev_seg_copies[dev_id],
-                                                entry_count,
-                                                seg_count,
-                                                col_widths,
-                                                agg_ops,
-                                                is_columnar,
-                                                start,
-                                                end);
-                     },
-                     device_id,
-                     start_entry,
-                     end_entry));
+      reducer_threads.push_back(std::async(
+          std::launch::async,
+          [&](const size_t dev_id, const size_t start, const size_t end) {
+            if (has_multi_gpus) {
+              cudaSetDevice(dev_id);
+            }
+            reduce_segment_on_device(dev_reduced_buffers[dev_id],
+                                     dev_seg_copies[dev_id],
+                                     entry_count,
+                                     seg_count,
+                                     col_widths,
+                                     agg_ops,
+                                     is_columnar,
+                                     start,
+                                     end);
+          },
+          device_id,
+          start_entry,
+          end_entry));
     }
     for (auto& child : reducer_threads) {
       child.get();

@@ -1,5 +1,7 @@
 package com.omnisci.jdbc;
 
+import static org.junit.Assert.*;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -8,8 +10,6 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Properties;
-
-import static org.junit.Assert.*;
 
 public class OmniSciDatabaseMetaDataTest {
   // Property_loader loads the values from 'connection.properties in resources

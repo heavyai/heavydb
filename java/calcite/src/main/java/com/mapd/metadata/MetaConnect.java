@@ -17,7 +17,10 @@ package com.mapd.metadata;
 
 import com.google.common.collect.ImmutableList;
 import com.mapd.calcite.parser.MapDParser;
+import com.mapd.calcite.parser.MapDTable;
 import com.mapd.calcite.parser.MapDUser;
+import com.mapd.calcite.parser.MapDView;
+import com.mapd.common.SockTransportProperties;
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDatumType;
@@ -25,15 +28,7 @@ import com.mapd.thrift.server.TEncodingType;
 import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TTableDetails;
 import com.mapd.thrift.server.TTypeInfo;
-import com.mapd.common.SockTransportProperties;
 
-import java.sql.Connection;
-import java.sql.DriverManager;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.sql.Statement;
-import java.util.HashSet;
-import java.util.Set;
 import org.apache.calcite.schema.Table;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -44,12 +39,17 @@ import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.mapd.calcite.parser.MapDTable;
-import com.mapd.calcite.parser.MapDView;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import com.mapd.common.SockTransportProperties;
 
 /**
  *

@@ -17,11 +17,11 @@ package com.mapd.tests;
 
 import static com.mapd.tests.MapdAsserts.shouldThrowException;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class CalciteViewsConcurrencyTest {
   final static Logger logger = LoggerFactory.getLogger(CalciteViewsConcurrencyTest.class);

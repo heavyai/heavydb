@@ -14,18 +14,21 @@
  * limitations under the License.
  */
 
+import static java.lang.System.out;
+
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TQueryResult;
+
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TJSONProtocol;
 import org.apache.thrift.transport.THttpClient;
-import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TSSLTransportFactory;
 import org.apache.thrift.transport.TSSLTransportFactory.TSSLTransportParameters;
+import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
-import static java.lang.System.out;
+
 import java.util.Date;
 
 /*

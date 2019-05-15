@@ -2,9 +2,10 @@ package com.mapd.utility.db_vendors;
 
 import org.postgis.Geometry;
 import org.postgis.PGgeometry;
+import org.postgresql.geometric.PGlseg;
 import org.postgresql.geometric.PGpoint;
 import org.postgresql.geometric.PGpolygon;
-import org.postgresql.geometric.PGlseg;
+
 import java.sql.*;
 import java.util.HashSet;
 import java.util.Hashtable;

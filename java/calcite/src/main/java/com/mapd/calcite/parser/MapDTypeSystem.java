@@ -16,8 +16,8 @@
 
 package com.mapd.calcite.parser;
 
-import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.rel.type.RelDataTypeSystemImpl;
+import org.apache.calcite.sql.type.SqlTypeName;
 
 public class MapDTypeSystem extends RelDataTypeSystemImpl {
   public MapDTypeSystem() {}

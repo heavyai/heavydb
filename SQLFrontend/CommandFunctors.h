@@ -223,18 +223,18 @@ StandardCommand(RoleList, {
 
 StandardCommand(Roles, ContextOps::get_all_roles(cmdContext()));
 
-StandardCommand(ListUsers,
-                { returned_list_regex<kGET_USERS>(p, cmdContext(), output_stream); },
-                RegexCmdDeterminant);
-StandardCommand(ListTables,
-                {
-                  returned_list_regex<kGET_PHYSICAL_TABLES>(
-                      p, cmdContext(), output_stream);
-                },
-                RegexCmdDeterminant);
-StandardCommand(ListViews,
-                { returned_list_regex<kGET_VIEWS>(p, cmdContext(), output_stream); },
-                RegexCmdDeterminant);
+StandardCommand(
+    ListUsers,
+    { returned_list_regex<kGET_USERS>(p, cmdContext(), output_stream); },
+    RegexCmdDeterminant);
+StandardCommand(
+    ListTables,
+    { returned_list_regex<kGET_PHYSICAL_TABLES>(p, cmdContext(), output_stream); },
+    RegexCmdDeterminant);
+StandardCommand(
+    ListViews,
+    { returned_list_regex<kGET_VIEWS>(p, cmdContext(), output_stream); },
+    RegexCmdDeterminant);
 
 StandardCommand(Help, {
   std::cout << "\\u [regex] List all users, optionally matching regex.\n";

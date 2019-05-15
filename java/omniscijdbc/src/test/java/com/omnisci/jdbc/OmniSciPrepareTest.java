@@ -1,5 +1,7 @@
 package com.omnisci.jdbc;
 
+import static org.junit.Assert.assertEquals;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -7,8 +9,6 @@ import org.junit.Test;
 
 import java.sql.*;
 import java.util.Properties;
-
-import static org.junit.Assert.assertEquals;
 
 public class OmniSciPrepareTest {
   static Properties PROPERTIES = new Property_loader("prepare_test.properties");

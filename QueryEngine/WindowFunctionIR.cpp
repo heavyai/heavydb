@@ -57,7 +57,9 @@ llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
     case SqlWindowFunctionKind::COUNT: {
       return codegenWindowFunctionAggregate(co);
     }
-    default: { LOG(FATAL) << "Invalid window function kind"; }
+    default: {
+      LOG(FATAL) << "Invalid window function kind";
+    }
   }
   return nullptr;
 }
@@ -85,7 +87,9 @@ std::string get_window_agg_name(const SqlWindowFunctionKind kind,
       agg_name = "agg_count";
       break;
     }
-    default: { LOG(FATAL) << "Invalid window function kind"; }
+    default: {
+      LOG(FATAL) << "Invalid window function kind";
+    }
   }
   switch (window_func_ti.get_type()) {
     case kFLOAT: {
@@ -96,7 +100,9 @@ std::string get_window_agg_name(const SqlWindowFunctionKind kind,
       agg_name += "_double";
       break;
     }
-    default: { break; }
+    default: {
+      break;
+    }
   }
   return agg_name;
 }
@@ -288,7 +294,9 @@ void Executor::codegenWindowAvgEpilogue(llvm::Value* crt_val,
       agg_count_func_name += "_double";
       break;
     }
-    default: { break; }
+    default: {
+      break;
+    }
   }
   agg_count_func_name += "_skip_val";
   cgen_state_->emitCall(agg_count_func_name,
@@ -345,6 +353,8 @@ llvm::Value* Executor::codegenAggregateWindowState() {
     case kDOUBLE: {
       return cgen_state_->emitCall("load_double", {aggregate_state});
     }
-    default: { return cgen_state_->ir_builder_.CreateLoad(aggregate_state); }
+    default: {
+      return cgen_state_->ir_builder_.CreateLoad(aggregate_state);
+    }
   }
 }

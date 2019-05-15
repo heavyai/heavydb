@@ -77,7 +77,9 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
         case kPOLYGON:
         case kMULTIPOLYGON:
           return new StringNoneEncoder(buffer);
-        default: { return 0; }
+        default: {
+          return 0;
+        }
       }
       break;
     }
@@ -201,7 +203,9 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
         case kPOLYGON:
         case kMULTIPOLYGON:
           return new StringNoneEncoder(buffer);
-        default: { return 0; }
+        default: {
+          return 0;
+        }
       }
       break;
     }

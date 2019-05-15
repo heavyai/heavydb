@@ -182,7 +182,9 @@ size_t get_int_constant_from_expr(const Analyzer::Expr* expr) {
     case kBIGINT: {
       return lag_constant->get_constval().bigintval;
     }
-    default: { LOG(FATAL) << "Invalid type for the lag argument"; }
+    default: {
+      LOG(FATAL) << "Invalid type for the lag argument";
+    }
   }
   return 0;
 }
@@ -383,7 +385,9 @@ bool window_function_is_value(const SqlWindowFunctionKind kind) {
     case SqlWindowFunctionKind::LAST_VALUE: {
       return true;
     }
-    default: { return false; }
+    default: {
+      return false;
+    }
   }
 }
 
@@ -398,7 +402,9 @@ bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
     case SqlWindowFunctionKind::SUM_INTERNAL: {
       return true;
     }
-    default: { return false; }
+    default: {
+      return false;
+    }
   }
 }
 
@@ -416,7 +422,9 @@ bool window_function_requires_peer_handling(const Analyzer::WindowFunction* wind
     case SqlWindowFunctionKind::MAX: {
       return false;
     }
-    default: { return true; }
+    default: {
+      return true;
+    }
   }
 }
 
@@ -633,7 +641,9 @@ WindowFunctionContext::makeComparator(const Analyzer::ColumnVar* col_var,
               order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
         };
       }
-      default: { LOG(FATAL) << "Invalid type size: " << ti.get_size(); }
+      default: {
+        LOG(FATAL) << "Invalid type size: " << ti.get_size();
+      }
     }
   }
   if (ti.is_fp()) {
@@ -652,7 +662,9 @@ WindowFunctionContext::makeComparator(const Analyzer::ColumnVar* col_var,
               order_column_buffer, ti, partition_indices, lhs, rhs, nulls_first);
         };
       }
-      default: { LOG(FATAL) << "Invalid float type"; }
+      default: {
+        LOG(FATAL) << "Invalid float type";
+      }
     }
   }
   throw std::runtime_error("Type not supported yet");

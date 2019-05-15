@@ -16,25 +16,26 @@
 
 package com.mapd.parser.server.test;
 
+import static org.junit.Assert.*;
+
 import com.mapd.parser.server.CalciteServerWrapper;
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TQueryResult;
 
-import java.util.Random;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
-
-import static org.junit.Assert.*;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class TestMapDServer {
   private final static Logger MAPDLOGGER = LoggerFactory.getLogger(TestMapDServer.class);

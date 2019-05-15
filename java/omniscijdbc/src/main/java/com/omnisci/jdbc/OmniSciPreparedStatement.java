@@ -16,11 +16,16 @@
 package com.omnisci.jdbc;
 
 import com.mapd.thrift.server.MapD;
+import com.mapd.thrift.server.TColumnType;
+import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TStringRow;
 import com.mapd.thrift.server.TStringValue;
-import com.mapd.thrift.server.TMapDException;
-import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TTableDetails;
+
+import org.apache.thrift.TException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.InputStream;
 import java.io.Reader;
 import java.math.BigDecimal;
@@ -42,15 +47,12 @@ import java.sql.SQLWarning;
 import java.sql.SQLXML;
 import java.sql.Time;
 import java.sql.Timestamp;
-import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.apache.thrift.TException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  *

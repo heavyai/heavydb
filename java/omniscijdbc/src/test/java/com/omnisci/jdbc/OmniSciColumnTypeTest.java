@@ -1,14 +1,15 @@
 package com.omnisci.jdbc;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+
 import org.junit.Test;
 
-import javax.xml.transform.Result;
 import java.sql.*;
 import java.util.HashMap;
 import java.util.Properties;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
+import javax.xml.transform.Result;
 
 public class OmniSciColumnTypeTest {
   static Properties PROPERTIES = new Property_loader("type_test.properties");

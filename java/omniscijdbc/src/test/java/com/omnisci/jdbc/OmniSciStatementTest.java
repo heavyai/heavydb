@@ -1,5 +1,9 @@
 package com.omnisci.jdbc;
 
+import static org.junit.Assert.*;
+
+import static java.lang.Math.ulp;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Ignore;
@@ -10,9 +14,6 @@ import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Properties;
 import java.util.TimeZone;
-
-import static java.lang.Math.ulp;
-import static org.junit.Assert.*;
 
 public class OmniSciStatementTest {
   static Properties PROPERTIES = new Property_loader("connection.properties");

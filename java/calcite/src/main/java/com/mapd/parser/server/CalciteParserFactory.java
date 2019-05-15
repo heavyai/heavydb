@@ -15,13 +15,14 @@
  */
 package com.mapd.parser.server;
 
-import java.util.Map;
-
 import com.mapd.calcite.parser.MapDParser;
+import com.mapd.common.SockTransportProperties;
+
 import org.apache.commons.pool.PoolableObjectFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.mapd.common.SockTransportProperties;
+
+import java.util.Map;
 
 /**
  *

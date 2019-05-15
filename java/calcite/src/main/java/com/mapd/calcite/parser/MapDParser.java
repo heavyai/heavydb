@@ -15,10 +15,9 @@
  */
 package com.mapd.calcite.parser;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import com.google.common.collect.ImmutableList;
+import com.mapd.common.SockTransportProperties;
+import com.mapd.parser.server.ExtensionFunction;
 
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.plan.RelOptLattice;
@@ -68,9 +67,10 @@ import org.apache.calcite.util.ConversionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.ImmutableList;
-import com.mapd.common.SockTransportProperties;
-import com.mapd.parser.server.ExtensionFunction;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  *

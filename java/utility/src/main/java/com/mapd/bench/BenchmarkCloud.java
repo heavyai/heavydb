@@ -17,6 +17,11 @@ package com.mapd.bench;
 
 // STEP 1. Import required packages
 import com.omnisci.jdbc.OmniSciStatement;
+
+import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -28,9 +33,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 
 public class BenchmarkCloud {
   final static Logger logger = LoggerFactory.getLogger(BenchmarkCloud.class);

@@ -1073,16 +1073,16 @@ void fill_one_to_many_hash_table(int32_t* buff,
 #endif
   std::vector<std::future<void>> pos_threads;
   for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
-    pos_threads.push_back(std::async(std::launch::async,
-                                     [&](const int thread_idx) {
-                                       for (int i = thread_idx; i < hash_entry_count;
-                                            i += cpu_thread_count) {
-                                         if (count_buff[i]) {
-                                           pos_buff[i] = count_copy[i];
-                                         }
-                                       }
-                                     },
-                                     cpu_thread_idx));
+    pos_threads.push_back(std::async(
+        std::launch::async,
+        [&](const int thread_idx) {
+          for (int i = thread_idx; i < hash_entry_count; i += cpu_thread_count) {
+            if (count_buff[i]) {
+              pos_buff[i] = count_copy[i];
+            }
+          }
+        },
+        cpu_thread_idx));
   }
   for (auto& child : pos_threads) {
     child.get();
@@ -1147,16 +1147,16 @@ void fill_one_to_many_hash_table_sharded(int32_t* buff,
       count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
   std::vector<std::future<void>> pos_threads;
   for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
-    pos_threads.push_back(std::async(std::launch::async,
-                                     [&](const int thread_idx) {
-                                       for (int i = thread_idx; i < hash_entry_count;
-                                            i += cpu_thread_count) {
-                                         if (count_buff[i]) {
-                                           pos_buff[i] = count_copy[i];
-                                         }
-                                       }
-                                     },
-                                     cpu_thread_idx));
+    pos_threads.push_back(std::async(
+        std::launch::async,
+        [&](const int thread_idx) {
+          for (int i = thread_idx; i < hash_entry_count; i += cpu_thread_count) {
+            if (count_buff[i]) {
+              pos_buff[i] = count_copy[i];
+            }
+          }
+        },
+        cpu_thread_idx));
   }
   for (auto& child : pos_threads) {
     child.get();
@@ -1377,16 +1377,16 @@ void fill_one_to_many_baseline_hash_table(
       count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
   std::vector<std::future<void>> pos_threads;
   for (int cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
-    pos_threads.push_back(std::async(std::launch::async,
-                                     [&](const int thread_idx) {
-                                       for (size_t i = thread_idx; i < hash_entry_count;
-                                            i += cpu_thread_count) {
-                                         if (count_buff[i]) {
-                                           pos_buff[i] = count_copy[i];
-                                         }
-                                       }
-                                     },
-                                     cpu_thread_idx));
+    pos_threads.push_back(std::async(
+        std::launch::async,
+        [&](const int thread_idx) {
+          for (size_t i = thread_idx; i < hash_entry_count; i += cpu_thread_count) {
+            if (count_buff[i]) {
+              pos_buff[i] = count_copy[i];
+            }
+          }
+        },
+        cpu_thread_idx));
   }
   for (auto& child : pos_threads) {
     child.get();

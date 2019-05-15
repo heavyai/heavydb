@@ -9,9 +9,6 @@ import com.mapd.calcite.parser.MapDSchema;
 import com.mapd.calcite.parser.MapDSerializer;
 import com.mapd.calcite.parser.MapDUser;
 
-import java.util.ArrayList;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.apache.calcite.plan.RelOptUtil;
 import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.schema.SchemaPlus;
@@ -24,6 +21,10 @@ import org.apache.calcite.tools.Planner;
 import org.apache.calcite.tools.RelConversionException;
 import org.apache.calcite.tools.ValidationException;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  *
@@ -81,9 +82,9 @@ public class tester {
       MapDParserOptions mdpo = new MapDParserOptions();
       MAPDLOGGER.error("MapDParser result: \n"
               + mp.getRelAlgebra(
-                        "select * from customer where c_custkey = 1.345000 limit 5",
-                        mdpo,
-                        mdu));
+                      "select * from customer where c_custkey = 1.345000 limit 5",
+                      mdpo,
+                      mdu));
     } catch (SqlParseException ex) {
       Logger.getLogger(tester.class.getName()).log(Level.SEVERE, null, ex);
     } catch (ValidationException ex) {

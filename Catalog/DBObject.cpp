@@ -155,7 +155,9 @@ std::vector<std::string> DBObject::toString() const {
       objectKey.push_back(std::to_string(objectKey_.dbId));
       objectKey.push_back(std::to_string(objectKey_.objectId));
       break;
-    default: { CHECK(false); }
+    default: {
+      CHECK(false);
+    }
   }
   return objectKey;
 }

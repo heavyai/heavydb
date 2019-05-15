@@ -138,20 +138,20 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultSet* rows) {
          i < worker_count && start_entry < entry_count;
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entry_count);
-      compute_stats_threads.push_back(
-          std::async(std::launch::async,
-                     [rows, &do_work, &dummy_encoders](
-                         const size_t start, const size_t end, const size_t worker_idx) {
-                       for (size_t i = start; i < end; ++i) {
-                         const auto crt_row = rows->getRowAtNoTranslations(i);
-                         if (!crt_row.empty()) {
-                           do_work(crt_row, dummy_encoders[worker_idx]);
-                         }
-                       }
-                     },
-                     start_entry,
-                     end_entry,
-                     i));
+      compute_stats_threads.push_back(std::async(
+          std::launch::async,
+          [rows, &do_work, &dummy_encoders](
+              const size_t start, const size_t end, const size_t worker_idx) {
+            for (size_t i = start; i < end; ++i) {
+              const auto crt_row = rows->getRowAtNoTranslations(i);
+              if (!crt_row.empty()) {
+                do_work(crt_row, dummy_encoders[worker_idx]);
+              }
+            }
+          },
+          start_entry,
+          end_entry,
+          i));
     }
     for (auto& child : compute_stats_threads) {
       child.wait();

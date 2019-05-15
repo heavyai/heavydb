@@ -15,15 +15,15 @@
  */
 package com.mapd.parser.server;
 
+import com.mapd.common.SockTransportProperties;
+import com.mapd.thrift.calciteserver.CalciteServer.Processor;
+
 import org.apache.thrift.server.TServer;
 import org.apache.thrift.server.TThreadPoolServer;
 import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TServerTransport;
-import com.mapd.thrift.calciteserver.CalciteServer.Processor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import com.mapd.common.SockTransportProperties;
 /**
  *
  * @author michael

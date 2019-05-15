@@ -18,6 +18,7 @@ package com.omnisci.jdbc;
 import com.mapd.thrift.server.TColumn;
 import com.mapd.thrift.server.TColumnData;
 import com.mapd.thrift.server.TDatumType;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

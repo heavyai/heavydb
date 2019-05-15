@@ -1,11 +1,11 @@
 package com.omnisci.jdbc;
-import java.sql.*;
+import static org.junit.Assert.*;
+
 import org.junit.Test;
 
+import java.sql.*;
 import java.sql.SQLException;
 import java.util.Properties;
-
-import static org.junit.Assert.*;
 
 public class OmniSciConnectionTest {
   // Property_loader loads the values from 'connection.properties in resources

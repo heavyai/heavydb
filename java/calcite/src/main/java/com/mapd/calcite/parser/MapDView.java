@@ -16,8 +16,9 @@
 package com.mapd.calcite.parser;
 
 import static com.mapd.calcite.parser.MapDParser.CURRENT_PARSER;
+
 import com.mapd.calcite.parser.MapDParserOptions;
-import java.util.ArrayList;
+import com.mapd.thrift.server.TTableDetails;
 
 import org.apache.calcite.plan.RelOptTable;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
@@ -33,7 +34,7 @@ import org.apache.calcite.tools.ValidationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.mapd.thrift.server.TTableDetails;
+import java.util.ArrayList;
 
 public class MapDView extends MapDTable implements TranslatableTable {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDView.class);

@@ -16,7 +16,6 @@
  */
 package org.apache.calcite.prepare;
 
-import java.util.List;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.runtime.CalciteException;
@@ -30,6 +29,8 @@ import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.sql.validate.SqlValidatorCatalogReader;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
 import org.apache.calcite.util.Util;
+
+import java.util.List;
 
 class MapDSqlAdvisorValidator extends SqlAdvisorValidator {
   MapDSqlAdvisorValidator(List<String> visibleTables,
@@ -82,7 +83,7 @@ class MapDSqlAdvisorValidator extends SqlAdvisorValidator {
   boolean tableViolatesPermissions(final String tableName) {
     return !tableName.isEmpty() && Character.isAlphabetic(tableName.charAt(0))
             && visibleTables.stream().noneMatch(
-                       visibleTableName -> visibleTableName.equalsIgnoreCase(tableName));
+                    visibleTableName -> visibleTableName.equalsIgnoreCase(tableName));
   }
 
   boolean hasViolatedTablePermissions() {

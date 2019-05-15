@@ -5,12 +5,13 @@
  */
 package com.mapd.calcite.parser;
 
+import com.mapd.metadata.LinestringSqlType;
+import com.mapd.metadata.PointSqlType;
+import com.mapd.metadata.PolygonSqlType;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TTableDetails;
 import com.mapd.thrift.server.TTypeInfo;
-
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.rel.type.RelDataType;
@@ -25,9 +26,7 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.mapd.metadata.PointSqlType;
-import com.mapd.metadata.LinestringSqlType;
-import com.mapd.metadata.PolygonSqlType;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  *

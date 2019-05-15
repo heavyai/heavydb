@@ -17,29 +17,28 @@
 
 package org.apache.calcite.rel.rules;
 
+import static org.apache.calcite.plan.RelOptUtil.conjunctions;
+
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
-
-import java.util.List;
-import java.util.ArrayList;
-
 import com.mapd.calcite.parser.MapDParserOptions;
 
 import org.apache.calcite.plan.RelOptRuleCall;
 import org.apache.calcite.plan.RelOptUtil;
+import org.apache.calcite.rel.RelNode;
+import org.apache.calcite.rel.core.Filter;
 import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.JoinRelType;
 import org.apache.calcite.rel.type.RelDataType;
-import org.apache.calcite.rel.core.Filter;
-import org.apache.calcite.tools.RelBuilderFactory;
-import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexUtil;
 import org.apache.calcite.tools.RelBuilder;
+import org.apache.calcite.tools.RelBuilderFactory;
 import org.apache.calcite.util.ImmutableBitSet;
 
-import static org.apache.calcite.plan.RelOptUtil.conjunctions;
+import java.util.ArrayList;
+import java.util.List;
 
 public class DynamicFilterJoinRule extends FilterJoinRule.FilterIntoJoinRule {
   public DynamicFilterJoinRule(boolean smart,
@@ -161,7 +160,7 @@ public class DynamicFilterJoinRule extends FilterJoinRule.FilterIntoJoinRule {
     // then this rule is a no-op
     if ((!filterPushed && joinType == join.getJoinType())
             || (joinFilters.isEmpty() && leftFilters.isEmpty()
-                       && rightFilters.isEmpty())) {
+                    && rightFilters.isEmpty())) {
       return;
     }
 

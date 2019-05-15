@@ -15,10 +15,10 @@
  */
 package com.mapd.tests;
 
-import java.util.ArrayList;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
 
 public class EagainConcurrencyTest {
   final static Logger logger = LoggerFactory.getLogger(EagainConcurrencyTest.class);

@@ -16,11 +16,7 @@
  */
 package org.apache.calcite.prepare;
 
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Properties;
+import com.mapd.calcite.parser.MapDParserOptions;
 
 import org.apache.calcite.config.CalciteConnectionConfig;
 import org.apache.calcite.config.CalciteConnectionConfigImpl;
@@ -42,7 +38,11 @@ import org.apache.calcite.sql.validate.SqlMoniker;
 import org.apache.calcite.tools.FrameworkConfig;
 import org.apache.calcite.tools.RelConversionException;
 
-import com.mapd.calcite.parser.MapDParserOptions;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
 
 /**
  * Customised version of the PlannerImpl for MapD.

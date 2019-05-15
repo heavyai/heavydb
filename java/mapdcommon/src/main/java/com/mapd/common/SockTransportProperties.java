@@ -1,25 +1,22 @@
 package com.mapd.common;
 
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.ssl.SSLContexts;
 import org.apache.thrift.transport.THttpClient;
 import org.apache.thrift.transport.TSSLTransportFactory;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.slf4j.LoggerFactory;
 
+import java.security.KeyStore;
+import java.security.cert.X509Certificate;
+
 import javax.net.ssl.SSLContext;
-
-import org.apache.http.ssl.SSLContexts;
-
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.X509TrustManager;
-import java.security.KeyStore;
-
-import java.security.cert.X509Certificate;
-
-import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 
 public class SockTransportProperties {
   final static org.slf4j.Logger logger =

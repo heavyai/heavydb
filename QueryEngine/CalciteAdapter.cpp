@@ -564,7 +564,9 @@ class CalciteAdapter {
         const auto& target_ti = std::get<2>(parsed_lit);
         return makeExpr<Analyzer::Constant>(target_ti.get_type(), true, Datum{0});
       }
-      default: { LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name(); }
+      default: {
+        LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name();
+      }
     }
     return nullptr;
   }

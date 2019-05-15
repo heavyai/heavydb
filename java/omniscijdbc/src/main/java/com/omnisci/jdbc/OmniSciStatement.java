@@ -18,13 +18,15 @@ package com.omnisci.jdbc;
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TQueryResult;
+
+import org.apache.thrift.TException;
+import org.slf4j.LoggerFactory;
+
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLWarning;
 import java.util.regex.Pattern;
-import org.apache.thrift.TException;
-import org.slf4j.LoggerFactory;
 
 /**
  *

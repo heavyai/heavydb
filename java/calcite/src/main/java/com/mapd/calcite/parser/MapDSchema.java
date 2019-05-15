@@ -5,11 +5,9 @@
  */
 package com.mapd.calcite.parser;
 
+import com.mapd.common.SockTransportProperties;
 import com.mapd.metadata.MetaConnect;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+
 import org.apache.calcite.linq4j.tree.Expression;
 import org.apache.calcite.rel.type.RelProtoDataType;
 import org.apache.calcite.schema.Function;
@@ -20,7 +18,11 @@ import org.apache.calcite.schema.Table;
 import org.apache.calcite.util.ConversionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.mapd.common.SockTransportProperties;
+
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  *

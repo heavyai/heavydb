@@ -1,10 +1,10 @@
 package com.omnisci.jdbc;
-import java.sql.*;
+import static org.junit.Assert.*;
+
 import org.junit.Test;
 
+import java.sql.*;
 import java.util.Properties;
-
-import static org.junit.Assert.*;
 
 public class OmniSciGeomTest {
   static Properties PROPERTIES = new Property_loader("connection.properties");

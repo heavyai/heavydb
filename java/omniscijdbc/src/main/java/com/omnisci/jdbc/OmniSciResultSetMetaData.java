@@ -17,11 +17,13 @@ package com.omnisci.jdbc;
 
 import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TQueryResult;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  *

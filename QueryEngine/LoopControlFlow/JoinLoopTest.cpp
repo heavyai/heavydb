@@ -145,38 +145,39 @@ std::vector<JoinLoop> generate_descriptors(const unsigned mask,
   for (size_t i = 0; i < upper_bounds.size(); ++i) {
     if (mask & (1 << i)) {
       const bool cond_is_true = cond_mask & (1 << cond_idx);
-      join_loops.emplace_back(JoinLoopKind::Singleton,
-                              JoinType::INNER,
-                              [i, cond_is_true](const std::vector<llvm::Value*>& v) {
-                                CHECK_EQ(i + 1, v.size());
-                                CHECK(!v.front());
-                                JoinLoopDomain domain{0};
-                                domain.slot_lookup_result =
-                                    cond_is_true ? ll_int(int64_t(99), g_global_context)
-                                                 : ll_int(int64_t(-1), g_global_context);
-                                return domain;
-                              },
-                              nullptr,
-                              nullptr,
-                              nullptr,
-                              "i" + std::to_string(i));
+      join_loops.emplace_back(
+          JoinLoopKind::Singleton,
+          JoinType::INNER,
+          [i, cond_is_true](const std::vector<llvm::Value*>& v) {
+            CHECK_EQ(i + 1, v.size());
+            CHECK(!v.front());
+            JoinLoopDomain domain{0};
+            domain.slot_lookup_result = cond_is_true
+                                            ? ll_int(int64_t(99), g_global_context)
+                                            : ll_int(int64_t(-1), g_global_context);
+            return domain;
+          },
+          nullptr,
+          nullptr,
+          nullptr,
+          "i" + std::to_string(i));
       ++cond_idx;
     } else {
       const auto upper_bound = upper_bounds[i];
-      join_loops.emplace_back(JoinLoopKind::UpperBound,
-                              JoinType::INNER,
-                              [i, upper_bound](const std::vector<llvm::Value*>& v) {
-                                CHECK_EQ(i + 1, v.size());
-                                CHECK(!v.front());
-                                JoinLoopDomain domain{0};
-                                domain.upper_bound =
-                                    ll_int<int64_t>(upper_bound, g_global_context);
-                                return domain;
-                              },
-                              nullptr,
-                              nullptr,
-                              nullptr,
-                              "i" + std::to_string(i));
+      join_loops.emplace_back(
+          JoinLoopKind::UpperBound,
+          JoinType::INNER,
+          [i, upper_bound](const std::vector<llvm::Value*>& v) {
+            CHECK_EQ(i + 1, v.size());
+            CHECK(!v.front());
+            JoinLoopDomain domain{0};
+            domain.upper_bound = ll_int<int64_t>(upper_bound, g_global_context);
+            return domain;
+          },
+          nullptr,
+          nullptr,
+          nullptr,
+          "i" + std::to_string(i));
     }
   }
   return join_loops;

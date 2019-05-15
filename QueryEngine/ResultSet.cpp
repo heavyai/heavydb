@@ -353,18 +353,19 @@ size_t ResultSet::parallelRowCount() const {
        i < worker_count && start_entry < entryCount();
        ++i, start_entry += stride) {
     const auto end_entry = std::min(start_entry + stride, entryCount());
-    counter_threads.push_back(std::async(std::launch::async,
-                                         [this](const size_t start, const size_t end) {
-                                           size_t row_count{0};
-                                           for (size_t i = start; i < end; ++i) {
-                                             if (!isRowAtEmpty(i)) {
-                                               ++row_count;
-                                             }
-                                           }
-                                           return row_count;
-                                         },
-                                         start_entry,
-                                         end_entry));
+    counter_threads.push_back(std::async(
+        std::launch::async,
+        [this](const size_t start, const size_t end) {
+          size_t row_count{0};
+          for (size_t i = start; i < end; ++i) {
+            if (!isRowAtEmpty(i)) {
+              ++row_count;
+            }
+          }
+          return row_count;
+        },
+        start_entry,
+        end_entry));
   }
   for (auto& child : counter_threads) {
     child.wait();

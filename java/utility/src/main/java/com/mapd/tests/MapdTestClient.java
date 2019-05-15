@@ -15,15 +15,6 @@
  */
 package com.mapd.tests;
 
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.List;
-
-import org.apache.thrift.TException;
-import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.protocol.TProtocol;
-import org.apache.thrift.transport.TSocket;
-
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TClusterHardwareInfo;
 import com.mapd.thrift.server.TDBObject;
@@ -33,6 +24,15 @@ import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TServerStatus;
 import com.mapd.thrift.server.TTableDetails;
+
+import org.apache.thrift.TException;
+import org.apache.thrift.protocol.TBinaryProtocol;
+import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.transport.TSocket;
+
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
 
 public class MapdTestClient {
   MapD.Client client;

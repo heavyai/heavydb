@@ -1,12 +1,10 @@
 package com.mapd.parser.server.test;
 
-import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Set;
+import static java.util.Arrays.asList;
+
+import com.mapd.calcite.parser.MapDSqlOperatorTable;
 
 import org.apache.calcite.avatica.util.Casing;
 import org.apache.calcite.linq4j.tree.Expression;
@@ -25,7 +23,10 @@ import org.apache.calcite.tools.Frameworks;
 import org.apache.calcite.tools.Planner;
 import org.junit.Test;
 
-import com.mapd.calcite.parser.MapDSqlOperatorTable;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
 public class SqlIdentifierCapturerTest {
   private class MockSchema implements Schema {

@@ -16,10 +16,11 @@
 
 // STEP 1. Import required packages
 
-import java.math.BigDecimal;
-import java.sql.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.math.BigDecimal;
+import java.sql.*;
 
 public class FirstTry {
   final static Logger logger = LoggerFactory.getLogger(FirstTry.class);

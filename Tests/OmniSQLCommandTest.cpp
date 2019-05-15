@@ -111,14 +111,14 @@ TEST(OmniSQLTest, CommandResolutionChain_ThreeSet_FirstHit) {
   bool third_hit = false;
 
   auto resolution =
-      CommandResolutionChain<>("\\fake_command1 token1 token2",
-                               "\\fake_command1",
-                               3,
-                               3,
-                               [&](Params const& p) { first_hit = true; })(
-          "\\fake_command2", 1, 1, [&](Params const& p) { second_hit = true; })(
-          "\\fake_command3", 1, 1, [&](Params const& p) { third_hit = true; })
-          .is_resolved();
+      CommandResolutionChain<>(
+          "\\fake_command1 token1 token2", "\\fake_command1", 3, 3, [&](Params const& p) {
+            first_hit = true;
+          })("\\fake_command2", 1, 1, [&](Params const& p) {
+        second_hit = true;
+      })("\\fake_command3", 1, 1, [&](Params const& p) {
+        third_hit = true;
+      }).is_resolved();
 
   EXPECT_TRUE(resolution);
   EXPECT_TRUE(first_hit);
@@ -134,14 +134,14 @@ TEST(OmniSQLTest, CommandResolutionChain_ThreeSet_SecondHit) {
   bool third_hit = false;
 
   auto resolution =
-      CommandResolutionChain<>("\\fake_command2 token1 token2",
-                               "\\fake_command1",
-                               1,
-                               1,
-                               [&](Params const& p) { first_hit = true; })(
-          "\\fake_command2", 3, 3, [&](Params const& p) { second_hit = true; })(
-          "\\fake_command3", 1, 1, [&](Params const& p) { third_hit = true; })
-          .is_resolved();
+      CommandResolutionChain<>(
+          "\\fake_command2 token1 token2", "\\fake_command1", 1, 1, [&](Params const& p) {
+            first_hit = true;
+          })("\\fake_command2", 3, 3, [&](Params const& p) {
+        second_hit = true;
+      })("\\fake_command3", 1, 1, [&](Params const& p) {
+        third_hit = true;
+      }).is_resolved();
 
   EXPECT_TRUE(resolution);
   EXPECT_FALSE(first_hit);
@@ -157,14 +157,14 @@ TEST(OmniSQLTest, CommandResolutionChain_ThreeSet_ThirdHit) {
   bool third_hit = false;
 
   auto resolution =
-      CommandResolutionChain<>("\\fake_command3 token1 token2",
-                               "\\fake_command1",
-                               1,
-                               1,
-                               [&](Params const& p) { first_hit = true; })(
-          "\\fake_command2", 1, 1, [&](Params const& p) { second_hit = true; })(
-          "\\fake_command3", 3, 3, [&](Params const& p) { third_hit = true; })
-          .is_resolved();
+      CommandResolutionChain<>(
+          "\\fake_command3 token1 token2", "\\fake_command1", 1, 1, [&](Params const& p) {
+            first_hit = true;
+          })("\\fake_command2", 1, 1, [&](Params const& p) {
+        second_hit = true;
+      })("\\fake_command3", 3, 3, [&](Params const& p) {
+        third_hit = true;
+      }).is_resolved();
 
   EXPECT_TRUE(resolution);
   EXPECT_FALSE(first_hit);
@@ -179,15 +179,16 @@ TEST(OmniSQLTest, CommandResolutionChain_ThreeSet_NoHits) {
   bool second_hit = false;
   bool third_hit = false;
 
-  auto resolution =
-      CommandResolutionChain<>("\\i_cant_be_matched token1 token2",
-                               "\\fake_command1",
-                               3,
-                               3,
-                               [&](Params const& p) { first_hit = true; })(
-          "\\fake_command2", 1, 1, [&](Params const& p) { second_hit = true; })(
-          "\\fake_command3", 1, 1, [&](Params const& p) { third_hit = true; })
-          .is_resolved();
+  auto resolution = CommandResolutionChain<>("\\i_cant_be_matched token1 token2",
+                                             "\\fake_command1",
+                                             3,
+                                             3,
+                                             [&](Params const& p) { first_hit = true; })(
+                        "\\fake_command2", 1, 1, [&](Params const& p) {
+                          second_hit = true;
+                        })("\\fake_command3", 1, 1, [&](Params const& p) {
+                      third_hit = true;
+                    }).is_resolved();
 
   EXPECT_FALSE(resolution);
   EXPECT_FALSE(first_hit);

@@ -16,28 +16,29 @@
 
 package com.mapd.parser.server.test;
 
+import static org.junit.Assert.*;
+
+import com.mapd.common.SockTransportProperties;
 import com.mapd.parser.server.CalciteServerWrapper;
 import com.mapd.thrift.calciteserver.CalciteServer;
 import com.mapd.thrift.calciteserver.TPlanResult;
-import org.junit.Test;
 
-import com.mapd.common.SockTransportProperties;
-import java.util.ArrayList;
-import java.util.Random;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.junit.AfterClass;
-
-import static org.junit.Assert.*;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
+import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.ArrayList;
+import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class TestServer {
   private final static Logger MAPDLOGGER = LoggerFactory.getLogger(TestServer.class);

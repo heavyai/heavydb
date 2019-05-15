@@ -83,18 +83,18 @@ ColumnarResults::ColumnarResults(
            i < worker_count && start_entry < entry_count;
            ++i, start_entry += stride) {
         const auto end_entry = std::min(start_entry + stride, entry_count);
-        conversion_threads.push_back(
-            std::async(std::launch::async,
-                       [&rows, &do_work, &row_idx](const size_t start, const size_t end) {
-                         for (size_t i = start; i < end; ++i) {
-                           const auto crt_row = rows.getRowAtNoTranslations(i);
-                           if (!crt_row.empty()) {
-                             do_work(crt_row, row_idx.fetch_add(1));
-                           }
-                         }
-                       },
-                       start_entry,
-                       end_entry));
+        conversion_threads.push_back(std::async(
+            std::launch::async,
+            [&rows, &do_work, &row_idx](const size_t start, const size_t end) {
+              for (size_t i = start; i < end; ++i) {
+                const auto crt_row = rows.getRowAtNoTranslations(i);
+                if (!crt_row.empty()) {
+                  do_work(crt_row, row_idx.fetch_add(1));
+                }
+              }
+            },
+            start_entry,
+            end_entry));
       }
       for (auto& child : conversion_threads) {
         child.wait();

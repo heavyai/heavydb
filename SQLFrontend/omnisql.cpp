@@ -920,7 +920,9 @@ void get_db_objects_for_grantee(ClientContext& context) {
           std::cout << " (view):";
           break;
         }
-        default: { CHECK(false); }
+        default: {
+          CHECK(false);
+        }
       }
       print_privs(db_object.privs, db_object.objectType);
       std::cout << std::endl;

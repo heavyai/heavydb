@@ -15,29 +15,20 @@
  */
 package com.mapd.utility;
 
+import static java.lang.Math.pow;
+import static java.lang.System.exit;
+
+import com.mapd.common.SockTransportProperties;
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TColumn;
 import com.mapd.thrift.server.TColumnData;
 import com.mapd.thrift.server.TColumnType;
+import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TTableDetails;
-import com.mapd.thrift.server.TMapDException;
-import java.io.BufferedReader;
-import java.io.FileReader;
-import java.io.IOException;
-import static java.lang.Math.pow;
-import static java.lang.System.exit;
-import java.math.BigDecimal;
-import java.sql.*;
-import java.util.ArrayList;
 import com.mapd.utility.db_vendors.Db_vendor_types;
-import java.util.List;
 
 import org.apache.commons.cli.*;
-
-import java.time.*;
-import java.security.KeyStore;
-
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TJSONProtocol;
@@ -47,7 +38,16 @@ import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.mapd.common.SockTransportProperties;
+
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.security.KeyStore;
+import java.sql.*;
+import java.time.*;
+import java.util.ArrayList;
+import java.util.List;
 
 interface DateTimeUtils {
   long getSecondsFromMilliseconds(long milliseconds);
@@ -272,7 +272,7 @@ class SQLImporter_args {
           if (cmd.hasOption("http")
                   || cmd.hasOption("binary")
                           && (cmd.hasOption("client-cert")
-                                     || cmd.hasOption("client-key"))) {
+                                  || cmd.hasOption("client-key"))) {
             MutuallyExlusiveOptionsException meo = MutuallyExlusiveOptionsException.create(
                     "http|binary can not be use with ca-cert|client-cert|client-key",
                     strings);

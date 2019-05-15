@@ -21,16 +21,12 @@ import com.mapd.thrift.server.TColumnData;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDBInfo;
 import com.mapd.thrift.server.TDatum;
+import com.mapd.thrift.server.TMapDException;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TRow;
 import com.mapd.thrift.server.TRowSet;
 import com.mapd.thrift.server.TTableDetails;
 import com.mapd.thrift.server.TTypeInfo;
-import com.mapd.thrift.server.TMapDException;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -39,6 +35,10 @@ import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  *

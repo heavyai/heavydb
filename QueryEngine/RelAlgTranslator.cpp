@@ -281,7 +281,9 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
     case kNULLT: {
       return makeExpr<Analyzer::Constant>(rex_literal->getTargetType(), true, Datum{0});
     }
-    default: { LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name(); }
+    default: {
+      LOG(FATAL) << "Unexpected literal type " << lit_ti.get_type_name();
+    }
   }
   return nullptr;
 }

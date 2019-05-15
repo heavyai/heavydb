@@ -1769,7 +1769,9 @@ void MapDHandler::get_tables_impl(std::vector<std::string>& table_names,
           continue;
         }
       }
-      default: { break; }
+      default: {
+        break;
+      }
     }
     if (!hasTableAccessPrivileges(td, session)) {
       // skip table, as there are no privileges to access it

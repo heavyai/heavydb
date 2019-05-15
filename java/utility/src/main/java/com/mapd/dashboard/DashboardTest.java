@@ -17,16 +17,16 @@ package com.mapd.dashboard;
 
 import static com.mapd.tests.MapdAsserts.shouldThrowException;
 
-import java.util.Arrays;
-import java.util.List;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import com.mapd.tests.MapdAsserts;
 import com.mapd.tests.MapdTestClient;
 import com.mapd.thrift.server.TDBObject;
 import com.mapd.thrift.server.TDBObjectType;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Arrays;
+import java.util.List;
 
 public class DashboardTest {
   final static Logger logger = LoggerFactory.getLogger(DashboardTest.class);

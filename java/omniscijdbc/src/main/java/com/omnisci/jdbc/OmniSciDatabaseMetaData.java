@@ -15,29 +15,30 @@
  */
 package com.omnisci.jdbc;
 
-import com.mapd.thrift.server.TTablePermissions;
 import com.mapd.thrift.server.TColumn;
 import com.mapd.thrift.server.TColumnData;
 import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDBInfo;
-import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TDBObject;
 import com.mapd.thrift.server.TDBObjectType;
+import com.mapd.thrift.server.TDatumType;
 import com.mapd.thrift.server.TEncodingType;
 import com.mapd.thrift.server.TQueryResult;
 import com.mapd.thrift.server.TRowSet;
 import com.mapd.thrift.server.TTableDetails;
+import com.mapd.thrift.server.TTablePermissions;
 import com.mapd.thrift.server.TTypeInfo;
+
+import org.apache.thrift.TException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.RowIdLifetime;
 import java.sql.SQLException;
 import java.util.*;
-
-import org.apache.thrift.TException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  *

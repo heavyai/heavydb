@@ -18,6 +18,11 @@ package com.mapd.bench;
 
 // STEP 1. Import required packages
 import com.omnisci.jdbc.OmniSciStatement;
+
+import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
@@ -25,9 +30,6 @@ import java.io.IOException;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
 
 public class Benchmark {
   final static Logger logger = LoggerFactory.getLogger(Benchmark.class);

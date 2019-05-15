@@ -90,7 +90,9 @@ struct ChunkMetadata {
           chunkStats.max.intval = max;
         }
         break;
-      default: { break; }
+      default: {
+        break;
+      }
     }
   }
 

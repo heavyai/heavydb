@@ -15,9 +15,8 @@
  */
 package com.mapd.metadata;
 
-import java.nio.charset.Charset;
-import java.util.ArrayList;
-import java.util.List;
+import com.mapd.metadata.GeoRelDataType;
+
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeComparability;
 import org.apache.calcite.rel.type.RelDataTypeFamily;
@@ -29,7 +28,9 @@ import org.apache.calcite.sql.SqlIdentifier;
 import org.apache.calcite.sql.SqlIntervalQualifier;
 import org.apache.calcite.sql.type.SqlTypeName;
 
-import com.mapd.metadata.GeoRelDataType;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.List;
 
 public class LinestringSqlType extends GeoRelDataType {
   @Override

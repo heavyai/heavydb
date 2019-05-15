@@ -15,12 +15,10 @@
  */
 package com.mapd.parser.server;
 
-import java.io.IOException;
-import java.nio.file.FileSystemNotFoundException;
 import static java.lang.System.exit;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.Properties;
+
+import com.mapd.common.SockTransportProperties;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -31,7 +29,12 @@ import org.apache.commons.cli.ParseException;
 import org.apache.log4j.PropertyConfigurator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import com.mapd.common.SockTransportProperties;
+
+import java.io.IOException;
+import java.nio.file.FileSystemNotFoundException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Properties;
 
 public class CalciteServerCaller {
   private SockTransportProperties skT = null;

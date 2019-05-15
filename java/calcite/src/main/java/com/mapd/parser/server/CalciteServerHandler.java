@@ -15,38 +15,39 @@
  */
 package com.mapd.parser.server;
 
+import static com.mapd.calcite.parser.MapDParser.CURRENT_PARSER;
+
 import com.mapd.calcite.parser.MapDParser;
 import com.mapd.calcite.parser.MapDParserOptions;
 import com.mapd.calcite.parser.MapDUser;
+import com.mapd.common.SockTransportProperties;
+import com.mapd.thrift.calciteserver.CalciteServer;
 import com.mapd.thrift.calciteserver.InvalidParseRequest;
 import com.mapd.thrift.calciteserver.TAccessedQueryObjects;
 import com.mapd.thrift.calciteserver.TCompletionHint;
 import com.mapd.thrift.calciteserver.TCompletionHintType;
 import com.mapd.thrift.calciteserver.TFilterPushDownInfo;
 import com.mapd.thrift.calciteserver.TPlanResult;
-import com.mapd.thrift.calciteserver.CalciteServer;
 
-import static com.mapd.calcite.parser.MapDParser.CURRENT_PARSER;
-
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
 import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.runtime.CalciteContextException;
 import org.apache.calcite.sql.parser.SqlParseException;
-import org.apache.calcite.sql.validate.SqlMonikerType;
 import org.apache.calcite.sql.validate.SqlMoniker;
+import org.apache.calcite.sql.validate.SqlMonikerType;
+import org.apache.calcite.tools.RelConversionException;
+import org.apache.calcite.tools.ValidationException;
 import org.apache.commons.pool.PoolableObjectFactory;
 import org.apache.commons.pool.impl.GenericObjectPool;
 import org.apache.thrift.TException;
 import org.apache.thrift.server.TServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.apache.calcite.tools.RelConversionException;
-import org.apache.calcite.tools.ValidationException;
-import com.mapd.common.SockTransportProperties;
+
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 /**
  *
