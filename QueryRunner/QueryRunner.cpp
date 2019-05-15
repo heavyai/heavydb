@@ -71,15 +71,15 @@ Planner::RootPlan* parse_plan_calcite(
   }
 
   const auto& cat = session->getCatalog();
-  auto& calcite_mgr = cat.getCalciteMgr();
+  auto calcite_mgr = cat.getCalciteMgr();
   const Catalog_Namespace::SessionInfo* sess = session.get();
   const auto query_ra =
-      calcite_mgr.process(*sess,
-                          pg_shim(query_str),
-                          {},
-                          true,
-                          false,
-                          false)
+      calcite_mgr->process(*sess,
+                           pg_shim(query_str),
+                           {},
+                           true,
+                           false,
+                           false)
           .plan_result;  //  if we want to be able to check plans we may want to calc this
   return translate_query(query_ra, cat);
 }
@@ -256,9 +256,9 @@ ExecutionResult run_select_query(
                          false,
                          false,
                          g_gpu_mem_limit_percent};
-  auto& calcite_mgr = cat.getCalciteMgr();
+  auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra =
-      calcite_mgr.process(*session, pg_shim(query_str), {}, true, false, false)
+      calcite_mgr->process(*session, pg_shim(query_str), {}, true, false, false)
           .plan_result;
   RelAlgExecutor ra_executor(executor.get(), cat);
   return ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
@@ -288,9 +288,9 @@ ExecutionResult run_select_query_with_filter_push_down(
                          with_filter_push_down,
                          false,
                          g_gpu_mem_limit_percent};
-  auto& calcite_mgr = cat.getCalciteMgr();
+  auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra =
-      calcite_mgr.process(*session, pg_shim(query_str), {}, true, false, false)
+      calcite_mgr->process(*session, pg_shim(query_str), {}, true, false, false)
           .plan_result;
   RelAlgExecutor ra_executor(executor.get(), cat);
 
@@ -307,7 +307,7 @@ ExecutionResult run_select_query_with_filter_push_down(
     }
     const auto new_query_ra =
         calcite_mgr
-            .process(
+            ->process(
                 *session, pg_shim(query_str), filter_push_down_info, true, false, false)
             .plan_result;
     const ExecutionOptions eo_modified{eo.output_columnar_hint,

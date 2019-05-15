@@ -48,97 +48,18 @@ using namespace Fragmenter_Namespace;
 #define BASE_PATH "./tmp"
 #endif
 
-// doesnt need real calcite server
-#define CALCITEPORT 36279
-
 namespace {
-std::unique_ptr<SessionInfo> gsession;
+std::unique_ptr<SessionInfo> g_session;
 
 std::shared_ptr<Calcite> g_calcite = nullptr;
 
-void calcite_shutdown_handler() {
-  if (g_calcite) {
-    g_calcite->close_calcite_server();
-  }
-}
-
-void mapd_signal_handler(int signal_number) {
-  LOG(ERROR) << "Interrupt signal (" << signal_number << ") received.";
-  calcite_shutdown_handler();
-  // shut down logging force a flush
-  google::ShutdownGoogleLogging();
-  // terminate program
-  if (signal_number == SIGTERM) {
-    std::exit(EXIT_SUCCESS);
-  } else {
-    std::exit(signal_number);
-  }
-}
-
-void register_signal_handler() {
-  std::signal(SIGTERM, mapd_signal_handler);
-  std::signal(SIGSEGV, mapd_signal_handler);
-  std::signal(SIGABRT, mapd_signal_handler);
-}
-
 inline void run_ddl_statement(const string& input_str) {
-  QueryRunner::run_ddl_statement(input_str, gsession);
+  QueryRunner::run_ddl_statement(input_str, g_session);
 }
-
-class SQLTestEnv : public ::testing::Environment {
- public:
-  void SetUp() override {
-    boost::filesystem::path base_path{BASE_PATH};
-    CHECK(boost::filesystem::exists(base_path));
-    auto system_db_file = base_path / "mapd_catalogs" / MAPD_DEFAULT_DB;
-    auto data_dir = base_path / "mapd_data";
-    UserMetadata user;
-    DBMetadata db;
-
-    register_signal_handler();
-    google::InstallFailureFunction(&calcite_shutdown_handler);
-
-    g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, data_dir.string(), 1024);
-    {
-      MapDParameters mapd_parms;
-      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
-          data_dir.string(), mapd_parms, false, 0);
-      auto& sys_cat = SysCatalog::instance();
-      sys_cat.init(base_path.string(),
-                   dataMgr,
-                   {},
-                   g_calcite,
-                   !boost::filesystem::exists(system_db_file),
-                   mapd_parms.aggregator,
-                   {});
-      CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
-      if (!sys_cat.getMetadataForUser("gtest", user)) {
-        sys_cat.createUser("gtest", "test!test!", false, "");
-        CHECK(sys_cat.getMetadataForUser("gtest", user));
-      }
-      if (!sys_cat.getMetadataForDB("gtest_db", db)) {
-        sys_cat.createDatabase("gtest_db", user.userId);
-        CHECK(sys_cat.getMetadataForDB("gtest_db", db));
-      }
-    }
-    MapDParameters mapd_parms;
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
-        data_dir.string(), mapd_parms, false, 0);
-    gsession.reset(new SessionInfo(std::make_shared<Catalog>(base_path.string(),
-                                                             db,
-                                                             dataMgr,
-                                                             std::vector<LeafHostInfo>{},
-                                                             g_calcite,
-                                                             false),
-                                   user,
-                                   ExecutorDeviceType::GPU,
-                                   ""));
-  }
-};
 
 bool load_data_test(string table_name, size_t num_rows) {
   vector<size_t> insert_col_hashs =
-      populate_table_random(table_name, num_rows, gsession->getCatalog());
+      populate_table_random(table_name, num_rows, g_session->getCatalog());
   return true;
 }
 
@@ -153,15 +74,15 @@ static size_t load_data_for_thread_test_2(int num_rows, string table_name) {
   if (num_rows <
       initial_num_rows) {  // to handle special case when only few rows should be added
     insert_col_hashs =
-        populate_table_random(table_name, num_rows, gsession->getCatalog());
+        populate_table_random(table_name, num_rows, g_session->getCatalog());
   } else {
     for (int cur_num_rows = initial_num_rows; cur_num_rows <= num_rows;
          cur_num_rows += num_rows_step) {
       if (cur_num_rows == num_rows) {
         insert_col_hashs =
-            populate_table_random(table_name, num_rows_step, gsession->getCatalog());
+            populate_table_random(table_name, num_rows_step, g_session->getCatalog());
       } else {
-        populate_table_random(table_name, num_rows_step, gsession->getCatalog());
+        populate_table_random(table_name, num_rows_step, g_session->getCatalog());
       }
     }
   }
@@ -447,7 +368,8 @@ TEST(DataLoad, NumbersTable_Parallel_CreateDropCreateTable_InsertRows) {
 int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);
-  ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
+
+  g_session.reset(QueryRunner::get_session(BASE_PATH));
 
   int err{0};
   try {
@@ -455,5 +377,6 @@ int main(int argc, char* argv[]) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+  g_session.reset(nullptr);
   return err;
 }

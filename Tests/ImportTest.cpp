@@ -38,8 +38,6 @@
 #define BASE_PATH "./tmp"
 #endif
 
-#define CALCITEPORT 36279
-
 using namespace std;
 using namespace TestHelpers;
 
@@ -251,21 +249,6 @@ bool import_test_local_parquet_with_geo_point(const string& prefix,
   return r_cnt == cnt;
 }
 #endif  // ENABLE_IMPORT_PARQUET
-
-class SQLTestEnv : public ::testing::Environment {
- public:
-  void SetUp() override {
-    g_session.reset(QueryRunner::get_session(BASE_PATH,
-                                             "gtest",
-                                             "test!test!",
-                                             "gtest_db",
-                                             std::vector<LeafHostInfo>{},
-                                             std::vector<LeafHostInfo>{},
-                                             false,
-                                             true,
-                                             true));
-  }
-};
 
 std::string TypeToString(SQLTypes type) {
   return SQLTypeInfo(type, false).get_type_name();
@@ -1155,7 +1138,9 @@ TEST_F(ImportTest, S3_GCS_One_geo_file) {
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
-  ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
+
+  g_session.reset(QueryRunner::get_session(BASE_PATH));
+
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
@@ -1184,5 +1169,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+  g_session.reset(nullptr);
   return err;
 }

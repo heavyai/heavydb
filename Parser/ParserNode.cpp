@@ -2078,12 +2078,12 @@ std::shared_ptr<ResultSet> getResultSet(const Catalog_Namespace::SessionInfo& se
 #else
   const auto device_type = ExecutorDeviceType::CPU;
 #endif  // HAVE_CUDA
-  auto& calcite_mgr = catalog.getCalciteMgr();
+  auto calcite_mgr = catalog.getCalciteMgr();
 
   // TODO MAT this should actually get the global or the session parameter for
   // view optimization
   const auto query_ra =
-      calcite_mgr.process(session, pg_shim(select_stmt), {}, true, false, false)
+      calcite_mgr->process(session, pg_shim(select_stmt), {}, true, false, false)
           .plan_result;
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
@@ -4174,7 +4174,7 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   const auto query_after_shim = pg_shim(select_query_);
 
   // this now also ensures that access permissions are checked
-  catalog.getCalciteMgr().process(session, query_after_shim, {}, true, false, false);
+  catalog.getCalciteMgr()->process(session, query_after_shim, {}, true, false, false);
   TableDescriptor td;
   td.tableName = view_name_;
   td.userId = session.get_currentUser().userId;

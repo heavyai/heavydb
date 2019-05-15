@@ -175,7 +175,7 @@ class Catalog {
   std::list<const DashboardDescriptor*> getAllDashboardsMetadata() const;
   const DBMetadata& getCurrentDB() const { return currentDB_; }
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
-  Calcite& getCalciteMgr() const { return *calciteMgr_; }
+  std::shared_ptr<Calcite> getCalciteMgr() const { return calciteMgr_; }
   const std::string& getBasePath() const { return basePath_; }
 
   const DictDescriptor* getMetadataForDict(int dict_ref, bool loadDict = true) const;

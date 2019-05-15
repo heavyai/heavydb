@@ -43,92 +43,11 @@ using namespace Planner;
 #define BASE_PATH "./tmp"
 #endif
 
-#define CALCITEPORT 36279
-
 namespace {
-std::unique_ptr<SessionInfo> gsession;
-
-std::shared_ptr<Calcite> g_calcite = nullptr;
-
-void calcite_shutdown_handler() {
-  if (g_calcite) {
-    g_calcite->close_calcite_server();
-  }
-}
-
-void mapd_signal_handler(int signal_number) {
-  LOG(ERROR) << "Interrupt signal (" << signal_number << ") received.";
-  calcite_shutdown_handler();
-  // shut down logging force a flush
-  google::ShutdownGoogleLogging();
-  // terminate program
-  if (signal_number == SIGTERM) {
-    std::exit(EXIT_SUCCESS);
-  } else {
-    std::exit(signal_number);
-  }
-}
-
-void register_signal_handler() {
-  std::signal(SIGTERM, mapd_signal_handler);
-  std::signal(SIGSEGV, mapd_signal_handler);
-  std::signal(SIGABRT, mapd_signal_handler);
-}
-
-class SQLTestEnv : public ::testing::Environment {
- public:
-  void SetUp() override {
-    boost::filesystem::path base_path{BASE_PATH};
-    CHECK(boost::filesystem::exists(base_path));
-    auto system_db_file = base_path / "mapd_catalogs" / MAPD_DEFAULT_DB;
-    auto data_dir = base_path / "mapd_data";
-    UserMetadata user;
-    DBMetadata db;
-
-    register_signal_handler();
-    google::InstallFailureFunction(&calcite_shutdown_handler);
-
-    g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path.string(), 1024);
-    {
-      MapDParameters mapd_parms;
-      auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
-          data_dir.string(), mapd_parms, false, 0);
-      auto& sys_cat = SysCatalog::instance();
-      sys_cat.init(base_path.string(),
-                   dataMgr,
-                   {},
-                   g_calcite,
-                   !boost::filesystem::exists(system_db_file),
-                   mapd_parms.aggregator,
-                   {});
-      CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
-      if (!sys_cat.getMetadataForUser("gtest", user)) {
-        sys_cat.createUser("gtest", "test!test!", false, "");
-        CHECK(sys_cat.getMetadataForUser("gtest", user));
-      }
-      if (!sys_cat.getMetadataForDB("gtest_db", db)) {
-        sys_cat.createDatabase("gtest_db", user.userId);
-        CHECK(sys_cat.getMetadataForDB("gtest_db", db));
-      }
-    }
-    MapDParameters mapd_parms;
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
-        data_dir.string(), mapd_parms, false, 0);
-    gsession.reset(new SessionInfo(
-        std::make_shared<Catalog_Namespace::Catalog>(base_path.string(),
-                                                     db,
-                                                     dataMgr,
-                                                     std::vector<LeafHostInfo>{},
-                                                     g_calcite,
-                                                     false),
-        user,
-        ExecutorDeviceType::GPU,
-        ""));
-  }
-};
+std::unique_ptr<SessionInfo> g_session;
 
 inline void run_ddl_statement(const string& input_str) {
-  QueryRunner::run_ddl_statement(input_str, gsession);
+  QueryRunner::run_ddl_statement(input_str, g_session);
 }
 
 RootPlan* plan_dml(const string& input_str) {
@@ -141,8 +60,8 @@ RootPlan* plan_dml(const string& input_str) {
   Parser::DMLStmt* dml = dynamic_cast<Parser::DMLStmt*>(stmt.get());
   CHECK(dml != nullptr);
   Query query;
-  dml->analyze(gsession->getCatalog(), query);
-  Optimizer optimizer(query, gsession->getCatalog());
+  dml->analyze(g_session->getCatalog(), query);
+  Optimizer optimizer(query, g_session->getCatalog());
   RootPlan* plan = optimizer.optimize();
   return plan;
 }
@@ -156,26 +75,26 @@ TEST(ParseAnalyzePlan, Create) {
                                     "h real, i float, j double, k bigint encoding diff, "
                                     "l text not null encoding dict, m "
                                     "timestamp(0), n time(0), o date);"););
-  ASSERT_TRUE(gsession->getCatalog().getMetadataForTable("fat") != nullptr);
+  ASSERT_TRUE(g_session->getCatalog().getMetadataForTable("fat") != nullptr);
   ASSERT_NO_THROW(
       run_ddl_statement(
           "create table if not exists skinny (a smallint, b int, c bigint);"););
-  ASSERT_TRUE(gsession->getCatalog().getMetadataForTable("skinny") != nullptr);
+  ASSERT_TRUE(g_session->getCatalog().getMetadataForTable("skinny") != nullptr);
   ASSERT_NO_THROW(
       run_ddl_statement(
           "create table if not exists smallfrag (a int, b text, c bigint) with "
           "(fragment_size = 1000, page_size = 512);"););
-  const TableDescriptor* td = gsession->getCatalog().getMetadataForTable("smallfrag");
+  const TableDescriptor* td = g_session->getCatalog().getMetadataForTable("smallfrag");
   EXPECT_TRUE(td->maxFragRows == 1000 && td->fragPageSize == 512);
   ASSERT_NO_THROW(
       run_ddl_statement(
           "create table if not exists testdict (a varchar(100) encoding dict(8), c "
           "text encoding dict);"););
-  td = gsession->getCatalog().getMetadataForTable("testdict");
+  td = g_session->getCatalog().getMetadataForTable("testdict");
   const ColumnDescriptor* cd =
-      gsession->getCatalog().getMetadataForColumn(td->tableId, "a");
+      g_session->getCatalog().getMetadataForColumn(td->tableId, "a");
   const DictDescriptor* dd =
-      gsession->getCatalog().getMetadataForDict(cd->columnType.get_comp_param());
+      g_session->getCatalog().getMetadataForDict(cd->columnType.get_comp_param());
   ASSERT_TRUE(dd != nullptr);
   EXPECT_EQ(dd->dictNBits, 8);
 }
@@ -410,7 +329,8 @@ void drop_views_and_tables() {
 int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);
-  ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
+
+  g_session.reset(QueryRunner::get_session(BASE_PATH));
 
   int err{0};
   try {
@@ -420,6 +340,7 @@ int main(int argc, char* argv[]) {
   }
 
   drop_views_and_tables();
+  g_session.reset(nullptr);
 
   return err;
 }

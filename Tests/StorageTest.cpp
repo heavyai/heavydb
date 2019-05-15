@@ -50,103 +50,25 @@ using namespace Fragmenter_Namespace;
 #define BASE_PATH "./tmp"
 #endif
 
-#define CALCITEPORT 0
-
 namespace {
-std::unique_ptr<SessionInfo> gsession;
-
-std::shared_ptr<Calcite> g_calcite = nullptr;
-
-void calcite_shutdown_handler() {
-  if (g_calcite) {
-    g_calcite->close_calcite_server();
-  }
-}
-
-void mapd_signal_handler(int signal_number) {
-  LOG(ERROR) << "Interrupt signal (" << signal_number << ") received.";
-  calcite_shutdown_handler();
-  // shut down logging force a flush
-  google::ShutdownGoogleLogging();
-  // terminate program
-  if (signal_number == SIGTERM) {
-    std::exit(EXIT_SUCCESS);
-  } else {
-    std::exit(signal_number);
-  }
-}
-
-void register_signal_handler() {
-  std::signal(SIGTERM, mapd_signal_handler);
-  std::signal(SIGSEGV, mapd_signal_handler);
-  std::signal(SIGABRT, mapd_signal_handler);
-}
+std::unique_ptr<SessionInfo> g_session;
 
 inline void run_ddl_statement(const string& input_str) {
-  QueryRunner::run_ddl_statement(input_str, gsession);
+  QueryRunner::run_ddl_statement(input_str, g_session);
 }
-
-class SQLTestEnv : public ::testing::Environment {
- public:
-  void SetUp() override {
-    boost::filesystem::path base_path{BASE_PATH};
-    CHECK(boost::filesystem::exists(base_path));
-    auto system_db_file = base_path / "mapd_catalogs" / MAPD_DEFAULT_DB;
-    auto data_dir = base_path / "mapd_data";
-    UserMetadata user;
-    DBMetadata db;
-
-    register_signal_handler();
-    google::InstallFailureFunction(&calcite_shutdown_handler);
-
-    g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, data_dir.string(), 1024);
-    MapDParameters mapd_parms;
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
-        data_dir.string(), mapd_parms, false, 0);
-    // if no catalog create one
-    auto& sys_cat = SysCatalog::instance();
-    sys_cat.init(base_path.string(),
-                 dataMgr,
-                 {},
-                 g_calcite,
-                 !boost::filesystem::exists(system_db_file),
-                 mapd_parms.aggregator,
-                 {});
-    CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
-    // if no user create one
-    if (!sys_cat.getMetadataForUser("gtest", user)) {
-      sys_cat.createUser("gtest", "test!test!", false, "");
-      CHECK(sys_cat.getMetadataForUser("gtest", user));
-    }
-    // if no db create one
-    if (!sys_cat.getMetadataForDB("gtest_db", db)) {
-      sys_cat.createDatabase("gtest_db", user.userId);
-      CHECK(sys_cat.getMetadataForDB("gtest_db", db));
-    }
-    gsession.reset(new SessionInfo(std::make_shared<Catalog>(base_path.string(),
-                                                             db,
-                                                             dataMgr,
-                                                             std::vector<LeafHostInfo>{},
-                                                             g_calcite,
-                                                             false),
-                                   user,
-                                   ExecutorDeviceType::GPU,
-                                   ""));
-  }
-};
 
 bool storage_test(const string& table_name, size_t num_rows) {
   vector<size_t> insert_col_hashs =
-      populate_table_random(table_name, num_rows, gsession->getCatalog());
+      populate_table_random(table_name, num_rows, g_session->getCatalog());
   vector<size_t> scan_col_hashs =
-      scan_table_return_hash(table_name, gsession->getCatalog());
+      scan_table_return_hash(table_name, g_session->getCatalog());
   vector<size_t> scan_col_hashs2 =
-      scan_table_return_hash_non_iter(table_name, gsession->getCatalog());
+      scan_table_return_hash_non_iter(table_name, g_session->getCatalog());
   return insert_col_hashs == scan_col_hashs && insert_col_hashs == scan_col_hashs2;
 }
 
 void simple_thread_wrapper(const string& table_name, size_t num_rows, size_t thread_id) {
-  populate_table_random(table_name, num_rows, gsession->getCatalog());
+  populate_table_random(table_name, num_rows, g_session->getCatalog());
 }
 
 bool storage_test_parallel(const string& table_name,
@@ -161,9 +83,9 @@ bool storage_test_parallel(const string& table_name,
     t.join();
   }
   vector<size_t> scan_col_hashs =
-      scan_table_return_hash(table_name, gsession->getCatalog());
+      scan_table_return_hash(table_name, g_session->getCatalog());
   vector<size_t> scan_col_hashs2 =
-      scan_table_return_hash_non_iter(table_name, gsession->getCatalog());
+      scan_table_return_hash_non_iter(table_name, g_session->getCatalog());
   return scan_col_hashs == scan_col_hashs2;
 }
 }  // namespace
@@ -254,7 +176,8 @@ TEST(StorageSmallParallel, AllTypes) {
 int main(int argc, char* argv[]) {
   google::InitGoogleLogging(argv[0]);
   ::testing::InitGoogleTest(&argc, argv);
-  ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
+
+  g_session.reset(QueryRunner::get_session(BASE_PATH));
 
   int err{0};
   try {
@@ -262,5 +185,6 @@ int main(int argc, char* argv[]) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+  g_session.reset(nullptr);
   return err;
 }

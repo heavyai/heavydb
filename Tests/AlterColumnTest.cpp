@@ -36,24 +36,22 @@
 #define BASE_PATH "./tmp"
 #endif
 
-#define CALCITEPORT 6279
-
 using namespace std;
 using namespace Catalog_Namespace;
 using namespace TestHelpers;
 
 namespace {
 
-std::unique_ptr<SessionInfo> gsession;
+std::unique_ptr<SessionInfo> g_session;
 bool g_hoist_literals{true};
 
 inline void run_ddl_statement(const string& input_str) {
-  QueryRunner::run_ddl_statement(input_str, gsession);
+  QueryRunner::run_ddl_statement(input_str, g_session);
 }
 
 std::shared_ptr<ResultSet> run_query(const string& query_str) {
   return QueryRunner::run_multiple_agg(
-      query_str, gsession, ExecutorDeviceType::CPU, g_hoist_literals, true);
+      query_str, g_session, ExecutorDeviceType::CPU, g_hoist_literals, true);
 }
 
 template <typename E = std::runtime_error>
@@ -138,23 +136,8 @@ void import_table_file(const string& table, const string& file) {
   if (!ddl) {
     throw std::runtime_error("Not a DDLStmt: " + query_str);
   }
-  ddl->execute(*gsession);
+  ddl->execute(*g_session);
 }
-
-class SQLTestEnv : public ::testing::Environment {
- public:
-  void SetUp() override {
-    gsession.reset(QueryRunner::get_session(BASE_PATH,
-                                            "gtest",
-                                            "test!test!",
-                                            "gtest_db",
-                                            std::vector<LeafHostInfo>{},
-                                            std::vector<LeafHostInfo>{},
-                                            false,
-                                            true,
-                                            true));
-  }
-};
 
 // don't use R"()" format; somehow it causes many blank lines
 // to be output on console. how come?
@@ -274,7 +257,8 @@ TEST(AlterColumnTest2, Drop_after_fail_to_add) {
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
-  ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
+
+  g_session.reset(QueryRunner::get_session(BASE_PATH));
 
   int err{0};
   try {
@@ -282,5 +266,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+  g_session.reset(nullptr);
   return err;
 }

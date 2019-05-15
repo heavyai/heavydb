@@ -40,8 +40,6 @@
 #define BASE_PATH "./tmp"
 #endif
 
-#define CALCITEPORT 6279
-
 using namespace Catalog_Namespace;
 
 namespace {
@@ -86,38 +84,11 @@ struct ScalarTargetValueExtractor : public boost::static_visitor<std::string> {
 // namespace
 namespace {
 
-std::unique_ptr<SessionInfo> gsession;
+std::unique_ptr<SessionInfo> g_session;
 bool g_hoist_literals{true};
 
-std::shared_ptr<Calcite> g_calcite = nullptr;
-
-void calcite_shutdown_handler() {
-  if (g_calcite) {
-    g_calcite->close_calcite_server();
-  }
-}
-
-void mapd_signal_handler(int signal_number) {
-  LOG(ERROR) << "Interrupt signal (" << signal_number << ") received.";
-  calcite_shutdown_handler();
-  // shut down logging force a flush
-  google::ShutdownGoogleLogging();
-  // terminate program
-  if (signal_number == SIGTERM) {
-    std::exit(EXIT_SUCCESS);
-  } else {
-    std::exit(signal_number);
-  }
-}
-
-void register_signal_handler() {
-  std::signal(SIGTERM, mapd_signal_handler);
-  std::signal(SIGSEGV, mapd_signal_handler);
-  std::signal(SIGABRT, mapd_signal_handler);
-}
-
 inline void run_ddl_statement(const std::string& input_str) {
-  QueryRunner::run_ddl_statement(input_str, gsession);
+  QueryRunner::run_ddl_statement(input_str, g_session);
 }
 
 template <class T>
@@ -131,7 +102,7 @@ T v(const TargetValue& r) {
 
 std::shared_ptr<ResultSet> run_query(const std::string& query_str) {
   return QueryRunner::run_multiple_agg(
-      query_str, gsession, ExecutorDeviceType::CPU, g_hoist_literals, true);
+      query_str, g_session, ExecutorDeviceType::CPU, g_hoist_literals, true);
 }
 
 bool compare_agg(const std::string& table,
@@ -173,7 +144,7 @@ void update_common(const std::string& table,
   std::vector<ScalarTargetValue> rhsValues;
   update_prepare_offsets_values<T>(cnt, step, val, fragOffsets, rhsValues);
   Fragmenter_Namespace::InsertOrderFragmenter::updateColumn(
-      &gsession->getCatalog(),
+      &g_session->getCatalog(),
       table,
       column,
       0,  // 1st frag since we have only 100 rows
@@ -300,7 +271,7 @@ bool compare_row(const std::string& table,
                  const ResultRow& newr,
                  const TargetValue& val,
                  const bool commit) {
-  const auto cat = &gsession->getCatalog();
+  const auto cat = &g_session->getCatalog();
   const auto td = cat->getMetadataForTable(table);
   const auto cdl = cat->getAllColumnMetadataForTable(td->tableId, false, false, false);
   const auto cds = std::vector<const ColumnDescriptor*>(cdl.begin(), cdl.end());
@@ -405,7 +376,7 @@ void import_table_file(const std::string& table, const std::string& file) {
   if (!ddl) {
     throw std::runtime_error("Not a DDLStmt: " + query_str);
   }
-  ddl->execute(*gsession);
+  ddl->execute(*g_session);
 }
 
 bool prepare_table_for_delete(const std::string& table = "trips",
@@ -420,7 +391,7 @@ bool prepare_table_for_delete(const std::string& table = "trips",
   }
   auto ms = measure<>::execution([&]() {
     Fragmenter_Namespace::InsertOrderFragmenter::updateColumn(
-        &gsession->getCatalog(),
+        &g_session->getCatalog(),
         table,
         column,
         0,  // 1st frag since we have only 100 rows
@@ -482,7 +453,7 @@ bool delete_and_immediately_vacuum_rows(const std::string& table,
   }
 
   // delete and vacuum rows supposedly immediately
-  auto cat = &gsession->getCatalog();
+  auto cat = &g_session->getCatalog();
   auto td = cat->getMetadataForTable(table);
   auto cd = cat->getMetadataForColumn(td->tableId, deleted_column);
   const_cast<ColumnDescriptor*>(cd)->isDeletedCol = true;
@@ -543,7 +514,7 @@ bool delete_and_vacuum_varlen_rows(const std::string& table,
 
   if (manual_vacuum) {
     ms = measure<>::execution([&]() {
-      auto cat = &gsession->getCatalog();
+      auto cat = &g_session->getCatalog();
       const auto td = cat->getMetadataForTable(table,
                                                /*populateFragmenter=*/true);
       auto executor = Executor::getExecutor(cat->getCurrentDB().dbId);
@@ -572,55 +543,6 @@ bool delete_and_vacuum_varlen_rows(const std::string& table,
   }
   return true;
 }
-
-class SQLTestEnv : public ::testing::Environment {
- public:
-  void SetUp() override {
-    boost::filesystem::path base_path{BASE_PATH};
-    CHECK(boost::filesystem::exists(base_path));
-    auto system_db_file = base_path / "mapd_catalogs" / MAPD_DEFAULT_DB;
-    auto data_dir = base_path / "mapd_data";
-    UserMetadata user;
-    DBMetadata db;
-
-    register_signal_handler();
-    google::InstallFailureFunction(&calcite_shutdown_handler);
-
-    g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, base_path.string(), 1024);
-    MapDParameters mapd_parms;
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
-        data_dir.string(), mapd_parms, false, 0);
-    // if no catalog create one
-    auto& sys_cat = SysCatalog::instance();
-    sys_cat.init(base_path.string(),
-                 dataMgr,
-                 {},
-                 g_calcite,
-                 !boost::filesystem::exists(system_db_file),
-                 mapd_parms.aggregator,
-                 {});
-    CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
-    // if no user create one
-    if (!sys_cat.getMetadataForUser("gtest", user)) {
-      sys_cat.createUser("gtest", "test!test!", false, "");
-      CHECK(sys_cat.getMetadataForUser("gtest", user));
-    }
-    // if no db create one
-    if (!sys_cat.getMetadataForDB("gtest_db", db)) {
-      sys_cat.createDatabase("gtest_db", user.userId);
-      CHECK(sys_cat.getMetadataForDB("gtest_db", db));
-    }
-    gsession.reset(new SessionInfo(std::make_shared<Catalog>(base_path.string(),
-                                                             db,
-                                                             dataMgr,
-                                                             std::vector<LeafHostInfo>{},
-                                                             g_calcite,
-                                                             false),
-                                   user,
-                                   ExecutorDeviceType::GPU,
-                                   ""));
-  }
-};
 
 // don't use R"()" format; somehow it causes many blank lines
 // to be output on console. how come?
@@ -1135,7 +1057,8 @@ TEST_F(UpdateStorageTest, Half_boolean_deleted_rollback) {
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
-  ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
+
+  g_session.reset(QueryRunner::get_session(BASE_PATH));
 
   // the data files for perf tests are too big to check in, so perf tests
   // are done privately in someone's dev host. prog option seems a overkill.
@@ -1162,5 +1085,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+  g_session.reset(nullptr);
   return err;
 }
