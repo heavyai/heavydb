@@ -59,19 +59,19 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto extract_expr = dynamic_cast<const Analyzer::ExtractExpr*>(expr);
   if (extract_expr) {
-    return {codegen(extract_expr, co)};
+    return {code_generator.codegen(extract_expr, co)};
   }
   auto dateadd_expr = dynamic_cast<const Analyzer::DateaddExpr*>(expr);
   if (dateadd_expr) {
-    return {codegen(dateadd_expr, co)};
+    return {code_generator.codegen(dateadd_expr, co)};
   }
   auto datediff_expr = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
   if (datediff_expr) {
-    return {codegen(datediff_expr, co)};
+    return {code_generator.codegen(datediff_expr, co)};
   }
   auto datetrunc_expr = dynamic_cast<const Analyzer::DatetruncExpr*>(expr);
   if (datetrunc_expr) {
-    return {codegen(datetrunc_expr, co)};
+    return {code_generator.codegen(datetrunc_expr, co)};
   }
   auto charlength_expr = dynamic_cast<const Analyzer::CharLengthExpr*>(expr);
   if (charlength_expr) {

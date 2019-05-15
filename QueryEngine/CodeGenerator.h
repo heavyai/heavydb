@@ -64,6 +64,14 @@ class CodeGenerator {
                                           const SQLTypeInfo& ti,
                                           bool upscale = true);
 
+  llvm::Value* codegen(const Analyzer::ExtractExpr*, const CompilationOptions&);
+
+  llvm::Value* codegen(const Analyzer::DateaddExpr*, const CompilationOptions&);
+
+  llvm::Value* codegen(const Analyzer::DatediffExpr*, const CompilationOptions&);
+
+  llvm::Value* codegen(const Analyzer::DatetruncExpr*, const CompilationOptions&);
+
   llvm::Value* toBool(llvm::Value*);
 
   llvm::Value* posArg(const Analyzer::Expr*) const;
@@ -191,6 +199,14 @@ class CodeGenerator {
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
                           const SQLTypeInfo&);
+
+  llvm::Value* codegenExtractHighPrecisionTimestamps(llvm::Value*,
+                                                     const SQLTypeInfo&,
+                                                     const ExtractField&);
+
+  llvm::Value* codegenDateTruncHighPrecisionTimestamps(llvm::Value*,
+                                                       const SQLTypeInfo&,
+                                                       const DatetruncField&);
 
   bool checkExpressionRanges(const Analyzer::UOper*, int64_t, int64_t);
 

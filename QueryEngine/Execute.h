@@ -533,16 +533,6 @@ class Executor {
                            llvm::Type* case_llvm_type,
                            const bool is_real_str,
                            const CompilationOptions&);
-  llvm::Value* codegen(const Analyzer::ExtractExpr*, const CompilationOptions&);
-  llvm::Value* codegen(const Analyzer::DateaddExpr*, const CompilationOptions&);
-  llvm::Value* codegen(const Analyzer::DatediffExpr*, const CompilationOptions&);
-  llvm::Value* codegen(const Analyzer::DatetruncExpr*, const CompilationOptions&);
-  llvm::Value* codegenExtractHighPrecisionTimestamps(llvm::Value*,
-                                                     const SQLTypeInfo&,
-                                                     const ExtractField&);
-  llvm::Value* codegenDateTruncHighPrecisionTimestamps(llvm::Value*,
-                                                       const SQLTypeInfo&,
-                                                       const DatetruncField&);
   llvm::Value* codegen(const Analyzer::CharLengthExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::KeyForStringExpr*, const CompilationOptions&);
   llvm::Value* codegen(const Analyzer::CardinalityExpr*, const CompilationOptions&);
