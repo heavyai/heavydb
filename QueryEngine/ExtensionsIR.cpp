@@ -87,6 +87,15 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
   if (ret_ty != ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_)) {
     throw std::runtime_error("Inconsistent return type for " + function_oper->getName());
   }
+  const auto current_bb = cgen_state_->ir_builder_.GetInsertBlock();
+  for (auto it : cgen_state_->ext_call_cache_) {
+    if (*it.foper == *function_oper) {
+      auto inst = llvm::dyn_cast<llvm::Instruction>(it.lv);
+      if (inst && inst->getParent() == current_bb) {
+        return it.lv;
+      }
+    }
+  }
   std::vector<llvm::Value*> orig_arg_lvs;
   std::unordered_map<llvm::Value*, llvm::Value*> const_arr_size;
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
@@ -120,7 +129,9 @@ llvm::Value* Executor::codegenFunctionOper(const Analyzer::FunctionOper* functio
   const auto args = codegenFunctionOperCastArgs(
       function_oper, &ext_func_sig, orig_arg_lvs, const_arr_size, co);
   auto ext_call = cgen_state_->emitExternalCall(ext_func_sig.getName(), ret_ty, args);
-  return endArgsNullcheck(bbs, ext_call, function_oper);
+  auto ext_call_nullcheck = endArgsNullcheck(bbs, ext_call, function_oper);
+  cgen_state_->ext_call_cache_.push_back({function_oper, ext_call_nullcheck});
+  return ext_call_nullcheck;
 }
 
 // Start the control flow needed for a call site check of NULL arguments.

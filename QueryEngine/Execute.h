@@ -1476,6 +1476,11 @@ class Executor {
     llvm::ValueToValueMapTy vmap_;  // used for cloning the runtime module
     llvm::IRBuilder<> ir_builder_;
     std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
+    struct FunctionOperValue {
+      const Analyzer::FunctionOper* foper;
+      llvm::Value* lv;
+    };
+    std::vector<FunctionOperValue> ext_call_cache_;
     std::vector<llvm::Value*> group_by_expr_cache_;
     std::vector<llvm::Value*> str_constants_;
     std::vector<llvm::Value*> frag_offsets_;
