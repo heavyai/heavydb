@@ -2357,6 +2357,11 @@ std::vector<size_t> do_table_reordering(
     const RA* node,
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor) {
+  if (g_cluster) {
+    // Disable table reordering in distributed mode. The aggregator does not have enough
+    // information to break ties
+    return {};
+  }
   const auto& cat = *executor->getCatalog();
   for (const auto& table_info : query_infos) {
     if (table_info.table_id < 0) {
