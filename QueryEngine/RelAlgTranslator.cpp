@@ -296,8 +296,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateScalarSubquery(
   CHECK(rex_subquery);
   auto result = rex_subquery->getExecutionResult();
   auto row_set = result->getRows();
-  if (row_set->rowCount() != size_t(1)) {
+  if (row_set->rowCount() > size_t(1)) {
     throw std::runtime_error("Scalar sub-query returned multiple rows");
+  }
+  if (row_set->rowCount() < size_t(1)) {
+    CHECK_EQ(row_set->rowCount(), size_t(0));
+    throw std::runtime_error("Scalar sub-query returned no results");
   }
   auto first_row = row_set->getNextRow(false, false);
   auto scalar_tv = boost::get<ScalarTargetValue>(&first_row[0]);
