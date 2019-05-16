@@ -324,6 +324,11 @@ int UdfCompiler::compileForGpu() {
 int UdfCompiler::compileUdf() {
   if (on_search_path("clang++")) {
     LOG(INFO) << "UDFCompiler filename to compiler: " << udf_file_name_ << std::endl;
+    if (!boost::filesystem::exists(udf_file_name_)) {
+      LOG(FATAL) << "User defined function file " << udf_file_name_ << " does not exist.";
+      return 1;
+    }
+
     auto ast_result = parseToAst(udf_file_name_.c_str());
 
     if (ast_result == 0) {
@@ -339,15 +344,19 @@ int UdfCompiler::compileUdf() {
           readCompiledModules();
         } else {
           LOG(FATAL) << "Unable to compile UDF file for gpu" << std::endl;
+          return 1;
         }
       } else {
         LOG(FATAL) << "Unable to compile UDF file for cpu" << std::endl;
+        return 1;
       }
     } else {
       LOG(FATAL) << "Unable to create AST file for udf compilation" << std::endl;
+      return 1;
     }
   } else {
     LOG(FATAL) << "Unable to compile udfs due to absence of clang++" << std::endl;
+    return 1;
   }
 
   return 0;

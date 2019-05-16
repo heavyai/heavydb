@@ -54,6 +54,9 @@ add_executable(CtasIntegrationTest CtasIntegrationTest.cpp)
 add_executable(DateTimeUtilsTest Shared/DateTimeUtilsTest.cpp)
 add_executable(UpdateMetadataTest UpdateMetadataTest.cpp)
 add_executable(CalciteOptimizeTest CalciteOptimizeTest.cpp)
+if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+  add_executable(UdfTest UdfTest.cpp)
+endif()
 
 target_link_libraries(ProfileTest gtest Shared Calcite QueryEngine ${MAPD_RENDERING_LIBRARIES} CsvImport QueryRunner Parser ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROF_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 target_link_libraries(ResultSetTest gtest QueryEngine ${MAPD_RENDERING_LIBRARIES} ${Boost_LIBRARIES} CsvImport QueryRunner Parser DataMgr Chunk ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
@@ -85,6 +88,9 @@ target_link_libraries(CtasUpdateTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CtasIntegrationTest gtest ${MAPD_LIBRARIES} ${Glog_LIBRARIES} ${Boost_LIBRARIES} Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS})
 target_link_libraries(DateTimeUtilsTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CalciteOptimizeTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
+if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+  target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS} CsvImport QueryRunner)
+endif()
 
 set(TEST_ARGS "--gtest_output=xml:../")
 add_test(PlanTest PlanTest ${TEST_ARGS})
@@ -110,6 +116,9 @@ add_test(CtasUpdateTest CtasUpdateTest ${TEST_ARGS})
 add_test(DateTimeUtilsTest DateTimeUtilsTest ${TEST_ARGS})
 add_test(UpdateMetadataTest UpdateMetadataTest ${TEST_ARGS})
 add_test(CalciteOptimizeTest CalciteOptimizeTest ${TEST_ARGS})
+if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+  add_test(UdfTest UdfTest ${TEST_ARGS})
+endif()
 
 # parse s3 credentials
 file(READ aws/s3client.conf S3CLIENT_CONF)
@@ -142,6 +151,12 @@ set(SANITY_TESTS
   DateTimeUtilsTest
   UpdateMetadataTest
 )
+
+if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
+  list(APPEND SANITY_TESTS UdfTest)
+endif()
+
+
 set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "sanity")
 
 add_custom_target(sanity_tests
