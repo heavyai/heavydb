@@ -2015,6 +2015,9 @@ TEST(Select, Case) {
     c("WITH distinct_x AS (SELECT x FROM test GROUP BY x) SELECT AVG(CASE WHEN x = 7 "
       "THEN -32767 ELSE -1 END) FROM distinct_x",
       dt);
+    c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN '1' WHEN x BETWEEN 8 AND 10 THEN '2' ELSE "
+      "real_str END AS c FROM test WHERE y IN (43) ORDER BY c ASC;",
+      dt);
 
     const auto constrained_by_in_threshold_state = g_constrained_by_in_threshold;
     g_constrained_by_in_threshold = 0;

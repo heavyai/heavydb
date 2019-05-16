@@ -1221,12 +1221,19 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::add_cast(const SQLTypeInfo& new_type_i
     ti.set_comp_param(TRANSIENT_DICT(type_info.get_comp_param()));
   }
 
+  std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
+      new_expr_pair_list;
   for (auto& p : expr_pair_list) {
-    p.second = p.second->add_cast(ti);
+    new_expr_pair_list.emplace_back(
+        std::make_pair(p.first, p.second->deep_copy()->add_cast(ti)));
   }
+
   if (else_expr != nullptr) {
     else_expr = else_expr->add_cast(ti);
   }
+  // Replace the current WHEN THEN pair list once we are sure all casts have succeeded
+  expr_pair_list = new_expr_pair_list;
+
   type_info = ti;
   return shared_from_this();
 }
