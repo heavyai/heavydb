@@ -27,7 +27,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
   }
   const auto& expr_ti = expr->get_type_info();
   CHECK(expr_ti.is_boolean());
-  const auto lhs_lvs = executor_->codegen(in_arg, true, co);
+  const auto lhs_lvs = codegen(in_arg, true, co);
   llvm::Value* result{nullptr};
   if (expr_ti.get_notnull()) {
     result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_),
@@ -91,7 +91,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set
       &executor_->getCatalog()->getDataMgr());
   const auto& in_integer_set_ti = in_integer_set->get_type_info();
   CHECK(in_integer_set_ti.is_boolean());
-  const auto lhs_lvs = executor_->codegen(in_arg, true, co);
+  const auto lhs_lvs = codegen(in_arg, true, co);
   llvm::Value* result{nullptr};
   if (in_integer_set_ti.get_notnull()) {
     result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_),

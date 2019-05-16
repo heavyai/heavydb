@@ -23,7 +23,7 @@ using namespace DateTimeUtils;
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
                                     const CompilationOptions& co) {
-  auto from_expr = executor_->codegen(extract_expr->get_from_expr(), true, co).front();
+  auto from_expr = codegen(extract_expr->get_from_expr(), true, co).front();
   const int32_t extract_field{extract_expr->get_field()};
   const auto& extract_expr_ti = extract_expr->get_from_expr()->get_type_info();
   if (extract_field == kEPOCH) {
@@ -72,9 +72,9 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DateaddExpr* dateadd_expr,
                                     const CompilationOptions& co) {
   const auto& dateadd_expr_ti = dateadd_expr->get_type_info();
   CHECK(dateadd_expr_ti.get_type() == kTIMESTAMP || dateadd_expr_ti.get_type() == kDATE);
-  auto datetime = executor_->codegen(dateadd_expr->get_datetime_expr(), true, co).front();
+  auto datetime = codegen(dateadd_expr->get_datetime_expr(), true, co).front();
   CHECK(datetime->getType()->isIntegerTy(64));
-  auto number = executor_->codegen(dateadd_expr->get_number_expr(), true, co).front();
+  auto number = codegen(dateadd_expr->get_number_expr(), true, co).front();
 
   const auto& datetime_ti = dateadd_expr->get_datetime_expr()->get_type_info();
   std::vector<llvm::Value*> dateadd_args{
@@ -97,9 +97,9 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DateaddExpr* dateadd_expr,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::DatediffExpr* datediff_expr,
                                     const CompilationOptions& co) {
-  auto start = executor_->codegen(datediff_expr->get_start_expr(), true, co).front();
+  auto start = codegen(datediff_expr->get_start_expr(), true, co).front();
   CHECK(start->getType()->isIntegerTy(64));
-  auto end = executor_->codegen(datediff_expr->get_end_expr(), true, co).front();
+  auto end = codegen(datediff_expr->get_end_expr(), true, co).front();
   CHECK(end->getType()->isIntegerTy(32) || end->getType()->isIntegerTy(64));
   const auto& start_ti = datediff_expr->get_start_expr()->get_type_info();
   const auto& end_ti = datediff_expr->get_end_expr()->get_type_info();
@@ -130,7 +130,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DatediffExpr* datediff_expr,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::DatetruncExpr* datetrunc_expr,
                                     const CompilationOptions& co) {
-  auto from_expr = executor_->codegen(datetrunc_expr->get_from_expr(), true, co).front();
+  auto from_expr = codegen(datetrunc_expr->get_from_expr(), true, co).front();
   const auto& datetrunc_expr_ti = datetrunc_expr->get_from_expr()->get_type_info();
   CHECK(from_expr->getType()->isIntegerTy(64));
   if (datetrunc_expr_ti.is_high_precision_timestamp()) {

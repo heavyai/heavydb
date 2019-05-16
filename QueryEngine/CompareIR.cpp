@@ -189,7 +189,7 @@ llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
   if (dynamic_cast<const Analyzer::ExpressionTuple*>(lhs)) {
     CHECK(dynamic_cast<const Analyzer::ExpressionTuple*>(rhs));
     const auto lowered = lower_multicol_compare(bin_oper);
-    const auto lowered_lvs = executor_->codegen(lowered.get(), true, co);
+    const auto lowered_lvs = codegen(lowered.get(), true, co);
     CHECK_EQ(size_t(1), lowered_lvs.size());
     return lowered_lvs.front();
   }
@@ -231,7 +231,7 @@ llvm::Value* CodeGenerator::codegenCmp(const Analyzer::BinOper* bin_oper,
     }
   }
 
-  auto lhs_lvs = executor_->codegen(lhs, true, co);
+  auto lhs_lvs = codegen(lhs, true, co);
   return codegenCmp(optype, qualifier, lhs_lvs, lhs_ti, rhs, co);
 }
 
@@ -383,7 +383,7 @@ llvm::Value* CodeGenerator::codegenCmpDecimalConst(const SQLOps optype,
   d.bigintval = truncated_decimal;
   const auto new_rhs_lit =
       makeExpr<Analyzer::Constant>(new_ti, rhs_constant->get_is_null(), d);
-  const auto operand_lv = executor_->codegen(operand, true, co).front();
+  const auto operand_lv = codegen(operand, true, co).front();
   const auto lhs_lv = codegenCast(operand_lv, operand_ti, new_ti, false, co);
   return codegenCmp(optype, qualifier, {lhs_lv}, new_ti, new_rhs_lit.get(), co);
 }
@@ -399,7 +399,7 @@ llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
   if (rhs_ti.is_array()) {
     return codegenQualifierCmp(optype, qualifier, lhs_lvs, rhs, co);
   }
-  auto rhs_lvs = executor_->codegen(rhs, true, co);
+  auto rhs_lvs = codegen(rhs, true, co);
   CHECK_EQ(kONE, qualifier);
   if (optype == kOVERLAPS) {
     CHECK(lhs_ti.is_geometry());
@@ -481,7 +481,7 @@ llvm::Value* CodeGenerator::codegenQualifierCmp(const SQLOps optype,
   }
   const auto& arr_ti = arr_expr->get_type_info();
   const auto& elem_ti = arr_ti.get_elem_type();
-  auto rhs_lvs = executor_->codegen(arr_expr, true, co);
+  auto rhs_lvs = codegen(arr_expr, true, co);
   CHECK_NE(kONE, qualifier);
   std::string fname{std::string("array_") + (qualifier == kANY ? "any" : "all") + "_" +
                     icmp_arr_name(optype)};

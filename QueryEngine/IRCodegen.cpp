@@ -22,12 +22,11 @@
 
 // Driver methods for the IR generation.
 
-std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
-                                            const bool fetch_columns,
-                                            const CompilationOptions& co) {
-  CodeGenerator code_generator(cgen_state_.get(), this);
+std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
+                                                 const bool fetch_columns,
+                                                 const CompilationOptions& co) {
   if (!expr) {
-    return {code_generator.posArg(expr)};
+    return {posArg(expr)};
   }
   auto bin_oper = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper) {
@@ -39,60 +38,59 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (col_var) {
-    return code_generator.codegen(col_var, fetch_columns, co);
+    return codegen(col_var, fetch_columns, co);
   }
   auto constant = dynamic_cast<const Analyzer::Constant*>(expr);
   if (constant) {
     if (constant->get_is_null()) {
       const auto& ti = constant->get_type_info();
-      return {ti.is_fp() ? static_cast<llvm::Value*>(inlineFpNull(ti))
-                         : static_cast<llvm::Value*>(inlineIntNull(ti))};
+      return {ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(ti))
+                         : static_cast<llvm::Value*>(executor_->inlineIntNull(ti))};
     }
     // The dictionary encoding case should be handled by the parent expression
     // (cast, for now), here is too late to know the dictionary id
     CHECK_NE(kENCODING_DICT, constant->get_type_info().get_compression());
-    return {code_generator.codegen(
-        constant, constant->get_type_info().get_compression(), 0, co)};
+    return {codegen(constant, constant->get_type_info().get_compression(), 0, co)};
   }
   auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
   if (case_expr) {
-    return {code_generator.codegen(case_expr, co)};
+    return {codegen(case_expr, co)};
   }
   auto extract_expr = dynamic_cast<const Analyzer::ExtractExpr*>(expr);
   if (extract_expr) {
-    return {code_generator.codegen(extract_expr, co)};
+    return {codegen(extract_expr, co)};
   }
   auto dateadd_expr = dynamic_cast<const Analyzer::DateaddExpr*>(expr);
   if (dateadd_expr) {
-    return {code_generator.codegen(dateadd_expr, co)};
+    return {codegen(dateadd_expr, co)};
   }
   auto datediff_expr = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
   if (datediff_expr) {
-    return {code_generator.codegen(datediff_expr, co)};
+    return {codegen(datediff_expr, co)};
   }
   auto datetrunc_expr = dynamic_cast<const Analyzer::DatetruncExpr*>(expr);
   if (datetrunc_expr) {
-    return {code_generator.codegen(datetrunc_expr, co)};
+    return {codegen(datetrunc_expr, co)};
   }
   auto charlength_expr = dynamic_cast<const Analyzer::CharLengthExpr*>(expr);
   if (charlength_expr) {
-    return {code_generator.codegen(charlength_expr, co)};
+    return {codegen(charlength_expr, co)};
   }
   auto keyforstring_expr = dynamic_cast<const Analyzer::KeyForStringExpr*>(expr);
   if (keyforstring_expr) {
-    return {code_generator.codegen(keyforstring_expr, co)};
+    return {codegen(keyforstring_expr, co)};
   }
   auto cardinality_expr = dynamic_cast<const Analyzer::CardinalityExpr*>(expr);
   if (cardinality_expr) {
-    return {code_generator.codegen(cardinality_expr, co)};
+    return {codegen(cardinality_expr, co)};
   }
   auto like_expr = dynamic_cast<const Analyzer::LikeExpr*>(expr);
   if (like_expr) {
-    return {code_generator.codegen(like_expr, co)};
+    return {codegen(like_expr, co)};
   }
   auto regexp_expr = dynamic_cast<const Analyzer::RegexpExpr*>(expr);
   if (regexp_expr) {
-    return {code_generator.codegen(regexp_expr, co)};
+    return {codegen(regexp_expr, co)};
   }
   auto likelihood_expr = dynamic_cast<const Analyzer::LikelihoodExpr*>(expr);
   if (likelihood_expr) {
@@ -100,28 +98,28 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   }
   auto in_expr = dynamic_cast<const Analyzer::InValues*>(expr);
   if (in_expr) {
-    return {code_generator.codegen(in_expr, co)};
+    return {codegen(in_expr, co)};
   }
   auto in_integer_set_expr = dynamic_cast<const Analyzer::InIntegerSet*>(expr);
   if (in_integer_set_expr) {
-    return {code_generator.codegen(in_integer_set_expr, co)};
+    return {codegen(in_integer_set_expr, co)};
   }
   auto function_oper_with_custom_type_handling_expr =
       dynamic_cast<const Analyzer::FunctionOperWithCustomTypeHandling*>(expr);
   if (function_oper_with_custom_type_handling_expr) {
-    return {code_generator.codegenFunctionOperWithCustomTypeHandling(
+    return {codegenFunctionOperWithCustomTypeHandling(
         function_oper_with_custom_type_handling_expr, co)};
   }
   auto array_oper_expr = dynamic_cast<const Analyzer::ArrayExpr*>(expr);
   if (array_oper_expr) {
-    return {code_generator.codegenArrayExpr(array_oper_expr, co)};
+    return {codegenArrayExpr(array_oper_expr, co)};
   }
   auto function_oper_expr = dynamic_cast<const Analyzer::FunctionOper*>(expr);
   if (function_oper_expr) {
-    return {code_generator.codegenFunctionOper(function_oper_expr, co)};
+    return {codegenFunctionOper(function_oper_expr, co)};
   }
   if (dynamic_cast<const Analyzer::OffsetInFragment*>(expr)) {
-    return {code_generator.posArg(nullptr)};
+    return {posArg(nullptr)};
   }
   if (dynamic_cast<const Analyzer::WindowFunction*>(expr)) {
     throw std::runtime_error("Window expression not supported in this context");
@@ -129,44 +127,42 @@ std::vector<llvm::Value*> Executor::codegen(const Analyzer::Expr* expr,
   abort();
 }
 
-llvm::Value* Executor::codegen(const Analyzer::BinOper* bin_oper,
-                               const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegen(const Analyzer::BinOper* bin_oper,
+                                    const CompilationOptions& co) {
   const auto optype = bin_oper->get_optype();
-  CodeGenerator code_generator(cgen_state_.get(), this);
   if (IS_ARITHMETIC(optype)) {
-    return code_generator.codegenArith(bin_oper, co);
+    return codegenArith(bin_oper, co);
   }
   if (IS_COMPARISON(optype)) {
-    return code_generator.codegenCmp(bin_oper, co);
+    return codegenCmp(bin_oper, co);
   }
   if (IS_LOGIC(optype)) {
-    return code_generator.codegenLogical(bin_oper, co);
+    return codegenLogical(bin_oper, co);
   }
   if (optype == kARRAY_AT) {
-    return code_generator.codegenArrayAt(bin_oper, co);
+    return codegenArrayAt(bin_oper, co);
   }
   abort();
 }
 
-llvm::Value* Executor::codegen(const Analyzer::UOper* u_oper,
-                               const CompilationOptions& co) {
+llvm::Value* CodeGenerator::codegen(const Analyzer::UOper* u_oper,
+                                    const CompilationOptions& co) {
   const auto optype = u_oper->get_optype();
-  CodeGenerator code_generator(cgen_state_.get(), this);
   switch (optype) {
     case kNOT: {
-      return code_generator.codegenLogical(u_oper, co);
+      return codegenLogical(u_oper, co);
     }
     case kCAST: {
-      return code_generator.codegenCast(u_oper, co);
+      return codegenCast(u_oper, co);
     }
     case kUMINUS: {
-      return code_generator.codegenUMinus(u_oper, co);
+      return codegenUMinus(u_oper, co);
     }
     case kISNULL: {
-      return code_generator.codegenIsNull(u_oper, co);
+      return codegenIsNull(u_oper, co);
     }
     case kUNNEST:
-      return code_generator.codegenUnnest(u_oper, co);
+      return codegenUnnest(u_oper, co);
     default:
       abort();
   }
@@ -296,7 +292,8 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             for (auto expr : current_level_join_conditions.quals) {
               left_join_cond = cgen_state_->ir_builder_.CreateAnd(
                   left_join_cond,
-                  code_generator.toBool(codegen(expr.get(), true, co).front()));
+                  code_generator.toBool(
+                      code_generator.codegen(expr.get(), true, co).front()));
             }
             return left_join_cond;
           };
@@ -368,8 +365,8 @@ Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
         cgen_state_->context_, "row_is_deleted", cgen_state_->row_func_);
     cgen_state_->ir_builder_.SetInsertPoint(it_valid_bb);
     CodeGenerator code_generator(cgen_state_.get(), this);
-    const auto row_is_deleted =
-        code_generator.toBool(codegen(deleted_expr.get(), true, co).front());
+    const auto row_is_deleted = code_generator.toBool(
+        code_generator.codegen(deleted_expr.get(), true, co).front());
     cgen_state_->ir_builder_.CreateBr(row_is_deleted_bb);
     cgen_state_->ir_builder_.SetInsertPoint(it_not_valid_bb);
     const auto row_is_deleted_default = ll_bool(false);
@@ -502,7 +499,8 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     std::stack<llvm::BasicBlock*>& array_loops,
     const bool thread_mem_shared) {
   CHECK_GE(col_width, sizeof(int32_t));
-  auto group_key = codegen(group_by_col, true, co).front();
+  CodeGenerator code_generator(cgen_state_.get(), this);
+  auto group_key = code_generator.codegen(group_by_col, true, co).front();
   auto key_to_cache = group_key;
   if (dynamic_cast<Analyzer::UOper*>(group_by_col) &&
       static_cast<Analyzer::UOper*>(group_by_col)->get_optype() == kUNNEST) {
@@ -520,7 +518,6 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     const auto& array_ti = arr_expr->get_type_info();
     CHECK(array_ti.is_array());
     const auto& elem_ti = array_ti.get_elem_type();
-    CodeGenerator code_generator(cgen_state_.get(), this);
     auto array_len = (array_ti.get_size() > 0)
                          ? ll_int(array_ti.get_size() / elem_ti.get_size())
                          : cgen_state_->emitExternalCall(

@@ -171,7 +171,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
       executor_->plan_state_->columns_to_fetch_.insert(
           std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
     }
-    return executor_->codegen(hash_join_lhs.get(), fetch_column, co);
+    return codegen(hash_join_lhs.get(), fetch_column, co);
   }
   auto pos_arg = posArg(col_var);
   if (window_func_context) {
@@ -442,11 +442,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
                              " not supported for outer joins yet");
   }
   const auto null_constant = makeExpr<Analyzer::Constant>(null_ti, true, Datum{0});
-  const auto null_target_lvs = executor_->codegen(
-      null_constant.get(),
-      false,
-      CompilationOptions{
-          ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false});
+  const auto null_target_lvs =
+      codegen(null_constant.get(),
+              false,
+              CompilationOptions{
+                  ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false});
   cgen_state_->ir_builder_.CreateBr(phi_bb);
   CHECK_EQ(orig_lvs.size(), null_target_lvs.size());
   cgen_state_->ir_builder_.SetInsertPoint(phi_bb);

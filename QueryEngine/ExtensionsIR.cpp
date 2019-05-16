@@ -103,7 +103,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
-    const auto arg_lvs = executor_->codegen(arg, true, co);
+    const auto arg_lvs = codegen(arg, true, co);
     // TODO(adb / d): Assuming no const array cols for geo (for now)
     if (arg_ti.is_geometry()) {
       CHECK_EQ(arg_ti.get_physical_coord_cols(), arg_lvs.size());
@@ -207,7 +207,7 @@ llvm::Value* CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
       const auto arg = function_oper->getArg(0);
       const auto& arg_ti = arg->get_type_info();
       CHECK(arg_ti.is_decimal());
-      const auto arg_lvs = executor_->codegen(arg, true, co);
+      const auto arg_lvs = codegen(arg, true, co);
       CHECK_EQ(size_t(1), arg_lvs.size());
       const auto arg_lv = arg_lvs.front();
       CHECK(arg_lv->getType()->isIntegerTy(64));
@@ -228,7 +228,7 @@ llvm::Value* CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
 
       const auto arg0 = function_oper->getArg(0);
       const auto& arg0_ti = arg0->get_type_info();
-      const auto arg0_lvs = executor_->codegen(arg0, true, co);
+      const auto arg0_lvs = codegen(arg0, true, co);
       CHECK_EQ(size_t(1), arg0_lvs.size());
       const auto arg0_lv = arg0_lvs.front();
       CHECK(arg0_lv->getType()->isIntegerTy(64));
@@ -236,7 +236,7 @@ llvm::Value* CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
       const auto arg1 = function_oper->getArg(1);
       const auto& arg1_ti = arg1->get_type_info();
       CHECK(arg1_ti.is_integer());
-      const auto arg1_lvs = executor_->codegen(arg1, true, co);
+      const auto arg1_lvs = codegen(arg1, true, co);
       auto arg1_lv = arg1_lvs.front();
       if (arg1_ti.get_type() != kINT) {
         arg1_lv = codegenCast(arg1_lv, arg1_ti, SQLTypeInfo(kINT, true), false, co);

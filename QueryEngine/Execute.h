@@ -498,12 +498,6 @@ class Executor {
     return ::ll_bool(v, cgen_state_->context_);
   }
 
-  std::vector<llvm::Value*> codegen(const Analyzer::Expr*,
-                                    const bool fetch_columns,
-                                    const CompilationOptions&);
-  llvm::Value* codegen(const Analyzer::BinOper*, const CompilationOptions&);
-  llvm::Value* codegen(const Analyzer::UOper*, const CompilationOptions&);
-
   int deviceCount(const ExecutorDeviceType) const;
   int deviceCountForMemoryLevel(const Data_Namespace::MemoryLevel memory_level) const;
 

@@ -991,6 +991,7 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
   const int32_t row_size_quad = query_mem_desc.didOutputColumnar()
                                     ? 0
                                     : query_mem_desc.getRowSize() / sizeof(int64_t);
+  CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
   if (use_streaming_top_n(ra_exe_unit_, query_mem_desc.didOutputColumnar())) {
     const auto& only_order_entry = ra_exe_unit_.sort_info.order_entries.front();
     CHECK_GE(only_order_entry.tle_no, int(1));
@@ -1000,7 +1001,7 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
     const auto chosen_bytes =
         static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(target_idx));
     auto order_entry_lv = executor_->castToTypeIn(
-        executor_->codegen(order_entry_expr, true, co).front(), chosen_bytes * 8);
+        code_generator.codegen(order_entry_expr, true, co).front(), chosen_bytes * 8);
     const uint32_t n = ra_exe_unit_.sort_info.offset + ra_exe_unit_.sort_info.limit;
     std::string fname = "get_bin_from_k_heap";
     const auto& oe_ti = order_entry_expr->get_type_info();
@@ -1043,7 +1044,6 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
   } else {
     const auto group_expr_lv =
         LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "old_total_matched"));
-    CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
     std::vector<llvm::Value*> args{
         groups_buffer,
         LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount())),
@@ -1689,8 +1689,8 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
     const auto& target_ti = target_expr->get_type_info();
     if (target_ti.is_array() && !executor_->plan_state_->isLazyFetchColumn(target_expr)) {
       const auto target_lvs =
-          agg_expr ? executor_->codegen(agg_expr->get_arg(), true, co)
-                   : executor_->codegen(
+          agg_expr ? code_generator.codegen(agg_expr->get_arg(), true, co)
+                   : code_generator.codegen(
                          target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
       if (target_ti.isChunkIteratorPackaging()) {
         // Something with the chunk transport is code that was generated from a source
@@ -1725,7 +1725,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
       auto generate_coord_lvs = [&](auto* selected_target_expr,
                                     bool const fetch_columns) -> LLVMValueVector {
         const auto target_lvs =
-            executor_->codegen(selected_target_expr, fetch_columns, co);
+            code_generator.codegen(selected_target_expr, fetch_columns, co);
         CHECK_EQ(target_ti.get_physical_coord_cols(), target_lvs.size());
 
         const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
@@ -1781,8 +1781,8 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
       }
     }
   }
-  return agg_expr ? executor_->codegen(agg_expr->get_arg(), true, co)
-                  : executor_->codegen(
+  return agg_expr ? code_generator.codegen(agg_expr->get_arg(), true, co)
+                  : code_generator.codegen(
                         target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
 }
 

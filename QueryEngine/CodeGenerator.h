@@ -26,20 +26,40 @@ class CodeGenerator {
   CodeGenerator(Executor::CgenState* cgen_state, Executor* executor)
       : cgen_state_(cgen_state), executor_(executor) {}
 
-  std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
-                                    const EncodingType enc_type,
-                                    const int dict_id,
+  std::vector<llvm::Value*> codegen(const Analyzer::Expr*,
+                                    const bool fetch_columns,
                                     const CompilationOptions&);
 
-  llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
+  std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*,
+                                    const bool fetch_column,
+                                    const CompilationOptions&);
 
   std::vector<llvm::Value*> codegenHoistedConstants(
       const std::vector<const Analyzer::Constant*>& constants,
       const EncodingType enc_type,
       const int dict_id);
 
-  std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*,
-                                    const bool fetch_column,
+  llvm::ConstantInt* codegenIntConst(const Analyzer::Constant* constant);
+
+  llvm::Value* codegenCastBetweenIntTypes(llvm::Value* operand_lv,
+                                          const SQLTypeInfo& operand_ti,
+                                          const SQLTypeInfo& ti,
+                                          bool upscale = true);
+
+  llvm::Value* posArg(const Analyzer::Expr*) const;
+
+  llvm::Value* toBool(llvm::Value*);
+
+  llvm::Value* castArrayPointer(llvm::Value* ptr, const SQLTypeInfo& elem_ti);
+
+  static bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
+                              std::vector<Analyzer::Expr*>& primary_quals,
+                              std::vector<Analyzer::Expr*>& deferred_quals);
+
+ private:
+  std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
+                                    const EncodingType enc_type,
+                                    const int dict_id,
                                     const CompilationOptions&);
 
   llvm::Value* codegenArith(const Analyzer::BinOper*, const CompilationOptions&);
@@ -70,11 +90,6 @@ class CodeGenerator {
                            const SQLTypeInfo& ti,
                            const bool operand_is_const,
                            const CompilationOptions& co);
-
-  llvm::Value* codegenCastBetweenIntTypes(llvm::Value* operand_lv,
-                                          const SQLTypeInfo& operand_ti,
-                                          const SQLTypeInfo& ti,
-                                          bool upscale = true);
 
   llvm::Value* codegen(const Analyzer::InValues*, const CompilationOptions&);
 
@@ -114,17 +129,10 @@ class CodeGenerator {
       const Analyzer::FunctionOperWithCustomTypeHandling*,
       const CompilationOptions&);
 
-  llvm::Value* castArrayPointer(llvm::Value* ptr, const SQLTypeInfo& elem_ti);
+  llvm::Value* codegen(const Analyzer::BinOper*, const CompilationOptions&);
 
-  llvm::Value* toBool(llvm::Value*);
+  llvm::Value* codegen(const Analyzer::UOper*, const CompilationOptions&);
 
-  llvm::Value* posArg(const Analyzer::Expr*) const;
-
-  static bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
-                              std::vector<Analyzer::Expr*>& primary_quals,
-                              std::vector<Analyzer::Expr*>& deferred_quals);
-
- private:
   std::vector<llvm::Value*> codegenHoistedConstantsLoads(const SQLTypeInfo& type_info,
                                                          const EncodingType enc_type,
                                                          const int dict_id,
@@ -168,27 +176,9 @@ class CodeGenerator {
       const bool fetch_column,
       const CompilationOptions& co);
 
-  // Returns the IR value which holds true iff at least one match has been found for outer
-  // join, null if there's no outer join condition on the given nesting level.
-  llvm::Value* foundOuterJoinMatch(const ssize_t nesting_level) const;
-
-  llvm::Value* resolveGroupedColumnReference(const Analyzer::ColumnVar*);
-
-  llvm::Value* colByteStream(const Analyzer::ColumnVar* col_var,
-                             const bool fetch_column,
-                             const bool hoist_literals);
-
-  std::shared_ptr<const Analyzer::Expr> hashJoinLhs(const Analyzer::ColumnVar* rhs) const;
-
-  std::shared_ptr<const Analyzer::ColumnVar> hashJoinLhsTuple(
-      const Analyzer::ColumnVar* rhs,
-      const Analyzer::BinOper* tautological_eq) const;
-
   llvm::Value* codegenIntArith(const Analyzer::BinOper*, llvm::Value*, llvm::Value*);
 
   llvm::Value* codegenFpArith(const Analyzer::BinOper*, llvm::Value*, llvm::Value*);
-
-  bool checkExpressionRanges(const Analyzer::BinOper*, int64_t, int64_t);
 
   llvm::Value* codegenCastTimestampToDate(llvm::Value* ts_lv,
                                           const int dimen,
@@ -260,9 +250,6 @@ class CodeGenerator {
                            const bool is_real_str,
                            const CompilationOptions&);
 
-  std::unique_ptr<InValuesBitmap> createInValuesBitmap(const Analyzer::InValues*,
-                                                       const CompilationOptions&);
-
   llvm::Value* codegenExtractHighPrecisionTimestamps(llvm::Value*,
                                                      const SQLTypeInfo&,
                                                      const ExtractField&);
@@ -270,8 +257,6 @@ class CodeGenerator {
   llvm::Value* codegenDateTruncHighPrecisionTimestamps(llvm::Value*,
                                                        const SQLTypeInfo&,
                                                        const DatetruncField&);
-
-  bool checkExpressionRanges(const Analyzer::UOper*, int64_t, int64_t);
 
   llvm::Value* codegenCmpDecimalConst(const SQLOps,
                                       const SQLQualifier,
@@ -317,6 +302,29 @@ class CodeGenerator {
                                  const Analyzer::Constant* pattern,
                                  const char escape_char,
                                  const CompilationOptions&);
+
+  // Returns the IR value which holds true iff at least one match has been found for outer
+  // join, null if there's no outer join condition on the given nesting level.
+  llvm::Value* foundOuterJoinMatch(const ssize_t nesting_level) const;
+
+  llvm::Value* resolveGroupedColumnReference(const Analyzer::ColumnVar*);
+
+  llvm::Value* colByteStream(const Analyzer::ColumnVar* col_var,
+                             const bool fetch_column,
+                             const bool hoist_literals);
+
+  std::shared_ptr<const Analyzer::Expr> hashJoinLhs(const Analyzer::ColumnVar* rhs) const;
+
+  std::shared_ptr<const Analyzer::ColumnVar> hashJoinLhsTuple(
+      const Analyzer::ColumnVar* rhs,
+      const Analyzer::BinOper* tautological_eq) const;
+
+  std::unique_ptr<InValuesBitmap> createInValuesBitmap(const Analyzer::InValues*,
+                                                       const CompilationOptions&);
+
+  bool checkExpressionRanges(const Analyzer::UOper*, int64_t, int64_t);
+
+  bool checkExpressionRanges(const Analyzer::BinOper*, int64_t, int64_t);
 
   struct ArgNullcheckBBs {
     llvm::BasicBlock* args_null_bb;

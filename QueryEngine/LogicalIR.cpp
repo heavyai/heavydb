@@ -212,7 +212,7 @@ llvm::Value* CodeGenerator::codegenLogicalShortCircuit(const Analyzer::BinOper* 
   }
 
   const auto& ti = bin_oper->get_type_info();
-  auto lhs_lv = executor_->codegen(lhs, true, co).front();
+  auto lhs_lv = codegen(lhs, true, co).front();
 
   // Here the linear control flow will diverge and expressions cached during the
   // code branch code generation (currently just column decoding) are not going
@@ -256,7 +256,7 @@ llvm::Value* CodeGenerator::codegenLogicalShortCircuit(const Analyzer::BinOper* 
 
   // Codegen rhs when unable to short circuit.
   cgen_state_->ir_builder_.SetInsertPoint(rhs_bb);
-  auto rhs_lv = executor_->codegen(rhs, true, co).front();
+  auto rhs_lv = codegen(rhs, true, co).front();
   if (!ti.get_notnull()) {
     // need rhs nullcheck as well
     if (rhs_lv->getType()->isIntegerTy(1)) {
@@ -297,8 +297,8 @@ llvm::Value* CodeGenerator::codegenLogical(const Analyzer::BinOper* bin_oper,
 
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
-  auto lhs_lv = executor_->codegen(lhs, true, co).front();
-  auto rhs_lv = executor_->codegen(rhs, true, co).front();
+  auto lhs_lv = codegen(lhs, true, co).front();
+  auto rhs_lv = codegen(rhs, true, co).front();
   const auto& ti = bin_oper->get_type_info();
   if (ti.get_notnull()) {
     switch (optype) {
@@ -355,7 +355,7 @@ llvm::Value* CodeGenerator::codegenLogical(const Analyzer::UOper* uoper,
   const auto operand = uoper->get_operand();
   const auto& operand_ti = operand->get_type_info();
   CHECK(operand_ti.is_boolean());
-  const auto operand_lv = executor_->codegen(operand, true, co).front();
+  const auto operand_lv = codegen(operand, true, co).front();
   CHECK(operand_lv->getType()->isIntegerTy());
   const bool not_null = (operand_ti.get_notnull() || is_qualified_bin_oper(operand));
   CHECK(not_null || operand_lv->getType()->isIntegerTy(8));
@@ -380,7 +380,7 @@ llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
   if (ti.get_notnull() && !ti.is_array()) {
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
   }
-  const auto operand_lv = executor_->codegen(operand, true, co).front();
+  const auto operand_lv = codegen(operand, true, co).front();
   if (ti.is_array()) {
     return cgen_state_->emitExternalCall("array_is_null",
                                          get_int_type(1, cgen_state_->context_),

@@ -35,7 +35,7 @@ llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
       operand_lv = operand_lvs.front();
     }
   } else {
-    operand_lv = executor_->codegen(operand, true, co).front();
+    operand_lv = codegen(operand, true, co).front();
   }
   const auto& operand_ti = operand->get_type_info();
   return codegenCast(operand_lv, operand_ti, ti, operand_as_const, co);

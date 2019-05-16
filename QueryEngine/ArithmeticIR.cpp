@@ -49,8 +49,8 @@ llvm::Value* CodeGenerator::codegenArith(const Analyzer::BinOper* bin_oper,
     }
   }
 
-  auto lhs_lv = executor_->codegen(lhs, true, co).front();
-  auto rhs_lv = executor_->codegen(rhs, true, co).front();
+  auto lhs_lv = codegen(lhs, true, co).front();
+  auto rhs_lv = codegen(rhs, true, co).front();
   // Handle operations when a time interval operand is involved, an operation
   // between an integer and a time interval isn't normalized by the analyzer.
   if (lhs_type.is_timeinterval()) {
@@ -529,7 +529,7 @@ llvm::Value* CodeGenerator::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
     return nullptr;
   }
 
-  auto lhs_lv = executor_->codegen(lhs, true, co).front();
+  auto lhs_lv = codegen(lhs, true, co).front();
   llvm::Value* rhs_lv{nullptr};
   if (rhs_constant) {
     const auto rhs_lit = Parser::IntLiteral::analyzeValue(
@@ -541,7 +541,7 @@ llvm::Value* CodeGenerator::codegenDeciDiv(const Analyzer::BinOper* bin_oper,
   } else if (rhs_cast) {
     auto rhs_cast_oper = rhs_cast->get_operand();
     const auto& rhs_cast_oper_ti = rhs_cast_oper->get_type_info();
-    auto rhs_cast_oper_lv = executor_->codegen(rhs_cast_oper, true, co).front();
+    auto rhs_cast_oper_lv = codegen(rhs_cast_oper, true, co).front();
     rhs_lv = codegenCastBetweenIntTypes(
         rhs_cast_oper_lv, rhs_cast_oper_ti, lhs_type, /*upscale*/ false);
   } else {
@@ -612,7 +612,7 @@ bool CodeGenerator::checkExpressionRanges(const Analyzer::UOper* uoper,
 llvm::Value* CodeGenerator::codegenUMinus(const Analyzer::UOper* uoper,
                                           const CompilationOptions& co) {
   CHECK_EQ(uoper->get_optype(), kUMINUS);
-  const auto operand_lv = executor_->codegen(uoper->get_operand(), true, co).front();
+  const auto operand_lv = codegen(uoper->get_operand(), true, co).front();
   const auto& ti = uoper->get_type_info();
   llvm::Value* chosen_max{nullptr};
   llvm::Value* chosen_min{nullptr};

@@ -19,7 +19,7 @@
 
 llvm::Value* CodeGenerator::codegenUnnest(const Analyzer::UOper* uoper,
                                           const CompilationOptions& co) {
-  return executor_->codegen(uoper->get_operand(), true, co).front();
+  return codegen(uoper->get_operand(), true, co).front();
 }
 
 llvm::Value* CodeGenerator::codegenArrayAt(const Analyzer::BinOper* array_at,
@@ -28,7 +28,7 @@ llvm::Value* CodeGenerator::codegenArrayAt(const Analyzer::BinOper* array_at,
   const auto idx_expr = array_at->get_right_operand();
   const auto& idx_ti = idx_expr->get_type_info();
   CHECK(idx_ti.is_integer());
-  auto idx_lvs = executor_->codegen(idx_expr, true, co);
+  auto idx_lvs = codegen(idx_expr, true, co);
   CHECK_EQ(size_t(1), idx_lvs.size());
   auto idx_lv = idx_lvs.front();
   if (idx_ti.get_logical_size() < 8) {
@@ -51,7 +51,7 @@ llvm::Value* CodeGenerator::codegenArrayAt(const Analyzer::BinOper* array_at,
                  ? llvm::Type::getDoubleTy(cgen_state_->context_)
                  : llvm::Type::getFloatTy(cgen_state_->context_))
           : get_int_type(elem_ti.get_logical_size() * 8, cgen_state_->context_);
-  const auto arr_lvs = executor_->codegen(arr_expr, true, co);
+  const auto arr_lvs = codegen(arr_expr, true, co);
   CHECK_EQ(size_t(1), arr_lvs.size());
   return cgen_state_->emitExternalCall(
       array_at_fname,
@@ -69,7 +69,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CardinalityExpr* expr,
   const auto& array_ti = arr_expr->get_type_info();
   CHECK(array_ti.is_array());
   const auto& elem_ti = array_ti.get_elem_type();
-  auto arr_lv = executor_->codegen(arr_expr, true, co);
+  auto arr_lv = codegen(arr_expr, true, co);
   std::string fn_name("array_size");
 
   std::vector<llvm::Value*> array_size_args{
@@ -95,7 +95,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
   const auto& return_type = array_expr->get_type_info();
   for (size_t i = 0; i < array_expr->getElementCount(); i++) {
     const auto arg = array_expr->getElement(i);
-    const auto arg_lvs = executor_->codegen(arg, true, co);
+    const auto arg_lvs = codegen(arg, true, co);
     if (arg_lvs.size() == 1) {
       argument_list.push_back(arg_lvs.front());
     } else {

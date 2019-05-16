@@ -643,12 +643,13 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
   const auto outer_col_ti = outer_col->get_type_info();
 
   if (outer_col_ti.is_geometry()) {
+    CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
     // TODO(adb): for points we will use the coords array, but for other geometries we
     // will need to use the bounding box. For now only support points.
     CHECK_EQ(outer_col_ti.get_type(), kPOINT);
     CHECK_EQ(bucket_sizes_for_dimension_.size(), static_cast<size_t>(2));
 
-    const auto col_lvs = executor_->codegen(outer_col, true, co);
+    const auto col_lvs = code_generator.codegen(outer_col, true, co);
     CHECK_EQ(col_lvs.size(), size_t(1));
 
     const auto outer_col_var = dynamic_cast<const Analyzer::ColumnVar*>(outer_col);
@@ -657,7 +658,6 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
         outer_col_var->get_table_id(), outer_col_var->get_column_id() + 1);
     CHECK(coords_cd);
 
-    CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
     const auto array_ptr = executor_->cgen_state_->emitExternalCall(
         "array_buff",
         llvm::Type::getInt8PtrTy(executor_->cgen_state_->context_),

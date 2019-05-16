@@ -1604,7 +1604,7 @@ llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
                                     outer_input_desc.getNestLevel());
   CodeGenerator code_generator(cgen_state_.get(), this);
   const auto is_deleted =
-      code_generator.toBool(codegen(deleted_expr.get(), true, co).front());
+      code_generator.toBool(code_generator.codegen(deleted_expr.get(), true, co).front());
   const auto is_deleted_bb = llvm::BasicBlock::Create(
       cgen_state_->context_, "is_deleted", cgen_state_->row_func_);
   llvm::BasicBlock* bb = llvm::BasicBlock::Create(
@@ -1635,7 +1635,7 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
   CodeGenerator code_generator(cgen_state_.get(), this);
   for (auto expr : primary_quals) {
     // Generate the filter for primary quals
-    auto cond = code_generator.toBool(codegen(expr, true, co).front());
+    auto cond = code_generator.toBool(code_generator.codegen(expr, true, co).front());
     filter_lv = cgen_state_->ir_builder_.CreateAnd(filter_lv, cond);
   }
   CHECK(filter_lv->getType()->isIntegerTy(1));
@@ -1657,7 +1657,7 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
 
   for (auto expr : deferred_quals) {
     filter_lv = cgen_state_->ir_builder_.CreateAnd(
-        filter_lv, code_generator.toBool(codegen(expr, true, co).front()));
+        filter_lv, code_generator.toBool(code_generator.codegen(expr, true, co).front()));
   }
 
   CHECK(filter_lv->getType()->isIntegerTy(1));

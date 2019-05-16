@@ -15,6 +15,7 @@
  */
 
 #include "JoinHashTable.h"
+#include "CodeGenerator.h"
 #include "ColumnFetcher.h"
 #include "Execute.h"
 #include "ExpressionRewrite.h"
@@ -1212,7 +1213,8 @@ std::vector<llvm::Value*> JoinHashTable::getHashJoinArgs(llvm::Value* hash_ptr,
                                                          const Analyzer::Expr* key_col,
                                                          const int shard_count,
                                                          const CompilationOptions& co) {
-  const auto key_lvs = executor_->codegen(key_col, true, co);
+  CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
+  const auto key_lvs = code_generator.codegen(key_col, true, co);
   CHECK_EQ(size_t(1), key_lvs.size());
   auto const& key_col_ti = key_col->get_type_info();
   auto hash_entry_info =
@@ -1360,7 +1362,8 @@ llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co,
   CHECK(key_col);
   auto val_col = cols.first;
   CHECK(val_col);
-  const auto key_lvs = executor_->codegen(key_col, true, co);
+  CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
+  const auto key_lvs = code_generator.codegen(key_col, true, co);
   CHECK_EQ(size_t(1), key_lvs.size());
   auto hash_ptr = codegenHashTableLoad(index);
   CHECK(hash_ptr);

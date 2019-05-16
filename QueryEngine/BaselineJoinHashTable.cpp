@@ -15,6 +15,7 @@
  */
 
 #include "BaselineJoinHashTable.h"
+#include "CodeGenerator.h"
 #include "ColumnFetcher.h"
 #include "Execute.h"
 #include "ExpressionRewrite.h"
@@ -1068,11 +1069,12 @@ llvm::Value* BaselineJoinHashTable::codegenKey(const CompilationOptions& co) {
       CHECK(false);
   }
 
+  CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
   for (size_t i = 0; i < getKeyComponentCount(); ++i) {
     const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(key_buff_lv, LL_INT(i));
     const auto& inner_outer_pair = inner_outer_pairs[i];
     const auto outer_col = inner_outer_pair.second;
-    const auto col_lvs = executor_->codegen(outer_col, true, co);
+    const auto col_lvs = code_generator.codegen(outer_col, true, co);
     CHECK_EQ(size_t(1), col_lvs.size());
     const auto col_lv = LL_BUILDER.CreateSExt(
         col_lvs.front(), get_int_type(key_component_width * 8, LL_CONTEXT));

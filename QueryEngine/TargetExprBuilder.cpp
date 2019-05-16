@@ -410,7 +410,6 @@ void TargetExprCodegen::codegen(
       }
       const auto partition_end =
           LL_INT(reinterpret_cast<int64_t>(window_func_context->partitionEnd()));
-      CodeGenerator code_generator(executor->cgen_state_.get(), executor);
       executor->cgen_state_->emitExternalCall(apply_window_pending_outputs_name,
                                               llvm::Type::getVoidTy(LL_CONTEXT),
                                               {pending_outputs,

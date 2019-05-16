@@ -67,13 +67,12 @@ llvm::Value* CodeGenerator::codegenCase(const Analyzer::CaseExpr* case_expr,
       llvm::BasicBlock::Create(cgen_state_->context_, "end_case", cgen_state_->row_func_);
   for (const auto& expr_pair : expr_pair_list) {
     Executor::FetchCacheAnchor branch_anchor(cgen_state_);
-    const auto when_lv =
-        toBool(executor_->codegen(expr_pair.first.get(), true, co).front());
+    const auto when_lv = toBool(codegen(expr_pair.first.get(), true, co).front());
     const auto cmp_bb = cgen_state_->ir_builder_.GetInsertBlock();
     const auto then_bb = llvm::BasicBlock::Create(
         cgen_state_->context_, "then_case", cgen_state_->row_func_);
     cgen_state_->ir_builder_.SetInsertPoint(then_bb);
-    auto then_bb_lvs = executor_->codegen(expr_pair.second.get(), true, co);
+    auto then_bb_lvs = codegen(expr_pair.second.get(), true, co);
     if (is_real_str) {
       if (then_bb_lvs.size() == 3) {
         then_lvs.push_back(
@@ -95,7 +94,7 @@ llvm::Value* CodeGenerator::codegenCase(const Analyzer::CaseExpr* case_expr,
   }
   const auto else_expr = case_expr->get_else_expr();
   CHECK(else_expr);
-  auto else_lvs = executor_->codegen(else_expr, true, co);
+  auto else_lvs = codegen(else_expr, true, co);
   llvm::Value* else_lv{nullptr};
   if (else_lvs.size() == 3) {
     else_lv = cgen_state_->emitCall("string_pack", {else_lvs[1], else_lvs[2]});

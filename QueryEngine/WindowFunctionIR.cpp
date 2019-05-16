@@ -48,7 +48,7 @@ llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
       CHECK(WindowProjectNodeContext::get());
       const auto& args = window_func->getArgs();
       CHECK(!args.empty());
-      const auto arg_lvs = codegen(args.front().get(), true, co);
+      const auto arg_lvs = code_generator.codegen(args.front().get(), true, co);
       CHECK_EQ(arg_lvs.size(), size_t(1));
       return arg_lvs.front();
     }
@@ -251,10 +251,10 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
     CHECK(window_func->getKind() == SqlWindowFunctionKind::COUNT);
     crt_val = ll_int(int64_t(1));
   } else {
-    const auto arg_lvs = codegen(args.front().get(), true, co);
+    CodeGenerator code_generator(cgen_state_.get(), this);
+    const auto arg_lvs = code_generator.codegen(args.front().get(), true, co);
     CHECK_EQ(arg_lvs.size(), size_t(1));
     if (window_func->getKind() == SqlWindowFunctionKind::SUM && !window_func_ti.is_fp()) {
-      CodeGenerator code_generator(cgen_state_.get(), this);
       crt_val = code_generator.codegenCastBetweenIntTypes(
           arg_lvs.front(), args.front()->get_type_info(), window_func_ti, false);
     } else {

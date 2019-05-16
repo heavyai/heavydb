@@ -55,7 +55,7 @@ extern "C" int32_t string_compress(const int64_t ptr_and_len,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
                                     const CompilationOptions& co) {
-  auto str_lv = executor_->codegen(expr->get_arg(), true, co);
+  auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
     if (g_enable_watchdog) {
@@ -86,7 +86,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::KeyForStringExpr* expr,
                                     const CompilationOptions& co) {
-  auto str_lv = executor_->codegen(expr->get_arg(), true, co);
+  auto str_lv = codegen(expr->get_arg(), true, co);
   CHECK_EQ(size_t(1), str_lv.size());
   return cgen_state_->emitCall("key_for_string_encoded", str_lv);
 }
@@ -123,7 +123,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
         "Cannot do LIKE / ILIKE on this dictionary encoded column, its cardinality is "
         "too high");
   }
-  auto str_lv = executor_->codegen(expr->get_arg(), true, co);
+  auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
     str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
@@ -132,7 +132,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
       throw QueryMustRunOnCpu();
     }
   }
-  auto like_expr_arg_lvs = executor_->codegen(expr->get_like_expr(), true, co);
+  auto like_expr_arg_lvs = codegen(expr->get_like_expr(), true, co);
   CHECK_EQ(size_t(3), like_expr_arg_lvs.size());
   const bool is_nullable{!expr->get_arg()->get_type_info().get_notnull()};
   std::vector<llvm::Value*> str_like_args{
@@ -337,13 +337,13 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::RegexpExpr* expr,
   if (co.device_type_ == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
-  auto str_lv = executor_->codegen(expr->get_arg(), true, co);
+  auto str_lv = codegen(expr->get_arg(), true, co);
   if (str_lv.size() != 3) {
     CHECK_EQ(size_t(1), str_lv.size());
     str_lv.push_back(cgen_state_->emitCall("extract_str_ptr", {str_lv.front()}));
     str_lv.push_back(cgen_state_->emitCall("extract_str_len", {str_lv.front()}));
   }
-  auto regexp_expr_arg_lvs = executor_->codegen(expr->get_pattern_expr(), true, co);
+  auto regexp_expr_arg_lvs = codegen(expr->get_pattern_expr(), true, co);
   CHECK_EQ(size_t(3), regexp_expr_arg_lvs.size());
   const bool is_nullable{!expr->get_arg()->get_type_info().get_notnull()};
   std::vector<llvm::Value*> regexp_args{
