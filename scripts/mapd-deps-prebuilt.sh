@@ -171,8 +171,15 @@ elif [ "$ID" == "centos" ] ; then
     python-devel \
     wget \
     curl \
+    python-yaml \
+    libX11-devel \
+    mesa-libGL-devel \
+    environment-modules \
+    valgrind \
     openldap-devel
+  # Install packages from EPEL
   sudo yum install -y \
+    cloc \
     jq
 
   if ! type module >/dev/null 2>&1 ; then
