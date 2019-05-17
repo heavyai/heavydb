@@ -1842,6 +1842,22 @@ size_t shard_column_index(const std::string& name,
   return 0;
 }
 
+size_t sort_column_index(const std::string& name,
+                         const std::list<ColumnDescriptor>& columns) {
+  size_t index = 1;
+  for (const auto& cd : columns) {
+    if (cd.columnName == name) {
+      return index;
+    }
+    ++index;
+    if (cd.columnType.is_geometry()) {
+      index += cd.columnType.get_physical_cols();
+    }
+  }
+  // Not found, return 0
+  return 0;
+}
+
 void set_string_field(rapidjson::Value& obj,
                       const std::string& field_name,
                       const std::string& field_value,
@@ -2016,6 +2032,14 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
               "A table cannot be sharded and replicated at the same time");
         }
         td.partitions = partitions_uc;
+      } else if (boost::iequals(*p->get_name(), "sort_column")) {
+        const auto sort_column =
+            static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+        td.sortedColumnId = sort_column_index(*sort_column, columns);
+        if (!td.sortedColumnId) {
+          throw std::runtime_error("Specified sort column " + *sort_column +
+                                   " doesn't exist");
+        }
       } else if (boost::iequals(*p->get_name(), "shard_count")) {
         if (!dynamic_cast<const IntLiteral*>(p->get_value())) {
           throw std::runtime_error("SHARD_COUNT must be an integer literal.");
@@ -2594,6 +2618,15 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
                 "A table cannot be sharded and replicated at the same time");
           }
           td.partitions = partitions_uc;
+        } else if (boost::iequals(*p->get_name(), "sort_column")) {
+          const auto sort_column =
+              static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+          td.sortedColumnId =
+              sort_column_index(*sort_column, column_descriptors_for_create);
+          if (!td.sortedColumnId) {
+            throw std::runtime_error("Specified sort column " + *sort_column +
+                                     " doesn't exist");
+          }
         } else if (boost::iequals(*p->get_name(), "vacuum")) {
           const auto vacuum =
               static_cast<const StringLiteral*>(p->get_value())->get_stringval();
@@ -2611,7 +2644,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
           throw std::runtime_error(
               "Invalid CREATE TABLE option " + *p->get_name() +
               ".  Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_CHUNK_SIZE, MAX_ROWS, "
-              "PARTITIONS or VACUUM.");
+              "PARTITIONS, SORT_COLUMN or VACUUM.");
         }
       }
     }
@@ -3218,6 +3251,12 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           throw std::runtime_error("max_reject option must be an integer.");
         }
         copy_params.max_reject = int_literal->get_intval();
+      } else if (boost::iequals(*p->get_name(), "buffer_size")) {
+        const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
+        if (int_literal == nullptr) {
+          throw std::runtime_error("buffer_size option must be an integer.");
+        }
+        copy_params.buffer_size = std::max<size_t>(1 << 20, int_literal->get_intval());
       } else if (boost::iequals(*p->get_name(), "threads")) {
         const IntLiteral* int_literal = dynamic_cast<const IntLiteral*>(p->get_value());
         if (int_literal == nullptr) {

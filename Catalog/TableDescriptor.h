@@ -54,6 +54,7 @@ struct TableDescriptor {
   int32_t
       nShards;  // # of shards, i.e. physical tables for this logical table (default: 0)
   int shardedColumnId;  // Id of the column to be sharded on
+  int sortedColumnId;   // Id of the column to be sorted on
   Data_Namespace::MemoryLevel persistenceLevel;
   bool hasDeletedCol;  // Does table has a delete col, Yes (VACUUM = DELAYED)
                        //                              No  (VACUUM = IMMEDIATE)
@@ -69,6 +70,7 @@ struct TableDescriptor {
       , shard(-1)
       , nShards(0)
       , shardedColumnId(0)
+      , sortedColumnId(0)
       , persistenceLevel(Data_Namespace::MemoryLevel::DISK_LEVEL)
       , hasDeletedCol(true)
       , mutex_(std::make_shared<std::mutex>()) {}

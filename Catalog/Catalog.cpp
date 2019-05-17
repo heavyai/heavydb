@@ -49,7 +49,7 @@
 #include "../QueryEngine/TableOptimizer.h"
 
 #include "../Fragmenter/Fragmenter.h"
-#include "../Fragmenter/InsertOrderFragmenter.h"
+#include "../Fragmenter/SortedOrderFragmenter.h"
 #include "../Parser/ParserNode.h"
 #include "../Shared/File.h"
 #include "../Shared/StringTransform.h"
@@ -61,6 +61,7 @@
 
 using Chunk_NS::Chunk;
 using Fragmenter_Namespace::InsertOrderFragmenter;
+using Fragmenter_Namespace::SortedOrderFragmenter;
 using std::list;
 using std::map;
 using std::pair;
@@ -212,6 +213,11 @@ void Catalog::updateTableDescriptorSchema() {
       string queryString("ALTER TABLE mapd_tables ADD userid integer DEFAULT " +
                          std::to_string(MAPD_ROOT_USER_ID));
       sqliteConnector_.query(queryString);
+    }
+    if (std::find(cols.begin(), cols.end(), std::string("sort_column_id")) ==
+        cols.end()) {
+      sqliteConnector_.query(
+          "ALTER TABLE mapd_tables ADD sort_column_id INTEGER DEFAULT 0");
     }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -840,7 +846,8 @@ void Catalog::buildMaps() {
   string tableQuery(
       "SELECT tableid, name, ncolumns, isview, fragments, frag_type, max_frag_rows, "
       "max_chunk_size, frag_page_size, "
-      "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo, userid "
+      "max_rows, partitions, shard_column_id, shard, num_shards, key_metainfo, userid, "
+      "sort_column_id "
       "from mapd_tables");
   sqliteConnector_.query(tableQuery);
   numRows = sqliteConnector_.getNumRows();
@@ -863,6 +870,8 @@ void Catalog::buildMaps() {
     td->nShards = sqliteConnector_.getData<int>(r, 13);
     td->keyMetainfo = sqliteConnector_.getData<string>(r, 14);
     td->userId = sqliteConnector_.getData<int>(r, 15);
+    td->sortedColumnId =
+        sqliteConnector_.isNull(r, 16) ? 0 : sqliteConnector_.getData<int>(r, 16);
     if (!td->isView) {
       td->fragmenter = nullptr;
     }
@@ -1219,17 +1228,31 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
     getAllColumnMetadataForTable(td, columnDescs, true, false, true);
     Chunk::translateColumnDescriptorsToChunkVec(columnDescs, chunkVec);
     ChunkKey chunkKeyPrefix = {currentDB_.dbId, td->tableId};
-    td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix,
-                                               chunkVec,
-                                               dataMgr_.get(),
-                                               const_cast<Catalog*>(this),
-                                               td->tableId,
-                                               td->shard,
-                                               td->maxFragRows,
-                                               td->maxChunkSize,
-                                               td->fragPageSize,
-                                               td->maxRows,
-                                               td->persistenceLevel);
+    if (td->sortedColumnId > 0) {
+      td->fragmenter = new SortedOrderFragmenter(chunkKeyPrefix,
+                                                 chunkVec,
+                                                 dataMgr_.get(),
+                                                 const_cast<Catalog*>(this),
+                                                 td->tableId,
+                                                 td->shard,
+                                                 td->maxFragRows,
+                                                 td->maxChunkSize,
+                                                 td->fragPageSize,
+                                                 td->maxRows,
+                                                 td->persistenceLevel);
+    } else {
+      td->fragmenter = new InsertOrderFragmenter(chunkKeyPrefix,
+                                                 chunkVec,
+                                                 dataMgr_.get(),
+                                                 const_cast<Catalog*>(this),
+                                                 td->tableId,
+                                                 td->shard,
+                                                 td->maxFragRows,
+                                                 td->maxChunkSize,
+                                                 td->fragPageSize,
+                                                 td->maxRows,
+                                                 td->persistenceLevel);
+    }
   });
   LOG(INFO) << "Instantiating Fragmenter for table " << td->tableName << " took "
             << time_ms << "ms";
@@ -1918,8 +1941,9 @@ void Catalog::createTable(
           "frag_type, max_frag_rows, "
           "max_chunk_size, "
           "frag_page_size, max_rows, partitions, shard_column_id, shard, num_shards, "
+          "sort_column_id, "
           "key_metainfo) VALUES (?, ?, ?, "
-          "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          "?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 
           std::vector<std::string>{td.tableName,
                                    std::to_string(td.userId),
@@ -1935,6 +1959,7 @@ void Catalog::createTable(
                                    std::to_string(td.shardedColumnId),
                                    std::to_string(td.shard),
                                    std::to_string(td.nShards),
+                                   std::to_string(td.sortedColumnId),
                                    td.keyMetainfo});
 
       // now get the auto generated tableid

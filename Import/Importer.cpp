@@ -2536,7 +2536,7 @@ bool Loader::loadToShard(
     size_t row_count,
     const TableDescriptor* shard_table,
     bool checkpoint) {
-  std::lock_guard<std::mutex> loader_lock(loader_mutex_);
+  std::unique_lock<std::mutex> loader_lock(loader_mutex_);
   // patch insert_data with new column
   if (this->get_replicating()) {
     for (const auto& import_buff : import_buffers) {
@@ -2555,6 +2555,11 @@ bool Loader::loadToShard(
   for (const auto& import_buffer : import_buffers) {
     ins_data.bypass.push_back(0 == import_buffer->get_replicate_count());
   }
+
+  // release loader_lock so that in InsertOrderFragmenter::insertDat
+  // we can have multiple threads sort/shuffle InsertData
+  loader_lock.unlock();
+
   {
     try {
       if (checkpoint) {
@@ -3639,10 +3644,6 @@ ImportStatus Importer::import() {
   return DataStreamSink::archivePlumber();
 }
 
-#define IMPORT_FILE_BUFFER_SIZE \
-  (1 << 23)  // not too big (need much memory) but not too small (many thread forks)
-#define MIN_FILE_BUFFER_SIZE 50000  // 50K min buffer
-
 ImportStatus Importer::importDelimited(const std::string& file_path,
                                        const bool decompressed) {
   bool load_truncated = false;
@@ -3668,7 +3669,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
   }
 
   // deal with small files
-  size_t alloc_size = IMPORT_FILE_BUFFER_SIZE;
+  size_t alloc_size = copy_params.buffer_size;
   if (!decompressed && file_size < alloc_size) {
     alloc_size = file_size;
   }
@@ -3775,9 +3776,9 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
       memcpy(scratch_buffer.get(), unbuf.get(), nresidual);
       size = nresidual + fread(scratch_buffer.get() + nresidual,
                                1,
-                               IMPORT_FILE_BUFFER_SIZE - nresidual,
+                               copy_params.buffer_size - nresidual,
                                p_file);
-      if (size < IMPORT_FILE_BUFFER_SIZE && feof(p_file)) {
+      if (size < copy_params.buffer_size && feof(p_file)) {
         eof_reached = true;
       }
 

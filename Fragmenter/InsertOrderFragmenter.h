@@ -68,7 +68,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
       const size_t maxRows = DEFAULT_MAX_ROWS,
       const Data_Namespace::MemoryLevel defaultInsertLevel = Data_Namespace::DISK_LEVEL);
 
-  ~InsertOrderFragmenter() override;
+  virtual ~InsertOrderFragmenter() override;
   /**
    * @brief returns (inside QueryInfo) object all
    * ids and row sizes of fragments
@@ -175,7 +175,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                               const FragmentInfo& fragment,
                               const Data_Namespace::MemoryLevel memory_level);
 
- private:
+ protected:
   std::vector<int> chunkKeyPrefix_;
   std::map<int, Chunk_NS::Chunk>
       columnMap_; /**< stores a map of column id to metadata about that column */

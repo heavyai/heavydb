@@ -851,6 +851,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
         "bigint, "
         "frag_page_size integer, "
         "max_rows bigint, partitions text, shard_column_id integer, shard integer, "
+        "sort_column_id integer default 0, "
         "num_shards integer, key_metainfo TEXT, version_num "
         "BIGINT DEFAULT 1) ");
     dbConn->query(

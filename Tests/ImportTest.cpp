@@ -289,6 +289,171 @@ TEST(Detect, Numeric) {
   d(kTEXT, "1.22.22");
 }
 
+const char* create_table_mini_sort = R"(
+  CREATE TABLE sortab(
+    i int, 
+    f float,
+    ia int[2], 
+    pt point, 
+    sa text[], 
+    s2 text encoding dict(16),
+    dt date,
+    d2 date ENCODING FIXED(16),
+    tm timestamp,
+    t4 timestamp ENCODING FIXED(32),
+    va int[])
+  )";
+
+class ImportTestMiniSort : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists sortab;"));
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists sortctas;"));
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists sortab;"));
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists sortctas;"));
+  }
+};
+
+void create_minisort_table_on_column(const std::string& column_name) {
+  EXPECT_NO_THROW(
+      run_ddl_statement(
+          std::string(create_table_mini_sort) +
+          (column_name.size() ? " with (sort_column='" + column_name + "');" : ";")););
+  EXPECT_NO_THROW(
+      run_ddl_statement("copy sortab from '../../Tests/Import/datafiles/mini_sort.txt' "
+                        "with (header='false');"));
+}
+
+void check_minisort_on_expects(const std::string& table_name,
+                               const std::vector<int>& expects) {
+  auto rows = run_query("SELECT i FROM " + table_name + ";");
+  CHECK_EQ(expects.size(), rows->rowCount());
+  for (auto exp : expects) {
+    auto crt_row = rows->getNextRow(true, true);
+    CHECK_EQ(size_t(1), crt_row.size());
+    CHECK_EQ(int64_t(exp), v<int64_t>(crt_row[0]));
+  }
+}
+
+void test_minisort_on_column(const std::string& column_name,
+                             const std::vector<int> expects) {
+  create_minisort_table_on_column(column_name);
+  check_minisort_on_expects("sortab", expects);
+}
+
+void create_minisort_table_on_column_with_ctas(const std::string& column_name) {
+  EXPECT_NO_THROW(
+      run_ddl_statement(
+          "create table sortctas as select * from sortab" +
+          (column_name.size() ? " with (sort_column='" + column_name + "');" : ";")););
+}
+
+void test_minisort_on_column_with_ctas(const std::string& column_name,
+                                       const std::vector<int> expects) {
+  create_minisort_table_on_column("");
+  create_minisort_table_on_column_with_ctas(column_name);
+  check_minisort_on_expects("sortctas", expects);
+}
+
+TEST_F(ImportTestMiniSort, on_none) {
+  test_minisort_on_column("", {5, 3, 1, 2, 4});
+}
+
+TEST_F(ImportTestMiniSort, on_int) {
+  test_minisort_on_column("i", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, on_float) {
+  test_minisort_on_column("f", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, on_int_array) {
+  test_minisort_on_column("ia", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, on_string_array) {
+  test_minisort_on_column("sa", {5, 3, 1, 2, 4});
+}
+
+TEST_F(ImportTestMiniSort, on_string_2b) {
+  test_minisort_on_column("s2", {5, 3, 1, 2, 4});
+}
+
+TEST_F(ImportTestMiniSort, on_date) {
+  test_minisort_on_column("dt", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, on_date_2b) {
+  test_minisort_on_column("d2", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, on_time) {
+  test_minisort_on_column("tm", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, on_time_4b) {
+  test_minisort_on_column("t4", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, on_varlen_array) {
+  test_minisort_on_column("va", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, on_geo_point) {
+  test_minisort_on_column("pt", {2, 3, 4, 5, 1});
+}
+
+TEST_F(ImportTestMiniSort, ctas_on_none) {
+  test_minisort_on_column_with_ctas("", {5, 3, 1, 2, 4});
+}
+
+TEST_F(ImportTestMiniSort, ctas_on_int) {
+  test_minisort_on_column_with_ctas("i", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, ctas_on_float) {
+  test_minisort_on_column_with_ctas("f", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, ctas_on_int_array) {
+  test_minisort_on_column_with_ctas("ia", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, ctas_on_string_array) {
+  test_minisort_on_column_with_ctas("sa", {5, 3, 1, 2, 4});
+}
+
+TEST_F(ImportTestMiniSort, ctas_on_string_2b) {
+  test_minisort_on_column_with_ctas("s2", {5, 3, 1, 2, 4});
+}
+
+TEST_F(ImportTestMiniSort, ctas_on_date) {
+  test_minisort_on_column_with_ctas("dt", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, ctas_on_date_2b) {
+  test_minisort_on_column_with_ctas("d2", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, ctas_on_time) {
+  test_minisort_on_column_with_ctas("tm", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, ctas_on_time_4b) {
+  test_minisort_on_column_with_ctas("t4", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, ctas_on_varlen_array) {
+  test_minisort_on_column_with_ctas("va", {1, 2, 3, 4, 5});
+}
+
+TEST_F(ImportTestMiniSort, ctas_on_geo_point) {
+  test_minisort_on_column_with_ctas("pt", {2, 3, 4, 5, 1});
+}
+
 const char* create_table_mixed_varlen = R"(
     CREATE TABLE import_test_mixed_varlen(
       pt GEOMETRY(POINT),
