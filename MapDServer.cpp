@@ -691,9 +691,9 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
     return false;
   }
   const auto db_file =
-      boost::filesystem::path(base_path) / "mapd_catalogs" / MAPD_DEFAULT_DB;
+      boost::filesystem::path(base_path) / "mapd_catalogs" / MAPD_SYSTEM_CATALOG;
   if (!boost::filesystem::exists(db_file)) {
-    LOG(ERROR) << "OmniSci database " << MAPD_DEFAULT_DB << " does not exist.";
+    LOG(ERROR) << "OmniSci system catalog " << MAPD_SYSTEM_CATALOG << " does not exist.";
     return_code = 1;
     return false;
   }

@@ -108,15 +108,6 @@ void SysCatalog::init(const std::string& basePath,
     buildUserRoleMap();
     buildObjectDescriptorMap();
   }
-  // check if mapd db catalog is loaded in cat_map
-  // if not, load mapd-cat here
-  if (!Catalog::get(MAPD_DEFAULT_DB)) {
-    Catalog_Namespace::DBMetadata db_meta;
-    CHECK(getMetadataForDB(MAPD_DEFAULT_DB, db_meta));
-    auto mapd_cat = std::make_shared<Catalog>(
-        basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, is_new_db);
-    Catalog::set(MAPD_DEFAULT_DB, mapd_cat);
-  }
 }
 
 SysCatalog::~SysCatalog() {
@@ -741,8 +732,6 @@ void SysCatalog::createUser(const string& name,
     }
 
     createRole_unsafe(name, true);
-    // TODO: establish rational for this ...
-    grantDefaultPrivilegesToRole_unsafe(name, issuper);
   } catch (const std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
@@ -1169,22 +1158,6 @@ DBSummaryList SysCatalog::getDatabaseListForUser(const UserMetadata& user) {
   }
 
   return ret;
-}
-
-// Note (max): I wonder why this one is necessary
-void SysCatalog::grantDefaultPrivilegesToRole_unsafe(const std::string& name,
-                                                     bool issuper) {
-  DBObject dbObject(MAPD_DEFAULT_DB, DatabaseDBObjectType);
-  auto* catalog = Catalog::get(MAPD_DEFAULT_DB).get();
-  CHECK(catalog);
-  dbObject.loadKey(*catalog);
-
-  if (issuper) {
-    // dont do this, user is super
-    // dbObject.setPrivileges(AccessPrivileges::ALL_DATABASE);
-  }
-
-  grantDBObjectPrivileges_unsafe(name, dbObject, *catalog);
 }
 
 void SysCatalog::createDBObject(const UserMetadata& user,
