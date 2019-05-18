@@ -527,7 +527,9 @@ TEST(Create, StorageOptions) {
             {{"shard_count"s, true}, {"", {std::to_string(shard_count)}}},
             {{"shard_count"s, false}, {", SHARD KEY(id)", {std::to_string(shard_count)}}},
             {{"vacuum"s, true}, {"", {"'-1'", "'0'", "'null'"}}},
-            {{"vacuum"s, false}, {"", {"'IMMEDIATE'", "'delayed'"}}}};
+            {{"vacuum"s, false}, {"", {"'IMMEDIATE'", "'delayed'"}}},
+            {{"sort_column"s, true}, {"", {"'arsenal'", "'barca'", "'city'"}}},
+            {{"sort_column"s, false}, {"", {"'id'", "'val'"}}}};
 
     for (auto& elem : params) {
       validate_storage_options(elem.first, elem.second);

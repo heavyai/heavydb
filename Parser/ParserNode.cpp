@@ -63,15 +63,15 @@ using namespace Lock_Namespace;
 using Catalog_Namespace::SysCatalog;
 using namespace std::string_literals;
 
-using TableDefFuncPtr = boost::function<void(TableDescriptor&, const NameValueAssign*)>;
+using TableDefFuncPtr = boost::function<void(TableDescriptor&,
+                                             const NameValueAssign*,
+                                             const std::list<ColumnDescriptor>& columns)>;
 
 namespace Importer_NS {
-
 std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti);
 }  // namespace Importer_NS
 
 namespace Parser {
-
 std::shared_ptr<Analyzer::Expr> NullLiteral::analyze(
     const Catalog_Namespace::Catalog& catalog,
     Analyzer::Query& query,
@@ -933,8 +933,7 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
       } else {
         throw std::runtime_error(
             "expressions in ELSE clause must be of the same or compatible types as those "
-            "in the "
-            "THEN clauses.");
+            "in the THEN clauses.");
       }
     }
   }
@@ -1850,7 +1849,7 @@ size_t sort_column_index(const std::string& name,
                          const std::list<ColumnDescriptor>& columns) {
   size_t index = 1;
   for (const auto& cd : columns) {
-    if (cd.columnName == name) {
+    if (boost::to_upper_copy<std::string>(cd.columnName) == name) {
       return index;
     }
     ++index;
@@ -1915,24 +1914,34 @@ decltype(auto) get_property_value(const NameValueAssign* p,
   return op(val);
 }
 
-decltype(auto) get_frag_size_def(TableDescriptor& td, const NameValueAssign* p) {
+decltype(auto) get_frag_size_def(TableDescriptor& td,
+                                 const NameValueAssign* p,
+                                 const std::list<ColumnDescriptor>& columns) {
   return get_property_value<IntLiteral>(p,
                                         [&td](const auto val) { td.maxFragRows = val; });
 }
 
-decltype(auto) get_max_chunk_size_def(TableDescriptor& td, const NameValueAssign* p) {
+decltype(auto) get_max_chunk_size_def(TableDescriptor& td,
+                                      const NameValueAssign* p,
+                                      const std::list<ColumnDescriptor>& columns) {
   return get_property_value<IntLiteral>(p,
                                         [&td](const auto val) { td.maxChunkSize = val; });
 }
 
-decltype(auto) get_page_size_def(TableDescriptor& td, const NameValueAssign* p) {
+decltype(auto) get_page_size_def(TableDescriptor& td,
+                                 const NameValueAssign* p,
+                                 const std::list<ColumnDescriptor>& columns) {
   return get_property_value<IntLiteral>(p,
                                         [&td](const auto val) { td.fragPageSize = val; });
 }
-decltype(auto) get_max_rows_def(TableDescriptor& td, const NameValueAssign* p) {
+decltype(auto) get_max_rows_def(TableDescriptor& td,
+                                const NameValueAssign* p,
+                                const std::list<ColumnDescriptor>& columns) {
   return get_property_value<IntLiteral>(p, [&td](const auto val) { td.maxRows = val; });
 }
-decltype(auto) get_partions_def(TableDescriptor& td, const NameValueAssign* p) {
+decltype(auto) get_partions_def(TableDescriptor& td,
+                                const NameValueAssign* p,
+                                const std::list<ColumnDescriptor>& columns) {
   return get_property_value<StringLiteral>(p, [&td](const auto partitions_uc) {
     if (partitions_uc != "SHARDED" && partitions_uc != "REPLICATED") {
       throw std::runtime_error("PARTITIONS must be SHARDED or REPLICATED");
@@ -1944,7 +1953,9 @@ decltype(auto) get_partions_def(TableDescriptor& td, const NameValueAssign* p) {
     td.partitions = partitions_uc;
   });
 }
-decltype(auto) get_shard_count_def(TableDescriptor& td, const NameValueAssign* p) {
+decltype(auto) get_shard_count_def(TableDescriptor& td,
+                                   const NameValueAssign* p,
+                                   const std::list<ColumnDescriptor>& columns) {
   if (!td.shardedColumnId) {
     throw std::runtime_error("SHARD KEY must be defined.");
   }
@@ -1961,12 +1972,25 @@ decltype(auto) get_shard_count_def(TableDescriptor& td, const NameValueAssign* p
   });
 }
 
-decltype(auto) get_vacuum_def(TableDescriptor& td, const NameValueAssign* p) {
+decltype(auto) get_vacuum_def(TableDescriptor& td,
+                              const NameValueAssign* p,
+                              const std::list<ColumnDescriptor>& columns) {
   return get_property_value<StringLiteral>(p, [&td](const auto vacuum_uc) {
     if (vacuum_uc != "IMMEDIATE" && vacuum_uc != "DELAYED") {
       throw std::runtime_error("VACUUM must be IMMEDIATE or DELAYED");
     }
     td.hasDeletedCol = boost::iequals(vacuum_uc, "IMMEDIATE") ? false : true;
+  });
+}
+
+decltype(auto) get_sort_column_def(TableDescriptor& td,
+                                   const NameValueAssign* p,
+                                   const std::list<ColumnDescriptor>& columns) {
+  return get_property_value<StringLiteral>(p, [&td, &columns](const auto sort_upper) {
+    td.sortedColumnId = sort_column_index(sort_upper, columns);
+    if (!td.sortedColumnId) {
+      throw std::runtime_error("Specified sort column " + sort_upper + " doesn't exist");
+    }
   });
 }
 
@@ -1977,17 +2001,19 @@ static const std::map<const std::string, const TableDefFuncPtr> tableDefFuncMap 
     {"max_rows"s, get_max_rows_def},
     {"partitions"s, get_partions_def},
     {"shard_count"s, get_shard_count_def},
-    {"vacuum"s, get_vacuum_def}};
+    {"vacuum"s, get_vacuum_def},
+    {"sort_column"s, get_sort_column_def}};
 
 void get_table_definitions(TableDescriptor& td,
-                           const std::unique_ptr<NameValueAssign>& p) {
+                           const std::unique_ptr<NameValueAssign>& p,
+                           const std::list<ColumnDescriptor>& columns) {
   const auto it = tableDefFuncMap.find(boost::to_lower_copy<std::string>(*p->get_name()));
   if (it == tableDefFuncMap.end()) {
     throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() +
                              ". Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_ROWS, "
-                             "PARTITIONS, VACUUM or SHARD_COUNT.");
+                             "PARTITIONS, VACUUM, SORT_COLUMN or SHARD_COUNT.");
   }
-  return it->second(td, p.get());
+  return it->second(td, p.get(), columns);
 }
 
 }  // namespace
@@ -2071,7 +2097,7 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   if (!storage_options_.empty()) {
     for (auto& p : storage_options_) {
-      get_table_definitions(td, p);
+      get_table_definitions(td, p, columns);
     }
   }
   td.keyMetainfo = serialize_key_metainfo(shard_key_def, shared_dict_defs);
@@ -2536,7 +2562,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     // only validate the select query so we get the target types
     // correctly, but do not populate the result set
     auto result = local_connector.query(session, select_query_, true);
-    auto column_descriptors_for_create =
+    const auto column_descriptors_for_create =
         local_connector.getColumnDescriptors(result, true);
 
     TableDescriptor td;
@@ -2559,7 +2585,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
     if (!storage_options_.empty()) {
       for (auto& p : storage_options_) {
-        get_table_definitions(td, p);
+        get_table_definitions(td, p, column_descriptors_for_create);
       }
     }
 
@@ -2744,9 +2770,9 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
         case kINT:
           if (compression->get_encoding_param() != 8 &&
               compression->get_encoding_param() != 16) {
-            throw std::runtime_error(cd.columnName +
-                                     ": Compression parameter for Fixed encoding on "
-                                     "INTEGER must be 8 or 16.");
+            throw std::runtime_error(
+                cd.columnName +
+                ": Compression parameter for Fixed encoding on INTEGER must be 8 or 16.");
           }
           break;
         case kBIGINT:
@@ -2818,9 +2844,9 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
       // throw std::runtime_error("DIFF(differential) encoding not supported yet.");
     } else if (boost::iequals(comp, "dict")) {
       if (!cd.columnType.is_string() && !cd.columnType.is_string_array()) {
-        throw std::runtime_error(cd.columnName +
-                                 ": Dictionary encoding is only supported on string or "
-                                 "string array columns.");
+        throw std::runtime_error(
+            cd.columnName +
+            ": Dictionary encoding is only supported on string or string array columns.");
       }
       if (compression->get_encoding_param() == 0) {
         comp_param = 32;  // default to 32-bits
@@ -3677,8 +3703,7 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
   if (!currentUser.isSuper) {
     if (!SysCatalog::instance().verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
       throw std::runtime_error(
-          "GRANT failed. It can only be executed by super user or owner of the "
-          "object.");
+          "GRANT failed. It can only be executed by super user or owner of the object.");
     }
   }
   /* set proper values of privileges & grant them to the object */
@@ -3705,8 +3730,7 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
   if (!currentUser.isSuper) {
     if (!SysCatalog::instance().verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
       throw std::runtime_error(
-          "REVOKE failed. It can only be executed by super user or owner of the "
-          "object.");
+          "REVOKE failed. It can only be executed by super user or owner of the object.");
     }
   }
   /* set proper values of privileges & grant them to the object */
