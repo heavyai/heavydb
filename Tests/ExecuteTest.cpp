@@ -14353,45 +14353,82 @@ TEST(Select, WindowFunctionLag) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   for (int lag = -5; lag <= 5; ++lag) {
-    std::string part1 =
-        "SELECT x, y, LAG(x + 5, " + std::to_string(lag) +
-        ") OVER (PARTITION BY y ORDER BY x ASC) l FROM test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, l ASC";
-    c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+    {
+      std::string part1 =
+          "SELECT x, y, LAG(x + 5, " + std::to_string(lag) +
+          ") OVER (PARTITION BY y ORDER BY x ASC) l FROM test_window_func ORDER BY x ASC";
+      std::string part2 = ", y ASC, l ASC";
+      c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+    }
+    {
+      std::string part1 =
+          "SELECT x, LAG(y, " + std::to_string(lag) +
+          ") OVER (PARTITION BY y ORDER BY x ASC) l FROM test_window_func ORDER BY x ASC";
+      std::string part2 = ", l ASC";
+      c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+    }
   }
 }
 
 TEST(Select, WindowFunctionFirst) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
-  std::string part1 =
-      "SELECT x, y, FIRST_VALUE(x + 5) OVER (PARTITION BY y ORDER BY x ASC) f FROM "
-      "test_window_func ORDER BY x ASC";
-  std::string part2 = ", y ASC, f ASC;";
-  c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+  {
+    std::string part1 =
+        "SELECT x, y, FIRST_VALUE(x + 5) OVER (PARTITION BY y ORDER BY x ASC) f FROM "
+        "test_window_func ORDER BY x ASC";
+    std::string part2 = ", y ASC, f ASC;";
+    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+  }
+  {
+    std::string part1 =
+        "SELECT x, FIRST_VALUE(y) OVER (PARTITION BY t ORDER BY x ASC) f FROM "
+        "test_window_func ORDER BY x ASC";
+    std::string part2 = ", f ASC;";
+    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+  }
 }
 
 TEST(Select, WindowFunctionLead) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   for (int lead = -5; lead <= 5; ++lead) {
-    std::string part1 =
-        "SELECT x, y, LEAD(x, " + std::to_string(lead) +
-        ") OVER (PARTITION BY y ORDER BY x DESC) l FROM test_window_func ORDER BY x ASC";
-    std::string part2 = ", y ASC, l ASC";
-    c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+    {
+      std::string part1 = "SELECT x, y, LEAD(x, " + std::to_string(lead) +
+                          ") OVER (PARTITION BY y ORDER BY x DESC) l FROM "
+                          "test_window_func ORDER BY x ASC";
+      std::string part2 = ", y ASC, l ASC";
+      c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+    }
+    {
+      std::string part1 = "SELECT x, LEAD(y, " + std::to_string(lead) +
+                          ") OVER (PARTITION BY y ORDER BY x DESC) l FROM "
+                          "test_window_func ORDER BY x ASC";
+      std::string part2 = ", l ASC";
+      c(part1 + " NULLS FIRST" + part2 + " NULLS FIRST;", part1 + part2 + ";", dt);
+    }
   }
 }
 
 TEST(Select, WindowFunctionLast) {
   SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
-  std::string part1 =
-      "SELECT x, y, FIRST_VALUE(x + 5) OVER (PARTITION BY y ORDER BY x ASC) f, "
-      "LAST_VALUE(x) OVER (PARTITION BY y ORDER BY x DESC) l FROM test_window_func ORDER "
-      "BY x ASC";
-  std::string part2 = ", y ASC, f ASC, l ASC;";
-  c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+  {
+    std::string part1 =
+        "SELECT x, y, FIRST_VALUE(x + 5) OVER (PARTITION BY y ORDER BY x ASC) f, "
+        "LAST_VALUE(x) OVER (PARTITION BY y ORDER BY x DESC) l FROM test_window_func "
+        "ORDER "
+        "BY x ASC";
+    std::string part2 = ", y ASC, f ASC, l ASC;";
+    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+  }
+  {
+    std::string part1 =
+        "SELECT x, LAST_VALUE(y) OVER (PARTITION BY t ORDER BY x ASC) f "
+        "FROM test_window_func ORDER BY x ASC";
+    std::string part2 = ", f ASC;";
+    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+  }
 }
 
 TEST(Select, WindowFunctionAggregate) {

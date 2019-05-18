@@ -23,6 +23,38 @@
 #include <functional>
 #include <unordered_map>
 
+// Returns true for value window functions, false otherwise.
+inline bool window_function_is_value(const SqlWindowFunctionKind kind) {
+  switch (kind) {
+    case SqlWindowFunctionKind::LAG:
+    case SqlWindowFunctionKind::LEAD:
+    case SqlWindowFunctionKind::FIRST_VALUE:
+    case SqlWindowFunctionKind::LAST_VALUE: {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+}
+
+// Returns true for aggregate window functions, false otherwise.
+inline bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
+  switch (kind) {
+    case SqlWindowFunctionKind::AVG:
+    case SqlWindowFunctionKind::MIN:
+    case SqlWindowFunctionKind::MAX:
+    case SqlWindowFunctionKind::SUM:
+    case SqlWindowFunctionKind::COUNT:
+    case SqlWindowFunctionKind::SUM_INTERNAL: {
+      return true;
+    }
+    default: {
+      return false;
+    }
+  }
+}
+
 // Per-window function context which encapsulates the logic for computing the various
 // window function kinds and keeps ownership of buffers which contain the results. For
 // rank functions, the code generated for the projection simply reads the values and

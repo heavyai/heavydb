@@ -376,38 +376,6 @@ extern "C" void add_window_pending_output(void* pending_output, const int64_t ha
   reinterpret_cast<std::vector<void*>*>(handle)->push_back(pending_output);
 }
 
-// Returns true for value window functions, false otherwise.
-bool window_function_is_value(const SqlWindowFunctionKind kind) {
-  switch (kind) {
-    case SqlWindowFunctionKind::LAG:
-    case SqlWindowFunctionKind::LEAD:
-    case SqlWindowFunctionKind::FIRST_VALUE:
-    case SqlWindowFunctionKind::LAST_VALUE: {
-      return true;
-    }
-    default: {
-      return false;
-    }
-  }
-}
-
-// Returns true for aggregate window functions, false otherwise.
-bool window_function_is_aggregate(const SqlWindowFunctionKind kind) {
-  switch (kind) {
-    case SqlWindowFunctionKind::AVG:
-    case SqlWindowFunctionKind::MIN:
-    case SqlWindowFunctionKind::MAX:
-    case SqlWindowFunctionKind::SUM:
-    case SqlWindowFunctionKind::COUNT:
-    case SqlWindowFunctionKind::SUM_INTERNAL: {
-      return true;
-    }
-    default: {
-      return false;
-    }
-  }
-}
-
 // Returns true iff the aggregate window function requires special multiplicity handling
 // to ensure that peer rows have the same value for the window function.
 bool window_function_requires_peer_handling(const Analyzer::WindowFunction* window_func) {

@@ -24,6 +24,7 @@
 #include "ExpressionRewrite.h"
 #include "ExtensionFunctionsWhitelist.h"
 #include "RelAlgAbstractInterpreter.h"
+#include "WindowContext.h"
 
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"
@@ -1568,8 +1569,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
   for (const auto& order_key : rex_window_function->getOrderKeys()) {
     order_keys.push_back(translateScalarRex(order_key.get()));
   }
+  auto ti = rex_window_function->getType();
+  if (window_function_is_value(rex_window_function->getKind())) {
+    CHECK_GE(args.size(), 1);
+    ti = args.front()->get_type_info();
+  }
   return makeExpr<Analyzer::WindowFunction>(
-      rex_window_function->getType(),
+      ti,
       rex_window_function->getKind(),
       args,
       partition_keys,
