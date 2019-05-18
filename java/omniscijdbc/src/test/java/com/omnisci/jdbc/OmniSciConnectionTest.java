@@ -1,4 +1,5 @@
 package com.omnisci.jdbc;
+
 import static org.junit.Assert.*;
 
 import org.junit.Test;
@@ -30,6 +31,7 @@ public class OmniSciConnectionTest {
       fail(err);
     }
   }
+
   @Test
   public void tst1a_binary_encrypted() {
     try {
@@ -54,6 +56,7 @@ public class OmniSciConnectionTest {
       fail(err);
     }
   }
+
   @Test
   public void tst2_http_unencrypted() {
     try {
@@ -69,6 +72,7 @@ public class OmniSciConnectionTest {
       fail(err);
     }
   }
+
   @Test
   public void tst3_https_encrypted() {
     try {
@@ -88,6 +92,7 @@ public class OmniSciConnectionTest {
       fail(err);
     }
   }
+
   @Test
   public void tst4_https_encrypted_with_server_validation() {
     try {
@@ -145,7 +150,7 @@ public class OmniSciConnectionTest {
       Properties pt = new Properties();
       pt.setProperty("user", user);
       pt.setProperty("password", password);
-      pt.setProperty("db_name", "mapd");
+      pt.setProperty("db_name", "omnisci");
       Connection conn = DriverManager.getConnection(url, pt);
     } catch (SQLException sq) {
       fail(sq.getMessage());

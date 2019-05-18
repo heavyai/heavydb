@@ -93,7 +93,7 @@ public class SqlIdentifierCapturerTest {
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
     final FrameworkConfig config =
             Frameworks.newConfigBuilder()
-                    .defaultSchema(rootSchema.add("mapd", mapd))
+                    .defaultSchema(rootSchema.add("omnisci", mapd))
                     .operatorTable(
                             new MapDSqlOperatorTable(SqlStdOperatorTable.instance()))
                     .parserConfig(SqlParser.configBuilder()

@@ -119,17 +119,17 @@ public class CatalogConcurrencyTest {
     logger.info("testCatalogConcurrency()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "mapd", "mapd", "HyperInteractive");
+            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER bob (password = 'password', is_super = 'false');");
 
-    su.runSql("GRANT CREATE on DATABASE mapd TO bob;");
-    su.runSql("GRANT CREATE VIEW on DATABASE mapd TO bob;");
-    su.runSql("GRANT CREATE DASHBOARD on DATABASE mapd TO bob;");
+    su.runSql("GRANT CREATE on DATABASE omnisci TO bob;");
+    su.runSql("GRANT CREATE VIEW on DATABASE omnisci TO bob;");
+    su.runSql("GRANT CREATE DASHBOARD on DATABASE omnisci TO bob;");
 
-    su.runSql("GRANT DROP on DATABASE mapd TO bob;");
-    su.runSql("GRANT DROP VIEW on DATABASE mapd TO bob;");
-    su.runSql("GRANT DELETE DASHBOARD on DATABASE mapd TO bob;");
+    su.runSql("GRANT DROP on DATABASE omnisci TO bob;");
+    su.runSql("GRANT DROP VIEW on DATABASE omnisci TO bob;");
+    su.runSql("GRANT DELETE DASHBOARD on DATABASE omnisci TO bob;");
 
     su.runSql("CREATE DATABASE db1;");
 
@@ -141,22 +141,22 @@ public class CatalogConcurrencyTest {
     su.runSql("GRANT DROP VIEW on DATABASE db1 TO bob;");
     su.runSql("GRANT DELETE DASHBOARD on DATABASE db1 TO bob;");
 
-    su.runSql("GRANT ACCESS on database mapd TO dba;");
-    su.runSql("GRANT ACCESS on database mapd TO bob;");
+    su.runSql("GRANT ACCESS on database omnisci TO dba;");
+    su.runSql("GRANT ACCESS on database omnisci TO bob;");
     su.runSql("GRANT ACCESS on database db1 TO dba;");
     su.runSql("GRANT ACCESS on database db1 TO bob;");
 
-    runTest("db1", "mapd", "HyperInteractive", "mapd", "HyperInteractive");
-    runTest("db1", "mapd", "HyperInteractive", "dba", "password");
-    runTest("db1", "mapd", "HyperInteractive", "bob", "password");
-    runTest("db1", "dba", "password", "mapd", "HyperInteractive");
+    runTest("db1", "admin", "HyperInteractive", "admin", "HyperInteractive");
+    runTest("db1", "admin", "HyperInteractive", "dba", "password");
+    runTest("db1", "admin", "HyperInteractive", "bob", "password");
+    runTest("db1", "dba", "password", "admin", "HyperInteractive");
     runTest("db1", "dba", "password", "bob", "password");
 
-    runTest("mapd", "mapd", "HyperInteractive", "mapd", "HyperInteractive");
-    runTest("mapd", "mapd", "HyperInteractive", "dba", "password");
-    runTest("mapd", "mapd", "HyperInteractive", "bob", "password");
-    runTest("mapd", "dba", "password", "mapd", "HyperInteractive");
-    runTest("mapd", "dba", "password", "bob", "password");
+    runTest("omnisci", "admin", "HyperInteractive", "admin", "HyperInteractive");
+    runTest("omnisci", "admin", "HyperInteractive", "dba", "password");
+    runTest("omnisci", "admin", "HyperInteractive", "bob", "password");
+    runTest("omnisci", "dba", "password", "admin", "HyperInteractive");
+    runTest("omnisci", "dba", "password", "bob", "password");
 
     su.runSql("DROP DATABASE db1;");
     su.runSql("DROP USER bob;");

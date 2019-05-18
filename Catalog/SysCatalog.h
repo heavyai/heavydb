@@ -54,12 +54,12 @@
 #include "../Calcite/Calcite.h"
 #include "../Shared/mapd_shared_mutex.h"
 
-const std::string MAPD_SYSTEM_CATALOG = "omnisci_system_catalog";
-const std::string MAPD_DEFAULT_DB = "mapd";
-const std::string MAPD_ROOT_USER = "mapd";
-const int MAPD_ROOT_USER_ID = 0;
-const std::string MAPD_ROOT_USER_ID_STR = "0";
-const std::string MAPD_ROOT_PASSWD_DEFAULT = "HyperInteractive";
+const std::string OMNISCI_SYSTEM_CATALOG = "omnisci_system_catalog";
+const std::string OMNISCI_DEFAULT_DB = "omnisci";
+const std::string OMNISCI_ROOT_USER = "admin";
+const int OMNISCI_ROOT_USER_ID = 0;
+const std::string OMNISCI_ROOT_USER_ID_STR = "0";
+const std::string OMNISCI_ROOT_PASSWD_DEFAULT = "HyperInteractive";
 
 namespace Catalog_Namespace {
 
@@ -227,7 +227,7 @@ class SysCatalog {
   }
 
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
-  std::string name() const { return MAPD_DEFAULT_DB; }
+  std::string name() const { return OMNISCI_DEFAULT_DB; }
   void renameObjectsInDescriptorMap(DBObject& object,
                                     const Catalog_Namespace::Catalog& cat);
   void syncUserWithRemoteProvider(const std::string& user_name,

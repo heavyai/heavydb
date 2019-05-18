@@ -3904,7 +3904,7 @@ void GrantRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error(
         "GRANT failed, because it can only be executed by super user.");
   }
-  if (std::find(get_grantees().begin(), get_grantees().end(), MAPD_ROOT_USER) !=
+  if (std::find(get_grantees().begin(), get_grantees().end(), OMNISCI_ROOT_USER) !=
       get_grantees().end()) {
     throw std::runtime_error(
         "Request to grant role failed because mapd root user has all privileges by "
@@ -3920,7 +3920,7 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error(
         "REVOKE failed, because it can only be executed by super user.");
   }
-  if (std::find(get_grantees().begin(), get_grantees().end(), MAPD_ROOT_USER) !=
+  if (std::find(get_grantees().begin(), get_grantees().end(), OMNISCI_ROOT_USER) !=
       get_grantees().end()) {
     throw std::runtime_error(
         "Request to revoke role failed because privileges can not be revoked from mapd "

@@ -136,7 +136,7 @@ class SQLTestEnv : public ::testing::Environment {
   void SetUp() override {
     boost::filesystem::path base_path{BASE_PATH};
     CHECK(boost::filesystem::exists(base_path));
-    auto system_db_file = base_path / "mapd_catalogs" / MAPD_DEFAULT_DB;
+    auto system_db_file = base_path / "mapd_catalogs" / OMNISCI_DEFAULT_DB;
     auto data_dir = base_path / "mapd_data";
     UserMetadata user;
     DBMetadata db;
@@ -169,7 +169,7 @@ class SQLTestEnv : public ::testing::Environment {
                  !boost::filesystem::exists(system_db_file),
                  mapd_parms.aggregator,
                  {});
-    CHECK(sys_cat.getMetadataForUser(MAPD_ROOT_USER, user));
+    CHECK(sys_cat.getMetadataForUser(OMNISCI_ROOT_USER, user));
     // if no user create one
     if (!sys_cat.getMetadataForUser("gtest", user)) {
       sys_cat.createUser("gtest", "test!test!", false, "");

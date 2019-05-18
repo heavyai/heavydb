@@ -389,8 +389,8 @@ TEST(UserRoles, RoleHierarchies) {
 }
 
 TEST_F(DatabaseObject, AccessDefaultsTest) {
-  auto cat_mapd = Catalog_Namespace::Catalog::get(MAPD_DEFAULT_DB);
-  DBObject mapd_object(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  auto cat_mapd = Catalog_Namespace::Catalog::get(OMNISCI_DEFAULT_DB);
+  DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(*cat_mapd);
 
@@ -404,7 +404,7 @@ TEST_F(DatabaseObject, AccessDefaultsTest) {
 TEST_F(DatabaseObject, SqlEditorAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_juve;
 
-  CHECK(sys_cat.getMetadataForDB(MAPD_DEFAULT_DB, db_meta));
+  CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Juventus", user_meta));
   session_juve.reset(
       new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
@@ -412,7 +412,7 @@ TEST_F(DatabaseObject, SqlEditorAccessTest) {
                                          ExecutorDeviceType::GPU,
                                          ""));
   auto& cat_mapd = session_juve->getCatalog();
-  DBObject mapd_object(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(DatabaseDBObjectType);
@@ -454,7 +454,7 @@ TEST_F(DatabaseObject, SqlEditorAccessTest) {
 TEST_F(DatabaseObject, DBLoginAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_juve;
 
-  CHECK(sys_cat.getMetadataForDB(MAPD_DEFAULT_DB, db_meta));
+  CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Bayern", user_meta));
   session_juve.reset(
       new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
@@ -462,7 +462,7 @@ TEST_F(DatabaseObject, DBLoginAccessTest) {
                                          ExecutorDeviceType::GPU,
                                          ""));
   auto& cat_mapd = session_juve->getCatalog();
-  DBObject mapd_object(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(DatabaseDBObjectType);
@@ -503,7 +503,7 @@ TEST_F(DatabaseObject, DBLoginAccessTest) {
 TEST_F(DatabaseObject, TableAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
 
-  CHECK(sys_cat.getMetadataForDB(MAPD_DEFAULT_DB, db_meta));
+  CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(
       new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
@@ -516,7 +516,7 @@ TEST_F(DatabaseObject, TableAccessTest) {
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::CREATE_TABLE));
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::DROP_TABLE));
   ASSERT_NO_THROW(bayern_privs.add(AccessPrivileges::ALTER_TABLE));
-  DBObject mapd_object(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(TableDBObjectType);
@@ -561,7 +561,7 @@ TEST_F(DatabaseObject, TableAccessTest) {
 
 TEST_F(DatabaseObject, ViewAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
-  CHECK(sys_cat.getMetadataForDB(MAPD_DEFAULT_DB, db_meta));
+  CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(
       new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
@@ -571,7 +571,7 @@ TEST_F(DatabaseObject, ViewAccessTest) {
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_VIEW));
-  DBObject mapd_object(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(ViewDBObjectType);
@@ -610,7 +610,7 @@ TEST_F(DatabaseObject, ViewAccessTest) {
 
 TEST_F(DatabaseObject, DashboardAccessTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
-  CHECK(sys_cat.getMetadataForDB(MAPD_DEFAULT_DB, db_meta));
+  CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(
       new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
@@ -620,7 +620,7 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DASHBOARD));
-  DBObject mapd_object(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.setPermissionType(DashboardDBObjectType);
@@ -659,7 +659,7 @@ TEST_F(DatabaseObject, DashboardAccessTest) {
 TEST_F(DatabaseObject, DatabaseAllTest) {
   std::unique_ptr<Catalog_Namespace::SessionInfo> session_ars;
 
-  CHECK(sys_cat.getMetadataForDB(MAPD_DEFAULT_DB, db_meta));
+  CHECK(sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta));
   CHECK(sys_cat.getMetadataForUser("Arsenal", user_meta));
   session_ars.reset(
       new Catalog_Namespace::SessionInfo(Catalog_Namespace::Catalog::get(db_meta.dbName),
@@ -669,7 +669,7 @@ TEST_F(DatabaseObject, DatabaseAllTest) {
   auto& cat_mapd = session_ars->getCatalog();
   AccessPrivileges arsenal_privs;
   ASSERT_NO_THROW(arsenal_privs.add(AccessPrivileges::ALL_DATABASE));
-  DBObject mapd_object(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   privObjects.clear();
   mapd_object.loadKey(cat_mapd);
   mapd_object.resetPrivileges();
@@ -1400,9 +1400,9 @@ TEST(DBObject, LoadKey) {
                     tbname + ";");
 
   // test the LoadKey() function
-  auto cat = Catalog_Namespace::Catalog::get(MAPD_DEFAULT_DB);
+  auto cat = Catalog_Namespace::Catalog::get(OMNISCI_DEFAULT_DB);
 
-  DBObject dbo1(MAPD_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
+  DBObject dbo1(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);
   DBObject dbo2(tbname, DBObjectType::TableDBObjectType);
   DBObject dbo3(vwname, DBObjectType::ViewDBObjectType);
 
@@ -1521,7 +1521,8 @@ TEST(SysCatalog, LoginWithDefaultDatabase) {
   username2 = username;
   dbname2.clear();
   ASSERT_NO_THROW(sys_cat.login(dbname2, username2, "password", user_meta, false));
-  EXPECT_EQ(dbname2, MAPD_DEFAULT_DB);  // correctly fell back to system default database
+  EXPECT_EQ(dbname2,
+            OMNISCI_DEFAULT_DB);  // correctly fell back to system default database
 }
 
 TEST(SysCatalog, SwitchDatabase) {

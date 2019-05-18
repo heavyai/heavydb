@@ -211,7 +211,7 @@ void Catalog::updateTableDescriptorSchema() {
     }
     if (std::find(cols.begin(), cols.end(), std::string("userid")) == cols.end()) {
       string queryString("ALTER TABLE mapd_tables ADD userid integer DEFAULT " +
-                         std::to_string(MAPD_ROOT_USER_ID));
+                         std::to_string(OMNISCI_ROOT_USER_ID));
       sqliteConnector_.query(queryString);
     }
     if (std::find(cols.begin(), cols.end(), std::string("sort_column_id")) ==

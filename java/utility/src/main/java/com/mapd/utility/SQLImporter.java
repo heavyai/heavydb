@@ -57,6 +57,7 @@ class MutuallyExlusiveOptionsException extends ParseException {
   protected MutuallyExlusiveOptionsException(String message) {
     super(message);
   }
+
   public static MutuallyExlusiveOptionsException create(String errMsg, String[] strings) {
     StringBuffer sb = new StringBuffer(
             "Mutually exclusive options used. " + errMsg + ". Options provided [");
@@ -71,16 +72,19 @@ class MutuallyExlusiveOptionsException extends ParseException {
 
 class SQLImporter_args {
   private Options options = new Options();
+
   void printVersion() {
     System.out.println("SQLImporter Version 4.6.0");
   }
+
   void printHelpMessage() {
     StringBuffer sb = new StringBuffer("\nSQLImporter ");
     // Ready for PKI auth
     // sb.append("(-u <userid> -p <password> | --client-cert <key store filename>
     sb.append("-u <userid> -p <password> [(--binary|--http|--https [--insecure])]\n");
-    sb.append("-s <omnisci server host> -db <omnsci db> --port <omnisci server port>\n");
-    // sb.append("([--ca-trust-store <ca trust store file name>] --ca-trust-store-password
+    sb.append("-s <omnisci server host> -db <omnisci db> --port <omnisci server port>\n");
+    // sb.append("([--ca-trust-store <ca trust store file name>]
+    // --ca-trust-store-password
     // <trust store password> | --insecure)\n");
     sb.append(
             "[-d <other database JDBC drive class>] -c <other database JDBC connection string>\n");
@@ -98,6 +102,7 @@ class SQLImporter_args {
     int help_width = 100;
     formatter.printHelp(help_width, sb.toString(), "", options, "");
   }
+
   SQLImporter_args() {
     options.addOption("r", true, "Row Load Limit");
 
@@ -216,6 +221,7 @@ class SQLImporter_args {
                               .longOpt("initializeFile")
                               .build());
   }
+
   private Option setOptionRequired(Option option) {
     option.setRequired(true);
     return option;
@@ -251,7 +257,8 @@ class SQLImporter_args {
           super.parse(options, strings);
         }
 
-        // FUTURE USE FOR USER Auth if user client-cert supplied must have client-key and
+        // FUTURE USE FOR USER Auth if user client-cert supplied must have client-key
+        // and
         // visa versa
         if (false) {
           if (cmd.hasOption("client-cert") || cmd.hasOption("client-key")) {
@@ -287,6 +294,7 @@ class SQLImporter_args {
 
         return cmd;
       }
+
       public CommandLine parse(Options options, String[] strings, boolean b)
               throws ParseException {
         return null;
@@ -306,6 +314,7 @@ public class SQLImporter {
   };
 
   Db_vendor_types vendor_types = null;
+
   public static void main(String[] args) {
     SQLImporter sq = new SQLImporter();
     sq.doWork(args);
@@ -596,9 +605,9 @@ public class SQLImporter {
       client = new MapD.Client(protocol);
       // This if will be useless until PKI signon
       if (cmd.hasOption("user")) {
-        session = client.connect(cmd.getOptionValue("user", "mapd"),
+        session = client.connect(cmd.getOptionValue("user", "admin"),
                 cmd.getOptionValue("passwd", "HyperInteractive"),
-                cmd.getOptionValue("database", "mapd"));
+                cmd.getOptionValue("database", "omnisci"));
       }
       LOGGER.debug("Connected session is " + session);
 

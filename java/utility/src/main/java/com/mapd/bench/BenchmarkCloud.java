@@ -44,11 +44,11 @@ public class BenchmarkCloud {
   static final String JDBC_DRIVER = "com.omnisci.jdbc.OmniSciDriver";
 
   // Database credentials
-  static final String USER = "mapd";
+  static final String USER = "admin";
   static final String PASS = "";
 
   // Database credentials
-  static final String RESULTS_USER = "mapd";
+  static final String RESULTS_USER = "admin";
   static final String RESULTS_PASS = "";
 
   private String driver;

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/ usr / bin / env python
 
 from thrift.protocol import TBinaryProtocol
 from thrift.transport import TSocket
@@ -30,17 +30,17 @@ def import_some_rows(session, table_name, client):
 
 
 def main():
-  # Import rows to a table created by the following statement:
-  # CREATE TABLE foo(x int, str text encoding dict, real_str text);
+#Import rows to a table created by the following statement:
+#CREATE TABLE foo(x int, str text encoding dict, real_str text);
 
-  # How to run:
-  #
-  # thrift -gen py ~/mapd2/mapd.thrift
-  # PYTHONPATH=`pwd`/gen-py python ./stream_insert.py
+#How to run:
+#
+#thrift - gen py ~ / mapd2 / mapd.thrift
+#PYTHONPATH =`pwd`/ gen - py python./ stream_insert.py
 
   table_name = 'foo'
-  db_name = 'mapd'
-  user_name = 'mapd'
+  db_name = 'omnisci'
+  user_name = 'admin'
   passwd = 'HyperInteractive'
   hostname = 'localhost'
   portno = 6274

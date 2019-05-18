@@ -4237,7 +4237,7 @@ void MapDHandler::start_heap_profile(const TSessionId& session) {
   if (IsHeapProfilerRunning()) {
     THROW_MAPD_EXCEPTION("Profiler already started");
   }
-  HeapProfilerStart("mapd");
+  HeapProfilerStart("omnisci");
 #else
   THROW_MAPD_EXCEPTION("Profiler not enabled");
 #endif  // HAVE_PROFILER

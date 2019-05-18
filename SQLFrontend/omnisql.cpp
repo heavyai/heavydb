@@ -1082,7 +1082,7 @@ int main(int argc, char** argv) {
   bool skip_host_verify = false;
   TQueryResult _return;
   std::string db_name;
-  std::string user_name{"mapd"};
+  std::string user_name{"admin"};
   std::string ca_cert_name{""};
   std::string passwd;
 
@@ -1099,8 +1099,9 @@ int main(int argc, char** argv) {
   desc.add_options()("delimiter,d",
                      po::value<std::string>(&delimiter)->default_value(delimiter),
                      "Field delimiter in row output");
-  desc.add_options()(
-      "db", po::value<std::string>(&db_name), "Database name (server default is mapd)");
+  desc.add_options()("db",
+                     po::value<std::string>(&db_name),
+                     "Database name (server default is omnisci)");
   desc.add_options()("user,u",
                      po::value<std::string>(&user_name)->default_value(user_name),
                      "User name");
@@ -1416,8 +1417,8 @@ int main(int argc, char** argv) {
       if (temp_line.size() > 11) {
         context.privs_role_name.clear();
         context.privs_role_name = strtok(line + 12, " ");
-        if (!context.privs_role_name.compare(MAPD_ROOT_USER)) {
-          std::cerr << "Command privileges failed because " << MAPD_ROOT_USER
+        if (!context.privs_role_name.compare(OMNISCI_ROOT_USER)) {
+          std::cerr << "Command privileges failed because " << OMNISCI_ROOT_USER
                     << " root user has all privileges by default." << std::endl;
         } else {
           get_db_objects_for_grantee(context);

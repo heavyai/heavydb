@@ -93,9 +93,9 @@ void SysCatalog::init(const std::string& basePath,
     string_dict_hosts_ = string_dict_hosts;
     aggregator_ = aggregator;
     bool db_exists =
-        boost::filesystem::exists(basePath_ + "/mapd_catalogs/" + MAPD_SYSTEM_CATALOG);
+        boost::filesystem::exists(basePath_ + "/mapd_catalogs/" + OMNISCI_SYSTEM_CATALOG);
     sqliteConnector_.reset(
-        new SqliteConnector(MAPD_SYSTEM_CATALOG, basePath_ + "/mapd_catalogs/"));
+        new SqliteConnector(OMNISCI_SYSTEM_CATALOG, basePath_ + "/mapd_catalogs/"));
     if (is_new_db) {
       initDB();
     } else {
@@ -134,9 +134,9 @@ void SysCatalog::initDB() {
         "mapd_databases)");
     sqliteConnector_->query_with_text_params(
         "INSERT INTO mapd_users VALUES (?, ?, ?, 1, NULL)",
-        std::vector<std::string>{MAPD_ROOT_USER_ID_STR,
-                                 MAPD_ROOT_USER,
-                                 hash_with_bcrypt(MAPD_ROOT_PASSWD_DEFAULT)});
+        std::vector<std::string>{OMNISCI_ROOT_USER_ID_STR,
+                                 OMNISCI_ROOT_USER,
+                                 hash_with_bcrypt(OMNISCI_ROOT_PASSWD_DEFAULT)});
     sqliteConnector_->query(
         "CREATE TABLE mapd_databases (dbid integer primary key, name text unique, owner "
         "integer references mapd_users)");
@@ -159,7 +159,7 @@ void SysCatalog::initDB() {
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
-  createDatabase(MAPD_DEFAULT_DB, MAPD_ROOT_USER_ID);
+  createDatabase(OMNISCI_DEFAULT_DB, OMNISCI_ROOT_USER_ID);
 }
 
 void SysCatalog::checkAndExecuteMigrations() {
@@ -198,7 +198,7 @@ void SysCatalog::updateUserSchema() {
 
 void SysCatalog::importDataFromOldMapdDB() {
   sys_sqlite_lock sqlite_lock(this);
-  std::string mapd_db_path = basePath_ + "/mapd_catalogs/" + MAPD_DEFAULT_DB;
+  std::string mapd_db_path = basePath_ + "/mapd_catalogs/" + OMNISCI_DEFAULT_DB;
   sqliteConnector_->query("ATTACH DATABASE `" + mapd_db_path + "` as old_cat");
   sqliteConnector_->query("BEGIN TRANSACTION");
   LOG(INFO) << "Moving global metadata into a separate catalog";
@@ -233,7 +233,7 @@ void SysCatalog::importDataFromOldMapdDB() {
   }
   sqliteConnector_->query("END TRANSACTION");
   const std::string sys_catalog_path =
-      basePath_ + "/mapd_catalogs/" + MAPD_SYSTEM_CATALOG;
+      basePath_ + "/mapd_catalogs/" + OMNISCI_SYSTEM_CATALOG;
   LOG(INFO) << "Global metadata has been successfully moved into a separate catalog: "
             << sys_catalog_path
             << ". Using this database with an older version of omnisci_server "
@@ -260,7 +260,7 @@ void SysCatalog::createUserRoles() {
         "CREATE TABLE mapd_roles(roleName text, userName text, UNIQUE(roleName, "
         "userName))");
     sqliteConnector_->query("SELECT name FROM mapd_users WHERE name <> \'" +
-                            MAPD_ROOT_USER + "\'");
+                            OMNISCI_ROOT_USER + "\'");
     size_t numRows = sqliteConnector_->getNumRows();
     vector<string> user_names;
     for (size_t i = 0; i < numRows; ++i) {
@@ -391,7 +391,7 @@ void SysCatalog::migratePrivileges() {
         DBObjectKey key;
         key.permissionType = DBObjectType::TableDBObjectType;
         key.dbId = grantee.second;
-        DBObject object(key, AccessPrivileges::ALL_TABLE_MIGRATE, MAPD_ROOT_USER_ID);
+        DBObject object(key, AccessPrivileges::ALL_TABLE_MIGRATE, OMNISCI_ROOT_USER_ID);
         object.setName(dbName);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
@@ -402,7 +402,8 @@ void SysCatalog::migratePrivileges() {
         DBObjectKey key;
         key.permissionType = DBObjectType::DashboardDBObjectType;
         key.dbId = grantee.second;
-        DBObject object(key, AccessPrivileges::ALL_DASHBOARD_MIGRATE, MAPD_ROOT_USER_ID);
+        DBObject object(
+            key, AccessPrivileges::ALL_DASHBOARD_MIGRATE, OMNISCI_ROOT_USER_ID);
         object.setName(dbName);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
@@ -413,7 +414,7 @@ void SysCatalog::migratePrivileges() {
         DBObjectKey key;
         key.permissionType = DBObjectType::ViewDBObjectType;
         key.dbId = grantee.second;
-        DBObject object(key, AccessPrivileges::ALL_VIEW_MIGRATE, MAPD_ROOT_USER_ID);
+        DBObject object(key, AccessPrivileges::ALL_VIEW_MIGRATE, OMNISCI_ROOT_USER_ID);
         object.setName(dbName);
         insertOrUpdateObjectPrivileges(
             sqliteConnector_, users_by_id[grantee.first], true, object);
@@ -421,12 +422,12 @@ void SysCatalog::migratePrivileges() {
     }
     for (auto user : user_has_privs) {
       auto dbName = dbs_by_id[0];
-      if (user.second == false && user.first != MAPD_ROOT_USER_ID) {
+      if (user.second == false && user.first != OMNISCI_ROOT_USER_ID) {
         {
           DBObjectKey key;
           key.permissionType = DBObjectType::DatabaseDBObjectType;
           key.dbId = 0;
-          DBObject object(key, AccessPrivileges::NONE, MAPD_ROOT_USER_ID);
+          DBObject object(key, AccessPrivileges::NONE, OMNISCI_ROOT_USER_ID);
           object.setName(dbName);
           insertOrUpdateObjectPrivileges(
               sqliteConnector_, users_by_id[user.first], true, object);
@@ -584,7 +585,7 @@ void SysCatalog::migrateDBAccessPrivileges() {
     for (auto db_ : databases) {
       CHECK(SysCatalog::instance().getMetadataForDB(db_.second, dbmeta));
       for (auto user : users) {
-        if (user.first != MAPD_ROOT_USER_ID) {
+        if (user.first != OMNISCI_ROOT_USER_ID) {
           {
             DBObjectKey key;
             key.permissionType = DBObjectType::DatabaseDBObjectType;
@@ -660,7 +661,6 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
       basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
 }
 
-
 // loginImpl() with no EE code and no SAML code
 void SysCatalog::loginImpl(std::string& username,
                            const std::string& password,
@@ -669,7 +669,6 @@ void SysCatalog::loginImpl(std::string& username,
     throw std::runtime_error("Invalid credentials.");
   }
 }
-
 
 std::shared_ptr<Catalog> SysCatalog::switchDatabase(std::string& dbname,
                                                     const std::string& username) {
@@ -828,7 +827,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
   if (getMetadataForDB(name, db)) {
     throw runtime_error("Database " + name + " already exists.");
   }
-  if (to_upper(name) == to_upper(MAPD_SYSTEM_CATALOG)) {
+  if (to_upper(name) == to_upper(OMNISCI_SYSTEM_CATALOG)) {
     throw runtime_error("Database name " + name + " is reserved.");
   }
 
@@ -900,7 +899,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
     CHECK(getMetadataForDB(name, db));
     auto cat =
         Catalog::get(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, true);
-    if (owner != MAPD_ROOT_USER_ID) {
+    if (owner != OMNISCI_ROOT_USER_ID) {
       DBObject object(name, DBObjectType::DatabaseDBObjectType);
       object.loadKey(*cat);
       UserMetadata user;
@@ -958,14 +957,12 @@ void SysCatalog::dropDatabase(const DBMetadata& db) {
   sqliteConnector_->query("END TRANSACTION");
 }
 
-
 // checkPasswordForUser() with no EE code
 bool SysCatalog::checkPasswordForUser(const std::string& passwd,
                                       std::string& name,
                                       UserMetadata& user) {
   return checkPasswordForUserImpl(passwd, name, user);
 }
-
 
 bool SysCatalog::checkPasswordForUserImpl(const std::string& passwd,
                                           std::string& name,
@@ -1097,11 +1094,11 @@ void SysCatalog::getMetadataWithDefault(std::string& dbname,
       dbname = db_meta.dbName;
       // loaded the user's default database
     } else {
-      if (!getMetadataForDB(MAPD_DEFAULT_DB, db_meta)) {
-        throw std::runtime_error(std::string("Database ") + MAPD_DEFAULT_DB +
+      if (!getMetadataForDB(OMNISCI_DEFAULT_DB, db_meta)) {
+        throw std::runtime_error(std::string("Database ") + OMNISCI_DEFAULT_DB +
                                  " does not exist.");
       }
-      dbname = MAPD_DEFAULT_DB;
+      dbname = OMNISCI_DEFAULT_DB;
       // loaded the mapd database by default
     }
   }
@@ -1186,7 +1183,7 @@ void SysCatalog::createDBObject(const UserMetadata& user,
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     if (user.userName.compare(
-            MAPD_ROOT_USER)) {  // no need to grant to suser, has all privs by default
+            OMNISCI_ROOT_USER)) {  // no need to grant to suser, has all privs by default
       grantDBObjectPrivileges_unsafe(user.userName, object, catalog);
       auto* grantee = instance().getUserGrantee(user.userName);
       if (!grantee) {
@@ -1225,7 +1222,7 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(
 
   sys_write_lock write_lock(this);
 
-  if (!granteeName.compare(MAPD_ROOT_USER)) {
+  if (!granteeName.compare(OMNISCI_ROOT_USER)) {
     throw runtime_error("Request to grant privileges to " + granteeName +
                         " failed because mapd root user has all privileges by default.");
   }
@@ -1290,7 +1287,7 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(
     const Catalog_Namespace::Catalog& catalog) {
   sys_write_lock write_lock(this);
 
-  if (!granteeName.compare(MAPD_ROOT_USER)) {
+  if (!granteeName.compare(OMNISCI_ROOT_USER)) {
     throw runtime_error(
         "Request to revoke privileges from " + granteeName +
         " failed because privileges can not be revoked from mapd root user.");
@@ -1375,7 +1372,7 @@ void SysCatalog::getDBObjectPrivileges(const std::string& granteeName,
                                        DBObject& object,
                                        const Catalog_Namespace::Catalog& catalog) const {
   sys_read_lock read_lock(this);
-  if (!granteeName.compare(MAPD_ROOT_USER)) {
+  if (!granteeName.compare(OMNISCI_ROOT_USER)) {
     throw runtime_error("Request to show privileges from " + granteeName +
                         " failed because mapd root user has all privileges by default.");
   }
@@ -1406,7 +1403,7 @@ void SysCatalog::createRole_unsafe(const std::string& roleName,
 
   // NOTE (max): Why create an empty privileges record for a role?
   /* grant none privileges to this role and add it to sqlite DB */
-  DBObject dbObject(MAPD_DEFAULT_DB, DatabaseDBObjectType);
+  DBObject dbObject(OMNISCI_DEFAULT_DB, DatabaseDBObjectType);
   DBObjectKey objKey;
   // 0 is an id that does not exist
   objKey.dbId = 0;
@@ -1832,7 +1829,7 @@ void SysCatalog::buildUserRoleMap() {
     std::string userName = sqliteConnector_->getData<string>(r, 1);
     // required for declared nomenclature before v4.0.0
     if ((boost::equals(roleName, "mapd_default_suser_role") &&
-         boost::equals(userName, MAPD_ROOT_USER)) ||
+         boost::equals(userName, OMNISCI_ROOT_USER)) ||
         (boost::equals(roleName, "mapd_default_user_role") &&
          !boost::equals(userName, "mapd_default_user_role"))) {
       // grouprole already exists with roleName==userName in mapd_roles table

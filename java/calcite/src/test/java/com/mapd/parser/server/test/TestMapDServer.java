@@ -60,7 +60,7 @@ public class TestMapDServer {
           for (int i = 1; i <= 100; i++) {
             // if (i%100 == 0){
             System.out.println("i is " + i);
-            //}
+            // }
             if (calls > calCount) {
               closeMapDConnection(conn);
               conn = createMapDConnection();
@@ -98,9 +98,10 @@ public class TestMapDServer {
     Random r = new Random();
     int aliasID = r.nextInt(100000) + 1000000;
     int limit = r.nextInt(20) + 1;
-    //  executeQuery(conn, String.format("Select TABALIAS%d.dest_lon AS COLALIAS%d from
-    //  flights TABALIAS%d LIMIT %d",
-    //          aliasID, aliasID, aliasID, limit), limit);
+    // executeQuery(conn, String.format("Select TABALIAS%d.dest_lon AS COLALIAS%d
+    // from
+    // flights TABALIAS%d LIMIT %d",
+    // aliasID, aliasID, aliasID, limit), limit);
     executeQuery(conn,
             "SELECT date_trunc(day, arr_timestamp) as key0,CASE when carrier_name IN ('Southwest Airlines','American Airlines','Skywest Airlines','American Eagle Airlines','US Airways') then carrier_name ELSE 'other' END as key1,COUNT(*) AS val FROM flights_2008_7m WHERE (arr_timestamp >= TIMESTAMP(0) '2008-01-01 00:57:00' AND arr_timestamp < TIMESTAMP(0) '2009-01-01 18:27:00') GROUP BY key0, key1 ORDER BY key0,key1",
             2202);
@@ -115,7 +116,7 @@ public class TestMapDServer {
       transport.open();
       TProtocol protocol = new TBinaryProtocol(transport);
       client = new MapD.Client(protocol);
-      session = client.connect("mapd", "HyperInteractive", "mapd");
+      session = client.connect("admin", "HyperInteractive", "omnisci");
     } catch (TException x) {
       fail("Exception on create occurred " + x.toString());
     }

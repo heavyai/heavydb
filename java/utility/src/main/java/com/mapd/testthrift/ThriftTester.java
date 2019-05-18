@@ -72,7 +72,7 @@ public class ThriftTester {
 
       String session = null;
 
-      session = client.connect("mapd", "HyperInteractive", "mapd");
+      session = client.connect("admin", "HyperInteractive", "omnisci");
 
       logger.info("Connected session is " + session);
 
@@ -112,7 +112,7 @@ public class ThriftTester {
               null,
               -1,
               -1);
-      // client.send_sql_execute(session, "Select BRAND  from ACV ;", true);
+      // client.send_sql_execute(session, "Select BRAND from ACV ;", true);
       // logger.info(" -- before query recv -- ");
       // TQueryResult sql_execute = client.recv_sql_execute();
 

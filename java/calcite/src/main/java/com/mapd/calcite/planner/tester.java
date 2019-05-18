@@ -35,16 +35,16 @@ public class tester {
 
   public static void main(String[] args) {
     final SqlStdOperatorTable stdOpTab = SqlStdOperatorTable.instance();
-    //        SqlOperatorTable opTab =
-    //        ChainedSqlOperatorTable.of(stdOpTab,
-    //            new ListSqlOperatorTable(
-    //                ImmutableList.<SqlOperator>of(new MyCountAggFunction())));
-    MapDUser mdu = new MapDUser("mapd", "passwd", "catalog", -1);
+    // SqlOperatorTable opTab =
+    // ChainedSqlOperatorTable.of(stdOpTab,
+    // new ListSqlOperatorTable(
+    // ImmutableList.<SqlOperator>of(new MyCountAggFunction())));
+    MapDUser mdu = new MapDUser("admin", "passwd", "catalog", -1);
     MapDSchema mapd =
             new MapDSchema("/home/michael/mapd2/build/data", null, -1, mdu, null);
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
     final FrameworkConfig config = Frameworks.newConfigBuilder()
-                                           .defaultSchema(rootSchema.add("mapd", mapd))
+                                           .defaultSchema(rootSchema.add("omnisci", mapd))
                                            .operatorTable(stdOpTab)
                                            .build();
 

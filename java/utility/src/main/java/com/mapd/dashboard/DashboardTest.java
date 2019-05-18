@@ -43,7 +43,7 @@ public class DashboardTest {
   void testUserRoles() throws Exception {
     logger.info("testUserRoles()");
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "mapd", "mapd", "HyperInteractive");
+            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
 
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER jason (password = 'password', is_super = 'false');");
@@ -96,7 +96,7 @@ public class DashboardTest {
     logger.info("testDbLevelDashboardPermissions()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "mapd", "mapd", "HyperInteractive");
+            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
 
     su.runSql("CREATE USER dba (password = 'password', is_super = 'true');");
     su.runSql("CREATE USER jason (password = 'password', is_super = 'false');");
@@ -107,18 +107,18 @@ public class DashboardTest {
     su.runSql("GRANT salesDept TO foo;");
 
     MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 6274, "mapd", "dba", "password");
+            MapdTestClient.getClient("localhost", 6274, "omnisci", "dba", "password");
     MapdTestClient jason =
-            MapdTestClient.getClient("localhost", 6274, "mapd", "jason", "password");
+            MapdTestClient.getClient("localhost", 6274, "omnisci", "jason", "password");
     MapdTestClient foo =
-            MapdTestClient.getClient("localhost", 6274, "mapd", "foo", "password");
+            MapdTestClient.getClient("localhost", 6274, "omnisci", "foo", "password");
 
     MapdAsserts.assertEqual(
             0, jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
     MapdAsserts.assertEqual(
             0, foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
 
-    su.runSql("GRANT CREATE DASHBOARD ON DATABASE mapd TO jason;");
+    su.runSql("GRANT CREATE DASHBOARD ON DATABASE omnisci TO jason;");
     MapdAsserts.assertEqual(
             1, jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
     MapdAsserts.assertEqual(
@@ -128,19 +128,19 @@ public class DashboardTest {
             jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
     MapdAsserts.assertEqual(Arrays.asList(true, false, false, false), obj.getPrivs());
 
-    su.runSql("GRANT EDIT DASHBOARD ON DATABASE mapd TO jason;");
+    su.runSql("GRANT EDIT DASHBOARD ON DATABASE omnisci TO jason;");
     obj = jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
     MapdAsserts.assertEqual(Arrays.asList(true, false, false, true), obj.getPrivs());
 
-    su.runSql("GRANT VIEW DASHBOARD ON DATABASE mapd TO jason;");
+    su.runSql("GRANT VIEW DASHBOARD ON DATABASE omnisci TO jason;");
     obj = jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
     MapdAsserts.assertEqual(Arrays.asList(true, false, true, true), obj.getPrivs());
 
-    su.runSql("GRANT DELETE DASHBOARD ON DATABASE mapd TO jason;");
+    su.runSql("GRANT DELETE DASHBOARD ON DATABASE omnisci TO jason;");
     obj = jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
     MapdAsserts.assertEqual(Arrays.asList(true, true, true, true), obj.getPrivs());
 
-    su.runSql("GRANT CREATE DASHBOARD ON DATABASE mapd TO salesDept;");
+    su.runSql("GRANT CREATE DASHBOARD ON DATABASE omnisci TO salesDept;");
     MapdAsserts.assertEqual(
             1, jason.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).size());
     MapdAsserts.assertEqual(
@@ -149,15 +149,15 @@ public class DashboardTest {
     obj = foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
     MapdAsserts.assertEqual(Arrays.asList(true, false, false, false), obj.getPrivs());
 
-    su.runSql("GRANT EDIT DASHBOARD ON DATABASE mapd TO salesDept;");
+    su.runSql("GRANT EDIT DASHBOARD ON DATABASE omnisci TO salesDept;");
     obj = foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
     MapdAsserts.assertEqual(Arrays.asList(true, false, false, true), obj.getPrivs());
 
-    su.runSql("GRANT VIEW DASHBOARD ON DATABASE mapd TO salesDept;");
+    su.runSql("GRANT VIEW DASHBOARD ON DATABASE omnisci TO salesDept;");
     obj = foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
     MapdAsserts.assertEqual(Arrays.asList(true, false, true, true), obj.getPrivs());
 
-    su.runSql("GRANT DELETE DASHBOARD ON DATABASE mapd TO salesDept;");
+    su.runSql("GRANT DELETE DASHBOARD ON DATABASE omnisci TO salesDept;");
     obj = foo.get_db_object_privs("", TDBObjectType.DashboardDBObjectType).get(0);
     MapdAsserts.assertEqual(Arrays.asList(true, true, true, true), obj.getPrivs());
 
@@ -171,7 +171,7 @@ public class DashboardTest {
     logger.info("testDashboards()");
 
     MapdTestClient su = MapdTestClient.getClient(
-            "localhost", 6274, "mapd", "mapd", "HyperInteractive");
+            "localhost", 6274, "omnisci", "admin", "HyperInteractive");
 
     List<String> users = su.get_users();
 
@@ -185,15 +185,15 @@ public class DashboardTest {
     su.runSql("GRANT salesDept TO foo;");
 
     MapdTestClient dba =
-            MapdTestClient.getClient("localhost", 6274, "mapd", "dba", "password");
+            MapdTestClient.getClient("localhost", 6274, "omnisci", "dba", "password");
     MapdTestClient jason =
-            MapdTestClient.getClient("localhost", 6274, "mapd", "jason", "password");
+            MapdTestClient.getClient("localhost", 6274, "omnisci", "jason", "password");
     MapdTestClient bob =
-            MapdTestClient.getClient("localhost", 6274, "mapd", "bob", "password");
+            MapdTestClient.getClient("localhost", 6274, "omnisci", "bob", "password");
     MapdTestClient foo =
-            MapdTestClient.getClient("localhost", 6274, "mapd", "foo", "password");
+            MapdTestClient.getClient("localhost", 6274, "omnisci", "foo", "password");
 
-    su.runSql("GRANT CREATE DASHBOARD ON DATABASE mapd TO jason;");
+    su.runSql("GRANT CREATE DASHBOARD ON DATABASE omnisci TO jason;");
 
     shouldThrowException("bob should not be able to create dashboards",
             () -> bob.create_dashboard("for_bob"));

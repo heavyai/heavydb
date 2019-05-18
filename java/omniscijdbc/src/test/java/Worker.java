@@ -1,3 +1,4 @@
+
 /*
  * Copyright 2017 MapD Technologies, Inc.
  *
@@ -30,8 +31,8 @@ class Worker implements Runnable {
   static final String JDBC_DRIVER = "com.omnisci.jdbc.OmniSciDriver";
   static final String DB_URL = "jdbc:omnisci:localhost:6274:mapd";
 
-  //  Database credentials
-  static final String USER = "mapd";
+  // Database credentials
+  static final String USER = "admin";
   static final String PASS = "HyperInteractive";
 
   private Connection conn = null;

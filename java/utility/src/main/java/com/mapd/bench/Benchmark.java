@@ -39,7 +39,7 @@ public class Benchmark {
   static final String DB_URL = "jdbc:omnisci:localhost:6274:mapd";
 
   // Database credentials
-  static final String USER = "mapd";
+  static final String USER = "admin";
   static final String PASS = "HyperInteractive";
 
   private String driver;

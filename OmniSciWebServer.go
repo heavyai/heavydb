@@ -703,9 +703,9 @@ func serversHandler(rw http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s := server{}
 		s.Master = true
-		s.Username = "mapd"
+		s.Username = "admin"
 		s.Password = "HyperInteractive"
-		s.Database = "mapd"
+		s.Database = "omnisci"
 
 		h, p, _ := net.SplitHostPort(r.Host)
 		s.Port, _ = net.LookupPort("tcp", p)
