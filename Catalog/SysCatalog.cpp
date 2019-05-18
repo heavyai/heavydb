@@ -531,7 +531,7 @@ void SysCatalog::updateBlankPasswordsToRandom() {
                    << ") to a random password";
       sqliteConnector_->query_with_text_params(
           "UPDATE mapd_users SET passwd_hash = ? WHERE userid = ?",
-          std::vector<std::string>{hash_with_bcrypt(generate_random_string(15)),
+          std::vector<std::string>{hash_with_bcrypt(generate_random_string(72)),
                                    users[i]});
     }
     sqliteConnector_->query_with_text_params(
@@ -1984,7 +1984,7 @@ void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
                                             bool* is_super) {
   UserMetadata user_meta;
   if (!getMetadataForUser(user_name, user_meta)) {
-    createUser(user_name, generate_random_string(15), is_super ? *is_super : false, "");
+    createUser(user_name, generate_random_string(72), is_super ? *is_super : false, "");
   } else if (is_super && *is_super != user_meta.isSuper) {
     alterUser(user_meta.userId, nullptr, is_super, nullptr);
   }
