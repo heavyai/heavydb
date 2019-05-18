@@ -646,17 +646,14 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
                                            const std::string& password,
                                            UserMetadata& user_meta,
                                            bool check_password) {
-  // NOTE: The dbname can be reset by getMetadataWithDefault(). The username can be reset
-  // by SamlServer's login()/authenticate_user().
+  // NOTE: The dbname isn't const because getMetadataWithDefault() can
+  // reset it. The username isn't const because SamlServer's
+  // login()/authenticate_user() can reset it.
 
   sys_write_lock write_lock(this);
 
   if (check_password) {
-    {
-      if (!checkPasswordForUser(password, username, user_meta)) {
-        throw std::runtime_error("Invalid credentials.");
-      }
-    }
+    loginImpl(username, password, user_meta);
   } else {  // not checking for password so user must exist
     if (!getMetadataForUser(username, user_meta)) {
       throw std::runtime_error("Invalid credentials.");
@@ -671,6 +668,17 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
   return Catalog::get(
       basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
 }
+
+
+// loginImpl() with no EE code and no SAML code
+void SysCatalog::loginImpl(std::string& username,
+                           const std::string& password,
+                           UserMetadata& user_meta) {
+  if (!checkPasswordForUser(password, username, user_meta)) {
+    throw std::runtime_error("Invalid credentials.");
+  }
+}
+
 
 std::shared_ptr<Catalog> SysCatalog::switchDatabase(std::string& dbname,
                                                     const std::string& username) {
@@ -961,25 +969,32 @@ void SysCatalog::dropDatabase(const DBMetadata& db) {
   sqliteConnector_->query("END TRANSACTION");
 }
 
+
+// checkPasswordForUser() with no EE code
 bool SysCatalog::checkPasswordForUser(const std::string& passwd,
                                       std::string& name,
                                       UserMetadata& user) {
-  {
-    if (!getMetadataForUser(name, user)) {
-      // Check password against some fake hash just to waste time so that response times
-      // for invalid password and invalid user are similar and a caller can't say the
-      // difference
-      char fake_hash[BCRYPT_HASHSIZE];
-      CHECK(bcrypt_gensalt(-1, fake_hash) == 0);
-      bcrypt_checkpw(passwd.c_str(), fake_hash);
-      return false;
-    }
-    int pwd_check_result = bcrypt_checkpw(passwd.c_str(), user.passwd_hash.c_str());
-    // if the check fails there is a good chance that data on disc is broken
-    CHECK(pwd_check_result >= 0);
-    if (pwd_check_result != 0) {
-      return false;
-    }
+  return checkPasswordForUserImpl(passwd, name, user);
+}
+
+
+bool SysCatalog::checkPasswordForUserImpl(const std::string& passwd,
+                                          std::string& name,
+                                          UserMetadata& user) {
+  if (!getMetadataForUser(name, user)) {
+    // Check password against some fake hash just to waste time so that response times
+    // for invalid password and invalid user are similar and a caller can't say the
+    // difference
+    char fake_hash[BCRYPT_HASHSIZE];
+    CHECK(bcrypt_gensalt(-1, fake_hash) == 0);
+    bcrypt_checkpw(passwd.c_str(), fake_hash);
+    return false;
+  }
+  int pwd_check_result = bcrypt_checkpw(passwd.c_str(), user.passwd_hash.c_str());
+  // if the check fails there is a good chance that data on disc is broken
+  CHECK(pwd_check_result >= 0);
+  if (pwd_check_result != 0) {
+    return false;
   }
   return true;
 }

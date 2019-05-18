@@ -450,6 +450,8 @@ class MapDHandler : public MapDIf {
   std::unique_ptr<MapDLeafHandler> leaf_handler_;
   std::shared_ptr<Calcite> calcite_;
   const bool legacy_syntax_;
+
+  // Exactly one immutable SessionInfo copy should be taken by a typical request.
   Catalog_Namespace::SessionInfo get_session_copy(const TSessionId& session);
   std::shared_ptr<Catalog_Namespace::SessionInfo> get_session_copy_ptr(
       const TSessionId& session);

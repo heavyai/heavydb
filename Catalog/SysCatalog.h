@@ -262,6 +262,13 @@ class SysCatalog {
   void updateBlankPasswordsToRandom();
   void migrateDBAccessPrivileges();
 
+  void loginImpl(std::string& username,
+                 const std::string& password,
+                 UserMetadata& user_meta);
+  bool checkPasswordForUserImpl(const std::string& passwd,
+                                std::string& name,
+                                UserMetadata& user);
+
   // Here go functions not wrapped into transactions (necessary for nested calls)
   void grantDefaultPrivilegesToRole_unsafe(const std::string& name, bool issuper);
   void createRole_unsafe(const std::string& roleName,
