@@ -1422,10 +1422,10 @@ TEST(SysCatalog, GetDatabaseList) {
   // cleanup
   struct CleanupGuard {
     ~CleanupGuard() {
-      run_ddl_statement("DROP DATABASE " + dbname4 + ";");
-      run_ddl_statement("DROP DATABASE " + dbname3 + ";");
-      run_ddl_statement("DROP DATABASE " + dbname2 + ";");
-      run_ddl_statement("DROP DATABASE " + dbname + ";");
+      run_ddl_statement("DROP DATABASE IF EXISTS " + dbname4 + ";");
+      run_ddl_statement("DROP DATABASE IF EXISTS " + dbname3 + ";");
+      run_ddl_statement("DROP DATABASE IF EXISTS " + dbname2 + ";");
+      run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
       run_ddl_statement("DROP USER " + username2 + ";");
       run_ddl_statement("DROP USER " + username + ";");
     }
@@ -1480,8 +1480,8 @@ TEST(SysCatalog, LoginWithDefaultDatabase) {
   // cleanup
   struct CleanupGuard {
     ~CleanupGuard() {
-      run_ddl_statement("DROP DATABASE " + dbname + ";");
-      run_ddl_statement("DROP DATABASE " + dbnamex + ";");
+      run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
+      run_ddl_statement("DROP DATABASE IF EXISTS " + dbnamex + ";");
       run_ddl_statement("DROP USER " + username + ";");
     }
   } cleanupGuard;
@@ -1534,9 +1534,9 @@ TEST(SysCatalog, SwitchDatabase) {
   // cleanup
   struct CleanupGuard {
     ~CleanupGuard() {
-      run_ddl_statement("DROP DATABASE " + dbname3 + ";");
-      run_ddl_statement("DROP DATABASE " + dbname2 + ";");
-      run_ddl_statement("DROP DATABASE " + dbname + ";");
+      run_ddl_statement("DROP DATABASE IF EXISTS " + dbname3 + ";");
+      run_ddl_statement("DROP DATABASE IF EXISTS " + dbname2 + ";");
+      run_ddl_statement("DROP DATABASE IF EXISTS " + dbname + ";");
       run_ddl_statement("DROP USER " + username + ";");
     }
   } cleanupGuard;

@@ -167,19 +167,19 @@ schema_element:
 NOT SUPPORTED */
 
 create_database_statement:
-		CREATE DATABASE NAME
+		CREATE DATABASE opt_if_not_exists NAME
 		{
-			$<nodeval>$ = new CreateDBStmt($<stringval>3, nullptr);
+			$<nodeval>$ = new CreateDBStmt($<stringval>4, nullptr, $<boolval>3);
 		}
-		| CREATE DATABASE NAME '(' name_eq_value_list ')'
+		| CREATE DATABASE opt_if_not_exists NAME '(' name_eq_value_list ')'
 		{
-			$<nodeval>$ = new CreateDBStmt($<stringval>3, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>5));
+			$<nodeval>$ = new CreateDBStmt($<stringval>4, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>6), $<boolval>3);
 		}
 		;
 drop_database_statement:
-		DROP DATABASE NAME
+		DROP DATABASE opt_if_exists NAME
 		{
-			$<nodeval>$ = new DropDBStmt($<stringval>3);
+			$<nodeval>$ = new DropDBStmt($<stringval>4, $<boolval>3);
 		}
 		;
 create_user_statement:

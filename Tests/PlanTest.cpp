@@ -45,6 +45,7 @@ using namespace Planner;
 
 namespace {
 std::unique_ptr<SessionInfo> g_session;
+auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 
 inline void run_ddl_statement(const string& input_str) {
   QueryRunner::run_ddl_statement(input_str, g_session);
@@ -97,6 +98,15 @@ TEST(ParseAnalyzePlan, Create) {
       g_session->getCatalog().getMetadataForDict(cd->columnType.get_comp_param());
   ASSERT_TRUE(dd != nullptr);
   EXPECT_EQ(dd->dictNBits, 8);
+  const std::string db_name("chelsea");
+  ASSERT_NO_THROW(run_ddl_statement("CREATE DATABASE " + db_name + ";"));
+  ASSERT_NO_THROW(run_ddl_statement("CREATE DATABASE IF NOT EXISTS " + db_name + ";"));
+  Catalog_Namespace::DBMetadata db;
+  EXPECT_TRUE(sys_cat.getMetadataForDB(db_name, db));
+  EXPECT_EQ(db.dbName, db_name);
+  ASSERT_NO_THROW(run_ddl_statement("DROP DATABASE " + db_name + ";"));
+  ASSERT_NO_THROW(run_ddl_statement("DROP DATABASE IF EXISTS " + db_name + ";"));
+  EXPECT_FALSE(sys_cat.getMetadataForDB(db_name, db));
 }
 
 TEST(ParseAnalyzePlan, Select) {

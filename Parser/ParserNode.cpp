@@ -4203,6 +4203,10 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error(
         "CREATE DATABASE command can only be executed by super user.");
   }
+  Catalog_Namespace::DBMetadata db_meta;
+  if (SysCatalog::instance().getMetadataForDB(*db_name, db_meta) && if_not_exists_) {
+    return;
+  }
   int ownerId = session.get_currentUser().userId;
   if (!name_value_list.empty()) {
     for (auto& p : name_value_list) {
@@ -4232,6 +4236,9 @@ void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   Catalog_Namespace::DBMetadata db;
   if (!SysCatalog::instance().getMetadataForDB(*db_name, db)) {
+    if (if_exists_) {
+      return;
+    }
     throw std::runtime_error("Database " + *db_name + " does not exist.");
   }
 

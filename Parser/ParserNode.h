@@ -1680,7 +1680,8 @@ class DropViewStmt : public DDLStmt {
  */
 class CreateDBStmt : public DDLStmt {
  public:
-  CreateDBStmt(std::string* n, std::list<NameValueAssign*>* l) : db_name(n) {
+  CreateDBStmt(std::string* n, std::list<NameValueAssign*>* l, const bool if_not_exists)
+      : db_name(n), if_not_exists_(if_not_exists) {
     if (l) {
       for (const auto e : *l) {
         name_value_list.emplace_back(e);
@@ -1693,6 +1694,7 @@ class CreateDBStmt : public DDLStmt {
  private:
   std::unique_ptr<std::string> db_name;
   std::list<std::unique_ptr<NameValueAssign>> name_value_list;
+  bool if_not_exists_;
 };
 
 /*
@@ -1701,11 +1703,13 @@ class CreateDBStmt : public DDLStmt {
  */
 class DropDBStmt : public DDLStmt {
  public:
-  explicit DropDBStmt(std::string* n) : db_name(n) {}
+  explicit DropDBStmt(std::string* n, bool if_exists)
+      : db_name(n), if_exists_(if_exists) {}
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
   std::unique_ptr<std::string> db_name;
+  bool if_exists_;
 };
 
 /*
