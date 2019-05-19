@@ -235,10 +235,10 @@ llvm::Value* CodeGenerator::codegenLogicalShortCircuit(const Analyzer::BinOper* 
     nullcheck_fail_bb = llvm::BasicBlock::Create(
         cgen_state_->context_, "nullcheck_fail_bb", cgen_state_->row_func_);
     if (lhs_lv->getType()->isIntegerTy(1)) {
-      lhs_lv = executor_->castToTypeIn(lhs_lv, 8);
+      lhs_lv = cgen_state_->castToTypeIn(lhs_lv, 8);
     }
     auto lhs_nullcheck =
-        cgen_state_->ir_builder_.CreateICmpEQ(lhs_lv, executor_->inlineIntNull(ti));
+        cgen_state_->ir_builder_.CreateICmpEQ(lhs_lv, cgen_state_->inlineIntNull(ti));
     cgen_state_->ir_builder_.CreateCondBr(
         lhs_nullcheck, nullcheck_fail_bb, nullcheck_ok_bb);
     cgen_state_->ir_builder_.SetInsertPoint(nullcheck_ok_bb);
@@ -260,10 +260,10 @@ llvm::Value* CodeGenerator::codegenLogicalShortCircuit(const Analyzer::BinOper* 
   if (!ti.get_notnull()) {
     // need rhs nullcheck as well
     if (rhs_lv->getType()->isIntegerTy(1)) {
-      rhs_lv = executor_->castToTypeIn(rhs_lv, 8);
+      rhs_lv = cgen_state_->castToTypeIn(rhs_lv, 8);
     }
     auto rhs_nullcheck =
-        cgen_state_->ir_builder_.CreateICmpEQ(rhs_lv, executor_->inlineIntNull(ti));
+        cgen_state_->ir_builder_.CreateICmpEQ(rhs_lv, cgen_state_->inlineIntNull(ti));
     cgen_state_->ir_builder_.CreateCondBr(rhs_nullcheck, nullcheck_fail_bb, ret_bb);
   } else {
     cgen_state_->ir_builder_.CreateBr(ret_bb);
@@ -279,7 +279,7 @@ llvm::Value* CodeGenerator::codegenLogicalShortCircuit(const Analyzer::BinOper* 
   auto result_phi =
       cgen_state_->ir_builder_.CreatePHI(lhs_lv->getType(), (!ti.get_notnull()) ? 3 : 2);
   if (!ti.get_notnull()) {
-    result_phi->addIncoming(executor_->inlineIntNull(ti), nullcheck_fail_bb);
+    result_phi->addIncoming(cgen_state_->inlineIntNull(ti), nullcheck_fail_bb);
   }
   result_phi->addIncoming(cnst_lv, sc_check_bb);
   result_phi->addIncoming(rhs_lv, rhs_codegen_bb);
@@ -313,18 +313,18 @@ llvm::Value* CodeGenerator::codegenLogical(const Analyzer::BinOper* bin_oper,
   CHECK(lhs_lv->getType()->isIntegerTy(1) || lhs_lv->getType()->isIntegerTy(8));
   CHECK(rhs_lv->getType()->isIntegerTy(1) || rhs_lv->getType()->isIntegerTy(8));
   if (lhs_lv->getType()->isIntegerTy(1)) {
-    lhs_lv = executor_->castToTypeIn(lhs_lv, 8);
+    lhs_lv = cgen_state_->castToTypeIn(lhs_lv, 8);
   }
   if (rhs_lv->getType()->isIntegerTy(1)) {
-    rhs_lv = executor_->castToTypeIn(rhs_lv, 8);
+    rhs_lv = cgen_state_->castToTypeIn(rhs_lv, 8);
   }
   switch (optype) {
     case kAND:
       return cgen_state_->emitCall("logical_and",
-                                   {lhs_lv, rhs_lv, executor_->inlineIntNull(ti)});
+                                   {lhs_lv, rhs_lv, cgen_state_->inlineIntNull(ti)});
     case kOR:
       return cgen_state_->emitCall("logical_or",
-                                   {lhs_lv, rhs_lv, executor_->inlineIntNull(ti)});
+                                   {lhs_lv, rhs_lv, cgen_state_->inlineIntNull(ti)});
     default:
       abort();
   }
@@ -361,8 +361,8 @@ llvm::Value* CodeGenerator::codegenLogical(const Analyzer::UOper* uoper,
   CHECK(not_null || operand_lv->getType()->isIntegerTy(8));
   return not_null
              ? cgen_state_->ir_builder_.CreateNot(toBool(operand_lv))
-             : cgen_state_->emitCall("logical_not",
-                                     {operand_lv, executor_->inlineIntNull(operand_ti)});
+             : cgen_state_->emitCall(
+                   "logical_not", {operand_lv, cgen_state_->inlineIntNull(operand_ti)});
 }
 
 llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
@@ -395,9 +395,9 @@ llvm::Value* CodeGenerator::codegenIsNullNumber(llvm::Value* operand_lv,
     return cgen_state_->ir_builder_.CreateFCmp(llvm::FCmpInst::FCMP_OEQ,
                                                operand_lv,
                                                ti.get_type() == kFLOAT
-                                                   ? executor_->ll_fp(NULL_FLOAT)
-                                                   : executor_->ll_fp(NULL_DOUBLE));
+                                                   ? cgen_state_->llFp(NULL_FLOAT)
+                                                   : cgen_state_->llFp(NULL_DOUBLE));
   }
   return cgen_state_->ir_builder_.CreateICmp(
-      llvm::ICmpInst::ICMP_EQ, operand_lv, executor_->inlineIntNull(ti));
+      llvm::ICmpInst::ICMP_EQ, operand_lv, cgen_state_->inlineIntNull(ti));
 }

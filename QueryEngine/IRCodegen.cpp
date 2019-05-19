@@ -44,8 +44,9 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (constant) {
     if (constant->get_is_null()) {
       const auto& ti = constant->get_type_info();
-      return {ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(ti))
-                         : static_cast<llvm::Value*>(executor_->inlineIntNull(ti))};
+      return {ti.is_fp()
+                  ? static_cast<llvm::Value*>(executor_->cgen_state_->inlineFpNull(ti))
+                  : static_cast<llvm::Value*>(executor_->cgen_state_->inlineIntNull(ti))};
     }
     // The dictionary encoding case should be handled by the parent expression
     // (cast, for now), here is too late to know the dictionary id
@@ -287,7 +288,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             // once the condition is generated to avoid incorrect reuse.
             FetchCacheAnchor anchor(cgen_state_.get());
             addJoinLoopIterator(prev_iters, level_idx + 1);
-            llvm::Value* left_join_cond = ll_bool(true);
+            llvm::Value* left_join_cond = cgen_state_->llBool(true);
             CodeGenerator code_generator(cgen_state_.get(), this);
             for (auto expr : current_level_join_conditions.quals) {
               left_join_cond = cgen_state_->ir_builder_.CreateAnd(
@@ -305,7 +306,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             JoinLoopDomain domain{{0}};
             const auto rows_per_scan_ptr = cgen_state_->ir_builder_.CreateGEP(
                 get_arg_by_name(cgen_state_->row_func_, "num_rows_per_scan"),
-                ll_int(int32_t(level_idx + 1)));
+                cgen_state_->llInt(int32_t(level_idx + 1)));
             domain.upper_bound = cgen_state_->ir_builder_.CreateLoad(rows_per_scan_ptr,
                                                                      "num_rows_per_scan");
             return domain;
@@ -354,7 +355,7 @@ Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
       is_valid_it = have_more_inner_rows;
     } else {
       is_valid_it = cgen_state_->ir_builder_.CreateICmp(
-          llvm::ICmpInst::ICMP_SGE, matching_row_index, ll_int<int64_t>(0));
+          llvm::ICmpInst::ICMP_SGE, matching_row_index, cgen_state_->llInt<int64_t>(0));
     }
     const auto it_valid_bb = llvm::BasicBlock::Create(
         cgen_state_->context_, "it_valid", cgen_state_->row_func_);
@@ -369,7 +370,7 @@ Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
         code_generator.codegen(deleted_expr.get(), true, co).front());
     cgen_state_->ir_builder_.CreateBr(row_is_deleted_bb);
     cgen_state_->ir_builder_.SetInsertPoint(it_not_valid_bb);
-    const auto row_is_deleted_default = ll_bool(false);
+    const auto row_is_deleted_default = cgen_state_->llBool(false);
     cgen_state_->ir_builder_.CreateBr(row_is_deleted_bb);
     cgen_state_->ir_builder_.SetInsertPoint(row_is_deleted_bb);
     auto row_is_deleted_or_default =
@@ -455,7 +456,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
   const auto exit_bb =
       llvm::BasicBlock::Create(cgen_state_->context_, "exit", cgen_state_->row_func_);
   cgen_state_->ir_builder_.SetInsertPoint(exit_bb);
-  cgen_state_->ir_builder_.CreateRet(ll_int<int32_t>(0));
+  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt<int32_t>(0));
   cgen_state_->ir_builder_.SetInsertPoint(entry_bb);
   CodeGenerator code_generator(cgen_state_.get(), this);
   const auto loops_entry_bb = JoinLoop::codegen(
@@ -513,19 +514,20 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     const auto ret_ty = get_int_type(32, cgen_state_->context_);
     auto array_idx_ptr = cgen_state_->ir_builder_.CreateAlloca(ret_ty);
     CHECK(array_idx_ptr);
-    cgen_state_->ir_builder_.CreateStore(ll_int(int32_t(0)), array_idx_ptr);
+    cgen_state_->ir_builder_.CreateStore(cgen_state_->llInt(int32_t(0)), array_idx_ptr);
     const auto arr_expr = static_cast<Analyzer::UOper*>(group_by_col)->get_operand();
     const auto& array_ti = arr_expr->get_type_info();
     CHECK(array_ti.is_array());
     const auto& elem_ti = array_ti.get_elem_type();
-    auto array_len = (array_ti.get_size() > 0)
-                         ? ll_int(array_ti.get_size() / elem_ti.get_size())
-                         : cgen_state_->emitExternalCall(
-                               "array_size",
-                               ret_ty,
-                               {group_key,
-                                code_generator.posArg(arr_expr),
-                                ll_int(log2_bytes(elem_ti.get_logical_size()))});
+    auto array_len =
+        (array_ti.get_size() > 0)
+            ? cgen_state_->llInt(array_ti.get_size() / elem_ti.get_size())
+            : cgen_state_->emitExternalCall(
+                  "array_size",
+                  ret_ty,
+                  {group_key,
+                   code_generator.posArg(arr_expr),
+                   cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))});
     cgen_state_->ir_builder_.CreateBr(array_loop_head);
     cgen_state_->ir_builder_.SetInsertPoint(array_loop_head);
     CHECK(array_len);
@@ -540,7 +542,8 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
         array_loops.empty() ? diamond_codegen.orig_cond_false_ : array_loops.top());
     cgen_state_->ir_builder_.SetInsertPoint(array_loop_body);
     cgen_state_->ir_builder_.CreateStore(
-        cgen_state_->ir_builder_.CreateAdd(array_idx, ll_int(int32_t(1))), array_idx_ptr);
+        cgen_state_->ir_builder_.CreateAdd(array_idx, cgen_state_->llInt(int32_t(1))),
+        array_idx_ptr);
     const auto array_at_fname = "array_at_" + numeric_type_name(elem_ti);
     const auto ar_ret_ty =
         elem_ti.is_fp()
@@ -577,11 +580,11 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
                                            key_type, translated_null_val))});
   }
   group_key = cgen_state_->ir_builder_.CreateBitCast(
-      castToTypeIn(group_key, col_width * 8),
+      cgen_state_->castToTypeIn(group_key, col_width * 8),
       get_int_type(col_width * 8, cgen_state_->context_));
   if (orig_group_key) {
     orig_group_key = cgen_state_->ir_builder_.CreateBitCast(
-        castToTypeIn(orig_group_key, col_width * 8),
+        cgen_state_->castToTypeIn(orig_group_key, col_width * 8),
         get_int_type(col_width * 8, cgen_state_->context_));
   }
   return {group_key, orig_group_key};

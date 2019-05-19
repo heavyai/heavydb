@@ -430,7 +430,8 @@ llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
         std::vector<llvm::Value*> str_cmp_args{
             lhs_lvs[1], lhs_lvs[2], rhs_lvs[1], rhs_lvs[2]};
         if (!null_check_suffix.empty()) {
-          str_cmp_args.push_back(executor_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false)));
+          str_cmp_args.push_back(
+              cgen_state_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false)));
         }
         return cgen_state_->emitCall(
             string_cmp_func(optype) + (null_check_suffix.empty() ? "" : "_nullable"),
@@ -447,8 +448,8 @@ llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
                          null_check_suffix,
                      {lhs_lvs.front(),
                       rhs_lvs.front(),
-                      executor_->ll_int(inline_int_null_val(lhs_ti)),
-                      executor_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))});
+                      cgen_state_->llInt(inline_int_null_val(lhs_ti)),
+                      cgen_state_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))});
   }
   if (lhs_ti.get_type() == kFLOAT || lhs_ti.get_type() == kDOUBLE) {
     return null_check_suffix.empty()
@@ -459,9 +460,9 @@ llvm::Value* CodeGenerator::codegenCmp(const SQLOps optype,
                          null_check_suffix,
                      {lhs_lvs.front(),
                       rhs_lvs.front(),
-                      lhs_ti.get_type() == kFLOAT ? executor_->ll_fp(NULL_FLOAT)
-                                                  : executor_->ll_fp(NULL_DOUBLE),
-                      executor_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))});
+                      lhs_ti.get_type() == kFLOAT ? cgen_state_->llFp(NULL_FLOAT)
+                                                  : cgen_state_->llFp(NULL_DOUBLE),
+                      cgen_state_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))});
   }
   CHECK(false);
   return nullptr;
@@ -520,9 +521,9 @@ llvm::Value* CodeGenerator::codegenQualifierCmp(const SQLOps optype,
          posArg(arr_expr),
          lhs_lvs[1],
          lhs_lvs[2],
-         executor_->ll_int(int64_t(executor_->getStringDictionaryProxy(
+         cgen_state_->llInt(int64_t(executor_->getStringDictionaryProxy(
              elem_ti.get_comp_param(), executor_->getRowSetMemoryOwner(), true))),
-         executor_->inlineIntNull(elem_ti)});
+         cgen_state_->inlineIntNull(elem_ti)});
   }
   if (target_ti.is_integer() || target_ti.is_boolean() || target_ti.is_string()) {
     fname += ("_" + numeric_type_name(target_ti));
@@ -536,6 +537,6 @@ llvm::Value* CodeGenerator::codegenQualifierCmp(const SQLOps optype,
       {rhs_lvs.front(),
        posArg(arr_expr),
        lhs_lvs.front(),
-       elem_ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(elem_ti))
-                       : static_cast<llvm::Value*>(executor_->inlineIntNull(elem_ti))});
+       elem_ti.is_fp() ? static_cast<llvm::Value*>(cgen_state_->inlineFpNull(elem_ti))
+                       : static_cast<llvm::Value*>(cgen_state_->inlineIntNull(elem_ti))});
 }

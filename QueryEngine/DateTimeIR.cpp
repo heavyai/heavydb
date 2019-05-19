@@ -48,20 +48,20 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::ExtractExpr* extract_expr,
         extract_expr_ti.get_notnull()
             ? cgen_state_->ir_builder_.CreateMul(
                   from_expr,
-                  executor_->ll_int(
+                  cgen_state_->llInt(
                       get_extract_timestamp_precision_scale(extract_expr->get_field())))
             : cgen_state_->emitCall(
                   "mul_int64_t_nullable_lhs",
                   {from_expr,
-                   executor_->ll_int(
+                   cgen_state_->llInt(
                        get_extract_timestamp_precision_scale(extract_expr->get_field())),
-                   executor_->inlineIntNull(extract_expr_ti)});
+                   cgen_state_->inlineIntNull(extract_expr_ti)});
   }
   std::vector<llvm::Value*> extract_args{
-      executor_->ll_int(static_cast<int32_t>(extract_expr->get_field())), from_expr};
+      cgen_state_->llInt(static_cast<int32_t>(extract_expr->get_field())), from_expr};
   std::string extract_fname{"ExtractFromTime"};
   if (!extract_expr_ti.get_notnull()) {
-    extract_args.push_back(executor_->inlineIntNull(extract_expr_ti));
+    extract_args.push_back(cgen_state_->inlineIntNull(extract_expr_ti));
     extract_fname += "Nullable";
   }
   return cgen_state_->emitExternalCall(
@@ -78,17 +78,17 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DateaddExpr* dateadd_expr,
 
   const auto& datetime_ti = dateadd_expr->get_datetime_expr()->get_type_info();
   std::vector<llvm::Value*> dateadd_args{
-      executor_->ll_int(static_cast<int32_t>(dateadd_expr->get_field())),
+      cgen_state_->llInt(static_cast<int32_t>(dateadd_expr->get_field())),
       number,
       datetime};
   std::string dateadd_fname{"DateAdd"};
   if (dateadd_expr_ti.is_high_precision_timestamp()) {
     dateadd_fname += "HighPrecision";
-    dateadd_args.push_back(executor_->ll_int(static_cast<int64_t>(
+    dateadd_args.push_back(cgen_state_->llInt(static_cast<int64_t>(
         get_timestamp_precision_scale(dateadd_expr_ti.get_dimension()))));
   }
   if (!datetime_ti.get_notnull()) {
-    dateadd_args.push_back(executor_->inlineIntNull(datetime_ti));
+    dateadd_args.push_back(cgen_state_->inlineIntNull(datetime_ti));
     dateadd_fname += "Nullable";
   }
   return cgen_state_->emitExternalCall(
@@ -104,24 +104,24 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DatediffExpr* datediff_expr,
   const auto& start_ti = datediff_expr->get_start_expr()->get_type_info();
   const auto& end_ti = datediff_expr->get_end_expr()->get_type_info();
   std::vector<llvm::Value*> datediff_args{
-      executor_->ll_int(static_cast<int32_t>(datediff_expr->get_field())), start, end};
+      cgen_state_->llInt(static_cast<int32_t>(datediff_expr->get_field())), start, end};
   std::string datediff_fname{"DateDiff"};
   if (start_ti.is_high_precision_timestamp() || end_ti.is_high_precision_timestamp()) {
     const auto adj_dimen = end_ti.get_dimension() - start_ti.get_dimension();
     datediff_fname += "HighPrecision";
-    datediff_args.push_back(executor_->ll_int(static_cast<int32_t>(adj_dimen)));
-    datediff_args.push_back(executor_->ll_int(
+    datediff_args.push_back(cgen_state_->llInt(static_cast<int32_t>(adj_dimen)));
+    datediff_args.push_back(cgen_state_->llInt(
         static_cast<int64_t>(get_timestamp_precision_scale(abs(adj_dimen)))));
     datediff_args.push_back(
-        executor_->ll_int(static_cast<int64_t>(get_timestamp_precision_scale(
+        cgen_state_->llInt(static_cast<int64_t>(get_timestamp_precision_scale(
             adj_dimen < 0 ? end_ti.get_dimension() : start_ti.get_dimension()))));
     datediff_args.push_back(
-        executor_->ll_int(static_cast<int64_t>(get_timestamp_precision_scale(
+        cgen_state_->llInt(static_cast<int64_t>(get_timestamp_precision_scale(
             adj_dimen > 0 ? end_ti.get_dimension() : start_ti.get_dimension()))));
   }
   const auto& ret_ti = datediff_expr->get_type_info();
   if (!start_ti.get_notnull() || !end_ti.get_notnull()) {
-    datediff_args.push_back(executor_->inlineIntNull(ret_ti));
+    datediff_args.push_back(cgen_state_->inlineIntNull(ret_ti));
     datediff_fname += "Nullable";
   }
   return cgen_state_->emitExternalCall(
@@ -138,10 +138,10 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DatetruncExpr* datetrunc_exp
         from_expr, datetrunc_expr_ti, datetrunc_expr->get_field());
   }
   std::vector<llvm::Value*> datetrunc_args{
-      executor_->ll_int(static_cast<int32_t>(datetrunc_expr->get_field())), from_expr};
+      cgen_state_->llInt(static_cast<int32_t>(datetrunc_expr->get_field())), from_expr};
   std::string datetrunc_fname{"DateTruncate"};
   if (!datetrunc_expr_ti.get_notnull()) {
-    datetrunc_args.push_back(executor_->inlineIntNull(datetrunc_expr_ti));
+    datetrunc_args.push_back(cgen_state_->inlineIntNull(datetrunc_expr_ti));
     datetrunc_fname += "Nullable";
   }
   return cgen_state_->emitExternalCall(
@@ -160,21 +160,21 @@ llvm::Value* CodeGenerator::codegenExtractHighPrecisionTimestamps(
     if (result.first == kMULTIPLY) {
       return ti.get_notnull()
                  ? cgen_state_->ir_builder_.CreateMul(
-                       ts_lv, executor_->ll_int(static_cast<int64_t>(result.second)))
+                       ts_lv, cgen_state_->llInt(static_cast<int64_t>(result.second)))
                  : cgen_state_->emitCall(
                        "mul_int64_t_nullable_lhs",
                        {ts_lv,
-                        executor_->ll_int(static_cast<int64_t>(result.second)),
-                        executor_->inlineIntNull(ti)});
+                        cgen_state_->llInt(static_cast<int64_t>(result.second)),
+                        cgen_state_->inlineIntNull(ti)});
     } else if (result.first == kDIVIDE) {
       return ti.get_notnull()
                  ? cgen_state_->ir_builder_.CreateSDiv(
-                       ts_lv, executor_->ll_int(static_cast<int64_t>(result.second)))
+                       ts_lv, cgen_state_->llInt(static_cast<int64_t>(result.second)))
                  : cgen_state_->emitCall(
                        "div_int64_t_nullable_lhs",
                        {ts_lv,
-                        executor_->ll_int(static_cast<int64_t>(result.second)),
-                        executor_->inlineIntNull(ti)});
+                        cgen_state_->llInt(static_cast<int64_t>(result.second)),
+                        cgen_state_->inlineIntNull(ti)});
     } else {
       return ts_lv;
     }
@@ -182,13 +182,13 @@ llvm::Value* CodeGenerator::codegenExtractHighPrecisionTimestamps(
   return ti.get_notnull()
              ? cgen_state_->ir_builder_.CreateSDiv(
                    ts_lv,
-                   executor_->ll_int(static_cast<int64_t>(
+                   cgen_state_->llInt(static_cast<int64_t>(
                        get_timestamp_precision_scale(ti.get_dimension()))))
              : cgen_state_->emitCall(
                    "div_int64_t_nullable_lhs",
                    {ts_lv,
-                    executor_->ll_int(get_timestamp_precision_scale(ti.get_dimension())),
-                    executor_->inlineIntNull(ti)});
+                    cgen_state_->llInt(get_timestamp_precision_scale(ti.get_dimension())),
+                    cgen_state_->inlineIntNull(ti)});
 }
 
 llvm::Value* CodeGenerator::codegenDateTruncHighPrecisionTimestamps(
@@ -203,18 +203,19 @@ llvm::Value* CodeGenerator::codegenDateTruncHighPrecisionTimestamps(
       ts_lv =
           ti.get_notnull()
               ? cgen_state_->ir_builder_.CreateSDiv(
-                    ts_lv, executor_->ll_int(static_cast<int64_t>(result)))
+                    ts_lv, cgen_state_->llInt(static_cast<int64_t>(result)))
               : cgen_state_->emitCall("div_int64_t_nullable_lhs",
                                       {ts_lv,
-                                       executor_->ll_int(static_cast<int64_t>(result)),
-                                       executor_->inlineIntNull(ti)});
+                                       cgen_state_->llInt(static_cast<int64_t>(result)),
+                                       cgen_state_->inlineIntNull(ti)});
       return ti.get_notnull()
                  ? cgen_state_->ir_builder_.CreateMul(
-                       ts_lv, executor_->ll_int(static_cast<int64_t>(result)))
-                 : cgen_state_->emitCall("mul_int64_t_nullable_lhs",
-                                         {ts_lv,
-                                          executor_->ll_int(static_cast<int64_t>(result)),
-                                          executor_->inlineIntNull(ti)});
+                       ts_lv, cgen_state_->llInt(static_cast<int64_t>(result)))
+                 : cgen_state_->emitCall(
+                       "mul_int64_t_nullable_lhs",
+                       {ts_lv,
+                        cgen_state_->llInt(static_cast<int64_t>(result)),
+                        cgen_state_->inlineIntNull(ti)});
     } else {
       return ts_lv;
     }
@@ -223,24 +224,24 @@ llvm::Value* CodeGenerator::codegenDateTruncHighPrecisionTimestamps(
   const int64_t scale = get_timestamp_precision_scale(ti.get_dimension());
   ts_lv = ti.get_notnull()
               ? cgen_state_->ir_builder_.CreateSDiv(
-                    ts_lv, executor_->ll_int(static_cast<int64_t>(scale)))
+                    ts_lv, cgen_state_->llInt(static_cast<int64_t>(scale)))
               : cgen_state_->emitCall("div_int64_t_nullable_lhs",
                                       {ts_lv,
-                                       executor_->ll_int(static_cast<int64_t>(scale)),
-                                       executor_->inlineIntNull(ti)});
-  std::vector<llvm::Value*> datetrunc_args{executor_->ll_int(static_cast<int32_t>(field)),
-                                           ts_lv};
+                                       cgen_state_->llInt(static_cast<int64_t>(scale)),
+                                       cgen_state_->inlineIntNull(ti)});
+  std::vector<llvm::Value*> datetrunc_args{
+      cgen_state_->llInt(static_cast<int32_t>(field)), ts_lv};
   if (!ti.get_notnull()) {
     datetrunc_fname += "Nullable";
-    datetrunc_args.push_back(executor_->inlineIntNull(ti));
+    datetrunc_args.push_back(cgen_state_->inlineIntNull(ti));
   }
   ts_lv = cgen_state_->emitExternalCall(
       datetrunc_fname, get_int_type(64, cgen_state_->context_), datetrunc_args);
   return ti.get_notnull()
              ? cgen_state_->ir_builder_.CreateMul(
-                   ts_lv, executor_->ll_int(static_cast<int64_t>(scale)))
+                   ts_lv, cgen_state_->llInt(static_cast<int64_t>(scale)))
              : cgen_state_->emitCall("mul_int64_t_nullable_lhs",
                                      {ts_lv,
-                                      executor_->ll_int(static_cast<int64_t>(scale)),
-                                      executor_->inlineIntNull(ti)});
+                                      cgen_state_->llInt(static_cast<int64_t>(scale)),
+                                      cgen_state_->inlineIntNull(ti)});
 }

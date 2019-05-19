@@ -170,8 +170,8 @@ llvm::Value* CodeGenerator::endArgsNullcheck(
     ext_call_phi->addIncoming(fn_ret_lv, bbs.args_notnull_bb);
     const auto& ret_ti = function_oper->get_type_info();
     const auto null_lv =
-        ret_ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(ret_ti))
-                       : static_cast<llvm::Value*>(executor_->inlineIntNull(ret_ti));
+        ret_ti.is_fp() ? static_cast<llvm::Value*>(cgen_state_->inlineFpNull(ret_ti))
+                       : static_cast<llvm::Value*>(cgen_state_->inlineIntNull(ret_ti));
     ext_call_phi->addIncoming(null_lv, bbs.orig_bb);
     return ext_call_phi;
   }
@@ -215,12 +215,12 @@ llvm::Value* CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
       const std::string func_name =
           (function_oper->getName() == "FLOOR") ? "decimal_floor" : "decimal_ceil";
       const auto covar_result_lv = cgen_state_->emitCall(
-          func_name, {arg_lv, executor_->ll_int(exp_to_scale(arg_ti.get_scale()))});
+          func_name, {arg_lv, cgen_state_->llInt(exp_to_scale(arg_ti.get_scale()))});
       const auto ret_ti = function_oper->get_type_info();
       CHECK(ret_ti.is_decimal());
       CHECK_EQ(0, ret_ti.get_scale());
       const auto result_lv = cgen_state_->ir_builder_.CreateSDiv(
-          covar_result_lv, executor_->ll_int(exp_to_scale(arg_ti.get_scale())));
+          covar_result_lv, cgen_state_->llInt(exp_to_scale(arg_ti.get_scale())));
       return endArgsNullcheck(bbs, result_lv, function_oper);
     } else if (function_oper->getName() == "ROUND" &&
                function_oper->getArg(0)->get_type_info().is_decimal()) {
@@ -250,7 +250,7 @@ llvm::Value* CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
       const auto result_lv = cgen_state_->emitExternalCall(
           func_name,
           get_int_type(64, cgen_state_->context_),
-          {arg0_lv, arg1_lv, executor_->ll_int(arg0_ti.get_scale())});
+          {arg0_lv, arg1_lv, cgen_state_->llInt(arg0_ti.get_scale())});
 
       return endArgsNullcheck(bbs0, result_lv, function_oper);
     }
@@ -315,7 +315,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
                             get_int_type(32, cgen_state_->context_),
                             {orig_arg_lvs[k],
                              posArg(arg),
-                             executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))});
+                             cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))});
       args.push_back(castArrayPointer(ptr_lv, elem_ti));
       args.push_back(cgen_state_->ir_builder_.CreateZExt(
           len_lv, get_int_type(64, cgen_state_->context_)));
@@ -350,7 +350,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
             cgen_state_->emitExternalCall("fast_fixlen_array_buff",
                                           llvm::Type::getInt8PtrTy(cgen_state_->context_),
                                           {orig_arg_lvs[k], posArg(arg)});
-        len_lv = executor_->ll_int(int64_t(fixlen));
+        len_lv = cgen_state_->llInt(int64_t(fixlen));
       } else {
         // TODO: remove const_arr  and related code if it's not needed
         ptr_lv = (const_arr) ? orig_arg_lvs[k]
@@ -365,7 +365,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
                            get_int_type(32, cgen_state_->context_),
                            {orig_arg_lvs[k],
                             posArg(arg),
-                            executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))});
+                            cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))});
       }
       args.push_back(castArrayPointer(ptr_lv, elem_ti));
       args.push_back(cgen_state_->ir_builder_.CreateZExt(
@@ -395,7 +395,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
               get_int_type(32, cgen_state_->context_),
               {orig_arg_lvs[k],
                posArg(arg),
-               executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))});
+               cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))});
           args.push_back(castArrayPointer(ptr_lv, elem_ti));
           args.push_back(cgen_state_->ir_builder_.CreateZExt(
               len_lv, get_int_type(64, cgen_state_->context_)));
@@ -422,7 +422,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
                 get_int_type(32, cgen_state_->context_),
                 {orig_arg_lvs[k],
                  posArg(arg),
-                 executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))});
+                 cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))});
             args.push_back(castArrayPointer(ptr_lv, elem_ti));
             args.push_back(cgen_state_->ir_builder_.CreateZExt(
                 len_lv, get_int_type(64, cgen_state_->context_)));
@@ -448,7 +448,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
                 get_int_type(32, cgen_state_->context_),
                 {orig_arg_lvs[k],
                  posArg(arg),
-                 executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))});
+                 cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))});
             args.push_back(castArrayPointer(ptr_lv, elem_ti));
             args.push_back(cgen_state_->ir_builder_.CreateZExt(
                 len_lv, get_int_type(64, cgen_state_->context_)));

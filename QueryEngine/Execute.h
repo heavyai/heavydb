@@ -482,22 +482,6 @@ class Executor {
  private:
   void clearMetaInfoCache();
 
-  template <class T>
-  llvm::ConstantInt* ll_int(const T v) const {
-    return ::ll_int(v, cgen_state_->context_);
-  }
-  llvm::ConstantFP* ll_fp(const float v) const {
-    return static_cast<llvm::ConstantFP*>(
-        llvm::ConstantFP::get(llvm::Type::getFloatTy(cgen_state_->context_), v));
-  }
-  llvm::ConstantFP* ll_fp(const double v) const {
-    return static_cast<llvm::ConstantFP*>(
-        llvm::ConstantFP::get(llvm::Type::getDoubleTy(cgen_state_->context_), v));
-  }
-  llvm::ConstantInt* ll_bool(const bool v) const {
-    return ::ll_bool(v, cgen_state_->context_);
-  }
-
   int deviceCount(const ExecutorDeviceType) const;
   int deviceCountForMemoryLevel(const Data_Namespace::MemoryLevel memory_level) const;
 
@@ -530,12 +514,6 @@ class Executor {
   llvm::Value* codegenAggregateWindowState();
 
   llvm::Value* aggregateWindowStatePtr();
-
-  llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
-  llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
-  std::pair<llvm::ConstantInt*, llvm::ConstantInt*> inlineIntMaxMin(
-      const size_t byte_width,
-      const bool is_signed);
 
   struct CompilationResult {
     std::vector<std::pair<void*, void*>> native_functions;
@@ -952,7 +930,6 @@ class Executor {
                                          const bool thread_mem_shared);
 
   llvm::Value* castToFP(llvm::Value* val);
-  llvm::Value* castToTypeIn(llvm::Value* val, const size_t bit_width);
   llvm::Value* castToIntPtrTyIn(llvm::Value* val, const size_t bit_width);
 
   RelAlgExecutionUnit addDeletedColumn(const RelAlgExecutionUnit& ra_exe_unit);
@@ -1042,6 +1019,7 @@ class Executor {
     return off + alignment;
   }
 
+ public:
   struct CgenState {
    public:
     CgenState(const std::vector<InputTableInfo>& query_infos,
@@ -1226,6 +1204,33 @@ class Executor {
       return literal_bytes_[device_id];
     }
 
+    llvm::Value* castToTypeIn(llvm::Value* val, const size_t bit_width);
+
+    std::pair<llvm::ConstantInt*, llvm::ConstantInt*> inlineIntMaxMin(
+        const size_t byte_width,
+        const bool is_signed);
+
+    llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
+
+    llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
+
+    template <class T>
+    llvm::ConstantInt* llInt(const T v) const {
+      return ::ll_int(v, context_);
+    }
+
+    llvm::ConstantFP* llFp(const float v) const {
+      return static_cast<llvm::ConstantFP*>(
+          llvm::ConstantFP::get(llvm::Type::getFloatTy(context_), v));
+    }
+
+    llvm::ConstantFP* llFp(const double v) const {
+      return static_cast<llvm::ConstantFP*>(
+          llvm::ConstantFP::get(llvm::Type::getDoubleTy(context_), v));
+    }
+
+    llvm::ConstantInt* llBool(const bool v) const { return ::ll_bool(v, context_); }
+
     llvm::Module* module_;
     llvm::Function* row_func_;
     std::vector<llvm::Function*> helper_functions_;
@@ -1281,6 +1286,8 @@ class Executor {
     std::unordered_map<int, LiteralValues> literals_;
     std::unordered_map<int, size_t> literal_bytes_;
   };
+
+ private:
   std::unique_ptr<CgenState> cgen_state_;
 
   class FetchCacheAnchor {

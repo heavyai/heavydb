@@ -1134,10 +1134,12 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
             CHECK(row_count);
             auto crit_edge_rem =
                 (blockSize() & (blockSize() - 1))
-                    ? ir_builder.CreateSRem(row_count,
-                                            ll_int(static_cast<int64_t>(blockSize())))
-                    : ir_builder.CreateAnd(row_count,
-                                           ll_int(static_cast<int64_t>(blockSize() - 1)));
+                    ? ir_builder.CreateSRem(
+                          row_count,
+                          cgen_state_->llInt(static_cast<int64_t>(blockSize())))
+                    : ir_builder.CreateAnd(
+                          row_count,
+                          cgen_state_->llInt(static_cast<int64_t>(blockSize() - 1)));
             auto crit_edge_threshold = ir_builder.CreateSub(row_count, crit_edge_rem);
             crit_edge_threshold->setName("crit_edge_threshold");
 
@@ -1149,7 +1151,7 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
             // CPU path: run watchdog for every 64th row
             auto dw_predicate = ir_builder.CreateAnd(pos, uint64_t(0x3f));
             call_watchdog_lv = ir_builder.CreateICmp(
-                llvm::ICmpInst::ICMP_EQ, dw_predicate, ll_int(int64_t(0LL)));
+                llvm::ICmpInst::ICMP_EQ, dw_predicate, cgen_state_->llInt(int64_t(0LL)));
           }
           CHECK(call_watchdog_lv);
           auto error_check_bb = bb_it->splitBasicBlock(
@@ -1162,7 +1164,7 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
           auto detected_timeout = watchdog_ir_builder.CreateCall(
               cgen_state_->module_->getFunction("dynamic_watchdog"), {});
           auto timeout_err_lv = watchdog_ir_builder.CreateSelect(
-              detected_timeout, ll_int(Executor::ERR_OUT_OF_TIME), err_lv);
+              detected_timeout, cgen_state_->llInt(Executor::ERR_OUT_OF_TIME), err_lv);
           watchdog_ir_builder.CreateBr(error_check_bb);
 
           llvm::ReplaceInstWithInst(
@@ -1184,11 +1186,13 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
           // let kernel execution finish as expected, regardless of the observed error,
           // unless it is from the dynamic watchdog where all threads within that block
           // return together.
-          err_lv = ir_builder.CreateICmp(
-              llvm::ICmpInst::ICMP_EQ, err_lv, ll_int(Executor::ERR_OUT_OF_TIME));
+          err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_EQ,
+                                         err_lv,
+                                         cgen_state_->llInt(Executor::ERR_OUT_OF_TIME));
         } else {
-          err_lv = ir_builder.CreateICmp(
-              llvm::ICmpInst::ICMP_NE, err_lv, ll_int(static_cast<int32_t>(0)));
+          err_lv = ir_builder.CreateICmp(llvm::ICmpInst::ICMP_NE,
+                                         err_lv,
+                                         cgen_state_->llInt(static_cast<int32_t>(0)));
         }
         auto error_bb = llvm::BasicBlock::Create(
             cgen_state_->context_, ".error_exit", query_func, new_bb);
@@ -1611,7 +1615,7 @@ llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
       cgen_state_->context_, "is_not_deleted", cgen_state_->row_func_);
   cgen_state_->ir_builder_.CreateCondBr(is_deleted, is_deleted_bb, bb);
   cgen_state_->ir_builder_.SetInsertPoint(is_deleted_bb);
-  cgen_state_->ir_builder_.CreateRet(ll_int<int32_t>(0));
+  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt<int32_t>(0));
   cgen_state_->ir_builder_.SetInsertPoint(bb);
   return bb;
 }
@@ -1631,7 +1635,7 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
             << " quals";
   }
 
-  llvm::Value* filter_lv = ll_bool(true);
+  llvm::Value* filter_lv = cgen_state_->llBool(true);
   CodeGenerator code_generator(cgen_state_.get(), this);
   for (auto expr : primary_quals) {
     // Generate the filter for primary quals
@@ -1649,10 +1653,10 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
     cgen_state_->ir_builder_.CreateCondBr(filter_lv, sc_true, sc_false);
     cgen_state_->ir_builder_.SetInsertPoint(sc_false);
     if (ra_exe_unit.join_quals.empty()) {
-      cgen_state_->ir_builder_.CreateRet(ll_int(int32_t(0)));
+      cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(int32_t(0)));
     }
     cgen_state_->ir_builder_.SetInsertPoint(sc_true);
-    filter_lv = ll_bool(true);
+    filter_lv = cgen_state_->llBool(true);
   }
 
   for (auto expr : deferred_quals) {

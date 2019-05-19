@@ -59,8 +59,8 @@ llvm::Value* CodeGenerator::codegenArrayAt(const Analyzer::BinOper* array_at,
       {arr_lvs.front(),
        posArg(arr_expr),
        idx_lv,
-       elem_ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(elem_ti))
-                       : static_cast<llvm::Value*>(executor_->inlineIntNull(elem_ti))});
+       elem_ti.is_fp() ? static_cast<llvm::Value*>(cgen_state_->inlineFpNull(elem_ti))
+                       : static_cast<llvm::Value*>(cgen_state_->inlineIntNull(elem_ti))});
 }
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::CardinalityExpr* expr,
@@ -75,11 +75,11 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CardinalityExpr* expr,
   std::vector<llvm::Value*> array_size_args{
       arr_lv.front(),
       posArg(arr_expr),
-      executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))};
+      cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))};
   const bool is_nullable{!arr_expr->get_type_info().get_notnull()};
   if (is_nullable) {
     fn_name += "_nullable";
-    array_size_args.push_back(executor_->inlineIntNull(expr->get_type_info()));
+    array_size_args.push_back(cgen_state_->inlineIntNull(expr->get_type_info()));
   }
   return cgen_state_->emitExternalCall(
       fn_name, get_int_type(32, cgen_state_->context_), array_size_args);
@@ -114,12 +114,12 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
   llvm::Value* allocated_target_buffer =
       cgen_state_->emitExternalCall("allocate_varlen_buffer",
                                     llvm::Type::getInt8PtrTy(cgen_state_->context_),
-                                    {executor_->ll_int(array_expr->getElementCount()),
-                                     executor_->ll_int(array_element_size_bytes)});
-  cgen_state_->emitExternalCall(
-      "register_buffer_with_executor_rsm",
-      llvm::Type::getVoidTy(cgen_state_->context_),
-      {executor_->ll_int(reinterpret_cast<int64_t>(executor_)), allocated_target_buffer});
+                                    {cgen_state_->llInt(array_expr->getElementCount()),
+                                     cgen_state_->llInt(array_element_size_bytes)});
+  cgen_state_->emitExternalCall("register_buffer_with_executor_rsm",
+                                llvm::Type::getVoidTy(cgen_state_->context_),
+                                {cgen_state_->llInt(reinterpret_cast<int64_t>(executor_)),
+                                 allocated_target_buffer});
   llvm::Value* casted_allocated_target_buffer =
       ir_builder.CreatePointerCast(allocated_target_buffer, array_type->getPointerTo());
 
@@ -128,7 +128,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
     auto* element_ptr =
         ir_builder.CreateGEP(array_type,
                              casted_allocated_target_buffer,
-                             {executor_->ll_int(0), executor_->ll_int(i)});
+                             {cgen_state_->llInt(0), cgen_state_->llInt(i)});
 
     if (is_member_of_typeset<kTINYINT,
                              kSMALLINT,
@@ -163,6 +163,6 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
   }
 
   return {ir_builder.CreateGEP(
-              array_type, casted_allocated_target_buffer, executor_->ll_int(0)),
-          executor_->ll_int(array_expr->getElementCount())};
+              array_type, casted_allocated_target_buffer, cgen_state_->llInt(0)),
+          cgen_state_->llInt(array_expr->getElementCount())};
 }

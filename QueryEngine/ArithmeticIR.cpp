@@ -133,8 +133,8 @@ llvm::Value* CodeGenerator::codegenFpArith(const Analyzer::BinOper* bin_oper,
   const auto fp_typename = numeric_type_name(lhs_type);
   const auto null_check_suffix = get_null_check_suffix(lhs_type, rhs_type);
   llvm::ConstantFP* fp_null{lhs_type.get_type() == kFLOAT
-                                ? executor_->ll_fp(NULL_FLOAT)
-                                : executor_->ll_fp(NULL_DOUBLE)};
+                                ? cgen_state_->llFp(NULL_FLOAT)
+                                : cgen_state_->llFp(NULL_DOUBLE)};
   switch (bin_oper->get_optype()) {
     case kMINUS:
       return null_check_suffix.empty()
@@ -214,7 +214,7 @@ llvm::Value* CodeGenerator::codegenAdd(const Analyzer::BinOper* bin_oper,
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
   llvm::Value* chosen_max{nullptr};
   llvm::Value* chosen_min{nullptr};
-  std::tie(chosen_max, chosen_min) = executor_->inlineIntMaxMin(ti.get_size(), true);
+  std::tie(chosen_max, chosen_min) = cgen_state_->inlineIntMaxMin(ti.get_size(), true);
   auto need_overflow_check =
       !checkExpressionRanges(bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
@@ -248,11 +248,11 @@ llvm::Value* CodeGenerator::codegenAdd(const Analyzer::BinOper* bin_oper,
                  ? cgen_state_->ir_builder_.CreateAdd(lhs_lv, rhs_lv)
                  : cgen_state_->emitCall(
                        "add_" + null_typename + null_check_suffix,
-                       {lhs_lv, rhs_lv, executor_->ll_int(inline_int_null_val(ti))});
+                       {lhs_lv, rhs_lv, cgen_state_->llInt(inline_int_null_val(ti))});
   if (need_overflow_check) {
     cgen_state_->ir_builder_.SetInsertPoint(add_fail);
     cgen_state_->ir_builder_.CreateRet(
-        executor_->ll_int(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+        cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
     cgen_state_->ir_builder_.SetInsertPoint(add_ok);
   }
   return ret;
@@ -268,7 +268,7 @@ llvm::Value* CodeGenerator::codegenSub(const Analyzer::BinOper* bin_oper,
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
   llvm::Value* chosen_max{nullptr};
   llvm::Value* chosen_min{nullptr};
-  std::tie(chosen_max, chosen_min) = executor_->inlineIntMaxMin(ti.get_size(), true);
+  std::tie(chosen_max, chosen_min) = cgen_state_->inlineIntMaxMin(ti.get_size(), true);
   auto need_overflow_check =
       !checkExpressionRanges(bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
@@ -304,11 +304,11 @@ llvm::Value* CodeGenerator::codegenSub(const Analyzer::BinOper* bin_oper,
                  ? cgen_state_->ir_builder_.CreateSub(lhs_lv, rhs_lv)
                  : cgen_state_->emitCall(
                        "sub_" + null_typename + null_check_suffix,
-                       {lhs_lv, rhs_lv, executor_->ll_int(inline_int_null_val(ti))});
+                       {lhs_lv, rhs_lv, cgen_state_->llInt(inline_int_null_val(ti))});
   if (need_overflow_check) {
     cgen_state_->ir_builder_.SetInsertPoint(sub_fail);
     cgen_state_->ir_builder_.CreateRet(
-        executor_->ll_int(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+        cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
     cgen_state_->ir_builder_.SetInsertPoint(sub_ok);
   }
   return ret;
@@ -341,7 +341,7 @@ llvm::Value* CodeGenerator::codegenMul(const Analyzer::BinOper* bin_oper,
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
   llvm::Value* chosen_max{nullptr};
   llvm::Value* chosen_min{nullptr};
-  std::tie(chosen_max, chosen_min) = executor_->inlineIntMaxMin(ti.get_size(), true);
+  std::tie(chosen_max, chosen_min) = cgen_state_->inlineIntMaxMin(ti.get_size(), true);
   auto need_overflow_check =
       !checkExpressionRanges(bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
@@ -384,11 +384,11 @@ llvm::Value* CodeGenerator::codegenMul(const Analyzer::BinOper* bin_oper,
           ? cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv)
           : cgen_state_->emitCall(
                 "mul_" + null_typename + null_check_suffix,
-                {lhs_lv, rhs_lv, executor_->ll_int(inline_int_null_val(ti))});
+                {lhs_lv, rhs_lv, cgen_state_->llInt(inline_int_null_val(ti))});
   if (need_overflow_check) {
     cgen_state_->ir_builder_.SetInsertPoint(mul_fail);
     cgen_state_->ir_builder_.CreateRet(
-        executor_->ll_int(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+        cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
     cgen_state_->ir_builder_.SetInsertPoint(mul_ok);
   }
   return ret;
@@ -411,7 +411,7 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
           lhs_lv, get_int_type(64, cgen_state_->context_));
       llvm::Value* chosen_max{nullptr};
       llvm::Value* chosen_min{nullptr};
-      std::tie(chosen_max, chosen_min) = executor_->inlineIntMaxMin(8, true);
+      std::tie(chosen_max, chosen_min) = cgen_state_->inlineIntMaxMin(8, true);
       auto decimal_div_ok = llvm::BasicBlock::Create(
           cgen_state_->context_, "decimal_div_ok", cgen_state_->row_func_);
       if (!null_check_suffix.empty()) {
@@ -431,14 +431,14 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
             "gt_" + numeric_type_name(ti) + "_nullable",
             {lhs_lv,
              lhs_max_lv,
-             executor_->ll_int(inline_int_null_val(ti)),
-             executor_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))}));
+             cgen_state_->llInt(inline_int_null_val(ti)),
+             cgen_state_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))}));
       }
       cgen_state_->ir_builder_.CreateCondBr(detected, decimal_div_fail, decimal_div_ok);
 
       cgen_state_->ir_builder_.SetInsertPoint(decimal_div_fail);
       cgen_state_->ir_builder_.CreateRet(
-          executor_->ll_int(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+          cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
 
       cgen_state_->ir_builder_.SetInsertPoint(decimal_div_ok);
 
@@ -446,16 +446,16 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
                    ? cgen_state_->ir_builder_.CreateMul(lhs_lv, scale_lv)
                    : cgen_state_->emitCall(
                          "mul_" + numeric_type_name(ti) + null_check_suffix,
-                         {lhs_lv, scale_lv, executor_->ll_int(inline_int_null_val(ti))});
+                         {lhs_lv, scale_lv, cgen_state_->llInt(inline_int_null_val(ti))});
     }
   }
   if (g_null_div_by_zero) {
     llvm::Value* null_lv{nullptr};
     if (ti.is_fp()) {
-      null_lv = ti.get_type() == kFLOAT ? executor_->ll_fp(NULL_FLOAT)
-                                        : executor_->ll_fp(NULL_DOUBLE);
+      null_lv = ti.get_type() == kFLOAT ? cgen_state_->llFp(NULL_FLOAT)
+                                        : cgen_state_->llFp(NULL_DOUBLE);
     } else {
-      null_lv = executor_->ll_int(inline_int_null_val(ti));
+      null_lv = cgen_state_->llInt(inline_int_null_val(ti));
     }
     return cgen_state_->emitCall("safe_div_" + numeric_type_name(ti),
                                  {lhs_lv, rhs_lv, null_lv});
@@ -486,17 +486,17 @@ llvm::Value* CodeGenerator::codegenDiv(llvm::Value* lhs_lv,
                  ? cgen_state_->ir_builder_.CreateSDiv(lhs_lv, rhs_lv)
                  : cgen_state_->emitCall(
                        "div_" + null_typename + null_check_suffix,
-                       {lhs_lv, rhs_lv, executor_->ll_int(inline_int_null_val(ti))}))
+                       {lhs_lv, rhs_lv, cgen_state_->llInt(inline_int_null_val(ti))}))
           : (null_typename.empty()
                  ? cgen_state_->ir_builder_.CreateFDiv(lhs_lv, rhs_lv)
                  : cgen_state_->emitCall(
                        "div_" + null_typename + null_check_suffix,
                        {lhs_lv,
                         rhs_lv,
-                        ti.get_type() == kFLOAT ? executor_->ll_fp(NULL_FLOAT)
-                                                : executor_->ll_fp(NULL_DOUBLE)}));
+                        ti.get_type() == kFLOAT ? cgen_state_->llFp(NULL_FLOAT)
+                                                : cgen_state_->llFp(NULL_DOUBLE)}));
   cgen_state_->ir_builder_.SetInsertPoint(div_zero);
-  cgen_state_->ir_builder_.CreateRet(executor_->ll_int(Executor::ERR_DIV_BY_ZERO));
+  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(Executor::ERR_DIV_BY_ZERO));
   cgen_state_->ir_builder_.SetInsertPoint(div_ok);
   return ret;
 }
@@ -580,9 +580,9 @@ llvm::Value* CodeGenerator::codegenMod(llvm::Value* lhs_lv,
                  ? cgen_state_->ir_builder_.CreateSRem(lhs_lv, rhs_lv)
                  : cgen_state_->emitCall(
                        "mod_" + null_typename + null_check_suffix,
-                       {lhs_lv, rhs_lv, executor_->ll_int(inline_int_null_val(ti))});
+                       {lhs_lv, rhs_lv, cgen_state_->llInt(inline_int_null_val(ti))});
   cgen_state_->ir_builder_.SetInsertPoint(mod_zero);
-  cgen_state_->ir_builder_.CreateRet(executor_->ll_int(Executor::ERR_DIV_BY_ZERO));
+  cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt(Executor::ERR_DIV_BY_ZERO));
   cgen_state_->ir_builder_.SetInsertPoint(mod_ok);
   return ret;
 }
@@ -618,7 +618,7 @@ llvm::Value* CodeGenerator::codegenUMinus(const Analyzer::UOper* uoper,
   llvm::Value* chosen_min{nullptr};
   bool need_overflow_check = false;
   if (ti.is_integer() || ti.is_decimal() || ti.is_timeinterval()) {
-    std::tie(chosen_max, chosen_min) = executor_->inlineIntMaxMin(ti.get_size(), true);
+    std::tie(chosen_max, chosen_min) = cgen_state_->inlineIntMaxMin(ti.get_size(), true);
     need_overflow_check = !checkExpressionRanges(
         uoper,
         static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
@@ -650,12 +650,12 @@ llvm::Value* CodeGenerator::codegenUMinus(const Analyzer::UOper* uoper,
           : cgen_state_->emitCall(
                 "uminus_" + numeric_type_name(ti) + "_nullable",
                 {operand_lv,
-                 ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(ti))
-                            : static_cast<llvm::Value*>(executor_->inlineIntNull(ti))});
+                 ti.is_fp() ? static_cast<llvm::Value*>(cgen_state_->inlineFpNull(ti))
+                            : static_cast<llvm::Value*>(cgen_state_->inlineIntNull(ti))});
   if (need_overflow_check) {
     cgen_state_->ir_builder_.SetInsertPoint(uminus_fail);
     cgen_state_->ir_builder_.CreateRet(
-        executor_->ll_int(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+        cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
     cgen_state_->ir_builder_.SetInsertPoint(uminus_ok);
   }
   return ret;

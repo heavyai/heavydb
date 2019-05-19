@@ -564,57 +564,57 @@ int Executor::deviceCountForMemoryLevel(
                                    : deviceCount(ExecutorDeviceType::CPU);
 }
 
-llvm::ConstantInt* Executor::inlineIntNull(const SQLTypeInfo& type_info) {
+llvm::ConstantInt* Executor::CgenState::inlineIntNull(const SQLTypeInfo& type_info) {
   auto type = type_info.get_type();
   if (type_info.is_string()) {
     switch (type_info.get_compression()) {
       case kENCODING_DICT:
-        return ll_int(static_cast<int32_t>(inline_int_null_val(type_info)));
+        return llInt(static_cast<int32_t>(inline_int_null_val(type_info)));
       case kENCODING_NONE:
-        return ll_int(int64_t(0));
+        return llInt(int64_t(0));
       default:
         CHECK(false);
     }
   }
   switch (type) {
     case kBOOLEAN:
-      return ll_int(static_cast<int8_t>(inline_int_null_val(type_info)));
+      return llInt(static_cast<int8_t>(inline_int_null_val(type_info)));
     case kTINYINT:
-      return ll_int(static_cast<int8_t>(inline_int_null_val(type_info)));
+      return llInt(static_cast<int8_t>(inline_int_null_val(type_info)));
     case kSMALLINT:
-      return ll_int(static_cast<int16_t>(inline_int_null_val(type_info)));
+      return llInt(static_cast<int16_t>(inline_int_null_val(type_info)));
     case kINT:
-      return ll_int(static_cast<int32_t>(inline_int_null_val(type_info)));
+      return llInt(static_cast<int32_t>(inline_int_null_val(type_info)));
     case kBIGINT:
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
-      return ll_int(inline_int_null_val(type_info));
+      return llInt(inline_int_null_val(type_info));
     case kDECIMAL:
     case kNUMERIC:
-      return ll_int(inline_int_null_val(type_info));
+      return llInt(inline_int_null_val(type_info));
     case kARRAY:
-      return ll_int(int64_t(0));
+      return llInt(int64_t(0));
     default:
       abort();
   }
 }
 
-llvm::ConstantFP* Executor::inlineFpNull(const SQLTypeInfo& type_info) {
+llvm::ConstantFP* Executor::CgenState::inlineFpNull(const SQLTypeInfo& type_info) {
   CHECK(type_info.is_fp());
   switch (type_info.get_type()) {
     case kFLOAT:
-      return ll_fp(NULL_FLOAT);
+      return llFp(NULL_FLOAT);
     case kDOUBLE:
-      return ll_fp(NULL_DOUBLE);
+      return llFp(NULL_DOUBLE);
     default:
       abort();
   }
 }
 
-std::pair<llvm::ConstantInt*, llvm::ConstantInt*> Executor::inlineIntMaxMin(
+std::pair<llvm::ConstantInt*, llvm::ConstantInt*> Executor::CgenState::inlineIntMaxMin(
     const size_t byte_width,
     const bool is_signed) {
   int64_t max_int{0}, min_int{0};
@@ -628,16 +628,16 @@ std::pair<llvm::ConstantInt*, llvm::ConstantInt*> Executor::inlineIntMaxMin(
   }
   switch (byte_width) {
     case 1:
-      return std::make_pair(ll_int(static_cast<int8_t>(max_int)),
-                            ll_int(static_cast<int8_t>(min_int)));
+      return std::make_pair(::ll_int(static_cast<int8_t>(max_int), context_),
+                            ::ll_int(static_cast<int8_t>(min_int), context_));
     case 2:
-      return std::make_pair(ll_int(static_cast<int16_t>(max_int)),
-                            ll_int(static_cast<int16_t>(min_int)));
+      return std::make_pair(::ll_int(static_cast<int16_t>(max_int), context_),
+                            ::ll_int(static_cast<int16_t>(min_int), context_));
     case 4:
-      return std::make_pair(ll_int(static_cast<int32_t>(max_int)),
-                            ll_int(static_cast<int32_t>(min_int)));
+      return std::make_pair(::ll_int(static_cast<int32_t>(max_int), context_),
+                            ::ll_int(static_cast<int32_t>(min_int), context_));
     case 8:
-      return std::make_pair(ll_int(max_int), ll_int(min_int));
+      return std::make_pair(::ll_int(max_int, context_), ::ll_int(min_int, context_));
     default:
       abort();
   }
@@ -2883,19 +2883,18 @@ llvm::Value* Executor::castToFP(llvm::Value* val) {
   return cgen_state_->ir_builder_.CreateSIToFP(val, dest_ty);
 }
 
-llvm::Value* Executor::castToTypeIn(llvm::Value* val, const size_t dst_bits) {
+llvm::Value* Executor::CgenState::castToTypeIn(llvm::Value* val, const size_t dst_bits) {
   auto src_bits = val->getType()->getScalarSizeInBits();
   if (src_bits == dst_bits) {
     return val;
   }
   if (val->getType()->isIntegerTy()) {
-    return cgen_state_->ir_builder_.CreateIntCast(
-        val, get_int_type(dst_bits, cgen_state_->context_), src_bits != 1);
+    return ir_builder_.CreateIntCast(
+        val, get_int_type(dst_bits, context_), src_bits != 1);
   }
   // real (not dictionary-encoded) strings; store the pointer to the payload
   if (val->getType()->isPointerTy()) {
-    return cgen_state_->ir_builder_.CreatePointerCast(
-        val, get_int_type(dst_bits, cgen_state_->context_));
+    return ir_builder_.CreatePointerCast(val, get_int_type(dst_bits, context_));
   }
 
   CHECK(val->getType()->isFloatTy() || val->getType()->isDoubleTy());
@@ -2903,16 +2902,16 @@ llvm::Value* Executor::castToTypeIn(llvm::Value* val, const size_t dst_bits) {
   llvm::Type* dst_type = nullptr;
   switch (dst_bits) {
     case 64:
-      dst_type = llvm::Type::getDoubleTy(cgen_state_->context_);
+      dst_type = llvm::Type::getDoubleTy(context_);
       break;
     case 32:
-      dst_type = llvm::Type::getFloatTy(cgen_state_->context_);
+      dst_type = llvm::Type::getFloatTy(context_);
       break;
     default:
       CHECK(false);
   }
 
-  return cgen_state_->ir_builder_.CreateFPCast(val, dst_type);
+  return ir_builder_.CreateFPCast(val, dst_type);
 }
 
 llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth) {

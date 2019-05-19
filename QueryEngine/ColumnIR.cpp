@@ -223,7 +223,7 @@ llvm::Value* CodeGenerator::codegenWindowPosition(
     llvm::Value* pos_arg) {
   const auto window_position = cgen_state_->emitCall(
       "row_number_window_func",
-      {executor_->ll_int(reinterpret_cast<const int64_t>(window_func_context->output())),
+      {cgen_state_->llInt(reinterpret_cast<const int64_t>(window_func_context->output())),
        pos_arg});
   window_func_context->setRowNumber(window_position);
   return window_position;
@@ -273,7 +273,7 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
     llvm::Value* pos_arg) {
   const auto orig_bb = cgen_state_->ir_builder_.GetInsertBlock();
   const auto pos_is_valid =
-      cgen_state_->ir_builder_.CreateICmpSGE(pos_arg, executor_->ll_int(int64_t(0)));
+      cgen_state_->ir_builder_.CreateICmpSGE(pos_arg, cgen_state_->llInt(int64_t(0)));
   const auto pos_valid_bb = llvm::BasicBlock::Create(
       cgen_state_->context_, "window.pos_valid", cgen_state_->row_func_);
   const auto pos_notvalid_bb = llvm::BasicBlock::Create(
@@ -288,9 +288,9 @@ llvm::Value* CodeGenerator::codegenFixedLengthColVarInWindow(
       cgen_state_->ir_builder_.CreatePHI(fixed_length_column_lv->getType(), 2);
   window_func_call_phi->addIncoming(fixed_length_column_lv, pos_valid_bb);
   const auto& col_ti = col_var->get_type_info();
-  const auto null_lv = col_ti.is_fp()
-                           ? static_cast<llvm::Value*>(executor_->inlineFpNull(col_ti))
-                           : static_cast<llvm::Value*>(executor_->inlineIntNull(col_ti));
+  const auto null_lv =
+      col_ti.is_fp() ? static_cast<llvm::Value*>(cgen_state_->inlineFpNull(col_ti))
+                     : static_cast<llvm::Value*>(cgen_state_->inlineIntNull(col_ti));
   window_func_call_phi->addIncoming(null_lv, orig_bb);
   return window_func_call_phi;
 }
@@ -330,7 +330,7 @@ llvm::Value* CodeGenerator::codegenRowId(const Analyzer::ColumnVar* col_var,
   } else if (col_var->get_rte_idx() > 0) {
     auto frag_off_ptr = get_arg_by_name(cgen_state_->row_func_, "frag_row_off");
     auto input_off_ptr = cgen_state_->ir_builder_.CreateGEP(
-        frag_off_ptr, executor_->ll_int(int32_t(col_var->get_rte_idx())));
+        frag_off_ptr, cgen_state_->llInt(int32_t(col_var->get_rte_idx())));
     auto rowid_offset_lv = cgen_state_->ir_builder_.CreateLoad(input_off_ptr);
     rowid_lv = cgen_state_->ir_builder_.CreateAdd(rowid_lv, rowid_offset_lv);
   }
@@ -376,17 +376,17 @@ llvm::Value* CodeGenerator::codgenAdjustFixedEncNull(llvm::Value* val,
     llvm::Value* from_null{nullptr};
     switch (col_ti.get_size()) {
       case 1:
-        from_null = executor_->ll_int(std::numeric_limits<uint8_t>::max());
+        from_null = cgen_state_->llInt(std::numeric_limits<uint8_t>::max());
         break;
       case 2:
-        from_null = executor_->ll_int(std::numeric_limits<uint16_t>::max());
+        from_null = cgen_state_->llInt(std::numeric_limits<uint16_t>::max());
         break;
       default:
         CHECK(false);
     }
     return cgen_state_->emitCall(
         "cast_" + from_typename + "_to_" + numeric_type_name(col_ti) + "_nullable",
-        {adjusted, from_null, executor_->inlineIntNull(col_ti)});
+        {adjusted, from_null, cgen_state_->inlineIntNull(col_ti)});
   }
   SQLTypeInfo col_phys_ti(get_phys_int_type(col_ti.get_size()),
                           col_ti.get_dimension(),
@@ -398,8 +398,8 @@ llvm::Value* CodeGenerator::codgenAdjustFixedEncNull(llvm::Value* val,
   return cgen_state_->emitCall(
       "cast_" + from_typename + "_to_" + numeric_type_name(col_ti) + "_nullable",
       {adjusted,
-       executor_->inlineIntNull(col_phys_ti),
-       executor_->inlineIntNull(col_ti)});
+       cgen_state_->inlineIntNull(col_phys_ti),
+       cgen_state_->inlineIntNull(col_ti)});
 }
 
 llvm::Value* CodeGenerator::foundOuterJoinMatch(const ssize_t nesting_level) const {

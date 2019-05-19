@@ -76,7 +76,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
   const bool is_nullable{!expr->get_arg()->get_type_info().get_notnull()};
   if (is_nullable) {
     fn_name += "_nullable";
-    charlength_args.push_back(executor_->inlineIntNull(expr->get_type_info()));
+    charlength_args.push_back(cgen_state_->inlineIntNull(expr->get_type_info()));
   }
   return expr->get_calc_encoded_length()
              ? cgen_state_->emitExternalCall(
@@ -141,11 +141,11 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,
   if (expr->get_is_simple()) {
     fn_name += "_simple";
   } else {
-    str_like_args.push_back(executor_->ll_int(int8_t(escape_char)));
+    str_like_args.push_back(cgen_state_->llInt(int8_t(escape_char)));
   }
   if (is_nullable) {
     fn_name += "_nullable";
-    str_like_args.push_back(executor_->inlineIntNull(expr->get_type_info()));
+    str_like_args.push_back(cgen_state_->inlineIntNull(expr->get_type_info()));
   }
   return cgen_state_->emitCall(fn_name, str_like_args);
 }
@@ -349,10 +349,10 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::RegexpExpr* expr,
   std::vector<llvm::Value*> regexp_args{
       str_lv[1], str_lv[2], regexp_expr_arg_lvs[1], regexp_expr_arg_lvs[2]};
   std::string fn_name("regexp_like");
-  regexp_args.push_back(executor_->ll_int(int8_t(escape_char)));
+  regexp_args.push_back(cgen_state_->llInt(int8_t(escape_char)));
   if (is_nullable) {
     fn_name += "_nullable";
-    regexp_args.push_back(executor_->inlineIntNull(expr->get_type_info()));
+    regexp_args.push_back(cgen_state_->inlineIntNull(expr->get_type_info()));
     return cgen_state_->emitExternalCall(
         fn_name, get_int_type(8, cgen_state_->context_), regexp_args);
   }

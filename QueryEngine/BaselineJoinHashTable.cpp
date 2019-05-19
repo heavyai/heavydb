@@ -966,8 +966,8 @@ int BaselineJoinHashTable::initHashTableForDevice(
 
 #define LL_CONTEXT executor_->cgen_state_->context_
 #define LL_BUILDER executor_->cgen_state_->ir_builder_
-#define LL_INT(v) executor_->ll_int(v)
-#define LL_FP(v) executor_->ll_fp(v)
+#define LL_INT(v) executor_->cgen_state_->llInt(v)
+#define LL_FP(v) executor_->cgen_state_->llFp(v)
 #define ROW_FUNC executor_->cgen_state_->row_func_
 
 llvm::Value* BaselineJoinHashTable::codegenSlot(const CompilationOptions& co,

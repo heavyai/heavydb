@@ -1197,10 +1197,10 @@ llvm::Value* JoinHashTable::codegenHashTableLoad(const size_t table_idx,
     auto hash_tables_ptr =
         get_arg_by_name(executor->cgen_state_->row_func_, "join_hash_tables");
     auto hash_pptr =
-        table_idx > 0
-            ? executor->cgen_state_->ir_builder_.CreateGEP(
-                  hash_tables_ptr, executor->ll_int(static_cast<int64_t>(table_idx)))
-            : hash_tables_ptr;
+        table_idx > 0 ? executor->cgen_state_->ir_builder_.CreateGEP(
+                            hash_tables_ptr,
+                            executor->cgen_state_->llInt(static_cast<int64_t>(table_idx)))
+                      : hash_tables_ptr;
     hash_ptr = executor->cgen_state_->ir_builder_.CreateLoad(hash_pptr);
   } else {
     hash_ptr = get_arg_by_name(executor->cgen_state_->row_func_, "join_hash_tables");
@@ -1222,37 +1222,39 @@ std::vector<llvm::Value*> JoinHashTable::getHashJoinArgs(llvm::Value* hash_ptr,
 
   std::vector<llvm::Value*> hash_join_idx_args{
       hash_ptr,
-      executor_->castToTypeIn(key_lvs.front(), 64),
-      executor_->ll_int(col_range_.getIntMin()),
-      executor_->ll_int(col_range_.getIntMax())};
+      executor_->cgen_state_->castToTypeIn(key_lvs.front(), 64),
+      executor_->cgen_state_->llInt(col_range_.getIntMin()),
+      executor_->cgen_state_->llInt(col_range_.getIntMax())};
   if (shard_count) {
     const auto expected_hash_entry_count =
         get_hash_entry_count(col_range_, isBitwiseEq());
     const auto entry_count_per_shard =
         (expected_hash_entry_count + shard_count - 1) / shard_count;
-    hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(entry_count_per_shard));
-    hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(shard_count));
-    hash_join_idx_args.push_back(executor_->ll_int<uint32_t>(device_count_));
+    hash_join_idx_args.push_back(
+        executor_->cgen_state_->llInt<uint32_t>(entry_count_per_shard));
+    hash_join_idx_args.push_back(executor_->cgen_state_->llInt<uint32_t>(shard_count));
+    hash_join_idx_args.push_back(executor_->cgen_state_->llInt<uint32_t>(device_count_));
   }
   auto key_col_logical_ti = get_logical_type_info(key_col->get_type_info());
   if (!key_col_logical_ti.get_notnull() || isBitwiseEq()) {
-    hash_join_idx_args.push_back(
-        executor_->ll_int(inline_fixed_encoding_null_val(key_col_logical_ti)));
+    hash_join_idx_args.push_back(executor_->cgen_state_->llInt(
+        inline_fixed_encoding_null_val(key_col_logical_ti)));
   }
   auto special_date_bucketization_case =
       key_col_ti.get_type() == kDATE && hash_type_ == HashType::OneToOne;
   if (isBitwiseEq()) {
     if (special_date_bucketization_case) {
-      hash_join_idx_args.push_back(executor_->ll_int(
+      hash_join_idx_args.push_back(executor_->cgen_state_->llInt(
           col_range_.getIntMax() / hash_entry_info.bucket_normalization + 1));
     } else {
-      hash_join_idx_args.push_back(executor_->ll_int(col_range_.getIntMax() + 1));
+      hash_join_idx_args.push_back(
+          executor_->cgen_state_->llInt(col_range_.getIntMax() + 1));
     }
   }
 
   if (special_date_bucketization_case) {
     hash_join_idx_args.emplace_back(
-        executor_->ll_int(hash_entry_info.bucket_normalization));
+        executor_->cgen_state_->llInt(hash_entry_info.bucket_normalization));
   }
 
   return hash_join_idx_args;
@@ -1308,13 +1310,13 @@ HashJoinMatchingSet JoinHashTable::codegenMatchingSet(
 
   const auto slot_lv = executor->cgen_state_->emitCall(fname, hash_join_idx_args_in);
   const auto slot_valid_lv = executor->cgen_state_->ir_builder_.CreateICmpSGE(
-      slot_lv, executor->ll_int(int64_t(0)));
+      slot_lv, executor->cgen_state_->llInt(int64_t(0)));
 
   auto pos_ptr = hash_join_idx_args_in[0];
   CHECK(pos_ptr);
 
   auto count_ptr = executor->cgen_state_->ir_builder_.CreateAdd(
-      pos_ptr, executor->ll_int(sub_buff_size));
+      pos_ptr, executor->cgen_state_->llInt(sub_buff_size));
   auto hash_join_idx_args = hash_join_idx_args_in;
   hash_join_idx_args[0] = executor->cgen_state_->ir_builder_.CreatePtrToInt(
       count_ptr, llvm::Type::getInt64Ty(executor->cgen_state_->context_));
@@ -1322,10 +1324,10 @@ HashJoinMatchingSet JoinHashTable::codegenMatchingSet(
   const auto row_count_lv = executor->cgen_state_->ir_builder_.CreateSelect(
       slot_valid_lv,
       executor->cgen_state_->emitCall(fname, hash_join_idx_args),
-      executor->ll_int(int64_t(0)));
+      executor->cgen_state_->llInt(int64_t(0)));
   auto rowid_base_i32 = executor->cgen_state_->ir_builder_.CreateIntToPtr(
-      executor->cgen_state_->ir_builder_.CreateAdd(pos_ptr,
-                                                   executor->ll_int(2 * sub_buff_size)),
+      executor->cgen_state_->ir_builder_.CreateAdd(
+          pos_ptr, executor->cgen_state_->llInt(2 * sub_buff_size)),
       llvm::Type::getInt32PtrTy(executor->cgen_state_->context_));
   auto rowid_ptr_i32 =
       executor->cgen_state_->ir_builder_.CreateGEP(rowid_base_i32, slot_lv);

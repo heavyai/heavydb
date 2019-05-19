@@ -216,9 +216,9 @@ int64_t GroupByAndAggregate::getBucketedCardinality(const ColRangeInfo& col_rang
 
 #define LL_CONTEXT executor_->cgen_state_->context_
 #define LL_BUILDER executor_->cgen_state_->ir_builder_
-#define LL_BOOL(v) executor_->ll_bool(v)
-#define LL_INT(v) executor_->ll_int(v)
-#define LL_FP(v) executor_->ll_fp(v)
+#define LL_BOOL(v) executor_->cgen_state_->llBool(v)
+#define LL_INT(v) executor_->cgen_state_->llInt(v)
+#define LL_FP(v) executor_->cgen_state_->llFp(v)
 #define ROW_FUNC executor_->cgen_state_->row_func_
 
 GroupByAndAggregate::GroupByAndAggregate(
@@ -1000,7 +1000,7 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
     const auto order_entry_expr = ra_exe_unit_.target_exprs[target_idx];
     const auto chosen_bytes =
         static_cast<size_t>(query_mem_desc.getPaddedSlotWidthBytes(target_idx));
-    auto order_entry_lv = executor_->castToTypeIn(
+    auto order_entry_lv = executor_->cgen_state_->castToTypeIn(
         code_generator.codegen(order_entry_expr, true, co).front(), chosen_bytes * 8);
     const uint32_t n = ra_exe_unit_.sort_info.offset + ra_exe_unit_.sort_info.limit;
     std::string fname = "get_bin_from_k_heap";
@@ -1358,9 +1358,9 @@ llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
   llvm::Value* agg_null{nullptr};
   llvm::Value* target_to_cast{target};
   if (arg_type.is_fp()) {
-    arg_null = executor_->inlineFpNull(arg_type);
+    arg_null = executor_->cgen_state_->inlineFpNull(arg_type);
     if (agg_type.is_fp()) {
-      agg_null = executor_->inlineFpNull(agg_type);
+      agg_null = executor_->cgen_state_->inlineFpNull(agg_type);
       if (!static_cast<llvm::ConstantFP*>(arg_null)->isExactlyValue(
               static_cast<llvm::ConstantFP*>(agg_null)->getValueAPF())) {
         need_conversion = true;
@@ -1370,13 +1370,13 @@ llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
       return target;
     }
   } else {
-    arg_null = executor_->inlineIntNull(arg_type);
+    arg_null = executor_->cgen_state_->inlineIntNull(arg_type);
     if (agg_type.is_fp()) {
-      agg_null = executor_->inlineFpNull(agg_type);
+      agg_null = executor_->cgen_state_->inlineFpNull(agg_type);
       need_conversion = true;
       target_to_cast = executor_->castToFP(target);
     } else {
-      agg_null = executor_->inlineIntNull(agg_type);
+      agg_null = executor_->cgen_state_->inlineIntNull(agg_type);
       if ((static_cast<llvm::ConstantInt*>(arg_null)->getBitWidth() !=
            static_cast<llvm::ConstantInt*>(agg_null)->getBitWidth()) ||
           (static_cast<llvm::ConstantInt*>(arg_null)->getValue() !=
@@ -1389,7 +1389,9 @@ llvm::Value* GroupByAndAggregate::convertNullIfAny(const SQLTypeInfo& arg_type,
     auto cmp = arg_type.is_fp() ? LL_BUILDER.CreateFCmpOEQ(target, arg_null)
                                 : LL_BUILDER.CreateICmpEQ(target, arg_null);
     return LL_BUILDER.CreateSelect(
-        cmp, agg_null, executor_->castToTypeIn(target_to_cast, chosen_bytes << 3));
+        cmp,
+        agg_null,
+        executor_->cgen_state_->castToTypeIn(target_to_cast, chosen_bytes << 3));
   } else {
     return target;
   }
@@ -1639,9 +1641,10 @@ void GroupByAndAggregate::codegenCountDistinct(
     agg_args.push_back(LL_INT(static_cast<int64_t>(count_distinct_descriptor.min_val)));
   }
   if (agg_info.skip_null_val) {
-    auto null_lv = executor_->castToTypeIn(
-        (arg_ti.is_fp() ? static_cast<llvm::Value*>(executor_->inlineFpNull(arg_ti))
-                        : static_cast<llvm::Value*>(executor_->inlineIntNull(arg_ti))),
+    auto null_lv = executor_->cgen_state_->castToTypeIn(
+        (arg_ti.is_fp()
+             ? static_cast<llvm::Value*>(executor_->cgen_state_->inlineFpNull(arg_ti))
+             : static_cast<llvm::Value*>(executor_->cgen_state_->inlineIntNull(arg_ti))),
         64);
     null_lv = executor_->cgen_state_->ir_builder_.CreateBitCast(
         null_lv, get_int_type(64, executor_->cgen_state_->context_));
@@ -1701,16 +1704,17 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
         const auto i8p_ty =
             llvm::PointerType::get(get_int_type(8, executor_->cgen_state_->context_), 0);
         const auto& elem_ti = target_ti.get_elem_type();
-        return {executor_->cgen_state_->emitExternalCall(
-                    "array_buff",
-                    i8p_ty,
-                    {target_lvs.front(), code_generator.posArg(target_expr)}),
-                executor_->cgen_state_->emitExternalCall(
-                    "array_size",
-                    i32_ty,
-                    {target_lvs.front(),
-                     code_generator.posArg(target_expr),
-                     executor_->ll_int(log2_bytes(elem_ti.get_logical_size()))})};
+        return {
+            executor_->cgen_state_->emitExternalCall(
+                "array_buff",
+                i8p_ty,
+                {target_lvs.front(), code_generator.posArg(target_expr)}),
+            executor_->cgen_state_->emitExternalCall(
+                "array_size",
+                i32_ty,
+                {target_lvs.front(),
+                 code_generator.posArg(target_expr),
+                 executor_->cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))})};
       } else if (target_ti.isStandardBufferPackaging()) {
         if (agg_expr) {
           throw std::runtime_error(
@@ -1756,7 +1760,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
                 "fast_fixlen_array_buff",
                 i8p_ty,
                 {target_lv, code_generator.posArg(selected_target_expr)}));
-            coords.push_back(executor_->ll_int(int64_t(fixlen)));
+            coords.push_back(executor_->cgen_state_->llInt(int64_t(fixlen)));
             continue;
           }
           coords.push_back(executor_->cgen_state_->emitExternalCall(
@@ -1768,7 +1772,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
               i32_ty,
               {target_lv,
                code_generator.posArg(selected_target_expr),
-               executor_->ll_int(log2_bytes(elem_sz))}));
+               executor_->cgen_state_->llInt(log2_bytes(elem_sz))}));
         }
         return coords;
       };

@@ -33,7 +33,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
     result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_),
                                     false);
   } else {
-    result = executor_->ll_int(int8_t(0));
+    result = cgen_state_->llInt(int8_t(0));
   }
   CHECK(result);
   if (co.hoist_literals_) {  // TODO(alex): remove this constraint
@@ -41,7 +41,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
     if (in_vals_bitmap) {
       if (in_vals_bitmap->isEmpty()) {
         return in_vals_bitmap->hasNull()
-                   ? executor_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))
+                   ? cgen_state_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))
                    : result;
       }
       CHECK_EQ(size_t(1), lhs_lvs.size());
@@ -61,7 +61,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
       const auto crt =
           codegenCmp(kEQ, kONE, lhs_lvs, in_arg->get_type_info(), in_val.get(), co);
       result = cgen_state_->emitCall("logical_or",
-                                     {result, crt, executor_->inlineIntNull(expr_ti)});
+                                     {result, crt, cgen_state_->inlineIntNull(expr_ti)});
     }
   }
   return result;
@@ -97,12 +97,12 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set
     result = llvm::ConstantInt::get(llvm::IntegerType::getInt1Ty(cgen_state_->context_),
                                     false);
   } else {
-    result = executor_->ll_int(int8_t(0));
+    result = cgen_state_->llInt(int8_t(0));
   }
   CHECK(result);
   if (in_vals_bitmap->isEmpty()) {
     return in_vals_bitmap->hasNull()
-               ? executor_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))
+               ? cgen_state_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))
                : result;
   }
   CHECK_EQ(size_t(1), lhs_lvs.size());

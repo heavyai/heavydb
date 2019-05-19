@@ -60,24 +60,24 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
       if (constant->get_is_null()) {
         if (enc_type == kENCODING_DICT) {
           return {
-              executor_->ll_int(static_cast<int32_t>(inline_int_null_val(type_info)))};
+              cgen_state_->llInt(static_cast<int32_t>(inline_int_null_val(type_info)))};
         }
-        return {executor_->ll_int(int64_t(0)),
+        return {cgen_state_->llInt(int64_t(0)),
                 llvm::Constant::getNullValue(
                     llvm::PointerType::get(get_int_type(8, cgen_state_->context_), 0)),
-                executor_->ll_int(int32_t(0))};
+                cgen_state_->llInt(int32_t(0))};
       }
       const auto& str_const = *constant->get_constval().stringval;
       if (enc_type == kENCODING_DICT) {
         return {
-            executor_->ll_int(executor_
-                                  ->getStringDictionaryProxy(
-                                      dict_id, executor_->getRowSetMemoryOwner(), true)
-                                  ->getIdOfString(str_const))};
+            cgen_state_->llInt(executor_
+                                   ->getStringDictionaryProxy(
+                                       dict_id, executor_->getRowSetMemoryOwner(), true)
+                                   ->getIdOfString(str_const))};
       }
-      return {executor_->ll_int(int64_t(0)),
+      return {cgen_state_->llInt(int64_t(0)),
               cgen_state_->addStringConstant(str_const),
-              executor_->ll_int(static_cast<int32_t>(str_const.size()))};
+              cgen_state_->llInt(static_cast<int32_t>(str_const.size()))};
     }
     default:
       CHECK(false);
@@ -88,25 +88,25 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
 llvm::ConstantInt* CodeGenerator::codegenIntConst(const Analyzer::Constant* constant) {
   const auto& type_info = constant->get_type_info();
   if (constant->get_is_null()) {
-    return executor_->inlineIntNull(type_info);
+    return cgen_state_->inlineIntNull(type_info);
   }
   const auto type =
       type_info.is_decimal() ? decimal_to_int_type(type_info) : type_info.get_type();
   switch (type) {
     case kTINYINT:
-      return executor_->ll_int(constant->get_constval().tinyintval);
+      return cgen_state_->llInt(constant->get_constval().tinyintval);
     case kSMALLINT:
-      return executor_->ll_int(constant->get_constval().smallintval);
+      return cgen_state_->llInt(constant->get_constval().smallintval);
     case kINT:
-      return executor_->ll_int(constant->get_constval().intval);
+      return cgen_state_->llInt(constant->get_constval().intval);
     case kBIGINT:
-      return executor_->ll_int(constant->get_constval().bigintval);
+      return cgen_state_->llInt(constant->get_constval().bigintval);
     case kTIME:
     case kTIMESTAMP:
     case kDATE:
     case kINTERVAL_DAY_TIME:
     case kINTERVAL_YEAR_MONTH:
-      return executor_->ll_int(constant->get_constval().bigintval);
+      return cgen_state_->llInt(constant->get_constval().bigintval);
     default:
       abort();
   }
@@ -120,7 +120,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
   std::string literal_name = "literal_" + std::to_string(lit_off);
   auto lit_buff_query_func_lv = get_arg_by_name(cgen_state_->query_func_, "literals");
   const auto lit_buf_start = cgen_state_->query_func_entry_ir_builder_.CreateGEP(
-      lit_buff_query_func_lv, executor_->ll_int(lit_off));
+      lit_buff_query_func_lv, cgen_state_->llInt(lit_off));
   if (type_info.is_string() && enc_type != kENCODING_DICT) {
     CHECK_EQ(kENCODING_NONE, type_info.get_compression());
     CHECK_EQ(size_t(4), executor_->literalBytes(Executor::LiteralValue(std::string(""))));
@@ -132,12 +132,12 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
         cgen_state_->query_func_entry_ir_builder_.CreateLoad(off_and_len_ptr);
     auto off_lv = cgen_state_->query_func_entry_ir_builder_.CreateLShr(
         cgen_state_->query_func_entry_ir_builder_.CreateAnd(
-            off_and_len, executor_->ll_int(int32_t(0xffff0000))),
-        executor_->ll_int(int32_t(16)));
+            off_and_len, cgen_state_->llInt(int32_t(0xffff0000))),
+        cgen_state_->llInt(int32_t(16)));
     auto len_lv = cgen_state_->query_func_entry_ir_builder_.CreateAnd(
-        off_and_len, executor_->ll_int(int32_t(0x0000ffff)));
+        off_and_len, cgen_state_->llInt(int32_t(0x0000ffff)));
 
-    auto var_start = executor_->ll_int(int64_t(0));
+    auto var_start = cgen_state_->llInt(int64_t(0));
     auto var_start_address = cgen_state_->query_func_entry_ir_builder_.CreateGEP(
         lit_buff_query_func_lv, off_lv);
     auto var_length = len_lv;
@@ -164,10 +164,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
         cgen_state_->query_func_entry_ir_builder_.CreateLoad(off_and_len_ptr);
     auto off_lv = cgen_state_->query_func_entry_ir_builder_.CreateLShr(
         cgen_state_->query_func_entry_ir_builder_.CreateAnd(
-            off_and_len, executor_->ll_int(int32_t(0xffff0000))),
-        executor_->ll_int(int32_t(16)));
+            off_and_len, cgen_state_->llInt(int32_t(0xffff0000))),
+        cgen_state_->llInt(int32_t(16)));
     auto len_lv = cgen_state_->query_func_entry_ir_builder_.CreateAnd(
-        off_and_len, executor_->ll_int(int32_t(0x0000ffff)));
+        off_and_len, cgen_state_->llInt(int32_t(0x0000ffff)));
 
     auto var_start_address = cgen_state_->query_func_entry_ir_builder_.CreateGEP(
         lit_buff_query_func_lv, off_lv);
@@ -226,17 +226,17 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(
     llvm::PointerType* placeholder0_type =
         llvm::PointerType::get(var_start->getType(), 0);
     auto placeholder0 = cgen_state_->ir_builder_.CreateLoad(
-        cgen_state_->ir_builder_.CreateIntToPtr(executor_->ll_int(0), placeholder0_type),
+        cgen_state_->ir_builder_.CreateIntToPtr(cgen_state_->llInt(0), placeholder0_type),
         "__placeholder__" + literal_name + "_start");
     llvm::PointerType* placeholder1_type =
         llvm::PointerType::get(var_start_address->getType(), 0);
     auto placeholder1 = cgen_state_->ir_builder_.CreateLoad(
-        cgen_state_->ir_builder_.CreateIntToPtr(executor_->ll_int(0), placeholder1_type),
+        cgen_state_->ir_builder_.CreateIntToPtr(cgen_state_->llInt(0), placeholder1_type),
         "__placeholder__" + literal_name + "_start_address");
     llvm::PointerType* placeholder2_type =
         llvm::PointerType::get(var_length->getType(), 0);
     auto placeholder2 = cgen_state_->ir_builder_.CreateLoad(
-        cgen_state_->ir_builder_.CreateIntToPtr(executor_->ll_int(0), placeholder2_type),
+        cgen_state_->ir_builder_.CreateIntToPtr(cgen_state_->llInt(0), placeholder2_type),
         "__placeholder__" + literal_name + "_length");
 
     cgen_state_->row_func_hoisted_literals_[placeholder0] = {lit_off, 0};
@@ -256,12 +256,12 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(
     llvm::PointerType* placeholder0_type =
         llvm::PointerType::get(var_start_address->getType(), 0);
     auto placeholder0 = cgen_state_->ir_builder_.CreateLoad(
-        cgen_state_->ir_builder_.CreateIntToPtr(executor_->ll_int(0), placeholder0_type),
+        cgen_state_->ir_builder_.CreateIntToPtr(cgen_state_->llInt(0), placeholder0_type),
         "__placeholder__" + literal_name + "_start_address");
     llvm::PointerType* placeholder1_type =
         llvm::PointerType::get(var_length->getType(), 0);
     auto placeholder1 = cgen_state_->ir_builder_.CreateLoad(
-        cgen_state_->ir_builder_.CreateIntToPtr(executor_->ll_int(0), placeholder1_type),
+        cgen_state_->ir_builder_.CreateIntToPtr(cgen_state_->llInt(0), placeholder1_type),
         "__placeholder__" + literal_name + "_length");
 
     cgen_state_->row_func_hoisted_literals_[placeholder0] = {lit_off, 0};
@@ -275,7 +275,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(
 
   auto placeholder0 = cgen_state_->ir_builder_.CreateLoad(
       cgen_state_->ir_builder_.CreateIntToPtr(
-          executor_->ll_int(0), llvm::PointerType::get(to_return_lv->getType(), 0)),
+          cgen_state_->llInt(0), llvm::PointerType::get(to_return_lv->getType(), 0)),
       "__placeholder__" + literal_name);
 
   cgen_state_->row_func_hoisted_literals_[placeholder0] = {lit_off, 0};

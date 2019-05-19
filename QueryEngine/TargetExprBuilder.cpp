@@ -33,8 +33,8 @@
 #define LL_CONTEXT executor->cgen_state_->context_
 #define LL_BUILDER executor->cgen_state_->ir_builder_
 #define LL_BOOL(v) executor->ll_bool(v)
-#define LL_INT(v) executor->ll_int(v)
-#define LL_FP(v) executor->ll_fp(v)
+#define LL_INT(v) executor->cgen_state_->llInt(v)
+#define LL_FP(v) executor->cgen_state_->llFp(v)
 #define ROW_FUNC executor->cgen_state_->row_func_
 
 namespace {
@@ -261,8 +261,9 @@ void TargetExprCodegen::codegen(
            target_lvs[target_lv_idx],
            code_generator.posArg(arg_expr),
            elem_ti.is_fp()
-               ? static_cast<llvm::Value*>(executor->inlineFpNull(elem_ti))
-               : static_cast<llvm::Value*>(executor->inlineIntNull(elem_ti))});
+               ? static_cast<llvm::Value*>(executor->cgen_state_->inlineFpNull(elem_ti))
+               : static_cast<llvm::Value*>(
+                     executor->cgen_state_->inlineIntNull(elem_ti))});
       ++slot_index;
       ++target_lv_idx;
       continue;
@@ -311,7 +312,8 @@ void TargetExprCodegen::codegen(
         target_lv = executor->castToFP(target_lv);
       }
       if (!dynamic_cast<const Analyzer::AggExpr*>(target_expr) || arg_expr) {
-        target_lv = executor->castToTypeIn(target_lv, (agg_chosen_bytes << 3));
+        target_lv =
+            executor->cgen_state_->castToTypeIn(target_lv, (agg_chosen_bytes << 3));
       }
     }
 
@@ -353,15 +355,17 @@ void TargetExprCodegen::codegen(
         agg_fname += "_skip_val";
         llvm::Value* null_in_lv{nullptr};
         if (arg_ti.is_fp()) {
-          null_in_lv = static_cast<llvm::Value*>(executor->inlineFpNull(arg_ti));
+          null_in_lv =
+              static_cast<llvm::Value*>(executor->cgen_state_->inlineFpNull(arg_ti));
         } else {
-          null_in_lv = static_cast<llvm::Value*>(
-              executor->inlineIntNull(is_agg_domain_range_equivalent(target_info.agg_kind)
-                                          ? arg_ti
-                                          : target_info.sql_type));
+          null_in_lv = static_cast<llvm::Value*>(executor->cgen_state_->inlineIntNull(
+              is_agg_domain_range_equivalent(target_info.agg_kind)
+                  ? arg_ti
+                  : target_info.sql_type));
         }
         CHECK(null_in_lv);
-        auto null_lv = executor->castToTypeIn(null_in_lv, (agg_chosen_bytes << 3));
+        auto null_lv =
+            executor->cgen_state_->castToTypeIn(null_in_lv, (agg_chosen_bytes << 3));
         agg_args.push_back(null_lv);
       }
       if (!target_info.is_distinct) {
