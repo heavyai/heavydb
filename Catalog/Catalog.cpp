@@ -1057,7 +1057,9 @@ void Catalog::addTableToMap(TableDescriptor& td,
   }
 }
 
-void Catalog::removeTableFromMap(const string& tableName, int tableId) {
+void Catalog::removeTableFromMap(const string& tableName,
+                                 const int tableId,
+                                 const bool is_on_error) {
   cat_write_lock write_lock(this);
   TableDescriptorMapById::iterator tableDescIt = tableDescriptorMapById_.find(tableId);
   if (tableDescIt == tableDescriptorMapById_.end()) {
@@ -1107,7 +1109,16 @@ void Catalog::removeTableFromMap(const string& tableName, int tableId) {
         INJECT_TIMER(removingDicts);
         DictRef dict_ref(currentDB_.dbId, dictId);
         const auto dictIt = dictDescriptorMapByRef_.find(dict_ref);
-        CHECK(dictIt != dictDescriptorMapByRef_.end());
+        // If we're removing this table due to an error, it is possible that the string
+        // dictionary reference was never populated. Don't crash, just continue cleaning
+        // up the TableDescriptor and ColumnDescriptors
+        if (!is_on_error) {
+          CHECK(dictIt != dictDescriptorMapByRef_.end());
+        } else {
+          if (dictIt == dictDescriptorMapByRef_.end()) {
+            continue;
+          }
+        }
         const auto& dd = dictIt->second;
         CHECK_GE(dd->refcount, 1);
         --dd->refcount;
@@ -2062,7 +2073,7 @@ void Catalog::createTable(
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
-    removeTableFromMap(td.tableName, td.tableId);
+    removeTableFromMap(td.tableName, td.tableId, true);
     throw;
   }
 

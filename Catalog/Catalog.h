@@ -272,7 +272,9 @@ class Catalog {
   void addFrontendViewToMap(DashboardDescriptor& vd);
   void addFrontendViewToMapNoLock(DashboardDescriptor& vd);
   void addLinkToMap(LinkDescriptor& ld);
-  void removeTableFromMap(const std::string& tableName, int tableId);
+  void removeTableFromMap(const std::string& tableName,
+                          const int tableId,
+                          const bool is_on_error = false);
   void doDropTable(const TableDescriptor* td);
   void doTruncateTable(const TableDescriptor* td);
   void renamePhysicalTable(const TableDescriptor* td, const std::string& newTableName);
