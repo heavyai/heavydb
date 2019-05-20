@@ -61,7 +61,7 @@ class TDatum;
 class TColumn;
 
 // not too big (need much memory) but not too small (many thread forks)
-constexpr static size_t kImportFileBufferSize = (1 << 26);
+constexpr static size_t kImportFileBufferSize = (1 << 23);
 
 namespace arrow {
 
