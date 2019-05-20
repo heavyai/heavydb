@@ -1182,8 +1182,7 @@ void SysCatalog::createDBObject(const UserMetadata& user,
   object.setOwner(user.userId);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
-    if (user.userName.compare(
-            OMNISCI_ROOT_USER)) {  // no need to grant to suser, has all privs by default
+    if (!user.isSuper) {  // no need to grant to suser, has all privs by default
       grantDBObjectPrivileges_unsafe(user.userName, object, catalog);
       auto* grantee = instance().getUserGrantee(user.userName);
       if (!grantee) {
@@ -1222,9 +1221,12 @@ void SysCatalog::grantDBObjectPrivileges_unsafe(
 
   sys_write_lock write_lock(this);
 
-  if (!granteeName.compare(OMNISCI_ROOT_USER)) {
-    throw runtime_error("Request to grant privileges to " + granteeName +
-                        " failed because mapd root user has all privileges by default.");
+  UserMetadata user_meta;
+  if (instance().getMetadataForUser(granteeName, user_meta)) {
+    if (user_meta.isSuper) {
+      // super doesn't have explicit privileges so nothing to do
+      return;
+    }
   }
   auto* grantee = instance().getGrantee(granteeName);
   if (!grantee) {
@@ -1287,10 +1289,12 @@ void SysCatalog::revokeDBObjectPrivileges_unsafe(
     const Catalog_Namespace::Catalog& catalog) {
   sys_write_lock write_lock(this);
 
-  if (!granteeName.compare(OMNISCI_ROOT_USER)) {
-    throw runtime_error(
-        "Request to revoke privileges from " + granteeName +
-        " failed because privileges can not be revoked from mapd root user.");
+  UserMetadata user_meta;
+  if (instance().getMetadataForUser(granteeName, user_meta)) {
+    if (user_meta.isSuper) {
+      // super doesn't have explicit privileges so nothing to do
+      return;
+    }
   }
   auto* grantee = getGrantee(granteeName);
   if (!grantee) {
@@ -1372,9 +1376,14 @@ void SysCatalog::getDBObjectPrivileges(const std::string& granteeName,
                                        DBObject& object,
                                        const Catalog_Namespace::Catalog& catalog) const {
   sys_read_lock read_lock(this);
-  if (!granteeName.compare(OMNISCI_ROOT_USER)) {
-    throw runtime_error("Request to show privileges from " + granteeName +
-                        " failed because mapd root user has all privileges by default.");
+  UserMetadata user_meta;
+
+  if (instance().getMetadataForUser(granteeName, user_meta)) {
+    if (user_meta.isSuper) {
+      throw runtime_error(
+          "Request to show privileges from " + granteeName +
+          " failed because user is super user and has all privileges by default.");
+    }
   }
   auto* grantee = instance().getGrantee(granteeName);
   if (!grantee) {
@@ -1421,7 +1430,7 @@ void SysCatalog::dropRole_unsafe(const std::string& roleName) {
   // it may very well be a user "role", so keep it generic
   auto* rl = getGrantee(roleName);
   CHECK(rl);  // it has been checked already in the calling proc that this role exists,
-              // faiul otherwise
+              // fail otherwise
   delete rl;
   granteeMap_.erase(to_upper(roleName));
 
@@ -1699,7 +1708,8 @@ std::vector<std::string> SysCatalog::getRoles(const std::string& userName,
                                               const int32_t dbId) {
   sys_sqlite_lock sqlite_lock(this);
   std::string sql =
-      "SELECT DISTINCT roleName FROM mapd_object_permissions WHERE objectPermissions<>0 "
+      "SELECT DISTINCT roleName FROM mapd_object_permissions WHERE "
+      "objectPermissions<>0 "
       "AND roleType=0 AND dbId=" +
       std::to_string(dbId);
   sqliteConnector_->query(sql);

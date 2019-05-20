@@ -693,12 +693,16 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
   const auto db_file =
       boost::filesystem::path(base_path) / "mapd_catalogs" / OMNISCI_SYSTEM_CATALOG;
   if (!boost::filesystem::exists(db_file)) {
-    LOG(ERROR) << "OmniSci system catalog " << OMNISCI_SYSTEM_CATALOG
-               << " does not exist.";
-    return_code = 1;
-    return false;
+    {  // check old system catalog existsense
+      const auto db_file = boost::filesystem::path(base_path) / "mapd_catalogs/mapd";
+      if (!boost::filesystem::exists(db_file)) {
+        LOG(ERROR) << "OmniSci system catalog " << OMNISCI_SYSTEM_CATALOG
+                   << " does not exist.";
+        return_code = 1;
+        return false;
+      }
+    }
   }
-
   // add all parameters to be displayed on startup
   LOG(INFO) << "OmniSci started with data directory at '" << base_path << "'";
   LOG(INFO) << " Watchdog is set to " << enable_watchdog;

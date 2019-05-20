@@ -1155,7 +1155,7 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
   ASSERT_NO_THROW(
-      sys_cat.grantDBObjectPrivilegesBatch({"Gunners", "Chelsea"}, {dash_object}, g_cat));
+      sys_cat.grantDBObjectPrivilegesBatch({"Gunners", "Bayern"}, {dash_object}, g_cat));
   perms_list =
       sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
@@ -1196,7 +1196,7 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
 
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::EDIT_DASHBOARD));
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Chelsea", dash_object, g_cat));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Bayern", dash_object, g_cat));
   perms_list =
       sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
