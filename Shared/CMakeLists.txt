@@ -7,6 +7,7 @@ set(shared_source_files
     SysInfo.cpp
     File.cpp
     StackTrace.cpp
+    base64.cpp
 )
 
 add_library(Shared ${shared_source_files})

@@ -21,10 +21,9 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
-#include <boost/archive/iterators/base64_from_binary.hpp>
-#include <boost/archive/iterators/binary_from_base64.hpp>
-#include <boost/archive/iterators/transform_width.hpp>
 #include <boost/preprocessor/facilities/overload.hpp>
+
+#include "Shared/base64.h"
 
 // NOTE:  These alternative checks are required because of changes to glog
 template <typename T1>
@@ -149,21 +148,6 @@ class CmdBase : public TAG_TYPE {
 
 class CmdStringUtilities {
  public:
-  static inline std::string decode64(const std::string& val) {
-    using namespace boost::archive::iterators;
-    using It = transform_width<binary_from_base64<std::string::const_iterator>, 8, 6>;
-    return boost::algorithm::trim_right_copy_if(
-        std::string(It(std::begin(val)), It(std::end(val))),
-        [](char c) { return c == '\0'; });
-  }
-
-  static inline std::string encode64(const std::string& val) {
-    using namespace boost::archive::iterators;
-    using It = base64_from_binary<transform_width<std::string::const_iterator, 6, 8>>;
-    auto tmp = std::string(It(std::begin(val)), It(std::end(val)));
-    return tmp.append((3 - val.size() % 3) % 3, '=');
-  }
-
   static bool replace(std::string& str, const std::string& from, const std::string& to) {
     size_t start_pos = str.find(from);
     if (start_pos == std::string::npos) {
@@ -520,7 +504,7 @@ StandardCommand(ExportDashboard, {
           if (dashfile.is_open()) {
             dashfile << lambda_context.dash_return.dashboard_name << std::endl;
             dashfile << lambda_context.dash_return.dashboard_metadata << std::endl;
-            dashfile << decode64(lambda_context.dash_return.dashboard_state);
+            dashfile << mapd::decode_base64(lambda_context.dash_return.dashboard_state);
             dashfile.close();
           } else {
             output_stream << "Could not open file `" << filename << "`" << std::endl;
@@ -561,7 +545,7 @@ StandardCommand(ImportDashboard, {
     return;
   }
 
-  cmdContext().view_state = encode64(state);
+  cmdContext().view_state = mapd::encode_base64(state);
 
   output_stream << "Importing dashboard " << cmdContext().view_name << " from file "
                 << filename << std::endl;

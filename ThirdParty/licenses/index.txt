@@ -14,6 +14,7 @@
   glbinding                                 [MIT](https://github.com/cginternals/glbinding/blob/master/LICENSE)                           OpenGL management
   gflags                                    [BSD-like](https://github.com/gflags/gflags/blob/master/COPYING.txt)                          Folly
   glog                                      [BSD-like](https://github.com/google/glog/blob/master/COPYING)                                C++ logging
+  cpp-jwt                                   [MIT](https://github.com/arun11299/cpp-jwt/blob/master/LICENSE)                              Elliptical Curve Digitl Signature
   libcurl                                   [MIT](https://curl.haxx.se/docs/copyright.html)                                               AWS metadata download
   libldap                                   varies, [OpenLDAP](http://www.openldap.org/software/release/license.html)                     LDAP support; provided by OS (dynamic linked)
   libpng                                    [libpng](http://libpng.org/pub/png/src/libpng-LICENSE.txt)                                    Render encoding / transport

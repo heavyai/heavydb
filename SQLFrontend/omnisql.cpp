@@ -28,9 +28,6 @@
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/algorithm/string/trim.hpp>
-#include <boost/archive/iterators/base64_from_binary.hpp>
-#include <boost/archive/iterators/binary_from_base64.hpp>
-#include <boost/archive/iterators/transform_width.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/format.hpp>
 #include <boost/program_options.hpp>
@@ -55,6 +52,7 @@
 #include "Shared/StringTransform.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/ThriftTypesConvert.h"
+#include "Shared/base64.h"
 #include "Shared/checked_alloc.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "gen-cpp/MapD.h"
@@ -87,17 +85,6 @@ void completion(const char* buf, linenoiseCompletions* lc) {
       linenoiseAddCompletion(lc, partial_query.c_str());
     }
   }
-}
-
-// code from
-// https://stackoverflow.com/questions/7053538/how-do-i-encode-a-string-to-base64-using-only-boost
-
-static inline std::string decode64(const std::string& val) {
-  using namespace boost::archive::iterators;
-  using It = transform_width<binary_from_base64<std::string::const_iterator>, 8, 6>;
-  return boost::algorithm::trim_right_copy_if(
-      std::string(It(std::begin(val)), It(std::end(val))),
-      [](char c) { return c == '\0'; });
 }
 
 #define LOAD_PATCH_SIZE 10000
@@ -962,7 +949,7 @@ void set_license_key(ClientContext& context, const std::string& token) {
       std::vector<std::string> jwt;
       boost::split(jwt, claims, boost::is_any_of("."));
       if (jwt.size() > 1) {
-        std::cout << decode64(jwt[1]) << std::endl;
+        std::cout << mapd::decode_base64(jwt[1]) << std::endl;
       }
     }
   }
@@ -974,7 +961,7 @@ void get_license_claims(ClientContext& context) {
       std::vector<std::string> jwt;
       boost::split(jwt, claims, boost::is_any_of("."));
       if (jwt.size() > 1) {
-        std::cout << decode64(jwt[1]) << std::endl;
+        std::cout << mapd::decode_base64(jwt[1]) << std::endl;
       }
     }
   }
