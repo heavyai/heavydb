@@ -228,7 +228,7 @@ void SysCatalog::updateUserSchema() {
 
 void SysCatalog::importDataFromOldMapdDB() {
   sys_sqlite_lock sqlite_lock(this);
-  std::string mapd_db_path = basePath_ + "/mapd_catalogs/" + OMNISCI_DEFAULT_DB;
+  std::string mapd_db_path = basePath_ + "/mapd_catalogs/mapd";
   sqliteConnector_->query("ATTACH DATABASE `" + mapd_db_path + "` as old_cat");
   sqliteConnector_->query("BEGIN TRANSACTION");
   LOG(INFO) << "Moving global metadata into a separate catalog";
