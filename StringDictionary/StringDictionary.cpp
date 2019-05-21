@@ -1179,6 +1179,9 @@ void StringDictionary::populate_string_array_ids(
     for (auto& child : worker_threads) {
       child.wait();
     }
+    for (auto& child : worker_threads) {
+      child.get();
+    }
   } else {
     processor(0);
   }

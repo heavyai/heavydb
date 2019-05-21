@@ -2283,9 +2283,6 @@ void InsertIntoTableAsSelectStmt::populateData(
     if (td->isView) {
       throw std::runtime_error("Insert to views is not supported yet.");
     }
-    if (td->partitions == "SHARDED") {
-      throw std::runtime_error("Insert to sharded tables is not supported yet.");
-    }
 
     if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
                                          AccessPrivileges::INSERT_INTO_TABLE,
@@ -2381,6 +2378,7 @@ void InsertIntoTableAsSelectStmt::populateData(
     return;
   }
 
+  Fragmenter_Namespace::InsertDataLoader insertDataLoader(*leafs_connector_);
   AggregatedResult res = leafs_connector_->query(session, select_query_);
   auto column_descriptors = local_connector.getColumnDescriptors(res, false);
   auto result_rows = res.rs;
@@ -2395,7 +2393,6 @@ void InsertIntoTableAsSelectStmt::populateData(
 
   size_t max_number_of_rows_per_package = std::min(num_rows / leaf_count, 64UL * 1024UL);
 
-  size_t current_leaf = 0;
   size_t start_row = 0;
   size_t num_rows_to_process = std::min(num_rows, max_number_of_rows_per_package);
 
@@ -2493,6 +2490,9 @@ void InsertIntoTableAsSelectStmt::populateData(
         for (auto& child : worker_threads) {
           child.wait();
         }
+        for (auto& child : worker_threads) {
+          child.get();
+        }
 
       } else {
         convert_function(0);
@@ -2513,6 +2513,9 @@ void InsertIntoTableAsSelectStmt::populateData(
         for (auto& child : worker_threads) {
           child.wait();
         }
+        for (auto& child : worker_threads) {
+          child.get();
+        }
       }
 
       Fragmenter_Namespace::InsertData insert_data;
@@ -2526,17 +2529,32 @@ void InsertIntoTableAsSelectStmt::populateData(
         value_converters[col_idx++]->addDataBlocksToInsertData(insert_data);
       }
 
-      leafs_connector_->insertDataToLeaf(session, current_leaf, insert_data);
+      insertDataLoader.insertData(session, insert_data);
     } catch (...) {
-      leafs_connector_->rollback(session, created_td->tableId);
+      try {
+        if (created_td->nShards) {
+          const auto shard_tables = catalog.getPhysicalTablesDescriptors(created_td);
+          for (const auto ptd : shard_tables) {
+            leafs_connector_->rollback(session, ptd->tableId);
+          }
+        }
+        leafs_connector_->rollback(session, created_td->tableId);
+      } catch (...) {
+        // eat it
+      }
       throw;
     }
-    current_leaf = (current_leaf + 1) % leaf_count;
     start_row += num_rows_to_process;
     num_rows_to_process = std::min(num_rows - start_row, max_number_of_rows_per_package);
   }
 
   if (!is_temporary) {
+    if (created_td->nShards) {
+      const auto shard_tables = catalog.getPhysicalTablesDescriptors(created_td);
+      for (const auto ptd : shard_tables) {
+        leafs_connector_->checkpoint(session, ptd->tableId);
+      }
+    }
     leafs_connector_->checkpoint(session, created_td->tableId);
   }
 }

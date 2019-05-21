@@ -713,7 +713,8 @@ TEST_P(Ctas, CreateTableAsSelect) {
   }
 }
 
-TEST_P(Itas, InsertIntoTableFromSelect) {
+void itasTestBody(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
+                  std::string targetPartitionScheme = ")") {
   run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
   run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
 
@@ -732,7 +733,7 @@ TEST_P(Itas, InsertIntoTableFromSelect) {
         ", col_" + std::to_string(col) + " " + tcd->get_column_definition();
   }
   create_source_sql += ");";
-  create_target_sql += ");";
+  create_target_sql += targetPartitionScheme + ";";
 
   LOG(INFO) << create_source_sql;
   LOG(INFO) << create_target_sql;
@@ -792,6 +793,19 @@ TEST_P(Itas, InsertIntoTableFromSelect) {
       }
     }
   }
+}
+
+TEST_P(Itas, InsertIntoTableFromSelect) {
+  itasTestBody(columnDescriptors, ")");
+}
+
+TEST_P(Itas, InsertIntoTableFromSelectReplicated) {
+  itasTestBody(columnDescriptors, ") WITH (partitions='REPLICATED')");
+}
+
+TEST_P(Itas, InsertIntoTableFromSelectSharded) {
+  itasTestBody(columnDescriptors,
+               ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
 }
 
 const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =

@@ -515,7 +515,9 @@ struct GeoPointValueConverter : public TargetValueConverter {
         column_descriptor_->tableId, column_descriptor_->columnId + 1);
     CHECK(coords_column_descriptor_);
 
-    allocateColumnarData(num_rows);
+    if (num_rows) {
+      allocateColumnarData(num_rows);
+    }
   }
 
   ~GeoPointValueConverter() override {}
@@ -618,7 +620,9 @@ struct GeoLinestringValueConverter : public GeoPointValueConverter {
         column_descriptor_->tableId, column_descriptor_->columnId + 2);
     CHECK(bounds_column_descriptor_);
 
-    allocateColumnarData(num_rows);
+    if (num_rows) {
+      allocateColumnarData(num_rows);
+    }
   }
 
   ~GeoLinestringValueConverter() override {}

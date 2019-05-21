@@ -35,6 +35,8 @@
 #include "../Shared/sqltypes.h"
 #include "../Shared/unreachable.h"
 
+#include "../Fragmenter/InsertDataLoader.h"
+
 #include <Import/Importer.h>
 
 #include <functional>
@@ -1017,15 +1019,11 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
 
   std::string& get_select_query() { return select_query_; }
 
-  struct DistributedConnector {
+  struct DistributedConnector
+      : public Fragmenter_Namespace::InsertDataLoader::DistributedConnector {
     virtual AggregatedResult query(
         const Catalog_Namespace::SessionInfo& parent_session_info,
         std::string& sql_query_string) = 0;
-    virtual size_t leafCount() = 0;
-    virtual void insertDataToLeaf(
-        const Catalog_Namespace::SessionInfo& parent_session_info,
-        const size_t leaf_idx,
-        Fragmenter_Namespace::InsertData& insert_data) = 0;
     virtual void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
                             int tableId) = 0;
     virtual void rollback(const Catalog_Namespace::SessionInfo& parent_session_info,
