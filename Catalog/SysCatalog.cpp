@@ -74,6 +74,35 @@ using sys_read_lock = read_lock<SysCatalog>;
 using sys_write_lock = write_lock<SysCatalog>;
 using sys_sqlite_lock = sqlite_lock<SysCatalog>;
 
+auto CommonFileOperations::assembleCatalogName(std::string const& name) {
+  return base_path_ + "/mapd_catalogs/" + name;
+};
+
+void CommonFileOperations::removeCatalogByFullPath(std::string const& full_path) {
+  boost::filesystem::remove(full_path);
+}
+
+void CommonFileOperations::removeCatalogByName(std::string const& name) {
+  boost::filesystem::remove(assembleCatalogName(name));
+};
+
+auto CommonFileOperations::duplicateAndRenameCatalog(std::string const& current_name,
+                                                     std::string const& new_name) {
+  auto full_current_path = assembleCatalogName(current_name);
+  auto full_new_path = assembleCatalogName(new_name);
+
+  try {
+    boost::filesystem::copy_file(full_current_path, full_new_path);
+  } catch (std::exception& e) {
+    std::string err_message{"Could not copy file " + full_current_path + " to " +
+                            full_new_path + " exception was " + e.what()};
+    LOG(ERROR) << err_message;
+    throw std::runtime_error(err_message);
+  }
+
+  return std::make_pair(full_current_path, full_new_path);
+};
+
 void SysCatalog::init(const std::string& basePath,
                       std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
                       AuthMetadata authMetadata,
@@ -817,6 +846,73 @@ void SysCatalog::alterUser(const int32_t userid,
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
+}
+
+auto SysCatalog::yieldTransactionStreamer() {
+  return
+      [](auto& db_connector, auto on_success, auto on_failure, auto&&... query_requests) {
+        auto query_runner = [&db_connector](auto&&... query_reqs) {
+          [[gnu::unused]] int throw_away[] = {
+              (db_connector->query_with_text_params(
+                   std::forward<decltype(query_reqs)>(query_reqs)),
+               0)...};
+        };
+
+        db_connector->query("BEGIN TRANSACTION");
+        try {
+          query_runner(std::forward<decltype(query_requests)>(query_requests)...);
+          on_success();
+        } catch (std::exception&) {
+          db_connector->query("ROLLBACK TRANSACTION");
+          on_failure();
+          throw;
+        }
+        db_connector->query("END TRANSACTION");
+      };
+}
+
+void SysCatalog::renameDatabase(std::string const& old_name,
+                                std::string const& new_name) {
+  using namespace std::string_literals;
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+
+  DBMetadata new_db;
+  if (getMetadataForDB(new_name, new_db)) {
+    throw std::runtime_error("Database " + new_name + " already exists.");
+  }
+  if (to_upper(new_name) == to_upper(OMNISCI_SYSTEM_CATALOG)) {
+    throw std::runtime_error("Database name " + new_name + "is reserved.");
+  }
+
+  DBMetadata old_db;
+  if (!getMetadataForDB(old_name, old_db)) {
+    throw std::runtime_error("Database " + old_name + " does not exists.");
+  }
+
+  Catalog::remove(old_db.dbName);
+
+  std::string old_catalog_path, new_catalog_path;
+  std::tie(old_catalog_path, new_catalog_path) =
+      duplicateAndRenameCatalog(old_name, new_name);
+
+  auto transaction_streamer = yieldTransactionStreamer();
+  auto failure_handler = [this, new_catalog_path] {
+    removeCatalogByFullPath(new_catalog_path);
+  };
+  auto success_handler = [this, old_catalog_path] {
+    removeCatalogByFullPath(old_catalog_path);
+  };
+
+  auto q1 = {"UPDATE mapd_databases SET name=?1 WHERE name=?2;"s, new_name, old_name};
+  auto q2 = {
+      "UPDATE mapd_object_permissions SET objectName=?1 WHERE objectNAME=?2 and (objectPermissionsType=?3 or objectId = -1) and dbId=?4;"s,
+      new_name,
+      old_name,
+      std::to_string(static_cast<int>(DBObjectType::DatabaseDBObjectType)),
+      std::to_string(old_db.dbId)};
+
+  transaction_streamer(sqliteConnector_, success_handler, failure_handler, q1, q2);
 }
 
 void SysCatalog::createDatabase(const string& name, int owner) {

@@ -1194,6 +1194,20 @@ class ValidateStmt : public DDLStmt {
   bool isRepairTypeRemove_ = false;
 };
 
+class RenameDatabaseStmt : public DDLStmt {
+ public:
+  RenameDatabaseStmt(std::string* database_name, std::string* new_database_name)
+      : database_name_(database_name), new_database_name_(new_database_name) {}
+
+  auto const& getPreviousDatabaseName() { return database_name_; }
+  auto const& getNewDatabaseName() { return new_database_name_; }
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
+
+ private:
+  std::unique_ptr<std::string> database_name_;
+  std::unique_ptr<std::string> new_database_name_;
+};
+
 class RenameTableStmt : public DDLStmt {
  public:
   RenameTableStmt(std::string* tab, std::string* new_tab_name)

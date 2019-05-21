@@ -2680,6 +2680,20 @@ void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
   }
 }
 
+void RenameDatabaseStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  Catalog_Namespace::DBMetadata db;
+  if (!SysCatalog::instance().getMetadataForDB(*database_name_, db)) {
+    throw std::runtime_error("Database " + *database_name_ + " does not exist.");
+  }
+
+  if (!session.get_currentUser().isSuper &&
+      session.get_currentUser().userId != db.dbOwner) {
+    throw std::runtime_error("Only the super user or the owner can rename the database.");
+  }
+
+  SysCatalog::instance().renameDatabase(*database_name_, *new_database_name_);
+}
+
 void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);

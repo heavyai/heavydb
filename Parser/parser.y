@@ -130,6 +130,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| copy_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
+	| rename_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_user_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_user_statement { $<nodeval>$ = $<nodeval>1; }
 	| alter_user_statement { $<nodeval>$ = $<nodeval>1; }
@@ -182,6 +183,13 @@ drop_database_statement:
 			$<nodeval>$ = new DropDBStmt($<stringval>4, $<boolval>3);
 		}
 		;
+rename_database_statement:
+		ALTER DATABASE NAME RENAME TO NAME
+		{
+		   $<nodeval>$ = new RenameDatabaseStmt($<stringval>3, $<stringval>6);
+		}
+		;
+
 create_user_statement:
 		CREATE USER username '(' name_eq_value_list ')'
 		{

@@ -105,12 +105,26 @@ struct DBSummary {
 };
 using DBSummaryList = std::list<DBSummary>;
 
+class CommonFileOperations {
+ public:
+  CommonFileOperations(std::string const& base_path) : base_path_(base_path) {}
+
+  inline void removeCatalogByFullPath(std::string const& full_path);
+  inline void removeCatalogByName(std::string const& name);
+  inline auto duplicateAndRenameCatalog(std::string const& current_name,
+                                        std::string const& new_name);
+  inline auto assembleCatalogName(std::string const& name);
+
+ private:
+  std::string const& base_path_;
+};
+
 /*
  * @type SysCatalog
  * @brief class for the system-wide catalog, currently containing user and database
  * metadata
  */
-class SysCatalog {
+class SysCatalog : private CommonFileOperations {
  public:
   void init(const std::string& basePath,
             std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
@@ -142,6 +156,7 @@ class SysCatalog {
                  bool* issuper,
                  const std::string* dbname);
   void createDatabase(const std::string& dbname, int owner);
+  void renameDatabase(std::string const& old_name, std::string const& new_name);
   void dropDatabase(const DBMetadata& db);
   bool getMetadataForUser(const std::string& name, UserMetadata& user);
   bool getMetadataForUserById(const int32_t idIn, UserMetadata& user);
@@ -241,7 +256,8 @@ class SysCatalog {
   typedef std::multimap<std::string, ObjectRoleDescriptor*> ObjectRoleDescriptorMap;
 
   SysCatalog()
-      : aggregator_(false)
+      : CommonFileOperations(basePath_)
+      , aggregator_(false)
       , sqliteMutex_()
       , sharedMutex_()
       , thread_holding_sqlite_lock(std::thread::id())
@@ -322,6 +338,8 @@ class SysCatalog {
   std::shared_ptr<Calcite> calciteMgr_;
   std::vector<LeafHostInfo> string_dict_hosts_;
   bool aggregator_;
+
+  auto yieldTransactionStreamer();
 
  public:
   mutable std::mutex sqliteMutex_;
