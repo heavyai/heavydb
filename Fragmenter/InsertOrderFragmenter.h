@@ -68,7 +68,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
       const size_t maxRows = DEFAULT_MAX_ROWS,
       const Data_Namespace::MemoryLevel defaultInsertLevel = Data_Namespace::DISK_LEVEL);
 
-  virtual ~InsertOrderFragmenter() override;
+  ~InsertOrderFragmenter() override;
   /**
    * @brief returns (inside QueryInfo) object all
    * ids and row sizes of fragments

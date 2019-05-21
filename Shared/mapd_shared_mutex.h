@@ -23,7 +23,7 @@
 #include <folly/SharedMutex.h>
 using mapd_shared_mutex = folly::SharedMutex;
 #else
-typedef std::shared_timed_mutex mapd_shared_mutex;
+using mapd_shared_mutex = std::shared_timed_mutex;
 #endif  // HAVE_FOLLY
 #define mapd_lock_guard std::lock_guard
 #define mapd_unique_lock std::unique_lock
@@ -32,9 +32,9 @@ typedef std::shared_timed_mutex mapd_shared_mutex;
 #include <boost/thread/shared_mutex.hpp>
 #ifdef HAVE_FOLLY
 #include <folly/SharedMutex.h>
-typedef folly::SharedMutex mapd_shared_mutex;
+using mapd_shared_mutex = folly::SharedMutex;
 #else
-typedef boost::shared_mutex mapd_shared_mutex;
+using mapd_shared_mutex = boost::shared_mutex;
 #endif  // HAVE_FOLLY
 #define mapd_lock_guard boost::lock_guard
 #define mapd_unique_lock boost::unique_lock

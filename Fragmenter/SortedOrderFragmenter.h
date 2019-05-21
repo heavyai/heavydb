@@ -45,13 +45,13 @@ class SortedOrderFragmenter : public InsertOrderFragmenter {
                               maxRows,
                               defaultInsertLevel) {}
 
-  virtual ~SortedOrderFragmenter() override {}
-  virtual void insertData(InsertData& insertDataStruct) override {
+  ~SortedOrderFragmenter() override {}
+  void insertData(InsertData& insertDataStruct) override {
     sortData(insertDataStruct);
     InsertOrderFragmenter::insertData(insertDataStruct);
   }
 
-  virtual void insertDataNoCheckpoint(InsertData& insertDataStruct) override {
+  void insertDataNoCheckpoint(InsertData& insertDataStruct) override {
     sortData(insertDataStruct);
     InsertOrderFragmenter::insertDataNoCheckpoint(insertDataStruct);
   }
