@@ -2698,6 +2698,19 @@ void check_alter_table_privilege(const Catalog_Namespace::SessionInfo& session,
   }
 }
 
+void RenameUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  if (!session.get_currentUser().isSuper) {
+    throw std::runtime_error("Only a super user can rename users.");
+  }
+
+  Catalog_Namespace::UserMetadata user;
+  if (!SysCatalog::instance().getMetadataForUser(*username_, user)) {
+    throw std::runtime_error("User " + *username_ + " does not exist.");
+  }
+
+  SysCatalog::instance().renameUser(*username_, *new_username_);
+}
+
 void RenameDatabaseStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   Catalog_Namespace::DBMetadata db;
   if (!SysCatalog::instance().getMetadataForDB(*database_name_, db)) {
@@ -2706,7 +2719,7 @@ void RenameDatabaseStmt::execute(const Catalog_Namespace::SessionInfo& session) 
 
   if (!session.get_currentUser().isSuper &&
       session.get_currentUser().userId != db.dbOwner) {
-    throw std::runtime_error("Only the super user or the owner can rename the database.");
+    throw std::runtime_error("Only a super user or the owner can rename the database.");
   }
 
   SysCatalog::instance().renameDatabase(*database_name_, *new_database_name_);

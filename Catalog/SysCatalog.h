@@ -155,6 +155,7 @@ class SysCatalog : private CommonFileOperations {
                  const std::string* passwd,
                  bool* issuper,
                  const std::string* dbname);
+  void renameUser(std::string const& old_name, std::string const& new_name);
   void createDatabase(const std::string& dbname, int owner);
   void renameDatabase(std::string const& old_name, std::string const& new_name);
   void dropDatabase(const DBMetadata& db);
@@ -323,6 +324,7 @@ class SysCatalog : private CommonFileOperations {
                                   int32_t dbId,
                                   Grantee* grantee);
   bool isDashboardSystemRole(const std::string& roleName);
+  void updateUserRoleName(const std::string& roleName, const std::string& newName);
 
   template <typename F, typename... Args>
   void execInTransaction(F&& f, Args&&... args);

@@ -207,6 +207,11 @@ alter_user_statement:
 		{
 			$<nodeval>$ = new AlterUserStmt($<stringval>3, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>5));
 		}
+		|
+		ALTER USER username RENAME TO username
+		{
+		   $<nodeval>$ = new RenameUserStmt($<stringval>3, $<stringval>6);
+		}
 		;
 
 name_eq_value_list:

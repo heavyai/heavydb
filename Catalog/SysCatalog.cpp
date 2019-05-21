@@ -872,6 +872,50 @@ auto SysCatalog::yieldTransactionStreamer() {
       };
 }
 
+void SysCatalog::updateUserRoleName(const std::string& roleName,
+                                    const std::string& newName) {
+  sys_write_lock write_lock(this);
+
+  auto it = granteeMap_.find(to_upper(roleName));
+  CHECK(it != granteeMap_.end());
+  it->second->setName(newName);
+  std::swap(granteeMap_[to_upper(newName)], it->second);
+  granteeMap_.erase(it);
+}
+
+void SysCatalog::renameUser(std::string const& old_name, std::string const& new_name) {
+  using namespace std::string_literals;
+  sys_write_lock write_lock(this);
+  sys_sqlite_lock sqlite_lock(this);
+
+  UserMetadata old_user;
+  if (!getMetadataForUser(old_name, old_user)) {
+    throw std::runtime_error("User " + old_name + " doesn't exist.");
+  }
+
+  UserMetadata new_user;
+  if (getMetadataForUser(new_name, new_user)) {
+    throw std::runtime_error("User " + new_name + " already exists.");
+  }
+
+  if (getGrantee(new_name)) {
+    throw runtime_error(
+        "User name " + new_name +
+        " is same as one of existing grantees. User and role names should be unique.");
+  }
+
+  auto transaction_streamer = yieldTransactionStreamer();
+  auto failure_handler = [] {};
+  auto success_handler = [this, &old_name, &new_name] {
+    updateUserRoleName(old_name, new_name);
+  };
+  auto q1 = {"UPDATE mapd_users SET name=?1 where name=?2;"s, new_name, old_name};
+  auto q2 = {"UPDATE mapd_object_permissions set roleName=?1 WHERE roleName=?2;"s,
+             new_name,
+             old_name};
+  transaction_streamer(sqliteConnector_, success_handler, failure_handler, q1, q2);
+}
+
 void SysCatalog::renameDatabase(std::string const& old_name,
                                 std::string const& new_name) {
   using namespace std::string_literals;

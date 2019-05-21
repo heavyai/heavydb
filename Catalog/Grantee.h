@@ -50,6 +50,7 @@ class Grantee {
   DBObject* findDbObject(const DBObjectKey& objectKey, bool only_direct) const;
   bool hasAnyPrivilegesOnDb(int32_t dbId, bool only_direct) const;
   const std::string& getName() const { return name_; }
+  void setName(const std::string& name) { name_ = name; }
   std::vector<std::string> getRoles() const;
   bool hasRole(Role* role, bool only_direct) const;
   const DBObjectMap* getDbObjects(bool only_direct) const {

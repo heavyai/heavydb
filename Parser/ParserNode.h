@@ -1206,6 +1206,17 @@ class RenameDatabaseStmt : public DDLStmt {
   std::unique_ptr<std::string> new_database_name_;
 };
 
+class RenameUserStmt : public DDLStmt {
+ public:
+  RenameUserStmt(std::string* username, std::string* new_username)
+      : username_(username), new_username_(new_username) {}
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
+
+ private:
+  std::unique_ptr<std::string> username_;
+  std::unique_ptr<std::string> new_username_;
+};
+
 class RenameTableStmt : public DDLStmt {
  public:
   RenameTableStmt(std::string* tab, std::string* new_tab_name)

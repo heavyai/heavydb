@@ -8,6 +8,9 @@
 #include "../Catalog/DBObject.h"
 #include "../DataMgr/DataMgr.h"
 #include "../Parser/parser.h"
+#include "../QueryEngine/ArrowResultSet.h"
+#include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
+#include "../QueryEngine/Execute.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/scope.h"
@@ -28,6 +31,15 @@ std::vector<DBObject> privObjects;
 
 auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 
+template <class T>
+T v(const TargetValue& r) {
+  auto scalar_r = boost::get<ScalarTargetValue>(&r);
+  CHECK(scalar_r);
+  auto p = boost::get<T>(scalar_r);
+  CHECK(p);
+  return *p;
+}
+
 inline void run_ddl_statement(const std::string& query,
                               SessionInfoPtr& session_ptr = g_session) {
   QueryRunner::run_ddl_statement(query, session_ptr);
@@ -38,6 +50,20 @@ auto run_multiple_agg(const std::string& query_str,
                       SessionInfoPtr& session = g_session) {
   return QueryRunner::run_multiple_agg(
       query_str, session, device_type, false, true, g_ir_output_file);
+}
+
+TargetValue run_simple_agg(const std::string& query_str,
+                           const ExecutorDeviceType device_type,
+                           SessionInfoPtr& session = g_session,
+                           const bool geo_return_geo_tv = true,
+                           const bool allow_loop_joins = true) {
+  auto rows = run_multiple_agg(query_str, device_type, session);
+  if (geo_return_geo_tv) {
+    rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+  }
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size());
+  return crt_row[0];
 }
 
 }  // namespace
@@ -1421,6 +1447,292 @@ TEST(DBObject, LoadKey) {
   ASSERT_NO_THROW(dbo1.loadKey());
   ASSERT_NO_THROW(dbo2.loadKey(*cat));
   ASSERT_NO_THROW(dbo3.loadKey(*cat));
+}
+
+TEST(SysCatalog, RenameUser_Basic) {
+  using namespace std::string_literals;
+  auto username = "chuck"s;
+  auto database_name = "nydb"s;
+  auto rename_successful = false;
+
+  ScopeGuard scope_guard = [&rename_successful] {
+    if (rename_successful) {
+      run_ddl_statement("DROP USER cryingchuck;");
+    } else {
+      run_ddl_statement("DROP USER chuck");
+    }
+    run_ddl_statement("DROP DATABASE nydb;");
+  };
+
+  Catalog_Namespace::UserMetadata user_meta;
+  auto username_out(username);
+  auto database_out(database_name);
+
+  run_ddl_statement("CREATE USER chuck (password='password');");
+  run_ddl_statement("CREATE DATABASE nydb (owner='chuck');");
+  run_ddl_statement("ALTER USER chuck (default_db='nydb')");
+
+  // Check ability to login
+  ASSERT_NO_THROW(
+      sys_cat.login(database_out, username_out, "password"s, user_meta, false));
+
+  // Rename should be fine
+  EXPECT_NO_THROW(run_ddl_statement("ALTER USER chuck RENAME TO cryingchuck;"););
+
+  rename_successful = true;
+
+  // Check if we can login as the new user
+  username_out = "cryingchuck"s;
+  ASSERT_NO_THROW(
+      sys_cat.login(database_out, username_out, "password"s, user_meta, false));
+}
+
+TEST(SysCatalog, RenameUser_AlreadyExisting) {
+  using namespace std::string_literals;
+
+  auto username = "chuck"s;
+  auto new_username = "marcy"s;
+
+  ScopeGuard scope_guard = [] {
+    run_ddl_statement("DROP USER chuck;");
+    run_ddl_statement("DROP USER marcy;");
+  };
+
+  run_ddl_statement("CREATE USER chuck (password='password');");
+  run_ddl_statement("CREATE USER marcy (password='password');");
+
+  EXPECT_THROW(run_ddl_statement("ALTER USER chuck RENAME TO marcy;"),
+               std::runtime_error);
+}
+
+TEST(SysCatalog, RenameUser_UserDoesntExist) {
+  using namespace std::string_literals;
+
+  EXPECT_THROW(run_ddl_statement("ALTER USER lemont RENAME TO sanford;"),
+               std::runtime_error);
+}
+
+TEST(SysCatalog, RenameUser_AlreadyLoggedInQueryAfterRename) {
+  using namespace std::string_literals;
+  auto username = "chuck"s;
+  auto database_name = "nydb"s;
+  auto rename_successful = false;
+
+  ScopeGuard scope_guard = [&rename_successful] {
+    if (rename_successful) {
+      run_ddl_statement("DROP USER cryingchuck;");
+    } else {
+      run_ddl_statement("DROP USER chuck");
+    }
+    run_ddl_statement("DROP DATABASE nydb;");
+  };
+
+  Catalog_Namespace::UserMetadata user_meta;
+  auto username_out(username);
+  auto database_out(database_name);
+
+  run_ddl_statement("CREATE USER chuck (password='password');");
+  run_ddl_statement("CREATE DATABASE nydb (owner='chuck');");
+  run_ddl_statement("ALTER USER chuck (default_db='nydb')");
+
+  // Check ability to login
+  ASSERT_NO_THROW(
+      sys_cat.login(database_out, username_out, "password"s, user_meta, false));
+
+  auto dt = ExecutorDeviceType::CPU;
+
+  Catalog_Namespace::UserMetadata user_meta2;
+  username_out = "chuck"s;
+  database_out = "nydb"s;
+  ASSERT_NO_THROW(
+      sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
+
+  SessionInfoPtr chuck_session = std::make_unique<Catalog_Namespace::SessionInfo>(
+      Catalog_Namespace::Catalog::get("nydb"s), user_meta2, ExecutorDeviceType::CPU, "");
+
+  run_ddl_statement("create table chaos ( x integer );", chuck_session);
+  run_multiple_agg("insert into chaos values ( 1234 );", dt, chuck_session);
+
+  // Rename should be fine
+  EXPECT_NO_THROW(run_ddl_statement("ALTER USER chuck RENAME TO cryingchuck;"););
+
+  rename_successful = true;
+
+  // After the rename, can we query with the old session?
+  EXPECT_THROW(run_simple_agg("select x from chaos limit 1;", dt, chuck_session),
+               std::runtime_error);
+
+  Catalog_Namespace::UserMetadata user_meta3;
+  username_out = "cryingchuck"s;
+  ASSERT_NO_THROW(
+      sys_cat.login(database_out, username_out, "password"s, user_meta3, false));
+
+  SessionInfoPtr cryingchuck_session = std::make_unique<Catalog_Namespace::SessionInfo>(
+      Catalog_Namespace::Catalog::get("nydb"s), user_meta3, ExecutorDeviceType::CPU, "");
+
+  // After the rename, can we query with the new session?
+  ASSERT_EQ(1234,
+            v<int64_t>(
+                run_simple_agg("select x from chaos limit 1;", dt, cryingchuck_session)));
+}
+
+TEST(SysCatalog, RenameUser_ReloginWithOldName) {
+  using namespace std::string_literals;
+  auto username = "chuck"s;
+  auto database_name = "nydb"s;
+  auto rename_successful = false;
+
+  ScopeGuard scope_guard = [&rename_successful] {
+    if (rename_successful) {
+      run_ddl_statement("DROP USER cryingchuck;");
+    } else {
+      run_ddl_statement("DROP USER chuck");
+    }
+    run_ddl_statement("DROP DATABASE nydb;");
+  };
+
+  Catalog_Namespace::UserMetadata user_meta;
+  auto username_out(username);
+  auto database_out(database_name);
+
+  run_ddl_statement("CREATE USER chuck (password='password');");
+  run_ddl_statement("CREATE DATABASE nydb (owner='chuck');");
+  run_ddl_statement("ALTER USER chuck (default_db='nydb')");
+
+  // Check ability to login
+  ASSERT_NO_THROW(
+      sys_cat.login(database_out, username_out, "password"s, user_meta, false));
+
+  auto dt = ExecutorDeviceType::CPU;
+
+  Catalog_Namespace::UserMetadata user_meta2;
+  username_out = "chuck"s;
+  database_out = "nydb"s;
+  ASSERT_NO_THROW(
+      sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
+
+  SessionInfoPtr chuck_session = std::make_unique<Catalog_Namespace::SessionInfo>(
+      Catalog_Namespace::Catalog::get("nydb"s), user_meta2, ExecutorDeviceType::CPU, "");
+
+  run_ddl_statement("create table chaos ( x integer );", chuck_session);
+  run_multiple_agg("insert into chaos values ( 1234 );", dt, chuck_session);
+
+  // Rename should be fine
+  EXPECT_NO_THROW(run_ddl_statement("ALTER USER chuck RENAME TO cryingchuck;"););
+
+  rename_successful = true;
+
+  Catalog_Namespace::UserMetadata user_meta3;
+  EXPECT_THROW(sys_cat.login(database_out, username_out, "password"s, user_meta3, false),
+               std::runtime_error);
+}
+
+TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
+  using namespace std::string_literals;
+  auto rename_successful = false;
+
+  ScopeGuard s = [&rename_successful] {
+    run_ddl_statement("DROP USER rom;");
+
+    if (rename_successful) {
+      run_ddl_statement("DROP USER renamed_quark;");
+    } else {
+      run_ddl_statement("DROP USER quark;");
+    }
+    run_ddl_statement("DROP DATABASE Ferengi;");
+  };
+
+  run_ddl_statement("CREATE USER quark (password='password',is_super='false');");
+  run_ddl_statement("CREATE USER rom (password='password',is_super='false');");
+  run_ddl_statement("CREATE DATABASE Ferengi (owner='rom');");
+
+  auto database_out = "Ferengi"s;
+  auto username_out = "rom"s;
+  Catalog_Namespace::UserMetadata user_meta;
+  ASSERT_NO_THROW(
+      sys_cat.login(database_out, username_out, "password"s, user_meta, false));
+
+  auto dt = ExecutorDeviceType::CPU;
+
+  // Log in as rom, create the database tables
+  Catalog_Namespace::UserMetadata user_meta2;
+  username_out = "rom"s;
+  database_out = "Ferengi"s;
+  ASSERT_NO_THROW(
+      sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
+
+  SessionInfoPtr rom_session = std::make_unique<Catalog_Namespace::SessionInfo>(
+      Catalog_Namespace::Catalog::get("Ferengi"s),
+      user_meta2,
+      ExecutorDeviceType::CPU,
+      "");
+
+  run_ddl_statement("create table bank_account ( latinum integer );", rom_session);
+  run_ddl_statement("create view riches as select * from bank_account;", rom_session);
+  run_multiple_agg("insert into bank_account values (1234);", dt, rom_session);
+
+  run_ddl_statement("grant access on database Ferengi to quark;", rom_session);
+  run_ddl_statement("grant select on table bank_account to quark;", rom_session);
+  run_ddl_statement("grant select on view riches to quark;", rom_session);
+
+  run_ddl_statement("ALTER USER quark RENAME TO renamed_quark;");
+
+  rename_successful = true;
+
+  Catalog_Namespace::UserMetadata user_meta3;
+  username_out = "renamed_quark"s;
+  database_out = "Ferengi"s;
+  ASSERT_NO_THROW(
+      sys_cat.login(database_out, username_out, "password"s, user_meta3, false));
+
+  SessionInfoPtr renamed_quark_session = std::make_unique<Catalog_Namespace::SessionInfo>(
+      Catalog_Namespace::Catalog::get("Ferengi"s),
+      user_meta3,
+      ExecutorDeviceType::CPU,
+      "");
+
+  EXPECT_NO_THROW(
+      run_multiple_agg("select * from bank_account;", dt, renamed_quark_session));
+  EXPECT_NO_THROW(run_multiple_agg("select * from riches;", dt, renamed_quark_session));
+}
+
+TEST(SysCatalog, RenameUser_SuperUserRenameCheck) {
+  using namespace std::string_literals;
+  auto rename_successful = false;
+
+  ScopeGuard s = [&rename_successful] {
+    run_ddl_statement("DROP USER rom;");
+    run_ddl_statement("DROP USER quark;");
+
+    run_ddl_statement("DROP DATABASE Ferengi;");
+  };
+
+  run_ddl_statement("CREATE USER quark (password='password',is_super='false');");
+  run_ddl_statement("CREATE USER rom (password='password',is_super='false');");
+  run_ddl_statement("CREATE DATABASE Ferengi (owner='rom');");
+
+  auto database_out = "Ferengi"s;
+  auto username_out = "rom"s;
+  Catalog_Namespace::UserMetadata user_meta;
+  ASSERT_NO_THROW(
+      sys_cat.login(database_out, username_out, "password"s, user_meta, false));
+
+  // Log in as rom, create the database tables
+  Catalog_Namespace::UserMetadata user_meta2;
+  username_out = "rom"s;
+  database_out = "Ferengi"s;
+  ASSERT_NO_THROW(
+      sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
+
+  SessionInfoPtr rom_session = std::make_unique<Catalog_Namespace::SessionInfo>(
+      Catalog_Namespace::Catalog::get("Ferengi"s),
+      user_meta2,
+      ExecutorDeviceType::CPU,
+      "");
+
+  EXPECT_THROW(
+      run_ddl_statement("ALTER USER quark RENAME TO renamed_quark;", rom_session),
+      std::runtime_error);
 }
 
 TEST(SysCatalog, RenameDatabase_Basic) {
