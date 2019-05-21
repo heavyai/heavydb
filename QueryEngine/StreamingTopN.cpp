@@ -53,6 +53,9 @@ bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
     if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
       return false;
     }
+    if (dynamic_cast<const Analyzer::WindowFunction*>(target_expr)) {
+      return false;
+    }
   }
 
   // TODO: Allow streaming top n for columnar output

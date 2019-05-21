@@ -14535,6 +14535,18 @@ TEST(Select, WindowFunctionAggregate) {
         "ORDER BY y ASC";
     c(query + " NULLS FIRST, m ASC NULLS FIRST;", query + ", m ASC;", dt);
   }
+  {
+    std::string query =
+        "SELECT COUNT(*) OVER (PARTITION BY y ORDER BY x ASC), x, y FROM "
+        "test_window_func ORDER BY x LIMIT 1;";
+    const auto rows = run_multiple_agg(query, dt);
+    ASSERT_EQ(rows->rowCount(), size_t(1));
+    const auto crt_row = rows->getNextRow(true, true);
+    ASSERT_EQ(crt_row.size(), size_t(3));
+    ASSERT_EQ(v<int64_t>(crt_row[0]), int64_t(1));
+    ASSERT_EQ(v<int64_t>(crt_row[1]), int64_t(0));
+    ASSERT_EQ(boost::get<std::string>(v<NullableString>(crt_row[2])), "aaa");
+  }
   c("SELECT x, RANK() OVER (PARTITION BY y ORDER BY n ASC NULLS FIRST) r FROM (SELECT x, "
     "y, COUNT(*) n FROM test_window_func GROUP BY x, y) ORDER BY x ASC NULLS FIRST, y "
     "ASC NULLS FIRST;",
