@@ -30,6 +30,7 @@ struct AuthMetadata {
   std::string domainComp;
   std::string restUrl;
   std::string restToken;
+  bool allowLocalAuthFallback;
 };
 
 #endif /* AUTHMETADATA_H */

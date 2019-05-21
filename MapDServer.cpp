@@ -774,6 +774,9 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
   LOG(INFO) << " Enable Calcite view optimize "
             << mapd_parameters.enable_calcite_view_optimize;
 
+  LOG(INFO) << " Allow Local Auth Fallback: "
+            << (authMetadata.allowLocalAuthFallback ? "enabled" : "disabled");
+
   boost::algorithm::trim_if(authMetadata.distinguishedName, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.uri, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.ldapQueryUrl, boost::is_any_of("\"'"));

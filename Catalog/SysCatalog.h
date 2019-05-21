@@ -128,7 +128,7 @@ class SysCatalog : private CommonFileOperations {
  public:
   void init(const std::string& basePath,
             std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-            AuthMetadata authMetadata,
+            const AuthMetadata& authMetadata,
             std::shared_ptr<Calcite> calcite,
             bool is_new_db,
             bool aggregator,
@@ -335,6 +335,7 @@ class SysCatalog : private CommonFileOperations {
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
   std::unique_ptr<LdapServer> ldap_server_;
   std::unique_ptr<RestServer> rest_server_;
+  const AuthMetadata* authMetadata_;
   std::shared_ptr<Calcite> calciteMgr_;
   std::vector<LeafHostInfo> string_dict_hosts_;
   bool aggregator_;

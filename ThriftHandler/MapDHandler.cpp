@@ -148,7 +148,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const int start_gpu,
                          const size_t reserved_gpu_mem,
                          const size_t num_reader_threads,
-                         const AuthMetadata authMetadata,
+                         const AuthMetadata& authMetadata,
                          const MapDParameters& mapd_parameters,
                          const bool legacy_syntax,
                          const int idle_session_duration,
@@ -163,6 +163,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , allow_multifrag_(allow_multifrag)
     , read_only_(read_only)
     , allow_loop_joins_(allow_loop_joins)
+    , authMetadata_(authMetadata)
     , mapd_parameters_(mapd_parameters)
     , legacy_syntax_(legacy_syntax)
     , super_user_rights_(false)

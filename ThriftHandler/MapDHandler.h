@@ -129,7 +129,7 @@ class MapDHandler : public MapDIf {
               const int start_gpu,
               const size_t reserved_gpu_mem,
               const size_t num_reader_threads,
-              const AuthMetadata authMetadata,
+              const AuthMetadata& authMetadata,
               const MapDParameters& mapd_parameters,
               const bool legacy_syntax,
               const int idle_session_duration,
@@ -444,6 +444,7 @@ class MapDHandler : public MapDIf {
   mapd_shared_mutex sessions_mutex_;
   std::mutex render_mutex_;
   int64_t start_time_;
+  const AuthMetadata& authMetadata_;
   const MapDParameters& mapd_parameters_;
   std::unique_ptr<MapDRenderHandler> render_handler_;
   std::unique_ptr<MapDAggHandler> agg_handler_;

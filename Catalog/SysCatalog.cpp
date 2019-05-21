@@ -105,7 +105,7 @@ auto CommonFileOperations::duplicateAndRenameCatalog(std::string const& current_
 
 void SysCatalog::init(const std::string& basePath,
                       std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
-                      AuthMetadata authMetadata,
+                      const AuthMetadata& authMetadata,
                       std::shared_ptr<Calcite> calcite,
                       bool is_new_db,
                       bool aggregator,
@@ -116,8 +116,9 @@ void SysCatalog::init(const std::string& basePath,
 
     basePath_ = basePath;
     dataMgr_ = dataMgr;
-    ldap_server_.reset(new LdapServer(authMetadata));
-    rest_server_.reset(new RestServer(authMetadata));
+    authMetadata_ = &authMetadata;
+    ldap_server_.reset(new LdapServer(*authMetadata_));
+    rest_server_.reset(new RestServer(*authMetadata_));
     calciteMgr_ = calcite;
     string_dict_hosts_ = string_dict_hosts;
     aggregator_ = aggregator;
@@ -1070,12 +1071,14 @@ bool SysCatalog::checkPasswordForUserImpl(const std::string& passwd,
     char fake_hash[BCRYPT_HASHSIZE];
     CHECK(bcrypt_gensalt(-1, fake_hash) == 0);
     bcrypt_checkpw(passwd.c_str(), fake_hash);
+    LOG(WARNING) << "Local login failed";
     return false;
   }
   int pwd_check_result = bcrypt_checkpw(passwd.c_str(), user.passwd_hash.c_str());
   // if the check fails there is a good chance that data on disc is broken
   CHECK(pwd_check_result >= 0);
   if (pwd_check_result != 0) {
+    LOG(WARNING) << "Local login failed";
     return false;
   }
   return true;
