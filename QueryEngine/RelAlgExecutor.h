@@ -72,7 +72,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
       RenderInfo* render_info,
       const int64_t queue_time_ms);
 
-  FirstStepExecutionResult executeRelAlgQueryFirstStep(const RelAlgNode* ra,
+  FirstStepExecutionResult executeRelAlgQueryFirstStep(const RaExecutionDesc& exec_desc,
                                                        const CompilationOptions& co,
                                                        const ExecutionOptions& eo,
                                                        RenderInfo* render_info);
@@ -90,7 +90,15 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                    const CompilationOptions& co,
                                    const ExecutionOptions& eo,
                                    RenderInfo* render_info,
-                                   const int64_t queue_time_ms);
+                                   const int64_t queue_time_ms,
+                                   const bool with_existing_temp_tables = false);
+
+  ExecutionResult executeRelAlgSubSeq(std::vector<RaExecutionDesc>::iterator start_desc,
+                                      std::vector<RaExecutionDesc>::iterator end_desc,
+                                      const CompilationOptions& co,
+                                      const ExecutionOptions& eo,
+                                      RenderInfo* render_info,
+                                      const int64_t queue_time_ms);
 
   void addLeafResult(const unsigned id, const AggregatedResult& result) {
     const auto it_ok = leaf_results_.emplace(id, result);
@@ -124,7 +132,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                             RenderInfo* render_info);
 
   void executeRelAlgStep(const size_t step_idx,
-                         std::vector<RaExecutionDesc>&,
+                         std::vector<RaExecutionDesc>::iterator exec_desc_itr,
                          const CompilationOptions&,
                          const ExecutionOptions&,
                          RenderInfo*,
@@ -290,6 +298,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
     CHECK(it_ok.second);
   }
 
+  void eraseFromTemporaryTables(const int table_id) { temporary_tables_.erase(table_id); }
+
   void handleNop(RaExecutionDesc& ed);
 
   JoinQualsPerNestingLevel translateLeftDeepJoinFilter(
@@ -316,6 +326,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
   int64_t queue_time_ms_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;
   static const size_t max_groups_buffer_entry_default_guess{16384};
+
+  friend class PendingExecutionClosure;
 };
 
 #endif  // QUERYENGINE_RELALGEXECUTOR_H

@@ -229,13 +229,11 @@ void RelAlgExecutor::cleanupPostExecution() {
 }
 
 FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(
-    const RelAlgNode* ra,
+    const RaExecutionDesc& exec_desc,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
     RenderInfo* render_info) {
-  auto ed_list = get_execution_descriptors(ra);
-  CHECK(!ed_list.empty());
-  auto first_exec_desc = ed_list.front();
+  auto first_exec_desc = exec_desc;
   const auto sort = dynamic_cast<const RelSort*>(first_exec_desc.getBody());
   size_t shard_count{0};
   if (sort) {
@@ -255,8 +253,10 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(
   const auto merge_type = (node_is_aggregate(first_exec_desc.getBody()) && !shard_count)
                               ? MergeType::Reduce
                               : MergeType::Union;
+  // Execute the current step. Keep the existing temporary table map intact, since we may
+  // need to use results from previous query steps.
   return {executeRelAlgSeq(
-              first_exec_desc_singleton_list, co, eo, render_info, queue_time_ms_),
+              first_exec_desc_singleton_list, co, eo, render_info, queue_time_ms_, true),
           merge_type,
           first_exec_desc.getBody()->getId(),
           false};
@@ -290,9 +290,12 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
                                                  const CompilationOptions& co,
                                                  const ExecutionOptions& eo,
                                                  RenderInfo* render_info,
-                                                 const int64_t queue_time_ms) {
+                                                 const int64_t queue_time_ms,
+                                                 const bool with_existing_temp_tables) {
   INJECT_TIMER(executeRelAlgSeq);
-  decltype(temporary_tables_)().swap(temporary_tables_);
+  if (!with_existing_temp_tables) {
+    decltype(temporary_tables_)().swap(temporary_tables_);
+  }
   decltype(target_exprs_owned_)().swap(target_exprs_owned_);
   executor_->catalog_ = &cat_;
   executor_->temporary_tables_ = &temporary_tables_;
@@ -301,28 +304,54 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
   CHECK(!exec_descs.empty());
   const auto exec_desc_count = eo.just_explain ? size_t(1) : exec_descs.size();
 
-  for (size_t i = 0; i < exec_desc_count; ++i) {
+  size_t i = 0;
+  for (auto it = exec_descs.begin(); it != exec_descs.end(); ++it, ++i) {
     // only render on the last step
-    executeRelAlgStep(i,
-                      exec_descs,
+    executeRelAlgStep(i++,
+                      it,
                       co,
                       eo,
-                      (i == exec_desc_count - 1 ? render_info : nullptr),
+                      (it == exec_descs.end() - 1 ? render_info : nullptr),
                       queue_time_ms);
   }
 
   return exec_descs[exec_desc_count - 1].getResult();
 }
 
-void RelAlgExecutor::executeRelAlgStep(const size_t i,
-                                       std::vector<RaExecutionDesc>& exec_descs,
-                                       const CompilationOptions& co,
-                                       const ExecutionOptions& eo,
-                                       RenderInfo* render_info,
-                                       const int64_t queue_time_ms) {
+ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
+    std::vector<RaExecutionDesc>::iterator start_desc,
+    std::vector<RaExecutionDesc>::iterator end_desc,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo,
+    RenderInfo* render_info,
+    const int64_t queue_time_ms) {
+  INJECT_TIMER(executeRelAlgSubSeq);
+  executor_->catalog_ = &cat_;
+  executor_->temporary_tables_ = &temporary_tables_;
+
+  time(&now_);
+  CHECK(!eo.just_explain);
+
+  size_t i = 0;
+  for (auto it = start_desc; it != end_desc; ++it, ++i) {
+    // only render on the last step
+    executeRelAlgStep(
+        i++, it, co, eo, (it == end_desc - 1 ? render_info : nullptr), queue_time_ms);
+  }
+
+  return (end_desc - 1)->getResult();
+}
+
+void RelAlgExecutor::executeRelAlgStep(
+    const size_t i,
+    std::vector<RaExecutionDesc>::iterator exec_desc_itr,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo,
+    RenderInfo* render_info,
+    const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgStep);
   WindowProjectNodeContext::reset();
-  auto& exec_desc = exec_descs[i];
+  auto& exec_desc = *exec_desc_itr;
   const auto body = exec_desc.getBody();
   if (body->isNop()) {
     handleNop(exec_desc);
@@ -366,13 +395,17 @@ void RelAlgExecutor::executeRelAlgStep(const size_t i,
       executeUpdateViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
     } else {
       ssize_t prev_count = -1;
-      if (g_skip_intermediate_count && i > 0 &&
-          dynamic_cast<const RelCompound*>(exec_descs[i - 1].getBody())) {
-        auto prev_desc = exec_descs[i - 1];
-        const auto& prev_exe_result = prev_desc.getResult();
-        const auto prev_result = prev_exe_result.getRows();
-        if (prev_result) {
-          prev_count = static_cast<ssize_t>(prev_result->rowCount());
+      // Disabling the intermediate count optimization in distributed, as the previous
+      // execution descriptor will likely not hold the aggregated result.
+      if (g_skip_intermediate_count && i > 0 && !g_cluster) {
+        auto& prev_exec_desc = *(exec_desc_itr - 1);
+        if (dynamic_cast<const RelCompound*>(prev_exec_desc.getBody())) {
+          auto prev_desc = prev_exec_desc;
+          const auto& prev_exe_result = prev_desc.getResult();
+          const auto prev_result = prev_exe_result.getRows();
+          if (prev_result) {
+            prev_count = static_cast<ssize_t>(prev_result->rowCount());
+          }
         }
       }
       exec_desc.setResult(executeProject(

@@ -1607,14 +1607,13 @@ TEST(Select, ApproxCountDistinct) {
     c("SELECT AVG(z), APPROX_COUNT_DISTINCT(x) AS dx FROM test GROUP BY y HAVING dx > 1;",
       "SELECT AVG(z), COUNT(distinct x) AS dx FROM test GROUP BY y HAVING dx > 1;",
       dt);
-    SKIP_ON_AGGREGATOR(c(
-        "SELECT approx_value, exact_value FROM (SELECT APPROX_COUNT_DISTINCT(x) AS "
-        "approx_value FROM test), (SELECT "
-        "COUNT(distinct x) AS exact_value FROM test);",
-        "SELECT approx_value, exact_value FROM (SELECT COUNT(distinct x) AS approx_value "
-        "FROM test), (SELECT "
-        "COUNT(distinct x) AS exact_value FROM test);",
-        dt));
+    c("SELECT approx_value, exact_value FROM (SELECT APPROX_COUNT_DISTINCT(x) AS "
+      "approx_value FROM test), (SELECT "
+      "COUNT(distinct x) AS exact_value FROM test);",
+      "SELECT approx_value, exact_value FROM (SELECT COUNT(distinct x) AS approx_value "
+      "FROM test), (SELECT "
+      "COUNT(distinct x) AS exact_value FROM test);",
+      dt);
     c("SELECT APPROX_COUNT_DISTINCT(x, 1) FROM test;",
       "SELECT COUNT(distinct x) FROM test;",
       dt);
@@ -2085,8 +2084,7 @@ TEST(Select, Strings) {
     c("SELECT COUNT(*) FROM test WHERE str LIKE 'ba%';", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE '%eal_bar';", dt);
     c("SELECT COUNT(*) FROM test WHERE str LIKE '%ba%';", dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT * FROM test WHERE str LIKE '%' ORDER BY x ASC, y ASC;", dt));
+    c("SELECT * FROM test WHERE str LIKE '%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE str LIKE 'f%%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE str LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE ss LIKE 'f%\%' ORDER BY x ASC, y ASC;", dt);
@@ -2391,8 +2389,7 @@ TEST(Select, StringsNoneEncoding) {
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_%%%';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_ba%';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE '%eal_bar';", dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT * FROM test WHERE real_str LIKE '%' ORDER BY x ASC, y ASC;", dt));
+    c("SELECT * FROM test WHERE real_str LIKE '%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE real_str LIKE 'real_f%%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE real_str LIKE 'real_f%\%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE real_str LIKE 'real_@f%%' ESCAPE '@' ORDER BY x ASC, y "
@@ -5194,17 +5191,19 @@ void import_geospatial_test() {
 void import_geospatial_join_test(const bool replicate_inner_table = false) {
   // Create a single fragment inner table that is half the size of the geospatial_test
   // (outer) table
-  const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_inner_join_test;");
-  run_ddl_statement(geospatial_test);
-  constexpr char create_ddl[] = R"(CREATE TABLE geospatial_inner_join_test (
-        id INT,
-        p POINT,
-        l LINESTRING,
-        poly POLYGON,
-        mpoly MULTIPOLYGON
-      ) WITH (fragment_size=20); 
-  )";
-  run_ddl_statement(create_ddl);
+  const std::string drop_geospatial_test(
+      "DROP TABLE IF EXISTS geospatial_inner_join_test;");
+  run_ddl_statement(drop_geospatial_test);
+  std::string column_definition =
+      "id INT, p POINT, l LINESTRING, poly POLYGON, mpoly MULTIPOLYGON";
+  auto create_statement = build_create_table_statement(column_definition,
+                                                       "geospatial_inner_join_test",
+                                                       {"", 0},
+                                                       {},
+                                                       20,
+                                                       true,
+                                                       g_aggregator);
+  run_ddl_statement(create_statement);
   TestHelpers::ValuesGenerator gen("geospatial_inner_join_test");
   for (ssize_t i = 0; i < g_num_rows; i += 2) {
     const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
@@ -5226,8 +5225,6 @@ void import_geospatial_join_test(const bool replicate_inner_table = false) {
 }  // namespace
 
 TEST(Select, ArrayUnnest) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     unsigned power10 = 1;
@@ -5321,8 +5318,6 @@ TEST(Select, ArrayUnnest) {
 }
 
 TEST(Select, ArrayIndex) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     for (size_t row_idx = 0; row_idx < g_array_test_row_count; ++row_idx) {
@@ -5437,8 +5432,6 @@ TEST(Select, ArrayCountDistinct) {
 }
 
 TEST(Select, ArrayAnyAndAll) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     unsigned power10 = 1;
@@ -5522,13 +5515,14 @@ TEST(Select, ArrayAnyAndAll) {
     ASSERT_EQ(int64_t(2),
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM array_test WHERE 'bb' >= ANY arr_str;", dt)));
-    ASSERT_EQ(int64_t(0),
-              v<int64_t>(run_simple_agg(
-                  "SELECT COUNT(*) FROM array_test WHERE  real_str = ANY arr_str;", dt)));
-    ASSERT_EQ(
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+        int64_t(0),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM array_test WHERE  real_str = ANY arr_str;", dt))));
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
         int64_t(g_array_test_row_count),
         v<int64_t>(run_simple_agg(
-            "SELECT COUNT(*) FROM array_test WHERE  real_str <> ANY arr_str;", dt)));
+            "SELECT COUNT(*) FROM array_test WHERE  real_str <> ANY arr_str;", dt))));
     ASSERT_EQ(
         int64_t(g_array_test_row_count - 1),
         v<int64_t>(run_simple_agg(
@@ -6000,8 +5994,6 @@ TEST(Select, Subqueries) {
 }
 
 TEST(Select, Joins_Arrays) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     ASSERT_EQ(int64_t(0),
@@ -6116,18 +6108,16 @@ TEST(Select, Joins_ImplicitJoins) {
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x OR test.x = "
       "test_inner.x;",
       dt);
-    SKIP_ON_AGGREGATOR(c("SELECT bar.str FROM test, bar WHERE test.str = bar.str;", dt));
+    c("SELECT bar.str FROM test, bar WHERE test.str = bar.str;", dt);
 
     ASSERT_EQ(int64_t(3),
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, join_test "
                                         "WHERE test.rowid = join_test.rowid;",
                                         dt)));
-    SKIP_ON_AGGREGATOR(
-        ASSERT_EQ(7,
-                  v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
-                                            "test.x = test_inner.x AND test.rowid = 9;",
-                                            dt))));
-
+    ASSERT_EQ(7,
+              v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
+                                        "test.x = test_inner.x AND test.rowid = 9;",
+                                        dt)));
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, test_inner WHERE "
                                         "test.x = test_inner.x AND test.rowid = 20;",
@@ -6482,8 +6472,6 @@ TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
 }
 
 TEST(Select, Joins_InnerJoin_Filters) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT count(*) FROM test AS a JOIN join_test AS b ON a.x = b.x JOIN test_inner "
@@ -6498,10 +6486,9 @@ TEST(Select, Joins_InnerJoin_Filters) {
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.str = test_inner.str AND test.x "
       "= 7;",
       dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT test.x, test_inner.str FROM test JOIN test_inner ON test.str = "
-          "test_inner.str AND test.x <> 7;",
-          dt));
+    c("SELECT test.x, test_inner.str FROM test JOIN test_inner ON test.str = "
+      "test_inner.str AND test.x <> 7;",
+      dt);
     c("SELECT count(*) FROM test AS a JOIN hash_join_test AS b ON a.x = b.x JOIN "
       "test_inner AS c ON b.str = c.str "
       "WHERE a.y "
@@ -6517,10 +6504,13 @@ TEST(Select, Joins_InnerJoin_Filters) {
       "c.str = a.str WHERE c.str = "
       "'foo';",
       dt);
-    c("SELECT COUNT(*) FROM test t1 JOIN test t2 ON t1.x = t2.x WHERE t1.y > t2.y;", dt);
-    c("SELECT COUNT(*) FROM test t1 JOIN test t2 ON t1.x = t2.x WHERE t1.null_str = "
-      "t2.null_str;",
-      dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test t1 JOIN test t2 ON t1.x = t2.x WHERE t1.y > t2.y;",
+          dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test t1 JOIN test t2 ON t1.x = t2.x WHERE t1.null_str = "
+          "t2.null_str;",
+          dt));
   }
 }
 
@@ -6720,8 +6710,6 @@ TEST(Select, Joins_LeftJoin_Filters) {
 }
 
 TEST(Select, Joins_MultiCompositeColumns) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT a.x, b.str FROM test AS a JOIN join_test AS b ON a.str = b.str AND a.x = "
@@ -6766,8 +6754,6 @@ TEST(Select, Joins_BuildHashTable) {
 }
 
 TEST(Select, Joins_CoalesceColumns) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -6805,7 +6791,6 @@ TEST(Select, Joins_CoalesceColumns) {
     c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_2 t1 "
       "ON t0.dn = t1.dn AND t0.y = t1.y AND t0.tz = t1.tz AND t0.x = t1.x;",
       dt);
-
     c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
       "ON t0.dn = t1.dn AND t0.y = t1.y AND t0.tz = t1.tz AND t0.x = t1.x INNER JOIN "
       "coalesce_cols_test_2 t2 ON t0.y = t2.y AND t0.tz = t1.tz AND t0.x = t1.x;",
@@ -6814,22 +6799,24 @@ TEST(Select, Joins_CoalesceColumns) {
       "ON t0.dn = t1.dn AND t0.y = t1.y AND t0.tz = t1.tz AND t0.x = t1.x INNER JOIN "
       "coalesce_cols_test_2 t2 ON t0.d = t2.d AND t0.tz = t1.tz AND t0.x = t1.x;",
       dt);
-    c("SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
-      "ON t0.dn = t1.dn AND t0.str = t1.str AND t0.tz = t1.tz AND t0.x = t1.x INNER JOIN "
-      "coalesce_cols_test_2 t2 ON t0.y = t2.y AND t0.tz = t1.tz AND t0.x = t1.x;",
-      dt);
+    SKIP_ON_AGGREGATOR(c(
+        "SELECT COUNT(*) FROM coalesce_cols_test_0 t0 INNER JOIN coalesce_cols_test_1 t1 "
+        "ON t0.dn = t1.dn AND t0.str = t1.str AND t0.tz = t1.tz AND t0.x = t1.x INNER "
+        "JOIN "
+        "coalesce_cols_test_2 t2 ON t0.y = t2.y AND t0.tz = t1.tz AND t0.x = t1.x;",
+        dt));
   }
 }
 
 TEST(Select, Joins_ComplexQueries) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT COUNT(*) FROM test a JOIN (SELECT * FROM test WHERE y < 43) b ON a.x = b.x "
-      "JOIN join_test c ON a.x = c.x "
-      "WHERE a.fixed_str = 'foo';",
-      dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test a JOIN (SELECT * FROM test WHERE y < 43) b ON a.x = "
+          "b.x "
+          "JOIN join_test c ON a.x = c.x "
+          "WHERE a.fixed_str = 'foo';",
+          dt));
     c("SELECT * FROM (SELECT a.y, b.str FROM test a JOIN join_test b ON a.x = b.x) ORDER "
       "BY y, str;",
       dt);
@@ -6840,31 +6827,33 @@ TEST(Select, Joins_ComplexQueries) {
       "test_inner WHERE x = 7) AS b ON a.str "
       "= b.str WHERE a.y < 42;",
       dt);
-    c("SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN "
-      "(select str,count(*) "
-      "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN "
-      "(select "
-      "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit 40) "
-      "c on "
-      "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
-      dt);
-    c("SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR "
-      "false;",
-      "SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR 0;",
-      dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN "
+          "(select str,count(*) "
+          "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN "
+          "(select "
+          "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit "
+          "40) "
+          "c on "
+          "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
+          dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR "
+          "false;",
+          "SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR "
+          "0;",
+          dt));
   }
 }
 
 TEST(Select, Joins_TimeAndDate) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
     // Inner joins
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.m = b.m;", dt);
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.n = b.n;", dt);
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;", dt);
+    SKIP_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test a, test b WHERE a.m = b.m;", dt));
+    SKIP_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test a, test b WHERE a.n = b.n;", dt));
+    SKIP_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;", dt));
 
     c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.m = b.ts;", dt);
     c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.o = b.dt;", dt);
@@ -15035,7 +15024,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
     g_sqlite_comparator.query(drop_old_bar);
     std::string columns_definition{"str text encoding dict"};
     const auto create_bar = build_create_table_statement(
-        columns_definition, "bar", {"", 0}, {}, 2, with_delete_support);
+        columns_definition, "bar", {"", 0}, {}, 2, with_delete_support, g_aggregator);
     run_ddl_statement(create_bar);
     g_sqlite_comparator.query("CREATE TABLE bar(str text);");
   } catch (...) {
@@ -15218,7 +15207,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         {g_shard_count ? "str" : "", g_shard_count},
         {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
         2,
-        with_delete_support);
+        with_delete_support,
+        g_aggregator);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test_one_row(x int not null, y int, z smallint, t bigint, b "
@@ -15353,14 +15343,20 @@ int create_and_populate_tables(bool with_delete_support = true) {
   try {
     const std::string drop_old_array_test{"DROP TABLE IF EXISTS array_test;"};
     run_ddl_statement(drop_old_array_test);
-    const std::string create_array_test{
-        "CREATE TABLE array_test(x int not null, arr_i16 smallint[], arr_i32 int[], "
-        "arr_i64 bigint[], arr_str text[] "
-        "encoding dict, arr_float float[], arr_double double[], arr_bool boolean[], "
-        "real_str text encoding none, "
-        "arr3_i8 tinyint[3], arr3_i16 smallint[3], arr3_i32 int[3], arr3_i64 bigint[3], "
-        "arr3_float float[3], "
-        "arr3_double double[3], arr6_bool boolean[6]);"};
+    std::string columns_definition{
+        "x int not null, arr_i16 smallint[], arr_i32 int[], arr_i64 bigint[], arr_str "
+        "text[] encoding dict, arr_float float[], arr_double double[], arr_bool "
+        "boolean[], real_str text encoding none, arr3_i8 tinyint[3], arr3_i16 "
+        "smallint[3], arr3_i32 int[3], arr3_i64 bigint[3], arr3_float float[3], "
+        "arr3_double double[3], arr6_bool boolean[6]"};
+    const std::string create_array_test =
+        build_create_table_statement(columns_definition,
+                                     "array_test",
+                                     {"", 0},
+                                     {},
+                                     32000000,
+                                     with_delete_support,
+                                     g_aggregator);
     run_ddl_statement(create_array_test);
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'array_test'";
