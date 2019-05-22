@@ -1736,15 +1736,22 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
 
           const size_t elem_sz = ctr == 0 ? 1 : 4;
           ctr++;
+          int32_t fixlen = -1;
           if (target_ti.get_type() == kPOINT) {
+            const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
+            if (col_var) {
+              const auto coords_cd = executor_->getPhysicalColumnDescriptor(col_var, 1);
+              if (coords_cd && coords_cd->columnType.get_type() == kARRAY) {
+                fixlen = coords_cd->columnType.get_size();
+              }
+            }
+          }
+          if (fixlen > 0) {
             coords.push_back(executor_->cgen_state_->emitExternalCall(
                 "fast_fixlen_array_buff",
                 i8p_ty,
                 {target_lv, executor_->posArg(selected_target_expr)}));
-            coords.push_back(executor_->cgen_state_->emitExternalCall(
-                "fast_fixlen_array_size",
-                i32_ty,
-                {target_lv, executor_->ll_int(log2_bytes(elem_sz))}));
+            coords.push_back(executor_->ll_int(int64_t(fixlen)));
             continue;
           }
           coords.push_back(executor_->cgen_state_->emitExternalCall(

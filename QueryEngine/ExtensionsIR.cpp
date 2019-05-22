@@ -332,21 +332,22 @@ std::vector<llvm::Value*> Executor::codegenFunctionOperCastArgs(
                                .get_elem_type();
       llvm::Value* ptr_lv;
       llvm::Value* len_lv;
+      int32_t fixlen = -1;
       if (arg_ti.get_type() == kPOINT) {
+        const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(arg);
+        if (col_var) {
+          const auto coords_cd = getPhysicalColumnDescriptor(col_var, 1);
+          if (coords_cd && coords_cd->columnType.get_type() == kARRAY) {
+            fixlen = coords_cd->columnType.get_size();
+          }
+        }
+      }
+      if (fixlen > 0) {
         ptr_lv =
             cgen_state_->emitExternalCall("fast_fixlen_array_buff",
                                           llvm::Type::getInt8PtrTy(cgen_state_->context_),
                                           {orig_arg_lvs[k], posArg(arg)});
-        // Don't have the coords column's typeinfo here to generate an llvm constant,
-        // this is also why the elem_ti is taken from a dummy size-less array type
-        // declared above. Simply going with max coords size ll_int(int64_t(16)) would
-        // work too and would be a little faster - geo extensions know how to work with
-        // point coords and how much to read based on compression arg.
-        // This call gets the actual size of the fixed length coords array from ChunkIter.
-        len_lv = cgen_state_->emitExternalCall(
-            "fast_fixlen_array_size",
-            get_int_type(32, cgen_state_->context_),
-            {orig_arg_lvs[k], ll_int(log2_bytes(elem_ti.get_logical_size()))});
+        len_lv = ll_int(int64_t(fixlen));
       } else {
         // TODO: remove const_arr  and related code if it's not needed
         ptr_lv = (const_arr) ? orig_arg_lvs[k]

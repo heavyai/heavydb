@@ -438,6 +438,9 @@ class Executor {
 
   const ColumnDescriptor* getColumnDescriptor(const Analyzer::ColumnVar*) const;
 
+  const ColumnDescriptor* getPhysicalColumnDescriptor(const Analyzer::ColumnVar*,
+                                                      size_t) const;
+
   const Catalog_Namespace::Catalog* getCatalog() const;
 
   const std::shared_ptr<RowSetMemoryOwner> getRowSetMemoryOwner() const;
