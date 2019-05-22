@@ -1220,6 +1220,15 @@ class CoalesceSecondaryProjectVisitor : public RexVisitor<bool> {
   bool defaultResult() const final { return true; }
 };
 
+inline bool project_has_window_function_input(const RelProject* ra_project) {
+  for (size_t i = 0; i < ra_project->size(); i++) {
+    if (dynamic_cast<const RexWindowFunctionOperator*>(ra_project->getProjectAt(i))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
@@ -1228,8 +1237,16 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
   std::vector<size_t> crt_pattern;
   CoalesceState crt_state{CoalesceState::Initial};
 
+  auto reset_state = [&crt_pattern, &crt_state]() {
+    crt_state = CoalesceState::Initial;
+    decltype(crt_pattern)().swap(crt_pattern);
+  };
+
   for (RANodeIterator nodeIt(nodes); !nodeIt.allVisited();) {
     const auto ra_node = nodeIt != nodes.end() ? *nodeIt : nullptr;
+    if (ra_node) {
+      LOG(INFO) << "Visiting " << ra_node->toString();
+    }
     switch (crt_state) {
       case CoalesceState::Initial: {
         if (std::dynamic_pointer_cast<const RelFilter>(ra_node) &&
@@ -1248,13 +1265,16 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
         break;
       }
       case CoalesceState::Filter: {
-        if (std::dynamic_pointer_cast<const RelProject>(ra_node)) {
+        if (auto project_node = std::dynamic_pointer_cast<const RelProject>(ra_node)) {
+          if (project_has_window_function_input(project_node.get())) {
+            reset_state();
+            break;
+          }
           crt_pattern.push_back(size_t(nodeIt));
           crt_state = CoalesceState::FirstProject;
           nodeIt.advance(RANodeIterator::AdvancingMode::DUChain);
         } else {
-          crt_state = CoalesceState::Initial;
-          decltype(crt_pattern)().swap(crt_pattern);
+          reset_state();
         }
         break;
       }
@@ -1264,11 +1284,10 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
           crt_state = CoalesceState::Aggregate;
           nodeIt.advance(RANodeIterator::AdvancingMode::DUChain);
         } else {
-          crt_state = CoalesceState::Initial;
           if (crt_pattern.size() >= 2) {
             create_compound(nodes, crt_pattern);
           }
-          decltype(crt_pattern)().swap(crt_pattern);
+          reset_state();
         }
         break;
       }
@@ -1298,10 +1317,9 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
             nodeIt.advance(RANodeIterator::AdvancingMode::InOrder);
           }
         }
-        crt_state = CoalesceState::Initial;
         CHECK_GE(crt_pattern.size(), size_t(2));
         create_compound(nodes, crt_pattern);
-        decltype(crt_pattern)().swap(crt_pattern);
+        reset_state();
         break;
       }
       default:
