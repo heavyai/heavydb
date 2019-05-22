@@ -101,12 +101,11 @@ enum TMergeType {
 
 struct TStepResult {
   1: serialized_result_set.TSerializedRows serialized_rows
-  2: i64 uncompressed_size
-  3: bool execution_finished
-  4: TMergeType merge_type
-  5: bool sharded
-  6: TRowDescriptor row_desc
-  7: i32 node_id
+  2: bool execution_finished
+  3: TMergeType merge_type
+  4: bool sharded
+  5: TRowDescriptor row_desc
+  6: i32 node_id
 }
 
 struct TRowSet {
