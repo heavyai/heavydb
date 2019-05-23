@@ -78,9 +78,14 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
   } catch (const ColumnarConversionNotSupported& e) {
     throw HashJoinFail(std::string("Could not build hash tables for equijoin | ") +
                        e.what());
+  } catch (const OutOfMemory& e) {
+    throw HashJoinFail(
+        std::string("Ran out of memory while building hash tables for equijoin | ") +
+        e.what());
   } catch (const std::exception& e) {
-    LOG(FATAL) << "Fatal error while attempting to build hash tables for join: "
-               << e.what();
+    throw std::runtime_error(
+        std::string("Fatal error while attempting to build hash tables for join: ") +
+        e.what());
   }
   return join_hash_table;
 }

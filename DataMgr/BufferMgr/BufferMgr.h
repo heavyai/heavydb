@@ -39,20 +39,31 @@
 
 class OutOfMemory : public std::runtime_error {
  public:
-  OutOfMemory(size_t numBytes) : std::runtime_error("OutOfMemory") {
+  OutOfMemory(size_t numBytes)
+      : std::runtime_error(parse_error_str("OutOfMemory", numBytes)) {
     VLOG(1) << "Failed to allocate " << numBytes << " bytes";
     VLOG(1) << boost::stacktrace::stacktrace();
   };
 
-  OutOfMemory(const std::string& err) : std::runtime_error(err) {
+  OutOfMemory(const std::string& err) : std::runtime_error(parse_error_str(err, 0)) {
     VLOG(1) << "Failed with OutOfMemory, condition " << err;
     VLOG(1) << boost::stacktrace::stacktrace();
   };
 
-  OutOfMemory(const std::string& err, size_t numBytes) : std::runtime_error(err) {
+  OutOfMemory(const std::string& err, size_t numBytes)
+      : std::runtime_error(parse_error_str(err, numBytes)) {
     VLOG(1) << "Failed to allocate " << numBytes << " bytes with condition " << err;
     VLOG(1) << boost::stacktrace::stacktrace();
   };
+
+ private:
+  std::string parse_error_str(const std::string& err, const size_t numBytes = 0) {
+    if (numBytes) {
+      return err + ": Failed to allocate " + std::to_string(numBytes) + " bytes";
+    } else {
+      return "Failed to allocate memory with condition " + err;
+    }
+  }
 };
 
 class FailedToCreateFirstSlab : public OutOfMemory {
