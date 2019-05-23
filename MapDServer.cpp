@@ -446,7 +446,7 @@ void MapDProgramOptions::fillOptions() {
       po::value<size_t>(&reserved_gpu_mem)->default_value(reserved_gpu_mem),
       "Reduces GPU memory available to the OmniSci allocator by this amount. Used for "
       "compiled code cache and ancillary GPU functions and other processes that may also "
-      "be using the GPU concurrent with OmniSci Core.");
+      "be using the GPU concurrent with OmniSciDB.");
   help_desc.add_options()("start-gpu",
                           po::value<int>(&start_gpu)->default_value(start_gpu),
                           "First gpu to use.");
