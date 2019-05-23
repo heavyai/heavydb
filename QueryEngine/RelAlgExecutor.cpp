@@ -233,6 +233,7 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(
     const CompilationOptions& co,
     const ExecutionOptions& eo,
     RenderInfo* render_info) {
+  INJECT_TIMER(executeRelAlgQueryStep);
   auto first_exec_desc = exec_desc;
   const auto sort = dynamic_cast<const RelSort*>(first_exec_desc.getBody());
   size_t shard_count{0};
