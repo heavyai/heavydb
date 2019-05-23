@@ -182,7 +182,7 @@ const ColumnDescriptor* Executor::getColumnDescriptor(
 
 const ColumnDescriptor* Executor::getPhysicalColumnDescriptor(
     const Analyzer::ColumnVar* col_var,
-    size_t n) const {
+    int n) const {
   const auto cd = getColumnDescriptor(col_var);
   if (!cd || n > cd->columnType.get_physical_cols()) {
     return nullptr;

@@ -439,7 +439,7 @@ class Executor {
   const ColumnDescriptor* getColumnDescriptor(const Analyzer::ColumnVar*) const;
 
   const ColumnDescriptor* getPhysicalColumnDescriptor(const Analyzer::ColumnVar*,
-                                                      size_t) const;
+                                                      int) const;
 
   const Catalog_Namespace::Catalog* getCatalog() const;
 
