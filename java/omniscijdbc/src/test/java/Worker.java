@@ -29,7 +29,7 @@ class Worker implements Runnable {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(Worker.class);
   // JDBC driver name and database URL
   static final String JDBC_DRIVER = "com.omnisci.jdbc.OmniSciDriver";
-  static final String DB_URL = "jdbc:omnisci:localhost:6274:mapd";
+  static final String DB_URL = "jdbc:omnisci:localhost:6274:omnisci";
 
   // Database credentials
   static final String USER = "admin";

@@ -27,7 +27,7 @@ public class FirstTry {
 
   // JDBC driver name and database URL
   static final String JDBC_DRIVER = "com.omnisci.jdbc.OmniSciDriver";
-  static final String DB_URL = "jdbc:omnisci:localhost:6273:mapd:http";
+  static final String DB_URL = "jdbc:omnisci:localhost:6273:omnisci:http";
 
   // Database credentials
   static final String USER = "admin";
