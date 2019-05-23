@@ -523,7 +523,7 @@ func docsHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 // samlPostHandler receives a XML SAML payload from a provider (e.g. Okta) and
-// then makes a connect call to Core with the base64'd payload. If the call succeeds
+// then makes a connect call to OmniSciDB with the base64'd payload. If the call succeeds
 // we then set a session cookie (`omnisci_session`) for Immerse to use for login, as well
 // as the username (`omnisci_username`) and db name (`omnisci_db`).
 func samlPostHandler(rw http.ResponseWriter, r *http.Request) {
@@ -536,7 +536,7 @@ func samlPostHandler(rw http.ResponseWriter, r *http.Request) {
 
 		b64ResponseXML := r.FormValue("SAMLResponse")
 
-		// This is what a Thrift connect call to Core looks like. Here, the username and database
+		// This is what a Thrift connect call to OmniSciDB looks like. Here, the username and database
 		// name are left blank, per SAML login conventions. Hand-crafting Thrift messages like this
 		// isn't exactly "best practices", but it beats importing a whole Thrift lib for just this.
 		var jsonString = []byte(`[1,"connect",1,0,{"2":{"str":"` + b64ResponseXML + `"},"3":{"str":""}}]`)
@@ -734,7 +734,7 @@ func serversHandler(rw http.ResponseWriter, r *http.Request) {
 }
 
 func versionHandler(rw http.ResponseWriter, r *http.Request) {
-	outVers := "Core:\n" + version
+	outVers := "OmniSciDB:\n" + version
 	versTxt := frontend + "/version.txt"
 	feVers, err := ioutil.ReadFile(versTxt)
 	if err == nil {
