@@ -1,7 +1,7 @@
 OmniSciDB (formerly MapD Core)
 ==============================
 
-OmniSciDB is an in-memory, column store, SQL relational database designed from the ground up to run on GPUs. OmniSciDB is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).
+OmniSciDB is an in-memory, column store, SQL relational database designed from the ground up to run on GPUs.
 
 The repository includes a number of third party packages provided under separate licenses. Details about these packages and their respective licenses is at [ThirdParty/licenses/index.md](ThirdParty/licenses/index.md).
 
@@ -18,7 +18,7 @@ OmniSci provides pre-built binaries for Linux for stable releases of the project
 | * | tarball | CPU | https://releases.omnisci.com/os/tar/omnisci-os-latest-Linux-x86_64-cpu.tar.gz |  |
 | * | tarball | GPU | https://releases.omnisci.com/os/tar/omnisci-os-latest-Linux-x86_64-cuda.tar.gz |  |
 
-*** 
+***
 
 # Developing OmniSciDB: Table of Contents
 
