@@ -877,10 +877,11 @@ void SysCatalog::updateUserRoleName(const std::string& roleName,
   sys_write_lock write_lock(this);
 
   auto it = granteeMap_.find(to_upper(roleName));
-  CHECK(it != granteeMap_.end());
-  it->second->setName(newName);
-  std::swap(granteeMap_[to_upper(newName)], it->second);
-  granteeMap_.erase(it);
+  if (it != granteeMap_.end()) {
+    it->second->setName(newName);
+    std::swap(granteeMap_[to_upper(newName)], it->second);
+    granteeMap_.erase(it);
+  }
 }
 
 void SysCatalog::renameUser(std::string const& old_name, std::string const& new_name) {
