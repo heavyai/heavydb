@@ -429,4 +429,30 @@ void run_ddl_statement(const std::string& create_table_stmt,
   }
 }
 
+namespace {
+
+void clear_cpu_memory_distributed(
+    const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {}
+
+void clear_gpu_memory_distributed(
+    const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {}
+
+}  // namespace
+
+void clear_gpu_memory(const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
+  if (Catalog_Namespace::SysCatalog::instance().isAggregator()) {
+    clear_gpu_memory_distributed(session);
+    return;
+  }
+  Catalog_Namespace::SysCatalog::clearGpuMemory();
+}
+
+void clear_cpu_memory(const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
+  if (Catalog_Namespace::SysCatalog::instance().isAggregator()) {
+    clear_cpu_memory_distributed(session);
+    return;
+  }
+  Catalog_Namespace::SysCatalog::clearCpuMemory();
+}
+
 }  // namespace QueryRunner

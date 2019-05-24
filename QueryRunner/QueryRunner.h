@@ -110,6 +110,10 @@ std::shared_ptr<ResultSet> run_sql_distributed(
     const ExecutorDeviceType device_type,
     bool allow_loop_joins);
 
+void clear_gpu_memory(const std::unique_ptr<Catalog_Namespace::SessionInfo>& session);
+
+void clear_cpu_memory(const std::unique_ptr<Catalog_Namespace::SessionInfo>& session);
+
 }  // namespace QueryRunner
 
 #endif  // QUERY_RUNNER_H

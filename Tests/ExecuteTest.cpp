@@ -6741,6 +6741,11 @@ TEST(Select, Joins_MultiCompositeColumns) {
       "join_test.dup_str IS NULL)) AND (test.x = join_test.x OR (test.x IS NULL AND "
       "join_test.x IS NULL));",
       dt);
+
+    if (dt == ExecutorDeviceType::CPU) {
+      // Clear CPU memory and hash table caches
+      QueryRunner::clear_cpu_memory(g_session);
+    }
   }
 }
 
@@ -6750,6 +6755,11 @@ TEST(Select, Joins_BuildHashTable) {
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
     // Intentionally duplicate previous string join to cover hash table building.
     c("SELECT COUNT(*) FROM test, join_test WHERE test.str = join_test.dup_str;", dt);
+
+    if (dt == ExecutorDeviceType::CPU) {
+      // Clear CPU memory and hash table caches
+      QueryRunner::clear_cpu_memory(g_session);
+    }
   }
 }
 
@@ -6805,6 +6815,10 @@ TEST(Select, Joins_CoalesceColumns) {
         "JOIN "
         "coalesce_cols_test_2 t2 ON t0.y = t2.y AND t0.tz = t1.tz AND t0.x = t1.x;",
         dt));
+    if (dt == ExecutorDeviceType::CPU) {
+      // Clear CPU memory and hash table caches
+      QueryRunner::clear_cpu_memory(g_session);
+    }
   }
 }
 
@@ -6886,6 +6900,11 @@ TEST(Select, Joins_TimeAndDate) {
 
     // Outer joins
     c("SELECT a.x, a.o, b.dt FROM test a JOIN test_inner b ON a.o = b.dt;", dt);
+
+    if (dt == ExecutorDeviceType::CPU) {
+      // Clear CPU memory and hash table caches
+      QueryRunner::clear_cpu_memory(g_session);
+    }
   }
 }
 
@@ -12127,21 +12146,6 @@ TEST(Delete, Joins_ComplexQueries) {
       "false;",
       "SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR 0;",
       dt);
-  }
-}
-
-TEST(Delete, Joins_TimeAndDate) {
-  SKIP_ALL_ON_AGGREGATOR();
-
-  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
-    return;
-  }
-
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.m = b.m;", dt);
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.n = b.n;", dt);
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;", dt);
   }
 }
 
