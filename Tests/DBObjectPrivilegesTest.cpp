@@ -334,6 +334,9 @@ TEST(UserRoles, InvalidGrantsRevokesTest) {
 }
 
 TEST(UserRoles, ValidNames) {
+  EXPECT_NO_THROW(
+      run_ddl_statement("CREATE USER \"dumm.user\" (password = 'password');"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP USER \"dumm.user\";"));
   EXPECT_NO_THROW(run_ddl_statement("CREATE USER vasya (password = 'password');"));
   EXPECT_NO_THROW(
       run_ddl_statement("CREATE USER vasya.vasya@vasya.com (password = 'password');"));

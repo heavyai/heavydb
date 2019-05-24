@@ -254,12 +254,12 @@ WORK          TOK(WORK)
 		return SQLParser::FWDSTR;
 	}
 
-'[^'\n]*'	{
-		int c = yyFlexLexer::yyinput();
+'[^'\n]*' {
+    int c = yyFlexLexer::yyinput();
 
-		unput(c);	/* just peeking */
-		if(c != '\'') {
-			/* remove quotes */
+    unput(c);	/* just peeking */
+    if(c != '\'') {
+      /* remove quotes */
       char escape_removed[yyleng - 1];
       char *p = yytext + 1;
       int j = 0;
@@ -295,14 +295,68 @@ WORK          TOK(WORK)
       }
       escape_removed[j] = '\0';
 
-			yylval.stringval = new std::string(escape_removed);
-			return SQLParser::STRING;
-		}
-		else
-			yymore();
-	}
+      yylval.stringval = new std::string(escape_removed);
+      return SQLParser::STRING;
+    }
+    else
+      yymore();
+  }
 
 '[^'\n]*$	{	throw std::runtime_error("Unterminated string"); }
+
+\"[^\"\n]*\" {
+    int c = yyFlexLexer::yyinput();
+
+    unput(c);	/* just peeking */
+    if(c != '"') {
+      /* remove quotes */
+      char escape_removed[yyleng - 1];
+      char *p = yytext + 1;
+      int j = 0;
+      int len = yyleng - 2;
+      for (int i = 0; i < len; i++) {
+        if (p[i] == '\\') {
+          if (p[i+1] == 't') {
+            escape_removed[j++] = '\t';
+            i++;
+            continue;
+          } else if (p[i+1] == 'n') {
+            escape_removed[j++] = '\n';
+            i++;
+            continue;
+          } else if (p[i+1] == '\\') {
+            escape_removed[j++] = '\\';
+            i++;
+            continue;
+          } else if (p[i+1] == '"') {
+            escape_removed[j++] = '"';
+            i++;
+            continue;
+          } else if (p[i+1] == 'x' && i + 3 < len) {
+            char s[3];
+            s[0] = p[i+2];
+            s[1] = p[i+3];
+            s[2] = '\0';
+            int c;
+            sscanf(s, "%x", &c);
+            escape_removed[j++] = (char)c;
+            i += 3;
+            continue;
+          }
+        }
+        escape_removed[j++] = p[i];
+      }
+      escape_removed[j] = '\0';
+
+      yylval.stringval = new std::string(escape_removed);
+      return SQLParser::QUOTED_IDENTIFIER;
+    }
+    else
+      yymore();
+  }
+
+\"[^\"\n]*$	{	throw std::runtime_error("Unterminated string"); }
+
 
 	/*
 \n		{ lineno++; }

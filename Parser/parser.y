@@ -76,7 +76,7 @@ using namespace Parser;
 %token NAME
 %token DASHEDNAME
 %token EMAIL
-%token STRING FWDSTR SELECTSTRING
+%token STRING FWDSTR SELECTSTRING QUOTED_IDENTIFIER
 %token INTNUM FIXEDNUM
 
 	/* operators */
@@ -1080,7 +1080,7 @@ opt_table:
 	|	table
 	;
 username:
-        NAME | EMAIL | DASHEDNAME
+        NAME | EMAIL | DASHEDNAME | QUOTED_IDENTIFIER
     ;
 
 rolenames:
