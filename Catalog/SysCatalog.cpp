@@ -34,6 +34,7 @@
 
 #include "Catalog/AuthMetadata.h"
 #include "DataMgr/LockMgr.h"
+#include "QueryEngine/ExternalCacheInvalidators.h"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
@@ -1959,6 +1960,15 @@ void SysCatalog::buildRoleMap() {
     }
     rl->grantPrivileges(dbObject);
   }
+}
+
+void SysCatalog::clearCpuMemory() {
+  SysCatalog::instance().getDataMgr().clearMemory(MemoryLevel::CPU_LEVEL);
+  JoinHashTableCacheInvalidator::invalidateCaches();
+}
+
+void SysCatalog::clearGpuMemory() {
+  SysCatalog::instance().getDataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
 }
 
 void SysCatalog::populateRoleDbObjects(const std::vector<DBObject>& objects) {

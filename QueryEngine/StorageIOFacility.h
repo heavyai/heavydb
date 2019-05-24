@@ -1,9 +1,9 @@
 #ifndef STORAGEIOFACILITY_H
 #define STORAGEIOFACILITY_H
 
+#include "ExternalCacheInvalidators.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "TargetMetaInfo.h"
-#include "UpdateCacheInvalidators.h"
 
 #include <boost/variant.hpp>
 #include "Shared/ConfigResolve.h"
