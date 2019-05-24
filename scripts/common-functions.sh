@@ -165,3 +165,27 @@ function install_llvm() {
     make install
     popd
 }
+
+PROJ_VERSION=5.2.0
+GDAL_VERSION=2.4.2
+
+function install_gdal() {
+    # expat
+    download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_2_5/expat-2.2.5.tar.bz2
+
+    # kml
+    download ${HTTP_DEPS}/libkml-master.zip
+    unzip -u libkml-master.zip
+    pushd libkml-master
+    ./autogen.sh || true
+    CXXFLAGS="-std=c++03" ./configure --with-expat-include-dir=$PREFIX/include/ --with-expat-lib-dir=$PREFIX/lib --prefix=$PREFIX --enable-static --disable-java --disable-python --disable-swig
+    makej
+    make install
+    popd
+
+    # proj
+    download_make_install ${HTTP_DEPS}/proj-${PROJ_VERSION}.tar.gz
+
+    # gdal
+    download_make_install ${HTTP_DEPS}/gdal-${GDAL_VERSION}.tar.gz "" "--without-geos --with-libkml=$PREFIX --with-proj=$PREFIX"
+}
