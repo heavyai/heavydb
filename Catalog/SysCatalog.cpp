@@ -1184,34 +1184,47 @@ list<DBMetadata> SysCatalog::getAllDBMetadata() {
   return db_list;
 }
 
-list<UserMetadata> SysCatalog::getAllUserMetadata(long dbId) {
-  // this call is to return users that have some form of permissions to objects in the db
-  // sadly mapd_object_permissions table is also misused to manage user roles.
-  sys_sqlite_lock sqlite_lock(this);
-  std::string sql = "SELECT userid, name, issuper FROM mapd_users";
-  if (dbId >= 0) {
-    sql =
-        "SELECT userid, name, issuper FROM mapd_users WHERE name IN (SELECT roleName "
-        "FROM mapd_object_permissions "
-        "WHERE "
-        "objectPermissions<>0 AND roleType=1 AND dbId=" +
-        std::to_string(dbId) + ")";
-  }
-  sqliteConnector_->query(sql);
-  int numRows = sqliteConnector_->getNumRows();
+namespace {
+
+auto get_users(std::unique_ptr<SqliteConnector>& sqliteConnector,
+               const int32_t dbId = -1) {
+  sqliteConnector->query("SELECT userid, name, issuper FROM mapd_users");
+  int numRows = sqliteConnector->getNumRows();
   list<UserMetadata> user_list;
+  const bool return_all_users = dbId == -1;
+  auto has_any_privilege = [&return_all_users, &dbId](const std::string& name) {
+    if (!return_all_users) {
+      const auto grantee = SysCatalog::instance().getUserGrantee(name);
+      return grantee ? grantee->hasAnyPrivilegesOnDb(dbId, false) : false;
+    }
+    return true;
+  };
+  auto add_user = [&user_list, &has_any_privilege](
+                      const int32_t id, const std::string& name, const bool super) {
+    if (has_any_privilege(name)) {
+      user_list.emplace_back(id, name, "", super, -1);
+    };
+  };
   for (int r = 0; r < numRows; ++r) {
-    UserMetadata user;
-    user.userId = sqliteConnector_->getData<int>(r, 0);
-    user.userName = sqliteConnector_->getData<string>(r, 1);
-    user.isSuper = sqliteConnector_->getData<bool>(r, 2);
-    user_list.push_back(user);
+    add_user(sqliteConnector->getData<int>(r, 0),
+             sqliteConnector->getData<string>(r, 1),
+             sqliteConnector->getData<bool>(r, 2));
   }
   return user_list;
 }
 
+}  // namespace
+
+list<UserMetadata> SysCatalog::getAllUserMetadata(const int64_t dbId) {
+  // this call is to return users that have some form of permissions to objects in the db
+  // sadly mapd_object_permissions table is also misused to manage user roles.
+  sys_sqlite_lock sqlite_lock(this);
+  return get_users(sqliteConnector_, dbId);
+}
+
 list<UserMetadata> SysCatalog::getAllUserMetadata() {
-  return getAllUserMetadata(-1);
+  sys_sqlite_lock sqlite_lock(this);
+  return get_users(sqliteConnector_);
 }
 
 void SysCatalog::getMetadataWithDefault(std::string& dbname,

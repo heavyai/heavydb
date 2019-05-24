@@ -179,7 +179,7 @@ class SysCatalog : private CommonFileOperations {
   /**
    * return the users associated with the given DB
    */
-  std::list<UserMetadata> getAllUserMetadata(long dbId);
+  std::list<UserMetadata> getAllUserMetadata(const int64_t dbId);
   DBSummaryList getDatabaseListForUser(const UserMetadata& user);
   void createDBObject(const UserMetadata& user,
                       const std::string& objectName,

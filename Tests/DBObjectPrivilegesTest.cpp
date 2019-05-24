@@ -2154,6 +2154,166 @@ TEST(SysCatalog, SwitchDatabase) {
   ASSERT_THROW(sys_cat.switchDatabase(dbname3, username), std::runtime_error);
 }
 
+namespace {
+
+void compare_user_lists(const std::vector<std::string>& expected,
+                        const std::list<Catalog_Namespace::UserMetadata>& actual) {
+  ASSERT_EQ(expected.size(), actual.size());
+  size_t i = 0;
+  for (const auto user : actual) {
+    ASSERT_EQ(expected[i++], user.userName);
+  }
+}
+
+}  // namespace
+
+TEST(SysCatalog, AllUserMetaTest) {
+  using namespace std::string_literals;
+  Users users_;
+
+  static const auto champions = "champions"s;
+  static const auto europa = "europa"s;
+
+  struct ExpectedUserLists {
+    const std::vector<std::string> super_default = {"admin",
+                                                    "Chelsea",
+                                                    "Arsenal",
+                                                    "Juventus",
+                                                    "Bayern"};
+    const std::vector<std::string> user_default = {"Arsenal", "Bayern"};
+    const std::vector<std::string> user_champions = {"Juventus", "Bayern"};
+    const std::vector<std::string> user_europa = {"Arsenal", "Juventus"};
+  } expected;
+
+  run_ddl_statement("DROP DATABASE IF EXISTS " + champions + ";");
+  run_ddl_statement("DROP DATABASE IF EXISTS " + europa + ";");
+  run_ddl_statement("CREATE DATABASE " + champions + ";");
+  run_ddl_statement("CREATE DATABASE " + europa + ";");
+  run_ddl_statement("GRANT ACCESS ON DATABASE " + champions + " TO Bayern;");
+  run_ddl_statement("GRANT ACCESS ON DATABASE " + champions + " TO Juventus;");
+  run_ddl_statement("GRANT ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " TO Arsenal;");
+  run_ddl_statement("GRANT CREATE ON DATABASE " + champions + " TO Juventus;");
+  run_ddl_statement("GRANT SELECT ON DATABASE " + europa + " TO Arsenal;");
+  run_ddl_statement("GRANT CREATE ON DATABASE " + OMNISCI_DEFAULT_DB + " TO Bayern;");
+  run_ddl_statement("GRANT SELECT ON DATABASE " + europa + " TO Juventus;");
+
+  Catalog_Namespace::UserMetadata user_meta;
+  auto db_default(OMNISCI_DEFAULT_DB);
+  auto db_champions(champions);
+  auto db_europa(europa);
+  auto user_chelsea("Chelsea"s);
+  auto user_arsenal("Arsenal"s);
+  auto user_bayern("Bayern"s);
+
+  // Super User
+  ASSERT_NO_THROW(sys_cat.login(db_default, user_chelsea, "password"s, user_meta, false));
+  const auto suser_list = sys_cat.getAllUserMetadata();
+  compare_user_lists(expected.super_default, suser_list);
+
+  ASSERT_NO_THROW(
+      sys_cat.login(db_champions, user_chelsea, "password"s, user_meta, false));
+  const auto suser_list1 = sys_cat.getAllUserMetadata();
+  compare_user_lists(expected.super_default, suser_list1);
+
+  ASSERT_NO_THROW(sys_cat.login(db_europa, user_chelsea, "password"s, user_meta, false));
+  const auto suser_list2 = sys_cat.getAllUserMetadata();
+  compare_user_lists(expected.super_default, suser_list2);
+
+  // Normal User
+  Catalog_Namespace::DBMetadata db;
+  ASSERT_NO_THROW(sys_cat.getMetadataForDB(db_default, db));
+  ASSERT_NO_THROW(sys_cat.login(db_default, user_arsenal, "password"s, user_meta, false));
+  const auto nuser_list = sys_cat.getAllUserMetadata(db.dbId);
+  compare_user_lists(expected.user_default, nuser_list);
+
+  ASSERT_NO_THROW(sys_cat.getMetadataForDB(db_champions, db));
+  ASSERT_NO_THROW(
+      sys_cat.login(db_champions, user_bayern, "password"s, user_meta, false));
+  const auto nuser_list1 = sys_cat.getAllUserMetadata(db.dbId);
+  compare_user_lists(expected.user_champions, nuser_list1);
+
+  ASSERT_NO_THROW(sys_cat.getMetadataForDB(db_europa, db));
+  ASSERT_NO_THROW(sys_cat.login(db_europa, user_arsenal, "password"s, user_meta, false));
+  const auto nuser_list2 = sys_cat.getAllUserMetadata(db.dbId);
+  compare_user_lists(expected.user_europa, nuser_list2);
+}
+
+TEST(SysCatalog, RecursiveRolesUserMetaData) {
+  using namespace std::string_literals;
+  Users users_;
+  Roles roles_;
+
+  static const auto champions = "champions"s;
+  static const auto europa = "europa"s;
+  static const auto london = "london"s;
+  static const auto north_london = "north_london"s;
+  static const auto munich = "munich"s;
+  static const auto turin = "turin"s;
+
+  struct CleanupGuard {
+    ~CleanupGuard() {
+      run_ddl_statement("DROP ROLE " + london + ";");
+      run_ddl_statement("DROP ROLE " + north_london + ";");
+      run_ddl_statement("DROP ROLE " + munich + ";");
+      run_ddl_statement("DROP ROLE " + turin + ";");
+    }
+  } cleanupGuard;
+
+  struct ExpectedUserLists {
+    const std::vector<std::string> user_default = {"Arsenal", "Bayern"};
+    const std::vector<std::string> user_champions = {"Juventus", "Bayern"};
+    const std::vector<std::string> user_europa = {"Arsenal", "Juventus"};
+  } expected;
+
+  run_ddl_statement("CREATE ROLE " + london + ";");
+  run_ddl_statement("CREATE ROLE " + north_london + ";");
+  run_ddl_statement("CREATE ROLE " + munich + ";");
+  run_ddl_statement("CREATE ROLE " + turin + ";");
+  run_ddl_statement("DROP DATABASE IF EXISTS " + champions + ";");
+  run_ddl_statement("DROP DATABASE IF EXISTS " + europa + ";");
+  run_ddl_statement("CREATE DATABASE " + champions + ";");
+  run_ddl_statement("CREATE DATABASE " + europa + ";");
+  run_ddl_statement("GRANT ACCESS ON DATABASE " + champions + " TO Sudens;");
+  run_ddl_statement("GRANT ACCESS ON DATABASE " + champions + " TO OldLady;");
+  run_ddl_statement("GRANT ACCESS ON DATABASE " + OMNISCI_DEFAULT_DB + " TO Gunners;");
+  run_ddl_statement("GRANT CREATE ON DATABASE " + champions + " TO OldLady;");
+  run_ddl_statement("GRANT SELECT ON DATABASE " + europa + " TO Gunners;");
+  run_ddl_statement("GRANT CREATE ON DATABASE " + OMNISCI_DEFAULT_DB + " TO Sudens;");
+  run_ddl_statement("GRANT SELECT ON DATABASE " + europa + " TO OldLady;");
+
+  Catalog_Namespace::UserMetadata user_meta;
+  auto db_default(OMNISCI_DEFAULT_DB);
+  auto db_champions(champions);
+  auto db_europa(europa);
+  auto user_chelsea("Chelsea"s);
+  auto user_arsenal("Arsenal"s);
+  auto user_bayern("Bayern"s);
+  auto user_juventus("Juventus"s);
+
+  run_ddl_statement("GRANT Gunners to " + london + ";");
+  run_ddl_statement("GRANT " + london + " to " + north_london + ";");
+  run_ddl_statement("GRANT " + north_london + " to " + user_arsenal + ";");
+  run_ddl_statement("GRANT Sudens to " + user_bayern + ";");
+  run_ddl_statement("GRANT OldLady to " + user_juventus + ";");
+
+  Catalog_Namespace::DBMetadata db;
+  ASSERT_NO_THROW(sys_cat.getMetadataForDB(db_default, db));
+  ASSERT_NO_THROW(sys_cat.login(db_default, user_arsenal, "password"s, user_meta, false));
+  const auto nuser_list = sys_cat.getAllUserMetadata(db.dbId);
+  compare_user_lists(expected.user_default, nuser_list);
+
+  ASSERT_NO_THROW(sys_cat.getMetadataForDB(db_champions, db));
+  ASSERT_NO_THROW(
+      sys_cat.login(db_champions, user_bayern, "password"s, user_meta, false));
+  const auto nuser_list1 = sys_cat.getAllUserMetadata(db.dbId);
+  compare_user_lists(expected.user_champions, nuser_list1);
+
+  ASSERT_NO_THROW(sys_cat.getMetadataForDB(db_europa, db));
+  ASSERT_NO_THROW(sys_cat.login(db_europa, user_arsenal, "password"s, user_meta, false));
+  const auto nuser_list2 = sys_cat.getAllUserMetadata(db.dbId);
+  compare_user_lists(expected.user_europa, nuser_list2);
+}
+
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   google::InitGoogleLogging(argv[0]);

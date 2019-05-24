@@ -430,8 +430,8 @@ TPlanResult Calcite::processImpl(
   std::string catalog = cat.getCurrentDB().dbName;
 
   LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";
+  TPlanResult ret;
   if (server_available_) {
-    TPlanResult ret;
     try {
       auto ms = measure<>::execution([&]() {
         std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
@@ -453,7 +453,6 @@ TPlanResult Calcite::processImpl(
                 << (ms > ret.execution_time_ms ? ms - ret.execution_time_ms : 0)
                 << " (ms), Time in Java Calcite server " << ret.execution_time_ms
                 << " (ms)";
-      return ret;
     } catch (InvalidParseRequest& e) {
       throw std::invalid_argument(e.whyUp);
     } catch (const std::exception& ex) {
@@ -463,10 +462,9 @@ TPlanResult Calcite::processImpl(
     }
   } else {
     LOG(INFO) << "Not routing to Calcite, server is not up";
-    TPlanResult ret;
     ret.plan_result = "";
-    return ret;
   }
+  return ret;
 }
 
 std::string Calcite::getExtensionFunctionWhitelist() {
