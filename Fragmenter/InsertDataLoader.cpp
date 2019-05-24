@@ -298,13 +298,8 @@ void InsertDataLoader::insertData(const Catalog_Namespace::SessionInfo& session_
         [this, &session_info, &insert_data, &cat, &td, &rowIndicesOfShards](
             size_t shardId) {
           const auto shard_tables = cat.getPhysicalTablesDescriptors(td);
-          auto stardTableIdx = shardId;
-          auto shardLeafIdx = 0;
-
-          if (connector_.leafCount() > 1) {
-            stardTableIdx = shardId % connector_.leafCount();
-            shardLeafIdx = shardId / connector_.leafCount();
-          }
+          auto stardTableIdx = shardId % td->nShards;
+          auto shardLeafIdx = shardId / td->nShards;
 
           const auto& rowIndicesOfShard = rowIndicesOfShards[shardId];
           ShardDataOwner shardDataOwner;

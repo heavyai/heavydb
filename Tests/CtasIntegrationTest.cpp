@@ -1056,9 +1056,9 @@ int main(int argc, char* argv[]) {
     int port = 6274;
     std::string cert = "";
 
-    std::string user = "mapd";
+    std::string user = "admin";
     std::string pwd = "HyperInteractive";
-    std::string db = "mapd";
+    std::string db = "omnisci";
 
     desc.add_options()(
         "host",
