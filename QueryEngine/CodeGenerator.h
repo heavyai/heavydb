@@ -23,8 +23,13 @@
 
 class CodeGenerator {
  public:
-  CodeGenerator(Executor::CgenState* cgen_state, Executor* executor)
-      : cgen_state_(cgen_state), executor_(executor) {}
+  CodeGenerator(Executor* executor)
+      : cgen_state_(executor->cgen_state_.get())
+      , plan_state_(executor->plan_state_.get())
+      , executor_(executor) {}
+
+  CodeGenerator(Executor::CgenState* cgen_state, PlanState* plan_state)
+      : cgen_state_(cgen_state), plan_state_(plan_state), executor_(nullptr) {}
 
   std::vector<llvm::Value*> codegen(const Analyzer::Expr*,
                                     const bool fetch_columns,
@@ -350,5 +355,6 @@ class CodeGenerator {
       const CompilationOptions&);
 
   Executor::CgenState* cgen_state_;
+  PlanState* plan_state_;
   Executor* executor_;
 };

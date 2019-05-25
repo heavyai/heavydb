@@ -129,7 +129,7 @@ llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) co
     constants_owned.push_back(bitset_handle_literal);
     constants.push_back(bitset_handle_literal.get());
   }
-  CodeGenerator code_generator(executor->cgen_state_.get(), executor);
+  CodeGenerator code_generator(executor);
   const auto bitset_handle_lvs =
       code_generator.codegenHoistedConstants(constants, kENCODING_NONE, 0);
   CHECK_EQ(size_t(1), bitset_handle_lvs.size());

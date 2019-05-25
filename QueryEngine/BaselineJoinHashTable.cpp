@@ -1069,7 +1069,7 @@ llvm::Value* BaselineJoinHashTable::codegenKey(const CompilationOptions& co) {
       CHECK(false);
   }
 
-  CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
+  CodeGenerator code_generator(executor_);
   for (size_t i = 0; i < getKeyComponentCount(); ++i) {
     const auto key_comp_dest_lv = LL_BUILDER.CreateGEP(key_buff_lv, LL_INT(i));
     const auto& inner_outer_pair = inner_outer_pairs[i];

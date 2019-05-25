@@ -289,7 +289,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
             FetchCacheAnchor anchor(cgen_state_.get());
             addJoinLoopIterator(prev_iters, level_idx + 1);
             llvm::Value* left_join_cond = cgen_state_->llBool(true);
-            CodeGenerator code_generator(cgen_state_.get(), this);
+            CodeGenerator code_generator(this);
             for (auto expr : current_level_join_conditions.quals) {
               left_join_cond = cgen_state_->ir_builder_.CreateAnd(
                   left_join_cond,
@@ -365,7 +365,7 @@ Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
     const auto row_is_deleted_bb = llvm::BasicBlock::Create(
         cgen_state_->context_, "row_is_deleted", cgen_state_->row_func_);
     cgen_state_->ir_builder_.SetInsertPoint(it_valid_bb);
-    CodeGenerator code_generator(cgen_state_.get(), this);
+    CodeGenerator code_generator(this);
     const auto row_is_deleted = code_generator.toBool(
         code_generator.codegen(deleted_expr.get(), true, co).front());
     cgen_state_->ir_builder_.CreateBr(row_is_deleted_bb);
@@ -458,7 +458,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
   cgen_state_->ir_builder_.SetInsertPoint(exit_bb);
   cgen_state_->ir_builder_.CreateRet(cgen_state_->llInt<int32_t>(0));
   cgen_state_->ir_builder_.SetInsertPoint(entry_bb);
-  CodeGenerator code_generator(cgen_state_.get(), this);
+  CodeGenerator code_generator(this);
   const auto loops_entry_bb = JoinLoop::codegen(
       join_loops,
       [this,
@@ -500,7 +500,7 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     std::stack<llvm::BasicBlock*>& array_loops,
     const bool thread_mem_shared) {
   CHECK_GE(col_width, sizeof(int32_t));
-  CodeGenerator code_generator(cgen_state_.get(), this);
+  CodeGenerator code_generator(this);
   auto group_key = code_generator.codegen(group_by_col, true, co).front();
   auto key_to_cache = group_key;
   if (dynamic_cast<Analyzer::UOper*>(group_by_col) &&

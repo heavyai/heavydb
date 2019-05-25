@@ -89,6 +89,51 @@ size_t g_constrained_by_in_threshold{10};
 size_t g_big_group_threshold{20000};
 bool g_enable_window_functions{true};
 
+bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) {
+  if (!allow_lazy_fetch_) {
+    return false;
+  }
+  const auto do_not_fetch_column = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
+  if (!do_not_fetch_column || dynamic_cast<const Analyzer::Var*>(do_not_fetch_column)) {
+    return false;
+  }
+  if (do_not_fetch_column->get_table_id() > 0) {
+    auto cd = get_column_descriptor(do_not_fetch_column->get_column_id(),
+                                    do_not_fetch_column->get_table_id(),
+                                    *executor_->getCatalog());
+    if (cd->isVirtualCol) {
+      return false;
+    }
+  }
+  std::set<std::pair<int, int>> intersect;
+  std::set_intersection(columns_to_fetch_.begin(),
+                        columns_to_fetch_.end(),
+                        columns_to_not_fetch_.begin(),
+                        columns_to_not_fetch_.end(),
+                        std::inserter(intersect, intersect.begin()));
+  if (!intersect.empty()) {
+    throw CompilationRetryNoLazyFetch();
+  }
+  return columns_to_fetch_.find(std::make_pair(do_not_fetch_column->get_table_id(),
+                                               do_not_fetch_column->get_column_id())) ==
+         columns_to_fetch_.end();
+}
+
+int PlanState::getLocalColumnId(const Analyzer::ColumnVar* col_var,
+                                const bool fetch_column) {
+  CHECK(col_var);
+  const int table_id = col_var->get_table_id();
+  int global_col_id = col_var->get_column_id();
+  const int scan_idx = col_var->get_rte_idx();
+  InputColDescriptor scan_col_desc(global_col_id, table_id, scan_idx);
+  const auto it = global_to_local_col_ids_.find(scan_col_desc);
+  CHECK(it != global_to_local_col_ids_.end());
+  if (fetch_column) {
+    columns_to_fetch_.insert(std::make_pair(table_id, global_col_id));
+  }
+  return it->second;
+}
+
 Executor::Executor(const int db_id,
                    const size_t block_size_x,
                    const size_t grid_size_x,
@@ -96,7 +141,6 @@ Executor::Executor(const int db_id,
                    const std::string& debug_file,
                    ::QueryRenderer::QueryRenderManager* render_manager)
     : cgen_state_(new CgenState({}, false))
-    , is_nested_(false)
     , gpu_active_modules_device_mask_(0x0)
     , interrupted_(false)
     , cpu_code_cache_(code_cache_size)
@@ -269,12 +313,12 @@ std::vector<ColumnLazyFetchInfo> Executor::getColLazyFetchInfo(
           CHECK(!cd0->isVirtualCol);
           auto col0_var = makeExpr<Analyzer::ColumnVar>(
               col0_ti, col_var->get_table_id(), cd0->columnId, rte_idx);
-          auto local_col0_id = getLocalColumnId(col0_var.get(), false);
+          auto local_col0_id = plan_state_->getLocalColumnId(col0_var.get(), false);
           col_lazy_fetch_info.emplace_back(
               ColumnLazyFetchInfo{true, local_col0_id, col0_ti});
         }
       } else {
-        auto local_col_id = getLocalColumnId(col_var, false);
+        auto local_col_id = plan_state_->getLocalColumnId(col_var, false);
         const auto& col_ti = col_var->get_type_info();
         col_lazy_fetch_info.emplace_back(ColumnLazyFetchInfo{true, local_col_id, col_ti});
       }
@@ -2982,31 +3026,9 @@ void Executor::allocateLocalColumnIds(
     const auto local_col_id = plan_state_->global_to_local_col_ids_.size();
     const auto it_ok = plan_state_->global_to_local_col_ids_.insert(
         std::make_pair(*col_id, local_col_id));
-    plan_state_->local_to_global_col_ids_.push_back(col_id->getColId());
-    plan_state_->global_to_local_col_ids_.find(*col_id);
     // enforce uniqueness of the column ids in the scan plan
     CHECK(it_ok.second);
   }
-}
-
-int Executor::getLocalColumnId(const Analyzer::ColumnVar* col_var,
-                               const bool fetch_column) const {
-  CHECK(col_var);
-  const int table_id = is_nested_ ? 0 : col_var->get_table_id();
-  int global_col_id = col_var->get_column_id();
-  if (is_nested_) {
-    const auto var = dynamic_cast<const Analyzer::Var*>(col_var);
-    CHECK(var);
-    global_col_id = var->get_varno();
-  }
-  const int scan_idx = is_nested_ ? -1 : col_var->get_rte_idx();
-  InputColDescriptor scan_col_desc(global_col_id, table_id, scan_idx);
-  const auto it = plan_state_->global_to_local_col_ids_.find(scan_col_desc);
-  CHECK(it != plan_state_->global_to_local_col_ids_.end());
-  if (fetch_column) {
-    plan_state_->columns_to_fetch_.insert(std::make_pair(table_id, global_col_id));
-  }
-  return it->second;
 }
 
 namespace {
@@ -3094,7 +3116,7 @@ std::pair<bool, int64_t> Executor::skipFragment(
       chunk_min = get_hpt_scaled_value(chunk_min, lhs_dimen, rhs_dimen);
       chunk_max = get_hpt_scaled_value(chunk_max, lhs_dimen, rhs_dimen);
     }
-    CodeGenerator code_generator(cgen_state_.get(), this);
+    CodeGenerator code_generator(this);
     const auto rhs_val = code_generator.codegenIntConst(rhs_const)->getSExtValue();
     switch (comp_expr->get_optype()) {
       case kGE:

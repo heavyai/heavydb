@@ -128,16 +128,16 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
             col0_ti, col_var->get_table_id(), cd0->columnId, rte_idx);
         auto col = codegenColVar(col0_var.get(), fetch_column, false, co);
         cols.insert(cols.end(), col.begin(), col.end());
-        if (!fetch_column && executor_->plan_state_->isLazyFetchColumn(col_var)) {
-          executor_->plan_state_->columns_to_not_fetch_.insert(
+        if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
+          plan_state_->columns_to_not_fetch_.insert(
               std::make_pair(col_var->get_table_id(), col0_var->get_column_id()));
         }
       }
-      if (!fetch_column && executor_->plan_state_->isLazyFetchColumn(col_var)) {
-        executor_->plan_state_->columns_to_not_fetch_.insert(
+      if (!fetch_column && plan_state_->isLazyFetchColumn(col_var)) {
+        plan_state_->columns_to_not_fetch_.insert(
             std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
       } else {
-        executor_->plan_state_->columns_to_fetch_.insert(
+        plan_state_->columns_to_fetch_.insert(
             std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
       }
       return cols;
@@ -152,7 +152,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   if (grouped_col_lv) {
     return {grouped_col_lv};
   }
-  const int local_col_id = executor_->getLocalColumnId(col_var, fetch_column);
+  const int local_col_id = plan_state_->getLocalColumnId(col_var, fetch_column);
   const auto window_func_context =
       WindowProjectNodeContext::getActiveWindowFunctionContext();
   // only generate the decoding code once; if a column has been previously
@@ -167,8 +167,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   // Use the already fetched left-hand side of an equi-join if the types are identical.
   // Currently, types can only be different because of different underlying dictionaries.
   if (hash_join_lhs && hash_join_lhs->get_type_info() == col_var->get_type_info()) {
-    if (executor_->plan_state_->isLazyFetchColumn(col_var)) {
-      executor_->plan_state_->columns_to_fetch_.insert(
+    if (plan_state_->isLazyFetchColumn(col_var)) {
+      plan_state_->columns_to_fetch_.insert(
           std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
     }
     return codegen(hash_join_lhs.get(), fetch_column, co);
@@ -178,9 +178,9 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
     pos_arg = codegenWindowPosition(window_func_context, pos_arg);
   }
   auto col_byte_stream = colByteStream(col_var, fetch_column, hoist_literals);
-  if (executor_->plan_state_->isLazyFetchColumn(col_var)) {
+  if (plan_state_->isLazyFetchColumn(col_var)) {
     if (update_query_plan) {
-      executor_->plan_state_->columns_to_not_fetch_.insert(
+      plan_state_->columns_to_not_fetch_.insert(
           std::make_pair(col_var->get_table_id(), col_var->get_column_id()));
     }
     if (rte_idx > 0) {
@@ -467,7 +467,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenOuterJoinNullPlaceholder(
 llvm::Value* CodeGenerator::resolveGroupedColumnReference(
     const Analyzer::ColumnVar* col_var) {
   auto col_id = col_var->get_column_id();
-  if (col_var->get_rte_idx() >= 0 && !executor_->is_nested_) {
+  if (col_var->get_rte_idx() >= 0) {
     return nullptr;
   }
   CHECK((col_id == 0) || (col_var->get_rte_idx() >= 0 && col_var->get_table_id() > 0));
@@ -488,7 +488,7 @@ llvm::Value* CodeGenerator::colByteStream(const Analyzer::ColumnVar* col_var,
                                           const bool hoist_literals) {
   CHECK_GE(cgen_state_->row_func_->arg_size(), size_t(3));
   const auto stream_arg_name =
-      "col_buf" + std::to_string(executor_->getLocalColumnId(col_var, fetch_column));
+      "col_buf" + std::to_string(plan_state_->getLocalColumnId(col_var, fetch_column));
   for (auto& arg : cgen_state_->row_func_->args()) {
     if (arg.getName() == stream_arg_name) {
       CHECK(arg.getType() == llvm::Type::getInt8PtrTy(cgen_state_->context_));
@@ -537,8 +537,7 @@ const Analyzer::Expr* remove_cast_to_int(const Analyzer::Expr* expr) {
 
 std::shared_ptr<const Analyzer::Expr> CodeGenerator::hashJoinLhs(
     const Analyzer::ColumnVar* rhs) const {
-  for (const auto tautological_eq :
-       executor_->plan_state_->join_info_.equi_join_tautologies_) {
+  for (const auto tautological_eq : plan_state_->join_info_.equi_join_tautologies_) {
     CHECK(IS_EQUIVALENCE(tautological_eq->get_optype()));
     if (dynamic_cast<const Analyzer::ExpressionTuple*>(
             tautological_eq->get_left_operand())) {

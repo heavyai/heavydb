@@ -20,7 +20,7 @@
 
 llvm::Value* Executor::codegenWindowFunction(const size_t target_index,
                                              const CompilationOptions& co) {
-  CodeGenerator code_generator(cgen_state_.get(), this);
+  CodeGenerator code_generator(this);
   const auto window_func_context =
       WindowProjectNodeContext::get()->activateWindowFunctionContext(target_index);
   const auto window_func = window_func_context->getWindowFunction();
@@ -169,7 +169,7 @@ llvm::BasicBlock* Executor::codegenWindowResetStateControlFlow() {
   const auto max_val = cgen_state_->llInt(window_func_context->elementCount() - 1);
   const auto null_val = cgen_state_->llInt(inline_int_null_value<int64_t>());
   const auto null_bool_val = cgen_state_->llInt<int8_t>(inline_int_null_value<int8_t>());
-  CodeGenerator code_generator(cgen_state_.get(), this);
+  CodeGenerator code_generator(this);
   const auto reset_state =
       code_generator.toBool(cgen_state_->emitCall("bit_is_set",
                                                   {bitset,
@@ -253,7 +253,7 @@ llvm::Value* Executor::codegenWindowFunctionAggregateCalls(llvm::Value* aggregat
     CHECK(window_func->getKind() == SqlWindowFunctionKind::COUNT);
     crt_val = cgen_state_->llInt(int64_t(1));
   } else {
-    CodeGenerator code_generator(cgen_state_.get(), this);
+    CodeGenerator code_generator(this);
     const auto arg_lvs = code_generator.codegen(args.front().get(), true, co);
     CHECK_EQ(arg_lvs.size(), size_t(1));
     if (window_func->getKind() == SqlWindowFunctionKind::SUM && !window_func_ti.is_fp()) {

@@ -239,7 +239,7 @@ void TargetExprCodegen::codegen(
   size_t target_lv_idx = 0;
   const bool lazy_fetched{executor->plan_state_->isLazyFetchColumn(target_expr)};
 
-  CodeGenerator code_generator(executor->cgen_state_.get(), executor);
+  CodeGenerator code_generator(executor);
   for (const auto& agg_base_name : agg_fn_names) {
     if (target_info.is_distinct && arg_expr->get_type_info().is_array()) {
       CHECK_EQ(static_cast<size_t>(query_mem_desc.getLogicalSlotWidthBytes(slot_index)),

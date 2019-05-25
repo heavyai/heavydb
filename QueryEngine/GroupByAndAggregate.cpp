@@ -938,7 +938,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
           // Ignore rejection on pushing current row to top-K heap.
           LL_BUILDER.CreateRet(LL_INT(int32_t(0)));
         } else {
-          CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
+          CodeGenerator code_generator(executor_);
           LL_BUILDER.CreateRet(LL_BUILDER.CreateNeg(LL_BUILDER.CreateTrunc(
               // TODO(alex): remove the trunc once pos is converted to 32 bits
               code_generator.posArg(nullptr),
@@ -991,7 +991,7 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
   const int32_t row_size_quad = query_mem_desc.didOutputColumnar()
                                     ? 0
                                     : query_mem_desc.getRowSize() / sizeof(int64_t);
-  CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
+  CodeGenerator code_generator(executor_);
   if (use_streaming_top_n(ra_exe_unit_, query_mem_desc.didOutputColumnar())) {
     const auto& only_order_entry = ra_exe_unit_.sort_info.order_entries.front();
     CHECK_GE(only_order_entry.tle_no, int(1));
@@ -1410,7 +1410,7 @@ llvm::Value* GroupByAndAggregate::codegenWindowRowPointer(
                                       : query_mem_desc.getRowSize() / sizeof(int64_t);
     auto arg_it = ROW_FUNC->arg_begin();
     auto groups_buffer = arg_it++;
-    CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
+    CodeGenerator code_generator(executor_);
     if (!window_func_context->getRowNumber()) {
       CHECK(window_func->getKind() == SqlWindowFunctionKind::COUNT);
       window_func_context->setRowNumber(emitCall(
@@ -1687,7 +1687,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
     const CompilationOptions& co) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
   // TODO(alex): handle arrays uniformly?
-  CodeGenerator code_generator(executor_->cgen_state_.get(), executor_);
+  CodeGenerator code_generator(executor_);
   if (target_expr) {
     const auto& target_ti = target_expr->get_type_info();
     if (target_ti.is_array() && !executor_->plan_state_->isLazyFetchColumn(target_expr)) {

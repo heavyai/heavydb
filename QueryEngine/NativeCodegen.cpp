@@ -1116,8 +1116,7 @@ void Executor::createErrorCheckControlFlow(llvm::Function* query_func,
         continue;
       }
       auto& filter_call = llvm::cast<llvm::CallInst>(*inst_it);
-      if (std::string(filter_call.getCalledFunction()->getName()) ==
-          unique_name("row_process", is_nested_)) {
+      if (std::string(filter_call.getCalledFunction()->getName()) == "row_process") {
         auto next_inst_it = inst_it;
         ++next_inst_it;
         auto new_bb = bb_it->splitBasicBlock(next_inst_it);
@@ -1432,14 +1431,12 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   const bool is_group_by{query_mem_desc->isGroupBy()};
   auto query_func = is_group_by ? query_group_by_template(cgen_state_->module_,
-                                                          is_nested_,
                                                           co.hoist_literals_,
                                                           *query_mem_desc,
                                                           co.device_type_,
                                                           ra_exe_unit.scan_limit)
                                 : query_template(cgen_state_->module_,
                                                  agg_slot_count,
-                                                 is_nested_,
                                                  co.hoist_literals_,
                                                  !!ra_exe_unit.estimator);
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
@@ -1517,8 +1514,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       continue;
     }
     auto& filter_call = llvm::cast<llvm::CallInst>(*it);
-    if (std::string(filter_call.getCalledFunction()->getName()) ==
-        unique_name("row_process", is_nested_)) {
+    if (std::string(filter_call.getCalledFunction()->getName()) == "row_process") {
       std::vector<llvm::Value*> args;
       for (size_t i = 0; i < filter_call.getNumArgOperands(); ++i) {
         args.push_back(filter_call.getArgOperand(i));
@@ -1534,7 +1530,6 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
     }
   }
 
-  is_nested_ = false;
   plan_state_->init_agg_vals_ =
       init_agg_val_vec(ra_exe_unit.target_exprs, ra_exe_unit.quals, *query_mem_desc);
 
@@ -1606,7 +1601,7 @@ llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
                                     outer_input_desc.getTableId(),
                                     deleted_cd->columnId,
                                     outer_input_desc.getNestLevel());
-  CodeGenerator code_generator(cgen_state_.get(), this);
+  CodeGenerator code_generator(this);
   const auto is_deleted =
       code_generator.toBool(code_generator.codegen(deleted_expr.get(), true, co).front());
   const auto is_deleted_bb = llvm::BasicBlock::Create(
@@ -1636,7 +1631,7 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
   }
 
   llvm::Value* filter_lv = cgen_state_->llBool(true);
-  CodeGenerator code_generator(cgen_state_.get(), this);
+  CodeGenerator code_generator(this);
   for (auto expr : primary_quals) {
     // Generate the filter for primary quals
     auto cond = code_generator.toBool(code_generator.codegen(expr, true, co).front());

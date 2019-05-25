@@ -328,6 +328,51 @@ using LLVMValueVector = std::vector<llvm::Value*>;
 
 class QueryCompilationDescriptor;
 
+struct JoinInfo {
+  JoinInfo(const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
+           const std::vector<std::shared_ptr<JoinHashTableInterface>>& join_hash_tables)
+      : equi_join_tautologies_(equi_join_tautologies)
+      , join_hash_tables_(join_hash_tables) {}
+
+  std::vector<std::shared_ptr<Analyzer::BinOper>>
+      equi_join_tautologies_;  // expressions we equi-join on are true by
+                               // definition when using a hash join; we'll
+                               // fold them to true during code generation
+  std::vector<std::shared_ptr<JoinHashTableInterface>> join_hash_tables_;
+  std::unordered_set<size_t> sharded_range_table_indices_;
+};
+
+struct PlanState {
+  PlanState(const bool allow_lazy_fetch, const Executor* executor)
+      : allow_lazy_fetch_(allow_lazy_fetch)
+      , join_info_({std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}})
+      , executor_(executor) {}
+
+  using TableId = int;
+  using ColumnId = int;
+
+  std::vector<int64_t> init_agg_vals_;
+  std::vector<Analyzer::Expr*> target_exprs_;
+  std::unordered_map<InputColDescriptor, size_t> global_to_local_col_ids_;
+  std::set<std::pair<TableId, ColumnId>> columns_to_fetch_;
+  std::set<std::pair<TableId, ColumnId>> columns_to_not_fetch_;
+  bool allow_lazy_fetch_;
+  JoinInfo join_info_;
+  const Executor* executor_;
+
+  int getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fetch_column);
+
+  bool isLazyFetchColumn(const Analyzer::Expr* target_expr);
+
+  bool isLazyFetchColumn(const InputColDescriptor& col_desc) {
+    Analyzer::ColumnVar column(SQLTypeInfo(),
+                               col_desc.getScanDesc().getTableId(),
+                               col_desc.getColId(),
+                               col_desc.getScanDesc().getNestLevel());
+    return isLazyFetchColumn(&column);
+  }
+};
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -531,20 +576,6 @@ class Executor {
     }
     return false;
   }
-
-  struct JoinInfo {
-    JoinInfo(const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
-             const std::vector<std::shared_ptr<JoinHashTableInterface>>& join_hash_tables)
-        : equi_join_tautologies_(equi_join_tautologies)
-        , join_hash_tables_(join_hash_tables) {}
-
-    std::vector<std::shared_ptr<Analyzer::BinOper>>
-        equi_join_tautologies_;  // expressions we equi-join on are true by
-                                 // definition when using a hash join; we'll
-                                 // fold them to true during code generation
-    std::vector<std::shared_ptr<JoinHashTableInterface>> join_hash_tables_;
-    std::unordered_set<size_t> sharded_range_table_indices_;
-  };
 
   struct FetchResult {
     std::vector<std::vector<const int8_t*>> col_buffers;
@@ -935,7 +966,6 @@ class Executor {
   RelAlgExecutionUnit addDeletedColumn(const RelAlgExecutionUnit& ra_exe_unit);
   void allocateLocalColumnIds(
       const std::list<std::shared_ptr<const InputColDescriptor>>& global_col_ids);
-  int getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fetch_column) const;
 
   std::pair<bool, int64_t> skipFragment(
       const InputDescriptor& table_desc,
@@ -1301,66 +1331,6 @@ class Executor {
     std::unordered_map<int, std::vector<llvm::Value*>> saved_fetch_cache;
   };
 
-  struct PlanState {
-    PlanState(const bool allow_lazy_fetch, const Executor* executor)
-        : allow_lazy_fetch_(allow_lazy_fetch)
-        , join_info_({std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}})
-        , executor_(executor) {}
-
-    using TableId = int;
-    using ColumnId = int;
-
-    std::vector<int64_t> init_agg_vals_;
-    std::vector<Analyzer::Expr*> target_exprs_;
-    std::unordered_map<InputColDescriptor, size_t> global_to_local_col_ids_;
-    std::vector<ColumnId> local_to_global_col_ids_;
-    std::set<std::pair<TableId, ColumnId>> columns_to_fetch_;
-    std::set<std::pair<TableId, ColumnId>> columns_to_not_fetch_;
-    bool allow_lazy_fetch_;
-    JoinInfo join_info_;
-    const Executor* executor_;
-
-    bool isLazyFetchColumn(const Analyzer::Expr* target_expr) {
-      if (!allow_lazy_fetch_) {
-        return false;
-      }
-      const auto do_not_fetch_column =
-          dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
-      if (!do_not_fetch_column ||
-          dynamic_cast<const Analyzer::Var*>(do_not_fetch_column)) {
-        return false;
-      }
-      if (do_not_fetch_column->get_table_id() > 0) {
-        auto cd = get_column_descriptor(do_not_fetch_column->get_column_id(),
-                                        do_not_fetch_column->get_table_id(),
-                                        *executor_->catalog_);
-        if (cd->isVirtualCol) {
-          return false;
-        }
-      }
-      std::set<std::pair<int, int>> intersect;
-      std::set_intersection(columns_to_fetch_.begin(),
-                            columns_to_fetch_.end(),
-                            columns_to_not_fetch_.begin(),
-                            columns_to_not_fetch_.end(),
-                            std::inserter(intersect, intersect.begin()));
-      if (!intersect.empty()) {
-        throw CompilationRetryNoLazyFetch();
-      }
-      return columns_to_fetch_.find(std::make_pair(
-                 do_not_fetch_column->get_table_id(),
-                 do_not_fetch_column->get_column_id())) == columns_to_fetch_.end();
-    }
-
-    bool isLazyFetchColumn(const InputColDescriptor& col_desc) {
-      Analyzer::ColumnVar column(SQLTypeInfo(),
-                                 col_desc.getScanDesc().getTableId(),
-                                 col_desc.getColId(),
-                                 col_desc.getScanDesc().getNestLevel());
-      return isLazyFetchColumn(&column);
-    }
-  };
-
   std::unordered_set<llvm::Function*> markDeadRuntimeFuncs(
       llvm::Module& module,
       const std::vector<llvm::Function*>& roots,
@@ -1370,8 +1340,6 @@ class Executor {
 
   std::unique_ptr<PlanState> plan_state_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
-
-  bool is_nested_;
 
   static const int max_gpu_count{16};
   std::mutex gpu_exec_mutex_[max_gpu_count];

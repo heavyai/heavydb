@@ -114,7 +114,6 @@ llvm::Function* pos_step(llvm::Module* mod) {
 template <class Attributes>
 llvm::Function* row_process(llvm::Module* mod,
                             const size_t aggr_col_count,
-                            const bool is_nested,
                             const bool hoist_literals) {
   using namespace llvm;
 
@@ -149,7 +148,7 @@ llvm::Function* row_process(llvm::Module* mod,
       /*Params=*/func_args,
       /*isVarArg=*/false);
 
-  auto func_name = unique_name("row_process", is_nested);
+  std::string func_name{"row_process"};
   auto func_ptr = mod->getFunction(func_name);
 
   if (!func_ptr) {
@@ -183,7 +182,6 @@ llvm::Function* row_process(llvm::Module* mod,
 template <class Attributes>
 llvm::Function* query_template_impl(llvm::Module* mod,
                                     const size_t aggr_col_count,
-                                    const bool is_nested,
                                     const bool hoist_literals,
                                     const bool is_estimate_query) {
   using namespace llvm;
@@ -195,7 +193,7 @@ llvm::Function* query_template_impl(llvm::Module* mod,
   auto func_group_buff_idx = group_buff_idx<Attributes>(mod);
   CHECK(func_group_buff_idx);
   auto func_row_process = row_process<Attributes>(
-      mod, is_estimate_query ? 1 : aggr_col_count, is_nested, hoist_literals);
+      mod, is_estimate_query ? 1 : aggr_col_count, hoist_literals);
   CHECK(func_row_process);
 
   auto i8_type = IntegerType::get(mod->getContext(), 8);
@@ -228,7 +226,7 @@ llvm::Function* query_template_impl(llvm::Module* mod,
       /*Params=*/query_args,
       /*isVarArg=*/false);
 
-  auto query_template_name = unique_name("query_template", is_nested);
+  std::string query_template_name{"query_template"};
   auto query_func_ptr = mod->getFunction(query_template_name);
   CHECK(!query_func_ptr);
 
@@ -458,7 +456,6 @@ llvm::Function* query_template_impl(llvm::Module* mod,
 
 template <class Attributes>
 llvm::Function* query_group_by_template_impl(llvm::Module* mod,
-                                             const bool is_nested,
                                              const bool hoist_literals,
                                              const QueryMemoryDescriptor& query_mem_desc,
                                              const ExecutorDeviceType device_type,
@@ -471,7 +468,7 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   CHECK(func_pos_step);
   auto func_group_buff_idx = group_buff_idx<Attributes>(mod);
   CHECK(func_group_buff_idx);
-  auto func_row_process = row_process<Attributes>(mod, 0, is_nested, hoist_literals);
+  auto func_row_process = row_process<Attributes>(mod, 0, hoist_literals);
   CHECK(func_row_process);
   auto func_init_shared_mem = query_mem_desc.sharedMemBytes(device_type)
                                   ? mod->getFunction("init_shared_mem")
@@ -520,7 +517,7 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
       /*Params=*/query_args,
       /*isVarArg=*/false);
 
-  auto query_name = unique_name("query_group_by_template", is_nested);
+  std::string query_name{"query_group_by_template"};
   auto query_func_ptr = mod->getFunction(query_name);
   CHECK(!query_func_ptr);
 
@@ -801,47 +798,36 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   return query_func_ptr;
 }
 
-std::string unique_name(const char* base_name, const bool is_nested) {
-  char full_name[128] = {0};
-  snprintf(
-      full_name, sizeof(full_name), "%s_%u", base_name, static_cast<unsigned>(is_nested));
-  return full_name;
-}
-
 #if LLVM_VERSION_MAJOR >= 6
 llvm::Function* query_template(llvm::Module* module,
                                const size_t aggr_col_count,
-                               const bool is_nested,
                                const bool hoist_literals,
                                const bool is_estimate_query) {
   return query_template_impl<llvm::AttributeList>(
-      module, aggr_col_count, is_nested, hoist_literals, is_estimate_query);
+      module, aggr_col_count, hoist_literals, is_estimate_query);
 }
 llvm::Function* query_group_by_template(llvm::Module* module,
-                                        const bool is_nested,
                                         const bool hoist_literals,
                                         const QueryMemoryDescriptor& query_mem_desc,
                                         const ExecutorDeviceType device_type,
                                         const bool check_scan_limit) {
   return query_group_by_template_impl<llvm::AttributeList>(
-      module, is_nested, hoist_literals, query_mem_desc, device_type, check_scan_limit);
+      module, hoist_literals, query_mem_desc, device_type, check_scan_limit);
 }
 #else
 llvm::Function* query_template(llvm::Module* module,
                                const size_t aggr_col_count,
-                               const bool is_nested,
                                const bool hoist_literals,
                                const bool is_estimate_query) {
   return query_template_impl<llvm::AttributeSet>(
-      module, aggr_col_count, is_nested, hoist_literals, is_estimate_query);
+      module, aggr_col_count, hoist_literals, is_estimate_query);
 }
 llvm::Function* query_group_by_template(llvm::Module* module,
-                                        const bool is_nested,
                                         const bool hoist_literals,
                                         const QueryMemoryDescriptor& query_mem_desc,
                                         const ExecutorDeviceType device_type,
                                         const bool check_scan_limit) {
   return query_group_by_template_impl<llvm::AttributeSet>(
-      module, is_nested, hoist_literals, query_mem_desc, device_type, check_scan_limit);
+      module, hoist_literals, query_mem_desc, device_type, check_scan_limit);
 }
 #endif
