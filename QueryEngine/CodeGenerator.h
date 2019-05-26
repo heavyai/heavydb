@@ -35,10 +35,6 @@ class CodeGenerator {
                                     const bool fetch_columns,
                                     const CompilationOptions&);
 
-  std::vector<llvm::Value*> codegen(const Analyzer::ColumnVar*,
-                                    const bool fetch_column,
-                                    const CompilationOptions&);
-
   std::vector<llvm::Value*> codegenHoistedConstants(
       const std::vector<const Analyzer::Constant*>& constants,
       const EncodingType enc_type,
@@ -66,6 +62,10 @@ class CodeGenerator {
                                     const EncodingType enc_type,
                                     const int dict_id,
                                     const CompilationOptions&);
+
+  virtual std::vector<llvm::Value*> codegenColumn(const Analyzer::ColumnVar*,
+                                                  const bool fetch_column,
+                                                  const CompilationOptions&);
 
   llvm::Value* codegenArith(const Analyzer::BinOper*, const CompilationOptions&);
 
@@ -357,4 +357,15 @@ class CodeGenerator {
   Executor::CgenState* cgen_state_;
   PlanState* plan_state_;
   Executor* executor_;
+};
+
+class ScalarCodeGenerator : public CodeGenerator {
+ public:
+  ScalarCodeGenerator(Executor::CgenState* cgen_state, PlanState* plan_state)
+      : CodeGenerator(cgen_state, plan_state) {}
+
+ private:
+  std::vector<llvm::Value*> codegenColumn(const Analyzer::ColumnVar*,
+                                          const bool fetch_column,
+                                          const CompilationOptions&) override;
 };

@@ -89,9 +89,9 @@ int adjusted_range_table_index(const Analyzer::ColumnVar* col_var) {
 
 }  // namespace
 
-std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::ColumnVar* col_var,
-                                                 const bool fetch_column,
-                                                 const CompilationOptions& co) {
+std::vector<llvm::Value*> CodeGenerator::codegenColumn(const Analyzer::ColumnVar* col_var,
+                                                       const bool fetch_column,
+                                                       const CompilationOptions& co) {
   if (col_var->get_rte_idx() <= 0 ||
       cgen_state_->outer_join_match_found_per_level_.empty() ||
       !foundOuterJoinMatch(col_var->get_rte_idx())) {
@@ -601,4 +601,10 @@ std::shared_ptr<const Analyzer::ColumnVar> CodeGenerator::hashJoinLhsTuple(
     }
   }
   return nullptr;
+}
+
+std::vector<llvm::Value*> ScalarCodeGenerator::codegenColumn(const Analyzer::ColumnVar*,
+                                                             const bool fetch_column,
+                                                             const CompilationOptions&) {
+  throw std::runtime_error("Column not supported");
 }

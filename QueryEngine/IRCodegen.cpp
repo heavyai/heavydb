@@ -38,7 +38,7 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   }
   auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(expr);
   if (col_var) {
-    return codegen(col_var, fetch_columns, co);
+    return codegenColumn(col_var, fetch_columns, co);
   }
   auto constant = dynamic_cast<const Analyzer::Constant*>(expr);
   if (constant) {
