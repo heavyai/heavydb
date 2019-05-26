@@ -363,14 +363,30 @@ class CodeGenerator {
 
 class ScalarCodeGenerator : public CodeGenerator {
  public:
-  ScalarCodeGenerator(Executor::CgenState* cgen_state, PlanState* plan_state)
-      : CodeGenerator(cgen_state, plan_state) {}
+  ScalarCodeGenerator(std::unique_ptr<llvm::Module> module)
+      : CodeGenerator(nullptr, nullptr), module_(std::move(module)) {}
 
-  // TODO: remove
-  void prepare(const Analyzer::Expr*);
+  struct CompiledExpression {
+    llvm::Value* value;
+    llvm::Function* func;
+    std::vector<std::shared_ptr<Analyzer::ColumnVar>> inputs;
+  };
+
+  CompiledExpression compile(const Analyzer::Expr*,
+                             const bool fetch_columns,
+                             const CompilationOptions&);
+
+  using ColumnMap =
+      std::unordered_map<InputColDescriptor, std::shared_ptr<Analyzer::ColumnVar>>;
 
  private:
   std::vector<llvm::Value*> codegenColumn(const Analyzer::ColumnVar*,
                                           const bool fetch_column,
                                           const CompilationOptions&) override;
+
+  ColumnMap prepare(const Analyzer::Expr*);
+
+  std::unique_ptr<llvm::Module> module_;
+  std::unique_ptr<Executor::CgenState> own_cgen_state_;
+  std::unique_ptr<PlanState> own_plan_state_;
 };
