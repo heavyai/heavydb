@@ -4,6 +4,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 set(TEST_BASE_PATH "./tmp")
 add_definitions("-DBASE_PATH=\"${TEST_BASE_PATH}\"")
 
+add_executable(CodeGeneratorTest CodeGeneratorTest.cpp)
 add_executable(ExecuteTest ExecuteTest.cpp)
 add_executable(RunQueryLoop RunQueryLoop.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
@@ -72,6 +73,7 @@ set(EXECUTE_TEST_LIBS gtest QueryRunner ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${G
 list(APPEND EXECUTE_TEST_LIBS Calcite)
 list(APPEND EXECUTE_TEST_LIBS Calcite mapd_thrift ${PROFILER_LIBS})
 
+target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS} CsvImport QueryRunner)
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)
 target_link_libraries(ImportTest gtest ${EXECUTE_TEST_LIBS})
