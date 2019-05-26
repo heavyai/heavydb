@@ -28,6 +28,7 @@
 #include "QueryPhysicalInputsCollector.h"
 #include "RangeTableIndexVisitor.h"
 #include "RexVisitor.h"
+#include "UsedColumnsVisitor.h"
 #include "WindowContext.h"
 
 #include "../Parser/ParserNode.h"
@@ -2264,25 +2265,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node,
 
 namespace {
 
-template <typename SET_TYPE>
-class UsedColumnsVisitor : public ScalarExprVisitor<SET_TYPE> {
- public:
-  using ColumnIdSet = SET_TYPE;
-
- protected:
-  ColumnIdSet visitColumnVar(const Analyzer::ColumnVar* col_var) const override {
-    return {col_var->get_column_id()};
-  }
-
-  std::unordered_set<int> aggregateResult(
-      const std::unordered_set<int>& aggregate,
-      const std::unordered_set<int>& next_result) const override {
-    auto result = aggregate;
-    result.insert(next_result.begin(), next_result.end());
-    return result;
-  }
-};
-
 JoinType get_join_type(const RelAlgNode* ra) {
   auto sink = get_data_sink(ra);
   if (auto join = dynamic_cast<const RelJoin*>(sink)) {
@@ -2489,9 +2471,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
       std::next(target_exprs.cbegin(), starting_projection_column_idx);
   decltype(target_exprs) filtered_target_exprs(update_expr_iter, target_exprs.end());
 
-  using ColumnIdSet = std::unordered_set<int>;
-  UsedColumnsVisitor<ColumnIdSet> used_columns_visitor;
-  ColumnIdSet id_accumulator;
+  UsedColumnsVisitor used_columns_visitor;
+  std::unordered_set<int> id_accumulator;
 
   for (auto const& expr :
        boost::make_iterator_range(update_expr_iter, target_exprs.end())) {
@@ -2900,9 +2881,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
       std::next(target_exprs.cbegin(), starting_projection_column_idx);
   decltype(target_exprs) filtered_target_exprs(update_expr_iter, target_exprs.end());
 
-  using ColumnIdSet = std::unordered_set<int>;
-  UsedColumnsVisitor<ColumnIdSet> used_columns_visitor;
-  ColumnIdSet id_accumulator;
+  UsedColumnsVisitor used_columns_visitor;
+  std::unordered_set<int> id_accumulator;
 
   for (auto const& expr :
        boost::make_iterator_range(update_expr_iter, target_exprs.end())) {

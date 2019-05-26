@@ -19,8 +19,8 @@
 #include "../Execute.h"
 #include "../ExpressionRewrite.h"
 #include "../GroupByAndAggregate.h"
-#include "../ScalarExprVisitor.h"
 #include "../StreamingTopN.h"
+#include "../UsedColumnsVisitor.h"
 #include "ColSlotContext.h"
 
 bool g_enable_smem_group_by{true};
@@ -55,22 +55,6 @@ std::vector<ssize_t> target_expr_group_by_indices(
   }
   return indices;
 }
-
-class UsedColumnsVisitor : public ScalarExprVisitor<std::unordered_set<int>> {
- protected:
-  std::unordered_set<int> visitColumnVar(
-      const Analyzer::ColumnVar* column) const override {
-    return {column->get_column_id()};
-  }
-
-  std::unordered_set<int> aggregateResult(
-      const std::unordered_set<int>& aggregate,
-      const std::unordered_set<int>& next_result) const override {
-    auto result = aggregate;
-    result.insert(next_result.begin(), next_result.end());
-    return result;
-  }
-};
 
 std::vector<ssize_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_unit,
                                               const Catalog_Namespace::Catalog& cat) {
