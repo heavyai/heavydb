@@ -17,6 +17,7 @@
 #include "CodeGenerator.h"
 #include "Codec.h"
 #include "Execute.h"
+#include "ScalarExprVisitor.h"
 #include "WindowContext.h"
 
 // Code generation routines and helpers for working with column expressions.
@@ -603,8 +604,46 @@ std::shared_ptr<const Analyzer::ColumnVar> CodeGenerator::hashJoinLhsTuple(
   return nullptr;
 }
 
-std::vector<llvm::Value*> ScalarCodeGenerator::codegenColumn(const Analyzer::ColumnVar*,
-                                                             const bool fetch_column,
-                                                             const CompilationOptions&) {
-  throw std::runtime_error("Column not supported");
+namespace {
+
+using ColumnSet = std::unordered_set<InputColDescriptor>;
+
+class UsedColumnExpressions : public ScalarExprVisitor<ColumnSet> {
+ protected:
+  ColumnSet visitColumnVar(const Analyzer::ColumnVar* column) const override {
+    return {InputColDescriptor(
+        column->get_column_id(), column->get_table_id(), column->get_rte_idx())};
+  }
+
+  ColumnSet aggregateResult(const ColumnSet& aggregate,
+                            const ColumnSet& next_result) const override {
+    auto result = aggregate;
+    result.insert(next_result.begin(), next_result.end());
+    return result;
+  }
+};
+
+}  // namespace
+
+void ScalarCodeGenerator::prepare(const Analyzer::Expr* expr) {
+  UsedColumnExpressions visitor;
+  const auto used_columns = visitor.visit(expr);
+  std::list<std::shared_ptr<const InputColDescriptor>> global_col_ids;
+  for (const auto& used_column : used_columns) {
+    global_col_ids.push_back(
+        std::make_shared<InputColDescriptor>(used_column.getColId(),
+                                             used_column.getScanDesc().getTableId(),
+                                             used_column.getScanDesc().getNestLevel()));
+  }
+  plan_state_->allocateLocalColumnIds(global_col_ids);
+}
+
+std::vector<llvm::Value*> ScalarCodeGenerator::codegenColumn(
+    const Analyzer::ColumnVar* column,
+    const bool fetch_column,
+    const CompilationOptions& co) {
+  int arg_idx = plan_state_->getLocalColumnId(column, fetch_column);
+  CHECK_LT(arg_idx, cgen_state_->row_func_->arg_size());
+  llvm::Value* arg = cgen_state_->row_func_->arg_begin() + arg_idx;
+  return {arg};
 }

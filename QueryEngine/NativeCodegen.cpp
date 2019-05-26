@@ -1469,7 +1469,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   const auto join_loops =
       buildJoinLoops(body_execution_unit, co, eo, query_infos, column_cache);
 
-  allocateLocalColumnIds(ra_exe_unit.input_col_descs);
+  plan_state_->allocateLocalColumnIds(ra_exe_unit.input_col_descs);
   const auto is_not_deleted_bb = codegenSkipDeletedOuterTableRow(ra_exe_unit, co);
   if (is_not_deleted_bb) {
     bb = is_not_deleted_bb;

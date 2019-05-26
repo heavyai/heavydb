@@ -119,6 +119,18 @@ bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) {
          columns_to_fetch_.end();
 }
 
+void PlanState::allocateLocalColumnIds(
+    const std::list<std::shared_ptr<const InputColDescriptor>>& global_col_ids) {
+  for (const auto& col_id : global_col_ids) {
+    CHECK(col_id);
+    const auto local_col_id = global_to_local_col_ids_.size();
+    const auto it_ok =
+        global_to_local_col_ids_.insert(std::make_pair(*col_id, local_col_id));
+    // enforce uniqueness of the column ids in the scan plan
+    CHECK(it_ok.second);
+  }
+}
+
 int PlanState::getLocalColumnId(const Analyzer::ColumnVar* col_var,
                                 const bool fetch_column) {
   CHECK(col_var);
@@ -3017,18 +3029,6 @@ RelAlgExecutionUnit Executor::addDeletedColumn(const RelAlgExecutionUnit& ra_exe
     }
   }
   return ra_exe_unit_with_deleted;
-}
-
-void Executor::allocateLocalColumnIds(
-    const std::list<std::shared_ptr<const InputColDescriptor>>& global_col_ids) {
-  for (const auto& col_id : global_col_ids) {
-    CHECK(col_id);
-    const auto local_col_id = plan_state_->global_to_local_col_ids_.size();
-    const auto it_ok = plan_state_->global_to_local_col_ids_.insert(
-        std::make_pair(*col_id, local_col_id));
-    // enforce uniqueness of the column ids in the scan plan
-    CHECK(it_ok.second);
-  }
 }
 
 namespace {

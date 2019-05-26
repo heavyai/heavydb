@@ -360,6 +360,9 @@ struct PlanState {
   JoinInfo join_info_;
   const Executor* executor_;
 
+  void allocateLocalColumnIds(
+      const std::list<std::shared_ptr<const InputColDescriptor>>& global_col_ids);
+
   int getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fetch_column);
 
   bool isLazyFetchColumn(const Analyzer::Expr* target_expr);
@@ -964,8 +967,6 @@ class Executor {
   llvm::Value* castToIntPtrTyIn(llvm::Value* val, const size_t bit_width);
 
   RelAlgExecutionUnit addDeletedColumn(const RelAlgExecutionUnit& ra_exe_unit);
-  void allocateLocalColumnIds(
-      const std::list<std::shared_ptr<const InputColDescriptor>>& global_col_ids);
 
   std::pair<bool, int64_t> skipFragment(
       const InputDescriptor& table_desc,

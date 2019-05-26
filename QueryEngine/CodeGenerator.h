@@ -24,12 +24,12 @@
 class CodeGenerator {
  public:
   CodeGenerator(Executor* executor)
-      : cgen_state_(executor->cgen_state_.get())
-      , plan_state_(executor->plan_state_.get())
-      , executor_(executor) {}
+      : executor_(executor)
+      , cgen_state_(executor->cgen_state_.get())
+      , plan_state_(executor->plan_state_.get()) {}
 
   CodeGenerator(Executor::CgenState* cgen_state, PlanState* plan_state)
-      : cgen_state_(cgen_state), plan_state_(plan_state), executor_(nullptr) {}
+      : executor_(nullptr), cgen_state_(cgen_state), plan_state_(plan_state) {}
 
   std::vector<llvm::Value*> codegen(const Analyzer::Expr*,
                                     const bool fetch_columns,
@@ -354,15 +354,20 @@ class CodeGenerator {
       const std::unordered_map<llvm::Value*, llvm::Value*>&,
       const CompilationOptions&);
 
+  Executor* executor_;
+
+ protected:
   Executor::CgenState* cgen_state_;
   PlanState* plan_state_;
-  Executor* executor_;
 };
 
 class ScalarCodeGenerator : public CodeGenerator {
  public:
   ScalarCodeGenerator(Executor::CgenState* cgen_state, PlanState* plan_state)
       : CodeGenerator(cgen_state, plan_state) {}
+
+  // TODO: remove
+  void prepare(const Analyzer::Expr*);
 
  private:
   std::vector<llvm::Value*> codegenColumn(const Analyzer::ColumnVar*,
