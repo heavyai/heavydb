@@ -20,16 +20,14 @@
 #include "AggregatedColRange.h"
 #include "BufferCompaction.h"
 #include "CartesianProduct.h"
+#include "CgenState.h"
 #include "DateTimeUtils.h"
 #include "Descriptors/QueryFragmentDescriptor.h"
 #include "GroupByAndAggregate.h"
-#include "IRCodegenUtils.h"
-#include "InValuesBitmap.h"
-#include "InputMetadata.h"
 #include "JoinHashTable.h"
-#include "LLVMGlobalContext.h"
 #include "LoopControlFlow/JoinLoop.h"
 #include "NvidiaKernel.h"
+#include "PlanState.h"
 #include "RelAlgExecutionUnit.h"
 #include "RelAlgTranslator.h"
 #include "StringDictionaryGenerations.h"
@@ -37,7 +35,6 @@
 #include "TargetMetaInfo.h"
 #include "WindowContext.h"
 
-#include "../Analyzer/Analyzer.h"
 #include "../Chunk/Chunk.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Planner/Planner.h"
@@ -50,11 +47,8 @@
 
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/IR/Function.h>
-#include <llvm/IR/IRBuilder.h>
-#include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
-#include <llvm/Transforms/Utils/ValueMapper.h>
 #include <rapidjson/document.h>
 #include <boost/functional/hash.hpp>
 
@@ -328,54 +322,6 @@ using LLVMValueVector = std::vector<llvm::Value*>;
 
 class QueryCompilationDescriptor;
 
-struct JoinInfo {
-  JoinInfo(const std::vector<std::shared_ptr<Analyzer::BinOper>>& equi_join_tautologies,
-           const std::vector<std::shared_ptr<JoinHashTableInterface>>& join_hash_tables)
-      : equi_join_tautologies_(equi_join_tautologies)
-      , join_hash_tables_(join_hash_tables) {}
-
-  std::vector<std::shared_ptr<Analyzer::BinOper>>
-      equi_join_tautologies_;  // expressions we equi-join on are true by
-                               // definition when using a hash join; we'll
-                               // fold them to true during code generation
-  std::vector<std::shared_ptr<JoinHashTableInterface>> join_hash_tables_;
-  std::unordered_set<size_t> sharded_range_table_indices_;
-};
-
-struct PlanState {
-  PlanState(const bool allow_lazy_fetch, const Executor* executor)
-      : allow_lazy_fetch_(allow_lazy_fetch)
-      , join_info_({std::vector<std::shared_ptr<Analyzer::BinOper>>{}, {}})
-      , executor_(executor) {}
-
-  using TableId = int;
-  using ColumnId = int;
-
-  std::vector<int64_t> init_agg_vals_;
-  std::vector<Analyzer::Expr*> target_exprs_;
-  std::unordered_map<InputColDescriptor, size_t> global_to_local_col_ids_;
-  std::set<std::pair<TableId, ColumnId>> columns_to_fetch_;
-  std::set<std::pair<TableId, ColumnId>> columns_to_not_fetch_;
-  bool allow_lazy_fetch_;
-  JoinInfo join_info_;
-  const Executor* executor_;
-
-  void allocateLocalColumnIds(
-      const std::list<std::shared_ptr<const InputColDescriptor>>& global_col_ids);
-
-  int getLocalColumnId(const Analyzer::ColumnVar* col_var, const bool fetch_column);
-
-  bool isLazyFetchColumn(const Analyzer::Expr* target_expr);
-
-  bool isLazyFetchColumn(const InputColDescriptor& col_desc) {
-    Analyzer::ColumnVar column(SQLTypeInfo(),
-                               col_desc.getScanDesc().getTableId(),
-                               col_desc.getColId(),
-                               col_desc.getScanDesc().getNestLevel());
-    return isLazyFetchColumn(&column);
-  }
-};
-
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -506,20 +452,6 @@ class Executor {
   std::vector<ColumnLazyFetchInfo> getColLazyFetchInfo(
       const std::vector<Analyzer::Expr*>& target_exprs) const;
 
-  using LiteralValue = boost::variant<int8_t,
-                                      int16_t,
-                                      int32_t,
-                                      int64_t,
-                                      float,
-                                      double,
-                                      std::pair<std::string, int>,
-                                      std::string,
-                                      std::vector<double>,
-                                      std::vector<int32_t>,
-                                      std::vector<int8_t>,
-                                      std::pair<std::vector<int8_t>, int>>;
-  using LiteralValues = std::vector<LiteralValue>;
-
   void registerActiveModule(void* module, const int device_id) const;
   void unregisterActiveModule(void* module, const int device_id) const;
   void interrupt();
@@ -565,7 +497,7 @@ class Executor {
 
   struct CompilationResult {
     std::vector<std::pair<void*, void*>> native_functions;
-    std::unordered_map<int, LiteralValues> literal_values;
+    std::unordered_map<int, CgenState::LiteralValues> literal_values;
     bool output_columnar;
     std::string llvm_ir;
   };
@@ -1000,39 +932,8 @@ class Executor {
       CodeCache&);
 
   std::vector<int8_t> serializeLiterals(
-      const std::unordered_map<int, Executor::LiteralValues>& literals,
+      const std::unordered_map<int, CgenState::LiteralValues>& literals,
       const int device_id);
-
-  static size_t literalBytes(const LiteralValue& lit) {
-    switch (lit.which()) {
-      case 0:
-        return 1;  // int8_t
-      case 1:
-        return 2;  // int16_t
-      case 2:
-        return 4;  // int32_t
-      case 3:
-        return 8;  // int64_t
-      case 4:
-        return 4;  // float
-      case 5:
-        return 8;  // double
-      case 6:
-        return 4;  // std::pair<std::string, int>
-      case 7:
-        return 4;  // std::string
-      case 8:
-        return 4;  // std::vector<double>
-      case 9:
-        return 4;  // std::vector<int32_t>
-      case 10:
-        return 4;  // std::vector<int8_t>
-      case 11:
-        return 4;  // std::pair<std::vector<int8_t>, int>
-      default:
-        abort();
-    }
-  }
 
   static size_t align(const size_t off_in, const size_t alignment) {
     size_t off = off_in;
@@ -1042,283 +943,6 @@ class Executor {
     return off;
   }
 
-  static size_t addAligned(const size_t off_in, const size_t alignment) {
-    size_t off = off_in;
-    if (off % alignment != 0) {
-      off += (alignment - off % alignment);
-    }
-    return off + alignment;
-  }
-
- public:
-  struct CgenState {
-   public:
-    CgenState(const std::vector<InputTableInfo>& query_infos,
-              const bool contains_left_deep_outer_join)
-        : module_(nullptr)
-        , row_func_(nullptr)
-        , context_(getGlobalLLVMContext())
-        , ir_builder_(context_)
-        , contains_left_deep_outer_join_(contains_left_deep_outer_join)
-        , outer_join_match_found_per_level_(std::max(query_infos.size(), size_t(1)) - 1)
-        , query_infos_(query_infos)
-        , needs_error_check_(false)
-        , query_func_(nullptr)
-        , query_func_entry_ir_builder_(context_){};
-
-    size_t getOrAddLiteral(const Analyzer::Constant* constant,
-                           const EncodingType enc_type,
-                           const int dict_id,
-                           const int device_id) {
-      const auto& ti = constant->get_type_info();
-      const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
-      switch (type) {
-        case kBOOLEAN:
-          return getOrAddLiteral(constant->get_is_null()
-                                     ? int8_t(inline_int_null_val(ti))
-                                     : int8_t(constant->get_constval().boolval ? 1 : 0),
-                                 device_id);
-        case kTINYINT:
-          return getOrAddLiteral(constant->get_is_null()
-                                     ? int8_t(inline_int_null_val(ti))
-                                     : constant->get_constval().tinyintval,
-                                 device_id);
-        case kSMALLINT:
-          return getOrAddLiteral(constant->get_is_null()
-                                     ? int16_t(inline_int_null_val(ti))
-                                     : constant->get_constval().smallintval,
-                                 device_id);
-        case kINT:
-          return getOrAddLiteral(constant->get_is_null()
-                                     ? int32_t(inline_int_null_val(ti))
-                                     : constant->get_constval().intval,
-                                 device_id);
-        case kBIGINT:
-          return getOrAddLiteral(constant->get_is_null()
-                                     ? int64_t(inline_int_null_val(ti))
-                                     : constant->get_constval().bigintval,
-                                 device_id);
-        case kFLOAT:
-          return getOrAddLiteral(constant->get_is_null()
-                                     ? float(inline_fp_null_val(ti))
-                                     : constant->get_constval().floatval,
-                                 device_id);
-        case kDOUBLE:
-          return getOrAddLiteral(constant->get_is_null()
-                                     ? inline_fp_null_val(ti)
-                                     : constant->get_constval().doubleval,
-                                 device_id);
-        case kCHAR:
-        case kTEXT:
-        case kVARCHAR:
-          if (enc_type == kENCODING_DICT) {
-            if (constant->get_is_null()) {
-              return getOrAddLiteral(int32_t(inline_int_null_val(ti)), device_id);
-            }
-            return getOrAddLiteral(
-                std::make_pair(*constant->get_constval().stringval, dict_id), device_id);
-          }
-          CHECK_EQ(kENCODING_NONE, enc_type);
-          if (constant->get_is_null()) {
-            throw std::runtime_error(
-                "CHAR / VARCHAR NULL literal not supported in this context");  // TODO(alex):
-                                                                               // support
-                                                                               // null
-          }
-          return getOrAddLiteral(*constant->get_constval().stringval, device_id);
-        case kTIME:
-        case kTIMESTAMP:
-        case kDATE:
-        case kINTERVAL_DAY_TIME:
-        case kINTERVAL_YEAR_MONTH:
-          // TODO(alex): support null
-          return getOrAddLiteral(constant->get_constval().bigintval, device_id);
-        case kARRAY: {
-          if (enc_type == kENCODING_NONE) {
-            if (ti.get_subtype() == kDOUBLE) {
-              std::vector<double> double_array_literal;
-              for (const auto& value : constant->get_value_list()) {
-                const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
-                CHECK(c);
-                double d = c->get_constval().doubleval;
-                double_array_literal.push_back(d);
-              }
-              return getOrAddLiteral(double_array_literal, device_id);
-            }
-            if (ti.get_subtype() == kINT) {
-              std::vector<int32_t> int32_array_literal;
-              for (const auto& value : constant->get_value_list()) {
-                const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
-                CHECK(c);
-                int32_t i = c->get_constval().intval;
-                int32_array_literal.push_back(i);
-              }
-              return getOrAddLiteral(int32_array_literal, device_id);
-            }
-            if (ti.get_subtype() == kTINYINT) {
-              std::vector<int8_t> int8_array_literal;
-              for (const auto& value : constant->get_value_list()) {
-                const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
-                CHECK(c);
-                int8_t i = c->get_constval().tinyintval;
-                int8_array_literal.push_back(i);
-              }
-              if (ti.get_comp_param() == 64) {
-                return getOrAddLiteral(std::make_pair(int8_array_literal, 64), device_id);
-              }
-              return getOrAddLiteral(int8_array_literal, device_id);
-            }
-            throw std::runtime_error("Unsupported literal array");
-          }
-          if (enc_type == kENCODING_GEOINT) {
-            if (ti.get_subtype() == kTINYINT) {
-              std::vector<int8_t> int8_array_literal;
-              for (const auto& value : constant->get_value_list()) {
-                const auto c = dynamic_cast<const Analyzer::Constant*>(value.get());
-                CHECK(c);
-                int8_t i = c->get_constval().tinyintval;
-                int8_array_literal.push_back(i);
-              }
-              if (ti.get_comp_param() == 32) {
-                return getOrAddLiteral(std::make_pair(int8_array_literal, 32), device_id);
-              }
-              return getOrAddLiteral(int8_array_literal, device_id);
-            }
-          }
-          throw std::runtime_error("Encoded literal arrays are not supported");
-        }
-        default:
-          abort();
-      }
-    }
-
-    const std::unordered_map<int, LiteralValues>& getLiterals() const {
-      return literals_;
-    }
-
-    llvm::Value* addStringConstant(const std::string& str) {
-      llvm::Value* str_lv = ir_builder_.CreateGlobalString(
-          str, "str_const_" + std::to_string(std::hash<std::string>()(str)));
-      auto i8_ptr = llvm::PointerType::get(get_int_type(8, context_), 0);
-      str_constants_.push_back(str_lv);
-      str_lv = ir_builder_.CreateBitCast(str_lv, i8_ptr);
-      return str_lv;
-    }
-
-    const InValuesBitmap* addInValuesBitmap(
-        std::unique_ptr<InValuesBitmap>& in_values_bitmap) {
-      in_values_bitmaps_.emplace_back(std::move(in_values_bitmap));
-      return in_values_bitmaps_.back().get();
-    }
-    // look up a runtime function based on the name, return type and type of
-    // the arguments and call it; x64 only, don't call from GPU codegen
-    llvm::Value* emitExternalCall(const std::string& fname,
-                                  llvm::Type* ret_type,
-                                  const std::vector<llvm::Value*> args) {
-      std::vector<llvm::Type*> arg_types;
-      for (const auto arg : args) {
-        arg_types.push_back(arg->getType());
-      }
-      auto func_ty = llvm::FunctionType::get(ret_type, arg_types, false);
-      auto func_p = module_->getOrInsertFunction(fname, func_ty);
-      CHECK(func_p);
-      llvm::Value* result = ir_builder_.CreateCall(func_p, args);
-      // check the assumed type
-      CHECK_EQ(result->getType(), ret_type);
-      return result;
-    }
-
-    llvm::Value* emitCall(const std::string& fname,
-                          const std::vector<llvm::Value*>& args);
-
-    size_t getLiteralBufferUsage(const int device_id) {
-      return literal_bytes_[device_id];
-    }
-
-    llvm::Value* castToTypeIn(llvm::Value* val, const size_t bit_width);
-
-    std::pair<llvm::ConstantInt*, llvm::ConstantInt*> inlineIntMaxMin(
-        const size_t byte_width,
-        const bool is_signed);
-
-    llvm::ConstantInt* inlineIntNull(const SQLTypeInfo&);
-
-    llvm::ConstantFP* inlineFpNull(const SQLTypeInfo&);
-
-    template <class T>
-    llvm::ConstantInt* llInt(const T v) const {
-      return ::ll_int(v, context_);
-    }
-
-    llvm::ConstantFP* llFp(const float v) const {
-      return static_cast<llvm::ConstantFP*>(
-          llvm::ConstantFP::get(llvm::Type::getFloatTy(context_), v));
-    }
-
-    llvm::ConstantFP* llFp(const double v) const {
-      return static_cast<llvm::ConstantFP*>(
-          llvm::ConstantFP::get(llvm::Type::getDoubleTy(context_), v));
-    }
-
-    llvm::ConstantInt* llBool(const bool v) const { return ::ll_bool(v, context_); }
-
-    llvm::Module* module_;
-    llvm::Function* row_func_;
-    std::vector<llvm::Function*> helper_functions_;
-    llvm::LLVMContext& context_;
-    llvm::ValueToValueMapTy vmap_;  // used for cloning the runtime module
-    llvm::IRBuilder<> ir_builder_;
-    std::unordered_map<int, std::vector<llvm::Value*>> fetch_cache_;
-    struct FunctionOperValue {
-      const Analyzer::FunctionOper* foper;
-      llvm::Value* lv;
-    };
-    std::vector<FunctionOperValue> ext_call_cache_;
-    std::vector<llvm::Value*> group_by_expr_cache_;
-    std::vector<llvm::Value*> str_constants_;
-    std::vector<llvm::Value*> frag_offsets_;
-    const bool contains_left_deep_outer_join_;
-    std::vector<llvm::Value*> outer_join_match_found_per_level_;
-    std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
-    std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
-    const std::vector<InputTableInfo>& query_infos_;
-    bool needs_error_check_;
-
-    llvm::Function* query_func_;
-    llvm::IRBuilder<> query_func_entry_ir_builder_;
-    std::unordered_map<int, std::vector<llvm::Value*>> query_func_literal_loads_;
-
-    struct HoistedLiteralLoadLocator {
-      int offset_in_literal_buffer;
-      int index_of_literal_load;
-    };
-    std::unordered_map<llvm::Value*, HoistedLiteralLoadLocator>
-        row_func_hoisted_literals_;
-
-   private:
-    template <class T>
-    size_t getOrAddLiteral(const T& val, const int device_id) {
-      const Executor::LiteralValue var_val(val);
-      size_t literal_found_off{0};
-      auto& literals = literals_[device_id];
-      for (const auto& literal : literals) {
-        const auto lit_bytes = literalBytes(literal);
-        literal_found_off = addAligned(literal_found_off, lit_bytes);
-        if (literal == var_val) {
-          return literal_found_off - lit_bytes;
-        }
-      }
-      literals.emplace_back(val);
-      const auto lit_bytes = literalBytes(var_val);
-      literal_bytes_[device_id] = addAligned(literal_bytes_[device_id], lit_bytes);
-      return literal_bytes_[device_id] - lit_bytes;
-    }
-
-    std::unordered_map<int, LiteralValues> literals_;
-    std::unordered_map<int, size_t> literal_bytes_;
-  };
-
- private:
   std::unique_ptr<CgenState> cgen_state_;
 
   class FetchCacheAnchor {

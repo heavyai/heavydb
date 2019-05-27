@@ -17,6 +17,7 @@ set(query_engine_source_files
     CardinalityEstimator.cpp
     CaseIR.cpp
     CastIR.cpp
+    CgenState.cpp
     Codec.cpp
     ColumnarResults.cpp
     ColumnFetcher.cpp
@@ -62,6 +63,7 @@ set(query_engine_source_files
     OutputBufferInitialization.cpp
     OverlapsJoinHashTable.cpp
     QueryPhysicalInputsCollector.cpp
+    PlanState.cpp
     QueryRewrite.cpp
     QueryTemplateGenerator.cpp
     QueryExecutionContext.cpp

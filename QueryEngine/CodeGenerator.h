@@ -28,7 +28,7 @@ class CodeGenerator {
       , cgen_state_(executor->cgen_state_.get())
       , plan_state_(executor->plan_state_.get()) {}
 
-  CodeGenerator(Executor::CgenState* cgen_state, PlanState* plan_state)
+  CodeGenerator(CgenState* cgen_state, PlanState* plan_state)
       : executor_(nullptr), cgen_state_(cgen_state), plan_state_(plan_state) {}
 
   std::vector<llvm::Value*> codegen(const Analyzer::Expr*,
@@ -357,7 +357,7 @@ class CodeGenerator {
   Executor* executor_;
 
  protected:
-  Executor::CgenState* cgen_state_;
+  CgenState* cgen_state_;
   PlanState* plan_state_;
 };
 
@@ -387,6 +387,6 @@ class ScalarCodeGenerator : public CodeGenerator {
   ColumnMap prepare(const Analyzer::Expr*);
 
   std::unique_ptr<llvm::Module> module_;
-  std::unique_ptr<Executor::CgenState> own_cgen_state_;
+  std::unique_ptr<CgenState> own_cgen_state_;
   std::unique_ptr<PlanState> own_plan_state_;
 };

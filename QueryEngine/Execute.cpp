@@ -50,7 +50,6 @@
 #include "StringDictionaryGenerations.h"
 
 #include <llvm/Transforms/Utils/BasicBlockUtils.h>
-#include <llvm/Transforms/Utils/Cloning.h>
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
 
@@ -73,7 +72,6 @@ unsigned g_trivial_loop_join_threshold{1000};
 bool g_from_table_reordering{true};
 bool g_inner_join_fragment_skipping{true};
 extern bool g_enable_smem_group_by;
-extern std::unique_ptr<llvm::Module> g_rt_module;
 extern std::unique_ptr<llvm::Module> udf_gpu_module;
 extern std::unique_ptr<llvm::Module> udf_cpu_module;
 bool g_enable_filter_push_down{false};
@@ -88,63 +86,6 @@ bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
 size_t g_big_group_threshold{20000};
 bool g_enable_window_functions{true};
-
-bool PlanState::isLazyFetchColumn(const Analyzer::Expr* target_expr) {
-  if (!allow_lazy_fetch_) {
-    return false;
-  }
-  const auto do_not_fetch_column = dynamic_cast<const Analyzer::ColumnVar*>(target_expr);
-  if (!do_not_fetch_column || dynamic_cast<const Analyzer::Var*>(do_not_fetch_column)) {
-    return false;
-  }
-  if (do_not_fetch_column->get_table_id() > 0) {
-    auto cd = get_column_descriptor(do_not_fetch_column->get_column_id(),
-                                    do_not_fetch_column->get_table_id(),
-                                    *executor_->getCatalog());
-    if (cd->isVirtualCol) {
-      return false;
-    }
-  }
-  std::set<std::pair<int, int>> intersect;
-  std::set_intersection(columns_to_fetch_.begin(),
-                        columns_to_fetch_.end(),
-                        columns_to_not_fetch_.begin(),
-                        columns_to_not_fetch_.end(),
-                        std::inserter(intersect, intersect.begin()));
-  if (!intersect.empty()) {
-    throw CompilationRetryNoLazyFetch();
-  }
-  return columns_to_fetch_.find(std::make_pair(do_not_fetch_column->get_table_id(),
-                                               do_not_fetch_column->get_column_id())) ==
-         columns_to_fetch_.end();
-}
-
-void PlanState::allocateLocalColumnIds(
-    const std::list<std::shared_ptr<const InputColDescriptor>>& global_col_ids) {
-  for (const auto& col_id : global_col_ids) {
-    CHECK(col_id);
-    const auto local_col_id = global_to_local_col_ids_.size();
-    const auto it_ok =
-        global_to_local_col_ids_.insert(std::make_pair(*col_id, local_col_id));
-    // enforce uniqueness of the column ids in the scan plan
-    CHECK(it_ok.second);
-  }
-}
-
-int PlanState::getLocalColumnId(const Analyzer::ColumnVar* col_var,
-                                const bool fetch_column) {
-  CHECK(col_var);
-  const int table_id = col_var->get_table_id();
-  int global_col_id = col_var->get_column_id();
-  const int scan_idx = col_var->get_rte_idx();
-  InputColDescriptor scan_col_desc(global_col_id, table_id, scan_idx);
-  const auto it = global_to_local_col_ids_.find(scan_col_desc);
-  CHECK(it != global_to_local_col_ids_.end());
-  if (fetch_column) {
-    columns_to_fetch_.insert(std::make_pair(table_id, global_col_id));
-  }
-  return it->second;
-}
 
 Executor::Executor(const int db_id,
                    const size_t block_size_x,
@@ -347,7 +288,7 @@ void Executor::clearMetaInfoCache() {
 }
 
 std::vector<int8_t> Executor::serializeLiterals(
-    const std::unordered_map<int, Executor::LiteralValues>& literals,
+    const std::unordered_map<int, CgenState::LiteralValues>& literals,
     const int device_id) {
   if (literals.empty()) {
     return {};
@@ -363,7 +304,7 @@ std::vector<int8_t> Executor::serializeLiterals(
   std::vector<std::vector<int8_t>> align32_int8_array_literals;
   std::vector<std::vector<int8_t>> int8_array_literals;
   for (const auto& lit : dev_literals) {
-    lit_buf_size = addAligned(lit_buf_size, Executor::literalBytes(lit));
+    lit_buf_size = CgenState::addAligned(lit_buf_size, CgenState::literalBytes(lit));
     if (lit.which() == 7) {
       const auto p = boost::get<std::string>(&lit);
       CHECK(p);
@@ -451,8 +392,8 @@ std::vector<int8_t> Executor::serializeLiterals(
   std::vector<int8_t> serialized(lit_buf_size);
   size_t off{0};
   for (const auto& lit : dev_literals) {
-    const auto lit_bytes = Executor::literalBytes(lit);
-    off = addAligned(off, lit_bytes);
+    const auto lit_bytes = CgenState::literalBytes(lit);
+    off = CgenState::addAligned(off, lit_bytes);
     switch (lit.which()) {
       case 0: {
         const auto p = boost::get<int8_t>(&lit);
@@ -618,85 +559,6 @@ int Executor::deviceCountForMemoryLevel(
     const Data_Namespace::MemoryLevel memory_level) const {
   return memory_level == GPU_LEVEL ? deviceCount(ExecutorDeviceType::GPU)
                                    : deviceCount(ExecutorDeviceType::CPU);
-}
-
-llvm::ConstantInt* Executor::CgenState::inlineIntNull(const SQLTypeInfo& type_info) {
-  auto type = type_info.get_type();
-  if (type_info.is_string()) {
-    switch (type_info.get_compression()) {
-      case kENCODING_DICT:
-        return llInt(static_cast<int32_t>(inline_int_null_val(type_info)));
-      case kENCODING_NONE:
-        return llInt(int64_t(0));
-      default:
-        CHECK(false);
-    }
-  }
-  switch (type) {
-    case kBOOLEAN:
-      return llInt(static_cast<int8_t>(inline_int_null_val(type_info)));
-    case kTINYINT:
-      return llInt(static_cast<int8_t>(inline_int_null_val(type_info)));
-    case kSMALLINT:
-      return llInt(static_cast<int16_t>(inline_int_null_val(type_info)));
-    case kINT:
-      return llInt(static_cast<int32_t>(inline_int_null_val(type_info)));
-    case kBIGINT:
-    case kTIME:
-    case kTIMESTAMP:
-    case kDATE:
-    case kINTERVAL_DAY_TIME:
-    case kINTERVAL_YEAR_MONTH:
-      return llInt(inline_int_null_val(type_info));
-    case kDECIMAL:
-    case kNUMERIC:
-      return llInt(inline_int_null_val(type_info));
-    case kARRAY:
-      return llInt(int64_t(0));
-    default:
-      abort();
-  }
-}
-
-llvm::ConstantFP* Executor::CgenState::inlineFpNull(const SQLTypeInfo& type_info) {
-  CHECK(type_info.is_fp());
-  switch (type_info.get_type()) {
-    case kFLOAT:
-      return llFp(NULL_FLOAT);
-    case kDOUBLE:
-      return llFp(NULL_DOUBLE);
-    default:
-      abort();
-  }
-}
-
-std::pair<llvm::ConstantInt*, llvm::ConstantInt*> Executor::CgenState::inlineIntMaxMin(
-    const size_t byte_width,
-    const bool is_signed) {
-  int64_t max_int{0}, min_int{0};
-  if (is_signed) {
-    std::tie(max_int, min_int) = inline_int_max_min(byte_width);
-  } else {
-    uint64_t max_uint{0}, min_uint{0};
-    std::tie(max_uint, min_uint) = inline_uint_max_min(byte_width);
-    max_int = static_cast<int64_t>(max_uint);
-    CHECK_EQ(uint64_t(0), min_uint);
-  }
-  switch (byte_width) {
-    case 1:
-      return std::make_pair(::ll_int(static_cast<int8_t>(max_int), context_),
-                            ::ll_int(static_cast<int8_t>(min_int), context_));
-    case 2:
-      return std::make_pair(::ll_int(static_cast<int16_t>(max_int), context_),
-                            ::ll_int(static_cast<int16_t>(min_int), context_));
-    case 4:
-      return std::make_pair(::ll_int(static_cast<int32_t>(max_int), context_),
-                            ::ll_int(static_cast<int32_t>(min_int), context_));
-    case 8:
-      return std::make_pair(::ll_int(max_int, context_), ::ll_int(min_int, context_));
-    default:
-      abort();
-  }
 }
 
 // TODO(alex): remove or split
@@ -2939,37 +2801,6 @@ llvm::Value* Executor::castToFP(llvm::Value* val) {
   return cgen_state_->ir_builder_.CreateSIToFP(val, dest_ty);
 }
 
-llvm::Value* Executor::CgenState::castToTypeIn(llvm::Value* val, const size_t dst_bits) {
-  auto src_bits = val->getType()->getScalarSizeInBits();
-  if (src_bits == dst_bits) {
-    return val;
-  }
-  if (val->getType()->isIntegerTy()) {
-    return ir_builder_.CreateIntCast(
-        val, get_int_type(dst_bits, context_), src_bits != 1);
-  }
-  // real (not dictionary-encoded) strings; store the pointer to the payload
-  if (val->getType()->isPointerTy()) {
-    return ir_builder_.CreatePointerCast(val, get_int_type(dst_bits, context_));
-  }
-
-  CHECK(val->getType()->isFloatTy() || val->getType()->isDoubleTy());
-
-  llvm::Type* dst_type = nullptr;
-  switch (dst_bits) {
-    case 64:
-      dst_type = llvm::Type::getDoubleTy(context_);
-      break;
-    case 32:
-      dst_type = llvm::Type::getFloatTy(context_);
-      break;
-    default:
-      CHECK(false);
-  }
-
-  return ir_builder_.CreateFPCast(val, dst_type);
-}
-
 llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth) {
   CHECK(val->getType()->isPointerTy());
 
@@ -3208,30 +3039,6 @@ std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(
     }
   }
   return skip_frag;
-}
-
-llvm::Value* Executor::CgenState::emitCall(const std::string& fname,
-                                           const std::vector<llvm::Value*>& args) {
-  // Get the implementation from the runtime module.
-  auto func_impl = g_rt_module->getFunction(fname);
-  CHECK(func_impl);
-  // Get the function reference from the query module.
-  auto func = module_->getFunction(fname);
-  CHECK(func);
-  // If the function called isn't external, clone the implementation from the runtime
-  // module.
-  if (func->isDeclaration() && !func_impl->isDeclaration()) {
-    auto DestI = func->arg_begin();
-    for (auto arg_it = func_impl->arg_begin(); arg_it != func_impl->arg_end(); ++arg_it) {
-      DestI->setName(arg_it->getName());
-      vmap_[&*arg_it] = &*DestI++;
-    }
-
-    llvm::SmallVector<llvm::ReturnInst*, 8> Returns;  // Ignore returns cloned.
-    llvm::CloneFunctionInto(func, func_impl, vmap_, /*ModuleLevelChanges=*/true, Returns);
-  }
-
-  return ir_builder_.CreateCall(func, args);
 }
 
 std::map<std::pair<int, ::QueryRenderer::QueryRenderManager*>, std::shared_ptr<Executor>>

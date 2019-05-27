@@ -123,7 +123,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsLoads(
       lit_buff_query_func_lv, cgen_state_->llInt(lit_off));
   if (type_info.is_string() && enc_type != kENCODING_DICT) {
     CHECK_EQ(kENCODING_NONE, type_info.get_compression());
-    CHECK_EQ(size_t(4), executor_->literalBytes(Executor::LiteralValue(std::string(""))));
+    CHECK_EQ(size_t(4),
+             CgenState::literalBytes(CgenState::LiteralValue(std::string(""))));
     auto off_and_len_ptr = cgen_state_->query_func_entry_ir_builder_.CreateBitCast(
         lit_buf_start,
         llvm::PointerType::get(get_int_type(32, cgen_state_->context_), 0));
