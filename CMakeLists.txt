@@ -777,6 +777,8 @@ if(ENABLE_CUDA)
 endif()
 install(FILES completion_hints.thrift DESTINATION ".")
 install(FILES mapd.thrift DESTINATION ".")
+install(FILES common.thrift DESTINATION ".")
+install(FILES QueryEngine/serialized_result_set.thrift DESTINATION "QueryEngine/")
 
 if(NOT PREFER_STATIC_LIBS)
   install(FILES ${Boost_LIBRARIES} DESTINATION ThirdParty/lib)
