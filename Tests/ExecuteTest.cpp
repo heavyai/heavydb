@@ -14654,6 +14654,14 @@ TEST(Select, WindowFunctionSum) {
   c(query + " NULLS FIRST;", query + ";", dt);
 }
 
+TEST(Select, EmptyString) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    EXPECT_THROW(run_multiple_agg("", dt), std::exception);
+  }
+}
+
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,

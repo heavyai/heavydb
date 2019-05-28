@@ -151,7 +151,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
     // need to trim the sql string as it seems it is not trimed prior to here
     sqlText = sqlText.trim();
     // remove last charcter if it is a ;
-    if (sqlText.charAt(sqlText.length() - 1) == ';') {
+    if (sqlText.length() > 0 && sqlText.charAt(sqlText.length() - 1) == ';') {
       sqlText = sqlText.substring(0, sqlText.length() - 1);
     }
     String relAlgebra;
