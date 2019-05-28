@@ -1701,9 +1701,8 @@ TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
 
 TEST(SysCatalog, RenameUser_SuperUserRenameCheck) {
   using namespace std::string_literals;
-  auto rename_successful = false;
 
-  ScopeGuard s = [&rename_successful] {
+  ScopeGuard s = [] {
     run_ddl_statement("DROP USER rom;");
     run_ddl_statement("DROP USER quark;");
 

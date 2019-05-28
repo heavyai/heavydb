@@ -12,12 +12,6 @@
 #include "Shared/MapDParameters.h"
 #include "gen-cpp/CalciteServer.h"
 
-#ifdef BASE_PATH
-constexpr char c_base_path[] = BASE_PATH;
-#else
-constexpr char c_base_path[] = "./tmp";
-#endif
-
 namespace {
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 std::shared_ptr<Calcite> g_calcite;
