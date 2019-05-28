@@ -1013,9 +1013,19 @@ std::string get_table_name(const InputDescriptor& input_desc,
   }
 }
 
+inline size_t getDeviceBasedScanLimit(const ExecutorDeviceType device_type,
+                                      const int device_count) {
+  if (device_type == ExecutorDeviceType::GPU) {
+    return device_count * Executor::high_scan_limit;
+  }
+  return Executor::high_scan_limit;
+}
+
 void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
                            const std::vector<InputTableInfo>& table_infos,
-                           const Catalog_Namespace::Catalog& cat) {
+                           const Catalog_Namespace::Catalog& cat,
+                           const ExecutorDeviceType device_type,
+                           const int device_count) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
       return;
@@ -1028,14 +1038,25 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
   }
   if (ra_exe_unit.sort_info.algorithm != SortAlgorithm::StreamingTopN &&
       ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() &&
-      (!ra_exe_unit.scan_limit || ra_exe_unit.scan_limit > Executor::high_scan_limit)) {
+      (!ra_exe_unit.scan_limit ||
+       ra_exe_unit.scan_limit > getDeviceBasedScanLimit(device_type, device_count))) {
     std::vector<std::string> table_names;
     const auto& input_descs = ra_exe_unit.input_descs;
     for (const auto& input_desc : input_descs) {
       table_names.push_back(get_table_name(input_desc, cat));
     }
-    throw WatchdogException("Query would require a scan without a limit on table(s): " +
-                            boost::algorithm::join(table_names, ", "));
+    if (!ra_exe_unit.scan_limit) {
+      throw WatchdogException(
+          "Projection query would require a scan without a limit on table(s): " +
+          boost::algorithm::join(table_names, ", "));
+    } else {
+      throw WatchdogException(
+          "Projection query output result set on table(s): " +
+          boost::algorithm::join(table_names, ", ") + "  would contain " +
+          std::to_string(ra_exe_unit.scan_limit) +
+          " rows, which is more than the current system limit of " +
+          std::to_string(getDeviceBasedScanLimit(device_type, device_count)));
+    }
   }
 }
 
@@ -1601,7 +1622,7 @@ void Executor::dispatchFragments(
                                              g_inner_join_fragment_skipping,
                                              this);
   if (eo.with_watchdog && fragment_descriptor.shouldCheckWorkUnitWatchdog()) {
-    checkWorkUnitWatchdog(ra_exe_unit, table_infos, *catalog_);
+    checkWorkUnitWatchdog(ra_exe_unit, table_infos, *catalog_, device_type, device_count);
   }
 
   if (use_multifrag_kernel) {

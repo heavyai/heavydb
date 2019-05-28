@@ -477,7 +477,7 @@ class Executor {
   void interrupt();
   void resetInterrupt();
 
-  static const size_t high_scan_limit{10000000};
+  static const size_t high_scan_limit{32000000};
 
  private:
   void clearMetaInfoCache();
