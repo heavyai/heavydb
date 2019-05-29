@@ -438,6 +438,9 @@ class ResultSet {
 
   bool isExplain() const;
 
+  bool isGeoColOnGpu(const size_t col_idx) const;
+  int getDeviceId() const;
+
   // Called from the executor because in the new ResultSet we assume the 'padded' field
   // in SlotSize already contains the padding, whereas in the executor it's computed.
   // Once the buffer initialization moves to ResultSet we can remove this method.
@@ -493,7 +496,18 @@ class ResultSet {
 
   size_t getLimit();
 
-  enum class GeoReturnType { GeoTargetValue, WktString };
+  /**
+   * Geo return type options when accessing geo columns from a result set.
+   */
+  enum class GeoReturnType {
+    GeoTargetValue,      /**< Copies the geo data into a struct of vectors - coords are
+                            uncompressed */
+    WktString,           /**< Returns the geo data as a WKT string */
+    GeoTargetValuePtr,   /**< Returns only the pointers of the underlying buffers for the
+                            geo data. */
+    GeoTargetValueGpuPtr /**< If geo data is currently on a device, keep the data on the
+                            device and return the device ptrs */
+  };
   GeoReturnType getGeoReturnType() const { return geo_return_type_; }
   void setGeoReturnType(const GeoReturnType val) { geo_return_type_ = val; }
 

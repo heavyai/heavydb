@@ -29,6 +29,8 @@
 #include <boost/optional.hpp>
 #include <boost/variant.hpp>
 
+#include <Shared/sqltypes.h>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -131,6 +133,25 @@ struct GeoMultiPolyTargetValue {
       , poly_rings(std::make_shared<std::vector<int32_t>>(poly_rings)) {}
 };
 
+struct GeoPointTargetValuePtr {
+  std::shared_ptr<VarlenDatum> coords_data;
+};
+
+struct GeoLineStringTargetValuePtr {
+  std::shared_ptr<VarlenDatum> coords_data;
+};
+
+struct GeoPolyTargetValuePtr {
+  std::shared_ptr<VarlenDatum> coords_data;
+  std::shared_ptr<VarlenDatum> ring_sizes_data;
+};
+
+struct GeoMultiPolyTargetValuePtr {
+  std::shared_ptr<VarlenDatum> coords_data;
+  std::shared_ptr<VarlenDatum> ring_sizes_data;
+  std::shared_ptr<VarlenDatum> poly_rings_data;
+};
+
 using NullableString = boost::variant<std::string, void*>;
 using ScalarTargetValue = boost::variant<int64_t, double, float, NullableString>;
 using ArrayTargetValue = boost::optional<std::vector<ScalarTargetValue>>;
@@ -138,6 +159,11 @@ using GeoTargetValue = boost::variant<GeoPointTargetValue,
                                       GeoLineStringTargetValue,
                                       GeoPolyTargetValue,
                                       GeoMultiPolyTargetValue>;
-using TargetValue = boost::variant<ScalarTargetValue, ArrayTargetValue, GeoTargetValue>;
+using GeoTargetValuePtr = boost::variant<GeoPointTargetValuePtr,
+                                         GeoLineStringTargetValuePtr,
+                                         GeoPolyTargetValuePtr,
+                                         GeoMultiPolyTargetValuePtr>;
+using TargetValue = boost::
+    variant<ScalarTargetValue, ArrayTargetValue, GeoTargetValue, GeoTargetValuePtr>;
 
 #endif  // QUERYENGINE_TARGETVALUE_H

@@ -440,6 +440,10 @@ bool ResultSet::isExplain() const {
   return just_explain_;
 }
 
+int ResultSet::getDeviceId() const {
+  return device_id_;
+}
+
 QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
     const QueryMemoryDescriptor& query_mem_desc) {
   auto query_mem_desc_copy = query_mem_desc;

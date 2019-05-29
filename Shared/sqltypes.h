@@ -91,6 +91,9 @@ struct HostArrayDatum : public VarlenDatum {
 
   HostArrayDatum() = default;
 
+  HostArrayDatum(size_t const l, ManagedPtr p, bool const n)
+      : VarlenDatum(l, p.get(), n), data_ptr(p) {}
+
   HostArrayDatum(size_t const l, int8_t* p, bool const n)
       : VarlenDatum(l, p, n), data_ptr(p, FreeDeleter()){};
 

@@ -25,7 +25,12 @@
 #define QUERYENGINE_RESULTSET_GEOSERIALIZATION_H
 
 #include <Shared/geo_compression.h>
+#include <Shared/geo_types.h>
+#include <Shared/sqltypes.h>
+#include "ResultSet.h"
 #include "TargetValue.h"
+
+using VarlenDatumPtr = std::unique_ptr<VarlenDatum>;
 
 template <SQLTypes GEO_SOURCE_TYPE>
 struct GeoTargetValueSerializer {
@@ -37,10 +42,17 @@ struct GeoWktSerializer {
   static_assert(IS_GEO(GEO_SOURCE_TYPE), "Invalid geo type for wkt serializer.");
 };
 
+template <SQLTypes GEO_SOURCE_TYPE>
+struct GeoTargetValuePtrSerializer {
+  static_assert(IS_GEO(GEO_SOURCE_TYPE),
+                "Invalid geo type for target value ptr serializer.");
+};
+
 template <ResultSet::GeoReturnType GEO_RETURN_TYPE, SQLTypes GEO_SOURCE_TYPE>
 struct GeoReturnTypeTraits {
   static_assert(GEO_RETURN_TYPE == ResultSet::GeoReturnType::GeoTargetValue ||
-                    GEO_RETURN_TYPE == ResultSet::GeoReturnType::WktString,
+                    GEO_RETURN_TYPE == ResultSet::GeoReturnType::WktString ||
+                    GEO_RETURN_TYPE == ResultSet::GeoReturnType::GeoTargetValuePtr,
                 "ResultSet: Unrecognized Geo Return Type encountered.");
 };
 
@@ -52,6 +64,11 @@ struct GeoReturnTypeTraits<ResultSet::GeoReturnType::GeoTargetValue, GEO_SOURCE_
 template <SQLTypes GEO_SOURCE_TYPE>
 struct GeoReturnTypeTraits<ResultSet::GeoReturnType::WktString, GEO_SOURCE_TYPE> {
   using GeoSerializerType = GeoWktSerializer<GEO_SOURCE_TYPE>;
+};
+
+template <SQLTypes GEO_SOURCE_TYPE>
+struct GeoReturnTypeTraits<ResultSet::GeoReturnType::GeoTargetValuePtr, GEO_SOURCE_TYPE> {
+  using GeoSerializerType = GeoTargetValuePtrSerializer<GEO_SOURCE_TYPE>;
 };
 
 namespace {
@@ -73,12 +90,12 @@ void decompress_geo_coords_geoint32(std::vector<T>& dec,
                                     const int8_t* enc,
                                     const size_t sz) {
   const auto compressed_coords = reinterpret_cast<const int32_t*>(enc);
-  dec.reserve(sz / sizeof(int32_t));
-  for (size_t i = 0; i < sz / sizeof(int32_t); i += 2) {
-    dec.push_back(
-        Geo_namespace::decompress_longitude_coord_geoint32(compressed_coords[i]));
-    dec.push_back(
-        Geo_namespace::decompress_lattitude_coord_geoint32(compressed_coords[i + 1]));
+  const auto num_coords = sz / sizeof(int32_t);
+  dec.resize(num_coords);
+  for (size_t i = 0; i < num_coords; i += 2) {
+    dec[i] = Geo_namespace::decompress_longitude_coord_geoint32(compressed_coords[i]);
+    dec[i + 1] =
+        Geo_namespace::decompress_lattitude_coord_geoint32(compressed_coords[i + 1]);
   }
 }
 
@@ -105,8 +122,6 @@ std::shared_ptr<std::vector<double>> decompress_coords<double>(const SQLTypeInfo
 
 }  // namespace
 
-using VarlenDatumPtr = std::unique_ptr<VarlenDatum>;
-
 // Point
 template <>
 struct GeoTargetValueSerializer<kPOINT> {
@@ -130,6 +145,14 @@ struct GeoWktSerializer<kPOINT> {
   }
 };
 
+template <>
+struct GeoTargetValuePtrSerializer<kPOINT> {
+  static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
+                                      std::array<VarlenDatumPtr, 1>& vals) {
+    return GeoPointTargetValuePtr({std::move(vals[0])});
+  }
+};
+
 // LineString
 template <>
 struct GeoTargetValueSerializer<kLINESTRING> {
@@ -150,6 +173,14 @@ struct GeoWktSerializer<kLINESTRING> {
     Geo_namespace::GeoLineString linestring(
         *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length));
     return NullableString(linestring.getWktString());
+  }
+};
+
+template <>
+struct GeoTargetValuePtrSerializer<kLINESTRING> {
+  static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
+                                      std::array<VarlenDatumPtr, 1>& vals) {
+    return GeoLineStringTargetValuePtr({std::move(vals[0])});
   }
 };
 
@@ -177,6 +208,14 @@ struct GeoWktSerializer<kPOLYGON> {
         ring_sizes_vec);
     return NullableString(poly.getWktString());
   };
+};
+
+template <>
+struct GeoTargetValuePtrSerializer<kPOLYGON> {
+  static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
+                                      std::array<VarlenDatumPtr, 2>& vals) {
+    return GeoPolyTargetValuePtr({std::move(vals[0]), std::move(vals[1])});
+  }
 };
 
 // MultiPolygon
@@ -208,6 +247,15 @@ struct GeoWktSerializer<kMULTIPOLYGON> {
         ring_sizes_vec,
         poly_rings_vec);
     return NullableString(mpoly.getWktString());
+  }
+};
+
+template <>
+struct GeoTargetValuePtrSerializer<kMULTIPOLYGON> {
+  static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
+                                      std::array<VarlenDatumPtr, 3>& vals) {
+    return GeoMultiPolyTargetValuePtr(
+        {std::move(vals[0]), std::move(vals[1]), std::move(vals[2])});
   }
 };
 

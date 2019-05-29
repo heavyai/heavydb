@@ -25,12 +25,16 @@
 #include "../Shared/geo_types.h"
 #include "../Shared/likely.h"
 #include "Execute.h"
+#include "ParserNode.h"
+#include "QueryEngine/TargetValue.h"
 #include "ResultSet.h"
 #include "ResultSetGeoSerialization.h"
 #include "RuntimeFunctions.h"
 #include "Shared/SqlTypesLayout.h"
+#include "Shared/sqltypes.h"
 #include "TypePunning.h"
 
+#include <memory>
 #include <utility>
 
 namespace {
@@ -106,7 +110,6 @@ const int8_t* advance_col_buff_to_slot(const int8_t* buff,
   CHECK(false);
   return nullptr;
 }
-
 }  // namespace
 
 std::vector<TargetValue> ResultSet::getRowAt(
@@ -932,7 +935,7 @@ inline std::unique_ptr<ArrayDatum> lazy_fetch_chunk(const int8_t* ptr,
 
 struct GeoLazyFetchHandler {
   template <typename... T>
-  static inline auto fetch(T&&... vals) {
+  static inline auto fetch(const ResultSet::GeoReturnType return_type, T&&... vals) {
     constexpr int num_vals = sizeof...(vals);
     static_assert(
         num_vals % 2 == 0,
@@ -952,13 +955,19 @@ inline std::unique_ptr<ArrayDatum> fetch_data_from_gpu(int64_t varlen_ptr,
                                                        const int64_t length,
                                                        Data_Namespace::DataMgr* data_mgr,
                                                        const int device_id) {
-  int8_t* cpu_buf = new int8_t[length];
+  auto cpu_buf = std::shared_ptr<int8_t>(new int8_t[length], FreeDeleter());
   copy_from_gpu(
-      data_mgr, cpu_buf, static_cast<CUdeviceptr>(varlen_ptr), length, device_id);
+      data_mgr, cpu_buf.get(), static_cast<CUdeviceptr>(varlen_ptr), length, device_id);
   return std::make_unique<ArrayDatum>(length, cpu_buf, false);
 }
 
 struct GeoQueryOutputFetchHandler {
+  static inline auto yieldGpuPtrFetcher() {
+    return [](const int64_t ptr, const int64_t length) -> VarlenDatumPtr {
+      return std::make_unique<VarlenDatum>(length, reinterpret_cast<int8_t*>(ptr), false);
+    };
+  }
+
   static inline auto yieldGpuDatumFetcher(Data_Namespace::DataMgr* data_mgr_ptr,
                                           const int device_id) {
     return [data_mgr_ptr, device_id](const int64_t ptr,
@@ -974,7 +983,8 @@ struct GeoQueryOutputFetchHandler {
   }
 
   template <typename... T>
-  static inline auto fetch(Data_Namespace::DataMgr* data_mgr,
+  static inline auto fetch(const ResultSet::GeoReturnType return_type,
+                           Data_Namespace::DataMgr* data_mgr,
                            const bool fetch_data_from_gpu,
                            const int device_id,
                            T&&... vals) {
@@ -994,11 +1004,13 @@ struct GeoQueryOutputFetchHandler {
     };
 
     if (fetch_data_from_gpu) {
-      auto datum_fetcher = yieldGpuDatumFetcher(data_mgr, device_id);
-      return ad_arr_generator(datum_fetcher);
+      if (return_type == ResultSet::GeoReturnType::GeoTargetValueGpuPtr) {
+        return ad_arr_generator(yieldGpuPtrFetcher());
+      } else {
+        return ad_arr_generator(yieldGpuDatumFetcher(data_mgr, device_id));
+      }
     } else {
-      auto datum_fetcher = yieldCpuDatumFetcher();
-      return ad_arr_generator(datum_fetcher);
+      return ad_arr_generator(yieldCpuDatumFetcher());
     }
   }
 };
@@ -1009,7 +1021,7 @@ struct GeoTargetValueBuilder {
   static inline TargetValue build(const SQLTypeInfo& geo_ti,
                                   const ResultSet::GeoReturnType return_type,
                                   T&&... vals) {
-    auto ad_arr = GeoTargetFetcher::fetch(std::forward<T>(vals)...);
+    auto ad_arr = GeoTargetFetcher::fetch(return_type, std::forward<T>(vals)...);
     static_assert(std::tuple_size<decltype(ad_arr)>::value > 0,
                   "ArrayDatum array for Geo Target must contain at least one value.");
 
@@ -1024,6 +1036,15 @@ struct GeoTargetValueBuilder {
       }
       case ResultSet::GeoReturnType::WktString: {
         return GeoReturnTypeTraits<ResultSet::GeoReturnType::WktString,
+                                   GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,
+                                                                                  ad_arr);
+      }
+      case ResultSet::GeoReturnType::GeoTargetValuePtr:
+      case ResultSet::GeoReturnType::GeoTargetValueGpuPtr: {
+        if (ad_arr[0]->is_null) {
+          return GeoTargetValuePtr();
+        }
+        return GeoReturnTypeTraits<ResultSet::GeoReturnType::GeoTargetValuePtr,
                                    GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,
                                                                                   ad_arr);
       }
@@ -1246,9 +1267,37 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
   return std::string(reinterpret_cast<char*>(varlen_ptr), length);
 }
 
+bool ResultSet::isGeoColOnGpu(const size_t col_idx) const {
+  // This should match the logic in makeGeoTargetValue which ultimately calls
+  // fetch_data_from_gpu when the geo column is on the device.
+  // TODO(croot): somehow find a way to refactor this and makeGeoTargetValue to use a
+  // utility function that handles this logic in one place
+  CHECK_LT(col_idx, targets_.size());
+  if (!IS_GEO(targets_[col_idx].sql_type.get_type())) {
+    throw std::runtime_error("Column target at index " + std::to_string(col_idx) +
+                             " is not a geo column. It is of type " +
+                             targets_[col_idx].sql_type.get_type_name() + ".");
+  }
+
+  const auto& target_info = targets_[col_idx];
+  if (separate_varlen_storage_valid_ && !target_info.is_agg) {
+    return false;
+  }
+
+  if (!lazy_fetch_info_.empty()) {
+    CHECK_LT(col_idx, lazy_fetch_info_.size());
+    if (lazy_fetch_info_[col_idx].is_lazily_fetched) {
+      return false;
+    }
+  }
+
+  return device_type_ == ExecutorDeviceType::GPU;
+}
+
 // Reads a geo value from a series of ptrs to var len types
-// In Columnar format, geo_target_ptr is the geo column ptr (a pointer to the beginning of
-// that specific geo column) and should be appropriately adjusted with the entry_buff_idx
+// In Columnar format, geo_target_ptr is the geo column ptr (a pointer to the beginning
+// of that specific geo column) and should be appropriately adjusted with the
+// entry_buff_idx
 TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
                                           const size_t slot_idx,
                                           const TargetInfo& target_info,
@@ -1333,16 +1382,6 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
     return varlen_buffer;
   };
 
-  auto removeCompressionFromGeoType = [](const SQLTypeInfo& ti) {
-    return SQLTypeInfo(ti.get_type(),
-                       ti.get_dimension(),
-                       ti.get_scale(),
-                       ti.get_notnull(),
-                       kENCODING_NONE,
-                       0,
-                       ti.get_subtype());
-  };
-
   if (separate_varlen_storage_valid_ && getCoordsDataPtr(geo_target_ptr) < 0) {
     CHECK_EQ(-1, getCoordsDataPtr(geo_target_ptr));
     return TargetValue(nullptr);
@@ -1362,7 +1401,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
                  varlen_buffer.size());
 
         return GeoTargetValueBuilder<kPOINT, GeoQueryOutputFetchHandler>::build(
-            removeCompressionFromGeoType(target_info.sql_type),
+            target_info.sql_type,
             geo_return_type_,
             nullptr,
             false,
@@ -1395,7 +1434,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
                  varlen_buffer.size());
 
         return GeoTargetValueBuilder<kLINESTRING, GeoQueryOutputFetchHandler>::build(
-            removeCompressionFromGeoType(target_info.sql_type),
+            target_info.sql_type,
             geo_return_type_,
             nullptr,
             false,
@@ -1428,7 +1467,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
                  varlen_buffer.size());
 
         return GeoTargetValueBuilder<kPOLYGON, GeoQueryOutputFetchHandler>::build(
-            removeCompressionFromGeoType(target_info.sql_type),
+            target_info.sql_type,
             geo_return_type_,
             nullptr,
             false,
@@ -1470,7 +1509,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
                  varlen_buffer.size());
 
         return GeoTargetValueBuilder<kMULTIPOLYGON, GeoQueryOutputFetchHandler>::build(
-            removeCompressionFromGeoType(target_info.sql_type),
+            target_info.sql_type,
             geo_return_type_,
             nullptr,
             false,
