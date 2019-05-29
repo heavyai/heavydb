@@ -14536,6 +14536,12 @@ TEST(Select, WindowFunctionAggregate) {
   }
   {
     std::string query =
+        "SELECT x, COUNT(t) OVER (PARTITION BY y ORDER BY x ASC) m FROM test_window_func "
+        "WHERE x < 5 ORDER BY x ASC";
+    c(query + " NULLS FIRST, m ASC NULLS FIRST;", query + ", m ASC;", dt);
+  }
+  {
+    std::string query =
         "SELECT COUNT(*) OVER (PARTITION BY y ORDER BY x ASC), x, y FROM "
         "test_window_func ORDER BY x LIMIT 1;";
     const auto rows = run_multiple_agg(query, dt);

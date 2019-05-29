@@ -1244,9 +1244,6 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
 
   for (RANodeIterator nodeIt(nodes); !nodeIt.allVisited();) {
     const auto ra_node = nodeIt != nodes.end() ? *nodeIt : nullptr;
-    if (ra_node) {
-      LOG(INFO) << "Visiting " << ra_node->toString();
-    }
     switch (crt_state) {
       case CoalesceState::Initial: {
         if (std::dynamic_pointer_cast<const RelFilter>(ra_node) &&

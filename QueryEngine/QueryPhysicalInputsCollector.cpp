@@ -31,6 +31,7 @@ class RelAlgPhysicalInputsVisitor : public RelAlgVisitor<PhysicalInputSet> {
   PhysicalInputSet visitJoin(const RelJoin* join) const override;
   PhysicalInputSet visitLeftDeepInnerJoin(const RelLeftDeepInnerJoin*) const override;
   PhysicalInputSet visitProject(const RelProject* project) const override;
+  PhysicalInputSet visitSort(const RelSort* sort) const override;
 
  protected:
   PhysicalInputSet aggregateResult(const PhysicalInputSet& aggregate,
@@ -64,6 +65,34 @@ class RexPhysicalInputsVisitor : public RexVisitor<PhysicalInputSet> {
     CHECK(ra);
     RelAlgPhysicalInputsVisitor visitor;
     return visitor.visit(ra);
+  }
+
+  PhysicalInputSet visitOperator(const RexOperator* oper) const override {
+    PhysicalInputSet result;
+    if (auto window_oper = dynamic_cast<const RexWindowFunctionOperator*>(oper)) {
+      for (const auto& partition_key : window_oper->getPartitionKeys()) {
+        if (auto input = dynamic_cast<const RexInput*>(partition_key.get())) {
+          const auto source_node = input->getSourceNode();
+          if (auto filter_node = dynamic_cast<const RelFilter*>(source_node)) {
+            // Partitions utilize string dictionary translation in the hash join framework
+            // if the partition key is a dictionary encoded string. Ensure we reach the
+            // source for all partition keys, so we can access string dictionaries for the
+            // partition keys while we build the partition (hash) table
+            CHECK_EQ(filter_node->inputCount(), size_t(1));
+            const auto parent_node = filter_node->getInput(0);
+            const auto node_inputs = get_node_output(parent_node);
+            CHECK_LT(input->getIndex(), node_inputs.size());
+            result = aggregateResult(result, visitInput(&node_inputs[input->getIndex()]));
+          }
+          result = aggregateResult(result, visit(input));
+        }
+      }
+      return result;
+    }
+    for (size_t i = 0; i < oper->size(); i++) {
+      result = aggregateResult(result, visit(oper->getOperand(i)));
+    }
+    return result;
   }
 
  protected:
@@ -141,6 +170,11 @@ PhysicalInputSet RelAlgPhysicalInputsVisitor::visitProject(
     result.insert(rex_phys_inputs.begin(), rex_phys_inputs.end());
   }
   return result;
+}
+
+PhysicalInputSet RelAlgPhysicalInputsVisitor::visitSort(const RelSort* sort) const {
+  CHECK_EQ(sort->inputCount(), size_t(1));
+  return visit(sort->getInput(0));
 }
 
 PhysicalInputSet RelAlgPhysicalInputsVisitor::aggregateResult(
