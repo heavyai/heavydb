@@ -64,14 +64,14 @@ ChunkMetadata StringNoneEncoder::appendData(const std::vector<std::string>* srcD
                       sizeof(StringOffsetT));  // write the inital 0 offset
     last_offset = 0;
   } else {
-    if (last_offset < 0) {
-      // need to read the last offset from buffer/disk
-      index_buf->read((int8_t*)&last_offset,
-                      sizeof(StringOffsetT),
-                      index_buf->size() - sizeof(StringOffsetT),
-                      Data_Namespace::CPU_LEVEL);
-      assert(last_offset >= 0);
-    }
+    // always need to read a valid last offset from buffer/disk
+    // b/c now due to vacuum "last offset" may go backward and if
+    // index chunk was not reloaded last_offset would go way off!
+    index_buf->read((int8_t*)&last_offset,
+                    sizeof(StringOffsetT),
+                    index_buf->size() - sizeof(StringOffsetT),
+                    Data_Namespace::CPU_LEVEL);
+    assert(last_offset >= 0);
   }
   size_t data_size = 0;
   for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {

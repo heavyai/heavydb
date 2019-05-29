@@ -97,18 +97,18 @@ class ArrayNoneEncoder : public Encoder {
       last_offset = initial_offset;
     } else {
       // Valid last_offset is never negative
-      if (last_offset == -1) {
-        // Invalid last offset, need to read a valid last offset from buffer/disk
-        index_buf->read((int8_t*)&last_offset,
-                        sizeof(ArrayOffsetT),
-                        index_buf->size() - sizeof(ArrayOffsetT),
-                        Data_Namespace::CPU_LEVEL);
-        assert(last_offset != -1);
-        // If the loaded offset is negative it means the last value was a NULL array,
-        // convert to a valid last offset
-        if (last_offset < 0) {
-          last_offset = -last_offset;
-        }
+      // always need to read a valid last offset from buffer/disk
+      // b/c now due to vacuum "last offset" may go backward and if
+      // index chunk was not reloaded last_offset would go way off!
+      index_buf->read((int8_t*)&last_offset,
+                      sizeof(ArrayOffsetT),
+                      index_buf->size() - sizeof(ArrayOffsetT),
+                      Data_Namespace::CPU_LEVEL);
+      assert(last_offset != -1);
+      // If the loaded offset is negative it means the last value was a NULL array,
+      // convert to a valid last offset
+      if (last_offset < 0) {
+        last_offset = -last_offset;
       }
     }
     // Need to start data from 4 byte offset if first array encoded is a NULL array

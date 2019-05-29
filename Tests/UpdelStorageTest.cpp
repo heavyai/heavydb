@@ -520,6 +520,7 @@ bool delete_and_vacuum_varlen_rows(const std::string& table,
       auto executor = Executor::getExecutor(cat->getCurrentDB().dbId);
       TableOptimizer optimizer(td, executor.get(), *cat);
       optimizer.vacuumDeletedRows();
+      optimizer.recomputeMetadata();
     });
     if (UpdelTestConfig::showMeasuredTime) {
       VLOG(2) << "time on vacuum:" << ms << " ms";
@@ -634,6 +635,31 @@ class RowVacuumTestWithVarlenAndArraysN : public ::testing::Test {
     ASSERT_NO_THROW(run_ddl_statement("drop table varlen;"););
   }
 };
+
+using RowVacuumTestWithVarlenAndArrays_0 = RowVacuumTestWithVarlenAndArraysN<0>;
+TEST_F(RowVacuumTestWithVarlenAndArrays_0, Vacuum_Half_Then_Add_All) {
+  // delete and vacuum half of (8) rows
+  EXPECT_TRUE(delete_and_vacuum_varlen_rows("varlen",
+                                            UpdelTestConfig::varNumRows,
+                                            UpdelTestConfig::varNumRows / 2,
+                                            0,
+                                            1,
+                                            true));
+
+  // add ALL row back
+  EXPECT_NO_THROW(import_table_file("varlen", UpdelTestConfig::varFile););
+  // check new added rows ...
+  auto rows = run_query("select ns from varlen where rowid >= " +
+                        std::to_string(UpdelTestConfig::varNumRows / 2) + ";");
+  for (int i = 0; i < UpdelTestConfig::varNumRows; ++i) {
+    auto crt_row = rows->getNextRow(true, true);
+    CHECK_EQ(size_t(1), crt_row.size());
+    auto nullable_str = v<NullableString>(crt_row[0]);
+    auto ns = boost::get<std::string>(&nullable_str);
+    CHECK(ns);
+    EXPECT_TRUE(*ns == std::to_string(i + 1));
+  }
+}
 
 using ManualRowVacuumTestWithVarlenAndArrays =
     RowVacuumTestWithVarlenAndArraysN<varNumRowsByDefault / 2>;

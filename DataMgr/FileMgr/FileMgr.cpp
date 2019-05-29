@@ -756,6 +756,13 @@ AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key,
     }
   }
   if (srcBuffer->isUpdated()) {
+    // chunk size is not changed when fixed rows are updated or are marked as deleted.
+    // but when rows are vacuumed or varlen rows are updated (new rows are appended),
+    // chunk size will change. For vacuum, checkpoint should sync size from cpu to disk.
+    // For varlen update, it takes another route via fragmenter using disk-level buffer.
+    if (0 == numBytes && !chunk->isDirty()) {
+      chunk->setSize(newChunkSize);
+    }
     //@todo use dirty flags to only flush pages of chunk that need to
     // be flushed
     chunk->write((int8_t*)srcBuffer->getMemoryPtr(),
