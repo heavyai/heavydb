@@ -58,7 +58,7 @@ TEST_F(ViewObject, BasicTest) {
   TPlanResult vresult = g_calcite->process(
       *g_session, "select i1 from view_view_table1", {}, true, false, false);
 
-  EXPECT_NE(vresult.plan_result, tresult.plan_result);
+  EXPECT_EQ(vresult.plan_result, tresult.plan_result);
 
   TPlanResult ovresult = g_calcite->process(
       *g_session, "select i1 from view_view_table1", {}, true, false, true);

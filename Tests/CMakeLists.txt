@@ -150,6 +150,7 @@ set(SANITY_TESTS
   CtasUpdateTest
   DateTimeUtilsTest
   UpdateMetadataTest
+  CalciteOptimizeTest
 )
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
