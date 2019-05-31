@@ -15,6 +15,9 @@
  */
 package com.mapd.parser.server;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -26,12 +29,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 /**
  *
  * @author alex
  */
 class ExtensionFunctionSignatureParser {
+  final static Logger MAPDLOGGER =
+          LoggerFactory.getLogger(ExtensionFunctionSignatureParser.class);
+
   static Map<String, ExtensionFunction> parse(final String file_path) throws IOException {
     File file = new File(file_path);
     FileReader fileReader = new FileReader(file);
@@ -97,8 +102,13 @@ class ExtensionFunctionSignatureParser {
   private static ExtensionFunction.ExtArgumentType deserializeType(
           final String type_name) {
     final String const_prefix = "const ";
+    final String std_namespace_prefix = "std::";
+
     if (type_name.startsWith(const_prefix)) {
       return deserializeType(type_name.substring(const_prefix.length()));
+    }
+    if (type_name.startsWith(std_namespace_prefix)) {
+      return deserializeType(type_name.substring(std_namespace_prefix.length()));
     }
     if (type_name.equals("bool") || type_name.equals("_Bool")) {
       return ExtensionFunction.ExtArgumentType.Bool;
@@ -131,8 +141,29 @@ class ExtensionFunctionSignatureParser {
     if (type_name.endsWith(" *")) {
       return pointerType(deserializeType(type_name.substring(0, type_name.length() - 2)));
     }
+
     if (type_name.endsWith("*")) {
       return pointerType(deserializeType(type_name.substring(0, type_name.length() - 1)));
+    }
+
+    if (type_name.equals("Array<int8_t>") || type_name.equals("Array<char>")) {
+      return ExtensionFunction.ExtArgumentType.ArrayInt8;
+    }
+    if (type_name.equals("Array<int16_t>") || type_name.equals("Array<short>")) {
+      return ExtensionFunction.ExtArgumentType.ArrayInt16;
+    }
+    if (type_name.equals("Array<int32_t>") || type_name.equals("Array<int>")) {
+      return ExtensionFunction.ExtArgumentType.ArrayInt32;
+    }
+    if (type_name.equals("Array<int64_t>") || type_name.equals("Array<size_t>")
+            || type_name.equals("Array<long>")) {
+      return ExtensionFunction.ExtArgumentType.ArrayInt64;
+    }
+    if (type_name.equals("Array<float>")) {
+      return ExtensionFunction.ExtArgumentType.ArrayFloat;
+    }
+    if (type_name.equals("Array<double>")) {
+      return ExtensionFunction.ExtArgumentType.ArrayDouble;
     }
     assert false;
     return null;

@@ -153,6 +153,14 @@ static int match_arguments(const SQLTypeInfo& arg_type,
       break;
     case kLINESTRING:
     case kPOINT:
+      if ((stype == ExtArgumentType::PInt8 || stype == ExtArgumentType::PInt16 ||
+           stype == ExtArgumentType::PInt32 || stype == ExtArgumentType::PInt64 ||
+           stype == ExtArgumentType::PFloat || stype == ExtArgumentType::PDouble) &&
+          sig_pos < max_pos && sig_types[sig_pos + 1] == ExtArgumentType::Int64) {
+        penalty_score += 1000;
+        return 2;
+      }
+
     case kARRAY:
       if ((stype == ExtArgumentType::PInt8 || stype == ExtArgumentType::PInt16 ||
            stype == ExtArgumentType::PInt32 || stype == ExtArgumentType::PInt64 ||
@@ -160,6 +168,9 @@ static int match_arguments(const SQLTypeInfo& arg_type,
           sig_pos < max_pos && sig_types[sig_pos + 1] == ExtArgumentType::Int64) {
         penalty_score += 1000;
         return 2;
+      } else if (is_ext_arg_type_array(stype)) {
+        penalty_score += 1000;
+        return 1;
       }
       break;
     case kPOLYGON:
@@ -326,4 +337,19 @@ ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper) {
     func_args.push_back(function_oper->getOwnArg(i));
   }
   return bind_function(name, func_args);
+}
+
+bool is_ext_arg_type_array(const ExtArgumentType ext_arg_type) {
+  switch (ext_arg_type) {
+    case ExtArgumentType::ArrayInt8:
+    case ExtArgumentType::ArrayInt16:
+    case ExtArgumentType::ArrayInt32:
+    case ExtArgumentType::ArrayInt64:
+    case ExtArgumentType::ArrayFloat:
+    case ExtArgumentType::ArrayDouble:
+      return true;
+
+    default:
+      return false;
+  }
 }

@@ -405,6 +405,16 @@ class CodeGenerator {
   llvm::Value* codegenFunctionOperNullArg(const Analyzer::FunctionOper*,
                                           const std::vector<llvm::Value*>&);
 
+  llvm::StructType* createArrayStructType(const std::string& udf_func_name,
+                                          size_t param_num);
+
+  void codegenArrayArgs(const std::string& udf_func_name,
+                        size_t param_num,
+                        llvm::Value* array_buf,
+                        llvm::Value* array_size,
+                        llvm::Value* array_is_null,
+                        std::vector<llvm::Value*>& output_args);
+
   std::vector<llvm::Value*> codegenFunctionOperCastArgs(
       const Analyzer::FunctionOper*,
       const ExtensionFunction*,

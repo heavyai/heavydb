@@ -44,7 +44,13 @@ enum class ExtArgumentType {
   PInt64,
   PFloat,
   PDouble,
-  Bool
+  Bool,
+  ArrayInt8,
+  ArrayInt16,
+  ArrayInt32,
+  ArrayInt64,
+  ArrayFloat,
+  ArrayDouble
 };
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type);

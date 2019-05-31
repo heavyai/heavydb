@@ -1635,7 +1635,14 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   } else {
     rt_module_copy->setDataLayout(get_gpu_data_layout());
     rt_module_copy->setTargetTriple(get_gpu_target_triple_string());
+
     if (is_udf_module_present()) {
+      llvm::Triple gpu_triple(udf_gpu_module->getTargetTriple());
+
+      if (!gpu_triple.isNVPTX()) {
+        throw QueryMustRunOnCpu();
+      }
+
       link_udf_module(udf_gpu_module, *rt_module_copy, cgen_state_.get());
     }
     if (is_rt_udf_module_present()) {

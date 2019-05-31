@@ -20,6 +20,9 @@
 #include "ExtensionFunctionsBinding.h"
 #include "ExtensionFunctionsWhitelist.h"
 
+extern std::unique_ptr<llvm::Module> udf_gpu_module;
+extern std::unique_ptr<llvm::Module> udf_cpu_module;
+
 namespace {
 
 llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type,
@@ -171,6 +174,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
 
   auto ext_call_nullcheck = endArgsNullcheck(bbs, ext_call, function_oper);
   cgen_state_->ext_call_cache_.push_back({function_oper, ext_call_nullcheck});
+
   return ext_call_nullcheck;
 }
 
@@ -328,6 +332,59 @@ llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
   return one_arg_null;
 }
 
+llvm::StructType* CodeGenerator::createArrayStructType(const std::string& udf_func_name,
+                                                       size_t param_num) {
+  llvm::Function* udf_func = cgen_state_->module_->getFunction(udf_func_name);
+  llvm::Module* module_for_lookup = cgen_state_->module_;
+
+  CHECK(udf_func);
+
+  llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
+  CHECK(param_num < udf_func_type->getNumParams());
+  llvm::Type* param_type = udf_func_type->getParamType(param_num);
+  CHECK(param_type->isPointerTy());
+  llvm::Type* struct_type = param_type->getPointerElementType();
+  CHECK(struct_type->isStructTy());
+  CHECK(struct_type->getStructNumElements() == 3);
+
+  llvm::StringRef struct_name = struct_type->getStructName();
+
+  llvm::StructType* array_type = module_for_lookup->getTypeByName(struct_name);
+  CHECK(array_type);
+
+  return (array_type);
+}
+
+void CodeGenerator::codegenArrayArgs(const std::string& udf_func_name,
+                                     size_t param_num,
+                                     llvm::Value* array_buf,
+                                     llvm::Value* array_size,
+                                     llvm::Value* array_null,
+                                     std::vector<llvm::Value*>& output_args) {
+  CHECK(array_buf);
+  CHECK(array_size);
+  CHECK(array_null);
+
+  auto array_abstraction = createArrayStructType(udf_func_name, param_num);
+  auto alloc_mem = cgen_state_->ir_builder_.CreateAlloca(array_abstraction, nullptr);
+
+  auto array_buf_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(array_abstraction, alloc_mem, 0);
+  cgen_state_->ir_builder_.CreateStore(array_buf, array_buf_ptr);
+
+  auto array_size_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(array_abstraction, alloc_mem, 1);
+  cgen_state_->ir_builder_.CreateStore(array_size, array_size_ptr);
+
+  auto bool_extended_type = llvm::Type::getInt8Ty(cgen_state_->context_);
+  auto array_null_extended =
+      cgen_state_->ir_builder_.CreateZExt(array_null, bool_extended_type);
+  auto array_is_null_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(array_abstraction, alloc_mem, 2);
+  cgen_state_->ir_builder_.CreateStore(array_null_extended, array_is_null_ptr);
+  output_args.push_back(alloc_mem);
+}
+
 // Generate CAST operations for arguments in `orig_arg_lvs` to the types required by
 // `ext_func_sig`.
 std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
@@ -365,10 +422,29 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
                             {orig_arg_lvs[k],
                              posArg(arg),
                              cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))});
-      args.push_back(castArrayPointer(ptr_lv, elem_ti));
-      args.push_back(cgen_state_->ir_builder_.CreateZExt(
-          len_lv, get_int_type(64, cgen_state_->context_)));
-      j++;
+
+      if (!is_ext_arg_type_array(ext_func_args[i])) {
+        args.push_back(castArrayPointer(ptr_lv, elem_ti));
+        args.push_back(cgen_state_->ir_builder_.CreateZExt(
+            len_lv, get_int_type(64, cgen_state_->context_)));
+        j++;
+      } else {
+        auto array_buf_arg = castArrayPointer(ptr_lv, elem_ti);
+        auto builder = cgen_state_->ir_builder_;
+        auto array_size_arg =
+            builder.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_));
+        auto array_null_arg =
+            cgen_state_->emitExternalCall("array_is_null",
+                                          get_int_type(1, cgen_state_->context_),
+                                          {orig_arg_lvs[k], posArg(arg)});
+        codegenArrayArgs(ext_func_sig->getName(),
+                         k,
+                         array_buf_arg,
+                         array_size_arg,
+                         array_null_arg,
+                         args);
+      }
+
     } else if (arg_ti.is_geometry()) {
       // Coords
       bool const_arr = (const_arr_size.count(orig_arg_lvs[k]) > 0);

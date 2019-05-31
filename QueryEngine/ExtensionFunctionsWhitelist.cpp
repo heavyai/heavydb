@@ -141,6 +141,18 @@ std::string serialize_type(const ExtArgumentType type) {
       return "float*";
     case ExtArgumentType::PDouble:
       return "double*";
+    case ExtArgumentType::ArrayInt8:
+      return "array_i8";
+    case ExtArgumentType::ArrayInt16:
+      return "array_i16";
+    case ExtArgumentType::ArrayInt32:
+      return "array_i32";
+    case ExtArgumentType::ArrayInt64:
+      return "array_i64";
+    case ExtArgumentType::ArrayFloat:
+      return "array_float";
+    case ExtArgumentType::ArrayDouble:
+      return "array_double";
     default:
       CHECK(false);
   }
@@ -279,6 +291,25 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "double*") {
     return ExtArgumentType::PDouble;
   }
+  if (type_name == "array_i8") {
+    return ExtArgumentType::ArrayInt8;
+  }
+  if (type_name == "array_i16") {
+    return ExtArgumentType::ArrayInt16;
+  }
+  if (type_name == "array_i32") {
+    return ExtArgumentType::ArrayInt32;
+  }
+  if (type_name == "array_i64") {
+    return ExtArgumentType::ArrayInt64;
+  }
+  if (type_name == "array_float") {
+    return ExtArgumentType::ArrayFloat;
+  }
+  if (type_name == "array_double") {
+    return ExtArgumentType::ArrayDouble;
+  }
+
   CHECK(false);
   return ExtArgumentType::Int16;
 }

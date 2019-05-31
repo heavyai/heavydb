@@ -1463,6 +1463,12 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         case PInt64:
         case PFloat:
         case PDouble:
+        case ArrayInt8:
+        case ArrayInt16:
+        case ArrayInt32:
+        case ArrayInt64:
+        case ArrayFloat:
+        case ArrayDouble:
           return SqlTypeName.ARRAY;
       }
       assert false;

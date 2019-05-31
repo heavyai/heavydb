@@ -15,6 +15,9 @@
  */
 package com.mapd.parser.server;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,6 +26,8 @@ import java.util.List;
  * @author alex
  */
 public class ExtensionFunction {
+  final static Logger MAPDLOGGER = LoggerFactory.getLogger(ExtensionFunction.class);
+
   public enum ExtArgumentType {
     Int8,
     Int16,
@@ -37,7 +42,13 @@ public class ExtensionFunction {
     PInt64,
     PFloat,
     PDouble,
-    Bool
+    Bool,
+    ArrayInt8,
+    ArrayInt16,
+    ArrayInt32,
+    ArrayInt64,
+    ArrayFloat,
+    ArrayDouble
   }
   ;
 
@@ -55,6 +66,7 @@ public class ExtensionFunction {
   }
 
   public String toJson(final String name) {
+    MAPDLOGGER.debug("Extensionfunction::toJson: " + name);
     StringBuilder json_cons = new StringBuilder();
     json_cons.append("{");
     json_cons.append("\"name\":").append(dq(name)).append(",");
@@ -99,6 +111,18 @@ public class ExtensionFunction {
         return "float*";
       case PDouble:
         return "double*";
+      case ArrayInt8:
+        return "array_i8";
+      case ArrayInt16:
+        return "array_i16";
+      case ArrayInt32:
+        return "array_i32";
+      case ArrayInt64:
+        return "array_i64";
+      case ArrayFloat:
+        return "array_float";
+      case ArrayDouble:
+        return "array_double";
     }
     assert false;
     return null;

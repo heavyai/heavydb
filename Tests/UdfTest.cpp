@@ -19,6 +19,7 @@
 #include <boost/filesystem/operations.hpp>
 #include <csignal>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <vector>
 #include "Catalog/Catalog.h"
@@ -209,9 +210,12 @@ TEST_F(UDFCompilerTest, UdfQuery) {
   ASSERT_EQ(compile_result, 0);
 
   run_ddl_statement("DROP TABLE IF EXISTS stocks;");
+  run_ddl_statement("DROP TABLE IF EXISTS sal_emp;");
   run_ddl_statement(
       "CREATE TABLE stocks(symbol text, open_p int, high_p int, "
       "low_p int, close_p int, entry_d DATE);");
+
+  run_ddl_statement("CREATE TABLE sal_emp(name text, pay_by_quarter integer[]);");
 
   std::string insert1(
       "INSERT into stocks VALUES ('NVDA', '178', '178', '171', '173', '2019-05-07');");
@@ -225,6 +229,23 @@ TEST_F(UDFCompilerTest, UdfQuery) {
       "INSERT into stocks VALUES ('NVDA', '183', '184', '181', '183', '2019-05-03');");
   EXPECT_NO_THROW(run_multiple_agg(insert3, ExecutorDeviceType::CPU));
 
+  std::string array_insert1(
+      "INSERT into sal_emp VALUES ('Sarah', ARRAY[5000, 6000, 7000, 8000]);");
+  EXPECT_NO_THROW(run_multiple_agg(array_insert1, ExecutorDeviceType::CPU));
+
+  std::string array_insert2(
+      "INSERT into sal_emp VALUES ('John', ARRAY[3000, 3500, 4000, 4300]);");
+
+  EXPECT_NO_THROW(run_multiple_agg(array_insert2, ExecutorDeviceType::CPU));
+
+  std::string array_insert3("INSERT into sal_emp VALUES ('Jim', NULL);");
+  EXPECT_NO_THROW(run_multiple_agg(array_insert3, ExecutorDeviceType::CPU));
+
+  std::string array_insert4(
+      "INSERT into sal_emp VALUES ('Carla', ARRAY[7000, NULL, NULL, 9000]);");
+
+  EXPECT_NO_THROW(run_multiple_agg(array_insert4, ExecutorDeviceType::CPU));
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     ASSERT_EQ(7,
@@ -235,6 +256,54 @@ TEST_F(UDFCompilerTest, UdfQuery) {
               v<int64_t>(run_simple_agg("SELECT udf_range_int(high_p, low_p) from stocks "
                                         "where entry_d = '2019-05-03';",
                                         dt)));
+
+    ASSERT_EQ(
+        5000,
+        v<int64_t>(run_simple_agg("select array_at_int32(pay_by_quarter, 0) from sal_emp "
+                                  "where name = 'Sarah';",
+                                  dt)));
+
+    ASSERT_EQ(
+        4300,
+        v<int64_t>(run_simple_agg("select array_at_int32(pay_by_quarter, 3) from sal_emp "
+                                  "where name = 'John';",
+                                  dt)));
+
+    ASSERT_EQ(
+        4,
+        v<int64_t>(run_simple_agg("select array_sz_int32(pay_by_quarter) from sal_emp "
+                                  "where name = 'John';",
+                                  dt)));
+
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "select array_is_null_int32(pay_by_quarter) from sal_emp "
+                  "where name = 'Jim';",
+                  dt)));
+
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "select array_is_null_int32(pay_by_quarter) from sal_emp "
+                  "where name = 'John';",
+                  dt)));
+
+    ASSERT_EQ(
+        std::numeric_limits<int32_t>::min(),
+        v<int64_t>(run_simple_agg("select array_at_int32(pay_by_quarter, 1) from sal_emp "
+                                  "where name = 'Carla';",
+                                  dt)));
+
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "select array_at_int32_is_null(pay_by_quarter, 0) from sal_emp "
+                  "where name = 'Carla';",
+                  dt)));
+
+    ASSERT_EQ(1,
+              v<int64_t>(run_simple_agg(
+                  "select array_at_int32_is_null(pay_by_quarter, 1) from sal_emp "
+                  "where name = 'Carla';",
+                  dt)));
   }
 
   EXPECT_THROW(run_simple_agg("SELECT udf_range_integer(high_p, low_p) from stocks where "
@@ -243,6 +312,7 @@ TEST_F(UDFCompilerTest, UdfQuery) {
                std::exception);
 
   run_ddl_statement("DROP TABLE stocks;");
+  run_ddl_statement("DROP TABLE sal_emp;");
 }
 
 int main(int argc, char** argv) {
