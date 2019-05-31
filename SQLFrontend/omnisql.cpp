@@ -61,6 +61,7 @@
 
 #include "ClientContext.h"
 #include "CommandFunctors.h"
+#include "CommandHistoryFile.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -1072,6 +1073,7 @@ int main(int argc, char** argv) {
   std::string user_name{"admin"};
   std::string ca_cert_name{""};
   std::string passwd;
+  CommandHistoryFile cmd_file;
 
   namespace po = boost::program_options;
 
@@ -1097,6 +1099,8 @@ int main(int argc, char** argv) {
       po::value<std::string>(&ca_cert_name)->default_value(ca_cert_name),
       "Path to trusted server certificate. Initiates an encrypted connection");
   desc.add_options()("passwd,p", po::value<std::string>(&passwd), "Password");
+  desc.add_options()(
+      "history", po::value<CommandHistoryFile>(&cmd_file), "History filename");
   desc.add_options()("server,s",
                      po::value<std::string>(&server_host)->default_value(server_host),
                      "Server hostname");
@@ -1209,7 +1213,7 @@ int main(int argc, char** argv) {
 
   /* Load history from file. The history file is just a plain text file
    * where entries are separated by newlines. */
-  linenoiseHistoryLoad("omnisql_history.txt"); /* Load the history at startup */
+  linenoiseHistoryLoad(cmd_file); /* Load the history at startup */
   /* default to multi-line mode */
   linenoiseSetMultiLine(1);
 
@@ -1252,9 +1256,8 @@ int main(int argc, char** argv) {
       boost::algorithm::trim(current_line);
       if (current_line.back() == ';') {
         std::string query(current_line);
-        linenoiseHistoryAdd(hide_sensitive_data_from_query(current_line)
-                                .c_str());           /* Add to the history. */
-        linenoiseHistorySave("omnisql_history.txt"); /* Save the history on disk. */
+        linenoiseHistoryAdd(hide_sensitive_data_from_query(current_line).c_str());
+        linenoiseHistorySave(cmd_file);
         current_line.clear();
         prompt.assign("omnisql> ");
         (void)backchannel(TURN_ON, nullptr);
@@ -1477,7 +1480,7 @@ int main(int argc, char** argv) {
     } else {
       linenoiseHistoryAdd(hide_sensitive_data_from_query(line).c_str());
     }
-    linenoiseHistorySave("omnisql_history.txt"); /* Save the history on disk. */
+    linenoiseHistorySave(cmd_file);
   }
 
   if (context.session != INVALID_SESSION_ID) {
