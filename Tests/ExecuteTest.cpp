@@ -153,7 +153,7 @@ TargetValue run_simple_agg(const string& query_str,
     rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
   }
   auto crt_row = rows->getNextRow(true, true);
-  CHECK_EQ(size_t(1), crt_row.size());
+  CHECK_EQ(size_t(1), crt_row.size()) << query_str;
   return crt_row[0];
 }
 
@@ -165,7 +165,7 @@ TargetValue get_first_target(const string& query_str,
     rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
   }
   auto crt_row = rows->getNextRow(true, true);
-  CHECK_GE(crt_row.size(), size_t(1));
+  CHECK_GE(crt_row.size(), size_t(1)) << query_str;
   return crt_row[0];
 }
 
@@ -6114,10 +6114,11 @@ TEST(Select, Joins_ImplicitJoins) {
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, join_test "
                                         "WHERE test.rowid = join_test.rowid;",
                                         dt)));
-    ASSERT_EQ(7,
-              v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
-                                        "test.x = test_inner.x AND test.rowid = 9;",
-                                        dt)));
+    SKIP_ON_AGGREGATOR(
+        ASSERT_EQ(7,
+                  v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
+                                            "test.x = test_inner.x AND test.rowid = 9;",
+                                            dt))));
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, test_inner WHERE "
                                         "test.x = test_inner.x AND test.rowid = 20;",
@@ -6212,9 +6213,11 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
         "SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x GROUP BY a.x ORDER BY "
         "a.x;",
         dt));
-    c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x AND test.rowid "
-      "= test_inner.rowid;",
-      dt);
+    SKIP_ON_AGGREGATOR(  // no guarantee of equivalent rowid as sqlite
+        c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x AND "
+          "test.rowid "
+          "= test_inner.rowid;",
+          dt));
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.y = test_inner.y OR (test.y IS "
       "NULL AND test_inner.y IS NULL);",
       dt);
