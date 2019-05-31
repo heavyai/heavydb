@@ -384,7 +384,7 @@ add_library(mapd_thrift
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp)
-    
+
 target_compile_options(mapd_thrift PRIVATE -fPIC)
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
 
@@ -477,6 +477,7 @@ endif()
 list(APPEND MAPD_LIBRARIES Calcite)
 
 if(ENABLE_RENDERING)
+  add_dependencies(QueryRenderer Parser)
   list(APPEND MAPD_LIBRARIES "${MAPD_RENDERING_LIBRARIES}")
 endif()
 
@@ -523,7 +524,7 @@ add_custom_command(
     COMMAND mkdir
     ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/common.thrift) 
+    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/common.thrift)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
@@ -532,7 +533,7 @@ add_custom_command(
     COMMAND mkdir
     ARGS -p ${CMAKE_SOURCE_DIR}/java/thrift/src/gen
     COMMAND ${Thrift_EXECUTABLE}
-    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift)       
+    ARGS -gen java -r -out ${CMAKE_SOURCE_DIR}/java/thrift/src/gen/ ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift)
 
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/java/thrift/calciteserver.thrift ${CMAKE_SOURCE_DIR}/completion_hints.thrift
