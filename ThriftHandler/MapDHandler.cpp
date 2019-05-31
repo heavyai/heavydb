@@ -2714,7 +2714,8 @@ bool path_is_relative(const std::string& path) {
 
 bool is_a_supported_geo_file(const std::string& path, bool include_gz) {
   if (include_gz) {
-    if (boost::iends_with(path, ".geojson.gz") || boost::iends_with(path, ".json.gz")) {
+    if (boost::iends_with(path, ".geojson.gz") || boost::iends_with(path, ".json.gz") ||
+        boost::iends_with(path, ".kml.gz")) {
       return true;
     }
   }
