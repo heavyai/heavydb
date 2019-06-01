@@ -12491,6 +12491,13 @@ TEST(Select, GeoSpatial_Projection) {
         GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}),
         0.01);
 
+    // Reductions (TODO: It would be nice to have some correctness, but for now we ensure
+    // these queries run without crashing)
+    EXPECT_NO_THROW(run_simple_agg(
+        "SELECT SAMPLE(mpoly) FROM geospatial_test WHERE id > 2 GROUP BY id", dt));
+    EXPECT_NO_THROW(run_simple_agg(
+        "SELECT SAMPLE(gpoly4326) FROM geospatial_test WHERE id > 2 GROUP BY id", dt));
+
     // Sample with multiple aggs
     {
       const auto rows = run_multiple_agg(

@@ -268,6 +268,8 @@ class QueryMemoryDescriptor {
                             const ExecutorDeviceType device_type) const;
   size_t getBufferSizeBytes(const ExecutorDeviceType device_type) const;
 
+  const ColSlotContext& getColSlotContext() const { return col_slot_context_; }
+
   // TODO(alex): remove
   bool usesGetGroupValueFast() const;
 

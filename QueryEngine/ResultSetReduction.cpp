@@ -301,61 +301,79 @@ void ResultSetStorage::reduceEntriesNoCollisionsColWise(
   // functions
   CHECK(serialized_varlen_buffer.empty());
 
+  const auto& col_slot_context = query_mem_desc_.getColSlotContext();
+
   auto this_crt_col_ptr = get_cols_ptr(this_buff, query_mem_desc_);
   auto that_crt_col_ptr = get_cols_ptr(that_buff, query_mem_desc_);
-  size_t agg_col_idx = 0;
   for (size_t target_idx = 0; target_idx < targets_.size(); ++target_idx) {
     const auto& agg_info = targets_[target_idx];
-    const auto this_next_col_ptr = advance_to_next_columnar_target_buff(
-        this_crt_col_ptr, query_mem_desc_, agg_col_idx);
-    const auto that_next_col_ptr = advance_to_next_columnar_target_buff(
-        that_crt_col_ptr, query_mem_desc_, agg_col_idx);
-    for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
-      check_watchdog(entry_idx);
-      if (isEmptyEntryColumnar(entry_idx, that_buff)) {
-        continue;
-      }
-      if (LIKELY(!query_mem_desc_.hasKeylessHash())) {
-        // copy the key from right hand side
-        copyKeyColWise(entry_idx, this_buff, that_buff);
-      }
-      auto this_ptr1 = this_crt_col_ptr +
-                       entry_idx * query_mem_desc_.getPaddedSlotWidthBytes(agg_col_idx);
-      auto that_ptr1 = that_crt_col_ptr +
-                       entry_idx * query_mem_desc_.getPaddedSlotWidthBytes(agg_col_idx);
-      int8_t* this_ptr2{nullptr};
-      const int8_t* that_ptr2{nullptr};
-      if (agg_info.is_agg &&
-          (agg_info.agg_kind == kAVG ||
-           (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_varlen()))) {
-        this_ptr2 = this_next_col_ptr +
-                    entry_idx * query_mem_desc_.getPaddedSlotWidthBytes(agg_col_idx + 1);
-        that_ptr2 = that_next_col_ptr +
-                    entry_idx * query_mem_desc_.getPaddedSlotWidthBytes(agg_col_idx + 1);
-      }
-      reduceOneSlot(this_ptr1,
-                    this_ptr2,
-                    that_ptr1,
-                    that_ptr2,
-                    agg_info,
-                    target_idx,
-                    agg_col_idx,
-                    agg_col_idx,
-                    that,
-                    serialized_varlen_buffer);
-    }
+    const auto& slots_for_col = col_slot_context.getSlotsForCol(target_idx);
 
-    this_crt_col_ptr = this_next_col_ptr;
-    that_crt_col_ptr = that_next_col_ptr;
+    bool two_slot_target{false};
     if (agg_info.is_agg &&
         (agg_info.agg_kind == kAVG ||
          (agg_info.agg_kind == kSAMPLE && agg_info.sql_type.is_varlen()))) {
-      this_crt_col_ptr = advance_to_next_columnar_target_buff(
-          this_crt_col_ptr, query_mem_desc_, agg_col_idx + 1);
-      that_crt_col_ptr = advance_to_next_columnar_target_buff(
-          that_crt_col_ptr, query_mem_desc_, agg_col_idx + 1);
+      // Note that this assumes if one of the slot pairs in a given target is an array,
+      // all slot pairs are arrays. Currently this is true for all geo targets, but we
+      // should better codify and store this information in the future
+      two_slot_target = true;
     }
-    agg_col_idx = advance_slot(agg_col_idx, agg_info, false);
+
+    for (size_t target_slot_idx = slots_for_col.front();
+         target_slot_idx < slots_for_col.back() + 1;
+         target_slot_idx += 2) {
+      const auto this_next_col_ptr = advance_to_next_columnar_target_buff(
+          this_crt_col_ptr, query_mem_desc_, target_slot_idx);
+      const auto that_next_col_ptr = advance_to_next_columnar_target_buff(
+          that_crt_col_ptr, query_mem_desc_, target_slot_idx);
+
+      for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
+        check_watchdog(entry_idx);
+        if (isEmptyEntryColumnar(entry_idx, that_buff)) {
+          continue;
+        }
+        if (LIKELY(!query_mem_desc_.hasKeylessHash())) {
+          // copy the key from right hand side
+          copyKeyColWise(entry_idx, this_buff, that_buff);
+        }
+        auto this_ptr1 =
+            this_crt_col_ptr +
+            entry_idx * query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx);
+        auto that_ptr1 =
+            that_crt_col_ptr +
+            entry_idx * query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx);
+        int8_t* this_ptr2{nullptr};
+        const int8_t* that_ptr2{nullptr};
+        if (UNLIKELY(two_slot_target)) {
+          this_ptr2 =
+              this_next_col_ptr +
+              entry_idx * query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx + 1);
+          that_ptr2 =
+              that_next_col_ptr +
+              entry_idx * query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx + 1);
+        }
+        reduceOneSlot(this_ptr1,
+                      this_ptr2,
+                      that_ptr1,
+                      that_ptr2,
+                      agg_info,
+                      target_idx,
+                      target_slot_idx,
+                      target_slot_idx,
+                      that,
+                      slots_for_col.front(),
+                      serialized_varlen_buffer);
+      }
+
+      this_crt_col_ptr = this_next_col_ptr;
+      that_crt_col_ptr = that_next_col_ptr;
+      if (UNLIKELY(two_slot_target)) {
+        this_crt_col_ptr = advance_to_next_columnar_target_buff(
+            this_crt_col_ptr, query_mem_desc_, target_slot_idx + 1);
+        that_crt_col_ptr = advance_to_next_columnar_target_buff(
+            that_crt_col_ptr, query_mem_desc_, target_slot_idx + 1);
+      }
+    }
   }
 }
 
@@ -499,41 +517,69 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
            that_targets_ptr - key_bytes_with_padding,
            key_bytes);
   }
-  size_t target_slot_idx = 0;
+
+  const auto& col_slot_context = query_mem_desc_.getColSlotContext();
+
   size_t init_agg_val_idx = 0;
   for (size_t target_logical_idx = 0; target_logical_idx < targets_.size();
        ++target_logical_idx) {
     const auto& target_info = targets_[target_logical_idx];
+    const auto& slots_for_col = col_slot_context.getSlotsForCol(target_logical_idx);
     int8_t* this_ptr2{nullptr};
     const int8_t* that_ptr2{nullptr};
+
+    bool two_slot_target{false};
     if (target_info.is_agg &&
         (target_info.agg_kind == kAVG ||
          (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()))) {
-      this_ptr2 =
-          this_targets_ptr + query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx);
-      that_ptr2 =
-          that_targets_ptr + query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx);
+      // Note that this assumes if one of the slot pairs in a given target is an array,
+      // all slot pairs are arrays. Currently this is true for all geo targets, but we
+      // should better codify and store this information in the future
+      two_slot_target = true;
     }
-    reduceOneSlot(this_targets_ptr,
-                  this_ptr2,
-                  that_targets_ptr,
-                  that_ptr2,
-                  target_info,
-                  target_logical_idx,
-                  target_slot_idx,
-                  init_agg_val_idx,
-                  that,
-                  serialized_varlen_buffer);
-    this_targets_ptr = advance_target_ptr_row_wise(
-        this_targets_ptr, target_info, target_slot_idx, query_mem_desc_, false);
-    that_targets_ptr = advance_target_ptr_row_wise(
-        that_targets_ptr, target_info, target_slot_idx, query_mem_desc_, false);
-    target_slot_idx = advance_slot(target_slot_idx, target_info, false);
-    if (query_mem_desc_.targetGroupbyIndicesSize() == 0) {
-      init_agg_val_idx = advance_slot(init_agg_val_idx, target_info, false);
-    } else {
-      if (query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) < 0) {
-        init_agg_val_idx = advance_slot(init_agg_val_idx, target_info, false);
+
+    for (size_t target_slot_idx = slots_for_col.front();
+         target_slot_idx < slots_for_col.back() + 1;
+         target_slot_idx += 2) {
+      if (UNLIKELY(two_slot_target)) {
+        this_ptr2 =
+            this_targets_ptr + query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx);
+        that_ptr2 =
+            that_targets_ptr + query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx);
+      }
+      reduceOneSlot(this_targets_ptr,
+                    this_ptr2,
+                    that_targets_ptr,
+                    that_ptr2,
+                    target_info,
+                    target_logical_idx,
+                    target_slot_idx,
+                    init_agg_val_idx,
+                    that,
+                    slots_for_col.front(),
+                    serialized_varlen_buffer);
+      auto increment_agg_val_idx_maybe =
+          [&init_agg_val_idx, &target_logical_idx, this](const int slot_count) {
+            if (query_mem_desc_.targetGroupbyIndicesSize() == 0 ||
+                query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) < 0) {
+              init_agg_val_idx += slot_count;
+            }
+          };
+      if (UNLIKELY(two_slot_target)) {
+        increment_agg_val_idx_maybe(2);
+        this_targets_ptr = this_targets_ptr +
+                           query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx) +
+                           query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx + 1);
+        that_targets_ptr = that_targets_ptr +
+                           query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx) +
+                           query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx + 1);
+      } else {
+        increment_agg_val_idx_maybe(1);
+        this_targets_ptr =
+            this_targets_ptr + query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx);
+        that_targets_ptr =
+            that_targets_ptr + query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx);
+        ;
       }
     }
   }
@@ -857,6 +903,7 @@ void ResultSetStorage::reduceOneSlotBaseline(int64_t* this_buff,
                 target_slot_idx,
                 init_agg_val_idx,
                 that,
+                target_slot_idx,  // dummy, for now
                 {});
 }
 
@@ -1241,6 +1288,7 @@ void ResultSetStorage::reduceOneSlot(
     const size_t target_slot_idx,
     const size_t init_agg_val_idx,
     const ResultSetStorage& that,
+    const size_t first_slot_idx_for_target,
     const std::vector<std::string>& serialized_varlen_buffer) const {
   if (query_mem_desc_.targetGroupbyIndicesSize() > 0) {
     if (query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) >= 0) {
@@ -1304,44 +1352,22 @@ void ResultSetStorage::reduceOneSlot(
         auto rhs_proj_col = *reinterpret_cast<const int64_t*>(that_ptr1);
         if ((target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) &&
             !serialized_varlen_buffer.empty()) {
-          auto ptr1 = this_ptr1;
-          auto ptr2 = this_ptr2;
-          auto slot_idx = target_slot_idx;
-
-          const auto& elem_ti = target_info.sql_type.get_elem_type();
-          size_t length_to_elems =
-              target_info.sql_type.is_string() || target_info.sql_type.is_geometry()
-                  ? 1
-                  : elem_ti.get_size();
+          size_t length_to_elems{0};
           if (target_info.sql_type.is_geometry()) {
-            for (int j = 0; j < target_info.sql_type.get_physical_coord_cols(); j++) {
-              if (j > 0) {
-                ptr1 = ptr2 + query_mem_desc_.getPaddedSlotWidthBytes(++slot_idx);
-                ptr2 = ptr1 + query_mem_desc_.getPaddedSlotWidthBytes(++slot_idx);
-                length_to_elems = 4;
-              }
-              CHECK_LT(rhs_proj_col, serialized_varlen_buffer.size());
-              const auto& varlen_bytes_str = serialized_varlen_buffer[rhs_proj_col++];
-              const auto str_ptr =
-                  reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
-              CHECK(ptr1);
-              *reinterpret_cast<int64_t*>(ptr1) =
-                  reinterpret_cast<const int64_t>(str_ptr);
-              CHECK(ptr2);
-              *reinterpret_cast<int64_t*>(ptr2) =
-                  static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
-            }
+            // TODO: Assumes hard-coded sizes for geometry targets
+            length_to_elems = target_slot_idx == first_slot_idx_for_target ? 1 : 4;
           } else {
-            CHECK_LT(rhs_proj_col, serialized_varlen_buffer.size());
-            const auto& varlen_bytes_str = serialized_varlen_buffer[rhs_proj_col];
-            const auto str_ptr =
-                reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
-            CHECK(ptr1);
-            *reinterpret_cast<int64_t*>(ptr1) = reinterpret_cast<const int64_t>(str_ptr);
-            CHECK(ptr2);
-            *reinterpret_cast<int64_t*>(ptr2) =
-                static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
+            const auto& elem_ti = target_info.sql_type.get_elem_type();
+            length_to_elems = target_info.sql_type.is_string() ? 1 : elem_ti.get_size();
           }
+
+          CHECK_LT(rhs_proj_col, serialized_varlen_buffer.size());
+          const auto& varlen_bytes_str = serialized_varlen_buffer[rhs_proj_col];
+          const auto str_ptr = reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
+          *reinterpret_cast<int64_t*>(this_ptr1) =
+              reinterpret_cast<const int64_t>(str_ptr);
+          *reinterpret_cast<int64_t*>(this_ptr2) =
+              static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
         } else {
           if (rhs_proj_col != init_val) {
             *reinterpret_cast<int64_t*>(this_ptr1) = rhs_proj_col;
