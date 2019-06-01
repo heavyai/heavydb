@@ -2436,7 +2436,7 @@ TEST(MoreReduce, OffsetRewriteGeo) {
     buff2[1 * 8 + 3] = 4;
     buff2[2 * 8 + 3] = 1;
     buff2[0 * 8 + 5] = 2;  // poly rings
-    buff2[1 * 8 + 5] = 3;
+    buff2[1 * 8 + 5] = 5;
     buff2[2 * 8 + 5] = 2;
     buff2[0 * 8 + 7] = 4;  // int argument to sum
     buff2[1 * 8 + 7] = 5;
@@ -2532,7 +2532,7 @@ TEST(MoreReduce, OffsetRewriteGeoKeyless) {
     buff2[1 * 8 + 3] = 4;
     buff2[2 * 8 + 3] = 1;
     buff2[0 * 8 + 5] = 2;  // poly rings
-    buff2[1 * 8 + 5] = 3;
+    buff2[1 * 8 + 5] = 5;
     buff2[2 * 8 + 5] = 2;
     buff2[0 * 8 + 7] = 4;  // int argument to sum
     buff2[1 * 8 + 7] = 5;

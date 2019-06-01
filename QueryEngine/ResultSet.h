@@ -169,6 +169,7 @@ class ResultSetStorage {
                      const size_t target_slot_idx,
                      const size_t init_agg_val_idx,
                      const ResultSetStorage& that,
+                     const size_t first_slot_idx_for_target,
                      const std::vector<std::string>& serialized_varlen_buffer) const;
 
   void reduceOneCountDistinctSlot(int8_t* this_ptr1,
