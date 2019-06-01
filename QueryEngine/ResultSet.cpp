@@ -164,8 +164,8 @@ ResultSet::ResultSet(const std::shared_ptr<const Analyzer::Estimator> estimator,
     , cached_row_count_(-1)
     , geo_return_type_(GeoReturnType::WktString) {
   if (device_type == ExecutorDeviceType::GPU) {
-    estimator_buffer_ = reinterpret_cast<int8_t*>(CudaAllocator::alloc(
-        data_mgr_, estimator_->getBufferSize(), device_id_, nullptr));
+    estimator_buffer_ =
+        CudaAllocator::alloc(data_mgr_, estimator_->getBufferSize(), device_id_);
     data_mgr->getCudaMgr()->zeroDeviceMem(
         estimator_buffer_, estimator_->getBufferSize(), device_id_);
   } else {

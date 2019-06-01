@@ -29,6 +29,8 @@
 #include <stdexcept>
 #include <vector>
 
+#include "../Allocators/DeviceAllocator.h"
+
 namespace QueryRenderer {
 class JSONLocation;
 class QueryRenderManager;
@@ -50,7 +52,7 @@ class StreamingTopNNotSupportedInRenderQuery : public std::runtime_error {
 
 enum class RAExecutionPolicy { Host, Device };
 
-class RenderAllocator {
+class RenderAllocator : public Allocator {
  public:
   RenderAllocator(int8_t* preallocated_ptr,
                   const size_t preallocated_size,
@@ -59,7 +61,7 @@ class RenderAllocator {
                   const unsigned grid_size_x,
                   const RAExecutionPolicy execution_policy = RAExecutionPolicy::Device);
 
-  int8_t* alloc(const size_t bytes);
+  int8_t* alloc(const size_t bytes) final;
 
   void markChunkComplete();
 

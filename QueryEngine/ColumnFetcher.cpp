@@ -188,10 +188,13 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
     } else {
       CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level);
       auto& data_mgr = cat.getDataMgr();
-      auto chunk_iter_gpu =
-          CudaAllocator::alloc(&data_mgr, sizeof(ChunkIter), device_id, nullptr);
-      copy_to_gpu(&data_mgr, chunk_iter_gpu, &chunk_iter, sizeof(ChunkIter), device_id);
-      return reinterpret_cast<int8_t*>(chunk_iter_gpu);
+      auto chunk_iter_gpu = CudaAllocator::alloc(&data_mgr, sizeof(ChunkIter), device_id);
+      copy_to_gpu(&data_mgr,
+                  reinterpret_cast<CUdeviceptr>(chunk_iter_gpu),
+                  &chunk_iter,
+                  sizeof(ChunkIter),
+                  device_id);
+      return chunk_iter_gpu;
     }
   } else {
     auto ab = chunk->get_buffer();
@@ -277,9 +280,13 @@ const int8_t* ColumnFetcher::transferColumnIfNeeded(
   if (memory_level == Data_Namespace::GPU_LEVEL) {
     const auto& col_ti = columnar_results->getColumnType(col_id);
     const auto num_bytes = columnar_results->size() * col_ti.get_size();
-    auto gpu_col_buffer = CudaAllocator::alloc(data_mgr, num_bytes, device_id, nullptr);
-    copy_to_gpu(data_mgr, gpu_col_buffer, col_buffers[col_id], num_bytes, device_id);
-    return reinterpret_cast<const int8_t*>(gpu_col_buffer);
+    auto gpu_col_buffer = CudaAllocator::alloc(data_mgr, num_bytes, device_id);
+    copy_to_gpu(data_mgr,
+                reinterpret_cast<CUdeviceptr>(gpu_col_buffer),
+                col_buffers[col_id],
+                num_bytes,
+                device_id);
+    return gpu_col_buffer;
   }
   return col_buffers[col_id];
 }

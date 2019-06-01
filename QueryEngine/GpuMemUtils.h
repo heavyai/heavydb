@@ -60,10 +60,10 @@ using GpuGroupByBuffers = std::pair<CUdeviceptr, CUdeviceptr>;
 
 class QueryMemoryDescriptor;
 class DeviceAllocator;
-class RenderAllocator;
+class Allocator;
 
 GpuGroupByBuffers create_dev_group_by_buffers(
-    const DeviceAllocator* device_allocator,
+    DeviceAllocator* device_allocator,
     const std::vector<int64_t*>& group_by_buffers,
     const QueryMemoryDescriptor&,
     const unsigned block_size_x,
@@ -71,7 +71,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
     const int device_id,
     const bool prepend_index_buffer,
     const bool always_init_group_by_on_host,
-    RenderAllocator* render_allocator);
+    Allocator* insitu_allocator);
 
 void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
                                     const std::vector<int64_t*>& group_by_buffers,

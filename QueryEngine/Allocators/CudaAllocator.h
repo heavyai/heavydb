@@ -46,10 +46,9 @@ class CudaAllocator : public DeviceAllocator {
 
   virtual ~CudaAllocator() {}
 
-  static CUdeviceptr alloc(Data_Namespace::DataMgr* data_mgr,
-                           const size_t num_bytes,
-                           const int device_id,
-                           RenderAllocator* render_allocator);
+  static int8_t* alloc(Data_Namespace::DataMgr* data_mgr,
+                       const size_t num_bytes,
+                       const int device_id);
 
   static Data_Namespace::AbstractBuffer* allocGpuAbstractBuffer(
       Data_Namespace::DataMgr* data_mgr,
@@ -59,17 +58,16 @@ class CudaAllocator : public DeviceAllocator {
   static void freeGpuAbstractBuffer(Data_Namespace::DataMgr* data_mgr,
                                     Data_Namespace::AbstractBuffer* ab);
 
-  CUdeviceptr alloc(const size_t num_bytes,
-                    RenderAllocator* render_allocator) const override;
+  int8_t* alloc(const size_t num_bytes) override;
 
   void free(Data_Namespace::AbstractBuffer* ab) const override;
 
-  void copyToDevice(CUdeviceptr dst,
-                    const void* src,
+  void copyToDevice(int8_t* device_dst,
+                    const int8_t* host_src,
                     const size_t num_bytes) const override;
 
-  void copyFromDevice(void* dst,
-                      const CUdeviceptr src,
+  void copyFromDevice(int8_t* host_dst,
+                      const int8_t* device_src,
                       const size_t num_bytes) const override;
 
   void zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes) const override;

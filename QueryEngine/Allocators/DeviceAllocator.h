@@ -35,22 +35,24 @@ class AbstractBuffer;
 class DataMgr;
 }  // namespace Data_Namespace
 
-// TODO(adb): RenderAllocator becomes a first class citizen
-class RenderAllocator;
-
-class DeviceAllocator {
+class Allocator {
  public:
-  virtual CUdeviceptr alloc(const size_t num_bytes,
-                            RenderAllocator* render_allocator) const = 0;
+  Allocator() {}
+  virtual ~Allocator() {}
 
+  virtual int8_t* alloc(const size_t num_bytes) = 0;
+};
+
+class DeviceAllocator : public Allocator {
+ public:
   virtual void free(Data_Namespace::AbstractBuffer* ab) const = 0;
 
-  virtual void copyToDevice(CUdeviceptr dst,
-                            const void* src,
+  virtual void copyToDevice(int8_t* device_dst,
+                            const int8_t* host_src,
                             const size_t num_bytes) const = 0;
 
-  virtual void copyFromDevice(void* dst,
-                              const CUdeviceptr src,
+  virtual void copyFromDevice(int8_t* host_dst,
+                              const int8_t* device_src,
                               const size_t num_bytes) const = 0;
 
   virtual void zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes) const = 0;

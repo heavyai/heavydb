@@ -32,16 +32,12 @@ CudaAllocator::CudaAllocator(Data_Namespace::DataMgr* data_mgr, const int device
 #endif  // HAVE_CUDA
 }
 
-CUdeviceptr CudaAllocator::alloc(Data_Namespace::DataMgr* data_mgr,
-                                 const size_t num_bytes,
-                                 const int device_id,
-                                 RenderAllocator* render_allocator) {
+int8_t* CudaAllocator::alloc(Data_Namespace::DataMgr* data_mgr,
+                             const size_t num_bytes,
+                             const int device_id) {
   CHECK(data_mgr);
-  if (render_allocator) {
-    return reinterpret_cast<CUdeviceptr>(render_allocator->alloc(num_bytes));
-  }
   auto ab = CudaAllocator::allocGpuAbstractBuffer(data_mgr, num_bytes, device_id);
-  return reinterpret_cast<CUdeviceptr>(ab->getMemoryPtr());
+  return ab->getMemoryPtr();
 }
 
 Data_Namespace::AbstractBuffer* CudaAllocator::allocGpuAbstractBuffer(
@@ -60,35 +56,28 @@ void CudaAllocator::freeGpuAbstractBuffer(Data_Namespace::DataMgr* data_mgr,
   data_mgr->free(ab);
 }
 
-CUdeviceptr CudaAllocator::alloc(const size_t num_bytes,
-                                 RenderAllocator* render_allocator) const {
-  return CudaAllocator::alloc(data_mgr_, num_bytes, device_id_, render_allocator);
+int8_t* CudaAllocator::alloc(const size_t num_bytes) {
+  return CudaAllocator::alloc(data_mgr_, num_bytes, device_id_);
 }
 
 void CudaAllocator::free(Data_Namespace::AbstractBuffer* ab) const {
   data_mgr_->free(ab);
 }
 
-void CudaAllocator::copyToDevice(CUdeviceptr dst,
-                                 const void* src,
+void CudaAllocator::copyToDevice(int8_t* device_dst,
+                                 const int8_t* host_src,
                                  const size_t num_bytes) const {
   const auto cuda_mgr = data_mgr_->getCudaMgr();
   CHECK(cuda_mgr);
-  cuda_mgr->copyHostToDevice(reinterpret_cast<int8_t*>(dst),
-                             static_cast<const int8_t*>(src),
-                             num_bytes,
-                             device_id_);
+  cuda_mgr->copyHostToDevice(device_dst, host_src, num_bytes, device_id_);
 }
 
-void CudaAllocator::copyFromDevice(void* dst,
-                                   const CUdeviceptr src,
+void CudaAllocator::copyFromDevice(int8_t* host_dst,
+                                   const int8_t* device_src,
                                    const size_t num_bytes) const {
   const auto cuda_mgr = data_mgr_->getCudaMgr();
   CHECK(cuda_mgr);
-  cuda_mgr->copyDeviceToHost(static_cast<int8_t*>(dst),
-                             reinterpret_cast<const int8_t*>(src),
-                             num_bytes,
-                             device_id_);
+  cuda_mgr->copyDeviceToHost(host_dst, device_src, num_bytes, device_id_);
 }
 
 void CudaAllocator::zeroDeviceMem(int8_t* device_ptr, const size_t num_bytes) const {

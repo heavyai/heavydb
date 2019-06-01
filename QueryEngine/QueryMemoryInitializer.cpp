@@ -469,8 +469,8 @@ void QueryMemoryInitializer::allocateCountDistinctGpuMem(
 
   count_distinct_bitmap_mem_bytes_ =
       total_bytes_per_entry * query_mem_desc.getEntryCount();
-  count_distinct_bitmap_mem_ =
-      device_allocator_->alloc(count_distinct_bitmap_mem_bytes_, nullptr);
+  count_distinct_bitmap_mem_ = reinterpret_cast<CUdeviceptr>(
+      device_allocator_->alloc(count_distinct_bitmap_mem_bytes_));
   device_allocator_->zeroDeviceMem(reinterpret_cast<int8_t*>(count_distinct_bitmap_mem_),
                                    count_distinct_bitmap_mem_bytes_);
 
@@ -559,7 +559,8 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
   const auto thread_count = block_size_x * grid_size_x;
   const auto total_buff_size =
       streaming_top_n::get_heap_size(query_mem_desc.getRowSize(), n, thread_count);
-  CUdeviceptr dev_buffer = device_allocator_->alloc(total_buff_size, nullptr);
+  CUdeviceptr dev_buffer =
+      reinterpret_cast<CUdeviceptr>(device_allocator_->alloc(total_buff_size));
 
   std::vector<CUdeviceptr> dev_buffers(thread_count);
 
@@ -567,9 +568,10 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
     dev_buffers[i] = dev_buffer;
   }
 
-  auto dev_ptr = device_allocator_->alloc(thread_count * sizeof(CUdeviceptr), nullptr);
-  device_allocator_->copyToDevice(
-      dev_ptr, &dev_buffers[0], thread_count * sizeof(CUdeviceptr));
+  auto dev_ptr = device_allocator_->alloc(thread_count * sizeof(CUdeviceptr));
+  device_allocator_->copyToDevice(dev_ptr,
+                                  reinterpret_cast<int8_t*>(dev_buffers.data()),
+                                  thread_count * sizeof(CUdeviceptr));
 
   CHECK(query_mem_desc.lazyInitGroups(ExecutorDeviceType::GPU));
 
@@ -594,7 +596,7 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
       block_size_x,
       grid_size_x);
 
-  return {dev_ptr, dev_buffer};
+  return {reinterpret_cast<CUdeviceptr>(dev_ptr), dev_buffer};
 }
 
 GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
@@ -640,15 +642,15 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
     size_t groups_buffer_size{query_mem_desc.getBufferSizeBytes(ExecutorDeviceType::GPU)};
     auto group_by_dev_buffer = dev_group_by_buffers.second;
     const size_t col_count = query_mem_desc.getSlotCount();
-    CUdeviceptr col_widths_dev_ptr{0};
+    int8_t* col_widths_dev_ptr{nullptr};
     if (output_columnar) {
       std::vector<int8_t> compact_col_widths(col_count);
       for (size_t idx = 0; idx < col_count; ++idx) {
         compact_col_widths[idx] = query_mem_desc.getPaddedSlotWidthBytes(idx);
       }
-      col_widths_dev_ptr = device_allocator_->alloc(col_count * sizeof(int8_t), nullptr);
+      col_widths_dev_ptr = device_allocator_->alloc(col_count * sizeof(int8_t));
       device_allocator_->copyToDevice(
-          col_widths_dev_ptr, &compact_col_widths[0], col_count * sizeof(int8_t));
+          col_widths_dev_ptr, compact_col_widths.data(), col_count * sizeof(int8_t));
     }
     const int8_t warp_count =
         query_mem_desc.interleavedBins(ExecutorDeviceType::GPU) ? warp_size : 1;
@@ -660,7 +662,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
             query_mem_desc.getEntryCount(),
             query_mem_desc.groupColWidthsSize(),
             col_count,
-            reinterpret_cast<int8_t*>(col_widths_dev_ptr),
+            col_widths_dev_ptr,
             /*need_padding = */ true,
             query_mem_desc.hasKeylessHash(),
             sizeof(int64_t),
