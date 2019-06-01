@@ -149,6 +149,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     // using reflection when we are deserializing from JSON.
     // opTab.addOperator(new RampFunction());
     // opTab.addOperator(new DedupFunction());
+    opTab.addOperator(new MyTableUDF()); // Table UDF prototype
     opTab.addOperator(new MyUDFFunction());
     opTab.addOperator(new PgUnnest());
     opTab.addOperator(new Any());
@@ -296,6 +297,33 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BIGINT);
+    }
+  }
+
+  /**
+   * Example table level UDF
+   */
+  public static class MyTableUDF extends SqlFunction {
+    public MyTableUDF() {
+      super("MY_UDTF",
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(signature()),
+              SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      assert opBinding.getOperandCount() == 2;
+      return opBinding.getCursorOperand(1);
+    }
+
+    private static java.util.List<SqlTypeFamily> signature() {
+      java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
+      sig_family.add(SqlTypeFamily.ANY);
+      sig_family.add(SqlTypeFamily.CURSOR);
+      return sig_family;
     }
   }
 

@@ -149,7 +149,8 @@ bool is_identical_copy(
       }
       if (dynamic_cast<const RelAggregate*>(only_usr) ||
           dynamic_cast<const RelSort*>(only_usr) ||
-          dynamic_cast<const RelJoin*>(only_usr)) {
+          dynamic_cast<const RelJoin*>(only_usr) ||
+          dynamic_cast<const RelTableFunction*>(only_usr)) {
         return false;
       }
       CHECK(dynamic_cast<const RelFilter*>(only_usr));
@@ -412,8 +413,9 @@ std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>> bui
       const auto sort = dynamic_cast<const RelSort*>(walker);
       const auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(walker);
       const auto logical_values = dynamic_cast<const RelLogicalValues*>(walker);
+      const auto table_func = dynamic_cast<const RelTableFunction*>(walker);
       CHECK(join || project || aggregate || filter || sort || left_deep_join ||
-            logical_values);
+            logical_values || table_func);
       for (size_t i = 0; i < walker->inputCount(); ++i) {
         auto src = walker->getInput(i);
         if (dynamic_cast<const RelScan*>(src) || dynamic_cast<const RelModify*>(src)) {
@@ -664,6 +666,16 @@ std::vector<std::unordered_set<size_t>> get_live_ins(
     auto rex_ins = collector.visit(filter->getCondition());
     for (const auto& rex_in : rex_ins) {
       live_in.insert(static_cast<size_t>(rex_in.getIndex()));
+    }
+    return {live_in};
+  }
+  if (auto table_func = dynamic_cast<const RelTableFunction*>(node)) {
+    CHECK_EQ(size_t(1), table_func->inputCount());
+
+    const auto input_count = table_func->size();
+    std::unordered_set<size_t> live_in;
+    for (size_t i = 0; i < input_count; i++) {
+      live_in.insert(i);
     }
     return {live_in};
   }

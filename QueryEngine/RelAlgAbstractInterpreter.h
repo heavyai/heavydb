@@ -1356,6 +1356,86 @@ class RelModify : public RelAlgNode {
   TargetColumnList target_column_list_;
 };
 
+class RelTableFunction : public RelAlgNode {
+ public:
+  RelTableFunction(const std::string& function_name,
+                   std::shared_ptr<const RelAlgNode> input,
+                   std::vector<std::string>& fields,
+                   std::vector<const Rex*> col_inputs,
+                   std::vector<std::unique_ptr<const RexScalar>>& table_func_inputs,
+                   std::vector<std::unique_ptr<const RexScalar>>& target_exprs)
+      : function_name_(function_name)
+      , fields_(fields)
+      , col_inputs_(col_inputs)
+      , table_func_inputs_(std::move(table_func_inputs))
+      , target_exprs_(std::move(target_exprs)) {
+    inputs_.emplace_back(input);
+  }
+
+  void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
+                    std::shared_ptr<const RelAlgNode> input) override;
+
+  std::string getFunctionName() const { return function_name_; }
+
+  size_t size() const override { return target_exprs_.size(); }
+
+  size_t getTableFuncInputsSize() const { return table_func_inputs_.size(); }
+
+  size_t getColInputsSize() const { return col_inputs_.size(); }
+
+  const RexScalar* getTableFuncInputAt(const size_t idx) const {
+    CHECK_LT(idx, table_func_inputs_.size());
+    return table_func_inputs_[idx].get();
+  }
+
+  const RexScalar* getTableFuncInputAtAndRelease(const size_t idx) {
+    CHECK_LT(idx, table_func_inputs_.size());
+    return table_func_inputs_[idx].release();
+  }
+
+  void setTableFuncInputs(std::vector<std::unique_ptr<const RexScalar>>& exprs) {
+    table_func_inputs_ = std::move(exprs);
+  }
+
+  std::string getFieldName(const size_t idx) const {
+    CHECK_LT(idx, fields_.size());
+    return fields_[idx];
+  }
+
+  std::shared_ptr<RelAlgNode> deepCopy() const override;
+
+  std::string toString() const override {
+    std::string result = "RelTableFunction<" +
+                         std::to_string(reinterpret_cast<uint64_t>(this)) + ">(" +
+                         function_name_ + " ";
+
+    result += "targets: " + target_exprs_.size();
+    result += "inputs: [";
+    for (size_t i = 0; i < target_exprs_.size(); ++i) {
+      result += target_exprs_[i]->toString();
+      if (i < target_exprs_.size() - 1) {
+        result += ", ";
+      }
+    }
+    result += "]";
+
+    return result;
+  }
+
+ private:
+  std::string function_name_;
+  std::vector<std::string> fields_;
+
+  std::vector<const Rex*>
+      col_inputs_;  // owned by `table_func_inputs_`, but allows picking out the specific
+                    // input columns vs other table function inputs (e.g. literals)
+  std::vector<std::unique_ptr<const RexScalar>> table_func_inputs_;
+
+  std::vector<std::unique_ptr<const RexScalar>>
+      target_exprs_;  // Note: these should all be RexRef but are stored as RexScalar for
+                      // consistency
+};
+
 class RelLogicalValues : public RelAlgNode {
  public:
   RelLogicalValues(const std::vector<TargetMetaInfo>& tuple_type)

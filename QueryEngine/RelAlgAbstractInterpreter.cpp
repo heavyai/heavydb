@@ -151,6 +151,12 @@ RANodeOutput get_node_output(const RelAlgNode* ra_node) {
     lhs_out.insert(lhs_out.end(), rhs_out.begin(), rhs_out.end());
     return lhs_out;
   }
+  const auto table_func_node = dynamic_cast<const RelTableFunction*>(ra_node);
+  if (table_func_node) {
+    // Table Function output count doesn't depend on the input
+    CHECK_EQ(size_t(1), table_func_node->inputCount());
+    return n_outputs(table_func_node, table_func_node->size());
+  }
   const auto sort_node = dynamic_cast<const RelSort*>(ra_node);
   if (sort_node) {
     // Sort preserves shape
@@ -221,6 +227,10 @@ bool isRenamedInput(const RelAlgNode* node,
 
   if (auto project = dynamic_cast<const RelProject*>(node)) {
     return new_name != project->getFieldName(index);
+  }
+
+  if (auto table_func = dynamic_cast<const RelTableFunction*>(node)) {
+    return new_name != table_func->getFieldName(index);
   }
 
   if (auto logical_values = dynamic_cast<const RelLogicalValues*>(node)) {
@@ -343,6 +353,51 @@ std::shared_ptr<RelAlgNode> RelCompound::deepCopy() const {
 
 std::shared_ptr<RelAlgNode> RelSort::deepCopy() const {
   return std::make_shared<RelSort>(collation_, limit_, offset_, inputs_[0]);
+}
+
+void RelTableFunction::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
+                                    std::shared_ptr<const RelAlgNode> input) {
+  RelAlgNode::replaceInput(old_input, input);
+  RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
+  for (const auto& target_expr : target_exprs_) {
+    rebind_inputs.visit(target_expr.get());
+  }
+  for (const auto& func_input : table_func_inputs_) {
+    rebind_inputs.visit(func_input.get());
+  }
+}
+
+std::shared_ptr<RelAlgNode> RelTableFunction::deepCopy() const {
+  RexDeepCopyVisitor copier;
+
+  std::unordered_map<const Rex*, const Rex*> old_to_new_input;
+
+  std::vector<std::unique_ptr<const RexScalar>> table_func_inputs_copy;
+  for (auto& expr : table_func_inputs_) {
+    table_func_inputs_copy.push_back(copier.visit(expr.get()));
+    old_to_new_input.insert(
+        std::make_pair(expr.get(), table_func_inputs_copy.back().get()));
+  }
+
+  std::vector<const Rex*> col_inputs_copy;
+  for (auto target : col_inputs_) {
+    auto target_it = old_to_new_input.find(target);
+    CHECK(target_it != old_to_new_input.end());
+    col_inputs_copy.push_back(target_it->second);
+  }
+  auto fields_copy = fields_;
+
+  std::vector<std::unique_ptr<const RexScalar>> target_exprs_copy;
+  for (auto& expr : target_exprs_) {
+    target_exprs_copy.push_back(copier.visit(expr.get()));
+  }
+
+  return std::make_shared<RelTableFunction>(function_name_,
+                                            inputs_[0],
+                                            fields_copy,
+                                            col_inputs_copy,
+                                            table_func_inputs_copy,
+                                            target_exprs_copy);
 }
 
 namespace std {
@@ -890,6 +945,21 @@ void bind_project_to_input(RelProject* project_node, const RANodeOutput& input) 
   project_node->setExpressions(disambiguated_exprs);
 }
 
+void bind_table_func_to_input(RelTableFunction* table_func_node,
+                              const RANodeOutput& input) noexcept {
+  CHECK_EQ(size_t(1), table_func_node->inputCount());
+  std::vector<std::unique_ptr<const RexScalar>> disambiguated_exprs;
+  for (size_t i = 0; i < table_func_node->getTableFuncInputsSize(); ++i) {
+    const auto target_expr = table_func_node->getTableFuncInputAt(i);
+    if (dynamic_cast<const RexSubQuery*>(target_expr)) {
+      disambiguated_exprs.emplace_back(table_func_node->getTableFuncInputAtAndRelease(i));
+    } else {
+      disambiguated_exprs.emplace_back(disambiguate_rex(target_expr, input));
+    }
+  }
+  table_func_node->setTableFuncInputs(disambiguated_exprs);
+}
+
 void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   for (auto ra_node : nodes) {
     const auto filter_node = std::dynamic_pointer_cast<RelFilter>(ra_node);
@@ -913,6 +983,11 @@ void bind_inputs(const std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept
       bind_project_to_input(project_node.get(),
                             get_node_output(project_node->getInput(0)));
       continue;
+    }
+    const auto table_func_node = std::dynamic_pointer_cast<RelTableFunction>(ra_node);
+    if (table_func_node) {
+      bind_table_func_to_input(table_func_node.get(),
+                               get_node_output(table_func_node->getInput(0)));
     }
   }
 }
@@ -1790,6 +1865,8 @@ class RelAlgAbstractInterpreter {
         ra_node = dispatchLogicalValues(crt_node);
       } else if (rel_op == std::string("LogicalTableModify")) {
         ra_node = dispatchModify(crt_node);
+      } else if (rel_op == std::string("LogicalTableFunctionScan")) {
+        ra_node = dispatchTableFunction(crt_node);
       } else {
         throw QueryNotSupported(std::string("Node ") + rel_op + " not supported yet");
       }
@@ -1921,6 +1998,90 @@ class RelAlgAbstractInterpreter {
     }
 
     return modify_node;
+  }
+
+  std::shared_ptr<RelTableFunction> dispatchTableFunction(
+      const rapidjson::Value& table_func_ra) {
+    LOG(INFO) << "Dispatching table func " << json_node_to_string(table_func_ra);
+
+    const auto inputs = getRelAlgInputs(table_func_ra);
+    CHECK_EQ(size_t(1), inputs.size());
+
+    const auto& invocation = field(table_func_ra, "invocation");
+    CHECK(invocation.IsObject());
+
+    const auto& operands = field(invocation, "operands");
+    CHECK(operands.IsArray());
+    CHECK_GE(operands.Size(), unsigned(0));
+
+    std::vector<const Rex*> col_inputs;
+    std::vector<std::unique_ptr<const RexScalar>> table_func_inputs;
+    std::vector<std::string> fields;
+
+    for (auto exprs_json_it = operands.Begin(); exprs_json_it != operands.End();
+         ++exprs_json_it) {
+      const auto& expr_json = *exprs_json_it;
+      CHECK(expr_json.IsObject());
+
+      if (expr_json.HasMember("op")) {
+        const auto op_str = json_str(field(expr_json, "op"));
+        if (op_str == "CAST" && expr_json.HasMember("type")) {
+          const auto& expr_type = field(expr_json, "type");
+          CHECK(expr_type.IsObject());
+          CHECK(expr_type.HasMember("type"));
+          const auto& expr_type_name = json_str(field(expr_type, "type"));
+          if (expr_type_name == "CURSOR") {
+            CHECK(expr_json.HasMember("operands"));
+            const auto& expr_operands = field(expr_json, "operands");
+            CHECK(expr_operands.IsArray());
+            if (expr_operands.Size() != 1) {
+              throw std::runtime_error(
+                  "Table functions currently only support one ResultSet input");
+            }
+
+            CHECK(expr_json.HasMember("type"));
+            const auto& expr_types = field(invocation, "type");
+            CHECK(expr_types.IsArray());
+
+            const auto prior_node = prev(table_func_ra);
+            CHECK(prior_node);
+            CHECK_EQ(prior_node->size(), expr_types.Size());
+
+            // Forward the values from the prior node as RexInputs
+            for (size_t i = 0; i < prior_node->size(); i++) {
+              table_func_inputs.emplace_back(std::make_unique<RexAbstractInput>(i));
+              col_inputs.emplace_back(table_func_inputs.back().get());
+            }
+            continue;
+          }
+        }
+      }
+      table_func_inputs.emplace_back(
+          parse_scalar_expr(*exprs_json_it, cat_, ra_executor_));
+    }
+
+    const auto& op_name = field(invocation, "op");
+    CHECK(op_name.IsString());
+
+    std::vector<std::unique_ptr<const RexScalar>> table_function_projected_outputs;
+    const auto& row_types = field(table_func_ra, "rowType");
+    CHECK(row_types.IsArray());
+    CHECK_GE(row_types.Size(), unsigned(0));
+    const auto& row_types_array = row_types.GetArray();
+
+    for (size_t i = 0; i < row_types_array.Size(); i++) {
+      // We don't care about the type information in rowType -- replace each output with a
+      // reference to be resolved later in the translator
+      table_function_projected_outputs.emplace_back(std::make_unique<RexRef>(i));
+      fields.emplace_back("");
+    }
+
+    return std::make_shared<RelTableFunction>(op_name.GetString(),
+                                              inputs[0],
+                                              fields,
+                                              col_inputs,
+                                              table_func_inputs,
+                                              table_function_projected_outputs);
   }
 
   std::shared_ptr<RelLogicalValues> dispatchLogicalValues(

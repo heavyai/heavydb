@@ -25,6 +25,7 @@ template <class T>
 class RexVisitorBase {
  public:
   virtual T visit(const RexScalar* rex_scalar) const {
+    CHECK(rex_scalar);
     const auto rex_input = dynamic_cast<const RexInput*>(rex_scalar);
     if (rex_input) {
       return visitInput(rex_input);
@@ -49,7 +50,7 @@ class RexVisitorBase {
     if (rex_ref) {
       return visitRef(rex_ref);
     }
-    CHECK(false);
+    LOG(FATAL) << "No visit path for " << rex_scalar->toString();
     return defaultResult();
   }
 

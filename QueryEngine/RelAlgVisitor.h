@@ -67,6 +67,10 @@ class RelAlgVisitor {
     if (modify) {
       return aggregateResult(result, visitModify(modify));
     }
+    const auto table_func = dynamic_cast<const RelTableFunction*>(rel_alg);
+    if (table_func) {
+      return aggregateResult(result, visitTableFunction(table_func));
+    }
     CHECK(false);
     return defaultResult();
   }
@@ -92,6 +96,8 @@ class RelAlgVisitor {
   virtual T visitLogicalValues(const RelLogicalValues*) const { return defaultResult(); }
 
   virtual T visitModify(const RelModify*) const { return defaultResult(); }
+
+  virtual T visitTableFunction(const RelTableFunction*) const { return defaultResult(); }
 
  protected:
   virtual T aggregateResult(const T& aggregate, const T& next_result) const {
