@@ -1210,6 +1210,8 @@ class RenameUserStmt : public DDLStmt {
  public:
   RenameUserStmt(std::string* username, std::string* new_username)
       : username_(username), new_username_(new_username) {}
+  auto const& getOldUserName() { return username_; }
+  auto const& getNewUserName() { return new_username_; }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
@@ -1728,6 +1730,7 @@ class DropDBStmt : public DDLStmt {
  public:
   explicit DropDBStmt(std::string* n, bool if_exists)
       : db_name(n), if_exists_(if_exists) {}
+  auto const& getDatabaseName() { return db_name; }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
@@ -1784,6 +1787,7 @@ class AlterUserStmt : public DDLStmt {
 class DropUserStmt : public DDLStmt {
  public:
   DropUserStmt(std::string* n) : user_name(n) {}
+  auto const& getUserName() { return user_name; }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
  private:
@@ -1943,6 +1947,20 @@ struct DefaultValidate<StringLiteral> {
     return val_upper;
   }
 };
+
+template <typename T>
+struct ShouldInvalidateSessionsByDB : public std::false_type {};
+template <typename T>
+struct ShouldInvalidateSessionsByUser : public std::false_type {};
+
+template <>
+struct ShouldInvalidateSessionsByDB<DropDBStmt> : public std::true_type {};
+template <>
+struct ShouldInvalidateSessionsByUser<DropUserStmt> : public std::true_type {};
+template <>
+struct ShouldInvalidateSessionsByDB<RenameDatabaseStmt> : public std::true_type {};
+template <>
+struct ShouldInvalidateSessionsByUser<RenameUserStmt> : public std::true_type {};
 
 }  // namespace Parser
 

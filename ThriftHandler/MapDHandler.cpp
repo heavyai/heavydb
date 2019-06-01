@@ -4735,6 +4735,29 @@ bool MapDHandler::user_can_access_table(
                                                 privObjects);
 };
 
+void MapDHandler::check_and_invalidate_sessions(Parser::DDLStmt* ddl) {
+  const auto drop_db_stmt = dynamic_cast<Parser::DropDBStmt*>(ddl);
+  if (drop_db_stmt) {
+    invalidate_sessions(*drop_db_stmt->getDatabaseName(), drop_db_stmt);
+    return;
+  }
+  const auto rename_db_stmt = dynamic_cast<Parser::RenameDatabaseStmt*>(ddl);
+  if (rename_db_stmt) {
+    invalidate_sessions(*rename_db_stmt->getPreviousDatabaseName(), rename_db_stmt);
+    return;
+  }
+  const auto drop_user_stmt = dynamic_cast<Parser::DropUserStmt*>(ddl);
+  if (drop_user_stmt) {
+    invalidate_sessions(*drop_user_stmt->getUserName(), drop_user_stmt);
+    return;
+  }
+  const auto rename_user_stmt = dynamic_cast<Parser::RenameUserStmt*>(ddl);
+  if (rename_user_stmt) {
+    invalidate_sessions(*rename_user_stmt->getOldUserName(), rename_user_stmt);
+    return;
+  }
+}
+
 void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                    const Catalog_Namespace::SessionInfo& session_info,
                                    const std::string& query_str,
@@ -5063,8 +5086,10 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                                             LockType::UpdateDeleteLock);
     }
 
-    _return.execution_time_ms +=
-        measure<>::execution([&]() { ddl->execute(session_info); });
+    _return.execution_time_ms += measure<>::execution([&]() {
+      ddl->execute(session_info);
+      check_and_invalidate_sessions(ddl);
+    });
     return true;
   };
 

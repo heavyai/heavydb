@@ -56,6 +56,7 @@
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/TableGenerations.h"
 #include "Shared/ConfigResolve.h"
+#include "Shared/GenericTypeUtilities.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/StringTransform.h"
 #include "Shared/geosupport.h"
@@ -678,6 +679,34 @@ class MapDHandler : public MapDIf {
       {"dashboard"s, has_dashboard_permission},
       {"table"s, has_table_permission},
       {"view"s, has_view_permission}};
+
+  void check_and_invalidate_sessions(Parser::DDLStmt* ddl);
+
+  template <typename STMT_TYPE>
+  void invalidate_sessions(std::string& name, STMT_TYPE* stmt) {
+    using namespace Parser;
+
+    auto is_match = [&name](const std::string& session_name) {
+      return boost::iequals(name, session_name);
+    };
+    if (ShouldInvalidateSessionsByDB<STMT_TYPE>()) {
+      for (auto it = sessions_.begin(); it != sessions_.end();) {
+        if (is_match(it->second.get()->getCatalog().getCurrentDB().dbName)) {
+          it = sessions_.erase(it);
+        } else {
+          ++it;
+        }
+      }
+    } else if (ShouldInvalidateSessionsByUser<STMT_TYPE>()) {
+      for (auto it = sessions_.begin(); it != sessions_.end();) {
+        if (is_match(it->second.get()->get_currentUser().userName)) {
+          it = sessions_.erase(it);
+        } else {
+          ++it;
+        }
+      }
+    }
+  }
 };
 
 // Log Format:
