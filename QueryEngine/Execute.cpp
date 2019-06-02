@@ -89,6 +89,7 @@ bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
 size_t g_big_group_threshold{20000};
 bool g_enable_window_functions{true};
+bool g_enable_table_functions{true};
 size_t g_max_memory_allocation_size{2000000000};  // set to max slab size
 size_t g_min_memory_allocation_size{
     256};  // minimum memory allocation required for projection query output buffer
@@ -1299,7 +1300,7 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                                           const CompilationOptions& co,
                                           const ExecutionOptions& eo,
                                           const Catalog_Namespace::Catalog& cat,
-                                          PerFragmentCB& cb) {
+                                          PerFragmentCallBack& cb) {
   const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
   ColumnCacheMap column_cache;
 
@@ -1337,6 +1338,10 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
     const auto fragment_results = all_fragment_results[fragment_index];
     cb(fragment_results.first, outer_fragments[fragment_index]);
   }
+}
+
+ResultSetPtr Executor::executeTableFunction() {
+  return std::make_shared<ResultSet>("TODO");
 }
 
 ResultSetPtr Executor::executeExplain(const QueryCompilationDescriptor& query_comp_desc) {

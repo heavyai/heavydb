@@ -175,6 +175,11 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                  const int64_t queue_time_ms,
                                  const ssize_t previous_count);
 
+  ExecutionResult executeTableFunction(const RelTableFunction*,
+                                       const CompilationOptions&,
+                                       const ExecutionOptions&,
+                                       const int64_t queue_time_ms);
+
   // Computes the window function results to be used by the query.
   void computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
                      const CompilationOptions& co,
@@ -215,6 +220,11 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
     std::unique_ptr<QueryRewriter> query_rewriter;
     const std::vector<size_t> input_permutation;
     const std::vector<size_t> left_deep_join_input_sizes;
+  };
+
+  struct TableFunctionWorkUnit {
+    TableFunctionExecutionUnit exe_unit;
+    const RelAlgNode* body;
   };
 
   WorkUnit createSortInputWorkUnit(const RelSort*, const bool just_explain);
@@ -289,6 +299,9 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                 const bool just_explain);
 
   WorkUnit createJoinWorkUnit(const RelJoin*, const SortInfo&, const bool just_explain);
+
+  TableFunctionWorkUnit createTableFunctionWorkUnit(const RelTableFunction* table_func,
+                                                    const bool just_explain);
 
   void addTemporaryTable(const int table_id, const ResultSetPtr& result) {
     CHECK_LT(size_t(0), result->colCount());

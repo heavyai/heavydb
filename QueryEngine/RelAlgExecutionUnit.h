@@ -37,8 +37,8 @@
 enum class SortAlgorithm { Default, SpeculativeTopN, StreamingTopN };
 
 namespace Analyzer {
-
 class Expr;
+class ColumnVar;
 class Estimator;
 struct OrderEntry;
 
@@ -71,6 +71,15 @@ struct RelAlgExecutionUnit {
   size_t scan_limit;
   QueryFeatureDescriptor query_features;
   bool use_bump_allocator{false};
+};
+
+struct TableFunctionExecutionUnit {
+  const std::vector<InputDescriptor> input_descs;
+  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
+  std::vector<Analyzer::Expr*> input_exprs;
+  std::vector<Analyzer::ColumnVar*> table_func_inputs;
+  std::vector<Analyzer::Expr*> target_exprs;
+  const std::string table_func_name;
 };
 
 class ResultSet;

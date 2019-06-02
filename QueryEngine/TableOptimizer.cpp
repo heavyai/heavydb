@@ -163,7 +163,7 @@ void TableOptimizer::recomputeMetadata() const {
       std::unordered_map</*fragment_id*/ int, ChunkStats> stats_map;
 
       size_t total_num_tuples = 0;
-      PerFragmentCB compute_deleted_callback =
+      Executor::PerFragmentCallBack compute_deleted_callback =
           [&stats_map, &tuple_count_map, &total_num_tuples, cd](
               ResultSetPtr results,
               const Fragmenter_Namespace::FragmentInfo& fragment_info) {
@@ -279,7 +279,7 @@ void TableOptimizer::recomputeMetadata() const {
 
       std::unordered_map</*fragment_id*/ int, ChunkStats> stats_map;
 
-      PerFragmentCB compute_metadata_callback =
+      Executor::PerFragmentCallBack compute_metadata_callback =
           [&stats_map, &tuple_count_map, cd](
               ResultSetPtr results,
               const Fragmenter_Namespace::FragmentInfo& fragment_info) {

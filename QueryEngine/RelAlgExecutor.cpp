@@ -410,6 +410,13 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     exec_desc.setResult(executeModify(modify, eo_work_unit));
     return;
   }
+  const auto table_func = dynamic_cast<const RelTableFunction*>(body);
+  if (table_func) {
+    exec_desc.setResult(
+        executeTableFunction(table_func, co, eo_work_unit, queue_time_ms));
+    addTemporaryTable(-table_func->getId(), exec_desc.getResult().getDataPtr());
+    return;
+  }
   CHECK(false);
 }
 
@@ -441,6 +448,7 @@ class RexUsedInputsVisitor : public RexVisitor<std::unordered_set<const RexInput
   std::unordered_set<const RexInput*> visitInput(
       const RexInput* rex_input) const override {
     const auto input_ra = rex_input->getSourceNode();
+    CHECK(input_ra);
     const auto scan_ra = dynamic_cast<const RelScan*>(input_ra);
     if (scan_ra) {
       const auto td = scan_ra->getTableDescriptor();
@@ -537,6 +545,19 @@ get_used_inputs(const RelProject* project, const Catalog_Namespace::Catalog& cat
   for (size_t i = 0; i < project->size(); ++i) {
     const auto proj_inputs = visitor.visit(project->getProjectAt(i));
     used_inputs.insert(proj_inputs.begin(), proj_inputs.end());
+  }
+  std::vector<std::shared_ptr<RexInput>> used_inputs_owned(visitor.get_inputs_owned());
+  return std::make_pair(used_inputs, used_inputs_owned);
+}
+
+std::pair<std::unordered_set<const RexInput*>, std::vector<std::shared_ptr<RexInput>>>
+get_used_inputs(const RelTableFunction* table_func,
+                const Catalog_Namespace::Catalog& cat) {
+  RexUsedInputsVisitor visitor(cat);
+  std::unordered_set<const RexInput*> used_inputs;
+  for (size_t i = 0; i < table_func->getTableFuncInputsSize(); ++i) {
+    const auto table_func_inputs = visitor.visit(table_func->getTableFuncInputAt(i));
+    used_inputs.insert(table_func_inputs.begin(), table_func_inputs.end());
   }
   std::vector<std::shared_ptr<RexInput>> used_inputs_owned(visitor.get_inputs_owned());
   return std::make_pair(used_inputs, used_inputs_owned);
@@ -762,12 +783,20 @@ size_t get_scalar_sources_size(const RelProject* project) {
   return project->size();
 }
 
+size_t get_scalar_sources_size(const RelTableFunction* table_func) {
+  return table_func->getTableFuncInputsSize();
+}
+
 const RexScalar* scalar_at(const size_t i, const RelCompound* compound) {
   return compound->getScalarSource(i);
 }
 
 const RexScalar* scalar_at(const size_t i, const RelProject* project) {
   return project->getProjectAt(i);
+}
+
+const RexScalar* scalar_at(const size_t i, const RelTableFunction* table_func) {
+  return table_func->getTableFuncInputAt(i);
 }
 
 std::shared_ptr<Analyzer::Expr> set_transient_dict(
@@ -1316,6 +1345,43 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                          render_info,
                          queue_time_ms,
                          previous_count);
+}
+
+ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* table_func,
+                                                     const CompilationOptions& co_in,
+                                                     const ExecutionOptions& eo,
+                                                     const int64_t queue_time_ms) {
+  INJECT_TIMER(executeTableFunction);
+
+  auto co = co_in;
+
+  if (g_cluster) {
+    throw std::runtime_error("Table functions not supported in distributed mode yet");
+  }
+  if (!g_enable_table_functions) {
+    throw std::runtime_error("Table function support is disabled");
+  }
+
+  auto table_func_work_unit = createTableFunctionWorkUnit(table_func, eo.just_explain);
+  const auto body = table_func_work_unit.body;
+  CHECK(body);
+
+  ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                                     co.device_type_,
+                                                     QueryMemoryDescriptor(),
+                                                     nullptr,
+                                                     executor_),
+                         {}};
+
+  try {
+    result = {executor_->executeTableFunction(), body->getOutputMetainfo()};
+  } catch (const QueryExecutionError& e) {
+    handlePersistentError(e.getErrorCode());
+    CHECK(e.getErrorCode() == Executor::ERR_OUT_OF_GPU_MEM);
+    throw std::runtime_error("Table function ran out of memory during execution");
+  }
+  result.setQueueTime(queue_time_ms);
+  return result;
 }
 
 namespace {
@@ -2991,6 +3057,52 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
           std::move(query_rewriter),
           input_permutation,
           left_deep_join_input_sizes};
+}
+
+RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUnit(
+    const RelTableFunction* table_func,
+    const bool just_explain) {
+  std::vector<InputDescriptor> input_descs;
+  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
+  auto input_to_nest_level = get_input_nest_levels(table_func, {});
+  std::tie(input_descs, input_col_descs, std::ignore) =
+      get_input_desc(table_func, input_to_nest_level, {}, cat_);
+  const auto query_infos = get_table_infos(input_descs, executor_);
+  CHECK_EQ(size_t(1), table_func->inputCount());
+
+  QueryFeatureDescriptor query_features;  // TODO(adb): remove/make optional
+  RelAlgTranslator translator(
+      cat_, executor_, input_to_nest_level, {}, now_, just_explain, query_features);
+  const auto input_exprs_owned = translate_scalar_sources(table_func, translator);
+  target_exprs_owned_.insert(
+      target_exprs_owned_.end(), input_exprs_owned.begin(), input_exprs_owned.end());
+  const auto input_exprs = get_exprs_not_owned(input_exprs_owned);
+
+  std::vector<Analyzer::ColumnVar*> input_col_exprs;
+  for (auto input_expr : input_exprs) {
+    if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
+      input_col_exprs.push_back(col_var);
+    }
+  }
+  CHECK_EQ(input_col_exprs.size(), table_func->getColInputsSize());
+
+  // TODO: temporarily just clone the first input and make it the output
+  std::vector<Analyzer::Expr*> table_func_outputs;
+  // TODO(adb): probably wrong
+  target_exprs_owned_.push_back(std::make_shared<Analyzer::Var>(
+      SQLTypeInfo(kINT, true), Analyzer::Var::WhichRow::kOUTPUT, 0));
+  table_func_outputs.push_back(target_exprs_owned_.back().get());
+
+  const TableFunctionExecutionUnit exe_unit = {
+      input_descs,
+      input_col_descs,
+      input_exprs,         // table function inputs
+      input_col_exprs,     // table function column inputs (duplicates w/ above)
+      table_func_outputs,  // table function projected exprs
+      table_func->getFunctionName()};
+  const auto targets_meta = get_targets_meta(table_func, exe_unit.target_exprs);
+  table_func->setOutputMetainfo(targets_meta);
+  return {exe_unit, table_func};
 }
 
 namespace {
