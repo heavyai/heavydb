@@ -77,7 +77,7 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   plan_state_ = own_plan_state_.get();
   const auto used_columns = prepare(expr);
   std::vector<llvm::Type*> arg_types(plan_state_->global_to_local_col_ids_.size() + 1);
-  std::vector<std::shared_ptr<Analyzer::ColumnVar>> inputs(arg_types.size());
+  std::vector<std::shared_ptr<Analyzer::ColumnVar>> inputs(arg_types.size() - 1);
   auto& ctx = module_->getContext();
   for (const auto& kv : plan_state_->global_to_local_col_ids_) {
     size_t arg_idx = kv.second;
@@ -104,7 +104,16 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   cgen_state_->ir_builder_.CreateStore(expr_lvs.front(),
                                        cgen_state_->row_func_->arg_begin());
   cgen_state_->ir_builder_.CreateRet(ll_int<int32_t>(0, ctx));
-  return {expr_lvs.front(), scalar_expr_func, inputs};
+  return {scalar_expr_func, inputs};
+}
+
+void* ScalarCodeGenerator::generateNativeCode(llvm::Function* func,
+                                              const CompilationOptions& co) {
+  CHECK(module_ && !execution_engine_) << "Invalid code generator state";
+  module_.release();
+  CHECK(co.device_type_ == ExecutorDeviceType::CPU) << "GPU not supported yet";
+  execution_engine_ = generateNativeCPUCode(func, {func}, co);
+  return execution_engine_->getPointerToFunction(func);
 }
 
 std::vector<llvm::Value*> ScalarCodeGenerator::codegenColumn(

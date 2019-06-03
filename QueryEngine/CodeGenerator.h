@@ -377,7 +377,6 @@ class ScalarCodeGenerator : public CodeGenerator {
       : CodeGenerator(nullptr, nullptr), module_(std::move(module)) {}
 
   struct CompiledExpression {
-    llvm::Value* value;
     llvm::Function* func;
     std::vector<std::shared_ptr<Analyzer::ColumnVar>> inputs;
   };
@@ -385,6 +384,8 @@ class ScalarCodeGenerator : public CodeGenerator {
   CompiledExpression compile(const Analyzer::Expr*,
                              const bool fetch_columns,
                              const CompilationOptions&);
+
+  void* generateNativeCode(llvm::Function* func, const CompilationOptions& co);
 
   using ColumnMap =
       std::unordered_map<InputColDescriptor, std::shared_ptr<Analyzer::ColumnVar>>;
@@ -397,6 +398,7 @@ class ScalarCodeGenerator : public CodeGenerator {
   ColumnMap prepare(const Analyzer::Expr*);
 
   std::unique_ptr<llvm::Module> module_;
+  std::unique_ptr<llvm::ExecutionEngine> execution_engine_;
   std::unique_ptr<CgenState> own_cgen_state_;
   std::unique_ptr<PlanState> own_plan_state_;
 };
