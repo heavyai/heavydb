@@ -307,13 +307,13 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(std::vector<RaExecutionDesc>& e
   const auto exec_desc_count = eo.just_explain ? size_t(1) : exec_descs.size();
 
   size_t i = 0;
-  for (auto it = exec_descs.begin(); it != exec_descs.end(); ++it, ++i) {
+  for (auto it = exec_descs.begin(); it != exec_descs.end(); ++it, i++) {
     // only render on the last step
-    executeRelAlgStep(i++,
+    executeRelAlgStep(i,
                       it,
                       co,
                       eo,
-                      (it == exec_descs.end() - 1 ? render_info : nullptr),
+                      (it == std::prev(exec_descs.end()) ? render_info : nullptr),
                       queue_time_ms);
   }
 
@@ -335,13 +335,17 @@ ExecutionResult RelAlgExecutor::executeRelAlgSubSeq(
   CHECK(!eo.just_explain);
 
   size_t i = 0;
-  for (auto it = start_desc; it != end_desc; ++it, ++i) {
+  for (auto it = start_desc; it != end_desc; ++it, i++) {
     // only render on the last step
-    executeRelAlgStep(
-        i++, it, co, eo, (it == end_desc - 1 ? render_info : nullptr), queue_time_ms);
+    executeRelAlgStep(i,
+                      it,
+                      co,
+                      eo,
+                      (it == std::prev(end_desc) ? render_info : nullptr),
+                      queue_time_ms);
   }
 
-  return (end_desc - 1)->getResult();
+  return std::prev(end_desc)->getResult();
 }
 
 void RelAlgExecutor::executeRelAlgStep(
