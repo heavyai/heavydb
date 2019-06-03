@@ -80,7 +80,7 @@ void verify_function_ir(const llvm::Function* func) {
 #if defined(HAVE_CUDA) || !defined(WITH_JIT_DEBUG)
 void eliminate_dead_self_recursive_funcs(
     llvm::Module& M,
-    std::unordered_set<llvm::Function*>& live_funcs) {
+    const std::unordered_set<llvm::Function*>& live_funcs) {
   std::vector<llvm::Function*> dead_funcs;
   for (auto& F : M) {
     bool bAlive = false;
@@ -105,7 +105,7 @@ void eliminate_dead_self_recursive_funcs(
 
 void optimize_ir(llvm::Function* query_func,
                  llvm::Module* module,
-                 std::unordered_set<llvm::Function*>& live_funcs,
+                 const std::unordered_set<llvm::Function*>& live_funcs,
                  const CompilationOptions& co) {
   llvm::legacy::PassManager pass_manager;
 
@@ -175,25 +175,14 @@ void Executor::addCodeToCache(
                                                                   std::move(module)));
 }
 
-std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
-    llvm::Function* query_func,
-    llvm::Function* multifrag_query_func,
-    std::unordered_set<llvm::Function*>& live_funcs,
-    llvm::Module* module,
+std::unique_ptr<llvm::ExecutionEngine> CodeGenerator::generateNativeCPUCode(
+    llvm::Function* func,
+    const std::unordered_set<llvm::Function*>& live_funcs,
     const CompilationOptions& co) {
-  CodeCacheKey key{serialize_llvm_object(query_func),
-                   serialize_llvm_object(cgen_state_->row_func_)};
-  for (const auto helper : cgen_state_->helper_functions_) {
-    key.push_back(serialize_llvm_object(helper));
-  }
-  auto cached_code = getCodeFromCache(key, cpu_code_cache_);
-  if (!cached_code.empty()) {
-    return cached_code;
-  }
-
+  auto module = func->getParent();
   // run optimizations
 #ifndef WITH_JIT_DEBUG
-  optimize_ir(query_func, module, live_funcs, co);
+  optimize_ir(func, module, live_funcs, co);
 #endif  // WITH_JIT_DEBUG
 
   llvm::ExecutionEngine* execution_engine{nullptr};
@@ -217,11 +206,33 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
   CHECK(execution_engine);
 
   execution_engine->finalizeObject();
-  auto native_code = execution_engine->getPointerToFunction(multifrag_query_func);
 
+  return std::unique_ptr<llvm::ExecutionEngine>(execution_engine);
+}
+
+std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
+    llvm::Function* query_func,
+    llvm::Function* multifrag_query_func,
+    const std::unordered_set<llvm::Function*>& live_funcs,
+    const CompilationOptions& co) {
+  auto module = multifrag_query_func->getParent();
+  CodeCacheKey key{serialize_llvm_object(query_func),
+                   serialize_llvm_object(cgen_state_->row_func_)};
+  for (const auto helper : cgen_state_->helper_functions_) {
+    key.push_back(serialize_llvm_object(helper));
+  }
+  auto cached_code = getCodeFromCache(key, cpu_code_cache_);
+  if (!cached_code.empty()) {
+    return cached_code;
+  }
+
+  auto execution_engine =
+      CodeGenerator::generateNativeCPUCode(query_func, live_funcs, co);
+  auto native_code = execution_engine->getPointerToFunction(multifrag_query_func);
   CHECK(native_code);
+
   addCodeToCache(key,
-                 {{std::make_tuple(native_code, execution_engine, nullptr)}},
+                 {{std::make_tuple(native_code, execution_engine.release(), nullptr)}},
                  module,
                  cpu_code_cache_);
 
@@ -481,10 +492,10 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
     llvm::Function* query_func,
     llvm::Function* multifrag_query_func,
     std::unordered_set<llvm::Function*>& live_funcs,
-    llvm::Module* module,
     const bool no_inline,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr,
     const CompilationOptions& co) {
+  auto module = multifrag_query_func->getParent();
 #ifdef HAVE_CUDA
   CHECK(cuda_mgr);
   CodeCacheKey key{serialize_llvm_object(query_func),
@@ -1025,7 +1036,7 @@ void read_udf_cpu_module(std::string& udf_ir_filename) {
   }
 }
 
-std::unordered_set<llvm::Function*> Executor::markDeadRuntimeFuncs(
+std::unordered_set<llvm::Function*> CodeGenerator::markDeadRuntimeFuncs(
     llvm::Module& module,
     const std::vector<llvm::Function*>& roots,
     const std::vector<llvm::Function*>& leaves) {
@@ -1542,9 +1553,10 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
              multifrag_query_func,
              cgen_state_->module_);
 
-  auto live_funcs = markDeadRuntimeFuncs(*cgen_state_->module_,
-                                         {query_func, cgen_state_->row_func_},
-                                         {multifrag_query_func});
+  auto live_funcs =
+      CodeGenerator::markDeadRuntimeFuncs(*cgen_state_->module_,
+                                          {query_func, cgen_state_->row_func_},
+                                          {multifrag_query_func});
 
   std::string llvm_ir;
   if (eo.just_explain) {
@@ -1563,15 +1575,10 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   return std::make_tuple(
       Executor::CompilationResult{
           co.device_type_ == ExecutorDeviceType::CPU
-              ? optimizeAndCodegenCPU(query_func,
-                                      multifrag_query_func,
-                                      live_funcs,
-                                      cgen_state_->module_,
-                                      co)
+              ? optimizeAndCodegenCPU(query_func, multifrag_query_func, live_funcs, co)
               : optimizeAndCodegenGPU(query_func,
                                       multifrag_query_func,
                                       live_funcs,
-                                      cgen_state_->module_,
                                       is_group_by || ra_exe_unit.estimator,
                                       cuda_mgr,
                                       co),

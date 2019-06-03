@@ -861,14 +861,12 @@ class Executor {
   std::vector<std::pair<void*, void*>> optimizeAndCodegenCPU(
       llvm::Function*,
       llvm::Function*,
-      std::unordered_set<llvm::Function*>&,
-      llvm::Module*,
+      const std::unordered_set<llvm::Function*>&,
       const CompilationOptions&);
   std::vector<std::pair<void*, void*>> optimizeAndCodegenGPU(
       llvm::Function*,
       llvm::Function*,
       std::unordered_set<llvm::Function*>&,
-      llvm::Module*,
       const bool no_inline,
       const CudaMgr_Namespace::CudaMgr* cuda_mgr,
       const CompilationOptions&);
@@ -955,11 +953,6 @@ class Executor {
     CgenState* cgen_state_;
     std::unordered_map<int, std::vector<llvm::Value*>> saved_fetch_cache;
   };
-
-  std::unordered_set<llvm::Function*> markDeadRuntimeFuncs(
-      llvm::Module& module,
-      const std::vector<llvm::Function*>& roots,
-      const std::vector<llvm::Function*>& leaves);
 
   llvm::Value* spillDoubleElement(llvm::Value* elem_val, llvm::Type* elem_ty);
 

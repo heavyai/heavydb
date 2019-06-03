@@ -53,6 +53,16 @@ class CodeGenerator {
 
   llvm::Value* castArrayPointer(llvm::Value* ptr, const SQLTypeInfo& elem_ti);
 
+  static std::unordered_set<llvm::Function*> markDeadRuntimeFuncs(
+      llvm::Module& module,
+      const std::vector<llvm::Function*>& roots,
+      const std::vector<llvm::Function*>& leaves);
+
+  static std::unique_ptr<llvm::ExecutionEngine> generateNativeCPUCode(
+      llvm::Function* func,
+      const std::unordered_set<llvm::Function*>& live_funcs,
+      const CompilationOptions& co);
+
   static bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
                               std::vector<Analyzer::Expr*>& primary_quals,
                               std::vector<Analyzer::Expr*>& deferred_quals);
