@@ -63,6 +63,33 @@ class CodeGenerator {
       const std::unordered_set<llvm::Function*>& live_funcs,
       const CompilationOptions& co);
 
+  static std::string generatePTX(const std::string& cuda_llir,
+                                 llvm::TargetMachine* nvptx_target_machine,
+                                 CgenState* cgen_state);
+
+  static std::unique_ptr<llvm::TargetMachine> initializeNVPTXBackend();
+
+  struct GPUCode {
+    std::vector<std::pair<void*, void*>> native_functions;
+    std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>>
+        cached_functions;
+  };
+
+  struct GPUTarget {
+    llvm::TargetMachine* nvptx_target_machine;
+    const CudaMgr_Namespace::CudaMgr* cuda_mgr;
+    unsigned block_size;
+    CgenState* cgen_state;
+    bool row_func_not_inlined;
+  };
+
+  static GPUCode generateNativeGPUCode(
+      llvm::Function* func,
+      llvm::Function* wrapper_func,
+      const std::unordered_set<llvm::Function*>& live_funcs,
+      const CompilationOptions& co,
+      const GPUTarget& gpu_target);
+
   static bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
                               std::vector<Analyzer::Expr*>& primary_quals,
                               std::vector<Analyzer::Expr*>& deferred_quals);

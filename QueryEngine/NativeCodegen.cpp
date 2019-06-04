@@ -488,6 +488,140 @@ llvm::StringRef get_gpu_data_layout() {
       "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
 }
 
+CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
+    llvm::Function* func,
+    llvm::Function* wrapper_func,
+    const std::unordered_set<llvm::Function*>& live_funcs,
+    const CompilationOptions& co,
+    const GPUTarget& gpu_target) {
+#ifdef HAVE_CUDA
+  auto module = func->getParent();
+  module->setDataLayout(
+      "e-p:64:64:64-i1:8:8-i8:8:8-"
+      "i16:16:16-i32:32:32-i64:64:64-"
+      "f32:32:32-f64:64:64-v16:16:16-"
+      "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
+  module->setTargetTriple("nvptx64-nvidia-cuda");
+
+  if (is_udf_module_present()) {
+    auto udf_module_copy = llvm::CloneModule(
+#if LLVM_VERSION_MAJOR >= 7
+        *udf_gpu_module.get(),
+#else
+        udf_gpu_module.get(),
+#endif
+        gpu_target.cgen_state->vmap_);
+
+    udf_module_copy->setDataLayout(get_gpu_data_layout());
+    udf_module_copy->setTargetTriple(get_gpu_target_triple_string());
+
+    llvm::Linker ld(*module);
+    bool link_error = false;
+
+    link_error = ld.linkInModule(std::move(udf_module_copy));
+
+    if (link_error) {
+      LOG(FATAL) << "optimizeAndCodegenGPU: *** error linking module ***";
+    }
+  }
+
+  // run optimizations
+  optimize_ir(func, module, live_funcs, co);
+  legalize_nvvm_ir(func);
+
+  std::stringstream ss;
+  llvm::raw_os_ostream os(ss);
+
+  llvm::LLVMContext& ctx = module->getContext();
+  // Get "nvvm.annotations" metadata node
+  llvm::NamedMDNode* md = module->getOrInsertNamedMetadata("nvvm.annotations");
+
+  llvm::Metadata* md_vals[] = {llvm::ConstantAsMetadata::get(wrapper_func),
+                               llvm::MDString::get(ctx, "kernel"),
+                               llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(
+                                   llvm::Type::getInt32Ty(ctx), 1))};
+
+  // Append metadata to nvvm.annotations
+  md->addOperand(llvm::MDNode::get(ctx, md_vals));
+
+  std::unordered_set<llvm::Function*> roots{wrapper_func, func};
+  if (gpu_target.row_func_not_inlined) {
+    clear_function_attributes(gpu_target.cgen_state->row_func_);
+    roots.insert(gpu_target.cgen_state->row_func_);
+  }
+
+  // Prevent the udf function(s) from being removed the way the runtime functions are
+
+  if (is_udf_module_present()) {
+    for (auto& f : udf_gpu_module->getFunctionList()) {
+      llvm::Function* udf_function = module->getFunction(f.getName());
+
+      if (udf_function) {
+        legalize_nvvm_ir(udf_function);
+        roots.insert(udf_function);
+      }
+    }
+  }
+
+  std::vector<llvm::Function*> rt_funcs;
+  for (auto& Fn : *module) {
+    if (roots.count(&Fn)) {
+      continue;
+    }
+    rt_funcs.push_back(&Fn);
+  }
+  for (auto& pFn : rt_funcs) {
+    pFn->removeFromParent();
+  }
+  module->print(os, nullptr);
+  os.flush();
+  for (auto& pFn : rt_funcs) {
+    module->getFunctionList().push_back(pFn);
+  }
+  module->eraseNamedMetadata(md);
+
+  auto cuda_llir = cuda_rt_decls + extension_function_decls() + ss.str();
+
+  std::vector<std::pair<void*, void*>> native_functions;
+  std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>>
+      cached_functions;
+
+  const auto ptx =
+      generatePTX(cuda_llir, gpu_target.nvptx_target_machine, gpu_target.cgen_state);
+
+  auto cubin_result = ptx_to_cubin(ptx, gpu_target.block_size, gpu_target.cuda_mgr);
+  auto& option_keys = cubin_result.option_keys;
+  auto& option_values = cubin_result.option_values;
+  auto cubin = cubin_result.cubin;
+  auto link_state = cubin_result.link_state;
+  const auto num_options = option_keys.size();
+
+  auto func_name = wrapper_func->getName().str();
+  for (int device_id = 0; device_id < gpu_target.cuda_mgr->getDeviceCount();
+       ++device_id) {
+    auto gpu_context = new GpuCompilationContext(cubin,
+                                                 func_name,
+                                                 device_id,
+                                                 gpu_target.cuda_mgr,
+                                                 num_options,
+                                                 &option_keys[0],
+                                                 &option_values[0]);
+    auto native_code = gpu_context->kernel();
+    auto native_module = gpu_context->module();
+    CHECK(native_code);
+    CHECK(native_module);
+    native_functions.emplace_back(native_code, native_module);
+    cached_functions.emplace_back(native_code, nullptr, gpu_context);
+  }
+
+  checkCudaErrors(cuLinkDestroy(link_state));
+
+  return {native_functions, cached_functions};
+#else
+  return {};
+#endif
+}
+
 std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
     llvm::Function* query_func,
     llvm::Function* multifrag_query_func,
@@ -532,154 +666,47 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
     }
   }
 
-  module->setDataLayout(
-      "e-p:64:64:64-i1:8:8-i8:8:8-"
-      "i16:16:16-i32:32:32-i64:64:64-"
-      "f32:32:32-f64:64:64-v16:16:16-"
-      "v32:32:32-v64:64:64-v128:128:128-n16:32:64");
-  module->setTargetTriple("nvptx64-nvidia-cuda");
+  initializeNVPTXBackend();
+  CodeGenerator::GPUTarget gpu_target{nvptx_target_machine_.get(),
+                                      cuda_mgr,
+                                      blockSize(),
+                                      cgen_state_.get(),
+                                      row_func_not_inlined};
+  const auto gpu_code = CodeGenerator::generateNativeGPUCode(
+      query_func, multifrag_query_func, live_funcs, co, gpu_target);
 
-  if (is_udf_module_present()) {
-    auto udf_module_copy = llvm::CloneModule(
-#if LLVM_VERSION_MAJOR >= 7
-        *udf_gpu_module.get(),
-#else
-        udf_gpu_module.get(),
-#endif
-        cgen_state_->vmap_);
+  addCodeToCache(key, gpu_code.cached_functions, module, gpu_code_cache_);
 
-    udf_module_copy->setDataLayout(get_gpu_data_layout());
-    udf_module_copy->setTargetTriple(get_gpu_target_triple_string());
-
-    llvm::Linker ld(*module);
-    bool link_error = false;
-
-    link_error = ld.linkInModule(std::move(udf_module_copy));
-
-    if (link_error) {
-      LOG(FATAL) << "optimizeAndCodegenGPU: *** error linking module ***";
-    }
-  }
-
-  // run optimizations
-  optimize_ir(query_func, module, live_funcs, co);
-  legalize_nvvm_ir(query_func);
-
-  std::stringstream ss;
-  llvm::raw_os_ostream os(ss);
-
-  llvm::LLVMContext& ctx = module->getContext();
-  // Get "nvvm.annotations" metadata node
-  llvm::NamedMDNode* md = module->getOrInsertNamedMetadata("nvvm.annotations");
-
-  llvm::Metadata* md_vals[] = {llvm::ConstantAsMetadata::get(multifrag_query_func),
-                               llvm::MDString::get(ctx, "kernel"),
-                               llvm::ConstantAsMetadata::get(llvm::ConstantInt::get(
-                                   llvm::Type::getInt32Ty(ctx), 1))};
-
-  // Append metadata to nvvm.annotations
-  md->addOperand(llvm::MDNode::get(ctx, md_vals));
-
-  std::unordered_set<llvm::Function*> roots{multifrag_query_func, query_func};
-  if (row_func_not_inlined) {
-    clear_function_attributes(cgen_state_->row_func_);
-    roots.insert(cgen_state_->row_func_);
-  }
-
-  // Prevent the udf function(s) from being removed the way the runtime functions are
-
-  if (is_udf_module_present()) {
-    for (auto& f : udf_gpu_module->getFunctionList()) {
-      llvm::Function* udf_function = module->getFunction(f.getName());
-
-      if (udf_function) {
-        legalize_nvvm_ir(udf_function);
-        roots.insert(udf_function);
-      }
-    }
-  }
-
-  std::vector<llvm::Function*> rt_funcs;
-  for (auto& Fn : *module) {
-    if (roots.count(&Fn)) {
-      continue;
-    }
-    rt_funcs.push_back(&Fn);
-  }
-  for (auto& pFn : rt_funcs) {
-    pFn->removeFromParent();
-  }
-  module->print(os, nullptr);
-  os.flush();
-  for (auto& pFn : rt_funcs) {
-    module->getFunctionList().push_back(pFn);
-  }
-  module->eraseNamedMetadata(md);
-
-  auto cuda_llir = cuda_rt_decls + extension_function_decls() + ss.str();
-
-  std::vector<std::pair<void*, void*>> native_functions;
-  std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>>
-      cached_functions;
-
-  const auto ptx = generatePTX(cuda_llir);
-
-  auto cubin_result = ptx_to_cubin(ptx, blockSize(), cuda_mgr);
-  auto& option_keys = cubin_result.option_keys;
-  auto& option_values = cubin_result.option_values;
-  auto cubin = cubin_result.cubin;
-  auto link_state = cubin_result.link_state;
-  const auto num_options = option_keys.size();
-
-  auto func_name = multifrag_query_func->getName().str();
-  for (int device_id = 0; device_id < cuda_mgr->getDeviceCount(); ++device_id) {
-    auto gpu_context = new GpuCompilationContext(cubin,
-                                                 func_name,
-                                                 device_id,
-                                                 cuda_mgr,
-                                                 num_options,
-                                                 &option_keys[0],
-                                                 &option_values[0]);
-    auto native_code = gpu_context->kernel();
-    auto native_module = gpu_context->module();
-    CHECK(native_code);
-    CHECK(native_module);
-    native_functions.emplace_back(native_code, native_module);
-    cached_functions.emplace_back(native_code, nullptr, gpu_context);
-  }
-  addCodeToCache(key, cached_functions, module, gpu_code_cache_);
-
-  checkCudaErrors(cuLinkDestroy(link_state));
-
-  return native_functions;
+  return gpu_code.native_functions;
 #else
   return {};
 #endif
 }
 
-std::string Executor::generatePTX(const std::string& cuda_llir) const {
-  initializeNVPTXBackend();
+std::string CodeGenerator::generatePTX(const std::string& cuda_llir,
+                                       llvm::TargetMachine* nvptx_target_machine,
+                                       CgenState* cgen_state) {
   auto mem_buff = llvm::MemoryBuffer::getMemBuffer(cuda_llir, "", false);
 
   llvm::SMDiagnostic err;
 
-  auto module = llvm::parseIR(mem_buff->getMemBufferRef(), err, cgen_state_->context_);
+  auto module = llvm::parseIR(mem_buff->getMemBufferRef(), err, cgen_state->context_);
   if (!module) {
     LOG(FATAL) << err.getMessage().str();
   }
 
   llvm::SmallString<256> code_str;
   llvm::raw_svector_ostream formatted_os(code_str);
-  CHECK(nvptx_target_machine_);
+  CHECK(nvptx_target_machine);
   {
     llvm::legacy::PassManager ptxgen_pm;
-    module->setDataLayout(nvptx_target_machine_->createDataLayout());
+    module->setDataLayout(nvptx_target_machine->createDataLayout());
 
 #if LLVM_VERSION_MAJOR >= 7
-    nvptx_target_machine_->addPassesToEmitFile(
+    nvptx_target_machine->addPassesToEmitFile(
         ptxgen_pm, formatted_os, nullptr, llvm::TargetMachine::CGFT_AssemblyFile);
 #else
-    nvptx_target_machine_->addPassesToEmitFile(
+    nvptx_target_machine->addPassesToEmitFile(
         ptxgen_pm, formatted_os, llvm::TargetMachine::CGFT_AssemblyFile);
 #endif
     ptxgen_pm.run(*module);
@@ -688,10 +715,7 @@ std::string Executor::generatePTX(const std::string& cuda_llir) const {
   return code_str.str();
 }
 
-void Executor::initializeNVPTXBackend() const {
-  if (nvptx_target_machine_) {
-    return;
-  }
+std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend() {
   llvm::InitializeAllTargets();
   llvm::InitializeAllTargetMCs();
   llvm::InitializeAllAsmPrinters();
@@ -700,8 +724,20 @@ void Executor::initializeNVPTXBackend() const {
   if (!target) {
     LOG(FATAL) << err;
   }
-  nvptx_target_machine_.reset(target->createTargetMachine(
+  return std::unique_ptr<llvm::TargetMachine>(target->createTargetMachine(
       "nvptx64-nvidia-cuda", "sm_30", "", llvm::TargetOptions(), llvm::Reloc::Static));
+}
+
+std::string Executor::generatePTX(const std::string& cuda_llir) const {
+  return CodeGenerator::generatePTX(
+      cuda_llir, nvptx_target_machine_.get(), cgen_state_.get());
+}
+
+void Executor::initializeNVPTXBackend() const {
+  if (nvptx_target_machine_) {
+    return;
+  }
+  nvptx_target_machine_ = CodeGenerator::initializeNVPTXBackend();
 }
 
 namespace {
