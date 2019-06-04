@@ -2272,6 +2272,24 @@ void InsertIntoTableAsSelectStmt::populateData(
   }
 
   auto& catalog = session.getCatalog();
+  auto get_target_column_descriptors = [this, &catalog](const TableDescriptor* td) {
+    std::vector<const ColumnDescriptor*> target_column_descriptors;
+    if (column_list_.empty()) {
+      auto list = catalog.getAllColumnMetadataForTable(td->tableId, false, false, false);
+      target_column_descriptors = {std::begin(list), std::end(list)};
+
+    } else {
+      for (auto& c : column_list_) {
+        const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, *c);
+        if (cd == nullptr) {
+          throw std::runtime_error("Column " + *c + " does not exist.");
+        }
+        target_column_descriptors.push_back(cd);
+      }
+    }
+
+    return target_column_descriptors;
+  };
 
   if (validate_table) {
     // check access privileges
@@ -2295,23 +2313,11 @@ void InsertIntoTableAsSelectStmt::populateData(
     auto result = local_connector.query(session, select_query_, true);
     auto source_column_descriptors = local_connector.getColumnDescriptors(result, false);
 
-    std::vector<const ColumnDescriptor*> target_column_descriptors;
-    if (column_list_.empty()) {
-      auto list = catalog.getAllColumnMetadataForTable(td->tableId, false, false, false);
-      target_column_descriptors = {std::begin(list), std::end(list)};
-
-    } else {
-      for (auto& c : column_list_) {
-        const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, c);
-        if (cd == nullptr) {
-          throw std::runtime_error("Column " + c + " does not exist.");
-        }
-        target_column_descriptors.push_back(cd);
-      }
-      if (catalog.getAllColumnMetadataForTable(td->tableId, false, false, false).size() !=
-          target_column_descriptors.size()) {
-        throw std::runtime_error("Insert into a subset of columns is not supported yet.");
-      }
+    std::vector<const ColumnDescriptor*> target_column_descriptors =
+        get_target_column_descriptors(td);
+    if (catalog.getAllColumnMetadataForTable(td->tableId, false, false, false).size() !=
+        target_column_descriptors.size()) {
+      throw std::runtime_error("Insert into a subset of columns is not supported yet.");
     }
 
     if (source_column_descriptors.size() != target_column_descriptors.size()) {
@@ -2378,9 +2384,10 @@ void InsertIntoTableAsSelectStmt::populateData(
     return;
   }
 
+  const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
   Fragmenter_Namespace::InsertDataLoader insertDataLoader(*leafs_connector_);
   AggregatedResult res = leafs_connector_->query(session, select_query_);
-  auto column_descriptors = local_connector.getColumnDescriptors(res, false);
+  auto target_column_descriptors = get_target_column_descriptors(created_td);
   auto result_rows = res.rs;
   result_rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
   const auto num_rows = result_rows->rowCount();
@@ -2400,7 +2407,6 @@ void InsertIntoTableAsSelectStmt::populateData(
   num_rows_to_process = std::max(num_rows_to_process, 1UL);
 
   std::vector<std::unique_ptr<TargetValueConverter>> value_converters;
-  const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
 
   TargetValueConverterFactory factory;
 
@@ -2463,10 +2469,7 @@ void InsertIntoTableAsSelectStmt::populateData(
       value_converters.clear();
       row_idx = 0;
       int colNum = 0;
-      for (const auto& cd : column_descriptors) {
-        const ColumnDescriptor* targetDescriptor =
-            catalog.getMetadataForColumn(created_td->tableId, cd.columnName);
-
+      for (const auto targetDescriptor : target_column_descriptors) {
         auto sourceDataMetaInfo = res.targets_meta[colNum++];
 
         ConverterCreateParameter param{
@@ -2524,9 +2527,8 @@ void InsertIntoTableAsSelectStmt::populateData(
       insert_data.tableId = created_td->tableId;
       insert_data.numRows = num_rows_to_process;
 
-      int col_idx = 0;
-      for (const auto cd : column_descriptors) {
-        value_converters[col_idx++]->addDataBlocksToInsertData(insert_data);
+      for (int col_idx = 0; col_idx < target_column_descriptors.size(); col_idx++) {
+        value_converters[col_idx]->addDataBlocksToInsertData(insert_data);
       }
 
       insertDataLoader.insertData(session, insert_data);

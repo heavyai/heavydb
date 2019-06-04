@@ -998,8 +998,8 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
                               std::list<std::string*>* c)
       : table_name_(*table_name), select_query_(*select_query) {
     if (c) {
-      for (const auto e : *c) {
-        column_list_.emplace_back(*e);
+      for (auto e : *c) {
+        column_list_.emplace_back(e);
       }
       delete c;
     }
@@ -1052,7 +1052,7 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
   DistributedConnector* leafs_connector_ = nullptr;
 
  protected:
-  std::vector<std::string> column_list_;
+  std::vector<std::unique_ptr<std::string>> column_list_;
   std::string table_name_;
   std::string select_query_;
 };

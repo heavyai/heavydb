@@ -826,6 +826,103 @@ TEST_P(Ctas, CreateTableAsSelect) {
   }
 }
 
+TEST(Itas, DifferentColumnNames) {
+  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;", g_session);
+
+  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val int);",
+                                 g_session);
+
+  QueryRunner::run_multiple_agg("INSERT INTO ITAS_SOURCE VALUES(1,10); ",
+                                g_session,
+                                ExecutorDeviceType::CPU,
+                                true,
+                                true,
+                                nullptr);
+  QueryRunner::run_multiple_agg("INSERT INTO ITAS_SOURCE VALUES(2,20); ",
+                                g_session,
+                                ExecutorDeviceType::CPU,
+                                true,
+                                true,
+                                nullptr);
+  QueryRunner::run_multiple_agg("INSERT INTO ITAS_SOURCE VALUES(3,30); ",
+                                g_session,
+                                ExecutorDeviceType::CPU,
+                                true,
+                                true,
+                                nullptr);
+
+  auto check = [](int id, int64_t val) {
+    auto select_result = QueryRunner::run_multiple_agg(
+        "SELECT target_val FROM ITAS_TARGET WHERE target_id=" + std::to_string(id) + ";",
+        g_session,
+        ExecutorDeviceType::CPU,
+        true,
+        true,
+        nullptr);
+
+    const auto select_crt_row = select_result->getNextRow(true, false);
+    const auto mapd_variant = select_crt_row[0];
+    const auto scalar_mapd_variant = boost::get<ScalarTargetValue>(&mapd_variant);
+    const auto mapd_int_p = boost::get<int64_t>(scalar_mapd_variant);
+    const auto mapd_val = *mapd_int_p;
+    ASSERT_EQ(val, mapd_val);
+  };
+
+  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;", g_session);
+  QueryRunner::run_ddl_statement(
+      "CREATE TABLE ITAS_TARGET (target_id int, target_val int);", g_session);
+  QueryRunner::run_ddl_statement(
+      "INSERT INTO ITAS_TARGET SELECT id, val FROM ITAS_SOURCE;", g_session);
+
+  check(1, 10);
+  check(2, 20);
+  check(3, 30);
+
+  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;", g_session);
+  QueryRunner::run_ddl_statement(
+      "CREATE TABLE ITAS_TARGET (target_id int, target_val int);", g_session);
+  QueryRunner::run_ddl_statement(
+      "INSERT INTO ITAS_TARGET (target_id, target_val) SELECT id, val FROM ITAS_SOURCE;",
+      g_session);
+
+  check(1, 10);
+  check(2, 20);
+  check(3, 30);
+
+  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;", g_session);
+  QueryRunner::run_ddl_statement(
+      "CREATE TABLE ITAS_TARGET (target_id int, target_val int);", g_session);
+  QueryRunner::run_ddl_statement(
+      "INSERT INTO ITAS_TARGET (target_val, target_id) SELECT val, id FROM ITAS_SOURCE;",
+      g_session);
+
+  check(1, 10);
+  check(2, 20);
+  check(3, 30);
+
+  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;", g_session);
+  QueryRunner::run_ddl_statement(
+      "CREATE TABLE ITAS_TARGET (target_id int, target_val int);", g_session);
+  QueryRunner::run_ddl_statement(
+      "INSERT INTO ITAS_TARGET (target_id, target_val) SELECT val, id FROM ITAS_SOURCE;",
+      g_session);
+
+  check(10, 1);
+  check(20, 2);
+  check(30, 3);
+
+  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;", g_session);
+  QueryRunner::run_ddl_statement(
+      "CREATE TABLE ITAS_TARGET (target_id int, target_val int);", g_session);
+  QueryRunner::run_ddl_statement(
+      "INSERT INTO ITAS_TARGET (target_val, target_id) SELECT id, val FROM ITAS_SOURCE;",
+      g_session);
+
+  check(10, 1);
+  check(20, 2);
+  check(30, 3);
+}
+
 void itasTestBody(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
                   std::string targetPartitionScheme = ")") {
   QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;", g_session);
