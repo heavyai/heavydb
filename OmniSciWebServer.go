@@ -632,12 +632,22 @@ func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if r.Method == "GET" && r.URL.Path == "/" {
+	if r.Method == "GET" && (r.URL.Path == "/" || r.URL.Path == "/beta/") {
 		rw.Header().Del("Cache-Control")
 		rw.Header().Add("Cache-Control", "no-cache, no-store, must-revalidate")
 	}
 
 	h.ServeHTTP(rw, r)
+}
+
+func betaOrRedirectFrontendHandler(rw http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("omnisci-beta")
+	if err != nil || cookie.Value != "true" {
+		http.Redirect(rw, r, "/", http.StatusTemporaryRedirect)
+		return
+	}
+
+	thriftOrFrontendHandler(rw, r)
 }
 
 func httpToHTTPSRedirectHandler(rw http.ResponseWriter, r *http.Request) {
@@ -782,6 +792,7 @@ func main() {
 	mux.HandleFunc("/deleteUpload", deleteUploadHandler)
 	mux.HandleFunc("/servers.json", serversHandler)
 	mux.HandleFunc("/", thriftOrFrontendHandler)
+	mux.HandleFunc("/beta/", betaOrRedirectFrontendHandler)
 	mux.HandleFunc("/docs/", docsHandler)
 	mux.HandleFunc("/metrics/", metricsHandler)
 	mux.HandleFunc("/metrics/reset/", metricsResetHandler)
