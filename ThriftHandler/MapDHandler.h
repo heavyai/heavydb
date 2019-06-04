@@ -111,7 +111,7 @@ enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIE
 using SessionMap = std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>>;
 using permissionFuncPtr = bool (*)(const AccessPrivileges&, const TDBObjectPermissions&);
 using TableMap = std::map<std::string, bool>;
-using OptionalTableMap = boost::optional<TableMap>;
+using OptionalTableMap = boost::optional<TableMap&>;
 
 class MapDHandler : public MapDIf {
  public:

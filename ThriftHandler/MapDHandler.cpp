@@ -850,7 +850,8 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
     if (!pw.is_ddl && !pw.is_update_dml &&
         !(pw.getExplainType() == ParserWrapper::ExplainType::Other)) {
       std::string query_ra;
-      OptionalTableMap tableNames = TableMap{};
+      TableMap table_map;
+      OptionalTableMap tableNames(table_map);
       query_ra = parse_to_ra(query_str, {}, session_info, tableNames, mapd_parameters_);
 
       // COPY_TO/SELECT: get read ExecutorOuterLock >> read UpdateDeleteLock locks
@@ -4796,7 +4797,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
 
   try {
     ParserWrapper pw{query_str};
-    OptionalTableMap tableNames = TableMap{};
+    TableMap table_map;
+    OptionalTableMap tableNames(table_map);
     if (pw.isCalcitePathPermissable(read_only_)) {
       std::string query_ra;
       _return.execution_time_ms += measure<>::execution([&]() {
@@ -5053,7 +5055,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     // Check for DDL statements requiring locking and get locks
     auto export_stmt = dynamic_cast<Parser::ExportQueryStmt*>(ddl);
     if (export_stmt) {
-      OptionalTableMap tableNames = TableMap{};
+      TableMap table_map;
+      OptionalTableMap tableNames(table_map);
       const auto query_string = export_stmt->get_select_stmt();
       const auto query_ra =
           parse_to_ra(query_string, {}, session_info, tableNames, mapd_parameters_);
@@ -5119,7 +5122,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
             session_info.getCatalog(), *stmtp->get_table(), LockType::CheckpointLock);
         // >> read UpdateDeleteLock locks
-        OptionalTableMap tableNames = TableMap{};
+        TableMap table_map;
+        OptionalTableMap tableNames(table_map);
         const auto query_string = stmtp->get_query()->to_string();
         const auto query_ra =
             parse_to_ra(query_str, {}, session_info, tableNames, mapd_parameters_);
