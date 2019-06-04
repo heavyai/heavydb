@@ -2713,7 +2713,18 @@ bool path_is_relative(const std::string& path) {
   return !boost::filesystem::path(path).is_absolute();
 }
 
+bool path_has_valid_filename(const std::string& path) {
+  auto filename = boost::filesystem::path(path).filename().string();
+  if (filename.size() == 0 || filename[0] == '.' || filename[0] == '/') {
+    return false;
+  }
+  return true;
+}
+
 bool is_a_supported_geo_file(const std::string& path, bool include_gz) {
+  if (!path_has_valid_filename(path)) {
+    return false;
+  }
   if (include_gz) {
     if (boost::iends_with(path, ".geojson.gz") || boost::iends_with(path, ".json.gz") ||
         boost::iends_with(path, ".kml.gz")) {
@@ -2730,6 +2741,9 @@ bool is_a_supported_geo_file(const std::string& path, bool include_gz) {
 }
 
 bool is_a_supported_archive_file(const std::string& path) {
+  if (!path_has_valid_filename(path)) {
+    return false;
+  }
   if (boost::iends_with(path, ".zip") && !boost::iends_with(path, ".gdb.zip")) {
     return true;
   } else if (boost::iends_with(path, ".tar") || boost::iends_with(path, ".tgz") ||
