@@ -57,7 +57,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   try {
     return executeRelAlgQueryNoRetry(query_ra, co, eo, render_info);
   } catch (const QueryMustRunOnCpu&) {
-    if (g_enable_watchdog && !g_allow_cpu_retry) {
+    if (g_allow_cpu_retry) {
       throw;
     }
   }
@@ -2128,7 +2128,7 @@ ExecutionResult RelAlgExecutor::handleRetry(
                          {}};
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
-    if (g_enable_watchdog && !g_allow_cpu_retry) {
+    if (!g_allow_cpu_retry) {
       throw std::runtime_error(getErrorMessageFromCode(error_code));
     }
     const auto ra_exe_unit = decide_approx_count_distinct_implementation(
@@ -2153,13 +2153,6 @@ ExecutionResult RelAlgExecutor::handleRetry(
     }
   }
   handlePersistentError(error_code);
-  if (co.device_type_ == ExecutorDeviceType::GPU) {
-    std::string out_of_memory{"Query ran out of GPU memory, punt to CPU"};
-    LOG(INFO) << out_of_memory;
-    if (g_enable_watchdog && !g_allow_cpu_retry) {
-      throw std::runtime_error(out_of_memory);
-    }
-  }
   CompilationOptions co_cpu{ExecutorDeviceType::CPU,
                             co.hoist_literals_,
                             co.opt_level_,
@@ -2214,11 +2207,15 @@ void RelAlgExecutor::handlePersistentError(const int32_t error_code) {
   if (error_code == Executor::ERR_SPECULATIVE_TOP_OOM) {
     throw SpeculativeTopNFailed();
   }
-  if (error_code == Executor::ERR_OUT_OF_GPU_MEM &&
-      (!g_enable_watchdog || g_allow_cpu_retry)) {
+  if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
     // We ran out of GPU memory, this doesn't count as an error if the query is
-    // allowed to continue on CPU because either the watchdog is disabled or
-    // retry on CPU is explicitly allowed through --allow-cpu-retry.
+    // allowed to continue on CPU because retry on CPU is explicitly allowed through
+    // --allow-cpu-retry.
+    LOG(INFO) << "Query ran out of GPU memory, attempting punt to CPU";
+    if (!g_allow_cpu_retry) {
+      throw std::runtime_error(
+          "Query ran out of GPU memory, unable to automatically retry on CPU");
+    }
     return;
   }
   throw std::runtime_error(getErrorMessageFromCode(error_code));
