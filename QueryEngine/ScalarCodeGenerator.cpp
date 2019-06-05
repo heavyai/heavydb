@@ -104,16 +104,53 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   cgen_state_->ir_builder_.CreateStore(expr_lvs.front(),
                                        cgen_state_->row_func_->arg_begin());
   cgen_state_->ir_builder_.CreateRet(ll_int<int32_t>(0, ctx));
-  return {scalar_expr_func, inputs};
+  if (co.device_type_ == ExecutorDeviceType::GPU) {
+    std::vector<llvm::Type*> wrapper_arg_types(arg_types.size() + 1);
+    wrapper_arg_types[0] = llvm::PointerType::get(get_int_type(32, ctx), 0);
+    wrapper_arg_types[1] = arg_types[0];
+    for (size_t i = 1; i < arg_types.size(); ++i) {
+      wrapper_arg_types[i + 1] = llvm::PointerType::get(arg_types[i], 0);
+    }
+    auto wrapper_ft =
+        llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), wrapper_arg_types, false);
+    auto wrapper_scalar_expr_func =
+        llvm::Function::Create(wrapper_ft,
+                               llvm::Function::ExternalLinkage,
+                               "wrapper_scalar_expr",
+                               module_.get());
+    auto wrapper_bb_entry =
+        llvm::BasicBlock::Create(ctx, ".entry", wrapper_scalar_expr_func, 0);
+    llvm::IRBuilder<> b(ctx);
+    b.SetInsertPoint(wrapper_bb_entry);
+    std::vector<llvm::Value*> loaded_args = {wrapper_scalar_expr_func->arg_begin() + 1};
+    for (size_t i = 2; i < wrapper_arg_types.size(); ++i) {
+      loaded_args.push_back(b.CreateLoad(wrapper_scalar_expr_func->arg_begin() + i));
+    }
+    auto error_lv = b.CreateCall(scalar_expr_func, loaded_args);
+    b.CreateStore(error_lv, wrapper_scalar_expr_func->arg_begin());
+    b.CreateRetVoid();
+    return {scalar_expr_func, wrapper_scalar_expr_func, inputs};
+  }
+  return {scalar_expr_func, nullptr, inputs};
 }
 
-void* ScalarCodeGenerator::generateNativeCode(llvm::Function* func,
-                                              const CompilationOptions& co) {
+std::vector<void*> ScalarCodeGenerator::generateNativeCode(llvm::Function* func,
+                                                           llvm::Function* wrapper_func,
+                                                           const CompilationOptions& co) {
   CHECK(module_ && !execution_engine_) << "Invalid code generator state";
   module_.release();
-  CHECK(co.device_type_ == ExecutorDeviceType::CPU) << "GPU not supported yet";
-  execution_engine_ = generateNativeCPUCode(func, {func}, co);
-  return execution_engine_->getPointerToFunction(func);
+  switch (co.device_type_) {
+    case ExecutorDeviceType::CPU: {
+      execution_engine_ = generateNativeCPUCode(func, {func}, co);
+      return {execution_engine_->getPointerToFunction(func)};
+    }
+    case ExecutorDeviceType::GPU: {
+      return generateNativeGPUCode(func, wrapper_func, co);
+    }
+    default: {
+      LOG(FATAL) << "Invalid device type";
+    }
+  }
 }
 
 std::vector<llvm::Value*> ScalarCodeGenerator::codegenColumn(
@@ -124,4 +161,34 @@ std::vector<llvm::Value*> ScalarCodeGenerator::codegenColumn(
   CHECK_LT(arg_idx, cgen_state_->row_func_->arg_size());
   llvm::Value* arg = cgen_state_->row_func_->arg_begin() + arg_idx + 1;
   return {arg};
+}
+
+std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
+    llvm::Function* func,
+    llvm::Function* wrapper_func,
+    const CompilationOptions& co) {
+  if (!nvptx_target_machine_) {
+    nvptx_target_machine_ = initializeNVPTXBackend();
+  }
+  if (!cuda_mgr_) {
+    cuda_mgr_ = std::make_unique<CudaMgr_Namespace::CudaMgr>(0);
+  }
+  const auto& dev_props = cuda_mgr_->getAllDeviceProperties();
+  int block_size = dev_props.front().maxThreadsPerBlock;
+  GPUTarget gpu_target;
+  gpu_target.nvptx_target_machine = nvptx_target_machine_.get();
+  gpu_target.cuda_mgr = cuda_mgr_.get();
+  gpu_target.block_size = block_size;
+  gpu_target.cgen_state = cgen_state_;
+  gpu_target.row_func_not_inlined = false;
+  const auto gpu_code = CodeGenerator::generateNativeGPUCode(
+      func, wrapper_func, {func, wrapper_func}, co, gpu_target);
+  for (const auto& cached_function : gpu_code.cached_functions) {
+    gpu_compilation_contexts_.emplace_back(std::get<2>(cached_function));
+  }
+  std::vector<void*> native_function_pointers;
+  for (const auto& cached_function : gpu_code.cached_functions) {
+    native_function_pointers.push_back(std::get<0>(cached_function));
+  }
+  return native_function_pointers;
 }

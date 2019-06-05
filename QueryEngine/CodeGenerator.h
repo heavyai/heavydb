@@ -405,6 +405,7 @@ class ScalarCodeGenerator : public CodeGenerator {
 
   struct CompiledExpression {
     llvm::Function* func;
+    llvm::Function* wrapper_func;
     std::vector<std::shared_ptr<Analyzer::ColumnVar>> inputs;
   };
 
@@ -412,7 +413,11 @@ class ScalarCodeGenerator : public CodeGenerator {
                              const bool fetch_columns,
                              const CompilationOptions&);
 
-  void* generateNativeCode(llvm::Function* func, const CompilationOptions& co);
+  std::vector<void*> generateNativeCode(llvm::Function* func,
+                                        llvm::Function* wrapper_func,
+                                        const CompilationOptions& co);
+
+  CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cuda_mgr_.get(); }
 
   using ColumnMap =
       std::unordered_map<InputColDescriptor, std::shared_ptr<Analyzer::ColumnVar>>;
@@ -424,8 +429,15 @@ class ScalarCodeGenerator : public CodeGenerator {
 
   ColumnMap prepare(const Analyzer::Expr*);
 
+  std::vector<void*> generateNativeGPUCode(llvm::Function* func,
+                                           llvm::Function* wrapper_func,
+                                           const CompilationOptions& co);
+
   std::unique_ptr<llvm::Module> module_;
   std::unique_ptr<llvm::ExecutionEngine> execution_engine_;
   std::unique_ptr<CgenState> own_cgen_state_;
   std::unique_ptr<PlanState> own_plan_state_;
+  std::unique_ptr<CudaMgr_Namespace::CudaMgr> cuda_mgr_;
+  std::vector<std::unique_ptr<GpuCompilationContext>> gpu_compilation_contexts_;
+  std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 };

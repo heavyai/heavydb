@@ -629,8 +629,8 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
     const bool no_inline,
     const CudaMgr_Namespace::CudaMgr* cuda_mgr,
     const CompilationOptions& co) {
-  auto module = multifrag_query_func->getParent();
 #ifdef HAVE_CUDA
+  auto module = multifrag_query_func->getParent();
   CHECK(cuda_mgr);
   CodeCacheKey key{serialize_llvm_object(query_func),
                    serialize_llvm_object(cgen_state_->row_func_)};
