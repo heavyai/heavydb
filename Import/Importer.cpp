@@ -63,7 +63,6 @@
 
 #include <iostream>
 #include <vector>
-#include "DataMgr/LockMgr.h"
 #include "Importer.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Utils/ChunkAccessorTable.h"
