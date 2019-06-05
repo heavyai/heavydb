@@ -121,7 +121,8 @@ std::string build_create_table_statement(
   // const std::string shard_count_def{shard_info.shard_col.empty() ? "" : "shard_count="
   // +
   //                                                                          std::to_string(shard_info.shard_count)};
-  const std::string replicated_def{!replicated ? "" : ", PARTITIONS='REPLICATED' "};
+  const std::string replicated_def{
+      (!replicated || !shard_info.shard_col.empty()) ? "" : ", PARTITIONS='REPLICATED' "};
 
   return "CREATE TABLE " + table_name + "(" + columns_definition + shard_key_def +
          boost::algorithm::join(shared_dict_def, "") + ") WITH (" +
@@ -6326,12 +6327,10 @@ TEST(Select, Joins_InnerJoin_Sharded) {
 }
 
 TEST(Select, Joins_Negative_ShardKey) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    size_t num_shards = 1;
+    size_t num_shards = 1 * g_num_leafs;
     if (dt == ExecutorDeviceType::GPU && choose_shard_count() > 0) {
       num_shards = choose_shard_count();
     }

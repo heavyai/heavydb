@@ -33,9 +33,11 @@
 #include <cassert>
 #include <cmath>
 #include <limits>
+#include <random>
 #include <stdexcept>
 #include <type_traits>
 #include <typeinfo>
+
 #include "../Analyzer/RangeTableEntry.h"
 #include "../Catalog/Catalog.h"
 #include "../Catalog/SharedDictionaryValidator.h"
@@ -51,6 +53,7 @@
 #include "../Shared/geo_types.h"
 #include "../Shared/mapd_glob.h"
 #include "../Shared/measure.h"
+#include "../Shared/shard_key.h"
 #include "DataMgr/LockMgr.h"
 #include "ReservedKeywords.h"
 #include "gen-cpp/CalciteServer.h"
@@ -1563,6 +1566,116 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog,
     }
   }
   query.set_result_col_list(result_col_list);
+}
+
+size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& catalog,
+                                            size_t num_leafs) {
+  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+  if (td == nullptr) {
+    throw std::runtime_error("Table " + *table + " does not exist.");
+  }
+  if (td->isView) {
+    throw std::runtime_error("Insert to views is not supported yet.");
+  }
+
+  if (td->partitions == "REPLICATED") {
+    throw std::runtime_error("Cannot determine leaf on replicated table.");
+  }
+
+  if (0 == td->nShards) {
+    std::random_device rd;
+    std::mt19937_64 gen(rd());
+    std::uniform_int_distribution<size_t> dis;
+    const auto leaf_idx = dis(gen) % num_leafs;
+    return leaf_idx;
+  }
+
+  size_t indexOfShardColumn = 0;
+  const ColumnDescriptor* shardColumn = catalog.getShardColumnMetadataForTable(td);
+  CHECK(shardColumn);
+
+  if (column_list.empty()) {
+    auto all_cols = catalog.getAllColumnMetadataForTable(td->tableId, false, false, true);
+    auto iter = std::find(all_cols.begin(), all_cols.end(), shardColumn);
+    CHECK(iter != all_cols.end());
+    indexOfShardColumn = std::distance(all_cols.begin(), iter);
+  } else {
+    for (auto& c : column_list) {
+      if (*c == shardColumn->columnName) {
+        break;
+      }
+      indexOfShardColumn++;
+    }
+
+    if (indexOfShardColumn == column_list.size()) {
+      throw std::runtime_error("No value defined for shard column.");
+    }
+  }
+
+  if (indexOfShardColumn >= value_list.size()) {
+    throw std::runtime_error("No value defined for shard column.");
+  }
+
+  auto& shardColumnValueExpr = *(std::next(value_list.begin(), indexOfShardColumn));
+
+  Analyzer::Query query;
+  auto e = shardColumnValueExpr->analyze(catalog, query);
+  e = e->add_cast(shardColumn->columnType);
+  const Analyzer::Constant* con = dynamic_cast<Analyzer::Constant*>(e.get());
+  if (!con) {
+    auto col_cast = dynamic_cast<const Analyzer::UOper*>(e.get());
+    CHECK(col_cast);
+    CHECK_EQ(kCAST, col_cast->get_optype());
+    con = dynamic_cast<const Analyzer::Constant*>(col_cast->get_operand());
+  }
+  CHECK(con);
+
+  Datum d = con->get_constval();
+
+  auto shard_count = td->nShards * num_leafs;
+  int64_t shardId = 0;
+
+  if (con->get_is_null()) {
+    shardId = SHARD_FOR_KEY(inline_fixed_encoding_null_val(shardColumn->columnType),
+                            shard_count);
+  } else if (shardColumn->columnType.is_string()) {
+    auto dictDesc =
+        catalog.getMetadataForDict(shardColumn->columnType.get_comp_param(), true);
+    auto str_id = dictDesc->stringDict->getOrAdd(*d.stringval);
+    bool invalid = false;
+
+    if (4 == shardColumn->columnType.get_size()) {
+      invalid = str_id > max_valid_int_value<int32_t>();
+    } else if (2 == shardColumn->columnType.get_size()) {
+      invalid = str_id > max_valid_int_value<uint16_t>();
+    } else if (1 == shardColumn->columnType.get_size()) {
+      invalid = str_id > max_valid_int_value<uint8_t>();
+    }
+
+    if (invalid || str_id == inline_int_null_value<int32_t>()) {
+      str_id = inline_fixed_encoding_null_val(shardColumn->columnType);
+    }
+    shardId = SHARD_FOR_KEY(str_id, shard_count);
+  } else {
+    switch (shardColumn->columnType.get_logical_size()) {
+      case 8:
+        shardId = SHARD_FOR_KEY(d.bigintval, shard_count);
+        break;
+      case 4:
+        shardId = SHARD_FOR_KEY(d.intval, shard_count);
+        break;
+      case 2:
+        shardId = SHARD_FOR_KEY(d.smallintval, shard_count);
+        break;
+      case 1:
+        shardId = SHARD_FOR_KEY(d.tinyintval, shard_count);
+        break;
+      default:
+        CHECK(false);
+    }
+  }
+
+  return shardId / td->nShards;
 }
 
 void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,

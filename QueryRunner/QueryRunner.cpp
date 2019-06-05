@@ -36,6 +36,7 @@
 
 #define CALCITEPORT 36279
 
+extern size_t g_leaf_count;
 extern bool g_enable_filter_push_down;
 
 double g_gpu_mem_limit_percent{0.9};
@@ -146,6 +147,7 @@ Catalog_Namespace::SessionInfo* get_session(
   Catalog_Namespace::UserMetadata user;
   Catalog_Namespace::DBMetadata db;
 
+  g_leaf_count = leaf_servers.size();
   register_signal_handler();
   google::InstallFailureFunction(&calcite_shutdown_handler);
 

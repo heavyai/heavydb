@@ -4722,18 +4722,6 @@ void MapDHandler::convert_result(TQueryResult& _return,
   create_simple_result(_return, results, column_format, "Result");
 }
 
-namespace {
-
-void check_table_not_sharded(const Catalog& cat, const int table_id) {
-  const auto td = cat.getMetadataForTable(table_id);
-  CHECK(td);
-  if (td->nShards) {
-    throw std::runtime_error("Cannot execute a cluster insert into a sharded table");
-  }
-}
-
-}  // namespace
-
 // this all should be moved out of here to catalog
 bool MapDHandler::user_can_access_table(
     const Catalog_Namespace::SessionInfo& session_info,
@@ -5161,10 +5149,6 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         // InsertOrderFragmenter::deleteFragments
       }
 
-      if (g_cluster && root_plan->get_stmt_type() == kINSERT) {
-        check_table_not_sharded(session_info.getCatalog(),
-                                root_plan->get_result_table_id());
-      }
       execute_root_plan(_return,
                         root_plan.get(),
                         column_format,
