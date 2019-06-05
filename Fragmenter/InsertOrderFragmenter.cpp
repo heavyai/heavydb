@@ -29,6 +29,8 @@
 #include "../Shared/checked_alloc.h"
 #include "../Shared/thread_count.h"
 
+#include <LockMgr/TableLockMgr.h>
+
 #define DROP_FRAGMENT_FACTOR \
   0.97  // drop to 97% of max so we don't keep adding and dropping fragments
 
@@ -201,8 +203,8 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
   // during COPY. Locks on a logical table and its physical tables never intersect, which
   // means potential races. It'll be an overkill to resolve a logical table to physical
   // tables in MapDHandler, ParseNode or other higher layers where the logical table is
-  // locked with UpdateDeleteLock; it's easier to lock the logical table of its physical
-  // tables. A downside of this approach may be loss of parallel execution of
+  // locked with Table Read/Write locks; it's easier to lock the logical table of its
+  // physical tables. A downside of this approach may be loss of parallel execution of
   // deleteFragments across physical tables. Because deleteFragments is a short in-memory
   // operation, the loss seems not a big deal.
   auto chunkKeyPrefix = chunkKeyPrefix_;
@@ -210,12 +212,11 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
     chunkKeyPrefix[1] = catalog_->getLogicalTableId(chunkKeyPrefix[1]);
   }
 
-  // need to keep lock seq as UpdateDeleteLock >> fragmentInfoMutex_ or
+  // need to keep lock seq as TableLock >> fragmentInfoMutex_ or
   // SELECT and COPY may enter a deadlock
   using namespace Lock_Namespace;
-  mapd_unique_lock<mapd_shared_mutex> deleteLock(
-      *LockMgr<mapd_shared_mutex, ChunkKey>::getMutex(LockType::UpdateDeleteLock,
-                                                      chunkKeyPrefix));
+  WriteLock delete_lock = TableLockMgr::getWriteLockForTable(chunkKeyPrefix);
+
   mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
 
   for (const auto fragId : dropFragIds) {
@@ -564,11 +565,11 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
     numRowsLeft -= numRowsToInsert;
     numRowsInserted += numRowsToInsert;
   }
-  {  // Need to narrow scope of this lock, or SELECT and COPY_FROM enters a dead lock
-    // after SELECT has locked UpdateDeleteLock and COPY_FROM has locked
-    // fragmentInfoMutex_ while SELECT waits for fragmentInfoMutex_ and COPY_FROM waits
-    // for UpdateDeleteLock
-
+  {
+    // Only take the fragment info lock when updating fragment info map. Otherwise,
+    // potential deadlock can occur after SELECT has locked TableReadLock and COPY_FROM
+    // has locked fragmentInfoMutex_ while SELECT waits for fragmentInfoMutex_ and
+    // COPY_FROM waits for TableWriteLock
     mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
     for (auto partIt = fragmentInfoVec_.begin() + startFragment;
          partIt != fragmentInfoVec_.end();

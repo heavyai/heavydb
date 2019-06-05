@@ -30,16 +30,10 @@
 
 namespace Lock_Namespace {
 using namespace rapidjson;
-using VLock = boost::variant<mapd_shared_lock<mapd_shared_mutex>,
-                             mapd_unique_lock<mapd_shared_mutex>>;
+using LockTypeContainer = boost::variant<mapd_shared_lock<mapd_shared_mutex>,
+                                         mapd_unique_lock<mapd_shared_mutex>>;
 
-enum LockType {
-  TableMetadataLock,
-  CheckpointLock,
-  UpdateDeleteLock,
-  ExecutorOuterLock,
-  LockMax
-};
+enum LockType { TableMetadataLock, CheckpointLock, ExecutorOuterLock, LockMax };
 
 template <typename MutexType, typename KeyType>
 class LockMgr {
@@ -101,31 +95,16 @@ LockType<MutexType> getTableLock(const Catalog_Namespace::Catalog& cat,
 }
 
 template <typename MutexType>
-void getTableMutexs(const Catalog_Namespace::Catalog& cat,
-                    const std::string& query_ra,
-                    std::vector<std::shared_ptr<MutexType>>& tableMutexs,
-                    const LockType lockType) {
-  // parse ra to learn involved table names
-  std::map<std::string, bool> tableNames;
-  getTableNames(tableNames, query_ra);
-  // get a mutex<MutexType> for each involved table
-  // mutexes already sorted like tableNames
-  for (const auto& tableName : tableNames) {
-    tableMutexs.emplace_back(getTableMutex<MutexType>(cat, tableName, lockType));
-  }
-}
-
-template <typename MutexType>
 void getTableLocks(const Catalog_Namespace::Catalog& cat,
                    const std::map<std::string, bool>& tableNames,
-                   std::vector<std::shared_ptr<VLock>>& tableLocks,
+                   std::vector<std::shared_ptr<LockTypeContainer>>& tableLocks,
                    const Lock_Namespace::LockType lockType) {
   for (const auto& tableName : tableNames) {
     if (tableName.second) {
-      tableLocks.emplace_back(std::make_shared<VLock>(
+      tableLocks.emplace_back(std::make_shared<LockTypeContainer>(
           getTableLock<MutexType, mapd_unique_lock>(cat, tableName.first, lockType)));
     } else {
-      tableLocks.emplace_back(std::make_shared<VLock>(
+      tableLocks.emplace_back(std::make_shared<LockTypeContainer>(
           getTableLock<MutexType, mapd_shared_lock>(cat, tableName.first, lockType)));
     }
   }
@@ -134,7 +113,7 @@ void getTableLocks(const Catalog_Namespace::Catalog& cat,
 template <typename MutexType>
 void getTableLocks(const Catalog_Namespace::Catalog& cat,
                    const std::string& query_ra,
-                   std::vector<std::shared_ptr<VLock>>& tableLocks,
+                   std::vector<std::shared_ptr<LockTypeContainer>>& tableLocks,
                    const Lock_Namespace::LockType lockType) {
   // parse ra to learn involved table names
   std::map<std::string, bool> tableNames;
