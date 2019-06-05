@@ -229,7 +229,7 @@ void RelAlgExecutor::cleanupPostExecution() {
   executor_->lit_str_dict_proxy_ = nullptr;
 }
 
-FirstStepExecutionResult RelAlgExecutor::executeRelAlgQueryFirstStep(
+FirstStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
     const RaExecutionDesc& exec_desc,
     const CompilationOptions& co,
     const ExecutionOptions& eo,

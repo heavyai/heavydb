@@ -55,6 +55,7 @@
 #include "../Shared/measure.h"
 #include "../Shared/shard_key.h"
 #include "DataMgr/LockMgr.h"
+#include "LockMgr/TableLockMgr.h"
 #include "ReservedKeywords.h"
 #include "gen-cpp/CalciteServer.h"
 #include "parser.h"
@@ -2275,17 +2276,18 @@ AggregatedResult InsertIntoTableAsSelectStmt::LocalConnector::query(
     std::string& sql_query_string,
     bool validate_only) {
   auto& catalog = session.getCatalog();
-  // get read UpdateDeleteLock on tables involved in SELECT subquery
   std::string pg_shimmed_select_query = pg_shim(sql_query_string);
   const auto query_ra = parse_to_ra(catalog, pg_shimmed_select_query, session);
-  std::vector<std::shared_ptr<VLock>> readUpdateDeleteLocks;
-  Lock_Namespace::getTableLocks<mapd_shared_mutex>(
-      session.getCatalog(),
-      query_ra,
-      readUpdateDeleteLocks,
-      Lock_Namespace::LockType::UpdateDeleteLock);
-  // [ write UpdateDeleteLocks ] lock is deferred in
-  // InsertOrderFragmenter::deleteFragments
+
+  // Note that the below command should *only* get read locks on the source table for
+  // InsertIntoAsSelect. Write locks will be taken on the target table in
+  // InsertOrderFragmenter::deleteFragments. This potentially leaves a small window where
+  // the target table is not locked, and should be investigated.
+  ReadWriteLockContainer table_lock_container;
+  TableLockMgr::getTableLocks(session.getCatalog(),
+                              query_ra,
+                              table_lock_container.read_locks,
+                              table_lock_container.write_locks);
 
   std::vector<TargetMetaInfo> target_metainfos;
 
@@ -2301,13 +2303,13 @@ void InsertIntoTableAsSelectStmt::LocalConnector::insertDataToLeaf(
   CHECK(leaf_idx == 0);
   auto& catalog = session.getCatalog();
   auto created_td = catalog.getMetadataForTable(insert_data.tableId);
-  // get CheckpointLock+UpdateDeleteLock locks on the table before trying to create
+  // get CheckpointLock on the table before trying to create
   // its 1st fragment
   ChunkKey chunkKey = {catalog.getCurrentDB().dbId, created_td->tableId};
   mapd_unique_lock<mapd_shared_mutex> chkptlLock(
       *Lock_Namespace::LockMgr<mapd_shared_mutex, ChunkKey>::getMutex(
           Lock_Namespace::LockType::CheckpointLock, chunkKey));
-  // [ write UpdateDeleteLocks ] lock is deferred in
+  // [ TableWriteLock ] lock is deferred in
   // InsertOrderFragmenter::deleteFragments
   created_td->fragmenter->insertDataNoCheckpoint(insert_data);
 }
@@ -2766,8 +2768,7 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   auto chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
       catalog, *table, LockType::CheckpointLock);
-  auto upddelLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-      catalog, *table, LockType::UpdateDeleteLock);
+  auto table_write_lock = TableLockMgr::getWriteLockForTable(catalog, *table);
   catalog.dropTable(td);
 }
 

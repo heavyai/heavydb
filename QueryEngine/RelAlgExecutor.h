@@ -72,10 +72,10 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
       RenderInfo* render_info,
       const int64_t queue_time_ms);
 
-  FirstStepExecutionResult executeRelAlgQueryFirstStep(const RaExecutionDesc& exec_desc,
-                                                       const CompilationOptions& co,
-                                                       const ExecutionOptions& eo,
-                                                       RenderInfo* render_info);
+  FirstStepExecutionResult executeRelAlgQuerySingleStep(const RaExecutionDesc& exec_desc,
+                                                        const CompilationOptions& co,
+                                                        const ExecutionOptions& eo,
+                                                        RenderInfo* render_info);
 
   void prepareLeafExecution(
       const AggregatedColRange& agg_col_range,
