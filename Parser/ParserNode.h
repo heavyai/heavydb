@@ -1815,7 +1815,7 @@ class InsertStmt : public DMLStmt {
   void analyze(const Catalog_Namespace::Catalog& catalog,
                Analyzer::Query& query) const override = 0;
 
- private:
+ protected:
   std::unique_ptr<std::string> table;
   std::list<std::unique_ptr<std::string>> column_list;
 };
@@ -1837,6 +1837,8 @@ class InsertValuesStmt : public InsertStmt {
   const std::list<std::unique_ptr<Expr>>& get_value_list() const { return value_list; }
   void analyze(const Catalog_Namespace::Catalog& catalog,
                Analyzer::Query& query) const override;
+
+  size_t determineLeafIndex(const Catalog_Namespace::Catalog& catalog, size_t num_leafs);
 
  private:
   std::list<std::unique_ptr<Expr>> value_list;
