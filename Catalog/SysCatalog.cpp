@@ -1587,9 +1587,9 @@ void SysCatalog::dropRole_unsafe(const std::string& roleName) {
 
   // it may very well be a user "role", so keep it generic
   auto* rl = getGrantee(roleName);
-  CHECK(rl);  // it has been checked already in the calling proc that this role exists,
-              // fail otherwise
-  delete rl;
+  if (rl) {  // admin super user may not exist in roles
+    delete rl;
+  }
   granteeMap_.erase(to_upper(roleName));
 
   sys_sqlite_lock sqlite_lock(this);
