@@ -461,10 +461,10 @@ void c_arrow(const std::string& query_string, const ExecutorDeviceType device_ty
     continue;                                                \
   }
 
-#define SKIP_ALL_ON_AGGREGATOR()                           \
-  if (g_aggregator) {                                      \
-    LOG(WARNING) << "Tests not valid in distributed mode"; \
-    return;                                                \
+#define SKIP_ALL_ON_AGGREGATOR()                         \
+  if (g_aggregator) {                                    \
+    LOG(ERROR) << "Tests not valid in distributed mode"; \
+    return;                                              \
   }
 
 #define SKIP_ON_AGGREGATOR(EXP) \
@@ -5702,16 +5702,16 @@ TEST(Update, DecimalOverflow) {
                                       std::to_string(val) + ");",
                                   ExecutorDeviceType::CPU),
                  std::runtime_error);
-    SKIP_ON_AGGREGATOR(
-        run_multiple_agg("UPDATE decimal_overflow_test set d=d-1 WHERE d IS NOT NULL;",
-                         ExecutorDeviceType::CPU));
-    SKIP_ON_AGGREGATOR(
-        run_multiple_agg("UPDATE decimal_overflow_test set d=d+1 WHERE d IS NOT NULL;",
-                         ExecutorDeviceType::CPU));
-    SKIP_ON_AGGREGATOR(EXPECT_THROW(
+
+    run_multiple_agg("UPDATE decimal_overflow_test set d=d-1 WHERE d IS NOT NULL;",
+                     ExecutorDeviceType::CPU);
+
+    run_multiple_agg("UPDATE decimal_overflow_test set d=d+1 WHERE d IS NOT NULL;",
+                     ExecutorDeviceType::CPU);
+    EXPECT_THROW(
         run_multiple_agg("UPDATE decimal_overflow_test set d=d+1 WHERE d IS NOT NULL;",
                          ExecutorDeviceType::CPU),
-        std::runtime_error));
+        std::runtime_error);
   };
 
   test(1, 0);
@@ -9913,8 +9913,6 @@ TEST(Truncate, Count) {
 }
 
 TEST(Update, VarlenSmartSwitch) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!is_feature_enabled<VarlenUpdates>()) {
     return;
   }
@@ -9939,7 +9937,7 @@ TEST(Update, VarlenSmartSwitch) {
     run_multiple_agg(
         "insert into smartswitch values (2, ARRAY[9,10,11,12,13], 'Lightweight');", dt);
 
-    // In-place updates have no shift in rowid
+    // In-place /s have no shift in rowid
     auto x_pre_rowid_0 =
         v<int64_t>(run_simple_agg("select rowid from smartswitch where x=0;", dt));
     auto x_pre_rowid_1 =
@@ -10051,8 +10049,6 @@ TEST(Update, VarlenSmartSwitch) {
 }
 
 TEST(Update, Text) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10072,7 +10068,13 @@ TEST(Update, Text) {
     run_multiple_agg("insert into text_default values ('muffin');", dt);
     run_multiple_agg("insert into text_default values ('man');", dt);
 
-    run_multiple_agg("update text_default set t='pizza' where char_length(t) <= 3;", dt);
+    if (g_aggregator) {
+      run_multiple_agg(
+          "update text_default set t='pizza' where t in ('do','you','the','man');", dt);
+    } else {
+      run_multiple_agg("update text_default set t='pizza' where char_length(t) <= 3;",
+                       dt);
+    }
     ASSERT_EQ(int64_t(4),
               v<int64_t>(run_simple_agg(
                   "select count(t) from text_default where t='pizza';", dt)));
@@ -10082,8 +10084,6 @@ TEST(Update, Text) {
 }
 
 TEST(Update, TextINVariant) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10115,8 +10115,6 @@ TEST(Update, TextINVariant) {
 }
 
 TEST(Update, TextEncodingDict16) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10141,8 +10139,14 @@ TEST(Update, TextEncodingDict16) {
     run_multiple_agg("insert into textenc16_default values ('muffin');", dt);
     run_multiple_agg("insert into textenc16_default values ('man');", dt);
 
-    run_multiple_agg("update textenc16_default set t='pizza' where char_length(t) <= 3;",
-                     dt);
+    if (g_aggregator) {
+      run_multiple_agg(
+          "update textenc16_default set t='pizza' where t in ('do','you','the','man');",
+          dt);
+    } else {
+      run_multiple_agg(
+          "update textenc16_default set t='pizza' where char_length(t) <= 3;", dt);
+    }
     ASSERT_EQ(int64_t(4),
               v<int64_t>(run_simple_agg(
                   "select count(t) from textenc16_default where t='pizza';", dt)));
@@ -10152,8 +10156,6 @@ TEST(Update, TextEncodingDict16) {
 }
 
 TEST(Update, TextEncodingDict8) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10177,8 +10179,14 @@ TEST(Update, TextEncodingDict8) {
     run_multiple_agg("insert into textenc8_default values ('muffin');", dt);
     run_multiple_agg("insert into textenc8_default values ('man');", dt);
 
-    run_multiple_agg("update textenc8_default set t='pizza' where char_length(t) <= 3;",
-                     dt);
+    if (g_aggregator) {
+      run_multiple_agg(
+          "update textenc8_default set t='pizza' where t in ('do','you','the','man');",
+          dt);
+    } else {
+      run_multiple_agg("update textenc8_default set t='pizza' where char_length(t) <= 3;",
+                       dt);
+    }
     ASSERT_EQ(int64_t(4),
               v<int64_t>(run_simple_agg(
                   "select count(t) from textenc8_default where t='pizza';", dt)));
@@ -10188,8 +10196,6 @@ TEST(Update, TextEncodingDict8) {
 }
 
 TEST(Update, MultiColumnInteger) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10220,8 +10226,6 @@ TEST(Update, MultiColumnInteger) {
 }
 
 TEST(Update, TimestampUpdate) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10254,8 +10258,6 @@ TEST(Update, TimestampUpdate) {
 }
 
 TEST(Update, TimeUpdate) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10292,8 +10294,6 @@ TEST(Update, TimeUpdate) {
 }
 
 TEST(Update, DateUpdate) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10320,8 +10320,6 @@ TEST(Update, DateUpdate) {
 }
 
 TEST(Update, FloatUpdate) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10350,8 +10348,6 @@ TEST(Update, FloatUpdate) {
 }
 
 TEST(Update, IntegerUpdate) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10380,8 +10376,6 @@ TEST(Update, IntegerUpdate) {
 }
 
 TEST(Update, DoubleUpdate) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10411,8 +10405,6 @@ TEST(Update, DoubleUpdate) {
 }
 
 TEST(Update, SmallIntUpdate) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10440,8 +10432,6 @@ TEST(Update, SmallIntUpdate) {
 }
 
 TEST(Update, BigIntUpdate) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10465,8 +10455,6 @@ TEST(Update, BigIntUpdate) {
 }
 
 TEST(Update, DecimalUpdate) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10493,8 +10481,6 @@ TEST(Update, DecimalUpdate) {
 }
 
 TEST(Update, JoinCacheInvalidationTest) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
@@ -10504,7 +10490,9 @@ TEST(Update, JoinCacheInvalidationTest) {
     run_ddl_statement("drop table if exists string_join1");
     run_ddl_statement("drop table if exists string_join2");
     run_ddl_statement("create table string_join1 ( t text ) with (vacuum='delayed')");
-    run_ddl_statement("create table string_join2 ( t text ) with (vacuum='delayed')");
+    run_ddl_statement(
+        "create table string_join2 ( t text ) with (vacuum='delayed', "
+        "partitions='REPLICATED')");
 
     run_multiple_agg("insert into string_join1 values ('muffin')", dt);
     run_multiple_agg("insert into string_join1 values ('pizza')", dt);
@@ -10556,8 +10544,6 @@ TEST(Delete, WithoutVacuumAttribute) {
 }
 
 TEST(Update, ImplicitCastToDate4) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -10616,8 +10602,6 @@ TEST(Update, ImplicitCastToDate4) {
 }
 
 TEST(Update, ImplicitCastToDate2) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -10677,8 +10661,6 @@ TEST(Update, ImplicitCastToDate2) {
 }
 
 TEST(Update, ImplicitCastToEncodedString) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -10851,8 +10833,6 @@ TEST(Update, ImplicitCastToEncodedString) {
 }
 
 TEST(Update, ImplicitCastToNoneEncodedString) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -10903,8 +10883,6 @@ TEST(Update, ImplicitCastToNoneEncodedString) {
 }
 
 TEST(Update, ImplicitCastToNumericTypes) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -10935,9 +10913,8 @@ TEST(Update, ImplicitCastToNumericTypes) {
     run_multiple_agg("insert into booltest values ( 'True' );", dt);
     run_multiple_agg("insert into dectest values ( '1234.0' );", dt);
 
-    EXPECT_THROW(
-        run_multiple_agg("update floattest set f=cast( 'nonsense' as varchar );", dt),
-        std::invalid_argument);
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update floattest set f=cast( 'nonsense' as varchar );", dt));
 
     run_multiple_agg("update floattest set f=cast( '128.90' as varchar );", dt);
     EXPECT_FLOAT_EQ(float(128.90),
@@ -10983,9 +10960,8 @@ TEST(Update, ImplicitCastToNumericTypes) {
     EXPECT_FLOAT_EQ(float(1234),
                     v<float>(run_simple_agg("select f from floattest;", dt)));
 
-    EXPECT_THROW(
-        run_multiple_agg("update doubletest set d=cast( 'nonsense' as varchar );", dt),
-        std::invalid_argument);
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update doubletest set d=cast( 'nonsense' as varchar );", dt));
 
     run_multiple_agg("update doubletest set d=cast( '128.90' as varchar );", dt);
     EXPECT_DOUBLE_EQ(double(128.90),
@@ -11032,9 +11008,8 @@ TEST(Update, ImplicitCastToNumericTypes) {
     EXPECT_DOUBLE_EQ(double(1234),
                      v<double>(run_simple_agg("select d from doubletest;", dt)));
 
-    EXPECT_THROW(
-        run_multiple_agg("update inttest set i=cast( 'nonsense' as varchar );", dt),
-        std::invalid_argument);
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update inttest set i=cast( 'nonsense' as varchar );", dt));
     run_multiple_agg("update inttest set i=cast( '128.90' as varchar );", dt);
     EXPECT_EQ(int64_t(128), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
 
@@ -11071,9 +11046,8 @@ TEST(Update, ImplicitCastToNumericTypes) {
     run_multiple_agg("update inttest set i=cast( 1234.00 as decimal );", dt);
     EXPECT_EQ(int64_t(1234), v<int64_t>(run_simple_agg("select i from inttest;", dt)));
 
-    EXPECT_THROW(
-        run_multiple_agg("update sinttest set i=cast( 'nonsense' as varchar );", dt),
-        std::invalid_argument);
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update sinttest set i=cast( 'nonsense' as varchar );", dt));
     run_multiple_agg("update sinttest set i=cast( '128.90' as varchar );", dt);
     EXPECT_EQ(int64_t(128), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
 
@@ -11110,9 +11084,8 @@ TEST(Update, ImplicitCastToNumericTypes) {
     run_multiple_agg("update sinttest set i=cast( 1234.00 as decimal );", dt);
     EXPECT_EQ(int64_t(1234), v<int64_t>(run_simple_agg("select i from sinttest;", dt)));
 
-    EXPECT_THROW(
-        run_multiple_agg("update binttest set i=cast( 'nonsense' as varchar );", dt),
-        std::invalid_argument);
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update binttest set i=cast( 'nonsense' as varchar );", dt));
     run_multiple_agg("update binttest set i=cast( '128.90' as varchar );", dt);
     EXPECT_EQ(int64_t(128), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
 
@@ -11149,46 +11122,38 @@ TEST(Update, ImplicitCastToNumericTypes) {
     run_multiple_agg("update binttest set i=cast( 1234.00 as decimal );", dt);
     EXPECT_EQ(int64_t(1234), v<int64_t>(run_simple_agg("select i from binttest;", dt)));
 
-    EXPECT_THROW(
-        run_multiple_agg("update booltest set b=cast( 'nonsense' as varchar );", dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update booltest set b=cast( '128.90' as varchar );", dt),
-        std::runtime_error);
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update booltest set b=cast( 'nonsense' as varchar );", dt));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update booltest set b=cast( '128.90' as varchar );", dt));
 
-    EXPECT_THROW(
-        run_multiple_agg(
-            "update booltest set b=cast( '2000-01-01 10:11:12' as timestamp );", dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update booltest set b=cast( '12:34:56' as time );", dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("update booltest set b=cast( '1999-12-31' as date );", dt),
-        std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 1234.0 as float );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 1234.0 as double );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 56780 as integer );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 12345 as smallint );", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("update booltest set b=cast( 12345 as bigint );", dt),
-                 std::runtime_error);
+    EXPECT_ANY_THROW(run_multiple_agg(
+        "update booltest set b=cast( '2000-01-01 10:11:12' as timestamp );", dt));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update booltest set b=cast( '12:34:56' as time );", dt));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update booltest set b=cast( '1999-12-31' as date );", dt));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update booltest set b=cast( 1234.0 as float );", dt));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update booltest set b=cast( 1234.0 as double );", dt));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update booltest set b=cast( 56780 as integer );", dt));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update booltest set b=cast( 12345 as smallint );", dt));
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update booltest set b=cast( 12345 as bigint );", dt));
     EXPECT_NO_THROW(
         run_multiple_agg("update booltest set b=cast( 'False' as boolean );", dt));
     EXPECT_EQ(int64_t(0), v<int64_t>(run_simple_agg("select b from booltest;", dt)));
     EXPECT_NO_THROW(
         run_multiple_agg("update booltest set b=cast( 'True' as boolean );", dt));
     EXPECT_EQ(int64_t(1), v<int64_t>(run_simple_agg("select b from booltest;", dt)));
-    EXPECT_THROW(
-        run_multiple_agg("update booltest set b=cast( 1234.00 as decimal );", dt),
-        std::runtime_error);
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update booltest set b=cast( 1234.00 as decimal );", dt));
 
-    EXPECT_THROW(
-        run_multiple_agg("update dectest set d=cast( 'nonsense' as varchar );", dt),
-        std::invalid_argument);
+    EXPECT_ANY_THROW(
+        run_multiple_agg("update dectest set d=cast( 'nonsense' as varchar );", dt));
     run_multiple_agg("update dectest set d=cast( '128.90' as varchar );", dt);
     EXPECT_EQ(
         int64_t(128),
@@ -11257,8 +11222,6 @@ TEST(Update, ImplicitCastToNumericTypes) {
 }
 
 TEST(Update, ImplicitCastToTime4) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -11308,8 +11271,6 @@ TEST(Update, ImplicitCastToTime4) {
 }
 
 TEST(Update, ImplicitCastToTime8) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -11355,8 +11316,6 @@ TEST(Update, ImplicitCastToTime8) {
 }
 
 TEST(Update, ImplicitCastToTimestamp8) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -11406,8 +11365,6 @@ TEST(Update, ImplicitCastToTimestamp8) {
 }
 
 TEST(Update, ImplicitCastToTimestamp4) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -11463,8 +11420,6 @@ TEST(Update, ImplicitCastToTimestamp4) {
 }
 
 TEST(Update, ShardedTableShardKeyTest) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteUpdatePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -11505,8 +11460,6 @@ TEST(Update, ShardedTableShardKeyTest) {
 }
 
 TEST(Update, UsingDateColumns) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -11589,8 +11542,6 @@ TEST(Delete, ShardedTableDeleteTest) {
 }
 
 TEST(Delete, JoinCacheInvalidationTest) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -11600,7 +11551,9 @@ TEST(Delete, JoinCacheInvalidationTest) {
     run_ddl_statement("drop table if exists string_join1;");
     run_ddl_statement("drop table if exists string_join2;");
     run_ddl_statement("create table string_join1 ( t text ) with (vacuum='delayed')");
-    run_ddl_statement("create table string_join2 ( t text ) with (vacuum='delayed')");
+    run_ddl_statement(
+        "create table string_join2 ( t text ) with (vacuum='delayed', "
+        "partitions='REPLICATED')");
 
     run_multiple_agg("insert into string_join1 values ('muffin')", dt);
     run_multiple_agg("insert into string_join1 values ('pizza')", dt);
@@ -11633,8 +11586,6 @@ TEST(Delete, JoinCacheInvalidationTest) {
 }
 
 TEST(Delete, IntraFragment) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -11660,7 +11611,7 @@ TEST(Delete, IntraFragment) {
 
 #if 0
 // FIX-ME:  Test failing on some systems with calcite exceptions, needs rewriting
-TEST(Delete, Joins_EmptyTable) {
+TEST(Join, EmptyTable) {
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value)
     return;
 
@@ -11680,7 +11631,7 @@ TEST(Delete, Joins_EmptyTable) {
 }
 #endif
 
-TEST(Delete, Joins_InnerJoin_TwoTables) {
+TEST(Join, InnerJoin_TwoTables) {
   SKIP_ALL_ON_AGGREGATOR();
 
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
@@ -11725,7 +11676,7 @@ TEST(Delete, Joins_InnerJoin_TwoTables) {
   }
 }
 
-TEST(Delete, Joins_InnerJoin_AtLeastThreeTables) {
+TEST(Join, InnerJoin_AtLeastThreeTables) {
   SKIP_ALL_ON_AGGREGATOR();
 
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
@@ -11803,7 +11754,7 @@ TEST(Delete, Joins_InnerJoin_AtLeastThreeTables) {
   }
 }
 
-TEST(Delete, Joins_InnerJoin_Filters) {
+TEST(Join, InnerJoin_Filters) {
   SKIP_ALL_ON_AGGREGATOR();
 
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
@@ -11849,7 +11800,7 @@ TEST(Delete, Joins_InnerJoin_Filters) {
   }
 }
 
-TEST(Delete, Joins_LeftOuterJoin) {
+TEST(Join, LeftOuterJoin) {
   SKIP_ALL_ON_AGGREGATOR();
 
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
@@ -12008,7 +11959,7 @@ TEST(Delete, Joins_LeftOuterJoin) {
   }
 }
 
-TEST(Delete, Joins_LeftJoin_Filters) {
+TEST(Join, LeftJoin_Filters) {
   SKIP_ALL_ON_AGGREGATOR();
 
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
@@ -12055,7 +12006,7 @@ TEST(Delete, Joins_LeftJoin_Filters) {
   }
 }
 
-TEST(Delete, Joins_MultiCompositeColumns) {
+TEST(Join, MultiCompositeColumns) {
   SKIP_ALL_ON_AGGREGATOR();
 
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
@@ -12096,7 +12047,7 @@ TEST(Delete, Joins_MultiCompositeColumns) {
   }
 }
 
-TEST(Delete, Joins_BuildHashTable) {
+TEST(Join, BuildHashTable) {
   SKIP_ALL_ON_AGGREGATOR();
 
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
@@ -12111,7 +12062,7 @@ TEST(Delete, Joins_BuildHashTable) {
   }
 }
 
-TEST(Delete, Joins_ComplexQueries) {
+TEST(Join, ComplexQueries) {
   SKIP_ALL_ON_AGGREGATOR();
 
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
@@ -12149,7 +12100,7 @@ TEST(Delete, Joins_ComplexQueries) {
   }
 }
 
-TEST(Delete, Joins_OneOuterExpression) {
+TEST(Join, OneOuterExpression) {
   SKIP_ALL_ON_AGGREGATOR();
 
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
@@ -12173,7 +12124,7 @@ TEST(Delete, Joins_OneOuterExpression) {
   }
 }
 
-TEST(Delete, Joins_MultipleOuterExpressions) {
+TEST(Join, MultipleOuterExpressions) {
   SKIP_ALL_ON_AGGREGATOR();
 
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
@@ -12211,8 +12162,6 @@ TEST(Delete, Joins_MultipleOuterExpressions) {
 }
 
 TEST(Delete, ExtraFragment) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -12242,8 +12191,6 @@ TEST(Delete, ExtraFragment) {
 }
 
 TEST(Delete, Joins_ImplicitJoins) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -12260,7 +12207,9 @@ TEST(Delete, Joins_ImplicitJoins) {
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x;", dt);
     c("SELECT COUNT(*) FROM test, hash_join_test WHERE test.t = hash_join_test.t;", dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x < test_inner.x + 1;", dt);
-    c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str = test_inner.str;", dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test, test_inner WHERE test.real_str = test_inner.str;",
+          dt));
     c("SELECT test_inner.x, COUNT(*) AS n FROM test, test_inner WHERE test.x = "
       "test_inner.x GROUP BY test_inner.x "
       "ORDER BY n;",
@@ -12295,12 +12244,15 @@ TEST(Delete, Joins_ImplicitJoins) {
       "b.x AND a.x = c.x AND c.str = "
       "'foo';",
       dt);
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt);
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.str = b.str;", dt);
-    c("SELECT COUNT(*) FROM test, test_inner WHERE (test.x = test_inner.x AND test.y = "
-      "42 AND test_inner.str = 'foo') "
-      "OR (test.x = test_inner.x AND test.y = 43 AND test_inner.str = 'foo');",
-      dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.str = b.str;", dt));
+    SKIP_ON_AGGREGATOR(c(
+        "SELECT COUNT(*) FROM test, test_inner WHERE (test.x = test_inner.x AND test.y = "
+        "42 AND test_inner.str = 'foo') "
+        "OR (test.x = test_inner.x AND test.y = 43 AND test_inner.str = 'foo');",
+        dt));
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x OR test.x = "
       "test_inner.x;",
       dt);
@@ -12310,10 +12262,11 @@ TEST(Delete, Joins_ImplicitJoins) {
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;",
             dt)));
-    ASSERT_EQ(7,
-              v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
-                                        "test.x = test_inner.x AND test.rowid = 9;",
-                                        dt)));
+    SKIP_ON_AGGREGATOR(
+        ASSERT_EQ(7,
+                  v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
+                                            "test.x = test_inner.x AND test.rowid = 9;",
+                                            dt))));
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM test, test_inner WHERE "
                                         "test.x = test_inner.x AND test.rowid = 20;",
