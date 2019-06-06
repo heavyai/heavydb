@@ -1,5 +1,5 @@
 set(lock_mgr_source_files
-    TableLockMgr.cpp
+    LockMgr.cpp
 )
 
 add_library(LockMgr ${lock_mgr_source_files})

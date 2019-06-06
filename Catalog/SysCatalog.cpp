@@ -33,7 +33,7 @@
 #include "Catalog.h"
 
 #include "Catalog/AuthMetadata.h"
-#include "DataMgr/LockMgr.h"
+#include "LockMgr/LockMgr.h"
 #include "QueryEngine/ExternalCacheInvalidators.h"
 
 #include <boost/algorithm/string/predicate.hpp>

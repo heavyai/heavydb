@@ -25,7 +25,7 @@
 #include <type_traits>
 #include "../DataMgr/AbstractBuffer.h"
 #include "../DataMgr/DataMgr.h"
-#include "../DataMgr/LockMgr.h"
+#include "../LockMgr/LockMgr.h"
 #include "../Shared/checked_alloc.h"
 #include "../Shared/thread_count.h"
 

@@ -51,5 +51,5 @@ set_property(TARGET ParserGenerated PROPERTY CXX_STANDARD 14)
 
 add_library(Parser ${CMAKE_CURRENT_BINARY_DIR}/parser.h ${parser_source_files})
 add_dependencies(Parser ParserFiles ScannerFiles)
-target_link_libraries(Parser ParserGenerated Shared QueryEngine Catalog DataMgr)
+target_link_libraries(Parser ParserGenerated Shared QueryEngine Catalog DataMgr LockMgr)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
