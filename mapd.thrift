@@ -275,13 +275,14 @@ struct TNodeMemoryInfo {
 struct TTableMeta {
   1: string table_name
   2: i64 num_cols
-  3: list<common.TDatumType> col_datum_types
   4: bool is_view
   5: bool is_replicated
   6: i64 shard_count
   7: i64 max_rows
   8: i64 table_id
   9: i64 max_table_id
+  10: list<common.TTypeInfo> col_types
+  11: list<string> col_names
 }
 
 struct TTableDetails {

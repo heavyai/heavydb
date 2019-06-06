@@ -62,6 +62,7 @@
 #include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/TableOptimizer.h"
+#include "QueryEngine/ThriftSerializers.h"
 #include "Shared/SQLTypeUtilities.h"
 #include "Shared/StringTransform.h"
 #include "Shared/SysInfo.h"
@@ -1827,7 +1828,8 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
     ret.max_rows = td->maxRows;
     ret.table_id = td->tableId;
 
-    std::set<TDatumType::type> col_datum_types;
+    std::vector<TTypeInfo> col_types;
+    std::vector<std::string> col_names;
     size_t num_cols = 0;
     if (td->isView) {
       try {
@@ -1852,7 +1854,8 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
             num_cols--;
             continue;
           }
-          col_datum_types.insert(col.col_type.type);
+          col_types.push_back(col.col_type);
+          col_names.push_back(col.col_name);
         }
       } catch (std::exception& e) {
         LOG(WARNING) << "get_tables_meta: Ignoring broken view: " << td->tableName;
@@ -1867,7 +1870,8 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
             if (cd == deleted_cd) {
               continue;
             }
-            col_datum_types.insert(type_to_thrift(cd->columnType));
+            col_types.push_back(ThriftSerializers::type_info_to_thrift(cd->columnType));
+            col_names.push_back(cd->columnName);
           }
           num_cols = col_descriptors.size();
         } else {
@@ -1879,9 +1883,8 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
     }
 
     ret.num_cols = num_cols;
-    std::copy(col_datum_types.begin(),
-              col_datum_types.end(),
-              std::back_inserter(ret.col_datum_types));
+    std::copy(col_types.begin(), col_types.end(), std::back_inserter(ret.col_types));
+    std::copy(col_names.begin(), col_names.end(), std::back_inserter(ret.col_names));
 
     _return.push_back(ret);
   }
