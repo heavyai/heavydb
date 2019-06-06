@@ -54,7 +54,7 @@
 #include "../Shared/mapd_glob.h"
 #include "../Shared/measure.h"
 #include "../Shared/shard_key.h"
-#include "DataMgr/LockMgr.h"
+#include "LockMgr/LockMgr.h"
 #include "LockMgr/TableLockMgr.h"
 #include "ReservedKeywords.h"
 #include "gen-cpp/CalciteServer.h"

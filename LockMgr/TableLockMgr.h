@@ -23,7 +23,7 @@
 #include <memory>
 #include <string>
 
-#include <DataMgr/LockMgr.h>
+#include "LockMgr.h"
 
 #include <Catalog/Catalog.h>
 

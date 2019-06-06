@@ -41,9 +41,9 @@
 
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
-#include "DataMgr/LockMgr.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Import/Importer.h"
+#include "LockMgr/LockMgr.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/ReservedKeywords.h"
 #include "Parser/parser.h"

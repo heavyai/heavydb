@@ -32,7 +32,7 @@
 #include <sstream>
 #include "SysCatalog.h"
 
-#include "DataMgr/LockMgr.h"
+#include "LockMgr/LockMgr.h"
 #include "SharedDictionaryValidator.h"
 
 #include <boost/algorithm/string/predicate.hpp>
