@@ -33,8 +33,20 @@ yay -S \
     zlib
 
 # Install Arrow
-pushd arch/arrow
-makepkg -si
+# Package cannot be built in a path that incudes "internal" as a substring.
+ARROW_PKG_DIR=$HOME/omnisci_tmp_arrow
+mkdir -p $ARROW_PKG_DIR
+cp arch/arrow/PKGBUILD $ARROW_PKG_DIR
+pushd $ARROW_PKG_DIR
+makepkg -cis
+rm -f PKGBUILD
+popd
+mv $ARROW_PKG_DIR/{apache-arrow-*.tar.gz,arrow-*.pkg.tar.xz} arch/arrow/
+rmdir $ARROW_PKG_DIR
+
+# Install SPIRV-Cross
+pushd arch/spirv-cross
+makepkg -cis
 popd
 
 # Install Bison++ from source
