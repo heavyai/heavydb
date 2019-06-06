@@ -126,8 +126,8 @@ public class EagainConcurrencyTest {
     su.runSql("GRANT DROP VIEW on DATABASE db1 TO bob;");
     su.runSql("GRANT DELETE DASHBOARD on DATABASE db1 TO bob;");
 
-    su.runSql("GRANT ACCESS on database mapd TO dba;");
-    su.runSql("GRANT ACCESS on database mapd TO bob;");
+    su.runSql("GRANT ACCESS on database omnisci TO dba;");
+    su.runSql("GRANT ACCESS on database omnisci TO bob;");
     su.runSql("GRANT ACCESS on database db1 TO dba;");
     su.runSql("GRANT ACCESS on database db1 TO bob;");
 
