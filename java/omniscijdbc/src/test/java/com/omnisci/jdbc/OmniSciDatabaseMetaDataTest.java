@@ -68,9 +68,17 @@ public class OmniSciDatabaseMetaDataTest {
 
   @After
   public void tearDown() throws Exception {
-    Statement st = m_super_conn.createStatement();
-    run_command(st, PROPERTIES.getProperty("drop_base_db"));
     m_super_conn.close();
+    // When we drop a DB all its connections are invalidated, so we do it from
+    // a connection to another DB
+    Connection default_conn = DriverManager.getConnection(
+            PROPERTIES.getProperty("default_db_connection_url"),
+            super_user,
+            super_password);
+    Statement st = default_conn.createStatement();
+    run_command(st, PROPERTIES.getProperty("drop_base_db"));
+    st.close();
+    default_conn.close();
   }
 
   private void run_command(Statement st, String cmd) throws SQLException {
