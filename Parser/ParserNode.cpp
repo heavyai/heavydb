@@ -2283,11 +2283,8 @@ AggregatedResult InsertIntoTableAsSelectStmt::LocalConnector::query(
   // InsertIntoAsSelect. Write locks will be taken on the target table in
   // InsertOrderFragmenter::deleteFragments. This potentially leaves a small window where
   // the target table is not locked, and should be investigated.
-  ReadWriteLockContainer table_lock_container;
-  TableLockMgr::getTableLocks(session.getCatalog(),
-                              query_ra,
-                              table_lock_container.read_locks,
-                              table_lock_container.write_locks);
+  std::vector<TableLock> table_locks;
+  TableLockMgr::getTableLocks(session.getCatalog(), query_ra, table_locks);
 
   std::vector<TargetMetaInfo> target_metainfos;
 

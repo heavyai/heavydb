@@ -860,11 +860,9 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
       // for update/delete this would be a table write lock)
       mapd_shared_lock<mapd_shared_mutex> executeReadLock(
           *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
-      ReadWriteLockContainer table_lock_container;
-      TableLockMgr::getTableLocks(session_info.getCatalog(),
-                                  tableNames.value(),
-                                  table_lock_container.read_locks,
-                                  table_lock_container.write_locks);
+      std::vector<Lock_Namespace::TableLock> table_locks;
+      TableLockMgr::getTableLocks(
+          session_info.getCatalog(), tableNames.value(), table_locks);
 
       if (pw.isCalciteExplain()) {
         throw std::runtime_error("explain is not unsupported by current thrift API");
@@ -4797,7 +4795,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                   DELETE/UPDATE: CheckpointLock >> TableWriteLock
   */
 
-  Lock_Namespace::ReadWriteLockContainer sql_execute_lock_container;
+  std::vector<Lock_Namespace::TableLock> table_locks;
 
   mapd_unique_lock<mapd_shared_mutex> chkptlLock;
   mapd_unique_lock<mapd_shared_mutex> executeWriteLock;
@@ -4837,10 +4835,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       // COPY_TO/SELECT: read ExecutorOuterLock >> TableReadLock locks
       executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
           *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
-      TableLockMgr::getTableLocks(session_info.getCatalog(),
-                                  tableNames.value(),
-                                  sql_execute_lock_container.read_locks,
-                                  sql_execute_lock_container.write_locks);
+      TableLockMgr::getTableLocks(
+          session_info.getCatalog(), tableNames.value(), table_locks);
 
       const auto filter_push_down_requests =
           execute_rel_alg(_return,
@@ -5005,9 +5001,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     return root_plan_ptr;
   };
 
-  auto handle_ddl =
-      [&cat, &session_info, &_return, &chkptlLock, &sql_execute_lock_container, this](
-          Parser::DDLStmt* ddl) -> bool {
+  auto handle_ddl = [&cat, &session_info, &_return, &chkptlLock, &table_locks, this](
+                        Parser::DDLStmt* ddl) -> bool {
     if (!ddl) {
       return false;
     }
@@ -5068,10 +5063,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       const auto query_string = export_stmt->get_select_stmt();
       const auto query_ra =
           parse_to_ra(query_string, {}, session_info, tableNames, mapd_parameters_);
-      TableLockMgr::getTableLocks(session_info.getCatalog(),
-                                  tableNames.value(),
-                                  sql_execute_lock_container.read_locks,
-                                  sql_execute_lock_container.write_locks);
+      TableLockMgr::getTableLocks(
+          session_info.getCatalog(), tableNames.value(), table_locks);
     }
     auto truncate_stmt = dynamic_cast<Parser::TruncateTableStmt*>(ddl);
     if (truncate_stmt) {
@@ -5079,9 +5072,9 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
           getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.getCatalog(),
                                                             *truncate_stmt->get_table(),
                                                             LockType::CheckpointLock);
-      sql_execute_lock_container.write_locks.emplace_back(
-          TableLockMgr::getWriteLockForTable(session_info.getCatalog(),
-                                             *truncate_stmt->get_table()));
+      table_locks.emplace_back();
+      table_locks.back().write_lock = TableLockMgr::getWriteLockForTable(
+          session_info.getCatalog(), *truncate_stmt->get_table());
     }
     auto add_col_stmt = dynamic_cast<Parser::AddColumnStmt*>(ddl);
     if (add_col_stmt) {
@@ -5090,9 +5083,9 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
           getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_info.getCatalog(),
                                                             *add_col_stmt->get_table(),
                                                             LockType::CheckpointLock);
-      sql_execute_lock_container.write_locks.emplace_back(
-          TableLockMgr::getWriteLockForTable(session_info.getCatalog(),
-                                             *add_col_stmt->get_table()));
+      table_locks.emplace_back();
+      table_locks.back().write_lock = TableLockMgr::getWriteLockForTable(
+          session_info.getCatalog(), *add_col_stmt->get_table());
     }
 
     _return.execution_time_ms += measure<>::execution([&]() {
@@ -5132,10 +5125,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         const auto query_string = stmtp->get_query()->to_string();
         const auto query_ra =
             parse_to_ra(query_str, {}, session_info, tableNames, mapd_parameters_);
-        TableLockMgr::getTableLocks(session_info.getCatalog(),
-                                    tableNames.value(),
-                                    sql_execute_lock_container.read_locks,
-                                    sql_execute_lock_container.write_locks);
+        TableLockMgr::getTableLocks(
+            session_info.getCatalog(), tableNames.value(), table_locks);
 
         // [ TableWriteLocks ] lock is deferred in
         // InsertOrderFragmenter::deleteFragments

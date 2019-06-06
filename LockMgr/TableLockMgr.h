@@ -47,9 +47,9 @@ using MutexType = mapd_shared_mutex;
 using WriteLock = mapd_unique_lock<MutexType>;
 using ReadLock = mapd_shared_lock<MutexType>;
 
-struct ReadWriteLockContainer {
-  std::vector<ReadLock> read_locks;
-  std::vector<WriteLock> write_locks;
+struct TableLock {
+  WriteLock write_lock;
+  ReadLock read_lock;
 };
 
 template <class T>
@@ -62,25 +62,25 @@ class TableLockMgrImpl {
 
   static void getTableLocks(const Catalog_Namespace::Catalog& cat,
                             const std::map<std::string, bool>& table_names,
-                            std::vector<ReadLock>& read_locks,
-                            std::vector<WriteLock>& write_locks) {
+                            std::vector<TableLock>& table_locks) {
     for (const auto& table_name_itr : table_names) {
+      TableLock table_lock;
       if (table_name_itr.second) {
-        write_locks.push_back(T::getWriteLockForTable(cat, table_name_itr.first));
+        table_lock.write_lock = T::getWriteLockForTable(cat, table_name_itr.first);
       } else {
-        read_locks.push_back(T::getReadLockForTable(cat, table_name_itr.first));
+        table_lock.read_lock = T::getReadLockForTable(cat, table_name_itr.first);
       }
+      table_locks.emplace_back(std::move(table_lock));
     }
   }
 
   static void getTableLocks(const Catalog_Namespace::Catalog& cat,
                             const std::string& query_ra,
-                            std::vector<ReadLock>& read_locks,
-                            std::vector<WriteLock>& write_locks) {
+                            std::vector<TableLock>& table_locks) {
     // parse ra to learn involved table names
     std::map<std::string, bool> table_names;
     getTableNames(table_names, query_ra);
-    return T::getTableLocks(cat, table_names, read_locks, write_locks);
+    return T::getTableLocks(cat, table_names, table_locks);
   }
 
   static WriteLock getWriteLockForTable(const Catalog_Namespace::Catalog& cat,
