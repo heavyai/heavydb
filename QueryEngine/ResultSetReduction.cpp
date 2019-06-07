@@ -919,40 +919,99 @@ void ResultSetStorage::moveEntriesToBuffer(int8_t* new_buff,
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   CHECK(QueryDescriptionType::GroupByBaselineHash ==
         query_mem_desc_.getQueryDescriptionType());
-  const auto this_buff = reinterpret_cast<const int64_t*>(buff_);
+  const auto src_buff = reinterpret_cast<const int64_t*>(buff_);
   const auto row_qw_count = get_row_qw_count(query_mem_desc_);
   const auto key_byte_width = query_mem_desc_.getEffectiveKeyWidth();
-  for (size_t i = 0; i < query_mem_desc_.getEntryCount(); ++i) {
-    const auto key_off = query_mem_desc_.didOutputColumnar()
-                             ? key_offset_colwise(i, 0, query_mem_desc_.getEntryCount())
-                             : row_qw_count * i;
-    const auto key_ptr = reinterpret_cast<const KeyType*>(&this_buff[key_off]);
-    if (*key_ptr == get_empty_key<KeyType>()) {
-      continue;
+
+  if (use_multithreaded_reduction(query_mem_desc_.getEntryCount())) {
+    const size_t thread_count = cpu_threads();
+    std::vector<std::future<void>> move_threads;
+
+    for (size_t thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+      const auto thread_entry_count =
+          (query_mem_desc_.getEntryCount() + thread_count - 1) / thread_count;
+      const auto start_index = thread_idx * thread_entry_count;
+      const auto end_index =
+          std::min(start_index + thread_entry_count, query_mem_desc_.getEntryCount());
+      move_threads.emplace_back(std::async(
+          std::launch::async,
+          [this,
+           src_buff,
+           new_buff_i64,
+           new_entry_count,
+           start_index,
+           end_index,
+           key_count,
+           row_qw_count,
+           key_byte_width] {
+            for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
+              moveOneEntryToBuffer<KeyType>(entry_idx,
+                                            new_buff_i64,
+                                            new_entry_count,
+                                            key_count,
+                                            row_qw_count,
+                                            src_buff,
+                                            key_byte_width);
+            }
+          }));
     }
-    int64_t* new_entries_ptr{nullptr};
-    if (query_mem_desc_.didOutputColumnar()) {
-      const auto key =
-          make_key(&this_buff[key_off], query_mem_desc_.getEntryCount(), key_count);
-      new_entries_ptr =
-          get_group_value_columnar(new_buff_i64, new_entry_count, &key[0], key_count);
-    } else {
-      new_entries_ptr = get_group_value(new_buff_i64,
-                                        new_entry_count,
-                                        &this_buff[key_off],
-                                        key_count,
-                                        key_byte_width,
-                                        row_qw_count,
-                                        nullptr);
+    for (auto& move_thread : move_threads) {
+      move_thread.wait();
     }
-    CHECK(new_entries_ptr);
-    fill_slots(new_entries_ptr,
-               new_entry_count,
-               this_buff,
-               i,
-               query_mem_desc_.getEntryCount(),
-               query_mem_desc_);
+    for (auto& move_thread : move_threads) {
+      move_thread.get();
+    }
+  } else {
+    for (size_t entry_idx = 0; entry_idx < query_mem_desc_.getEntryCount(); ++entry_idx) {
+      moveOneEntryToBuffer<KeyType>(entry_idx,
+                                    new_buff_i64,
+                                    new_entry_count,
+                                    key_count,
+                                    row_qw_count,
+                                    src_buff,
+                                    key_byte_width);
+    }
   }
+}
+
+template <class KeyType>
+void ResultSetStorage::moveOneEntryToBuffer(const size_t entry_index,
+                                            int64_t* new_buff_i64,
+                                            const size_t new_entry_count,
+                                            const size_t key_count,
+                                            const size_t row_qw_count,
+                                            const int64_t* src_buff,
+                                            const size_t key_byte_width) const {
+  const auto key_off =
+      query_mem_desc_.didOutputColumnar()
+          ? key_offset_colwise(entry_index, 0, query_mem_desc_.getEntryCount())
+          : row_qw_count * entry_index;
+  const auto key_ptr = reinterpret_cast<const KeyType*>(&src_buff[key_off]);
+  if (*key_ptr == get_empty_key<KeyType>()) {
+    return;
+  }
+  int64_t* new_entries_ptr{nullptr};
+  if (query_mem_desc_.didOutputColumnar()) {
+    const auto key =
+        make_key(&src_buff[key_off], query_mem_desc_.getEntryCount(), key_count);
+    new_entries_ptr =
+        get_group_value_columnar(new_buff_i64, new_entry_count, &key[0], key_count);
+  } else {
+    new_entries_ptr = get_group_value(new_buff_i64,
+                                      new_entry_count,
+                                      &src_buff[key_off],
+                                      key_count,
+                                      key_byte_width,
+                                      row_qw_count,
+                                      nullptr);
+  }
+  CHECK(new_entries_ptr);
+  fill_slots(new_entries_ptr,
+             new_entry_count,
+             src_buff,
+             entry_index,
+             query_mem_desc_.getEntryCount(),
+             query_mem_desc_);
 }
 
 void ResultSet::initializeStorage() const {
@@ -1551,7 +1610,8 @@ bool ResultSetStorage::reduceSingleRow(const int8_t* row_ptr,
       } else {
         if (agg_info.agg_kind == kSAMPLE) {
           CHECK(!agg_info.sql_type.is_varlen())
-              << "Interleaved bins reduction not supported for variable length arguments "
+              << "Interleaved bins reduction not supported for variable length "
+                 "arguments "
                  "to SAMPLE";
         }
         if (agg_vals[agg_col_idx]) {

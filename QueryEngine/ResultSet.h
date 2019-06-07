@@ -96,6 +96,15 @@ class ResultSetStorage {
   template <class KeyType>
   void moveEntriesToBuffer(int8_t* new_buff, const size_t new_entry_count) const;
 
+  template <class KeyType>
+  void moveOneEntryToBuffer(const size_t entry_index,
+                            int64_t* new_buff_i64,
+                            const size_t new_entry_count,
+                            const size_t key_count,
+                            const size_t row_qw_count,
+                            const int64_t* src_buff,
+                            const size_t key_byte_width) const;
+
   void updateEntryCount(const size_t new_entry_count) {
     query_mem_desc_.setEntryCount(new_entry_count);
   }
