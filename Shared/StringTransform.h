@@ -63,4 +63,10 @@ inline std::string to_upper(const std::string& str) {
 
 std::string generate_random_string(const size_t len);
 
+// split apart a string into a vector of substrings
+std::vector<std::string> split(const std::string& str, const std::string& delim);
+
+// trim any whitespace from the left and right ends of a string
+std::string strip(const std::string& str);
+
 #endif  // SHARED_STRINGTRANSFORM_H

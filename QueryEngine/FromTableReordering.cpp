@@ -61,11 +61,13 @@ std::pair<cost_t, cost_t> get_join_qual_cost(const Analyzer::Expr* qual,
   if (!bin_oper || !IS_EQUIVALENCE(bin_oper->get_optype())) {
     return {200, 200};
   }
-  try {
-    normalize_column_pairs(
-        bin_oper, *executor->getCatalog(), executor->getTemporaryTables());
-  } catch (...) {
-    return {200, 200};
+  if (executor) {
+    try {
+      normalize_column_pairs(
+          bin_oper, *executor->getCatalog(), executor->getTemporaryTables());
+    } catch (...) {
+      return {200, 200};
+    }
   }
   return {100, 100};
 }
@@ -82,7 +84,7 @@ std::vector<std::map<node_t, cost_t>> build_join_cost_graph(
   // qualifiers between levels.
   for (const auto& current_level_join_conditions : left_deep_join_quals) {
     for (const auto& qual : current_level_join_conditions.quals) {
-      auto qual_nest_levels = visitor.visit(qual.get());
+      std::set<int> qual_nest_levels = visitor.visit(qual.get());
       if (qual_nest_levels.size() != 2) {
         continue;
       }
@@ -141,13 +143,34 @@ struct TraversalEdge {
   cost_t join_cost;
 };
 
-// Builds dependency tracking based on left joins.
+// Builds dependency tracking based on left joins and based on geo costs.
 SchedulingDependencyTracking build_dependency_tracking(
-    const JoinQualsPerNestingLevel& left_deep_join_quals) {
+    const JoinQualsPerNestingLevel& left_deep_join_quals,
+    const std::vector<std::map<node_t, cost_t>>& join_cost_graph) {
   SchedulingDependencyTracking dependency_tracking(left_deep_join_quals.size() + 1);
+  // Add directed graph edges for left join dependencies.
+  // See also start_it inside traverse_join_cost_graph(). These
+  // edges prevent start_it from pointing to a table with a
+  // left join dependency on another table.
   for (size_t level_idx = 0; level_idx < left_deep_join_quals.size(); ++level_idx) {
     if (left_deep_join_quals[level_idx].type == JoinType::LEFT) {
       dependency_tracking.addEdge(level_idx, level_idx + 1);
+    }
+  }
+  // Add directed graph edges for geojoin type dependencies.
+  // See also start_it inside traverse_join_cost_graph(). These
+  // edges prevent start_it from pointing to a table with a
+  // geojoin type dependency as defined by GEO_TYPE_COSTS.
+  for (size_t idx1 = 0; idx1 < join_cost_graph.size(); ++idx1) {
+    for (auto& inner_map : join_cost_graph[idx1]) {
+      auto& idx2 = inner_map.first;
+      auto& cost_forward = inner_map.second;
+      auto reverse_it = join_cost_graph[idx2].find(idx1);
+      CHECK(reverse_it != join_cost_graph[idx2].end());
+      auto& cost_backward = reverse_it->second;
+      if (cost_forward > cost_backward) {
+        dependency_tracking.addEdge(idx1, idx2);
+      }
     }
   }
   return dependency_tracking;
@@ -167,7 +190,8 @@ std::vector<node_t> traverse_join_cost_graph(
   std::iota(all_nest_levels.begin(), all_nest_levels.end(), 0);
   std::vector<node_t> input_permutation;
   std::unordered_set<node_t> visited;
-  auto dependency_tracking = build_dependency_tracking(left_deep_join_quals);
+  auto dependency_tracking =
+      build_dependency_tracking(left_deep_join_quals, join_cost_graph);
   auto schedulable_node = [&dependency_tracking, &visited](const node_t node) {
     const auto nodes_ready = dependency_tracking.getRoots();
     return nodes_ready.find(node) != nodes_ready.end() &&
@@ -182,13 +206,13 @@ std::vector<node_t> traverse_join_cost_graph(
                  schedulable_node);
     CHECK(!remaining_nest_levels.empty());
     // Start with the table with most tuples.
-    const auto max_it = std::max_element(
+    const auto start_it = std::max_element(
         remaining_nest_levels.begin(), remaining_nest_levels.end(), compare_node);
-    CHECK(max_it != remaining_nest_levels.end());
+    CHECK(start_it != remaining_nest_levels.end());
     std::priority_queue<TraversalEdge, std::vector<TraversalEdge>, decltype(compare_edge)>
         worklist(compare_edge);
-    worklist.push(TraversalEdge{*max_it, 0});
-    const auto it_ok = visited.insert(*max_it);
+    worklist.push(TraversalEdge{*start_it, 0});
+    const auto it_ok = visited.insert(*start_it);
     CHECK(it_ok.second);
     while (!worklist.empty()) {
       // Extract a node and add it to the permutation.

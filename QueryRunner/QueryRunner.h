@@ -93,6 +93,12 @@ ExecutionResult run_select_query_with_filter_push_down(
     const bool just_explain,
     const bool with_filter_push_down);
 
+std::shared_ptr<ResultSet> run_sql_distributed(
+    const std::string& query_str,
+    const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
+    const ExecutorDeviceType device_type,
+    bool allow_loop_joins);
+
 std::shared_ptr<ResultSet> run_multiple_agg(
     const std::string& query_str,
     const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
@@ -104,11 +110,9 @@ std::shared_ptr<ResultSet> run_multiple_agg(
 void run_ddl_statement(const std::string& create_table_stmt,
                        const std::unique_ptr<Catalog_Namespace::SessionInfo>& session);
 
-std::shared_ptr<ResultSet> run_sql_distributed(
-    const std::string& query_str,
-    const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
-    const ExecutorDeviceType device_type,
-    bool allow_loop_joins);
+void run_sql_statements(const std::string& sql,
+                        const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
+                        const ExecutorDeviceType device_type);
 
 void clear_gpu_memory(const std::unique_ptr<Catalog_Namespace::SessionInfo>& session);
 

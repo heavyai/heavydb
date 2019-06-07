@@ -23,6 +23,7 @@
 #include "QueryEngine/CalciteAdapter.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/MapDParameters.h"
+#include "Shared/StringTransform.h"
 #include "bcrypt.h"
 #include "gen-cpp/CalciteServer.h"
 
@@ -455,6 +456,38 @@ void clear_cpu_memory(const std::unique_ptr<Catalog_Namespace::SessionInfo>& ses
     return;
   }
   Catalog_Namespace::SysCatalog::clearCpuMemory();
+}
+
+void run_sql_statements(const std::string& sql,
+                        const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
+                        const ExecutorDeviceType device_type) {
+  // TODO: Need to properly handle escaped semicolons instead of doing a naive split().
+  auto fields = split(sql, ";");
+  for (const auto& field : fields) {
+    auto text = strip(field) + ";";
+    if (text == ";") {
+      continue;
+    }
+    // TODO: Maybe remove this redundant parsing after enhancing Parser::Stmt?
+    SQLParser parser;
+    std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
+    std::string last_parsed;
+    CHECK_EQ(parser.parse(text, parse_trees, last_parsed), 0);
+    CHECK_EQ(parse_trees.size(), size_t(1));
+    auto stmt = parse_trees.front().get();
+    Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
+    Parser::DMLStmt* dml = dynamic_cast<Parser::DMLStmt*>(stmt);
+    if (ddl != nullptr && dml == nullptr) {
+      run_ddl_statement(text, session);
+      // NOTE: The device_type is not needed in this branch because DDL
+      // statements only affect the catalog which runs on CPU only.
+    } else if (ddl == nullptr && dml != nullptr) {
+      run_multiple_agg(text, session, device_type, true, true, nullptr);
+    } else {
+      throw std::runtime_error(std::string("unexpected SQL statement type: ") + text);
+    }
+  }
+  // TODO: Maybe should return the result set from zero or more selects here?
 }
 
 }  // namespace QueryRunner

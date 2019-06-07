@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <unordered_set>
+#include <set>
 
 #include "ScalarExprVisitor.h"
 
@@ -41,17 +41,16 @@ class MaxRangeTableIndexVisitor : public ScalarExprVisitor<int> {
   }
 };
 
-class AllRangeTableIndexVisitor : public ScalarExprVisitor<std::unordered_set<int>> {
+class AllRangeTableIndexVisitor : public ScalarExprVisitor<std::set<int>> {
  protected:
-  std::unordered_set<int> visitColumnVar(
-      const Analyzer::ColumnVar* column) const override {
+  std::set<int> visitColumnVar(const Analyzer::ColumnVar* column) const override {
     return {column->get_rte_idx()};
   }
 
-  std::unordered_set<int> visitColumnVarTuple(
+  std::set<int> visitColumnVarTuple(
       const Analyzer::ExpressionTuple* expr_tuple) const override {
     AllRangeTableIndexVisitor visitor;
-    std::unordered_set<int> result;
+    std::set<int> result;
     for (const auto& expr_component : expr_tuple->getTuple()) {
       const auto component_rte_set = visitor.visit(expr_component.get());
       result.insert(component_rte_set.begin(), component_rte_set.end());
@@ -59,9 +58,8 @@ class AllRangeTableIndexVisitor : public ScalarExprVisitor<std::unordered_set<in
     return result;
   }
 
-  std::unordered_set<int> aggregateResult(
-      const std::unordered_set<int>& aggregate,
-      const std::unordered_set<int>& next_result) const override {
+  std::set<int> aggregateResult(const std::set<int>& aggregate,
+                                const std::set<int>& next_result) const override {
     auto result = aggregate;
     result.insert(next_result.begin(), next_result.end());
     return result;

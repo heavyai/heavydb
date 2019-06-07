@@ -174,6 +174,11 @@ inline void run_ddl_statement(const std::string& create_table_stmt) {
   QueryRunner::run_ddl_statement(create_table_stmt, g_session);
 }
 
+inline void run_sql_statements(const std::string& sql_stmts,
+                               const ExecutorDeviceType device_type) {
+  QueryRunner::run_sql_statements(sql_stmts, g_session, device_type);
+}
+
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
   return device_type == ExecutorDeviceType::GPU &&

@@ -115,3 +115,25 @@ std::string generate_random_string(const size_t len) {
   }
   return str;
 }
+
+std::vector<std::string> split(const std::string& str, const std::string& delim) {
+  CHECK(!delim.empty());
+  std::vector<std::string> result;
+  std::string::size_type i = 0, j = 0;
+  while ((i = str.find(delim, i)) != std::string::npos) {
+    result.emplace_back(str, j, i - j);
+    i += delim.size();
+    j = i;
+  }
+  result.emplace_back(str, j);
+  return result;
+}
+
+std::string strip(const std::string& str) {
+  std::string::size_type i, j;
+  for (i = 0; i < str.size() && std::isspace(str[i]); ++i) {
+  }
+  for (j = str.size(); j > i && std::isspace(str[j - 1]); --j) {
+  }
+  return str.substr(i, j - i);
+}

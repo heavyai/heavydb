@@ -36,6 +36,7 @@ if(ENABLE_CUDA)
 endif()
 
 add_executable(ResultSetTest ResultSetTest.cpp ResultSetTestUtils.cpp)
+add_executable(FromTableReorderingTest FromTableReorderingTest.cpp)
 add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp ResultSetTestUtils.cpp)
 add_executable(UtilTest UtilTest.cpp)
 add_executable(StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
@@ -61,6 +62,7 @@ endif()
 
 target_link_libraries(ProfileTest gtest Shared Calcite QueryEngine ${MAPD_RENDERING_LIBRARIES} CsvImport QueryRunner Parser ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${PROF_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 target_link_libraries(ResultSetTest gtest QueryEngine ${MAPD_RENDERING_LIBRARIES} ${Boost_LIBRARIES} CsvImport QueryRunner Parser DataMgr Chunk ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
+target_link_libraries(FromTableReorderingTest gtest QueryEngine ${MAPD_RENDERING_LIBRARIES} ${Boost_LIBRARIES} CsvImport QueryRunner Parser DataMgr Chunk ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 target_link_libraries(ResultSetBaselineRadixSortTest gtest QueryEngine ${MAPD_RENDERING_LIBRARIES} CsvImport QueryRunner Parser DataMgr Chunk ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 target_link_libraries(UtilTest Utils gtest ${Glog_LIBRARIES} ${Boost_LIBRARIES})
 target_link_libraries(StringDictionaryTest StringDictionary gtest ${Glog_LIBRARIES} ${Boost_LIBRARIES})
@@ -102,6 +104,7 @@ add_test(AlterColumnTest AlterColumnTest ${TEST_ARGS})
 add_test(UtilTest UtilTest ${TEST_ARGS})
 add_test(ExecuteTest ExecuteTest ${TEST_ARGS})
 add_test(ResultSetTest ResultSetTest ${TEST_ARGS})
+add_test(FromTableReorderingTest FromTableReorderingTest ${TEST_ARGS})
 add_test(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest ${TEST_ARGS})
 add_test(RunQueryLoop RunQueryLoop ${TEST_ARGS})
 add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
@@ -139,6 +142,7 @@ set(SANITY_TESTS
   PlanTest
   ExecuteTest
   ResultSetTest
+  FromTableReorderingTest
   ResultSetBaselineRadixSortTest
   StorageTest
   ImportTest
