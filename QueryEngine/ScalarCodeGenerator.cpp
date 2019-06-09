@@ -134,18 +134,20 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
   return {scalar_expr_func, nullptr, inputs};
 }
 
-std::vector<void*> ScalarCodeGenerator::generateNativeCode(llvm::Function* func,
-                                                           llvm::Function* wrapper_func,
-                                                           const CompilationOptions& co) {
+std::vector<void*> ScalarCodeGenerator::generateNativeCode(
+    const CompiledExpression& compiled_expression,
+    const CompilationOptions& co) {
   CHECK(module_ && !execution_engine_) << "Invalid code generator state";
   module_.release();
   switch (co.device_type_) {
     case ExecutorDeviceType::CPU: {
-      execution_engine_ = generateNativeCPUCode(func, {func}, co);
-      return {execution_engine_->getPointerToFunction(func)};
+      execution_engine_ =
+          generateNativeCPUCode(compiled_expression.func, {compiled_expression.func}, co);
+      return {execution_engine_->getPointerToFunction(compiled_expression.func)};
     }
     case ExecutorDeviceType::GPU: {
-      return generateNativeGPUCode(func, wrapper_func, co);
+      return generateNativeGPUCode(
+          compiled_expression.func, compiled_expression.wrapper_func, co);
     }
     default: {
       LOG(FATAL) << "Invalid device type";

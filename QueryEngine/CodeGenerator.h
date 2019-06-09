@@ -435,16 +435,15 @@ class ScalarCodeGenerator : public CodeGenerator {
 
   // Compiles the given scalar expression to IR and the list of columns in the expression,
   // needed to provide inputs to the generated function.
-  CompiledExpression compile(const Analyzer::Expr*,
+  CompiledExpression compile(const Analyzer::Expr* expr,
                              const bool fetch_columns,
-                             const CompilationOptions&);
+                             const CompilationOptions& co);
 
   // Generates the native function pointers for each device.
   // NB: this is separated from the compile method to allow building higher level code
   // generators which can inline the IR for evaluating a single expression (for example
   // loops).
-  std::vector<void*> generateNativeCode(llvm::Function* func,
-                                        llvm::Function* wrapper_func,
+  std::vector<void*> generateNativeCode(const CompiledExpression& compiled_expression,
                                         const CompilationOptions& co);
 
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cuda_mgr_.get(); }
