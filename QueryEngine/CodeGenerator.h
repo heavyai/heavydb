@@ -21,6 +21,7 @@
 #include "../Analyzer/Analyzer.h"
 #include "Execute.h"
 
+// Code generation utility to be used for queries and scalar expressions.
 class CodeGenerator {
  public:
   CodeGenerator(Executor* executor)
@@ -28,13 +29,17 @@ class CodeGenerator {
       , cgen_state_(executor->cgen_state_.get())
       , plan_state_(executor->plan_state_.get()) {}
 
+  // Overload which can be used without an executor, for SQL scalar expression code
+  // generation.
   CodeGenerator(CgenState* cgen_state, PlanState* plan_state)
       : executor_(nullptr), cgen_state_(cgen_state), plan_state_(plan_state) {}
 
+  // Generates IR value(s) for the given analyzer expression.
   std::vector<llvm::Value*> codegen(const Analyzer::Expr*,
                                     const bool fetch_columns,
                                     const CompilationOptions&);
 
+  // Generates constant values in the literal buffer of a query.
   std::vector<llvm::Value*> codegenHoistedConstants(
       const std::vector<const Analyzer::Constant*>& constants,
       const EncodingType enc_type,
@@ -47,6 +52,7 @@ class CodeGenerator {
                                           const SQLTypeInfo& ti,
                                           bool upscale = true);
 
+  // Generates the index of the current row in the context of query execution.
   llvm::Value* posArg(const Analyzer::Expr*) const;
 
   llvm::Value* toBool(llvm::Value*);
@@ -410,21 +416,33 @@ class CodeGenerator {
   PlanState* plan_state_;
 };
 
+// Code generator specialized for scalar expressions which doesn't require an executor.
 class ScalarCodeGenerator : public CodeGenerator {
  public:
+  // Constructor which takes the runtime module.
   ScalarCodeGenerator(std::unique_ptr<llvm::Module> module)
       : CodeGenerator(nullptr, nullptr), module_(std::move(module)) {}
 
+  // Function generated for a given analyzer expression. For GPU, a wrapper which meets
+  // the kernel signature constraints (returns void, takes all arguments as pointers) is
+  // generated. Also returns the list of column expressions for which compatible input
+  // parameters must be passed to the input of the generated function.
   struct CompiledExpression {
     llvm::Function* func;
     llvm::Function* wrapper_func;
     std::vector<std::shared_ptr<Analyzer::ColumnVar>> inputs;
   };
 
+  // Compiles the given scalar expression to IR and the list of columns in the expression,
+  // needed to provide inputs to the generated function.
   CompiledExpression compile(const Analyzer::Expr*,
                              const bool fetch_columns,
                              const CompilationOptions&);
 
+  // Generates the native function pointers for each device.
+  // NB: this is separated from the compile method to allow building higher level code
+  // generators which can inline the IR for evaluating a single expression (for example
+  // loops).
   std::vector<void*> generateNativeCode(llvm::Function* func,
                                         llvm::Function* wrapper_func,
                                         const CompilationOptions& co);
@@ -439,6 +457,8 @@ class ScalarCodeGenerator : public CodeGenerator {
                                           const bool fetch_column,
                                           const CompilationOptions&) override;
 
+  // Collect the columns used by the given analyzer expressions and fills in the column
+  // map to be used during code generation.
   ColumnMap prepare(const Analyzer::Expr*);
 
   std::vector<void*> generateNativeGPUCode(llvm::Function* func,
