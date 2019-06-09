@@ -181,8 +181,8 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
         "string_compress",
         get_int_type(32, cgen_state_->context_),
         {operand_lv,
-         cgen_state_->llInt(int64_t(executor_->getStringDictionaryProxy(
-             ti.get_comp_param(), executor_->getRowSetMemoryOwner(), true)))});
+         cgen_state_->llInt(int64_t(executor()->getStringDictionaryProxy(
+             ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true)))});
   }
   CHECK(operand_lv->getType()->isIntegerTy(32));
   if (ti.get_compression() == kENCODING_NONE) {
@@ -203,8 +203,8 @@ llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,
         "string_decompress",
         get_int_type(64, cgen_state_->context_),
         {operand_lv,
-         cgen_state_->llInt(int64_t(executor_->getStringDictionaryProxy(
-             operand_ti.get_comp_param(), executor_->getRowSetMemoryOwner(), true)))});
+         cgen_state_->llInt(int64_t(executor()->getStringDictionaryProxy(
+             operand_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true)))});
   }
   CHECK(operand_is_const);
   CHECK_EQ(kENCODING_DICT, ti.get_compression());

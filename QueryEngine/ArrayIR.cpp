@@ -116,10 +116,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
                                     llvm::Type::getInt8PtrTy(cgen_state_->context_),
                                     {cgen_state_->llInt(array_expr->getElementCount()),
                                      cgen_state_->llInt(array_element_size_bytes)});
-  cgen_state_->emitExternalCall("register_buffer_with_executor_rsm",
-                                llvm::Type::getVoidTy(cgen_state_->context_),
-                                {cgen_state_->llInt(reinterpret_cast<int64_t>(executor_)),
-                                 allocated_target_buffer});
+  cgen_state_->emitExternalCall(
+      "register_buffer_with_executor_rsm",
+      llvm::Type::getVoidTy(cgen_state_->context_),
+      {cgen_state_->llInt(reinterpret_cast<int64_t>(executor())),
+       allocated_target_buffer});
   llvm::Value* casted_allocated_target_buffer =
       ir_builder.CreatePointerCast(allocated_target_buffer, array_type->getPointerTo());
 

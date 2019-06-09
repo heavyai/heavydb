@@ -46,7 +46,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
       }
       CHECK_EQ(size_t(1), lhs_lvs.size());
       return cgen_state_->addInValuesBitmap(in_vals_bitmap)
-          ->codegen(lhs_lvs.front(), executor_);
+          ->codegen(lhs_lvs.front(), executor());
     }
   }
   if (expr_ti.get_notnull()) {
@@ -87,8 +87,8 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set
       needle_null_val,
       co.device_type_ == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
                                                  : Data_Namespace::CPU_LEVEL,
-      executor_->deviceCount(co.device_type_),
-      &executor_->getCatalog()->getDataMgr());
+      executor()->deviceCount(co.device_type_),
+      &executor()->getCatalog()->getDataMgr());
   const auto& in_integer_set_ti = in_integer_set->get_type_info();
   CHECK(in_integer_set_ti.is_boolean());
   const auto lhs_lvs = codegen(in_arg, true, co);
@@ -107,7 +107,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set
   }
   CHECK_EQ(size_t(1), lhs_lvs.size());
   return cgen_state_->addInValuesBitmap(in_vals_bitmap)
-      ->codegen(lhs_lvs.front(), executor_);
+      ->codegen(lhs_lvs.front(), executor());
 }
 
 std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
@@ -119,10 +119,10 @@ std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
   if (!(ti.is_integer() || (ti.is_string() && ti.get_compression() == kENCODING_DICT))) {
     return nullptr;
   }
-  const auto sdp = ti.is_string()
-                       ? executor_->getStringDictionaryProxy(
-                             ti.get_comp_param(), executor_->getRowSetMemoryOwner(), true)
-                       : nullptr;
+  const auto sdp =
+      ti.is_string() ? executor()->getStringDictionaryProxy(
+                           ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true)
+                     : nullptr;
   if (val_count > 3) {
     using ListIterator = decltype(value_list.begin());
     std::vector<int64_t> values;
@@ -195,8 +195,8 @@ std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
                                                 co.device_type_ == ExecutorDeviceType::GPU
                                                     ? Data_Namespace::GPU_LEVEL
                                                     : Data_Namespace::CPU_LEVEL,
-                                                executor_->deviceCount(co.device_type_),
-                                                &executor_->getCatalog()->getDataMgr());
+                                                executor()->deviceCount(co.device_type_),
+                                                &executor()->getCatalog()->getDataMgr());
     } catch (...) {
       return nullptr;
     }

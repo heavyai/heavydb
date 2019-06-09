@@ -171,8 +171,8 @@ llvm::Value* CodeGenerator::codegenDictLike(
                              " not supported"));
   }
   CHECK_EQ(kENCODING_DICT, dict_like_arg_ti.get_compression());
-  const auto sdp = executor_->getStringDictionaryProxy(
-      dict_like_arg_ti.get_comp_param(), executor_->getRowSetMemoryOwner(), true);
+  const auto sdp = executor()->getStringDictionaryProxy(
+      dict_like_arg_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true);
   if (sdp->storageEntryCount() > 200000000) {
     return nullptr;
   }
@@ -285,8 +285,8 @@ llvm::Value* CodeGenerator::codegenDictStrCmp(const std::shared_ptr<Analyzer::Ex
   const auto col_ti = col_var->get_type_info();
   CHECK(col_ti.is_string());
   CHECK_EQ(kENCODING_DICT, col_ti.get_compression());
-  const auto sdp = executor_->getStringDictionaryProxy(
-      col_ti.get_comp_param(), executor_->getRowSetMemoryOwner(), true);
+  const auto sdp = executor()->getStringDictionaryProxy(
+      col_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true);
 
   if (sdp->storageEntryCount() > 200000000) {
     std::runtime_error("Cardinality for string dictionary is too high");
@@ -376,8 +376,8 @@ llvm::Value* CodeGenerator::codegenDictRegexp(
   CHECK(dict_regexp_arg_ti.is_string());
   CHECK_EQ(kENCODING_DICT, dict_regexp_arg_ti.get_compression());
   const auto comp_param = dict_regexp_arg_ti.get_comp_param();
-  const auto sdp = executor_->getStringDictionaryProxy(
-      comp_param, executor_->getRowSetMemoryOwner(), true);
+  const auto sdp = executor()->getStringDictionaryProxy(
+      comp_param, executor()->getRowSetMemoryOwner(), true);
   if (sdp->storageEntryCount() > 15000000) {
     return nullptr;
   }

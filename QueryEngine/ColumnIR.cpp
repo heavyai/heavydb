@@ -108,7 +108,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   auto col_id = col_var->get_column_id();
   const int rte_idx = adjusted_range_table_index(col_var);
   CHECK_LT(rte_idx, cgen_state_->frag_offsets_.size());
-  const auto catalog = executor_->getCatalog();
+  const auto catalog = executor()->getCatalog();
   CHECK(catalog);
   if (col_var->get_table_id() > 0) {
     auto cd = get_column_descriptor(col_id, col_var->get_table_id(), *catalog);
@@ -313,7 +313,7 @@ llvm::Value* CodeGenerator::codegenRowId(const Analyzer::ColumnVar* col_var,
                                          const CompilationOptions& co) {
   const auto offset_lv = cgen_state_->frag_offsets_[adjusted_range_table_index(col_var)];
   llvm::Value* start_rowid_lv{nullptr};
-  const auto& table_generation = executor_->getTableGeneration(col_var->get_table_id());
+  const auto& table_generation = executor()->getTableGeneration(col_var->get_table_id());
   if (table_generation.start_rowid > 0) {
     // Handle the multi-node case: each leaf receives a start rowid used
     // to offset the local rowid and generate a cluster-wide unique rowid.

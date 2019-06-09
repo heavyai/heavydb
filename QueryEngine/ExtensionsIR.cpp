@@ -339,7 +339,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
       if (arg_ti.get_type() == kPOINT) {
         const auto col_var = dynamic_cast<const Analyzer::ColumnVar*>(arg);
         if (col_var) {
-          const auto coords_cd = executor_->getPhysicalColumnDescriptor(col_var, 1);
+          const auto coords_cd = executor()->getPhysicalColumnDescriptor(col_var, 1);
           if (coords_cd && coords_cd->columnType.get_type() == kARRAY) {
             fixlen = coords_cd->columnType.get_size();
           }

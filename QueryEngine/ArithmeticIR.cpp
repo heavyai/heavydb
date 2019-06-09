@@ -192,7 +192,7 @@ bool CodeGenerator::checkExpressionRanges(const Analyzer::BinOper* bin_oper,
 
   auto expr_range_info =
       cgen_state_->query_infos_.size() > 0
-          ? getExpressionRange(bin_oper, cgen_state_->query_infos_, executor_)
+          ? getExpressionRange(bin_oper, cgen_state_->query_infos_, executor())
           : ExpressionRange::makeInvalidRange();
   if (expr_range_info.getType() != ExpressionRangeType::Integer) {
     return false;
@@ -597,7 +597,7 @@ bool CodeGenerator::checkExpressionRanges(const Analyzer::UOper* uoper,
 
   auto expr_range_info =
       cgen_state_->query_infos_.size() > 0
-          ? getExpressionRange(uoper, cgen_state_->query_infos_, executor_)
+          ? getExpressionRange(uoper, cgen_state_->query_infos_, executor())
           : ExpressionRange::makeInvalidRange();
   if (expr_range_info.getType() != ExpressionRangeType::Integer) {
     return false;

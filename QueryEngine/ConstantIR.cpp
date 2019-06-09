@@ -23,7 +23,7 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
                                                  const CompilationOptions& co) {
   if (co.hoist_literals_) {
     std::vector<const Analyzer::Constant*> constants(
-        executor_->deviceCount(co.device_type_), constant);
+        executor()->deviceCount(co.device_type_), constant);
     return codegenHoistedConstants(constants, enc_type, dict_id);
   }
   const auto& type_info = constant->get_type_info();
@@ -70,9 +70,9 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
       const auto& str_const = *constant->get_constval().stringval;
       if (enc_type == kENCODING_DICT) {
         return {
-            cgen_state_->llInt(executor_
+            cgen_state_->llInt(executor()
                                    ->getStringDictionaryProxy(
-                                       dict_id, executor_->getRowSetMemoryOwner(), true)
+                                       dict_id, executor()->getRowSetMemoryOwner(), true)
                                    ->getIdOfString(str_const))};
       }
       return {cgen_state_->llInt(int64_t(0)),

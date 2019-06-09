@@ -252,7 +252,7 @@ llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
     CHECK(lhs_col);
 
     // Get the actual point data column descriptor
-    const auto coords_cd = executor_->getCatalog()->getMetadataForColumn(
+    const auto coords_cd = executor()->getCatalog()->getMetadataForColumn(
         lhs_col->get_table_id(), lhs_col->get_column_id() + 1);
     CHECK(coords_cd);
 
@@ -285,7 +285,7 @@ llvm::Value* CodeGenerator::codegenOverlaps(const SQLOps optype,
     const auto rhs_col = dynamic_cast<Analyzer::ColumnVar*>(rhs.get());
     CHECK(rhs_col);
 
-    const auto poly_bounds_cd = executor_->getCatalog()->getMetadataForColumn(
+    const auto poly_bounds_cd = executor()->getCatalog()->getMetadataForColumn(
         rhs_col->get_table_id(),
         rhs_col->get_column_id() + rhs_ti.get_physical_coord_cols() + 1);
     CHECK(poly_bounds_cd);
@@ -521,8 +521,8 @@ llvm::Value* CodeGenerator::codegenQualifierCmp(const SQLOps optype,
          posArg(arr_expr),
          lhs_lvs[1],
          lhs_lvs[2],
-         cgen_state_->llInt(int64_t(executor_->getStringDictionaryProxy(
-             elem_ti.get_comp_param(), executor_->getRowSetMemoryOwner(), true))),
+         cgen_state_->llInt(int64_t(executor()->getStringDictionaryProxy(
+             elem_ti.get_comp_param(), executor()->getRowSetMemoryOwner(), true))),
          cgen_state_->inlineIntNull(elem_ti)});
   }
   if (target_ti.is_integer() || target_ti.is_boolean() || target_ti.is_string()) {

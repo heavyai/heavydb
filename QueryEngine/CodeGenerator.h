@@ -94,6 +94,11 @@ class CodeGenerator {
                               std::vector<Analyzer::Expr*>& primary_quals,
                               std::vector<Analyzer::Expr*>& deferred_quals);
 
+  struct ExecutorRequired : public std::runtime_error {
+    ExecutorRequired()
+        : std::runtime_error("Executor required to generate this expression") {}
+  };
+
  private:
   std::vector<llvm::Value*> codegen(const Analyzer::Constant*,
                                     const EncodingType enc_type,
@@ -394,6 +399,13 @@ class CodeGenerator {
   Executor* executor_;
 
  protected:
+  Executor* executor() const {
+    if (!executor_) {
+      throw ExecutorRequired();
+    }
+    return executor_;
+  }
+
   CgenState* cgen_state_;
   PlanState* plan_state_;
 };
