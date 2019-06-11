@@ -105,6 +105,7 @@ add_test(ImportTest ImportTest ${TEST_ARGS})
 add_test(AlterColumnTest AlterColumnTest ${TEST_ARGS})
 add_test(UtilTest UtilTest ${TEST_ARGS})
 add_test(ExecuteTest ExecuteTest ${TEST_ARGS})
+add_test(CodeGeneratorTest CodeGeneratorTest ${TEST_ARGS})
 add_test(ResultSetTest ResultSetTest ${TEST_ARGS})
 add_test(FromTableReorderingTest FromTableReorderingTest ${TEST_ARGS})
 add_test(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest ${TEST_ARGS})
@@ -143,6 +144,7 @@ endif()
 set(SANITY_TESTS
   PlanTest
   ExecuteTest
+  CodeGeneratorTest
   ResultSetTest
   FromTableReorderingTest
   ResultSetBaselineRadixSortTest
