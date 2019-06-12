@@ -2099,7 +2099,7 @@ void MapDHandler::load_table_binary(const TSessionId& session,
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
   for (auto cd : col_descs) {
     import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, loader->get_string_dict(cd))));
+        new Importer_NS::TypedImportBuffer(cd, loader->getStringDict(cd))));
   }
   for (auto const& row : rows) {
     size_t col_idx = 0;
@@ -2156,7 +2156,7 @@ void MapDHandler::prepare_columnar_loader(
   }
   for (auto cd : col_descs) {
     import_buffers->push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, (*loader)->get_string_dict(cd))));
+        new Importer_NS::TypedImportBuffer(cd, (*loader)->getStringDict(cd))));
   }
 }
 
@@ -2376,7 +2376,7 @@ void MapDHandler::load_table(const TSessionId& session,
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
   for (auto cd : col_descs) {
     import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, loader->get_string_dict(cd))));
+        new Importer_NS::TypedImportBuffer(cd, loader->getStringDict(cd))));
   }
   Importer_NS::CopyParams copy_params;
   size_t rows_completed = 0;

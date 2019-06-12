@@ -2321,19 +2321,19 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
                                 typed_import_buffer->getStringDictionary()));
     }
   }
-  CHECK_GT(table_desc->shardedColumnId, 0);
+  CHECK_GT(table_desc_->shardedColumnId, 0);
   int col_idx{0};
   const ColumnDescriptor* shard_col_desc{nullptr};
-  for (const auto col_desc : column_descs) {
+  for (const auto col_desc : column_descs_) {
     ++col_idx;
-    if (col_idx == table_desc->shardedColumnId) {
+    if (col_idx == table_desc_->shardedColumnId) {
       shard_col_desc = col_desc;
       break;
     }
   }
   CHECK(shard_col_desc);
-  CHECK_LE(static_cast<size_t>(table_desc->shardedColumnId), import_buffers.size());
-  auto& shard_column_input_buffer = import_buffers[table_desc->shardedColumnId - 1];
+  CHECK_LE(static_cast<size_t>(table_desc_->shardedColumnId), import_buffers.size());
+  auto& shard_column_input_buffer = import_buffers[table_desc_->shardedColumnId - 1];
   const auto& shard_col_ti = shard_col_desc->columnType;
   CHECK(shard_col_ti.is_integer() ||
         (shard_col_ti.is_string() && shard_col_ti.get_compression() == kENCODING_DICT));
@@ -2347,12 +2347,12 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
   int64_t rows_left = row_count;
 
   for (size_t i = 0; i < row_count; ++i, rows_left -= rows_per_shard) {
-    const auto val = get_replicating() ? i : int_value_at(*shard_column_input_buffer, i);
+    const auto val = getReplicating() ? i : int_value_at(*shard_column_input_buffer, i);
     const size_t shard = SHARD_FOR_KEY(val, shard_count);
     auto& shard_output_buffers = all_shard_import_buffers[shard];
 
     // when replicate a column, populate 'rows' to all shards only once
-    if (get_replicating()) {
+    if (getReplicating()) {
       if (i >= shard_count) {
         break;
       }
@@ -2366,7 +2366,7 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
 
       // for a replicated (added) column, populate rows_per_shard as per-shard replicate
       // count. and, bypass non-replicated column.
-      if (get_replicating()) {
+      if (getReplicating()) {
         if (input_buffer->get_replicate_count() > 0) {
           shard_output_buffers[col_idx]->set_replicate_count(
               std::min<int64_t>(rows_left, rows_per_shard));
@@ -2435,7 +2435,7 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
     ++all_shard_row_counts[shard];
     // when replicating a column, row count of a shard == replicate count of the column on
     // the shard
-    if (get_replicating()) {
+    if (getReplicating()) {
       all_shard_row_counts[shard] = std::min<int64_t>(rows_left, rows_per_shard);
     }
   }
@@ -2445,10 +2445,10 @@ bool Loader::loadImpl(
     const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
     size_t row_count,
     bool checkpoint) {
-  if (table_desc->nShards) {
+  if (table_desc_->nShards) {
     std::vector<OneShardBuffers> all_shard_import_buffers;
     std::vector<size_t> all_shard_row_counts;
-    const auto shard_tables = catalog.getPhysicalTablesDescriptors(table_desc);
+    const auto shard_tables = catalog_.getPhysicalTablesDescriptors(table_desc_);
     distributeToShards(all_shard_import_buffers,
                        all_shard_row_counts,
                        import_buffers,
@@ -2466,7 +2466,7 @@ bool Loader::loadImpl(
     }
     return success;
   }
-  return loadToShard(import_buffers, row_count, table_desc, checkpoint);
+  return loadToShard(import_buffers, row_count, table_desc_, checkpoint);
 }
 
 std::vector<DataBlockPtr> Loader::get_data_block_pointers(
@@ -2537,15 +2537,15 @@ bool Loader::loadToShard(
     bool checkpoint) {
   std::unique_lock<std::mutex> loader_lock(loader_mutex_);
   // patch insert_data with new column
-  if (this->get_replicating()) {
+  if (this->getReplicating()) {
     for (const auto& import_buff : import_buffers) {
-      insert_data.replicate_count = import_buff->get_replicate_count();
-      insert_data.columnDescriptors[import_buff->getColumnDesc()->columnId] =
+      insert_data_.replicate_count = import_buff->get_replicate_count();
+      insert_data_.columnDescriptors[import_buff->getColumnDesc()->columnId] =
           import_buff->getColumnDesc();
     }
   }
 
-  Fragmenter_Namespace::InsertData ins_data(insert_data);
+  Fragmenter_Namespace::InsertData ins_data(insert_data_);
   ins_data.numRows = row_count;
   bool success = true;
 
@@ -2575,18 +2575,18 @@ bool Loader::loadToShard(
 }
 
 void Loader::init() {
-  insert_data.databaseId = catalog.getCurrentDB().dbId;
-  insert_data.tableId = table_desc->tableId;
-  for (auto cd : column_descs) {
-    insert_data.columnIds.push_back(cd->columnId);
+  insert_data_.databaseId = catalog_.getCurrentDB().dbId;
+  insert_data_.tableId = table_desc_->tableId;
+  for (auto cd : column_descs_) {
+    insert_data_.columnIds.push_back(cd->columnId);
     if (cd->columnType.get_compression() == kENCODING_DICT) {
       CHECK(cd->columnType.is_string() || cd->columnType.is_string_array());
-      const auto dd = catalog.getMetadataForDict(cd->columnType.get_comp_param());
+      const auto dd = catalog_.getMetadataForDict(cd->columnType.get_comp_param());
       CHECK(dd);
-      dict_map[cd->columnId] = dd->stringDict.get();
+      dict_map_[cd->columnId] = dd->stringDict.get();
     }
   }
-  insert_data.numRows = 0;
+  insert_data_.numRows = 0;
 }
 
 void Detector::init() {
@@ -2984,7 +2984,7 @@ void Importer::checkpoint(const int32_t start_epoch) {
     loader->checkpoint();
   }
 
-  if (loader->get_table_desc()->persistenceLevel ==
+  if (loader->getTableDesc()->persistenceLevel ==
       Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
     auto ms = measure<>::execution([&]() {
       if (!load_failed) {
@@ -3219,7 +3219,7 @@ void Importer::import_local_parquet(const std::string& file_path) {
         import_buffers_vec[slice].clear();
         for (const auto cd : cds) {
           import_buffers_vec[slice].emplace_back(
-              new TypedImportBuffer(cd, loader->get_string_dict(cd)));
+              new TypedImportBuffer(cd, loader->getStringDict(cd)));
         }
       }
       /*
@@ -3677,7 +3677,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     import_buffers_vec.emplace_back();
     for (const auto cd : loader->get_column_descs()) {
       import_buffers_vec[i].push_back(std::unique_ptr<TypedImportBuffer>(
-          new TypedImportBuffer(cd, loader->get_string_dict(cd))));
+          new TypedImportBuffer(cd, loader->getStringDict(cd))));
     }
   }
 
@@ -3694,7 +3694,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
   auto columnDescriptors = loader->getCatalog().getAllColumnMetadataForTable(
-      loader->get_table_desc()->tableId, false, false, false);
+      loader->getTableDesc()->tableId, false, false, false);
   for (auto cd : columnDescriptors) {
     SQLTypes ct = cd->columnType.get_type();
     if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
@@ -3705,7 +3705,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
   }
 
   ChunkKey chunkKey = {loader->getCatalog().getCurrentDB().dbId,
-                       loader->get_table_desc()->tableId};
+                       loader->getTableDesc()->tableId};
   auto start_epoch = loader->getTableEpoch();
   {
     std::list<std::future<ImportStatus>> threads;
@@ -3871,20 +3871,20 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
 }
 
 void Loader::checkpoint() {
-  if (get_table_desc()->persistenceLevel ==
+  if (getTableDesc()->persistenceLevel ==
       Data_Namespace::MemoryLevel::DISK_LEVEL) {  // only checkpoint disk-resident tables
-    getCatalog().checkpoint(get_table_desc()->tableId);
+    getCatalog().checkpoint(getTableDesc()->tableId);
   }
 }
 
 int32_t Loader::getTableEpoch() {
   return getCatalog().getTableEpoch(getCatalog().getCurrentDB().dbId,
-                                    get_table_desc()->tableId);
+                                    getTableDesc()->tableId);
 }
 
-void Loader::setTableEpoch(int32_t start_epoch) {
+void Loader::setTableEpoch(const int32_t start_epoch) {
   getCatalog().setTableEpoch(
-      getCatalog().getCurrentDB().dbId, get_table_desc()->tableId, start_epoch);
+      getCatalog().getCurrentDB().dbId, getTableDesc()->tableId, start_epoch);
 }
 
 void GDALErrorHandler(CPLErr eErrClass, int err_no, const char* msg) {
@@ -4525,14 +4525,14 @@ ImportStatus Importer::importGDAL(
   for (size_t i = 0; i < max_threads; i++) {
     for (const auto cd : loader->get_column_descs()) {
       import_buffers_vec[i].emplace_back(
-          new TypedImportBuffer(cd, loader->get_string_dict(cd)));
+          new TypedImportBuffer(cd, loader->getStringDict(cd)));
     }
   }
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
   auto columnDescriptors = loader->getCatalog().getAllColumnMetadataForTable(
-      loader->get_table_desc()->tableId, false, false, false);
+      loader->getTableDesc()->tableId, false, false, false);
   for (auto cd : columnDescriptors) {
     SQLTypes ct = cd->columnType.get_type();
     if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
@@ -4708,7 +4708,7 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(
 
   // get the table descriptor
   const auto& cat = loader->getCatalog();
-  const std::string& tableName = loader->get_table_desc()->tableName;
+  const std::string& tableName = loader->getTableDesc()->tableName;
   const auto td = cat.getMetadataForTable(tableName);
   CHECK(td);
   CHECK(td->fragmenter);

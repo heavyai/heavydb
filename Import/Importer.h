@@ -636,55 +636,62 @@ class TypedImportBuffer : boost::noncopyable {
 class Loader {
  public:
   Loader(Catalog_Namespace::Catalog& c, const TableDescriptor* t)
-      : catalog(c)
-      , table_desc(t)
-      , column_descs(c.getAllColumnMetadataForTable(t->tableId, false, false, true)) {
+      : catalog_(c)
+      , table_desc_(t)
+      , column_descs_(c.getAllColumnMetadataForTable(t->tableId, false, false, true)) {
     init();
-  };
-  Catalog_Namespace::Catalog& getCatalog() { return catalog; }
-  const TableDescriptor* get_table_desc() const { return table_desc; }
-  const std::list<const ColumnDescriptor*>& get_column_descs() const {
-    return column_descs;
   }
-  const Fragmenter_Namespace::InsertData& get_insert_data() const { return insert_data; }
-  StringDictionary* get_string_dict(const ColumnDescriptor* cd) const {
+
+  virtual ~Loader() {}
+
+  Catalog_Namespace::Catalog& getCatalog() { return catalog_; }
+  const TableDescriptor* getTableDesc() const { return table_desc_; }
+  const std::list<const ColumnDescriptor*>& get_column_descs() const {
+    return column_descs_;
+  }
+
+  StringDictionary* getStringDict(const ColumnDescriptor* cd) const {
     if ((cd->columnType.get_type() != kARRAY ||
          !IS_STRING(cd->columnType.get_subtype())) &&
         (!cd->columnType.is_string() ||
          cd->columnType.get_compression() != kENCODING_DICT)) {
       return nullptr;
     }
-    return dict_map.at(cd->columnId);
+    return dict_map_.at(cd->columnId);
   }
+
   virtual bool load(const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-                    size_t row_count);
+                    const size_t row_count);
   virtual bool loadNoCheckpoint(
       const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
-      size_t row_count);
+      const size_t row_count);
+  virtual void checkpoint();
+  virtual int32_t getTableEpoch();
+  virtual void setTableEpoch(const int32_t new_epoch);
+
+  void setReplicating(const bool replicating) { replicating_ = replicating; }
+  bool getReplicating() const { return replicating_; }
+
+ protected:
+  void init();
+
   virtual bool loadImpl(
       const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
       size_t row_count,
       bool checkpoint);
-  virtual void checkpoint();
-  virtual int32_t getTableEpoch();
-  virtual void setTableEpoch(const int32_t new_epoch);
-  inline void set_replicating(const bool replicating) { replicating_ = replicating; }
-  inline bool get_replicating() const { return replicating_; }
-  virtual ~Loader() {}
 
- protected:
-  Catalog_Namespace::Catalog& catalog;
-  const TableDescriptor* table_desc;
-  std::list<const ColumnDescriptor*> column_descs;
-  Fragmenter_Namespace::InsertData insert_data;
-  std::map<int, StringDictionary*> dict_map;
-  void init();
   using OneShardBuffers = std::vector<std::unique_ptr<TypedImportBuffer>>;
   void distributeToShards(std::vector<OneShardBuffers>& all_shard_import_buffers,
                           std::vector<size_t>& all_shard_row_counts,
                           const OneShardBuffers& import_buffers,
                           const size_t row_count,
                           const size_t shard_count);
+
+  Catalog_Namespace::Catalog& catalog_;
+  const TableDescriptor* table_desc_;
+  std::list<const ColumnDescriptor*> column_descs_;
+  Fragmenter_Namespace::InsertData insert_data_;
+  std::map<int, StringDictionary*> dict_map_;
 
  private:
   std::vector<DataBlockPtr> get_data_block_pointers(
@@ -693,6 +700,7 @@ class Loader {
                    size_t row_count,
                    const TableDescriptor* shard_table,
                    bool checkpoint);
+
   bool replicating_ = false;
   std::mutex loader_mutex_;
 };

@@ -3182,7 +3182,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                                        td->nColumns - 1,
                                                        &loader,
                                                        &import_buffers);
-    loader->set_replicating(true);
+    loader->setReplicating(true);
 
     // set_geo_physical_import_buffer below needs a sorted import_buffers
     std::sort(import_buffers.begin(),
@@ -4528,6 +4528,6 @@ void Catalog_Namespace::MapDHandler::prepare_columnar_loader(
   auto col_descs = (*loader)->get_column_descs();
   for (auto cd : col_descs) {
     import_buffers->push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, (*loader)->get_string_dict(cd))));
+        new Importer_NS::TypedImportBuffer(cd, (*loader)->getStringDict(cd))));
   }
 }
