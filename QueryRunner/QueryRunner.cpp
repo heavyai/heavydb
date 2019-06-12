@@ -30,6 +30,8 @@
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/RelAlgExecutor.h"
 
+#include "DistributedLoader.h"
+
 #include <glog/logging.h>
 #include <boost/filesystem/operations.hpp>
 #include <csignal>
@@ -341,6 +343,24 @@ TExecuteMode::type to_execute_mode(ExecutorDeviceType device_type) {
 
   CHECK(false);
   return TExecuteMode::type::GPU;
+}
+
+void run_copy_distributed(
+    Parser::CopyTableStmt* import_stmt,
+    const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
+  auto leaf_aggregator = get_leaf_aggregator();
+  auto importer = [&session, &leaf_aggregator](
+                      const Catalog_Namespace::Catalog& cat,
+                      const TableDescriptor* td,
+                      const std::string& file_path,
+                      const Importer_NS::CopyParams& copy_params) {
+    return std::make_unique<Importer_NS::Importer>(
+        new DistributedLoader(*session.get(), td, leaf_aggregator),
+        file_path,
+        copy_params);
+  };
+  import_stmt->execute(*session, importer);
+  return;
 }
 
 std::shared_ptr<ResultSet> run_sql_distributed(

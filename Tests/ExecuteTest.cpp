@@ -57,6 +57,8 @@ extern double g_gpu_mem_limit_percent;
 
 extern bool g_enable_window_functions;
 
+extern size_t g_leaf_count;
+
 namespace {
 
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
@@ -6242,6 +6244,64 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
           "t2.fixed_null_str) OR (t1.fixed_null_str IS NULL AND t2.fixed_null_str IS "
           "NULL));",
           dt));
+  }
+}
+
+namespace {
+
+void validate_shard_agg(const ResultSet& rows,
+                        const std::vector<std::pair<int64_t, int64_t>>& expected) {
+  ASSERT_EQ(static_cast<size_t>(expected.size()), rows.rowCount(false));
+  for (size_t i = 0; i < rows.rowCount(false); ++i) {
+    const auto crt_row = rows.getNextRow(true, true);
+    CHECK_EQ(size_t(2), crt_row.size());
+    const auto id = v<int64_t>(crt_row[0]);
+    ASSERT_EQ(expected[i].first, id);
+    const auto cnt = v<int64_t>(crt_row[1]);
+    ASSERT_EQ(expected[i].second, cnt);
+  }
+  const auto crt_row = rows.getNextRow(true, true);
+  CHECK(crt_row.empty());
+}
+
+}  // namespace
+
+TEST(Select, AggregationOnAsymmetricShards) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    if (g_enable_columnar_output) {
+      // TODO(wamsi): enable tests when columnar output is fixed
+      return;
+    }
+
+    static const std::vector<std::pair<std::string, std::string>> params = {
+        {"shard1", "2"},
+        {"shard2", "4"},
+        {"shard3", "6"},
+        {"shard4", "10"},
+        {"shard5", "14"},
+        {"shard6", "16"}};
+
+    static const std::vector<std::pair<int64_t, int64_t>> expected = {
+        {9, 1}, {8, 1}, {7, 4}, {6, 1}, {5, 1}, {4, 2}, {3, 5}, {2, 4}, {1, 3}};
+
+    for (auto& p : params) {
+      run_ddl_statement("DROP TABLE IF EXISTS " + p.first + ";");
+      run_ddl_statement(
+          "CREATE TABLE " + p.first +
+          " (id INTEGER, num INTEGER, ts TIMESTAMP(0), SHARD KEY (id)) WITH "
+          "(SHARD_COUNT=" +
+          p.second + ");");
+      run_ddl_statement("COPY " + p.first +
+                        " FROM '../../Tests/Import/datafiles/shard_asymmetric_test.csv' "
+                        "WITH (header='true');");
+
+      const auto rows = run_multiple_agg("select id, count(*) from " + p.first +
+                                             " group by id order by id desc limit 11;",
+                                         dt);
+      validate_shard_agg(*rows, expected);
+    }
   }
 }
 

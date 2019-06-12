@@ -252,7 +252,7 @@ GroupByAndAggregate::GroupByAndAggregate(
 
 int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_info,
                                                  const size_t shard_count) const {
-  int device_count{0};
+  size_t device_count{0};
   if (device_type_ == ExecutorDeviceType::GPU) {
     device_count = executor_->getCatalog()->getDataMgr().getCudaMgr()->getDeviceCount();
     CHECK_GT(device_count, 0);
@@ -262,10 +262,21 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
 
   if (shard_count) {
     CHECK(!col_range_info.bucket);
-    if (static_cast<size_t>(device_count) <= shard_count && g_leaf_count) {
-      bucket = shard_count * g_leaf_count;
+    /*
+      When a leaf node has less devices than shard count, the minimum distance between two
+      keys would be device_count because shards are stored consecutively across the
+      physical tables, i.e if a shard column has values 0 to 9, and 3 shards on each leaf,
+      then node 1 would have values: 0,1,2,6,7,8 and node 2 would have values: 3,4,5,9.
+      If each leaf node has only 1 device, in this case, all the keys from each node are
+      loaded on the device each.
+
+      When a leaf node has device count equal to or more than shard count then
+      mininum distance is always atleast shard_count * no of leaf nodes.
+    */
+    if (device_count < shard_count) {
+      bucket = std::max(device_count, static_cast<size_t>(1));
     } else {
-      bucket = device_count;
+      bucket = shard_count * std::max(g_leaf_count, static_cast<size_t>(1));
     }
   }
 
