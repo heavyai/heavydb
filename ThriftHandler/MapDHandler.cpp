@@ -5033,8 +5033,9 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       }
 
       if (g_cluster && !leaf_aggregator_.leafCount()) {
-        // Sharded table rows need to be routed to the leaf by an aggregator.
-        check_table_not_sharded(cat, import_stmt->get_table());
+        // Don't allow to import on a single leaf in any case
+        throw std::runtime_error(
+            {"Cannot import on an individual leaf. Please import from an Aggregator."});
       } else if (leaf_aggregator_.leafCount() > 0) {
         _return.execution_time_ms += measure<>::execution(
             [&]() { execute_distributed_copy_statement(import_stmt, session_info); });
