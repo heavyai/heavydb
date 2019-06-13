@@ -43,7 +43,18 @@ using namespace TestHelpers;
 
 extern bool g_use_date_in_days_default_encoding;
 
+extern size_t g_leaf_count;
+
 namespace {
+
+bool g_aggregator{false};
+size_t g_num_leafs{1};
+
+#define SKIP_ALL_ON_AGGREGATOR()                         \
+  if (g_aggregator) {                                    \
+    LOG(ERROR) << "Tests not valid in distributed mode"; \
+    return;                                              \
+  }
 
 std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 bool g_hoist_literals{true};
@@ -318,10 +329,9 @@ class ImportTestMiniSort : public ::testing::Test {
 };
 
 void create_minisort_table_on_column(const std::string& column_name) {
-  EXPECT_NO_THROW(
-      run_ddl_statement(
-          std::string(create_table_mini_sort) +
-          (column_name.size() ? " with (sort_column='" + column_name + "');" : ";")););
+  EXPECT_NO_THROW(run_ddl_statement(
+      std::string(create_table_mini_sort) +
+      (column_name.size() ? " with (sort_column='" + column_name + "');" : ";")));
   EXPECT_NO_THROW(
       run_ddl_statement("copy sortab from '../../Tests/Import/datafiles/mini_sort.txt' "
                         "with (header='false');"));
@@ -407,50 +417,62 @@ TEST_F(ImportTestMiniSort, on_geo_point) {
 }
 
 TEST_F(ImportTestMiniSort, ctas_on_none) {
+  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("", {5, 3, 1, 2, 4});
 }
 
 TEST_F(ImportTestMiniSort, ctas_on_int) {
+  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("i", {1, 2, 3, 4, 5});
 }
 
 TEST_F(ImportTestMiniSort, ctas_on_float) {
+  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("f", {1, 2, 3, 4, 5});
 }
 
 TEST_F(ImportTestMiniSort, ctas_on_int_array) {
+  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("ia", {1, 2, 3, 4, 5});
 }
 
 TEST_F(ImportTestMiniSort, ctas_on_string_array) {
+  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("sa", {5, 3, 1, 2, 4});
 }
 
 TEST_F(ImportTestMiniSort, ctas_on_string_2b) {
+  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("s2", {5, 3, 1, 2, 4});
 }
 
 TEST_F(ImportTestMiniSort, ctas_on_date) {
+  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("dt", {1, 2, 3, 4, 5});
 }
 
 TEST_F(ImportTestMiniSort, ctas_on_date_2b) {
+  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("d2", {1, 2, 3, 4, 5});
 }
 
 TEST_F(ImportTestMiniSort, ctas_on_time) {
+  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("tm", {1, 2, 3, 4, 5});
 }
 
 TEST_F(ImportTestMiniSort, ctas_on_time_4b) {
+  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("t4", {1, 2, 3, 4, 5});
 }
 
 TEST_F(ImportTestMiniSort, ctas_on_varlen_array) {
+  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("va", {1, 2, 3, 4, 5});
 }
 
 TEST_F(ImportTestMiniSort, ctas_on_geo_point) {
+  SKIP_ALL_ON_AGGREGATOR();
   test_minisort_on_column_with_ctas("pt", {2, 3, 4, 5, 1});
 }
 
@@ -555,6 +577,7 @@ inline void run_mixed_dates_test() {
 }
 
 TEST_F(ImportTestDate, ImportMixedDates) {
+  SKIP_ALL_ON_AGGREGATOR();  // global variable not available on leaf nodes
   run_mixed_dates_test();
 }
 
@@ -573,6 +596,7 @@ class ImportTestLegacyDate : public ::testing::Test {
 };
 
 TEST_F(ImportTestLegacyDate, ImportMixedDates) {
+  SKIP_ALL_ON_AGGREGATOR();  // global variable not available on leaf nodes
   run_mixed_dates_test();
 }
 
@@ -963,6 +987,84 @@ TEST_F(ImportTestSharded, One_csv_file) {
   EXPECT_TRUE(import_test_local("sharded_trip_data_9.csv", 100, 1.0));
 }
 
+const char* create_table_trips_dict_sharded_text = R"(
+    CREATE TABLE trips (
+      id                      INTEGER,
+      medallion               TEXT ENCODING DICT,
+      hack_license            TEXT ENCODING DICT,
+      vendor_id               TEXT ENCODING DICT,
+      rate_code_id            SMALLINT,
+      store_and_fwd_flag      TEXT ENCODING DICT,
+      pickup_date             DATE,
+      drop_date               DATE ENCODING FIXED(16),
+      pickup_datetime         TIMESTAMP,
+      dropoff_datetime        TIMESTAMP,
+      passenger_count         SMALLINT,
+      trip_time_in_secs       INTEGER,
+      trip_distance           DECIMAL(14,2),
+      pickup_longitude        DECIMAL(14,2),
+      pickup_latitude         DECIMAL(14,2),
+      dropoff_longitude       DECIMAL(14,2),
+      dropoff_latitude        DECIMAL(14,2),
+      shard key (medallion)
+    ) WITH (FRAGMENT_SIZE=75000000, SHARD_COUNT=2);
+  )";
+class ImportTestShardedText : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
+    ASSERT_NO_THROW(run_ddl_statement(create_table_trips_dict_sharded_text););
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table trips;"););
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists geo;"););
+  }
+};
+
+TEST_F(ImportTestShardedText, One_csv_file) {
+  EXPECT_TRUE(import_test_local("sharded_trip_data_9.csv", 100, 1.0));
+}
+
+const char* create_table_trips_dict_sharded_text_8bit = R"(
+    CREATE TABLE trips (
+      id                      INTEGER,
+      medallion               TEXT ENCODING DICT (8),
+      hack_license            TEXT ENCODING DICT,
+      vendor_id               TEXT ENCODING DICT,
+      rate_code_id            SMALLINT,
+      store_and_fwd_flag      TEXT ENCODING DICT,
+      pickup_date             DATE,
+      drop_date               DATE ENCODING FIXED(16),
+      pickup_datetime         TIMESTAMP,
+      dropoff_datetime        TIMESTAMP,
+      passenger_count         SMALLINT,
+      trip_time_in_secs       INTEGER,
+      trip_distance           DECIMAL(14,2),
+      pickup_longitude        DECIMAL(14,2),
+      pickup_latitude         DECIMAL(14,2),
+      dropoff_longitude       DECIMAL(14,2),
+      dropoff_latitude        DECIMAL(14,2),
+      shard key (medallion)
+    ) WITH (FRAGMENT_SIZE=75000000, SHARD_COUNT=2);
+  )";
+class ImportTestShardedText8 : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
+    ASSERT_NO_THROW(run_ddl_statement(create_table_trips_dict_sharded_text_8bit););
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table trips;"););
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists geo;"););
+  }
+};
+
+TEST_F(ImportTestShardedText8, One_csv_file) {
+  EXPECT_TRUE(import_test_local("sharded_trip_data_9.csv", 100, 1.0));
+}
+
 namespace {
 const char* create_table_geo = R"(
     CREATE TABLE geospatial (
@@ -1156,6 +1258,7 @@ class GeoGDALImportTest : public ::testing::Test {
 };
 
 TEST_F(GeoGDALImportTest, Geojson_Point_Import) {
+  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_point/geospatial_point.geojson");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
@@ -1163,6 +1266,7 @@ TEST_F(GeoGDALImportTest, Geojson_Point_Import) {
 }
 
 TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import) {
+  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
@@ -1171,6 +1275,7 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import) {
 }
 
 TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import_Empties) {
+  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_empties.geojson");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
@@ -1179,6 +1284,7 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import_Empties) {
 }
 
 TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import_Degenerate) {
+  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_degenerate.geojson");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
@@ -1187,30 +1293,35 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import_Degenerate) {
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_Point_Import) {
+  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.shp");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
   check_geo_gdal_point_import();
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import) {
+  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.shp");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
   check_geo_gdal_mpoly_import();
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_Point_Import_Compressed) {
+  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.shp");
   import_test_geofile_importer(file_path.string(), "geospatial", true);
   check_geo_gdal_point_tv_import();
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import_Compressed) {
+  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.shp");
   import_test_geofile_importer(file_path.string(), "geospatial", true);
   check_geo_gdal_mpoly_tv_import();
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_Point_Import_3857) {
+  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_point/geospatial_point_3857.shp");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
@@ -1218,6 +1329,7 @@ TEST_F(GeoGDALImportTest, Shapefile_Point_Import_3857) {
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import_3857) {
+  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_3857.shp");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
@@ -1225,6 +1337,7 @@ TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import_3857) {
 }
 
 TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Append) {
+  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
@@ -1235,6 +1348,7 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Append) {
 }
 
 TEST_F(GeoGDALImportTest, Geodatabase_Simple) {
+  SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geodatabase/S_USA.Experimental_Area_Locations.gdb.zip");
   import_test_geofile_importer(file_path.string(), "geospatial", false);
@@ -1304,8 +1418,6 @@ int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
 
-  g_session.reset(QueryRunner::get_session(BASE_PATH));
-
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
@@ -1327,6 +1439,8 @@ int main(int argc, char** argv) {
     std::cout << desc << std::endl;
     return 0;
   }
+
+  g_session.reset(QueryRunner::get_session(BASE_PATH));
 
   int err{0};
   try {

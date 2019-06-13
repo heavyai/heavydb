@@ -432,17 +432,22 @@ std::shared_ptr<ResultSet> run_multiple_agg(
 #endif
 }
 
-void run_ddl_statement(const std::string& create_table_stmt,
+void run_ddl_statement(const std::string& stmt_str_in,
                        const std::unique_ptr<Catalog_Namespace::SessionInfo>& session) {
+  auto stmt_str = stmt_str_in;
+  // First remove special chars
+  boost::algorithm::trim_left_if(stmt_str, boost::algorithm::is_any_of("\n"));
+  // Then remove spaces
+  boost::algorithm::trim_left(stmt_str);
   if (Catalog_Namespace::SysCatalog::instance().isAggregator()) {
-    run_sql_distributed(create_table_stmt, session, ExecutorDeviceType::CPU, false);
+    run_sql_distributed(stmt_str, session, ExecutorDeviceType::CPU, false);
     return;
   }
 
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
-  CHECK_EQ(parser.parse(create_table_stmt, parse_trees, last_parsed), 0);
+  CHECK_EQ(parser.parse(stmt_str, parse_trees, last_parsed), 0);
   CHECK_EQ(parse_trees.size(), size_t(1));
   auto stmt = parse_trees.front().get();
   Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);

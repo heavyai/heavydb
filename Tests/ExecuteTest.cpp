@@ -15820,29 +15820,6 @@ void drop_views() {
 
 }  // namespace
 
-LeafHostInfo to_leaf_host_info(std::string& server_info, NodeRole role) {
-  size_t pos = server_info.find(':');
-  if (pos == std::string::npos) {
-    throw std::runtime_error("Invalid host:port -> " + server_info);
-  }
-
-  auto host = server_info.substr(0, pos);
-  auto port = server_info.substr(pos + 1);
-
-  return LeafHostInfo(host, std::stoi(port), role);
-}
-
-std::vector<LeafHostInfo> to_leaf_host_info(std::vector<std::string>& server_infos,
-                                            NodeRole role) {
-  std::vector<LeafHostInfo> host_infos;
-
-  for (auto& server_info : server_infos) {
-    host_infos.push_back(to_leaf_host_info(server_info, role));
-  }
-
-  return host_infos;
-}
-
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
