@@ -1596,7 +1596,8 @@ size_t InsertValuesStmt::determineLeafIndex(const Catalog_Namespace::Catalog& ca
   CHECK(shardColumn);
 
   if (column_list.empty()) {
-    auto all_cols = catalog.getAllColumnMetadataForTable(td->tableId, false, false, true);
+    auto all_cols =
+        catalog.getAllColumnMetadataForTable(td->tableId, false, false, false);
     auto iter = std::find(all_cols.begin(), all_cols.end(), shardColumn);
     CHECK(iter != all_cols.end());
     indexOfShardColumn = std::distance(all_cols.begin(), iter);

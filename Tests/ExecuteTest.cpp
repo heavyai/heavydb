@@ -545,6 +545,41 @@ TEST(Create, StorageOptions) {
   }
 }
 
+TEST(Insert, ShardedTableWithGeo) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP TABLE IF EXISTS table_with_geo_and_shard_key;");
+    EXPECT_NO_THROW(
+        run_ddl_statement("CREATE TABLE table_with_geo_and_shard_key (x Int, poly "
+                          "POLYGON, b SMALLINT, SHARD KEY(b)) WITH (shard_count = 4);"));
+
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO table_with_geo_and_shard_key VALUES (1, "
+                         "'POLYGON((0 0, 1 1, 2 2, 3 3))', 0);",
+                         dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO table_with_geo_and_shard_key (x, poly, b) VALUES (1, "
+        "'POLYGON((0 0, 1 1, 2 2, 3 3))', 1);",
+        dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO table_with_geo_and_shard_key (b, poly, x) VALUES (2, "
+        "'POLYGON((0 0, 1 1, 2 2, 3 3))', 1);",
+        dt));
+    EXPECT_NO_THROW(run_multiple_agg(
+        "INSERT INTO table_with_geo_and_shard_key (x, b, poly) VALUES (1, 3, "
+        "'POLYGON((0 0, 1 1, 2 2, 3 3))');",
+        dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO table_with_geo_and_shard_key (poly, x, b) VALUES ("
+                         "'POLYGON((0 0, 1 1, 2 2, 3 3))', 1, 4);",
+                         dt));
+
+    ASSERT_EQ(5,
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM table_with_geo_and_shard_key;", dt)));
+  }
+}
+
 TEST(Insert, NullArrayNullEmpty) {
   const char* create_table_array_with_nulls =
       R"(create table table_array_with_nulls (i smallint, sia smallint[], fa2 float[2]);)";
