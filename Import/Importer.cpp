@@ -2271,7 +2271,8 @@ int64_t int_value_at(const TypedImportBuffer& import_buffer, const size_t index)
     values_buffer = import_buffer.getAsBytes();
   }
   CHECK(values_buffer);
-  switch (ti.get_logical_size()) {
+  const int logical_size = ti.is_string() ? ti.get_size() : ti.get_logical_size();
+  switch (logical_size) {
     case 1: {
       return values_buffer[index];
     }
@@ -2285,7 +2286,7 @@ int64_t int_value_at(const TypedImportBuffer& import_buffer, const size_t index)
       return reinterpret_cast<const int64_t*>(values_buffer)[index];
     }
     default:
-      CHECK(false);
+      LOG(FATAL) << "Unexpected size for shard key: " << logical_size;
   }
   UNREACHABLE();
   return 0;
