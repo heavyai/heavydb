@@ -142,8 +142,9 @@ DEVICE int32_t extract_quarter_fast(const int64_t lcltime) {
 DEVICE int32_t extract_year_fast(const int64_t lcltime) {
   uint32_t seconds_1900 = lcltime + kEpochOffsetYear1900;
   uint32_t leap_years = (seconds_1900 - kSecsJanToMar1900) / kSecondsPer4YearCycle;
-  uint32_t year =
-      (seconds_1900 - leap_years * kUSecsPerDay) / kSecondsPerNonLeapYear + 1900;
+  uint32_t year = lcltime / kSecondsPerNonLeapYear +
+                  kEpochOffsetYear1900 / kSecondsPerNonLeapYear -
+                  (leap_years * kUSecsPerDay / kSecondsPerNonLeapYear) + 1900;
   return year;
 }
 
