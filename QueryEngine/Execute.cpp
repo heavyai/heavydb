@@ -905,9 +905,19 @@ size_t get_context_count(const ExecutorDeviceType device_type,
 
 namespace {
 
+// Compute a very conservative entry count for the output buffer entry count using no
+// other information than the number of tuples in each table and multiplying them
+// together.
 size_t compute_buffer_entry_guess(const std::vector<InputTableInfo>& query_infos) {
   using Fragmenter_Namespace::FragmentInfo;
-  size_t max_groups_buffer_entry_guess = 1;
+  // Check for overflows since we're multiplying potentially big table sizes.
+  using checked_size_t = boost::multiprecision::number<
+      boost::multiprecision::cpp_int_backend<64,
+                                             64,
+                                             boost::multiprecision::unsigned_magnitude,
+                                             boost::multiprecision::checked,
+                                             void>>;
+  checked_size_t max_groups_buffer_entry_guess = 1;
   for (const auto& query_info : query_infos) {
     CHECK(!query_info.info.fragments.empty());
     auto it = std::max_element(query_info.info.fragments.begin(),
@@ -917,7 +927,15 @@ size_t compute_buffer_entry_guess(const std::vector<InputTableInfo>& query_infos
                                });
     max_groups_buffer_entry_guess *= it->getNumTuples();
   }
-  return max_groups_buffer_entry_guess;
+  // Cap the rough approximation to 100M entries, it's unlikely we can do a great job for
+  // baseline group layout with that many entries anyway.
+  constexpr size_t max_groups_buffer_entry_guess_cap = 100000000;
+  try {
+    return std::min(static_cast<size_t>(max_groups_buffer_entry_guess),
+                    max_groups_buffer_entry_guess_cap);
+  } catch (...) {
+    return max_groups_buffer_entry_guess_cap;
+  }
 }
 
 std::string get_table_name(const InputDescriptor& input_desc,
