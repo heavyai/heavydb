@@ -2163,7 +2163,12 @@ ExecutionResult RelAlgExecutor::handleRetry(
                             co.opt_level_,
                             co.with_dynamic_watchdog_};
   if (error_code) {
-    max_groups_buffer_entry_guess = 0;
+    // Only reset the group buffer entry guess if we ran out of slots, which suggests a
+    // highly pathological input which prevented a good estimation of distinct tuple
+    // count.
+    if (error_code < 0) {
+      max_groups_buffer_entry_guess = 0;
+    }
     while (true) {
       const auto ra_exe_unit =
           decide_approx_count_distinct_implementation(work_unit.exe_unit,
