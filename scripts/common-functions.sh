@@ -95,7 +95,7 @@ function install_snappy() {
   popd
 }
 
-AWSCPP_VERSION=1.7.83
+AWSCPP_VERSION=1.7.123
 
 function install_awscpp() {
     # default c++ standard support
