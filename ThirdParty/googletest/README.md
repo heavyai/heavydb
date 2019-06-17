@@ -1,39 +1,39 @@
 Google Mock and Google Test
 ---------------------------
 
-This directory contains [Google Test](https://code.google.com/p/googletest/)
-and [Google Mock](https://code.google.com/p/googlemock/), which have been fused
-together for distribution.
+This is Google Test v1.8.1.
+
+This directory contains [Google Test and Google
+Mock](https://github.com/google/googletest), which have been fused together to
+a single set of files.
 
 Use of the source code in this directory is governed by the license provided
-in this directory and at https://googletest.googlecode.com/svn/trunk/LICENSE
+in this directory and at https://github.com/google/googletest/blob/master/LICENSE
 
-### Instructions for regenerating gmock and gtest files
-
-Note: Google Mock includes all files from Google Test.
+### Instructions for regenerating fused gmock and gtest files
 
 Remove the current files:
 ```
 rm -rf gtest gmock gmock-gtest-all.cc
 ```
 
-Grab the latest Google Mock source from SVN:
+Grab the latest Google Test source from GitHub:
 ```
-svn checkout http://googlemock.googlecode.com/svn/trunk/ googlemock-read-only
+git clone https://github.com/google/googletest
 ```
 
 Run the included script to fuse the files together:
 ```
-python googlemock-read-only/scripts/fuse_gmock_files.py .
+python2 googletest/googlemock/scripts/fuse_gmock_files.py .
 ```
 
 Remove source directory:
 ```
-rm -rf googlemock-read-only
+rm -rf googletest
 ```
 
-The fuse scripts are written for Python 2; running with Python 3 will result in
-a `SyntaxError`.
+Note: as of 2019-05-28 the fuse scripts are written for Python 2; running with
+Python 3 will result in a `SyntaxError` due to a `print`.
 
 ### Usage
 
@@ -42,13 +42,13 @@ The provided CMakeLists.txt will generate a target named `gtest`.
 The following assumes these files are in a directory named
 `ThirdParty/googletest`.
 
-In the top-level CMakeLists.txt, add:
+In the top-level CMakeLists.txt add:
 ```
 include_directories(ThirdParty/googletest)
 add_subdirectory(ThirdParty/googletest)
 ```
 
-To link against the Google Test library, do:
+To link against the Google Test library:
 ```
 target_link_libraries(mylib gtest)
 ```
