@@ -292,7 +292,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
                                       count_distinct_descriptors) &&
                                   !output_columnar;
       }
-    } break;
+      break;
+    }
     case QueryDescriptionType::GroupByBaselineHash: {
       if (render_info) {
         render_info->setInSituDataIfUnset(false);
@@ -310,7 +311,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
 
       actual_col_range_info =
           ColRangeInfo{QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
-    } break;
+      break;
+    }
     case QueryDescriptionType::Projection: {
       CHECK(!must_use_baseline_sort);
 
@@ -334,7 +336,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
                                    : std::vector<ssize_t>{};
 
       col_slot_context = ColSlotContext(ra_exe_unit.target_exprs, target_groupby_indices);
-    } break;
+      break;
+    }
     default:
       UNREACHABLE() << "Unknown query type";
   }

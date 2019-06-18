@@ -654,7 +654,8 @@ int BaselineJoinHashTable::initHashTableOnCpu(
                   join_columns[0].num_elems,
                   thread_idx,
                   thread_count);
-            } break;
+              break;
+            }
             case 8: {
               const auto key_handler =
                   GenericKeyHandler(key_component_count,
@@ -673,7 +674,8 @@ int BaselineJoinHashTable::initHashTableOnCpu(
                   join_columns[0].num_elems,
                   thread_idx,
                   thread_count);
-            } break;
+              break;
+            }
             default:
               CHECK(false);
           }

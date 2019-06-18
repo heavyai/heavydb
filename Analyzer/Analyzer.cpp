@@ -633,7 +633,8 @@ SQLTypeInfo BinOper::common_numeric_type(const SQLTypeInfo& type1,
                                         common_scale,
                                     common_scale,
                                     notnull);
-        } break;
+          break;
+        }
         default:
           CHECK(false);
       }

@@ -167,7 +167,8 @@ void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level) {
         // CPU memory (currently used in ExecuteTest to lower memory pressure)
         JoinHashTableCacheInvalidator::invalidateCaches();
       }
-    } break;
+      break;
+    }
     default: {
       throw std::runtime_error(
           "Clearing memory levels other than the CPU level or GPU level is not "
@@ -631,7 +632,8 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
                       ? static_cast<int64_t>(agg_result)
                       : float_to_double_bin(static_cast<int32_t>(agg_result), true);
               return {converted_bin, 0};
-            } break;
+              break;
+            }
             case 8: {
               int64_t agg_result = agg_init_val;
               for (size_t i = 0; i < out_vec_sz; ++i) {
@@ -641,7 +643,8 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
                     *reinterpret_cast<const double*>(may_alias_ptr(&agg_init_val)));
               }
               return {agg_result, 0};
-            } break;
+              break;
+            }
             default:
               CHECK(false);
           }

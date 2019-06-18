@@ -275,7 +275,8 @@ Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry_guess,
                                                 eo,
                                                 render_info_,
                                                 executor_);
-    } break;
+      break;
+    }
     case ExecutorDeviceType::GPU: {
       query_mem_desc = query_comp_desc->compile(max_groups_buffer_entry_guess,
                                                 crt_min_byte_width,
@@ -287,7 +288,8 @@ Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry_guess,
                                                 eo,
                                                 render_info_,
                                                 executor_);
-    } break;
+      break;
+    }
     default:
       UNREACHABLE();
   }

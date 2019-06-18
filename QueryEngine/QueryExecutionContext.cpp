@@ -910,7 +910,8 @@ std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(
   switch (hash_table_count) {
     case 0: {
       params[JOIN_HASH_TABLES] = CUdeviceptr(0);
-    } break;
+      break;
+    }
     case 1:
       params[JOIN_HASH_TABLES] = static_cast<CUdeviceptr>(join_hash_tables[0]);
       break;
@@ -922,7 +923,8 @@ std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(
                   &join_hash_tables[0],
                   hash_table_count * sizeof(int64_t),
                   device_id);
-    } break;
+      break;
+    }
   }
 
   return params;

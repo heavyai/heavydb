@@ -1464,7 +1464,8 @@ std::vector<const RexScalar*> find_hoistable_conditions(const RexScalar* conditi
         } else {
           return {subconditions};
         }
-      } break;
+        break;
+      }
       case kEQ: {
         const auto lhs_conds = find_hoistable_conditions(
             rex_op->getOperand(0), source, first_col_idx, last_col_idx);
@@ -1480,7 +1481,8 @@ std::vector<const RexScalar*> find_hoistable_conditions(const RexScalar* conditi
           return {rex_op};
         }
         return {};
-      } break;
+        break;
+      }
       default:
         break;
     }

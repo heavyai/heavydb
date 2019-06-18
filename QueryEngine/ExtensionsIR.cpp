@@ -449,7 +449,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
           args.push_back(cgen_state_->ir_builder_.CreateZExt(
               len_lv, get_int_type(64, cgen_state_->context_)));
           j++;
-        } break;
+          break;
+        }
         case kMULTIPOLYGON: {
           k++;
           // Ring Sizes
@@ -503,7 +504,8 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
                 len_lv, get_int_type(64, cgen_state_->context_)));
           }
           j++;
-        } break;
+          break;
+        }
         default:
           CHECK(false);
       }

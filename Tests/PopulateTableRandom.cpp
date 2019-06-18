@@ -236,7 +236,8 @@ size_t random_fill(const ColumnDescriptor* cd,
       int64_t min = -max;
       hash = random_fill_int64(p.numbersPtr, num_elems, min, max);
       data_volumn += num_elems * sizeof(int64_t);
-    } break;
+      break;
+    }
     case kFLOAT:
       hash = random_fill_float(p.numbersPtr, num_elems);
       data_volumn += num_elems * sizeof(float);

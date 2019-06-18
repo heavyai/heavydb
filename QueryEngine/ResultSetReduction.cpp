@@ -184,11 +184,13 @@ void fill_empty_key(void* key_ptr, const size_t key_count, const size_t key_widt
     case 4: {
       auto key_ptr_i32 = reinterpret_cast<int32_t*>(key_ptr);
       fill_empty_key_32(key_ptr_i32, key_count);
-    } break;
+      break;
+    }
     case 8: {
       auto key_ptr_i64 = reinterpret_cast<int64_t*>(key_ptr);
       fill_empty_key_64(key_ptr_i64, key_count);
-    } break;
+      break;
+    }
     default:
       CHECK(false);
   }

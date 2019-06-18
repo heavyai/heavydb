@@ -1425,7 +1425,8 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
             getCoordsDataPtr(geo_target_ptr),
             getCoordsLength(geo_target_ptr));
       }
-    } break;
+      break;
+    }
     case kLINESTRING: {
       if (separate_varlen_storage_valid_ && !target_info.is_agg) {
         const auto& varlen_buffer = getSeparateVarlenStorage();
@@ -1458,7 +1459,8 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
             getCoordsDataPtr(geo_target_ptr),
             getCoordsLength(geo_target_ptr));
       }
-    } break;
+      break;
+    }
     case kPOLYGON: {
       if (separate_varlen_storage_valid_ && !target_info.is_agg) {
         const auto& varlen_buffer = getSeparateVarlenStorage();
@@ -1500,7 +1502,8 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
             getRingSizesPtr(geo_target_ptr),
             getRingSizesLength(geo_target_ptr) * 4);
       }
-    } break;
+      break;
+    }
     case kMULTIPOLYGON: {
       if (separate_varlen_storage_valid_ && !target_info.is_agg) {
         const auto& varlen_buffer = getSeparateVarlenStorage();
@@ -1550,7 +1553,8 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
             getPolyRingsPtr(geo_target_ptr),
             getPolyRingsLength(geo_target_ptr) * 4);
       }
-    } break;
+      break;
+    }
     default:
       throw std::runtime_error("Unknown Geometry type encountered: " +
                                target_info.sql_type.get_type_name());

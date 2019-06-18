@@ -135,7 +135,8 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
               return 0;
               break;
           }
-        } break;
+          break;
+        }
         case kBIGINT:
         case kNUMERIC:
         case kDECIMAL: {

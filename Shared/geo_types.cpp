@@ -582,14 +582,16 @@ void GeoTypesFactory::getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospati
       CHECK(geospatial_point);
       geospatial_point->getColumns(coords);
       ti.set_type(kPOINT);
-    } break;
+      break;
+    }
     case GeoBase::GeoType::kLINESTRING: {
       const auto geospatial_linestring =
           dynamic_cast<GeoLineString*>(geospatial_base.get());
       CHECK(geospatial_linestring);
       geospatial_linestring->getColumns(coords, bounds);
       ti.set_type(kLINESTRING);
-    } break;
+      break;
+    }
     case GeoBase::GeoType::kPOLYGON: {
       const auto geospatial_poly = dynamic_cast<GeoPolygon*>(geospatial_base.get());
       CHECK(geospatial_poly);
@@ -601,13 +603,15 @@ void GeoTypesFactory::getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospati
         }
       }
       ti.set_type(kPOLYGON);
-    } break;
+      break;
+    }
     case GeoBase::GeoType::kMULTIPOLYGON: {
       const auto geospatial_mpoly = dynamic_cast<GeoMultiPolygon*>(geospatial_base.get());
       CHECK(geospatial_mpoly);
       geospatial_mpoly->getColumns(coords, ring_sizes, poly_rings, bounds);
       ti.set_type(kMULTIPOLYGON);
-    } break;
+      break;
+    }
     default:
       throw std::runtime_error("Unrecognized geospatial type");
   }

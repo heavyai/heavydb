@@ -280,7 +280,8 @@ class ArrayNoneEncoder : public Encoder {
             initialized = true;
           }
         }
-      } break;
+        break;
+      }
       case kINT: {
         if (!initialized) {
           elem_min.intval = 1;
@@ -302,7 +303,8 @@ class ArrayNoneEncoder : public Encoder {
             initialized = true;
           }
         }
-      } break;
+        break;
+      }
       case kSMALLINT: {
         if (!initialized) {
           elem_min.smallintval = 1;
@@ -324,7 +326,8 @@ class ArrayNoneEncoder : public Encoder {
             initialized = true;
           }
         }
-      } break;
+        break;
+      }
       case kTINYINT: {
         if (!initialized) {
           elem_min.tinyintval = 1;
@@ -346,7 +349,8 @@ class ArrayNoneEncoder : public Encoder {
             initialized = true;
           }
         }
-      } break;
+        break;
+      }
       case kBIGINT:
       case kNUMERIC:
       case kDECIMAL: {
@@ -370,7 +374,8 @@ class ArrayNoneEncoder : public Encoder {
             initialized = true;
           }
         }
-      } break;
+        break;
+      }
       case kFLOAT: {
         if (!initialized) {
           elem_min.floatval = 1.0;
@@ -392,7 +397,8 @@ class ArrayNoneEncoder : public Encoder {
             initialized = true;
           }
         }
-      } break;
+        break;
+      }
       case kDOUBLE: {
         if (!initialized) {
           elem_min.doubleval = 1.0;
@@ -414,7 +420,8 @@ class ArrayNoneEncoder : public Encoder {
             initialized = true;
           }
         }
-      } break;
+        break;
+      }
       case kTIME:
       case kTIMESTAMP:
       case kDATE: {
@@ -438,7 +445,8 @@ class ArrayNoneEncoder : public Encoder {
             initialized = true;
           }
         }
-      } break;
+        break;
+      }
       case kCHAR:
       case kVARCHAR:
       case kTEXT: {
@@ -463,7 +471,8 @@ class ArrayNoneEncoder : public Encoder {
             initialized = true;
           }
         }
-      } break;
+        break;
+      }
       default:
         assert(false);
     }

@@ -501,7 +501,7 @@ int OverlapsJoinHashTable::initHashTableOnCpu(
                                                               join_columns[0].num_elems,
                                                               thread_idx,
                                                               thread_count);
-            } break;
+            }
             case 8: {
               const auto key_handler = OverlapsKeyHandler(
                   key_component_count,
@@ -516,7 +516,7 @@ int OverlapsJoinHashTable::initHashTableOnCpu(
                                                               join_columns[0].num_elems,
                                                               thread_idx,
                                                               thread_count);
-            } break;
+            }
             default:
               CHECK(false);
           }

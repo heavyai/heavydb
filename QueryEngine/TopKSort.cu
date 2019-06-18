@@ -186,7 +186,8 @@ void do_radix_sort(thrust::device_ptr<I> d_idx_first,
                                    layout.col_off,
                                    layout.row_bytes);
         sort_indices_by_key(d_idx_first, idx_count, d_oe_buffer, oe.is_desc, allocator);
-      } break;
+        break;
+      }
       case 8: {
         auto d_oe_buffer = get_device_ptr<double>(idx_count, allocator);
         collect_order_entry_column(d_oe_buffer,
@@ -196,7 +197,8 @@ void do_radix_sort(thrust::device_ptr<I> d_idx_first,
                                    layout.col_off,
                                    layout.row_bytes);
         sort_indices_by_key(d_idx_first, idx_count, d_oe_buffer, oe.is_desc, allocator);
-      } break;
+        break;
+      }
       default:
         CHECK(false);
     }
@@ -213,7 +215,8 @@ void do_radix_sort(thrust::device_ptr<I> d_idx_first,
                                  layout.col_off,
                                  layout.row_bytes);
       sort_indices_by_key(d_idx_first, idx_count, d_oe_buffer, oe.is_desc, allocator);
-    } break;
+      break;
+    }
     case 8: {
       auto d_oe_buffer = get_device_ptr<int64_t>(idx_count, allocator);
       collect_order_entry_column(d_oe_buffer,
@@ -223,7 +226,8 @@ void do_radix_sort(thrust::device_ptr<I> d_idx_first,
                                  layout.col_off,
                                  layout.row_bytes);
       sort_indices_by_key(d_idx_first, idx_count, d_oe_buffer, oe.is_desc, allocator);
-    } break;
+      break;
+    }
     default:
       CHECK(false);
   }

@@ -249,11 +249,13 @@ __global__ void columnarize_groups(int8_t* columnar_buffer,
       case 8: {
         int64_t* write_ptr = reinterpret_cast<int64_t*>(col_base) + thread_index;
         *write_ptr = *reinterpret_cast<const int64_t*>(read_ptr);
-      } break;
+        break;
+      }
       case 4: {
         int32_t* write_ptr = reinterpret_cast<int32_t*>(col_base) + thread_index;
         *write_ptr = *reinterpret_cast<const int32_t*>(read_ptr);
-      } break;
+        break;
+      }
       default:;
     }
     col_base += col_widths[i] * row_count;
@@ -310,7 +312,8 @@ __device__ inline void row_func(int8_t* write_base,
             break;
           default:;
         }
-      } break;
+        break;
+      }
       case 8: {
         auto write_ptr = reinterpret_cast<int64_t*>(write_base);
         const auto value = *reinterpret_cast<const int64_t*>(read_base);
@@ -329,7 +332,8 @@ __device__ inline void row_func(int8_t* write_base,
             break;
           default:;
         }
-      } break;
+        break;
+      }
       default:;
     }
     write_base += val_widths[i] * write_stride;
@@ -1282,7 +1286,8 @@ __device__ inline void reduce_func(int8_t* write_base,
             break;
           default:;
         }
-      } break;
+        break;
+      }
       case 8: {
         auto write_ptr = reinterpret_cast<int64_t*>(write_base);
         const auto value = *reinterpret_cast<const int64_t*>(read_base);
@@ -1299,7 +1304,8 @@ __device__ inline void reduce_func(int8_t* write_base,
             break;
           default:;
         }
-      } break;
+        break;
+      }
       default:;
     }
     write_base += val_widths[i] * write_stride;

@@ -280,7 +280,8 @@ bool RowToColumnLoader::convert_string_to_column(
           input_columns_[curr_col].nulls.push_back(false);
           input_columns_[curr_col].data.arr_col.push_back(array_tcol);
 
-        } break;
+          break;
+        }
         default:
           populate_TColumn(
               ts, column_type_info_[curr_col], input_columns_[curr_col], copy_params);

@@ -1148,7 +1148,8 @@ class RANodeIterator : public std::vector<std::shared_ptr<RelAlgNode>>::const_it
           }
         }
         super = only_use;
-      } break;
+        break;
+      }
       case AdvancingMode::InOrder:
         for (size_t i = 0; i != owner_.size(); ++i) {
           if (!visited_.count(i)) {
@@ -1565,7 +1566,8 @@ class RelAlgAbstractInterpreter {
     switch (modify_node->getOperation()) {
       case RelModify::ModifyOperation::Delete: {
         modify_node->applyDeleteModificationsToInputNode();
-      } break;
+        break;
+      }
       case RelModify::ModifyOperation::Update: {
         modify_node->applyUpdateModificationsToInputNode();
       }

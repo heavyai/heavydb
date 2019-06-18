@@ -101,34 +101,39 @@ bool generate_numbers(int8_t* random_numbers,
         *reinterpret_cast<T*>(random_numbers + i * stride) =
             std::max<T>(min_number, std::min<T>(max_number, std::round(d(gen))));
       }
-    } break;
+      break;
+    }
     case EXP1: {
       std::exponential_distribution<> d(1);
       for (unsigned i = 0; i < num_random_numbers; ++i) {
         *reinterpret_cast<T*>(random_numbers + i * stride) =
             std::max<T>(min_number, std::min<T>(max_number, std::round(d(gen))));
       }
-    } break;
+      break;
+    }
     case EXP2: {
       std::exponential_distribution<> d(2);
       for (unsigned i = 0; i < num_random_numbers; ++i) {
         *reinterpret_cast<T*>(random_numbers + i * stride) =
             std::max<T>(min_number, std::min<T>(max_number, std::round(d(gen))));
       }
-    } break;
+      break;
+    }
     case UNI: {
       std::uniform_int_distribution<T> d(min_number, max_number);
       for (unsigned i = 0; i < num_random_numbers; ++i) {
         *reinterpret_cast<T*>(random_numbers + i * stride) = d(gen);
       }
-    } break;
+      break;
+    }
     case POI: {
       std::poisson_distribution<T> d(4);
       for (unsigned i = 0; i < num_random_numbers; ++i) {
         *reinterpret_cast<T*>(random_numbers + i * stride) =
             std::max<T>(min_number, std::min(max_number, d(gen)));
       }
-    } break;
+      break;
+    }
     default:
       CHECK(false);
   }
@@ -220,11 +225,13 @@ inline void init_groups_on_host(int8_t* groups,
                     std::fill(col_ptr,
                               col_ptr + group_count,
                               static_cast<uint32_t>(init_vals[j]));
-                  } break;
+                    break;
+                  }
                   case 8: {
                     auto col_ptr = reinterpret_cast<size_t*>(col_base);
                     std::fill(col_ptr, col_ptr + group_count, init_vals[j]);
-                  } break;
+                    break;
+                  }
                   default:
                     CHECK(false);
                 }
