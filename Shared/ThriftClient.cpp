@@ -49,14 +49,24 @@ class InsecureAccessManager : public AccessManager {
   };
 };
 
-mapd::shared_ptr<TTransport> openBufferedClientTransport(
-    const std::string& server_host,
-    const int port,
-    const std::string& ca_cert_name) {
+mapd::shared_ptr<TTransport> openBufferedClientTransport(const std::string& server_host,
+                                                         const int port,
+                                                         const std::string& ca_cert_name,
+                                                         bool with_timeout,
+                                                         unsigned connect_timeout,
+                                                         unsigned recv_timeout,
+                                                         unsigned send_timeout) {
   mapd::shared_ptr<TTransport> transport;
   if (ca_cert_name.empty()) {
-    transport = mapd::shared_ptr<TTransport>(new TBufferedTransport(
-        mapd::shared_ptr<TTransport>(new TSocket(server_host, port))));
+    const auto socket = mapd::make_shared<TSocket>(server_host, port);
+    if (with_timeout) {
+      socket->setConnTimeout(connect_timeout);
+      socket->setRecvTimeout(recv_timeout);
+      socket->setSendTimeout(send_timeout);
+    }
+    transport = mapd::make_shared<TBufferedTransport>(socket);
+    //  transport = mapd::shared_ptr<TTransport>(new TBufferedTransport(
+    //     mapd::shared_ptr<TTransport>(new TSocket(server_host, port))));
   } else {
     // Thrift issue 4164 https://jira.apache.org/jira/browse/THRIFT-4164 reports
     // a problem if TSSLSocketFactory is destroyed before any sockets it creates
@@ -69,6 +79,11 @@ mapd::shared_ptr<TTransport> openBufferedClientTransport(
     factory->authenticate(false);
     factory->access(mapd::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
     mapd::shared_ptr<TSocket> secure_socket = factory->createSocket(server_host, port);
+    if (with_timeout) {
+      secure_socket->setConnTimeout(connect_timeout);
+      secure_socket->setRecvTimeout(recv_timeout);
+      secure_socket->setSendTimeout(send_timeout);
+    }
     transport = mapd::shared_ptr<TTransport>(new TBufferedTransport(secure_socket));
   }
   return transport;

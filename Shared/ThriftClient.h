@@ -48,7 +48,11 @@ struct ThriftClientConnection {
 mapd::shared_ptr<::apache::thrift::transport::TTransport> openBufferedClientTransport(
     const std::string& server_host,
     const int port,
-    const std::string& ca_cert_name);
+    const std::string& ca_cert_name,
+    const bool with_timeout = false,
+    const unsigned connect_timeout = 0,
+    const unsigned recv_timeount = 0,
+    const unsigned send_timeout = 0);
 
 mapd::shared_ptr<::apache::thrift::transport::TTransport> openHttpClientTransport(
     const std::string& server_host,

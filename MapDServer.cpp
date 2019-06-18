@@ -50,6 +50,10 @@ using namespace ::apache::thrift::protocol;
 using namespace ::apache::thrift::server;
 using namespace ::apache::thrift::transport;
 
+unsigned connect_timeout{20000};
+unsigned recv_timeout{300000};
+unsigned send_timeout{300000};
+
 extern bool g_cache_string_hash;
 extern size_t g_leaf_count;
 extern bool g_skip_intermediate_count;
@@ -562,6 +566,20 @@ std::stringstream sanitize_config_file(std::ifstream& in) {
 
 }  // namespace
 
+bool trim_and_check_file_exists(std::string& filename,
+                                const std::string desc,
+                                int& return_code) {
+  if (!filename.empty()) {
+    boost::algorithm::trim_if(filename, boost::is_any_of("\"'"));
+    if (!boost::filesystem::exists(filename)) {
+      LOG(ERROR) << desc << " " << filename << " does not exist.";
+      return_code = 1;
+      return false;
+    }
+  }
+  return true;
+}
+
 bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_code) {
   return_code = 0;
 
@@ -587,6 +605,19 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
       po::store(po::parse_config_file(sanitized_settings, all_desc, false), vm);
       po::notify(vm);
       settings_file.close();
+    }
+
+    if (!trim_and_check_file_exists(
+            mapd_parameters.ssl_cert_file, "ssl cert file", return_code)) {
+      return false;
+    }
+    if (!trim_and_check_file_exists(
+            mapd_parameters.ssl_trust_store, "ssl trust store", return_code)) {
+      return false;
+    }
+    if (!trim_and_check_file_exists(
+            mapd_parameters.ssl_key_file, "ssl key file", return_code)) {
+      return false;
     }
 
     if (vm.count("help")) {
@@ -784,9 +815,6 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
   boost::algorithm::trim_if(authMetadata.ldapSuperUserRole, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.restToken, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.restUrl, boost::is_any_of("\"'"));
-  boost::algorithm::trim_if(mapd_parameters.ssl_cert_file, boost::is_any_of("\"'"));
-  boost::algorithm::trim_if(mapd_parameters.ssl_key_file, boost::is_any_of("\"'"));
-  boost::algorithm::trim_if(mapd_parameters.ssl_trust_store, boost::is_any_of("\"'"));
 
   return true;
 }
