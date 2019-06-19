@@ -327,7 +327,9 @@ func uploadHandler(rw http.ResponseWriter, r *http.Request) {
 
 	uploadDir := dataDir + "/mapd_import/"
 	sid := r.Header.Get("sessionid")
-	if sessionIDCookie, err := r.Cookie(thriftSessionCookieName); sessionIDCookie != nil && err == nil {
+	samlAuthCookie, samlAuthCookieErr := r.Cookie(samlAuthCookieName)
+	sessionIDCookie, sessionIDCookieErr := r.Cookie(thriftSessionCookieName)
+	if samlAuthCookieErr == nil && sessionIDCookieErr == nil && samlAuthCookie == "true" && sessionIDCookie != nil {
 		sid = sessionIDCookie.Value
 	} else if len(r.FormValue("sessionid")) > 0 {
 		sid = r.FormValue("sessionid")
@@ -606,8 +608,9 @@ func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 		// If the thriftSessionCookieName is present, it holds the real session ID, while the Thrift
 		// call is using a placeholder. This code replaces the fake session ID in the Thrift call
 		// with the real one from the cookie.
-		sessionIDCookie, err := r.Cookie(thriftSessionCookieName)
-		if sessionIDCookie != nil && err == nil {
+		samlAuthCookie, samlAuthCookieErr := r.Cookie(samlAuthCookieName)
+		sessionIDCookie, sessionIDCookieErr := r.Cookie(thriftSessionCookieName)
+		if samlAuthCookieErr == nil && sessionIDCookieErr == nil && samlAuthCookie == "true" && sessionIDCookie != nil {
 			bodyBytes, _ := ioutil.ReadAll(r.Body)
 			defer r.Body.Close()
 
