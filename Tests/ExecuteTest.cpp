@@ -11608,8 +11608,6 @@ TEST(Update, UsingDateColumns) {
 }
 
 TEST(Delete, ShardedTableDeleteTest) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -14223,32 +14221,37 @@ void shard_key_test_runner(const std::string& shard_key_col,
   run_ddl_statement("drop table if exists shard_key_ddl_test;");
   run_ddl_statement(
       "CREATE TABLE shard_key_ddl_test (x INTEGER, y TEXT ENCODING DICT(32), pt "
-      "POINT, z DOUBLE, a BIGINT NOT NULL, poly POLYGON, b SMALLINT, SHARD KEY(" +
+      "POINT, z DOUBLE, a BIGINT NOT NULL, poly POLYGON, b SMALLINT, ts timestamp, t "
+      "time, dt date, SHARD KEY(" +
       shard_key_col + ")) WITH (shard_count = 4)");
 
   run_multiple_agg(
       "INSERT INTO shard_key_ddl_test VALUES (1, 'foo', 'POINT(1 1)', 1.0, 1, "
-      "'POLYGON((0 0, 1 1, 2 2, 3 3))', 1)",
+      "'POLYGON((0 0, 1 1, 2 2, 3 3))', 1, '12-aug-83 06:14:23' , '05:15:43', "
+      "'11-07-1973')",
       dt);
   run_multiple_agg(
       "INSERT INTO shard_key_ddl_test VALUES (2, 'bar', 'POINT(2 2)', 2.0, 2, "
-      "'POLYGON((0 0, 1 1, 20 20, 3 3))', 2)",
+      "'POLYGON((0 0, 1 1, 20 20, 3 3))', 2,  '1-dec-93 07:23:23' , '06:15:43', "
+      "'10-07-1975')",
       dt);
   run_multiple_agg(
       "INSERT INTO shard_key_ddl_test VALUES (3, 'hello', 'POINT(3 3)', 3.0, 3, "
-      "'POLYGON((0 0, 1 1, 2 2, 30 30))', 3)",
+      "'POLYGON((0 0, 1 1, 2 2, 30 30))', 3,  '1-feb-65 05:15:27' , '13:15:43', "
+      "'9-07-1977')",
       dt);
 }
 
 TEST(Select, ShardKeyDDL) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU}) {
     // Table creation / single row inserts
     EXPECT_NO_THROW(shard_key_test_runner("x", dt));
     EXPECT_NO_THROW(shard_key_test_runner("y", dt));
     EXPECT_NO_THROW(shard_key_test_runner("a", dt));
     EXPECT_NO_THROW(shard_key_test_runner("b", dt));
+    EXPECT_NO_THROW(shard_key_test_runner("ts", dt));
+    EXPECT_NO_THROW(shard_key_test_runner("t", dt));
+    EXPECT_NO_THROW(shard_key_test_runner("dt", dt));
 
     // Unsupported DDL
     EXPECT_THROW(shard_key_test_runner("z", dt), std::runtime_error);

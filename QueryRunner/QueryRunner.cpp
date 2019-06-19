@@ -447,7 +447,7 @@ void run_ddl_statement(const std::string& stmt_str_in,
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
-  CHECK_EQ(parser.parse(stmt_str, parse_trees, last_parsed), 0);
+  CHECK_EQ(parser.parse(stmt_str, parse_trees, last_parsed), 0) << stmt_str_in;
   CHECK_EQ(parse_trees.size(), size_t(1));
   auto stmt = parse_trees.front().get();
   Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);

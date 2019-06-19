@@ -2337,7 +2337,8 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
   auto& shard_column_input_buffer = import_buffers[table_desc_->shardedColumnId - 1];
   const auto& shard_col_ti = shard_col_desc->columnType;
   CHECK(shard_col_ti.is_integer() ||
-        (shard_col_ti.is_string() && shard_col_ti.get_compression() == kENCODING_DICT));
+        (shard_col_ti.is_string() && shard_col_ti.get_compression() == kENCODING_DICT) ||
+        shard_col_ti.is_time());
   if (shard_col_ti.is_string()) {
     const auto payloads_ptr = shard_column_input_buffer->getStringBuffer();
     CHECK(payloads_ptr);
