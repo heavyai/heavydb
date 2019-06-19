@@ -1699,21 +1699,7 @@ void MapDHandler::get_frontend_view(TFrontendView& _return,
                                     const TSessionId& session,
                                     const std::string& view_name) {
   LOG_ON_RETURN(session);
-  LOG(WARNING)
-      << "'get_frontend_view' will be deprecated in the next release, please use "
-         "'get_dashboard'.";
-  const auto session_info = get_session_copy(session);
-  auto& cat = session_info.getCatalog();
-  auto vd = cat.getMetadataForDashboard(
-      std::to_string(session_info.get_currentUser().userId), view_name);
-  if (!vd) {
-    THROW_MAPD_EXCEPTION("Dashboard " + view_name + " doesn't exist");
-  }
-  _return.view_name = view_name;
-  _return.view_state = vd->dashboardState;
-  _return.image_hash = vd->imageHash;
-  _return.update_time = vd->updateTime;
-  _return.view_metadata = vd->dashboardMetadata;
+  LOG(ERROR) << "'get_frontend_view' is deprecated, please use 'get_dashboard'.";
 }
 
 void MapDHandler::get_link_view(TFrontendView& _return,
@@ -2019,21 +2005,7 @@ void MapDHandler::get_databases(std::vector<TDBInfo>& dbinfos,
 void MapDHandler::get_frontend_views(std::vector<TFrontendView>& view_names,
                                      const TSessionId& session) {
   LOG_ON_RETURN(session);
-  LOG(WARNING) << "'get_frontend_views' will be deprecated in the next release, please "
-                  "use 'get_dashboards'.";
-  const auto session_info = get_session_copy(session);
-  auto& cat = session_info.getCatalog();
-  const auto views = cat.getAllDashboardsMetadata();
-  for (const auto vd : views) {
-    if (vd->userId == session_info.get_currentUser().userId) {
-      TFrontendView fv;
-      fv.view_name = vd->dashboardName;
-      fv.image_hash = vd->imageHash;
-      fv.update_time = vd->updateTime;
-      fv.view_metadata = vd->dashboardMetadata;
-      view_names.push_back(fv);
-    }
-  }
+  LOG(ERROR) << "'get_frontend_views' is deprecated, please use 'get_dashboards'.";
 }
 
 void MapDHandler::set_execution_mode(const TSessionId& session,
@@ -3365,49 +3337,16 @@ void MapDHandler::create_frontend_view(const TSessionId& session,
                                        const std::string& image_hash,
                                        const std::string& view_metadata) {
   LOG_ON_RETURN(session);
-  LOG(WARNING)
-      << "'create_frontend_view' will be deprecated in the next release, please use "
-         "'create_dashboard'.";
-  check_read_only("create_frontend_view");
-  const auto session_info = get_session_copy(session);
-  auto& cat = session_info.getCatalog();
-  DashboardDescriptor dd;
-  dd.dashboardName = view_name;
-  dd.dashboardState = view_state;
-  dd.imageHash = image_hash;
-  dd.dashboardMetadata = view_metadata;
-  dd.userId = session_info.get_currentUser().userId;
-  dd.user = session_info.get_currentUser().userName;
-
-  try {
-    auto id = cat.createDashboard(dd);
-    SysCatalog::instance().createDBObject(
-        session_info.get_currentUser(), view_name, DashboardDBObjectType, cat, id);
-  } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
-  }
+  LOG(ERROR) << "'create_frontend_view' is deprecated, please use "
+                "'create_dashboard'.";
 }
 
 // DEPRECATED(2019-04-01) - use delete_dashboard()
 void MapDHandler::delete_frontend_view(const TSessionId& session,
                                        const std::string& view_name) {
   LOG_ON_RETURN(session);
-  LOG(WARNING)
-      << "'delete_frontend_view' will be deprecated in the next release, please use "
-         "'delete_dashboard'.";
-  const auto session_info = get_session_copy(session);
-  auto& cat = session_info.getCatalog();
-  auto dd = cat.getMetadataForDashboard(
-      std::to_string(session_info.get_currentUser().userId), view_name);
-  if (!dd) {
-    THROW_MAPD_EXCEPTION("View " + view_name + " doesn't exist");
-  }
-  try {
-    cat.deleteMetadataForDashboard(std::to_string(session_info.get_currentUser().userId),
-                                   view_name);
-  } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
-  }
+  LOG(ERROR) << "'delete_frontend_view' is deprecated, please use "
+                "'delete_dashboard'.";
 }
 
 void MapDHandler::create_link(std::string& _return,
