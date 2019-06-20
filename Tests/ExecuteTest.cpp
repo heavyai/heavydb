@@ -2716,6 +2716,22 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg("SELECT EXTRACT(millisecond from TIMESTAMP(0) "
                                         "'1999-03-14 23:34:56') FROM test limit 1;",
                                         dt)));
+    ASSERT_EQ(2005,
+              v<int64_t>(run_simple_agg("select EXTRACT(year from TIMESTAMP '2005-12-31 "
+                                        "23:59:59') from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(1997,
+              v<int64_t>(run_simple_agg("select EXTRACT(year from TIMESTAMP '1997-01-01 "
+                                        "23:59:59') from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(2006,
+              v<int64_t>(run_simple_agg("select EXTRACT(year from TIMESTAMP '2006-01-01 "
+                                        "00:0:00') from test limit 1;",
+                                        dt)));
+    ASSERT_EQ(2014,
+              v<int64_t>(run_simple_agg("select EXTRACT(year from TIMESTAMP '2014-01-01 "
+                                        "00:00:00') from test limit 1;",
+                                        dt)));
 
     // do some DATE_TRUNC tests
     /*
