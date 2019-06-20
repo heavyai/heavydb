@@ -1205,7 +1205,7 @@ class CoalesceSecondaryProjectVisitor : public RexVisitor<bool> {
     return input_can_be_coalesced(input->getSourceNode(), input->getIndex(), false);
   }
 
-  bool visitLiteral(const RexLiteral*) const final { return true; }
+  bool visitLiteral(const RexLiteral*) const final { return false; }
 
   bool visitSubQuery(const RexSubQuery*) const final { return false; }
 

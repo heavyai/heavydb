@@ -873,6 +873,8 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE x - y + z = 66;", dt);
     c("SELECT COUNT(*) FROM test WHERE x - y + z + t = 1067;", dt);
     c("SELECT COUNT(*) FROM test WHERE y - x = 35;", dt);
+    c("SELECT 'Hello', 'World', 7 FROM test WHERE x <> 7;", dt);
+    c("SELECT 'Total', COUNT(*) FROM test WHERE x <> 7;", dt);
     c("SELECT SUM(2 * x) FROM test WHERE x = 7;", dt);
     c("SELECT SUM(2 * x + z) FROM test WHERE x = 7;", dt);
     c("SELECT SUM(x + y) FROM test WHERE x - y = -35;", dt);
