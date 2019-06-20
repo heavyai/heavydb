@@ -9887,6 +9887,10 @@ void validate_timestamp_agg(const ResultSet& row,
                             const double expected_mean,
                             const int64_t expected_count) {
   const auto crt_row = row.getNextRow(true, true);
+  if (!expected_count) {
+    ASSERT_EQ(size_t(0), crt_row.size());
+    return;
+  }
   ASSERT_EQ(size_t(3), crt_row.size());
   const auto actual_ts = v<int64_t>(crt_row[0]);
   ASSERT_EQ(actual_ts, expected_ts);
@@ -9938,59 +9942,154 @@ TEST(Select, TimestampCastAggregates) {
                          "22:23:15.123450', '2014-12-14 22:23:15.123456780');",
                          dt));
 
-    const std::vector<std::tuple<std::string, int64_t, double, int64_t>> params{
+    const std::vector<std::tuple<std::string, int64_t, double, int64_t, std::string>> params{
         // Date
-        std::make_tuple("CAST(dt as timestamp(0))", 1418428800, 125.0, 2),
-        std::make_tuple("CAST(dt as timestamp(3))", 1418428800000, 125.0, 2),
-        std::make_tuple("CAST(dt as timestamp(6))", 1418428800000000, 125.0, 2),
-        std::make_tuple("CAST(dt as timestamp(9))", 1418428800000000000, 125.0, 2),
-        std::make_tuple("DATE_TRUNC(millisecond, dt)", 1418428800, 125.0, 2),
-        std::make_tuple("DATE_TRUNC(microsecond, dt)", 1418428800, 125.0, 2),
-        std::make_tuple("DATE_TRUNC(nanosecond, dt)", 1418428800, 125.0, 2),
+        std::make_tuple("CAST(dt as timestamp(0))"s, 1418428800, 125.0, 2, ""s),
+        std::make_tuple("CAST(dt as timestamp(3))"s, 1418428800000, 125.0, 2, ""s),
+        std::make_tuple("CAST(dt as timestamp(6))"s, 1418428800000000, 125.0, 2, ""s),
+        std::make_tuple("CAST(dt as timestamp(9))"s, 1418428800000000000, 125.0, 2, ""s),
+        std::make_tuple("DATE_TRUNC(millisecond, dt)"s, 1418428800, 125.0, 2, ""s),
+        std::make_tuple("DATE_TRUNC(microsecond, dt)"s, 1418428800, 125.0, 2, ""s),
+        std::make_tuple("DATE_TRUNC(nanosecond, dt)"s, 1418428800, 125.0, 2, ""s),
+        std::make_tuple("DATE_TRUNC(nanosecond, dt)"s, 1418428800, 125.0, 2, ""s),
+        std::make_tuple(
+            "DATE_TRUNC(second, dt)"s,
+            1418428800,
+            125.0,
+            2,
+            "WHERE CAST(dt AS TIMESTAMP(0)) BETWEEN CAST('2014-12-13 00:00:00' AS TIMESTAMP(0)) AND CAST('2014-12-13 22:05:54' AS TIMESTAMP(0))"s),
+        std::make_tuple(
+            "DATE_TRUNC(second, dt)"s,
+            0,
+            0.0,
+            0,
+            "WHERE CAST(dt AS TIMESTAMP(3)) BETWEEN CAST('2014-12-12 00:00:00.000' AS TIMESTAMP(3)) AND CAST('2014-12-12 23:59:59.999' AS TIMESTAMP(3))"s),
+        std::make_tuple(
+            "DATE_TRUNC(nanosecond, dt)"s,
+            1418428800,
+            125.0,
+            2,
+            "WHERE CAST(dt AS TIMESTAMP(6)) BETWEEN CAST('2014-12-13 00:00:00.000000' AS TIMESTAMP(6)) AND CAST('2014-12-13 22:05:54.999911' AS TIMESTAMP(6))"s),
         // Timestamp(s)
-        std::make_tuple("CAST(ts as date)", 1418428800, 125.0, 2),
-        std::make_tuple("CAST(ts as timestamp(3))", 1418509395000, 125.0, 2),
-        std::make_tuple("CAST(ts as timestamp(6))", 1418509395000000, 125.0, 2),
-        std::make_tuple("CAST(ts as timestamp(9))", 1418509395000000000, 125.0, 2),
-        std::make_tuple("DATE_TRUNC(millisecond, ts)", 1418509395, 125.0, 2),
-        std::make_tuple("DATE_TRUNC(microsecond, ts)", 1418509395, 125.0, 2),
-        std::make_tuple("DATE_TRUNC(nanosecond, ts)", 1418509395, 125.0, 2),
+        std::make_tuple("CAST(ts as date)"s, 1418428800, 125.0, 2, ""s),
+        std::make_tuple("CAST(ts as timestamp(3))"s, 1418509395000, 125.0, 2, ""s),
+        std::make_tuple("CAST(ts as timestamp(6))"s, 1418509395000000, 125.0, 2, ""s),
+        std::make_tuple("CAST(ts as timestamp(9))"s, 1418509395000000000, 125.0, 2, ""s),
+        std::make_tuple("DATE_TRUNC(millisecond, ts)"s, 1418509395, 125.0, 2, ""s),
+        std::make_tuple("DATE_TRUNC(microsecond, ts)"s, 1418509395, 125.0, 2, ""s),
+        std::make_tuple("DATE_TRUNC(nanosecond, ts)"s, 1418509395, 125.0, 2, ""s),
+        std::make_tuple(
+            "DATE_TRUNC(second, ts)"s,
+            1418509395,
+            125.0,
+            2,
+            "WHERE CAST(ts AS TIMESTAMP(0)) BETWEEN CAST('2014-12-13 22:23:15' AS TIMESTAMP(0)) AND CAST('2014-12-14 22:23:13' AS TIMESTAMP(0))"s),
+        std::make_tuple(
+            "DATE_TRUNC(microsecond, ts)"s,
+            0,
+            0.0,
+            0,
+            "WHERE CAST(ts AS TIMESTAMP(3)) BETWEEN CAST('2014-12-13 22:23:16.000' AS TIMESTAMP(3)) AND CAST('2014-12-13 22:23:13.999' AS TIMESTAMP(3))"s),
+        std::make_tuple(
+            "DATE_TRUNC(millisecond, ts)"s,
+            1418595794,
+            395.0,
+            4,
+            "WHERE CAST(ts AS TIMESTAMP(6)) BETWEEN CAST('2014-12-13 22:23:16.000001' AS TIMESTAMP(6)) AND CAST('2014-12-14 22:23:14.000111' AS TIMESTAMP(6))"s),
         // Timestamp(ms)
-        std::make_tuple("CAST(ts3 as date)", 1418428800, 246.0, 5),
-        std::make_tuple("CAST(ts3 as timestamp(0))", 1418509395, 246.0, 5),
+        std::make_tuple("CAST(ts3 as date)"s, 1418428800, 246.0, 5, ""s),
+        std::make_tuple("CAST(ts3 as timestamp(0))"s, 1418509395, 246.0, 5, ""s),
         std::make_tuple(
-            "CAST(ts3 as timestamp(6))", 1418509395120000, 326.6666666666667, 3),
+            "CAST(ts3 as timestamp(6))"s, 1418509395120000, 326.6666666666667, 3, ""s),
         std::make_tuple(
-            "CAST(ts3 as timestamp(9))", 1418509395120000000, 326.6666666666667, 3),
+            "CAST(ts3 as timestamp(9))"s, 1418509395120000000, 326.6666666666667, 3, ""s),
         std::make_tuple(
-            "DATE_TRUNC(millisecond, ts3)", 1418509395120, 326.6666666666667, 3),
+            "DATE_TRUNC(millisecond, ts3)"s, 1418509395120, 326.6666666666667, 3, ""s),
         std::make_tuple(
-            "DATE_TRUNC(microsecond, ts3)", 1418509395120, 326.6666666666667, 3),
+            "DATE_TRUNC(microsecond, ts3)"s, 1418509395120, 326.6666666666667, 3, ""s),
         std::make_tuple(
-            "DATE_TRUNC(nanosecond, ts3)", 1418509395120, 326.6666666666667, 3),
-        // Timestamp(us)
-        std::make_tuple("CAST(ts6 as date)", 1418428800, 262.5, 4),
-        std::make_tuple("CAST(ts6 as timestamp(0))", 1418509395, 262.5, 4),
-        std::make_tuple("CAST(ts6 as timestamp(3))", 1418509395123, 262.5, 4),
-        std::make_tuple("CAST(ts6 as timestamp(9))", 1418509395123450000, 400.0, 2),
-        std::make_tuple("DATE_TRUNC(millisecond, ts6)", 1418509395123000, 262.5, 4),
-        std::make_tuple("DATE_TRUNC(microsecond, ts6)", 1418509395123450, 400.0, 2),
-        std::make_tuple("DATE_TRUNC(nanosecond, ts6)", 1418509395123450, 400.0, 2),
+            "DATE_TRUNC(nanosecond, ts3)"s, 1418509395120, 326.6666666666667, 3, ""s),
+        std::make_tuple(
+            "DATE_TRUNC(nanosecond, ts3)"s,
+            1418595795120,
+            600.0,
+            1,
+            "WHERE CAST(ts3 AS TIMESTAMP(3)) BETWEEN CAST('2014-12-13 22:23:15.124' AS TIMESTAMP(3)) AND CAST('2014-12-14 22:23:15.120' AS TIMESTAMP(3))"s),
+        std::make_tuple(
+            "DATE_TRUNC(microsecond, ts3)"s,
+            0,
+            0.0,
+            0,
+            "WHERE CAST(ts3 AS TIMESTAMP(3)) BETWEEN CAST('2014-12-13 22:23:16.000' AS TIMESTAMP(3)) AND CAST('2014-12-13 22:23:13.999' AS TIMESTAMP(3))"s),
+        std::make_tuple(
+            "DATE_TRUNC(millisecond, ts3)"s,
+            1418509395123,
+            125.0,
+            2,
+            "WHERE CAST(ts3 AS TIMESTAMP(6)) BETWEEN CAST('2014-12-13 22:23:15.122999' AS TIMESTAMP(6)) AND CAST('2014-12-14 22:23:15.000111' AS TIMESTAMP(6))"s),
+        // // Timestamp(us)
+        std::make_tuple("CAST(ts6 as date)"s, 1418428800, 262.5, 4, ""s),
+        std::make_tuple("CAST(ts6 as timestamp(0))"s, 1418509395, 262.5, 4, ""s),
+        std::make_tuple("CAST(ts6 as timestamp(3))"s, 1418509395123, 262.5, 4, ""s),
+        std::make_tuple("CAST(ts6 as timestamp(9))"s, 1418509395123450000, 400.0, 2, ""s),
+        std::make_tuple("DATE_TRUNC(millisecond, ts6)"s, 1418509395123000, 262.5, 4, ""s),
+        std::make_tuple("DATE_TRUNC(microsecond, ts6)"s, 1418509395123450, 400.0, 2, ""s),
+        std::make_tuple("DATE_TRUNC(nanosecond, ts6)"s, 1418509395123450, 400.0, 2, ""s),
+        std::make_tuple(
+            "DATE_TRUNC(nanosecond, ts6)"s,
+            1418509395123456,
+            125.0,
+            2,
+            "WHERE CAST(ts6 AS TIMESTAMP(6)) BETWEEN CAST('2014-12-13 22:23:15.123451' AS TIMESTAMP(6)) AND CAST('2014-12-14 22:23:15.123449' AS TIMESTAMP(6))"s),
+        std::make_tuple(
+            "DATE_TRUNC(microsecond, ts6)"s,
+            0,
+            0.0,
+            0,
+            "WHERE CAST(ts6 AS TIMESTAMP(3)) BETWEEN CAST('2014-12-13 22:23:16.000' AS TIMESTAMP(3)) AND CAST('2014-12-14 22:23:15.122' AS TIMESTAMP(3))"s),
+        std::make_tuple(
+            "DATE_TRUNC(millisecond, ts6)"s,
+            1418509395123000,
+            400.0,
+            2,
+            "WHERE CAST(ts6 AS TIMESTAMP(6)) BETWEEN CAST('2014-12-13 22:23:15.123449' AS TIMESTAMP(6)) AND CAST('2014-12-13 22:23:15.123451' AS TIMESTAMP(6))"s),
         // Timestamp(ns)
-        std::make_tuple("CAST(ts9 as date)", 1418428800, 262.5, 4),
-        std::make_tuple("CAST(ts9 as timestamp(0))", 1418509395, 262.5, 4),
-        std::make_tuple("CAST(ts9 as timestamp(3))", 1418509395123, 262.5, 4),
-        std::make_tuple("CAST(ts9 as timestamp(6))", 1418509395123456, 262.5, 4),
-        std::make_tuple("DATE_TRUNC(millisecond, ts9)", 1418509395123000000, 262.5, 4),
-        std::make_tuple("DATE_TRUNC(microsecond, ts9)", 1418509395123456000, 262.5, 4),
-        std::make_tuple("DATE_TRUNC(nanosecond, ts9)", 1418509395123456780, 400.0, 2)};
+        std::make_tuple("CAST(ts9 as date)"s, 1418428800, 262.5, 4, ""s),
+        std::make_tuple("CAST(ts9 as timestamp(0))"s, 1418509395, 262.5, 4, ""s),
+        std::make_tuple("CAST(ts9 as timestamp(3))"s, 1418509395123, 262.5, 4, ""s),
+        std::make_tuple("CAST(ts9 as timestamp(6))"s, 1418509395123456, 262.5, 4, ""s),
+        std::make_tuple(
+            "DATE_TRUNC(millisecond, ts9)"s, 1418509395123000000, 262.5, 4, ""s),
+        std::make_tuple(
+            "DATE_TRUNC(microsecond, ts9)"s, 1418509395123456000, 262.5, 4, ""s),
+        std::make_tuple(
+            "DATE_TRUNC(nanosecond, ts9)"s, 1418509395123456780, 400.0, 2, ""s),
+        std::make_tuple(
+            "DATE_TRUNC(microsecond, ts9)"s,
+            1418509395123456000,
+            262.5,
+            4,
+            "WHERE CAST(ts9 AS TIMESTAMP(6)) BETWEEN CAST('2014-12-13 22:23:15.123456' AS TIMESTAMP(6)) AND CAST('2014-12-14 22:23:15.123455' AS TIMESTAMP(6))"s),
+        std::make_tuple(
+            "DATE_TRUNC(microsecond, ts9)"s,
+            0,
+            0.0,
+            0,
+            "WHERE CAST(ts9 AS TIMESTAMP(3)) BETWEEN CAST('2014-12-13 22:23:16.000' AS TIMESTAMP(3)) AND CAST('2014-12-14 22:23:15.122' AS TIMESTAMP(3))"s),
+        std::make_tuple(
+            "DATE_TRUNC(millisecond, ts9)"s,
+            1418509395123000000,
+            400.0,
+            2,
+            "WHERE CAST(ts9 AS TIMESTAMP(9)) BETWEEN CAST('2014-12-13 22:23:15.123456780' AS TIMESTAMP(9)) AND CAST('2014-12-13 22:23:15.123456781' AS TIMESTAMP(9))"s)};
 
     for (auto& param : params) {
-      const auto row =
-          run_multiple_agg("SELECT " + std::get<0>(param) +
-                               " as tg, avg(val), count(*) from timestamp_agg group by "
-                               "tg order by tg limit 1;",
-                           dt);
+      const auto row = run_multiple_agg(
+          "SELECT " + std::get<0>(param) +
+              " as tg, avg(val), count(*) from timestamp_agg " + std::get<4>(param) +
+              " group by "
+              "tg order by tg limit 1;",
+          dt);
       validate_timestamp_agg(
           *row, std::get<1>(param), std::get<2>(param), std::get<3>(param));
     }

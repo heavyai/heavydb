@@ -19,6 +19,7 @@
 #include <cfenv>
 #include <cmath>
 #include "DateTimeTranslator.h"
+#include "DateTimeUtils.h"
 #include "DateTruncate.h"
 #include "Descriptors/InputDescriptors.h"
 #include "Execute.h"
@@ -91,6 +92,7 @@ void apply_fp_qual(const Datum const_datum,
       break;
   }
 }
+
 void apply_int_qual(const Datum const_datum,
                     const SQLTypes const_type,
                     const SQLOps sql_op,
@@ -116,6 +118,26 @@ void apply_int_qual(const Datum const_datum,
     default:  // there may be other operators, but don't do anything with them
       break;
   }
+}
+
+void apply_hpt_qual(const Datum const_datum,
+                    const SQLTypes const_type,
+                    const int32_t const_dimen,
+                    const int32_t col_dimen,
+                    const SQLOps sql_op,
+                    ExpressionRange& qual_range) {
+  CHECK(const_dimen != col_dimen);
+  Datum datum{0};
+  if (const_dimen > col_dimen) {
+    datum.bigintval =
+        get_value_from_datum<int64_t>(const_datum, const_type) /
+        DateTimeUtils::get_timestamp_precision_scale(const_dimen - col_dimen);
+  } else {
+    datum.bigintval =
+        get_value_from_datum<int64_t>(const_datum, const_type) *
+        DateTimeUtils::get_timestamp_precision_scale(col_dimen - const_dimen);
+  }
+  apply_int_qual(datum, const_type, sql_op, qual_range);
 }
 
 ExpressionRange apply_simple_quals(
@@ -161,6 +183,16 @@ ExpressionRange apply_simple_quals(
                     qual_const->get_type_info().get_type(),
                     qual_bin_oper->get_optype(),
                     qual_range);
+    } else if ((qual_col->get_type_info().is_timestamp() ||
+                qual_const->get_type_info().is_timestamp()) &&
+               (qual_col->get_type_info().get_dimension() !=
+                qual_const->get_type_info().get_dimension())) {
+      apply_hpt_qual(qual_const->get_constval(),
+                     qual_const->get_type_info().get_type(),
+                     qual_const->get_type_info().get_dimension(),
+                     qual_col->get_type_info().get_dimension(),
+                     qual_bin_oper->get_optype(),
+                     qual_range);
     } else {
       apply_int_qual(qual_const->get_constval(),
                      qual_const->get_type_info().get_type(),

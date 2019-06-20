@@ -296,6 +296,12 @@ void apply_fp_qual(const Datum const_datum,
                    const SQLTypes const_type,
                    const SQLOps sql_op,
                    ExpressionRange& qual_range);
+void apply_hpt_qual(const Datum const_datum,
+                    const SQLTypes const_type,
+                    const int32_t const_dimen,
+                    const int32_t col_dimen,
+                    const SQLOps sql_op,
+                    ExpressionRange& qual_range);
 
 ExpressionRange apply_simple_quals(
     const Analyzer::ColumnVar*,
