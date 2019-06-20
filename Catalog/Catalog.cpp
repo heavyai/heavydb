@@ -2976,7 +2976,17 @@ void Catalog::remove(const std::string& dbName) {
   mapd_cat_map_.erase(dbName);
 }
 
-void Catalog::optimizeTable(const TableDescriptor* td) const {
+void Catalog::vacuumDeletedRows(const int logicalTableId) const {
+  // shard here to serve request from TableOptimizer and elsewhere
+  cat_read_lock read_lock(this);
+  const auto td = getMetadataForTable(logicalTableId);
+  const auto shards = getPhysicalTablesDescriptors(td);
+  for (const auto shard : shards) {
+    vacuumDeletedRows(shard);
+  }
+}
+
+void Catalog::vacuumDeletedRows(const TableDescriptor* td) const {
   cat_read_lock read_lock(this);
   // "if not a table that supports delete return nullptr,  nothing more to do"
   const ColumnDescriptor* cd = getDeletedColumn(td);

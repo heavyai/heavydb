@@ -108,11 +108,14 @@ auto check_fragment_metadata(Args&&... args) -> auto {
 
 template <typename FUNC, typename... Args>
 void run_op_per_fragment(const TableDescriptor* td, FUNC f, Args&&... args) {
-  auto* fragmenter = td->fragmenter;
-  CHECK(fragmenter);
-  const auto table_info = fragmenter->getFragmentsForQuery();
-  for (const auto& fragment : table_info.fragments) {
-    f(fragment, std::forward<Args>(args)...);
+  const auto shards = g_session->getCatalog().getPhysicalTablesDescriptors(td);
+  for (const auto shard : shards) {
+    auto* fragmenter = shard->fragmenter;
+    CHECK(fragmenter);
+    const auto table_info = fragmenter->getFragmentsForQuery();
+    for (const auto& fragment : table_info.fragments) {
+      f(fragment, std::forward<Args>(args)...);
+    }
   }
 }
 
@@ -255,24 +258,30 @@ TEST_F(MultiFragMetadataUpdate, NoChanges) {
   }
 }
 
+template <int NSHARDS>
 class MetadataUpdate : public ::testing::Test {
   void SetUp() override {
+    std::string phrase_shard_key = NSHARDS > 1 ? ", SHARD KEY (skey)" : "";
+    std::string phrase_shard_count =
+        NSHARDS > 1 ? ", SHARD_COUNT = " + std::to_string(NSHARDS) : "";
     EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS " + g_table_name + ";"));
-    EXPECT_NO_THROW(
-        run_ddl_statement("CREATE TABLE " + g_table_name +
-                          " (x INT, y INT NOT NULL, z INT "
-                          "ENCODING FIXED(8), a DOUBLE, b FLOAT, d DATE, dd DATE "
-                          "ENCODING FIXED(16), c TEXT ENCODING DICT(32)) WITH "
-                          "(FRAGMENT_SIZE=5);"));
+    EXPECT_NO_THROW(run_ddl_statement(
+        "CREATE TABLE " + g_table_name +
+        " (x INT, y INT NOT NULL, z INT "
+        "ENCODING FIXED(8), a DOUBLE, b FLOAT, d DATE, dd DATE "
+        "ENCODING FIXED(16), c TEXT ENCODING DICT(32), skey int" +
+        phrase_shard_key + ") WITH (FRAGMENT_SIZE=5" + phrase_shard_count + ");"));
 
     TestHelpers::ValuesGenerator gen(g_table_name);
-    run_multiple_agg(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "'foo'"),
-                     ExecutorDeviceType::CPU);
-    run_multiple_agg(gen(2, 2, 2, 2, 2, "'12/31/2012'", "'12/31/2012'", "'foo'"),
-                     ExecutorDeviceType::CPU);
-    run_multiple_agg(
-        gen("null", 2, "null", "null", "null", "null", "'1/1/1940'", "'foo'"),
-        ExecutorDeviceType::CPU);
+    for (int sh = 0; sh < NSHARDS; ++sh) {
+      run_multiple_agg(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "'foo'", sh),
+                       ExecutorDeviceType::CPU);
+      run_multiple_agg(gen(2, 2, 2, 2, 2, "'12/31/2012'", "'12/31/2012'", "'foo'", sh),
+                       ExecutorDeviceType::CPU);
+      run_multiple_agg(
+          gen("null", 2, "null", "null", "null", "null", "'1/1/1940'", "'foo'", sh),
+          ExecutorDeviceType::CPU);
+    }
   }
 
   void TearDown() override {
@@ -280,7 +289,17 @@ class MetadataUpdate : public ::testing::Test {
   }
 };
 
-TEST_F(MetadataUpdate, InitialMetadata) {
+using MetadataUpdate_Unsharded = MetadataUpdate<1>;
+using MetadataUpdate_Sharded = MetadataUpdate<4>;
+
+#define BODY_F(test_class, test_name) test_class##_##test_name##_body()
+#define TEST_F1(test_class, test_name, sharded_or_not) \
+  TEST_F(test_class##_##sharded_or_not, test_name) { BODY_F(test_class, test_name); }
+#define TEST_UNSHARDED_AND_SHARDED(test_class, test_name) \
+  TEST_F1(test_class, test_name, Unsharded)               \
+  TEST_F1(test_class, test_name, Sharded)
+
+void BODY_F(MetadataUpdate, InitialMetadata) {
   const auto& cat = g_session->getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
@@ -336,7 +355,7 @@ TEST_F(MetadataUpdate, InitialMetadata) {
           false));
 }
 
-TEST_F(MetadataUpdate, IntUpdate) {
+void BODY_F(MetadataUpdate, IntUpdate) {
   const auto& cat = g_session->getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
@@ -354,7 +373,7 @@ TEST_F(MetadataUpdate, IntUpdate) {
   run_op_per_fragment(td, check_fragment_metadata(1, (int32_t)0, 2, true));
 }
 
-TEST_F(MetadataUpdate, IntRemoveNull) {
+void BODY_F(MetadataUpdate, IntRemoveNull) {
   const auto& cat = g_session->getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
@@ -365,7 +384,7 @@ TEST_F(MetadataUpdate, IntRemoveNull) {
   run_op_per_fragment(td, check_fragment_metadata(1, (int32_t)3, 3, false));
 }
 
-TEST_F(MetadataUpdate, NotNullInt) {
+void BODY_F(MetadataUpdate, NotNullInt) {
   const auto& cat = g_session->getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
@@ -384,7 +403,7 @@ TEST_F(MetadataUpdate, NotNullInt) {
   run_op_per_fragment(td, check_fragment_metadata(2, (int32_t)1, 1, false));
 }
 
-TEST_F(MetadataUpdate, DateNarrowRange) {
+void BODY_F(MetadataUpdate, DateNarrowRange) {
   const auto& cat = g_session->getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
@@ -397,7 +416,7 @@ TEST_F(MetadataUpdate, DateNarrowRange) {
                       check_fragment_metadata(6, (int64_t)1262304000, 1262304000, false));
 }
 
-TEST_F(MetadataUpdate, SmallDateNarrowMin) {
+void BODY_F(MetadataUpdate, SmallDateNarrowMin) {
   const auto& cat = g_session->getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
@@ -410,7 +429,7 @@ TEST_F(MetadataUpdate, SmallDateNarrowMin) {
                       check_fragment_metadata(7, (int64_t)1262304000, 1356912000, false));
 }
 
-TEST_F(MetadataUpdate, SmallDateNarrowMax) {
+void BODY_F(MetadataUpdate, SmallDateNarrowMax) {
   const auto& cat = g_session->getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
@@ -423,7 +442,7 @@ TEST_F(MetadataUpdate, SmallDateNarrowMax) {
                       check_fragment_metadata(7, (int64_t)-946771200, 1262304000, false));
 }
 
-TEST_F(MetadataUpdate, DeleteReset) {
+void BODY_F(MetadataUpdate, DeleteReset) {
   const auto& cat = g_session->getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
@@ -435,21 +454,35 @@ TEST_F(MetadataUpdate, DeleteReset) {
   run_op_per_fragment(td, check_fragment_metadata(-1, false, false, false));
 }
 
-TEST_F(MetadataUpdate, EncodedStringNull) {
+void BODY_F(MetadataUpdate, EncodedStringNull) {
   const auto& cat = g_session->getCatalog();
   const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   TestHelpers::ValuesGenerator gen(g_table_name);
-  run_multiple_agg(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "'abc'"),
-                   ExecutorDeviceType::CPU);
+  for (int sh = 0; sh < std::max(1, td->nShards); ++sh) {
+    run_multiple_agg(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "'abc'", sh),
+                     ExecutorDeviceType::CPU);
+  }
   vacuum_and_recompute_metadata(td, cat);
   run_op_per_fragment(td, check_fragment_metadata(8, 0, 1, false));
 
-  run_multiple_agg(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "null"),
-                   ExecutorDeviceType::CPU);
+  for (int sh = 0; sh < std::max(1, td->nShards); ++sh) {
+    run_multiple_agg(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "null", sh),
+                     ExecutorDeviceType::CPU);
+  }
   vacuum_and_recompute_metadata(td, cat);
   run_op_per_fragment(td, check_fragment_metadata(8, 0, 1, true));
 }
+
+TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, InitialMetadata)
+TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, IntUpdate)
+TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, IntRemoveNull)
+TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, NotNullInt)
+TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, DateNarrowRange)
+TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, SmallDateNarrowMin)
+TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, SmallDateNarrowMax)
+TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, DeleteReset)
+TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, EncodedStringNull)
 
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);

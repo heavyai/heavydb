@@ -329,7 +329,6 @@ void TableOptimizer::recomputeMetadata() const {
 
 void TableOptimizer::vacuumDeletedRows() const {
   const auto table_id = td_->tableId;
-  cat_.optimizeTable(td_);
-  auto& data_mgr = cat_.getDataMgr();
-  data_mgr.checkpoint(cat_.getCurrentDB().dbId, table_id);
+  cat_.vacuumDeletedRows(table_id);
+  cat_.checkpoint(table_id);
 }
