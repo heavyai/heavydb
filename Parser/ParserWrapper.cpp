@@ -26,8 +26,6 @@
 
 #include <boost/algorithm/string.hpp>
 
-#include <glog/logging.h>
-
 using namespace std;
 
 const std::vector<std::string> ParserWrapper::ddl_cmd = {"ALTER",

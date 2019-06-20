@@ -28,8 +28,7 @@
 #include "RelAlgExecutionUnit.h"
 
 #include "../Analyzer/Analyzer.h"
-
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 class CardinalityEstimationRequired : public std::runtime_error {
  public:

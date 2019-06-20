@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <boost/program_options.hpp>
 
@@ -31,6 +30,7 @@ using namespace ::apache::thrift::transport;
 #include "QueryEngine/TargetValue.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/sqltypes.h"
+#include "TestHelpers.h"
 #include "gen-cpp/MapD.h"
 
 #include <ctime>
@@ -1039,10 +1039,10 @@ INSTANTIATE_TEST_CASE_P(
 
 int main(int argc, char* argv[]) {
   int err = 0;
+  TestHelpers::init_logger_stderr_only(argc, argv);
 
   try {
     testing::InitGoogleTest(&argc, argv);
-    google::InitGoogleLogging(argv[0]);
 
     namespace po = boost::program_options;
 

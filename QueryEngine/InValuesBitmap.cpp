@@ -24,8 +24,8 @@
 #include "../Shared/checked_alloc.h"
 #include "GroupByAndAggregate.h"
 #include "RuntimeFunctions.h"
+#include "Shared/Logger.h"
 
-#include <glog/logging.h>
 #include <boost/multiprecision/cpp_int.hpp>
 #include <limits>
 

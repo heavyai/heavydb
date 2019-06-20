@@ -27,8 +27,7 @@
 #include "GroupByAndAggregate.h"
 #include "MaxwellCodegenPatch.h"
 #include "OutputBufferInitialization.h"
-
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 #define LL_CONTEXT executor->cgen_state_->context_
 #define LL_BUILDER executor->cgen_state_->ir_builder_
@@ -562,7 +561,8 @@ void TargetExprCodegenBuilder::codegen(
                                                 first_sample_expr.base_slot_index,
                                                 first_sample_expr.target_idx);
     } else {
-      CHECK_LT(first_sample_expr.base_slot_index, agg_out_vec.size());
+      CHECK_LT(static_cast<size_t>(first_sample_expr.base_slot_index),
+               agg_out_vec.size());
       agg_col_ptr =
           executor->castToIntPtrTyIn(agg_out_vec[first_sample_expr.base_slot_index], 64);
     }

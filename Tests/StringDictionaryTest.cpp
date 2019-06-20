@@ -15,10 +15,10 @@
  */
 
 #include "../StringDictionary/StringDictionary.h"
+#include "TestHelpers.h"
 
 #include <limits>
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #ifndef BASE_PATH
@@ -87,7 +87,7 @@ TEST(StringDictionary, RecoverMany) {
 }
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
+  TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
   int err{0};

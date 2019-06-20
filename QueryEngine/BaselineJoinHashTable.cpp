@@ -22,8 +22,6 @@
 #include "HashJoinKeyHandlers.h"
 #include "JoinHashTableGpuUtils.h"
 
-#include "Shared/unreachable.h"
-
 #include <future>
 
 std::vector<std::pair<BaselineJoinHashTable::HashTableCacheKey,
@@ -530,7 +528,7 @@ size_t BaselineJoinHashTable::getKeyComponentWidth() const {
     const auto inner_col = inner_outer_pair.first;
     const auto& inner_col_ti = inner_col->get_type_info();
     if (inner_col_ti.get_logical_size() > 4) {
-      CHECK_EQ(size_t(8), inner_col_ti.get_logical_size());
+      CHECK_EQ(8, inner_col_ti.get_logical_size());
       return 8;
     }
   }

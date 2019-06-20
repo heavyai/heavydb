@@ -50,10 +50,9 @@ std::string SessionInfo::public_session_id() const {
   return ss.str();
 }
 
-}  // namespace Catalog_Namespace
-
-std::ostream& operator<<(std::ostream& os,
-                         const Catalog_Namespace::SessionInfo& session_info) {
+std::ostream& operator<<(std::ostream& os, const SessionInfo& session_info) {
   os << session_info.get_public_session_id();
   return os;
 }
+
+}  // namespace Catalog_Namespace

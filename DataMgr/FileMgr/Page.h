@@ -23,7 +23,8 @@
 #ifndef DATAMGR_MEMORY_FILE_PAGE_H
 #define DATAMGR_MEMORY_FILE_PAGE_H
 
-#include <glog/logging.h>
+#include "Shared/Logger.h"
+
 #include <cassert>
 #include <deque>
 #include <stdexcept>

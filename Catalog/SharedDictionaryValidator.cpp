@@ -18,7 +18,7 @@
 
 #include <memory>
 
-#include "../Shared/unreachable.h"
+#include "Shared/Logger.h"
 
 const Parser::SharedDictionaryDef compress_reference_path(
     Parser::SharedDictionaryDef cur_node,

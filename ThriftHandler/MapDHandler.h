@@ -57,6 +57,7 @@
 #include "QueryEngine/TableGenerations.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/GenericTypeUtilities.h"
+#include "Shared/Logger.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/StringTransform.h"
 #include "Shared/geosupport.h"
@@ -68,11 +69,11 @@
 #include "ThriftHandler/DistributedValidate.h"
 
 #include <fcntl.h>
-#include <glog/logging.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <atomic>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/algorithm/string/trim.hpp>
@@ -101,7 +102,7 @@
 
 using namespace std::string_literals;
 
-class LogOnReturn;
+class LogSession;
 class MapDRenderHandler;
 class MapDAggHandler;
 class MapDLeafHandler;
@@ -464,7 +465,7 @@ class MapDHandler : public MapDIf {
                     const std::string& dbname,
                     Catalog_Namespace::UserMetadata& user_meta,
                     std::shared_ptr<Catalog_Namespace::Catalog> cat,
-                    LogOnReturn&);
+                    LogSession&);
   void disconnect_impl(const SessionMap::iterator& session_it);
   void check_table_load_privileges(const TSessionId& session,
                                    const std::string& table_name);
@@ -710,62 +711,70 @@ class MapDHandler : public MapDIf {
 };
 
 // Log Format:
-// stdlog [file] [line] [func] [milliseconds] [database] [user] [public_session_id]
-//        {[names]} {[values]}
-// Call at beginning of Thrift call. Wait until destructor to LOG(INFO), with timing.
+// YYYY-MM-DDTHH:MM::SS.FFFFFF [pid] [file]:[line] [label] [func] [match] [dur_ms]
+//    [dbname] [user] [pubsessid] {[names]} {[values]}
+// Call at both beginning(label="stdlog_begin") and end(label="stdlog") of Thrift call,
+//    with dur_ms = current age of LogSession object in milliseconds.
+// stdlog_begin is logged at DEBUG1 level, stdlog is logged at INFO level.
 // The only required parameter is session, which can be either:
 //  * std::shared_ptr<Catalog_Namespace::SessionInfo> - No locking is done.
 //  * TSessionId string - will call get_session_copy_ptr() to get shared_ptr.
 // All remaining optional parameters are name,value pairs that will be included in log.
-#define LOG_ON_RETURN(session, ...) \
-  LogOnReturn log_on_return(*this, session, __FILE__, __LINE__, __func__, ##__VA_ARGS__)
+#define LOG_SESSION(session, ...) \
+  LogSession log_session(*this, session, __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 
-class LogOnReturn : boost::noncopyable {
-  boost::filesystem::path const file_;
+class LogSession : boost::noncopyable {
+  std::string const file_;
   size_t const line_;
   char const* const func_;
   std::list<std::string> name_value_pairs_;
   std::chrono::steady_clock::time_point const start_;
   SessionMap::mapped_type session_ptr_;
+  static std::atomic<int64_t> s_match;
+  int64_t const match_;  // Unique to each begin/end pair to match them together.
   template <typename... Pairs>
-  LogOnReturn(char const* file, size_t line, char const* func, Pairs&&... pairs)
-      : file_(file)
+  LogSession(char const* file, size_t line, char const* func, Pairs&&... pairs)
+      : file_(boost::filesystem::path(file).filename().string())
       , line_(line)
       , func_(func)
       , name_value_pairs_{to_string(std::forward<Pairs>(pairs))...}
-      , start_(std::chrono::steady_clock::now()) {
+      , start_(std::chrono::steady_clock::now())
+      , match_(s_match++) {
     static_assert(sizeof...(Pairs) % 2 == 0,
-                  "LogOnReturn() requires an even number of name/value parameters.");
+                  "LogSession() requires an even number of name/value parameters.");
   }
+  void stdlog(logger::Severity, char const* label);
 
  public:
   template <typename... Pairs>
-  LogOnReturn(MapDHandler&,
-              SessionMap::mapped_type& session_ptr,
-              char const* file,
-              size_t line,
-              char const* func,
-              Pairs&&... pairs)
-      : LogOnReturn(file, line, func, std::forward<Pairs>(pairs)...) {
+  LogSession(MapDHandler& mh,
+             SessionMap::mapped_type const& session_ptr,
+             char const* file,
+             size_t line,
+             char const* func,
+             Pairs&&... pairs)
+      : LogSession(file, line, func, std::forward<Pairs>(pairs)...) {
     session_ptr_ = session_ptr;
+    stdlog(logger::Severity::DEBUG1, "stdlog_begin");
   }
   template <typename... Pairs>
-  LogOnReturn(MapDHandler& mapd_handler,
-              TSessionId const& session_id,
-              char const* file,
-              size_t line,
-              char const* func,
-              Pairs&&... pairs)
-      : LogOnReturn(file, line, func, std::forward<Pairs>(pairs)...) {
+  LogSession(MapDHandler& mh,
+             TSessionId const& session_id,
+             char const* file,
+             size_t line,
+             char const* func,
+             Pairs&&... pairs)
+      : LogSession(file, line, func, std::forward<Pairs>(pairs)...) {
     if (!session_id.empty()) {
       try {
-        session_ptr_ = mapd_handler.get_session_copy_ptr(session_id);
+        session_ptr_ = mh.get_session_copy_ptr(session_id);
       } catch (...) {
         session_ptr_.reset();
       }
     }
+    stdlog(logger::Severity::DEBUG1, "stdlog_begin");
   }
-  ~LogOnReturn();
+  ~LogSession();
   template <typename... Pairs>
   void append_name_value_pairs(Pairs&&... pairs) {
     static_assert(sizeof...(Pairs) % 2 == 0,
@@ -774,11 +783,11 @@ class LogOnReturn : boost::noncopyable {
                              {to_string(std::forward<Pairs>(pairs))...});
   }
   template <typename Units = std::chrono::milliseconds>
-  size_t duration() const {
+  typename Units::rep duration() const {
     using namespace std::chrono;
     return duration_cast<Units>(steady_clock::now() - start_).count();
   }
-  void set_session(SessionMap::mapped_type&);
+  void set_session(SessionMap::mapped_type const& session_ptr);
 };
 
 #endif /* MAPDHANDLER_H */

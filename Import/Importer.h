@@ -22,13 +22,11 @@
 #ifndef _IMPORTER_H_
 #define _IMPORTER_H_
 
-#include "../Shared/fixautotools.h"
+#include "Shared/Logger.h"
+#include "Shared/fixautotools.h"
 
 #include <gdal.h>
-#include <glog/logging.h>
 #include <ogrsf_frmts.h>
-
-#include "../Shared/fixautotools.h"
 
 #include <atomic>
 #include <boost/filesystem.hpp>

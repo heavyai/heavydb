@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <llvm/Bitcode/BitcodeReader.h>
 #include <llvm/IR/Function.h>
@@ -29,6 +28,7 @@
 #include "../QueryEngine/IRCodegenUtils.h"
 #include "../QueryEngine/LLVMGlobalContext.h"
 #include "../Shared/mapdpath.h"
+#include "TestHelpers.h"
 
 namespace {
 
@@ -385,7 +385,7 @@ TEST(CodeGeneratorTest, IntegerExprGPU) {
 #endif  // HAVE_CUDA
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
+  TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   int err = RUN_ALL_TESTS();
   return err;

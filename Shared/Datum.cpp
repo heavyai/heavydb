@@ -27,13 +27,13 @@
 #endif
 #include <cinttypes>
 
-#include <glog/logging.h>
 #include <cassert>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <stdexcept>
 #include <string>
+#include "Logger.h"
 #include "StringTransform.h"
 
 #include "DateConverters.h"

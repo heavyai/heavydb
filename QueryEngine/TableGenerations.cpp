@@ -15,8 +15,7 @@
  */
 
 #include "TableGenerations.h"
-
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 void TableGenerations::setGeneration(const uint32_t id,
                                      const TableGeneration& generation) {

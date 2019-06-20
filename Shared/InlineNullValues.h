@@ -17,13 +17,7 @@
 #ifndef INLINENULLVALUES_H
 #define INLINENULLVALUES_H
 
-#ifndef __CUDACC__
-#include <glog/logging.h>
-#else
-#ifndef CHECK
-#include "../Shared/always_assert.h"
-#endif
-#endif  // __CUDACC__
+#include "Logger.h"
 
 template <typename T>
 T inline_fp_null_value();

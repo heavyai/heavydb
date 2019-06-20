@@ -25,6 +25,7 @@
 
 #include "../AbstractBuffer.h"
 #include "Page.h"
+#include "Shared/Logger.h"
 
 #include <iostream>
 #include <stdexcept>
@@ -114,7 +115,10 @@ class FileBuffer : public AbstractBuffer {
   inline Data_Namespace::MemoryLevel getType() const override { return DISK_LEVEL; }
 
   /// Not implemented for FileMgr -- throws a runtime_error
-  int8_t* getMemoryPtr() override { LOG(FATAL) << "Operation not supported."; }
+  int8_t* getMemoryPtr() override {
+    LOG(FATAL) << "Operation not supported.";
+    return nullptr;  // satisfy return-type warning
+  }
 
   /// Returns the number of pages in the FileBuffer.
   inline size_t pageCount() const override { return multiPages_.size(); }

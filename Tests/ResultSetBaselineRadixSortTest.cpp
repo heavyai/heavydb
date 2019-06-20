@@ -25,6 +25,7 @@
 #include "../QueryEngine/ResultSet.h"
 #include "../QueryEngine/RuntimeFunctions.h"
 #include "ResultSetTestUtils.h"
+#include "TestHelpers.h"
 
 #ifdef HAVE_CUDA
 #include "../CudaMgr/CudaMgr.h"
@@ -32,7 +33,6 @@
 extern std::unique_ptr<CudaMgr_Namespace::CudaMgr> g_cuda_mgr;
 #endif  // HAVE_CUDA
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #include <numeric>
@@ -258,7 +258,7 @@ TEST(SortBaseline, Floats) {
 }
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
+  TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
 #ifdef HAVE_CUDA

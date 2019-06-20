@@ -18,8 +18,7 @@
 
 #include "RelAlgExecutor.h"
 #include "ResultSet.h"
-
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 SpeculativeTopNMap::SpeculativeTopNMap() : unknown_(0) {}
 

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
@@ -30,6 +29,7 @@
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/UDFCompiler.h"
 #include "QueryRunner/QueryRunner.h"
+#include "Shared/Logger.h"
 #include "Shared/MapDParameters.h"
 #include "TestHelpers.h"
 
@@ -87,7 +87,7 @@ void mapd_signal_handler(int signal_number) {
   LOG(ERROR) << "Interrupt signal (" << signal_number << ") received.";
   calcite_shutdown_handler();
   // shut down logging force a flush
-  google::ShutdownGoogleLogging();
+  logger::shutdown();
   // terminate program
   if (signal_number == SIGTERM) {
     std::exit(EXIT_SUCCESS);
@@ -142,7 +142,6 @@ class SQLTestEnv : public ::testing::Environment {
     DBMetadata db;
 
     register_signal_handler();
-    google::InstallFailureFunction(&calcite_shutdown_handler);
 
     boost::filesystem::path udf_file((get_udf_filename()));
     if (!boost::filesystem::exists(udf_file)) {
@@ -317,7 +316,7 @@ TEST_F(UDFCompilerTest, UdfQuery) {
 }
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
+  TestHelpers::init_logger_stderr_only(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
 

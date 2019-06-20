@@ -119,9 +119,8 @@ class SessionInfo {
   std::string public_session_id() const;
 };
 
-}  // namespace Catalog_Namespace
+std::ostream& operator<<(std::ostream& os, const SessionInfo& session_info);
 
-std::ostream& operator<<(std::ostream& os,
-                         const Catalog_Namespace::SessionInfo& session_info);
+}  // namespace Catalog_Namespace
 
 #endif /* SESSION_INFO_H */

@@ -21,9 +21,9 @@
  */
 #include "BufferMgr.h"
 #include "Buffer.h"
+#include "Shared/Logger.h"
 #include "Shared/measure.h"
 
-#include <glog/logging.h>
 #include <algorithm>
 #include <iomanip>
 #include <limits>

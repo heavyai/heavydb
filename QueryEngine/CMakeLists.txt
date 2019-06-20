@@ -145,6 +145,14 @@ if(ENABLE_DECODERS_BOUNDS_CHECKING)
   list(APPEND MAPD_DEFINITIONS "-DWITH_DECODERS_BOUNDS_CHECKING")
 endif()
 
+if(NOT PREFER_STATIC_LIBS)
+  list(APPEND MAPD_DEFINITIONS "-DBOOST_LOG_DYN_LINK")
+endif()
+
+if (SUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS)
+  list(APPEND MAPD_DEFINITIONS "-DSUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS")
+endif()
+
 if(ENABLE_LLVM_DBG)
 set(CLANG_SDK_INC "-I/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.11.sdk/usr/include/")
 set(CLANG_CRT_INC "-I/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/")
@@ -380,4 +388,4 @@ add_custom_command(
     )
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})
-target_link_libraries(group_by_hash_test gtest ${Glog_LIBRARIES} ${Boost_LIBRARIES} ${PROFILER_LIBS})
+target_link_libraries(group_by_hash_test gtest Shared ${Boost_LIBRARIES} ${PROFILER_LIBS})

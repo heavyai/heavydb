@@ -15,10 +15,10 @@
  */
 
 #include "CpuBuffer.h"
-#include <glog/logging.h>
 #include <cassert>
 #include <cstring>
 #include "../../../CudaMgr/CudaMgr.h"
+#include "Shared/Logger.h"
 
 namespace Buffer_Namespace {
 

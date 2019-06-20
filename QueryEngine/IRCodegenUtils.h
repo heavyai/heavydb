@@ -16,10 +16,10 @@
 
 #pragma once
 
-#include <glog/logging.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Type.h>
+#include "Shared/Logger.h"
 
 inline llvm::ArrayType* get_int_array_type(int const width,
                                            int count,

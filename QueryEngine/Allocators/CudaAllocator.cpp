@@ -20,8 +20,7 @@
 #include <DataMgr/DataMgr.h>
 #include <Shared/types.h>
 #include "../Rendering/RenderAllocator.h"
-
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 CudaAllocator::CudaAllocator(Data_Namespace::DataMgr* data_mgr, const int device_id)
     : data_mgr_(data_mgr), device_id_(device_id) {

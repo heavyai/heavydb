@@ -17,7 +17,8 @@
 #ifndef DATE_DAYS_ENCODER_H
 #define DATE_DAYS_ENCODER_H
 
-#include <glog/logging.h>
+#include "Shared/Logger.h"
+
 #include <iostream>
 #include <memory>
 #include "AbstractBuffer.h"

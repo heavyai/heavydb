@@ -464,7 +464,7 @@ void WindowFunctionContext::compute() {
   }
   if (window_function_is_value(window_func_->getKind()) ||
       window_function_is_aggregate(window_func_->getKind())) {
-    CHECK_EQ(off, elem_count_);
+    CHECK_EQ(static_cast<size_t>(off), elem_count_);
   }
   auto output_i64 = reinterpret_cast<int64_t*>(output_);
   if (window_function_is_aggregate(window_func_->getKind())) {

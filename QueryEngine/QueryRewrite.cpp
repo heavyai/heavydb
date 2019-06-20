@@ -17,8 +17,7 @@
 #include "QueryRewrite.h"
 #include "ExpressionRange.h"
 #include "ExpressionRewrite.h"
-
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 RelAlgExecutionUnit QueryRewriter::rewrite(
     const RelAlgExecutionUnit& ra_exe_unit_in) const {

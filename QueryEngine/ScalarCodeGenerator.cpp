@@ -49,6 +49,7 @@ llvm::Type* llvm_type_from_sql(const SQLTypeInfo& ti, llvm::LLVMContext& ctx) {
     }
     default: {
       LOG(FATAL) << "Unsupported type";
+      return nullptr;  // satisfy -Wreturn-type
     }
   }
 }
@@ -151,6 +152,7 @@ std::vector<void*> ScalarCodeGenerator::generateNativeCode(
     }
     default: {
       LOG(FATAL) << "Invalid device type";
+      return {};  // satisfy -Wreturn-type
     }
   }
 }
@@ -160,7 +162,7 @@ std::vector<llvm::Value*> ScalarCodeGenerator::codegenColumn(
     const bool fetch_column,
     const CompilationOptions& co) {
   int arg_idx = plan_state_->getLocalColumnId(column, fetch_column);
-  CHECK_LT(arg_idx, cgen_state_->row_func_->arg_size());
+  CHECK_LT(static_cast<size_t>(arg_idx), cgen_state_->row_func_->arg_size());
   llvm::Value* arg = cgen_state_->row_func_->arg_begin() + arg_idx + 1;
   return {arg};
 }

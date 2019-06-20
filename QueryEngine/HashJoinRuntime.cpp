@@ -25,11 +25,12 @@
 #include "GpuRtConstants.h"
 #include "JoinHashImpl.h"
 #else
-#include <glog/logging.h>
-#include "../Shared/likely.h"
-#include "../StringDictionary/StringDictionary.h"
-#include "../StringDictionary/StringDictionaryProxy.h"
+#include "Shared/Logger.h"
+
 #include "RuntimeFunctions.h"
+#include "Shared/likely.h"
+#include "StringDictionary/StringDictionary.h"
+#include "StringDictionary/StringDictionaryProxy.h"
 
 #include <future>
 #endif
@@ -1371,7 +1372,7 @@ void fill_one_to_many_baseline_hash_table(
   }
 
   std::vector<int32_t> count_copy(hash_entry_count, 0);
-  CHECK_GT(hash_entry_count, int32_t(0));
+  CHECK_GT(hash_entry_count, 0u);
   memcpy(&count_copy[1], count_buff, (hash_entry_count - 1) * sizeof(int32_t));
   inclusive_scan(
       count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);

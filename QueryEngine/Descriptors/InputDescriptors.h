@@ -18,8 +18,8 @@
 #define QUERYENGINE_INPUTDESCRIPTORS_H
 
 #include "../Catalog/TableDescriptor.h"
+#include "Shared/Logger.h"
 
-#include <glog/logging.h>
 #include <memory>
 
 enum class InputSourceType { TABLE, RESULT };

@@ -20,7 +20,7 @@
 #include <cstddef>
 #include "../Shared/sqltypes.h"
 
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 struct ChunkStats {
   Datum min;

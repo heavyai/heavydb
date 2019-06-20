@@ -22,7 +22,6 @@
 #include <limits>
 #include <string>
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #include <boost/algorithm/string.hpp>
@@ -1415,7 +1414,6 @@ TEST_F(ImportTest, S3_GCS_One_geo_file) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
 
   namespace po = boost::program_options;
@@ -1430,6 +1428,10 @@ int main(int argc, char** argv) {
       "test-help",
       "Print all ExecuteTest specific options (for gtest options use `--help`).");
 
+  logger::LogOptions log_options(argv[0]);
+  log_options.max_files_ = 0;  // stderr only by default
+  desc.add(log_options.get_options());
+
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
   po::notify(vm);
@@ -1439,6 +1441,8 @@ int main(int argc, char** argv) {
     std::cout << desc << std::endl;
     return 0;
   }
+
+  logger::init(log_options);
 
   g_session.reset(QueryRunner::get_session(BASE_PATH));
 

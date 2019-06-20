@@ -28,8 +28,8 @@
 
 #include "../Planner/Planner.h"
 #include "../Shared/sqltypes.h"
+#include "Shared/Logger.h"
 
-#include <glog/logging.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Value.h>

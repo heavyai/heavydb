@@ -28,8 +28,7 @@
 
 #include "../BufferCompaction.h"
 #include "../CompilationOptions.h"
-
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 inline size_t bitmap_bits_to_bytes(const size_t bitmap_sz) {
   size_t bitmap_byte_sz = bitmap_sz / 8;

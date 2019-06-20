@@ -195,7 +195,7 @@ size_t ColSlotContext::getCompactByteWidth() const {
     if (slot_size.padded_size == 0) {
       continue;
     }
-    CHECK_EQ(slot_size.padded_size, compact_width);
+    CHECK_EQ(static_cast<size_t>(slot_size.padded_size), compact_width);
   }
   return compact_width;
 }

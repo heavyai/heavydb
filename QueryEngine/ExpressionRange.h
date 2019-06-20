@@ -17,7 +17,6 @@
 #define QUERYENGINE_EXPRESSIONRANGE_H
 
 #include "../Analyzer/Analyzer.h"
-#include "../Shared/unreachable.h"
 
 #include <boost/multiprecision/cpp_int.hpp>  //#include <boost/none.hpp>
 #include <boost/optional.hpp>

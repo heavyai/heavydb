@@ -24,11 +24,7 @@
 
 #include "../Shared/TargetInfo.h"
 
-#ifndef __CUDACC__
-#include <glog/logging.h>
-#else
-#include "../Shared/always_assert.h"
-#endif  // __CUDACC__
+#include "Logger.h"
 
 #include <limits>
 

@@ -768,7 +768,7 @@ std::vector<CUdeviceptr> QueryExecutionContext::prepareKernelParams(
       data_mgr, params[NUM_FRAGMENTS], &num_fragments, sizeof(uint64_t), device_id);
   CUdeviceptr literals_and_addr_mapping =
       gpu_allocator_->alloc(literal_buff.size() + 2 * sizeof(int64_t), nullptr);
-  CHECK_EQ(0, literals_and_addr_mapping % 8);
+  CHECK_EQ(static_cast<CUdeviceptr>(0), literals_and_addr_mapping % 8);
   std::vector<int64_t> additional_literal_bytes;
   const auto count_distinct_bitmap_mem = query_buffers_->getCountDistinctBitmapPtr();
   if (count_distinct_bitmap_mem) {

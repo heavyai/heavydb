@@ -33,7 +33,7 @@
   POSSIBILITY OF SUCH DAMAGE.
 */
 #include "mpOprtNonCmplx.h"
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 MUP_NAMESPACE_START
 

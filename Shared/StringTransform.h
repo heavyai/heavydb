@@ -17,7 +17,8 @@
 #ifndef SHARED_STRINGTRANSFORM_H
 #define SHARED_STRINGTRANSFORM_H
 
-#include <glog/logging.h>
+#include "Logger.h"
+
 #include <algorithm>
 #include <array>
 #include <boost/algorithm/string/predicate.hpp>

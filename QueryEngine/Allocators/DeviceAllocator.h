@@ -22,7 +22,7 @@
 
 #pragma once
 
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 #ifdef HAVE_CUDA
 #include <cuda.h>

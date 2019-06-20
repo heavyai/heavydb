@@ -22,8 +22,8 @@
 #include "HashJoinRuntime.h"
 #include "RangeTableIndexVisitor.h"
 #include "RuntimeFunctions.h"
+#include "Shared/Logger.h"
 
-#include <glog/logging.h>
 #include <future>
 #include <numeric>
 #include <thread>
@@ -914,7 +914,7 @@ void JoinHashTable::initHashTableForDevice(
     auto& data_mgr = catalog->getDataMgr();
     if (shard_count) {
       const auto shards_per_device = (shard_count + device_count_ - 1) / device_count_;
-      CHECK_GT(shards_per_device, 0);
+      CHECK_GT(shards_per_device, 0u);
       hash_entry_info.hash_entry_count = entries_per_shard * shards_per_device;
     }
     gpu_hash_table_buff_[device_id] = CudaAllocator::allocGpuAbstractBuffer(
@@ -1039,7 +1039,7 @@ void JoinHashTable::initOneToManyHashTable(
   // needed once the join hash table has been built on the CPU.
   if (memory_level_ == Data_Namespace::GPU_LEVEL && shard_count) {
     const auto shards_per_device = (shard_count + device_count_ - 1) / device_count_;
-    CHECK_GT(shards_per_device, 0);
+    CHECK_GT(shards_per_device, 0u);
     hash_entry_count = entries_per_shard * shards_per_device;
   }
 #else
@@ -1417,7 +1417,7 @@ size_t get_entries_per_device(const size_t total_entries,
   size_t entries_per_device = entries_per_shard;
   if (memory_level == Data_Namespace::GPU_LEVEL && shard_count) {
     const auto shards_per_device = (shard_count + device_count - 1) / device_count;
-    CHECK_GT(shards_per_device, 0);
+    CHECK_GT(shards_per_device, 0u);
     entries_per_device = entries_per_shard * shards_per_device;
   }
   return entries_per_device;

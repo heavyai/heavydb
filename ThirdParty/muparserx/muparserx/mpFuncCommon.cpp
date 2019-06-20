@@ -40,7 +40,7 @@
 
 #include "mpValue.h"
 #include "mpParserBase.h"
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 
 MUP_NAMESPACE_START

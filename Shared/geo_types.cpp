@@ -15,10 +15,10 @@
  */
 
 #include "geo_types.h"
+#include "Logger.h"
 #include "sqltypes.h"
 
 #include <gdal.h>
-#include <glog/logging.h>
 #include <ogr_geometry.h>
 #include <ogrsf_frmts.h>
 
@@ -596,7 +596,7 @@ void GeoTypesFactory::getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospati
       geospatial_poly->getColumns(coords, ring_sizes, bounds);
       if (promote_poly_to_mpoly) {
         if (ring_sizes.size()) {
-          CHECK_GT(coords.size(), 0);
+          CHECK_GT(coords.size(), 0u);
           poly_rings.push_back(1 + geospatial_poly->getNumInteriorRings());
         }
       }

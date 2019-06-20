@@ -787,6 +787,7 @@ AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key,
 
 AbstractBuffer* FileMgr::alloc(const size_t numBytes = 0) {
   LOG(FATAL) << "Operation not supported";
+  return nullptr;  // satisfy return-type warning
 }
 
 void FileMgr::free(AbstractBuffer* buffer) {

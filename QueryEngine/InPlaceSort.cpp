@@ -20,8 +20,8 @@
 #include <Analyzer/Analyzer.h>
 #include "Allocators/ThrustAllocator.h"
 #include "Descriptors/QueryMemoryDescriptor.h"
+#include "Shared/Logger.h"
 
-#include <glog/logging.h>
 #include <cstdint>
 
 void sort_groups_cpu(int64_t* val_buff,

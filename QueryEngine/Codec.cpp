@@ -16,8 +16,8 @@
 
 #include "Codec.h"
 #include "LLVMGlobalContext.h"
+#include "Shared/Logger.h"
 
-#include <glog/logging.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Module.h>

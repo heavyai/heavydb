@@ -29,8 +29,8 @@
 #include <set>
 #include <vector>
 
-#include <glog/logging.h>
 #include "../CompilationOptions.h"
+#include "Shared/Logger.h"
 
 namespace Fragmenter_Namespace {
 class FragmentInfo;

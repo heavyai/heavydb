@@ -19,10 +19,10 @@
 #include "../Utils/Regexp.h"
 #include "../Utils/StringLike.h"
 #include "LeafHostInfo.h"
+#include "Shared/Logger.h"
 #include "Shared/thread_count.h"
 #include "StringDictionaryClient.h"
 
-#include <glog/logging.h>
 #include <sys/fcntl.h>
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
@@ -96,7 +96,9 @@ uint32_t rk_hash(const std::string& str) {
 }
 }  // namespace
 
-const int32_t StringDictionary::INVALID_STR_ID{-1};
+constexpr int32_t StringDictionary::INVALID_STR_ID;
+constexpr size_t StringDictionary::MAX_STRLEN;
+constexpr size_t StringDictionary::MAX_STRCOUNT;
 
 StringDictionary::StringDictionary(const std::string& folder,
                                    const bool isTemp,
@@ -777,7 +779,7 @@ std::shared_ptr<const std::vector<std::string>> StringDictionary::copyStrings() 
   const bool multithreaded = str_count_ > 10000;
   const auto worker_count =
       multithreaded ? static_cast<size_t>(cpu_threads()) : size_t(1);
-  CHECK_GT(worker_count, 0);
+  CHECK_GT(worker_count, 0UL);
   std::vector<std::vector<std::string>> worker_results(worker_count);
   auto copy = [this](std::vector<std::string>& str_list,
                      const size_t start_id,

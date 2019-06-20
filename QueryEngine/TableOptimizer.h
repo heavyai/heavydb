@@ -19,7 +19,7 @@
 #include "Execute.h"
 
 #include <Shared/measure.h>
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 /**
  * @brief Driver for running cleanup processes on a table.

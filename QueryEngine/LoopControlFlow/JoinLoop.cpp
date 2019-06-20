@@ -15,6 +15,7 @@
  */
 
 #include "JoinLoop.h"
+#include "Shared/Logger.h"
 
 #include <llvm/IR/Type.h>
 

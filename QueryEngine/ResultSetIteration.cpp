@@ -463,7 +463,7 @@ InternalTargetValue ResultSet::RowWiseTargetAccessor::getColumnInternal(
                  result_set_->serialized_varlen_buffer_.size());
         const auto& varlen_buffer_for_fragment =
             result_set_->serialized_varlen_buffer_[storage_lookup_result.storage_idx];
-        CHECK_LT(i1, varlen_buffer_for_fragment.size());
+        CHECK_LT(static_cast<size_t>(i1), varlen_buffer_for_fragment.size());
         return InternalTargetValue(&varlen_buffer_for_fragment[i1]);
       }
       CHECK(offsets_for_target.ptr2);
@@ -593,7 +593,7 @@ InternalTargetValue ResultSet::ColumnWiseTargetAccessor::getColumnInternal(
                  result_set_->serialized_varlen_buffer_.size());
         const auto& varlen_buffer_for_fragment =
             result_set_->serialized_varlen_buffer_[storage_lookup_result.storage_idx];
-        CHECK_LT(i1, varlen_buffer_for_fragment.size());
+        CHECK_LT(static_cast<size_t>(i1), varlen_buffer_for_fragment.size());
         return InternalTargetValue(&varlen_buffer_for_fragment[i1]);
       }
       CHECK(offsets_for_target.ptr2);
@@ -1090,7 +1090,7 @@ const std::vector<const int8_t*>& ResultSet::getColumnFrag(const size_t storage_
       CHECK_LE(local_idx, global_idx);
     }
     CHECK_GE(frag_id, int64_t(0));
-    CHECK_LT(frag_id, col_buffers_[storage_idx].size());
+    CHECK_LT(static_cast<size_t>(frag_id), col_buffers_[storage_idx].size());
     global_idx = local_idx;
     return col_buffers_[storage_idx][frag_id];
   } else {
@@ -1204,7 +1204,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
           return TargetValue(nullptr);
         }
         CHECK(vd.pointer);
-        CHECK_GT(vd.length, 0);
+        CHECK_GT(vd.length, 0u);
         std::string fetched_str(reinterpret_cast<char*>(vd.pointer), vd.length);
         return fetched_str;
       } else {
@@ -1219,7 +1219,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
         if (ad.is_null) {
           return ArrayTargetValue(boost::optional<std::vector<ScalarTargetValue>>{});
         }
-        CHECK_GE(ad.length, 0);
+        CHECK_GE(ad.length, 0u);
         if (ad.length > 0) {
           CHECK(ad.pointer);
         }

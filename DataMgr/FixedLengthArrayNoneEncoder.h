@@ -24,7 +24,8 @@
 #ifndef FIXED_LENGTH_ARRAY_NONE_ENCODER_H
 #define FIXED_LENGTH_ARRAY_NONE_ENCODER_H
 
-#include <glog/logging.h>
+#include "Shared/Logger.h"
+
 #include <cassert>
 #include <cstring>
 #include <memory>

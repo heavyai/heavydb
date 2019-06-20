@@ -16,11 +16,10 @@
 
 #include "ThrustAllocator.h"
 #include "CudaAllocator.h"
+#include "Shared/Logger.h"
 
 #include <CudaMgr/CudaMgr.h>
 #include <DataMgr/DataMgr.h>
-
-#include <glog/logging.h>
 
 int8_t* ThrustAllocator::allocate(std::ptrdiff_t num_bytes) {
 #ifdef HAVE_CUDA

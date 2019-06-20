@@ -29,7 +29,7 @@
   POSSIBILITY OF SUCH DAMAGE.
 */
 #include "mpOprtMatrix.h"
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 
 MUP_NAMESPACE_START

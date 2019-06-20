@@ -16,10 +16,10 @@
 
 #pragma once
 
-#include <glog/logging.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Value.h>
+#include "Shared/Logger.h"
 
 #include "../../Shared/sqldefs.h"
 #include "../IRCodegenUtils.h"

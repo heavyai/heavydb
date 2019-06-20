@@ -19,7 +19,7 @@
 
 #include "gen-cpp/mapd_types.h"
 
-#include <glog/logging.h>
+#include "Logger.h"
 
 #include <string>
 

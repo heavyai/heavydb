@@ -462,7 +462,7 @@ void ResultSetStorage::rewriteAggregateBufferOffsets(
               slot_idx += 2;
               length_to_elems = 4;
             }
-            CHECK_LT(offset, serialized_varlen_buffer.size());
+            CHECK_LT(static_cast<size_t>(offset), serialized_varlen_buffer.size());
             const auto& varlen_bytes_str = serialized_varlen_buffer[offset++];
             const auto str_ptr =
                 reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
@@ -473,7 +473,7 @@ void ResultSetStorage::rewriteAggregateBufferOffsets(
                 static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
           }
         } else {
-          CHECK_LT(offset, serialized_varlen_buffer.size());
+          CHECK_LT(static_cast<size_t>(offset), serialized_varlen_buffer.size());
           const auto& varlen_bytes_str = serialized_varlen_buffer[offset];
           const auto str_ptr = reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
           CHECK(ptr1);
@@ -1129,7 +1129,7 @@ void ResultSetStorage::fillOneEntryRowWise(const std::vector<int64_t>& entry) {
 void ResultSetStorage::initializeRowWise() const {
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   const auto row_size = get_row_bytes(query_mem_desc_);
-  CHECK_EQ(row_size % 8, 0);
+  CHECK_EQ(row_size % 8, 0u);
   const auto key_bytes_with_padding =
       align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
   CHECK(!query_mem_desc_.hasKeylessHash());
@@ -1420,7 +1420,7 @@ void ResultSetStorage::reduceOneSlot(
             length_to_elems = target_info.sql_type.is_string() ? 1 : elem_ti.get_size();
           }
 
-          CHECK_LT(rhs_proj_col, serialized_varlen_buffer.size());
+          CHECK_LT(static_cast<size_t>(rhs_proj_col), serialized_varlen_buffer.size());
           const auto& varlen_bytes_str = serialized_varlen_buffer[rhs_proj_col];
           const auto str_ptr = reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
           *reinterpret_cast<int64_t*>(this_ptr1) =

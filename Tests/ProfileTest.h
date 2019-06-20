@@ -27,11 +27,7 @@
 
 #include "../QueryEngine/GpuRtConstants.h"
 
-#ifndef __CUDACC__
-#include <glog/logging.h>
-#else
-#include "../Shared/always_assert.h"
-#endif  // __CUDACC__
+#include "../Shared/Logger.h"
 
 #ifdef HAVE_CUDA
 #include <cuda_runtime_api.h>

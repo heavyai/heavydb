@@ -29,9 +29,9 @@
 #ifndef DBOBJECT_H
 #define DBOBJECT_H
 
-#include <glog/logging.h>
 #include <string>
 #include <unordered_set>
+#include "Shared/Logger.h"
 
 namespace Catalog_Namespace {
 class Catalog;

@@ -15,7 +15,6 @@
  */
 
 #include "InsertOrderFragmenter.h"
-#include <glog/logging.h>
 #include <boost/lexical_cast.hpp>
 #include <cassert>
 #include <cmath>
@@ -28,6 +27,7 @@
 #include "../LockMgr/LockMgr.h"
 #include "../Shared/checked_alloc.h"
 #include "../Shared/thread_count.h"
+#include "Shared/Logger.h"
 
 #include <LockMgr/TableLockMgr.h>
 

@@ -16,8 +16,7 @@
 
 #include "RelAlgOptimizer.h"
 #include "RexVisitor.h"
-
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 #include <numeric>
 #include <string>

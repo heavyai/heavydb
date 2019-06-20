@@ -8,11 +8,11 @@ set(shared_source_files
     File.cpp
     StackTrace.cpp
     base64.cpp
+    Logger.cpp
 )
 
 add_library(Shared ${shared_source_files})
 
-find_package(Boost COMPONENTS filesystem system REQUIRED QUIET)
 # Required by ThriftClient.cpp
 add_definitions("-DTHRIFT_PACKAGE_VERSION=\"${Thrift_VERSION}\"")
 add_library(ThriftClient ThriftClient.cpp)

@@ -20,7 +20,7 @@
 #ifdef EXECUTE_INCLUDE
 
 #ifndef __CUDACC__
-#include <glog/logging.h>
+#include <cstdlib>  // abort()
 #endif
 
 DEVICE

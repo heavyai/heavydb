@@ -28,7 +28,6 @@
 #include "../SqliteConnector/SqliteConnector.h"
 #include "DistributedLoader.h"
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/any.hpp>
@@ -1746,7 +1745,7 @@ TEST(Select, OrderBy) {
     SKIP_NO_GPU();
     const auto rows = run_multiple_agg(
         "SELECT x, y, z + t, x * y AS m FROM test ORDER BY 3 desc LIMIT 5;", dt);
-    CHECK_EQ(rows->rowCount(), std::min(size_t(5), static_cast<size_t>(g_num_rows)));
+    CHECK_EQ(rows->rowCount(), std::min(size_t(5), static_cast<size_t>(g_num_rows)) + 0);
     CHECK_EQ(rows->colCount(), size_t(4));
     for (size_t row_idx = 0; row_idx < rows->rowCount(); ++row_idx) {
       ASSERT_TRUE(v<int64_t>(rows->getRowAt(row_idx, 0, true)) == 8 ||
@@ -15958,7 +15957,6 @@ void drop_views() {
 }  // namespace
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
   namespace po = boost::program_options;
 
@@ -16002,6 +16000,10 @@ int main(int argc, char** argv) {
       "test-help",
       "Print all ExecuteTest specific options (for gtest options use `--help`).");
 
+  logger::LogOptions log_options(argv[0]);
+  log_options.max_files_ = 0;  // stderr only by default
+  desc.add(log_options.get_options());
+
   po::variables_map vm;
   po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
   po::notify(vm);
@@ -16011,6 +16013,8 @@ int main(int argc, char** argv) {
     std::cout << desc << std::endl;
     return 0;
   }
+
+  logger::init(log_options);
 
   if (vm.count("disable-literal-hoisting")) {
     g_hoist_literals = false;

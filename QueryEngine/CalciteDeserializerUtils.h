@@ -22,8 +22,7 @@
 
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
-
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 inline SQLOps to_sql_op(const std::string& op_str) {
   if (op_str == std::string(">")) {

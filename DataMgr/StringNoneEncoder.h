@@ -23,8 +23,8 @@
  **/
 #ifndef STRING_NONE_ENCODER_H
 #define STRING_NONE_ENCODER_H
+#include "Shared/Logger.h"
 
-#include <glog/logging.h>
 #include <cassert>
 #include <string>
 #include <vector>

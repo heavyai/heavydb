@@ -106,7 +106,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
     const auto arg_lvs = codegen(arg, true, co);
     // TODO(adb / d): Assuming no const array cols for geo (for now)
     if (arg_ti.is_geometry()) {
-      CHECK_EQ(arg_ti.get_physical_coord_cols(), arg_lvs.size());
+      CHECK_EQ(static_cast<size_t>(arg_ti.get_physical_coord_cols()), arg_lvs.size());
       for (size_t i = 0; i < arg_lvs.size(); i++) {
         orig_arg_lvs.push_back(arg_lvs[i]);
       }

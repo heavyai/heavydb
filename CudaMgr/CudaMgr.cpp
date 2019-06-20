@@ -16,11 +16,11 @@
 
 #include "CudaMgr.h"
 #include <cuda_runtime.h>
-#include <glog/logging.h>
 #include <algorithm>
 #include <cassert>
 #include <iostream>
 #include <stdexcept>
+#include "Shared/Logger.h"
 
 namespace CudaMgr_Namespace {
 

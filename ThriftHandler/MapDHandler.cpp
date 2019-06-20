@@ -75,7 +75,6 @@
 #include "Shared/scope.h"
 
 #include <fcntl.h>
-#include <glog/logging.h>
 #include <picosha2.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -288,7 +287,7 @@ void MapDHandler::check_read_only(const std::string& str) {
 void MapDHandler::internal_connect(TSessionId& session,
                                    const std::string& username,
                                    const std::string& dbname) {
-  LOG_ON_RETURN(session);  // session not assumed valid here
+  LOG_SESSION(session);  // session not assumed valid here
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   std::string username2 = username;  // login() may reset username given as argument
   std::string dbname2 = dbname;      // login() may reset dbname given as argument
@@ -310,14 +309,15 @@ void MapDHandler::internal_connect(TSessionId& session,
     THROW_MAPD_EXCEPTION("Unauthorized Access: user " + username +
                          " is not allowed to access database " + dbname2 + ".");
   }
-  connect_impl(session, std::string(""), dbname2, user_meta, cat, log_on_return);
+  connect_impl(session, std::string(""), dbname2, user_meta, cat, log_session);
 }
 
 void MapDHandler::connect(TSessionId& session,
                           const std::string& username,
                           const std::string& passwd,
                           const std::string& dbname) {
-  LOG_ON_RETURN(session);  // session not assumed valid here
+  LOG_SESSION(session);  // session not assumed valid here
+
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   std::string username2 = username;  // login() may reset username given as argument
   std::string dbname2 = dbname;      // login() may reset dbname given as argument
@@ -339,7 +339,7 @@ void MapDHandler::connect(TSessionId& session,
     THROW_MAPD_EXCEPTION("Unauthorized Access: user " + username +
                          " is not allowed to access database " + dbname2 + ".");
   }
-  connect_impl(session, passwd, dbname2, user_meta, cat, log_on_return);
+  connect_impl(session, passwd, dbname2, user_meta, cat, log_session);
 }
 
 void MapDHandler::connect_impl(TSessionId& session,
@@ -347,7 +347,7 @@ void MapDHandler::connect_impl(TSessionId& session,
                                const std::string& dbname,
                                Catalog_Namespace::UserMetadata& user_meta,
                                std::shared_ptr<Catalog> cat,
-                               LogOnReturn& log_on_return) {
+                               LogSession& log_session) {
   do {
     session = generate_random_string(32);
   } while (sessions_.find(session) != sessions_.end());
@@ -356,11 +356,12 @@ void MapDHandler::connect_impl(TSessionId& session,
                         std::make_shared<Catalog_Namespace::SessionInfo>(
                             cat, user_meta, executor_device_type_, session));
   CHECK(emplace_retval.second);
-  log_on_return.set_session(emplace_retval.first->second);
+  SessionMap::mapped_type const session_ptr = emplace_retval.first->second;
+  log_session.set_session(session_ptr);
   if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time while
                               // doing warmup
     if (leaf_aggregator_.leafCount() > 0) {
-      const auto parent_session_info_ptr = emplace_retval.first->second;
+      const auto parent_session_info_ptr = session_ptr;
       CHECK(parent_session_info_ptr);
       leaf_aggregator_.connect(
           *parent_session_info_ptr, user_meta.userName, passwd, dbname);
@@ -368,11 +369,11 @@ void MapDHandler::connect_impl(TSessionId& session,
     }
   }
   LOG(INFO) << "User " << user_meta.userName << " connected to database " << dbname
-            << std::endl;
+            << " with public_session_id " << session_ptr->get_public_session_id();
 }
 
 void MapDHandler::disconnect(const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it_unsafe(session);
   const auto dbname = session_it->second->getCatalog().getCurrentDB().dbName;
@@ -410,7 +411,7 @@ void MapDHandler::switch_database(const TSessionId& session, const std::string& 
 }
 
 void MapDHandler::interrupt(const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   if (g_enable_dynamic_watchdog) {
     // Shared lock to allow simultaneous interrupts of multiple sessions
     mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
@@ -442,7 +443,7 @@ void MapDHandler::interrupt(const TSessionId& session) {
 }
 
 void MapDHandler::get_server_status(TServerStatus& _return, const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto rendering_enabled = bool(render_handler_);
   _return.read_only = read_only_;
   _return.version = MAPD_RELEASE;
@@ -455,7 +456,7 @@ void MapDHandler::get_server_status(TServerStatus& _return, const TSessionId& se
 
 void MapDHandler::get_status(std::vector<TServerStatus>& _return,
                              const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto rendering_enabled = bool(render_handler_);
   TServerStatus ret;
   ret.read_only = read_only_;
@@ -484,7 +485,7 @@ void MapDHandler::get_status(std::vector<TServerStatus>& _return,
 
 void MapDHandler::get_hardware_info(TClusterHardwareInfo& _return,
                                     const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   THardwareInfo ret;
   const auto cuda_mgr = data_mgr_->getCudaMgr();
   if (cuda_mgr) {
@@ -522,7 +523,7 @@ void MapDHandler::get_hardware_info(TClusterHardwareInfo& _return,
 }
 
 void MapDHandler::get_session_info(TSessionInfo& _return, const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   auto session_info = get_session_copy(session);
   _return.user = session_info.get_currentUser().userName;
   _return.database = session_info.getCatalog().getCurrentDB().dbName;
@@ -746,7 +747,7 @@ void MapDHandler::sql_execute(TQueryResult& _return,
                               const std::string& nonce,
                               const int32_t first_n,
                               const int32_t at_most_n) {
-  LOG_ON_RETURN(session, "query_str", hide_sensitive_data_from_query(query_str));
+  LOG_SESSION(session, "query_str", hide_sensitive_data_from_query(query_str));
   ScopeGuard reset_was_geo_copy_from = [&] { _was_geo_copy_from = false; };
   if (first_n >= 0 && at_most_n >= 0) {
     THROW_MAPD_EXCEPTION(std::string("At most one of first_n and at_most_n can be set"));
@@ -815,11 +816,11 @@ void MapDHandler::sql_execute(TQueryResult& _return,
                        create_params);
     });
   }
-  log_on_return.append_name_value_pairs(
+  log_session.append_name_value_pairs(
       "execution_time_ms",
       _return.execution_time_ms,
       "total_time_ms",  // BE-3420 - Redundant with duration field
-      log_on_return.duration<std::chrono::milliseconds>());
+      log_session.duration<std::chrono::milliseconds>());
 }
 
 void MapDHandler::sql_execute_df(TDataFrame& _return,
@@ -828,7 +829,7 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
                                  const TDeviceType::type device_type,
                                  const int32_t device_id,
                                  const int32_t first_n) {
-  LOG_ON_RETURN(session, "query_str", hide_sensitive_data_from_query(query_str));
+  LOG_SESSION(session, "query_str", hide_sensitive_data_from_query(query_str));
   const auto session_info = get_session_copy(session);
   if (device_type == TDeviceType::GPU) {
     const auto executor_device_type = session_info.get_executor_device_type();
@@ -892,7 +893,7 @@ void MapDHandler::sql_execute_gdf(TDataFrame& _return,
                                   const std::string& query_str,
                                   const int32_t device_id,
                                   const int32_t first_n) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   sql_execute_df(_return, session, query_str, TDeviceType::GPU, device_id, first_n);
 }
 
@@ -901,7 +902,7 @@ void MapDHandler::deallocate_df(const TSessionId& session,
                                 const TDataFrame& df,
                                 const TDeviceType::type device_type,
                                 const int32_t device_id) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
   int8_t* dev_ptr{0};
   if (device_type == TDeviceType::GPU) {
@@ -944,7 +945,7 @@ std::string MapDHandler::apply_copy_to_shim(const std::string& query_str) {
 void MapDHandler::sql_validate(TTableDescriptor& _return,
                                const TSessionId& session,
                                const std::string& query_str) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   std::unique_ptr<const Planner::RootPlan> root_plan;
   const auto session_info = get_session_copy(session);
   ParserWrapper pw{query_str};
@@ -993,7 +994,7 @@ void MapDHandler::get_completion_hints(std::vector<TCompletionHint>& hints,
                                        const TSessionId& session,
                                        const std::string& sql,
                                        const int cursor) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   std::vector<std::string> visible_tables;  // Tables allowed for the given session.
   get_completion_hints_unsorted(hints, visible_tables, session, sql, cursor);
   const auto proj_tokens = extract_projection_tokens_for_completion(sql);
@@ -1159,7 +1160,7 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
 }
 
 void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   auto session_info = get_session_copy(session);
   if (!session_info.get_currentUser().isSuper) {
     roles =
@@ -1298,7 +1299,7 @@ bool MapDHandler::has_object_privilege(const TSessionId& sessionId,
                                        const std::string& objectName,
                                        const TDBObjectType::type objectType,
                                        const TDBObjectPermissions& permissions) {
-  LOG_ON_RETURN(sessionId);
+  LOG_SESSION(sessionId);
   auto session = get_session_copy(sessionId);
   auto& cat = session.getCatalog();
   auto current_user = session.get_currentUser();
@@ -1356,7 +1357,7 @@ bool MapDHandler::has_object_privilege(const TSessionId& sessionId,
 void MapDHandler::get_db_objects_for_grantee(std::vector<TDBObject>& TDBObjectsForRole,
                                              const TSessionId& sessionId,
                                              const std::string& roleName) {
-  LOG_ON_RETURN(sessionId);
+  LOG_SESSION(sessionId);
   auto session = get_session_copy(sessionId);
   auto user = session.get_currentUser();
   if (!user.isSuper &&
@@ -1384,7 +1385,7 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
                                       const TSessionId& sessionId,
                                       const std::string& objectName,
                                       const TDBObjectType::type type) {
-  LOG_ON_RETURN(sessionId);
+  LOG_SESSION(sessionId);
   auto session = get_session_copy(sessionId);
   DBObjectType object_type;
   switch (type) {
@@ -1460,7 +1461,7 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
 void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
                                          const TSessionId& sessionId,
                                          const std::string& granteeName) {
-  LOG_ON_RETURN(sessionId);
+  LOG_SESSION(sessionId);
   auto session = get_session_copy(sessionId);
   auto* grantee = SysCatalog::instance().getGrantee(granteeName);
   if (grantee) {
@@ -1499,21 +1500,21 @@ void MapDHandler::get_result_row_for_pixel(
     const bool column_format,
     const int32_t pixel_radius,
     const std::string& nonce) {
-  LOG_ON_RETURN(session,
-                "widget_id",
-                widget_id,
-                "pixel.x",
-                pixel.x,
-                "pixel.y",
-                pixel.y,
-                "column_format",
-                column_format,
-                "pixel_radius",
-                pixel_radius,
-                "table_col_names",
-                MapDRenderHandler::dump_table_col_names(table_col_names),
-                "nonce",
-                nonce);
+  LOG_SESSION(session,
+              "widget_id",
+              widget_id,
+              "pixel.x",
+              pixel.x,
+              "pixel.y",
+              pixel.y,
+              "column_format",
+              column_format,
+              "pixel_radius",
+              pixel_radius,
+              "table_col_names",
+              MapDRenderHandler::dump_table_col_names(table_col_names),
+              "nonce",
+              nonce);
   if (!render_handler_) {
     THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
   }
@@ -1592,21 +1593,21 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog* cat,
 void MapDHandler::get_table_descriptor(TTableDescriptor& _return,
                                        const TSessionId& session,
                                        const std::string& table_name) {
-  LOG_ON_RETURN(session, "table_name", table_name);
+  LOG_SESSION(session, "table_name", table_name);
   LOG(ERROR) << "get_table_descriptor is deprecated, please fix application";
 }
 
 void MapDHandler::get_internal_table_details(TTableDetails& _return,
                                              const TSessionId& session,
                                              const std::string& table_name) {
-  LOG_ON_RETURN(session, "table_name", table_name);
+  LOG_SESSION(session, "table_name", table_name);
   get_table_details_impl(_return, session, table_name, true, false);
 }
 
 void MapDHandler::get_table_details(TTableDetails& _return,
                                     const TSessionId& session,
                                     const std::string& table_name) {
-  LOG_ON_RETURN(session, "table_name", table_name);
+  LOG_SESSION(session, "table_name", table_name);
   get_table_details_impl(_return, session, table_name, false, false);
 }
 
@@ -1690,7 +1691,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
 void MapDHandler::get_row_descriptor(TRowDescriptor& _return,
                                      const TSessionId& session,
                                      const std::string& table_name) {
-  LOG_ON_RETURN(session, "table_name", table_name);
+  LOG_SESSION(session, "table_name", table_name);
   LOG(ERROR) << "get_row_descriptor is deprecated, please fix application";
 }
 
@@ -1698,14 +1699,14 @@ void MapDHandler::get_row_descriptor(TRowDescriptor& _return,
 void MapDHandler::get_frontend_view(TFrontendView& _return,
                                     const TSessionId& session,
                                     const std::string& view_name) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   LOG(ERROR) << "'get_frontend_view' is deprecated, please use 'get_dashboard'.";
 }
 
 void MapDHandler::get_link_view(TFrontendView& _return,
                                 const TSessionId& session,
                                 const std::string& link) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
   auto ld = cat.getMetadataForLink(std::to_string(cat.getCurrentDB().dbId) + link);
@@ -1772,25 +1773,25 @@ void MapDHandler::get_tables_impl(std::vector<std::string>& table_names,
 
 void MapDHandler::get_tables(std::vector<std::string>& table_names,
                              const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   get_tables_impl(table_names, session, GET_PHYSICAL_TABLES_AND_VIEWS);
 }
 
 void MapDHandler::get_physical_tables(std::vector<std::string>& table_names,
                                       const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   get_tables_impl(table_names, session, GET_PHYSICAL_TABLES);
 }
 
 void MapDHandler::get_views(std::vector<std::string>& table_names,
                             const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   get_tables_impl(table_names, session, GET_VIEWS);
 }
 
 void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
                                   const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
   const auto tables = cat.getAllTableMetadata();
@@ -1878,7 +1879,7 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
 
 void MapDHandler::get_users(std::vector<std::string>& user_names,
                             const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   std::list<Catalog_Namespace::UserMetadata> user_list;
   const auto session_info = get_session_copy(session);
 
@@ -1898,7 +1899,7 @@ void MapDHandler::get_version(std::string& version) {
 }
 
 void MapDHandler::clear_gpu_memory(const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
   if (!session_info.get_currentUser().isSuper) {
     THROW_MAPD_EXCEPTION("Superuser privilege is required to run clear_gpu_memory");
@@ -1918,7 +1919,7 @@ void MapDHandler::clear_gpu_memory(const TSessionId& session) {
 }
 
 void MapDHandler::clear_cpu_memory(const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
   if (!session_info.get_currentUser().isSuper) {
     THROW_MAPD_EXCEPTION("Superuser privilege is required to run clear_cpu_memory");
@@ -1944,7 +1945,7 @@ TSessionId MapDHandler::getInvalidSessionId() const {
 void MapDHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
                              const TSessionId& session,
                              const std::string& memory_level) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
   std::vector<Data_Namespace::MemoryInfo> internal_memory;
   Data_Namespace::MemoryLevel mem_level;
@@ -1988,7 +1989,7 @@ void MapDHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
 
 void MapDHandler::get_databases(std::vector<TDBInfo>& dbinfos,
                                 const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
   const auto& user = session_info.get_currentUser();
   Catalog_Namespace::DBSummaryList dbs =
@@ -2004,13 +2005,13 @@ void MapDHandler::get_databases(std::vector<TDBInfo>& dbinfos,
 // DEPRECATED(2019-04-01) - use get_dashboards()
 void MapDHandler::get_frontend_views(std::vector<TFrontendView>& view_names,
                                      const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   LOG(ERROR) << "'get_frontend_views' is deprecated, please use 'get_dashboards'.";
 }
 
 void MapDHandler::set_execution_mode(const TSessionId& session,
                                      const TExecuteMode::type mode) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it_unsafe(session);
   if (leaf_aggregator_.leafCount() > 0) {
@@ -2039,7 +2040,7 @@ void check_table_not_sharded(const Catalog& cat, const std::string& table_name) 
 void MapDHandler::load_table_binary(const TSessionId& session,
                                     const std::string& table_name,
                                     const std::vector<TRow>& rows) {
-  LOG_ON_RETURN(session, "table_name", table_name);
+  LOG_SESSION(session, "table_name", table_name);
   check_read_only("load_table_binary");
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
@@ -2135,7 +2136,7 @@ void MapDHandler::prepare_columnar_loader(
 void MapDHandler::load_table_binary_columnar(const TSessionId& session,
                                              const std::string& table_name,
                                              const std::vector<TColumn>& cols) {
-  LOG_ON_RETURN(session, "table_name", table_name);
+  LOG_SESSION(session, "table_name", table_name);
   check_read_only("load_table_binary_columnar");
 
   std::unique_ptr<Importer_NS::Loader> loader;
@@ -2266,7 +2267,7 @@ RecordBatchVector loadArrowStream(const std::string& stream) {
 void MapDHandler::load_table_binary_arrow(const TSessionId& session,
                                           const std::string& table_name,
                                           const std::string& arrow_stream) {
-  LOG_ON_RETURN(session, "table_name", table_name);
+  LOG_SESSION(session, "table_name", table_name);
   check_read_only("load_table_binary_arrow");
 
   RecordBatchVector batches = loadArrowStream(arrow_stream);
@@ -2312,7 +2313,7 @@ void MapDHandler::load_table_binary_arrow(const TSessionId& session,
 void MapDHandler::load_table(const TSessionId& session,
                              const std::string& table_name,
                              const std::vector<TStringRow>& rows) {
-  LOG_ON_RETURN(session, "table_name", table_name);
+  LOG_SESSION(session, "table_name", table_name);
   check_read_only("load_table");
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
@@ -2767,7 +2768,7 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
                                       const TSessionId& session,
                                       const std::string& file_name_in,
                                       const TCopyParams& cp) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   check_read_only("detect_column_types");
   get_session_copy(session);
 
@@ -2953,15 +2954,15 @@ void MapDHandler::render_vega(TRenderResult& _return,
                               const std::string& vega_json,
                               const int compression_level,
                               const std::string& nonce) {
-  LOG_ON_RETURN(session,
-                "widget_id",
-                widget_id,
-                "compression_level",
-                compression_level,
-                "vega_json",
-                vega_json,
-                "nonce",
-                nonce);
+  LOG_SESSION(session,
+              "widget_id",
+              widget_id,
+              "compression_level",
+              compression_level,
+              "vega_json",
+              vega_json,
+              "nonce",
+              nonce);
   if (!render_handler_) {
     THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
   }
@@ -2993,7 +2994,7 @@ static bool is_allowed_on_dashboard(const Catalog_Namespace::SessionInfo& sessio
 void MapDHandler::get_dashboard(TDashboard& dashboard,
                                 const TSessionId& session,
                                 const int32_t dashboard_id) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
   Catalog_Namespace::UserMetadata user_meta;
@@ -3030,7 +3031,7 @@ void MapDHandler::get_dashboard(TDashboard& dashboard,
 
 void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards,
                                  const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
   Catalog_Namespace::UserMetadata user_meta;
@@ -3070,7 +3071,7 @@ int32_t MapDHandler::create_dashboard(const TSessionId& session,
                                       const std::string& dashboard_state,
                                       const std::string& image_hash,
                                       const std::string& dashboard_metadata) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   check_read_only("create_dashboard");
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
@@ -3112,7 +3113,7 @@ void MapDHandler::replace_dashboard(const TSessionId& session,
                                     const std::string& dashboard_state,
                                     const std::string& image_hash,
                                     const std::string& dashboard_metadata) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   check_read_only("replace_dashboard");
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
@@ -3145,7 +3146,7 @@ void MapDHandler::replace_dashboard(const TSessionId& session,
 
 void MapDHandler::delete_dashboard(const TSessionId& session,
                                    const int32_t dashboard_id) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   check_read_only("delete_dashboard");
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
@@ -3199,7 +3200,7 @@ void MapDHandler::share_dashboard(const TSessionId& session,
                                   const std::vector<std::string>& objects,
                                   const TDashboardPermissions& permissions,
                                   const bool grant_role = false) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   check_read_only("share_dashboard");
   std::vector<std::string> valid_groups;
   valid_groups = get_valid_groups(session, dashboard_id, groups);
@@ -3246,7 +3247,7 @@ void MapDHandler::unshare_dashboard(const TSessionId& session,
                                     const std::vector<std::string>& groups,
                                     const std::vector<std::string>& objects,
                                     const TDashboardPermissions& permissions) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   check_read_only("unshare_dashboard");
   std::vector<std::string> valid_groups;
   valid_groups = get_valid_groups(session, dashboard_id, groups);
@@ -3291,7 +3292,7 @@ void MapDHandler::get_dashboard_grantees(
     std::vector<TDashboardGrantees>& dashboard_grantees,
     const TSessionId& session,
     int32_t dashboard_id) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
   Catalog_Namespace::UserMetadata user_meta;
@@ -3336,7 +3337,7 @@ void MapDHandler::create_frontend_view(const TSessionId& session,
                                        const std::string& view_state,
                                        const std::string& image_hash,
                                        const std::string& view_metadata) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   LOG(ERROR) << "'create_frontend_view' is deprecated, please use "
                 "'create_dashboard'.";
 }
@@ -3344,7 +3345,7 @@ void MapDHandler::create_frontend_view(const TSessionId& session,
 // DEPRECATED(2019-04-01) - use delete_dashboard()
 void MapDHandler::delete_frontend_view(const TSessionId& session,
                                        const std::string& view_name) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   LOG(ERROR) << "'delete_frontend_view' is deprecated, please use "
                 "'delete_dashboard'.";
 }
@@ -3353,7 +3354,7 @@ void MapDHandler::create_link(std::string& _return,
                               const TSessionId& session,
                               const std::string& view_state,
                               const std::string& view_metadata) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   // check_read_only("create_link");
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
@@ -3407,7 +3408,7 @@ void MapDHandler::create_table(const TSessionId& session,
                                const TFileType::type file_type,
                                const TCreateParams& create_params) {
   // sql_execute() below also logs session info.
-  LOG_ON_RETURN(session, "table_name", table_name);
+  LOG_SESSION(session, "table_name", table_name);
   check_read_only("create_table");
 
   if (ImportHelpers::is_reserved_name(table_name)) {
@@ -3490,7 +3491,7 @@ void MapDHandler::import_table(const TSessionId& session,
                                const std::string& table_name,
                                const std::string& file_name_in,
                                const TCopyParams& cp) {
-  LOG_ON_RETURN(session, "table_name", table_name);
+  LOG_SESSION(session, "table_name", table_name);
   check_read_only("import_table");
   LOG(INFO) << "import_table " << table_name << " from " << file_name_in;
   const auto session_info = get_session_copy(session);
@@ -3598,7 +3599,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
                                    const TCopyParams& cp,
                                    const TRowDescriptor& row_desc,
                                    const TCreateParams& create_params) {
-  LOG_ON_RETURN(session, "table_name", table_name);
+  LOG_SESSION(session, "table_name", table_name);
   check_read_only("import_table");
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
@@ -4041,7 +4042,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
 void MapDHandler::import_table_status(TImportStatus& _return,
                                       const TSessionId& session,
                                       const std::string& import_id) {
-  LOG_ON_RETURN(session, "import_table_status", import_id);
+  LOG_SESSION(session, "import_table_status", import_id);
   auto is = Importer_NS::Importer::get_import_status(import_id);
   _return.elapsed = is.elapsed.count();
   _return.rows_completed = is.rows_completed;
@@ -4053,7 +4054,7 @@ void MapDHandler::get_first_geo_file_in_archive(std::string& _return,
                                                 const TSessionId& session,
                                                 const std::string& archive_path_in,
                                                 const TCopyParams& copy_params) {
-  LOG_ON_RETURN(session, "get_first_geo_file_in_archive", archive_path_in);
+  LOG_SESSION(session, "get_first_geo_file_in_archive", archive_path_in);
   std::string archive_path(archive_path_in);
 
   if (path_is_relative(archive_path)) {
@@ -4092,7 +4093,7 @@ void MapDHandler::get_all_files_in_archive(std::vector<std::string>& _return,
                                            const TSessionId& session,
                                            const std::string& archive_path_in,
                                            const TCopyParams& copy_params) {
-  LOG_ON_RETURN(session, "get_all_files_in_archive", archive_path_in);
+  LOG_SESSION(session, "get_all_files_in_archive", archive_path_in);
   std::string archive_path(archive_path_in);
 
   if (path_is_relative(archive_path)) {
@@ -4124,7 +4125,7 @@ void MapDHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return
                                          const TSessionId& session,
                                          const std::string& file_name_in,
                                          const TCopyParams& cp) {
-  LOG_ON_RETURN(session, "get_layers_in_geo_file", file_name_in);
+  LOG_SESSION(session, "get_layers_in_geo_file", file_name_in);
   std::string file_name(file_name_in);
 
   Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
@@ -4194,7 +4195,7 @@ void MapDHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return
 }
 
 void MapDHandler::start_heap_profile(const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
 #ifdef HAVE_PROFILER
   if (IsHeapProfilerRunning()) {
@@ -4207,7 +4208,7 @@ void MapDHandler::start_heap_profile(const TSessionId& session) {
 }
 
 void MapDHandler::stop_heap_profile(const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
 #ifdef HAVE_PROFILER
   if (!IsHeapProfilerRunning()) {
@@ -4220,7 +4221,7 @@ void MapDHandler::stop_heap_profile(const TSessionId& session) {
 }
 
 void MapDHandler::get_heap_profile(std::string& profile, const TSessionId& session) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
 #ifdef HAVE_PROFILER
   if (!IsHeapProfilerRunning()) {
@@ -4844,7 +4845,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       if (num_parse_errors > 0) {
         throw std::runtime_error("Syntax error at: " + last_parsed);
       }
-      CHECK_EQ(parse_trees.size(), 1);
+      CHECK_EQ(parse_trees.size(), 1u);
 
       if (pw.is_optimize) {
         const auto optimize_stmt =
@@ -5238,7 +5239,7 @@ std::string MapDHandler::parse_to_ra(
 void MapDHandler::check_table_consistency(TTableMeta& _return,
                                           const TSessionId& session,
                                           const int32_t table_id) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   if (!leaf_handler_) {
     THROW_MAPD_EXCEPTION("Distributed support is disabled.");
   }
@@ -5253,7 +5254,7 @@ void MapDHandler::start_query(TPendingQuery& _return,
                               const TSessionId& session,
                               const std::string& query_ra,
                               const bool just_explain) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   if (!leaf_handler_) {
     THROW_MAPD_EXCEPTION("Distributed support is disabled.");
   }
@@ -5305,7 +5306,7 @@ void MapDHandler::broadcast_serialized_rows(const TSerializedRows& serialized_ro
 
 void MapDHandler::insert_data(const TSessionId& session,
                               const TInsertData& thrift_insert_data) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   CHECK_EQ(thrift_insert_data.column_ids.size(), thrift_insert_data.data.size());
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
@@ -5392,7 +5393,7 @@ void MapDHandler::start_render_query(TPendingRenderQuery& _return,
                                      const int64_t widget_id,
                                      const int16_t node_idx,
                                      const std::string& vega_json) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   if (!render_handler_) {
     THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
   }
@@ -5433,7 +5434,7 @@ void MapDHandler::execute_next_render_step(TRenderStepResult& _return,
 void MapDHandler::checkpoint(const TSessionId& session,
                              const int32_t db_id,
                              const int32_t table_id) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
   cat.getDataMgr().checkpoint(db_id, table_id);
@@ -5444,7 +5445,7 @@ void MapDHandler::set_table_epoch(const TSessionId& session,
                                   const int db_id,
                                   const int table_id,
                                   const int new_epoch) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
   if (!session_info.get_currentUser().isSuper) {
     throw std::runtime_error("Only superuser can set_table_epoch");
@@ -5461,7 +5462,7 @@ void MapDHandler::set_table_epoch(const TSessionId& session,
 void MapDHandler::set_table_epoch_by_name(const TSessionId& session,
                                           const std::string& table_name,
                                           const int new_epoch) {
-  LOG_ON_RETURN(session, "table_name", table_name);
+  LOG_SESSION(session, "table_name", table_name);
   const auto session_info = get_session_copy(session);
   if (!session_info.get_currentUser().isSuper) {
     throw std::runtime_error("Only superuser can set_table_epoch");
@@ -5481,7 +5482,7 @@ void MapDHandler::set_table_epoch_by_name(const TSessionId& session,
 int32_t MapDHandler::get_table_epoch(const TSessionId& session,
                                      const int32_t db_id,
                                      const int32_t table_id) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
 
@@ -5493,7 +5494,7 @@ int32_t MapDHandler::get_table_epoch(const TSessionId& session,
 
 int32_t MapDHandler::get_table_epoch_by_name(const TSessionId& session,
                                              const std::string& table_name) {
-  LOG_ON_RETURN(session, "table_name", table_name);
+  LOG_SESSION(session, "table_name", table_name);
   const auto session_info = get_session_copy(session);
   auto& cat = session_info.getCatalog();
   auto td = cat.getMetadataForTable(
@@ -5510,7 +5511,7 @@ void MapDHandler::set_license_key(TLicenseInfo& _return,
                                   const TSessionId& session,
                                   const std::string& key,
                                   const std::string& nonce) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   check_read_only("set_license_key");
   const auto session_info = get_session_copy(session);
   THROW_MAPD_EXCEPTION(std::string("Licensing not supported."));
@@ -5519,7 +5520,7 @@ void MapDHandler::set_license_key(TLicenseInfo& _return,
 void MapDHandler::get_license_claims(TLicenseInfo& _return,
                                      const TSessionId& session,
                                      const std::string& nonce) {
-  LOG_ON_RETURN(session);
+  LOG_SESSION(session);
   const auto session_info = get_session_copy(session);
   _return.claims.emplace_back("");
 }
@@ -5534,46 +5535,52 @@ void MapDHandler::shutdown() {
   }
 }
 
-void LogOnReturn::set_session(SessionMap::mapped_type& session_ptr) {
-  session_ptr_ = session_ptr;
+std::atomic<int64_t> LogSession::s_match{0};
+
+void LogSession::stdlog(logger::Severity severity, char const* label) {
+  if (logger::g_min_active_severity <= severity) {
+    std::stringstream ss;
+    ss << file_ << ':' << line_ << ' ' << label << ' ' << func_ << ' ' << match_ << ' '
+       << duration<std::chrono::milliseconds>() << ' ';
+    if (session_ptr_) {
+      std::string const& dbname = session_ptr_->getCatalog().getCurrentDB().dbName;
+      if (dbname.find_first_of(" \"") == std::string::npos) {
+        ss << dbname << ' ';
+      } else {
+        ss << std::quoted(dbname, '"', '"') << ' ';
+      }
+      std::string const& username = session_ptr_->get_currentUser().userName;
+      if (username.find_first_of(" \"") == std::string::npos) {
+        ss << username << ' ';
+      } else {
+        ss << std::quoted(username, '"', '"') << ' ';
+      }
+      ss << session_ptr_->get_public_session_id() << ' ';
+    } else {
+      ss << "   ";  // 3 spaces for 3 empty strings
+    }
+    auto const& nv = name_value_pairs_;
+    if (nv.empty()) {
+      ss << ' ';  // 1 space for final empty names/values arrays
+    } else {
+      ss << '{' << std::quoted(*nv.cbegin(), '"', '"');  // names
+      for (auto itr = std::next(nv.cbegin(), 2); itr != nv.cend(); std::advance(itr, 2)) {
+        ss << ',' << std::quoted(*itr, '"', '"');
+      }
+      ss << "} {" << std::quoted(*std::next(nv.cbegin()), '"', '"');  // values
+      for (auto itr = std::next(nv.cbegin(), 2); itr != nv.cend(); std::advance(itr, 2)) {
+        ss << ',' << std::quoted(*std::next(itr), '"', '"');
+      }
+      ss << '}';
+    }
+    BOOST_LOG_SEV(logger::g_logger::get(), severity) << ss.rdbuf();
+  }
 }
 
-LogOnReturn::~LogOnReturn() {
-  std::stringstream ss;
-  ss << "stdlog " << file_.filename().c_str() << ' ' << line_ << ' ' << func_ << ' '
-     << duration<std::chrono::milliseconds>() << ' ';
-  if (session_ptr_) {
-    std::string const& dbname = session_ptr_->getCatalog().getCurrentDB().dbName;
-    if (dbname.find_first_of(" \"") == std::string::npos) {
-      ss << dbname << ' ';
-    } else {
-      ss << std::quoted(dbname, '"', '"') << ' ';
-    }
-    std::string const& username = session_ptr_->get_currentUser().userName;
-    if (username.find_first_of(" \"") == std::string::npos) {
-      ss << username << ' ';
-    } else {
-      ss << std::quoted(username, '"', '"') << ' ';
-    }
-    ss << session_ptr_->get_public_session_id() << ' ';
-  } else {
-    ss << "   ";  // 3 spaces for 3 empty strings
-  }
-  if (name_value_pairs_.empty()) {
-    ss << ' ';  // 1 space for final empty names/values arrays
-  } else {
-    ss << '{';  // names
-    for (auto itr = name_value_pairs_.cbegin(); itr != name_value_pairs_.cend();
-         std::advance(itr, 2)) {
-      ss << (itr == name_value_pairs_.cbegin() ? "" : ",") << std::quoted(*itr, '"', '"');
-    }
-    ss << "} {";  // values
-    for (auto itr = name_value_pairs_.cbegin(); itr != name_value_pairs_.cend();
-         std::advance(itr, 2)) {
-      ss << (itr == name_value_pairs_.cbegin() ? "" : ",")
-         << std::quoted(*std::next(itr), '"', '"');
-    }
-    ss << '}';
-  }
-  LOG(INFO) << ss.rdbuf();
+LogSession::~LogSession() {
+  stdlog(logger::Severity::INFO, "stdlog");
+}
+
+void LogSession::set_session(SessionMap::mapped_type const& session_ptr) {
+  session_ptr_ = session_ptr;
 }

@@ -18,8 +18,8 @@
 #include <chrono>
 #include <thread>
 
-#include <glog/logging.h>
 #include "DynamicWatchdog.h"
+#include "Shared/Logger.h"
 
 static __inline__ uint64_t read_cycle_counter(void) {
 #if (defined(__x86_64__) || defined(__x86_64))

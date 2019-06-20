@@ -25,8 +25,8 @@
 #ifndef QUERYENGINE_JSONACCESSORS_H
 #define QUERYENGINE_JSONACCESSORS_H
 
-#include <glog/logging.h>
 #include <rapidjson/document.h>
+#include "Shared/Logger.h"
 
 inline const rapidjson::Value& field(const rapidjson::Value& obj,
                                      const char field[]) noexcept {

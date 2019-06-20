@@ -1,4 +1,3 @@
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 #include <boost/filesystem/operations.hpp>
 #include <csignal>
@@ -10,6 +9,7 @@
 #include "../Parser/parser.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "Shared/MapDParameters.h"
+#include "TestHelpers.h"
 #include "gen-cpp/CalciteServer.h"
 
 namespace {
@@ -85,8 +85,8 @@ TEST_F(ViewObject, BasicTest) {
 }
 
 int main(int argc, char* argv[]) {
+  TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  google::InitGoogleLogging(argv[0]);
 
   g_session.reset(QueryRunner::get_session(BASE_PATH));
   g_calcite = g_session->getCatalog().getCalciteMgr();

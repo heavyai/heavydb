@@ -17,7 +17,6 @@
 #include <csignal>
 #include <cstdlib>
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #include <boost/algorithm/string.hpp>
@@ -35,6 +34,7 @@
 #include "Shared/MapDParameters.h"
 #include "Shared/UpdelRoll.h"
 #include "Shared/measure.h"
+#include "TestHelpers.h"
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -1081,7 +1081,7 @@ TEST_F(UpdateStorageTest, Half_boolean_deleted_rollback) {
 }  // namespace
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
+  TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
   g_session.reset(QueryRunner::get_session(BASE_PATH));

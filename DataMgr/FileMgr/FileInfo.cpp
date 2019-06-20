@@ -15,7 +15,6 @@
  */
 
 #include "FileInfo.h"
-#include <glog/logging.h>
 #include <iostream>
 #include "../../Shared/File.h"
 #include "FileMgr.h"
@@ -77,7 +76,7 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec,
   for (size_t pageNum = 0; pageNum < numPages; ++pageNum) {
     int headerSize;
 
-#define MAX_INTS_TO_READ 10  // currently use 1+6 ints
+    constexpr size_t MAX_INTS_TO_READ{10};  // currently use 1+6 ints
     int ints[MAX_INTS_TO_READ];
     CHECK_EQ(fseek(f, pageNum * pageSize, SEEK_SET), 0);
     CHECK_EQ(fread(ints, sizeof(int), MAX_INTS_TO_READ, f), MAX_INTS_TO_READ);

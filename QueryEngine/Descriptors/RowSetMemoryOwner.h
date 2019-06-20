@@ -17,8 +17,8 @@
 #pragma once
 
 #include "../StringDictionary/StringDictionaryProxy.h"
+#include "Shared/Logger.h"
 
-#include <glog/logging.h>
 #include <boost/noncopyable.hpp>
 
 #include <list>

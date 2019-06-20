@@ -29,8 +29,6 @@
 #include "BufferCompaction.h"
 #include "TypePunning.h"
 
-#include "../Shared/unreachable.h"
-
 #ifndef __CUDACC__
 
 #include "Descriptors/QueryMemoryDescriptor.h"

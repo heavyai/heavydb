@@ -214,7 +214,7 @@ void SortedOrderFragmenter::sortData(InsertData& insertDataStruct) {
   std::vector<size_t> indexes(insertDataStruct.numRows);
   std::iota(indexes.begin(), indexes.end(), 0);
   const auto dist = std::distance(insertDataStruct.columnIds.begin(), it);
-  CHECK_LT(dist, insertDataStruct.data.size());
+  CHECK_LT(static_cast<size_t>(dist), insertDataStruct.data.size());
   sortIndexes(physical_cd, indexes, insertDataStruct.data[dist]);
   // shuffle rows of all columns
   for (size_t i = 0; i < insertDataStruct.columnIds.size(); ++i) {

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <glog/logging.h>
 #include "CudaMgr.h"
+#include "Shared/Logger.h"
 
 namespace CudaMgr_Namespace {
 

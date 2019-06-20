@@ -18,7 +18,7 @@ set(datamgr_source_files
 
 add_library(DataMgr ${datamgr_source_files})
 
-target_link_libraries(DataMgr CudaMgr Shared ${Boost_THREAD_LIBRARY} ${Glog_LIBRARIES})
+target_link_libraries(DataMgr CudaMgr Shared ${Boost_THREAD_LIBRARY})
 
 option(ENABLE_CRASH_CORRUPTION_TEST "Enable crash using SIGUSR2 during page deletion to faster and affirmative test/repro db corruption" OFF)
 if(ENABLE_CRASH_CORRUPTION_TEST)

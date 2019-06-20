@@ -1,5 +1,5 @@
 set(THRIFT_HANDLER_SOURCES MapDHandler.cpp TokenCompletionHints.cpp)
-set(THRIFT_HANDLER_LIBS mapd_thrift Shared ${Glog_LIBRARIES} ${CMAKE_DL_LIBS})
+set(THRIFT_HANDLER_LIBS mapd_thrift Shared ${CMAKE_DL_LIBS})
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND THRIFT_HANDLER_LIBS rdkafka++ StringDictionary)

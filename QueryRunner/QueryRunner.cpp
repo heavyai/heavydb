@@ -22,6 +22,7 @@
 #include "Parser/parser.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "Shared/ConfigResolve.h"
+#include "Shared/Logger.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/StringTransform.h"
 #include "bcrypt.h"
@@ -32,7 +33,6 @@
 
 #include "DistributedLoader.h"
 
-#include <glog/logging.h>
 #include <boost/filesystem/operations.hpp>
 #include <csignal>
 #include <random>
@@ -117,7 +117,7 @@ void mapd_signal_handler(int signal_number) {
   LOG(ERROR) << "Interrupt signal (" << signal_number << ") received.";
   calcite_shutdown_handler();
   // shut down logging force a flush
-  google::ShutdownGoogleLogging();
+  logger::shutdown();
   // terminate program
   if (signal_number == SIGTERM) {
     std::exit(EXIT_SUCCESS);
@@ -152,7 +152,7 @@ Catalog_Namespace::SessionInfo* get_session(
 
   g_leaf_count = leaf_servers.size();
   register_signal_handler();
-  google::InstallFailureFunction(&calcite_shutdown_handler);
+  logger::set_once_fatal_func(&calcite_shutdown_handler);
 
   g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024);
 

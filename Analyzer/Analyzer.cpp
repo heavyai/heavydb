@@ -29,10 +29,8 @@
 #include "../Shared/sql_type_to_string.h"
 #include "../Shared/sql_window_function_to_string.h"
 #include "../Shared/sqltypes.h"
-#include "../Shared/unreachable.h"
 #include "RangeTableEntry.h"
 
-#include <glog/logging.h>
 #include <algorithm>
 #include <cstring>
 #include <iostream>

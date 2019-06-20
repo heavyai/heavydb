@@ -23,8 +23,6 @@
 
 #include "Execute.h"
 
-#include "Shared/unreachable.h"
-
 std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> condition,
     const std::vector<InputTableInfo>& query_infos,
@@ -199,7 +197,7 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
 
     std::vector<int32_t> num_keys_for_row;
     // TODO(adb): support multi-column overlaps join
-    CHECK_EQ(columns_per_device.size(), 1);
+    CHECK_EQ(columns_per_device.size(), 1u);
     num_keys_for_row.resize(columns_per_device.front().join_columns[0].num_elems);
 
     approximate_distinct_tuples_overlaps(hll_result,
@@ -246,7 +244,7 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
           auto join_columns_gpu =
               transfer_pod_vector_to_gpu(columns_for_device.join_columns, allocator);
 
-          CHECK_GT(columns_for_device.join_buckets.size(), 0);
+          CHECK_GT(columns_for_device.join_buckets.size(), 0u);
           const auto& bucket_sizes_for_dimension =
               columns_for_device.join_buckets[0].bucket_sizes_for_dimension;
           auto bucket_sizes_gpu = allocator.allocateScopedBuffer(
@@ -551,7 +549,7 @@ int OverlapsJoinHashTable::initHashTableOnGpu(
   auto join_columns_gpu = transfer_pod_vector_to_gpu(join_columns, allocator);
   auto hash_buff =
       reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr());
-  CHECK_EQ(join_columns.size(), 1);
+  CHECK_EQ(join_columns.size(), 1u);
   auto& bucket_sizes_for_dimension = join_bucket_info[0].bucket_sizes_for_dimension;
   auto bucket_sizes_gpu =
       transfer_pod_vector_to_gpu(bucket_sizes_for_dimension, allocator);
@@ -698,7 +696,7 @@ void OverlapsJoinHashTable::computeBucketSizes(
     const std::vector<InnerOuter>& inner_outer_pairs,
     const size_t row_count) {
   // No coalesced keys for overlaps joins yet
-  CHECK_EQ(inner_outer_pairs.size(), 1);
+  CHECK_EQ(inner_outer_pairs.size(), 1u);
 
   const auto col = inner_outer_pairs[0].first;
   CHECK(col);

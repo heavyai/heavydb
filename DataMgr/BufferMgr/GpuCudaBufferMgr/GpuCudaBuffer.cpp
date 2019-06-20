@@ -16,8 +16,8 @@
 
 #include "GpuCudaBuffer.h"
 #include "../../../CudaMgr/CudaMgr.h"
+#include "Shared/Logger.h"
 
-#include <glog/logging.h>
 #include <cassert>
 
 namespace Buffer_Namespace {

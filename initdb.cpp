@@ -23,6 +23,7 @@
 #include <string>
 #include "Catalog/Catalog.h"
 #include "Import/Importer.h"
+#include "Shared/Logger.h"
 #include "Shared/mapdpath.h"
 #include "boost/program_options.hpp"
 
@@ -43,8 +44,6 @@ int main(int argc, char* argv[]) {
   bool skip_geo = false;
   namespace po = boost::program_options;
 
-  google::InitGoogleLogging(argv[0]);
-
   po::options_description desc("Options");
   desc.add_options()("help,h", "Print help messages ")(
       "data",
@@ -58,6 +57,9 @@ int main(int argc, char* argv[]) {
                          ->default_value(g_enable_thrift_logs)
                          ->implicit_value(true),
                      "Enable writing messages directly from thrift to stdout/stderr.");
+
+  logger::LogOptions log_options(argv[0]);
+  desc.add(log_options.get_options());
 
   po::positional_options_description positionalOptions;
   positionalOptions.add("data", 1);
@@ -132,6 +134,9 @@ int main(int argc, char* argv[]) {
     std::cerr << "Cannot create mapd_export subdirectory under " << base_path
               << std::endl;
   }
+
+  log_options.set_base_path(base_path);
+  logger::init(log_options);
 
   try {
     MapDParameters mapd_parms;

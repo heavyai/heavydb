@@ -19,13 +19,13 @@
 
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED 1
 
-#include <glog/logging.h>
 #include <boost/stacktrace.hpp>
 #include <cstdlib>
 #include <ostream>
 #include <stdexcept>
 #include <string>
 #include "../Shared/types.h"
+#include "Shared/Logger.h"
 
 class OutOfHostMemory : public std::runtime_error {
  public:

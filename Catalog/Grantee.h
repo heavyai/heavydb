@@ -19,12 +19,12 @@
 
 #include "DBObject.h"
 
-#include <glog/logging.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/make_unique.hpp>
 #include <map>
 #include <string>
 #include <unordered_set>
+#include "Shared/Logger.h"
 
 class User;
 class Role;

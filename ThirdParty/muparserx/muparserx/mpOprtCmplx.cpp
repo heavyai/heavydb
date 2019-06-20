@@ -35,7 +35,7 @@
 #include "mpOprtCmplx.h"
 #include <iomanip>
 #include <limits>
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 MUP_NAMESPACE_START
 

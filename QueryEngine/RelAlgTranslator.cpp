@@ -204,8 +204,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
   std::shared_ptr<Analyzer::Constant> err_rate;
   if (takes_arg) {
     const auto operand = rex->getOperand(0);
-    CHECK_LT(operand, static_cast<ssize_t>(scalar_sources.size()));
-    CHECK_LE(rex->size(), 2);
+    CHECK_LT(operand, scalar_sources.size());
+    CHECK_LE(rex->size(), 2u);
     arg_expr = scalar_sources[operand];
     if (agg_kind == kAPPROX_COUNT_DISTINCT && rex->size() == 2) {
       err_rate = std::dynamic_pointer_cast<Analyzer::Constant>(
@@ -342,7 +342,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
       CHECK_EQ("rowid", cd->columnName);
       col_ti.set_size(8);
     }
-    CHECK_LE(rte_idx, join_types_.size());
+    CHECK_LE(static_cast<size_t>(rte_idx), join_types_.size());
     if (rte_idx > 0 && join_types_[rte_idx - 1] == JoinType::LEFT) {
       col_ti.set_notnull(false);
     }
@@ -354,7 +354,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateInput(
   const size_t col_id = rex_input->getIndex();
   CHECK_LT(col_id, in_metainfo.size());
   auto col_ti = in_metainfo[col_id].get_type_info();
-  CHECK_LE(rte_idx, join_types_.size());
+  CHECK_LE(static_cast<size_t>(rte_idx), join_types_.size());
   if (rte_idx > 0 && join_types_[rte_idx - 1] == JoinType::LEFT) {
     col_ti.set_notnull(false);
   }
@@ -1571,7 +1571,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateWindowFunction(
   }
   auto ti = rex_window_function->getType();
   if (window_function_is_value(rex_window_function->getKind())) {
-    CHECK_GE(args.size(), 1);
+    CHECK_GE(args.size(), 1u);
     ti = args.front()->get_type_info();
   }
   return makeExpr<Analyzer::WindowFunction>(

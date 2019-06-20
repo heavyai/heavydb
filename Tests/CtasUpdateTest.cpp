@@ -16,7 +16,6 @@
 
 #include "../QueryRunner/QueryRunner.h"
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #include <ctime>
@@ -25,6 +24,7 @@
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/Execute.h"
 #include "../Shared/file_delete.h"
+#include "TestHelpers.h"
 
 #include "../Shared/ConfigResolve.h"
 
@@ -1494,10 +1494,10 @@ INSTANTIATE_TEST_CASE_P(
 
 int main(int argc, char* argv[]) {
   int err = 0;
+  TestHelpers::init_logger_stderr_only(argc, argv);
 
   try {
     testing::InitGoogleTest(&argc, argv);
-    google::InitGoogleLogging(argv[0]);
     g_session.reset(QueryRunner::get_session(BASE_PATH));
 
     err = RUN_ALL_TESTS();

@@ -19,10 +19,9 @@
 
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"
+#include "Shared/Logger.h"
 
 #include "DateTimeTranslator.h"
-
-#include <glog/logging.h>
 
 namespace {
 

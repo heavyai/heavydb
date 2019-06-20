@@ -57,7 +57,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
     CHECK(!in_metainfo.empty());
     CHECK_GE(rte_idx, 0);
     column_id = rex_input->getIndex();
-    CHECK_LT(column_id, in_metainfo.size());
+    CHECK_LT(static_cast<size_t>(column_id), in_metainfo.size());
     ti = in_metainfo[column_id].get_type_info();
   }
   CHECK(IS_GEO(ti.get_type()));
@@ -512,12 +512,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     auto geoargs = translateGeoFunctionArg(
         rex_function->getOperand(0), arg_ti, lindex, false, false, true);
     if (arg_ti.get_type() == kPOLYGON) {
-      CHECK_EQ(geoargs.size(), 2);
+      CHECK_EQ(geoargs.size(), 2u);
       geoargs.erase(geoargs.begin(), geoargs.begin() + 1);  // remove the coords
       return makeExpr<Analyzer::FunctionOper>(
           rex_function->getType(), specialized_geofunc, geoargs);
     } else if (arg_ti.get_type() == kMULTIPOLYGON) {
-      CHECK_EQ(geoargs.size(), 3);
+      CHECK_EQ(geoargs.size(), 3u);
       geoargs.erase(geoargs.begin(), geoargs.begin() + 1);  // remove the coords
       geoargs.erase(geoargs.begin() + 1, geoargs.end());    // remove the poly_rings
       return makeExpr<Analyzer::FunctionOper>(
@@ -902,7 +902,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
   std::string specialized_geofunc{rex_function->getName()};
   if (rex_function->getName() == std::string("convert_meters_to_pixel_width") ||
       rex_function->getName() == std::string("convert_meters_to_pixel_height")) {
-    CHECK_EQ(rex_function->size(), 6);
+    CHECK_EQ(rex_function->size(), 6u);
     SQLTypeInfo arg_ti;
     std::vector<std::shared_ptr<Analyzer::Expr>> args;
     args.push_back(translateScalarRex(rex_function->getOperand(0)));
@@ -945,7 +945,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
     return makeExpr<Analyzer::FunctionOper>(
         rex_function->getType(), specialized_geofunc, args);
   } else if (rex_function->getName() == std::string("is_point_in_view")) {
-    CHECK_EQ(rex_function->size(), 5);
+    CHECK_EQ(rex_function->size(), 5u);
     SQLTypeInfo arg_ti;
     std::vector<std::shared_ptr<Analyzer::Expr>> args;
     auto geoargs = translateGeoFunctionArg(
@@ -977,7 +977,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
     return makeExpr<Analyzer::FunctionOper>(
         rex_function->getType(), specialized_geofunc, args);
   } else if (rex_function->getName() == std::string("is_point_size_in_view")) {
-    CHECK_EQ(rex_function->size(), 6);
+    CHECK_EQ(rex_function->size(), 6u);
     SQLTypeInfo arg_ti;
     std::vector<std::shared_ptr<Analyzer::Expr>> args;
     auto geoargs = translateGeoFunctionArg(
@@ -1016,7 +1016,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunctionWithGeoArg(
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoOverlapsOper(
     const RexOperator* rex_operator) const {
-  CHECK_EQ(rex_operator->size(), 2);
+  CHECK_EQ(rex_operator->size(), 2u);
 
   auto translate_input =
       [&](const RexScalar* operand) -> std::shared_ptr<Analyzer::Expr> {
@@ -1025,7 +1025,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoOverlapsOper(
 
     SQLTypeInfo ti;
     const auto exprs = translateGeoColumn(input, ti, true, false, false);
-    CHECK_GT(exprs.size(), 0);
+    CHECK_GT(exprs.size(), 0u);
     if (ti.get_type() == kPOINT) {
       return exprs.front();
     } else {

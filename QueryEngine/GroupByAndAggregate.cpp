@@ -255,7 +255,7 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
   size_t device_count{0};
   if (device_type_ == ExecutorDeviceType::GPU) {
     device_count = executor_->getCatalog()->getDataMgr().getCudaMgr()->getDeviceCount();
-    CHECK_GT(device_count, 0);
+    CHECK_GT(device_count, 0u);
   }
 
   int64_t bucket{col_range_info.bucket};
@@ -1741,7 +1741,8 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
                                     bool const fetch_columns) -> LLVMValueVector {
         const auto target_lvs =
             code_generator.codegen(selected_target_expr, fetch_columns, co);
-        CHECK_EQ(target_ti.get_physical_coord_cols(), target_lvs.size());
+        CHECK_EQ(static_cast<size_t>(target_ti.get_physical_coord_cols()),
+                 target_lvs.size());
 
         const auto i32_ty = get_int_type(32, executor_->cgen_state_->context_);
         const auto i8p_ty =

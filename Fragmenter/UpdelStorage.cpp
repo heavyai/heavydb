@@ -28,9 +28,9 @@
 #include "QueryEngine/TargetValue.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/DateConverters.h"
+#include "Shared/Logger.h"
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/thread_count.h"
-#include "Shared/unreachable.h"
 #include "TargetValueConvertersFactories.h"
 
 namespace Fragmenter_Namespace {

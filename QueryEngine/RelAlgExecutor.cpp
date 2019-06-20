@@ -648,7 +648,7 @@ get_join_source_used_inputs(const RelAlgNode* ra_node,
                             const Catalog_Namespace::Catalog& cat) {
   const auto data_sink_node = get_data_sink(ra_node);
   if (auto join = dynamic_cast<const RelJoin*>(data_sink_node)) {
-    CHECK_EQ(join->inputCount(), 2);
+    CHECK_EQ(join->inputCount(), 2u);
     const auto condition = join->getCondition();
     RexUsedInputsVisitor visitor(cat);
     auto condition_inputs = visitor.visit(condition);
@@ -658,7 +658,7 @@ get_join_source_used_inputs(const RelAlgNode* ra_node,
   }
 
   if (auto left_deep_join = dynamic_cast<const RelLeftDeepInnerJoin*>(data_sink_node)) {
-    CHECK_GE(left_deep_join->inputCount(), 2);
+    CHECK_GE(left_deep_join->inputCount(), 2u);
     const auto condition = left_deep_join->getInnerCondition();
     RexUsedInputsVisitor visitor(cat);
     auto result = visitor.visit(condition);
@@ -674,7 +674,7 @@ get_join_source_used_inputs(const RelAlgNode* ra_node,
     return std::make_pair(result, used_inputs_owned);
   }
 
-  CHECK_EQ(ra_node->inputCount(), 1);
+  CHECK_EQ(ra_node->inputCount(), 1u);
   return std::make_pair(std::unordered_set<const RexInput*>{},
                         std::vector<std::shared_ptr<RexInput>>{});
 }
@@ -2451,7 +2451,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
                               query_features);
   size_t starting_projection_column_idx =
       get_scalar_sources_size(compound) - compound->getTargetColumnCount() - 1;
-  CHECK_GT(starting_projection_column_idx, 0);
+  CHECK_GT(starting_projection_column_idx, 0u);
   const auto scalar_sources =
       translate_scalar_sources_for_update(compound,
                                           translator,
@@ -2873,7 +2873,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
                               query_features);
   size_t starting_projection_column_idx =
       get_scalar_sources_size(project) - project->getTargetColumnCount() - 1;
-  CHECK_GT(starting_projection_column_idx, 0);
+  CHECK_GT(starting_projection_column_idx, 0u);
   auto target_exprs_owned =
       translate_scalar_sources_for_update(project,
                                           translator,

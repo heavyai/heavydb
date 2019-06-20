@@ -24,7 +24,7 @@
 #include "QueryEngine/TargetMetaInfo.h"
 #include "gen-cpp/MapD.h"
 
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 namespace Catalog_Namespace {
 class SessionInfo;

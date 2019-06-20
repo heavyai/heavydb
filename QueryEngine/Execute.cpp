@@ -87,6 +87,8 @@ size_t g_constrained_by_in_threshold{10};
 size_t g_big_group_threshold{20000};
 bool g_enable_window_functions{true};
 
+int const Executor::max_gpu_count;
+
 Executor::Executor(const int db_id,
                    const size_t block_size_x,
                    const size_t grid_size_x,

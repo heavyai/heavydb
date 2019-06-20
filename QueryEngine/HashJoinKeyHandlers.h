@@ -23,10 +23,10 @@
 #ifdef __CUDACC__
 #include "DecodersImpl.h"
 #else
-#include <glog/logging.h>
 #include "../StringDictionary/StringDictionary.h"
 #include "../StringDictionary/StringDictionaryProxy.h"
 #include "RuntimeFunctions.h"
+#include "Shared/Logger.h"
 #endif
 
 #include <cmath>

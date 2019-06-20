@@ -30,6 +30,7 @@
 
 #include "MapDRelease.h"
 
+#include "Shared/Logger.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/file_delete.h"
 #include "Shared/mapd_shared_ptr.h"
@@ -87,7 +88,7 @@ void mapd_signal_handler(int signal_number) {
   LOG(INFO) << "Interrupt signal (" << signal_number << ") received.\n";
   shutdown_handler();
   // shut down logging force a flush
-  google::ShutdownGoogleLogging();
+  logger::shutdown();
   // terminate program
   if (signal_number == SIGTERM) {
     std::exit(EXIT_SUCCESS);
@@ -191,11 +192,10 @@ namespace po = boost::program_options;
 
 class MapDProgramOptions {
  public:
-  MapDProgramOptions() {
+  MapDProgramOptions(char const* argv0) : log_options_(argv0) {
     fillOptions();
     fillAdvancedOptions();
   }
-
   int http_port = 6278;
   size_t reserved_gpu_mem = 1 << 27;
   std::string base_path;
@@ -249,16 +249,20 @@ class MapDProgramOptions {
  private:
   void fillOptions();
   void fillAdvancedOptions();
+  [[deprecated(
+      "Glog was replaced by boost.log. See source comments for more info.")]] void
+  temporarily_support_deprecated_log_options_201904();
 
   po::options_description help_desc;
   po::options_description developer_desc;
+  logger::LogOptions log_options_;
   po::variables_map vm;
 
  public:
   std::vector<LeafHostInfo> db_leaves;
   std::vector<LeafHostInfo> string_leaves;
 
-  bool parse_command_line(int argc, char** argv, int& return_code);
+  boost::optional<int> parse_command_line(int argc, char const* const* argv);
 };
 
 void MapDProgramOptions::fillOptions() {
@@ -375,11 +379,6 @@ void MapDProgramOptions::fillOptions() {
                           "Upperbound on the number of rows that should pass the filter "
                           "if the selectivity is less than "
                           "the high fraction threshold.");
-  help_desc.add_options()(
-      "flush-log",
-      po::value<bool>(&flush_log)->default_value(flush_log)->implicit_value(true),
-      "Immediately flush logs to disk. Set to false if this is a performance "
-      "bottleneck.");
   help_desc.add_options()("from-table-reordering",
                           po::value<bool>(&g_from_table_reordering)
                               ->default_value(g_from_table_reordering)
@@ -466,6 +465,13 @@ void MapDProgramOptions::fillOptions() {
                               ->implicit_value(true),
                           "Write additional debug log messages to server logs.");
   help_desc.add_options()("version,v", "Print Version Number.");
+
+  help_desc.add_options()(
+      "flush-log",
+      po::value<bool>(&flush_log)->default_value(flush_log)->implicit_value(true),
+      R"(DEPRECATED - Immediately flush logs to disk. Set to false if this is a performance bottleneck.)"
+      " Replaced by log-auto-flush.");
+  help_desc.add(log_options_.get_options());
 }
 
 void MapDProgramOptions::fillAdvancedOptions() {
@@ -564,25 +570,21 @@ std::stringstream sanitize_config_file(std::ifstream& in) {
   return ss;
 }
 
-}  // namespace
-
-bool trim_and_check_file_exists(std::string& filename,
-                                const std::string desc,
-                                int& return_code) {
+bool trim_and_check_file_exists(std::string& filename, const std::string desc) {
   if (!filename.empty()) {
     boost::algorithm::trim_if(filename, boost::is_any_of("\"'"));
     if (!boost::filesystem::exists(filename)) {
       LOG(ERROR) << desc << " " << filename << " does not exist.";
-      return_code = 1;
       return false;
     }
   }
   return true;
 }
 
-bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_code) {
-  return_code = 0;
+}  // namespace
 
+boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
+                                                            char const* const* argv) {
   po::positional_options_description positional_options;
   positional_options.add("data", 1);
 
@@ -607,17 +609,14 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
       settings_file.close();
     }
 
-    if (!trim_and_check_file_exists(
-            mapd_parameters.ssl_cert_file, "ssl cert file", return_code)) {
-      return false;
+    if (!trim_and_check_file_exists(mapd_parameters.ssl_cert_file, "ssl cert file")) {
+      return 1;
     }
-    if (!trim_and_check_file_exists(
-            mapd_parameters.ssl_trust_store, "ssl trust store", return_code)) {
-      return false;
+    if (!trim_and_check_file_exists(mapd_parameters.ssl_trust_store, "ssl trust store")) {
+      return 1;
     }
-    if (!trim_and_check_file_exists(
-            mapd_parameters.ssl_key_file, "ssl key file", return_code)) {
-      return false;
+    if (!trim_and_check_file_exists(mapd_parameters.ssl_key_file, "ssl key file")) {
+      return 1;
     }
 
     if (vm.count("help")) {
@@ -626,8 +625,7 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
                 << std::endl
                 << std::endl;
       std::cout << help_desc << std::endl;
-      return_code = 0;
-      return false;
+      return 0;
     }
     if (vm.count("dev-options")) {
       std::cout << "Usage: omnisci_server <data directory path> [-p <port number>] "
@@ -635,8 +633,7 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
                 << std::endl
                 << std::endl;
       std::cout << developer_desc << std::endl;
-      return_code = 0;
-      return false;
+      return 0;
     }
     if (vm.count("version")) {
       std::cout << "OmniSci Version: " << MAPD_RELEASE << std::endl;
@@ -648,14 +645,12 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
     g_dynamic_watchdog_time_limit = dynamic_watchdog_time_limit;
   } catch (po::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
-    return_code = 1;
-    return false;
+    return 1;
   }
 
   if (g_hll_precision_bits < 1 || g_hll_precision_bits > 16) {
     std::cerr << "hll-precision-bits must be between 1 and 16." << std::endl;
-    return_code = 1;
-    return false;
+    return 1;
   }
 
   boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
@@ -663,8 +658,7 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
   if (!boost::filesystem::exists(data_path)) {
     std::cerr << "OmniSci data directory does not exist at '" << base_path
               << "'. Run initdb " << base_path << std::endl;
-    return_code = 1;
-    return false;
+    return 1;
   }
 
   const auto lock_file = boost::filesystem::path(base_path) / "omnisci_server_pid.lck";
@@ -674,16 +668,14 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
     auto err = std::string("Failed to open PID file ") + std::string(lock_file.c_str()) +
                std::string(". ") + strerror(errno) + ".";
     std::cerr << err << std::endl;
-    return_code = 1;
-    return false;
+    return 1;
   }
   if (lockf(pid_fd, F_TLOCK, 0) == -1) {
     auto err = std::string("Another OmniSci Server is using data directory ") +
                base_path + std::string(".");
     std::cerr << err << std::endl;
     close(pid_fd);
-    return_code = 1;
-    return false;
+    return 1;
   }
   if (ftruncate(pid_fd, 0) == -1) {
     auto err = std::string("Failed to truncate PID file ") +
@@ -691,35 +683,27 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
                std::string(".");
     std::cerr << err << std::endl;
     close(pid_fd);
-    return_code = 1;
-    return false;
+    return 1;
   }
   if (write(pid_fd, pid.c_str(), pid.length()) == -1) {
     auto err = std::string("Failed to write PID file ") + std::string(lock_file.c_str()) +
                ". " + strerror(errno) + ".";
     std::cerr << err << std::endl;
     close(pid_fd);
-    return_code = 1;
-    return false;
+    return 1;
   }
 
-  const auto log_path = boost::filesystem::path(base_path) / "mapd_log";
-  (void)boost::filesystem::create_directory(log_path);
-  FLAGS_log_dir = log_path.c_str();
-  if (flush_log) {
-    FLAGS_logbuflevel = -1;
+  temporarily_support_deprecated_log_options_201904();
+  if (verbose_logging && logger::Severity::DEBUG1 < log_options_.severity_) {
+    log_options_.severity_ = logger::Severity::DEBUG1;
   }
-  if (verbose_logging) {
-    FLAGS_v = 1;
-  }
-  // Initialize Google's logging library.
-  google::InitGoogleLogging(argv[0]);
+  log_options_.set_base_path(base_path);
+  logger::init(log_options_);
 
   boost::algorithm::trim_if(db_query_file, boost::is_any_of("\"'"));
   if (db_query_file.length() > 0 && !boost::filesystem::exists(db_query_file)) {
     LOG(ERROR) << "File containing DB queries " << db_query_file << " does not exist.";
-    return_code = 1;
-    return false;
+    return 1;
   }
   const auto db_file =
       boost::filesystem::path(base_path) / "mapd_catalogs" / OMNISCI_SYSTEM_CATALOG;
@@ -729,8 +713,7 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
       if (!boost::filesystem::exists(db_file)) {
         LOG(ERROR) << "OmniSci system catalog " << OMNISCI_SYSTEM_CATALOG
                    << " does not exist.";
-        return_code = 1;
-        return false;
+        return 1;
       }
     }
   }
@@ -761,8 +744,7 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
 
     if (!boost::filesystem::exists(udf_file_name)) {
       LOG(ERROR) << "User defined function file " << udf_file_name << " does not exist.";
-      return_code = 1;
-      return false;
+      return 1;
     }
 
     LOG(INFO) << "User provided extension functions loaded from " << udf_file_name;
@@ -777,22 +759,19 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
     LOG(INFO) << " HA group id " << mapd_parameters.ha_group_id;
     if (mapd_parameters.ha_unique_server_id.empty()) {
       LOG(ERROR) << "Starting server in HA mode --ha-unique-server-id must be set ";
-      return_code = 5;
-      return false;
+      return 5;
     } else {
       LOG(INFO) << " HA unique server id " << mapd_parameters.ha_unique_server_id;
     }
     if (mapd_parameters.ha_brokers.empty()) {
       LOG(ERROR) << "Starting server in HA mode --ha-brokers must be set ";
-      return_code = 6;
-      return false;
+      return 6;
     } else {
       LOG(INFO) << " HA brokers " << mapd_parameters.ha_brokers;
     }
     if (mapd_parameters.ha_shared_data.empty()) {
       LOG(ERROR) << "Starting server in HA mode --ha-shared-data must be set ";
-      return_code = 7;
-      return false;
+      return 7;
     } else {
       LOG(INFO) << " HA shared data is " << mapd_parameters.ha_shared_data;
     }
@@ -816,20 +795,31 @@ bool MapDProgramOptions::parse_command_line(int argc, char** argv, int& return_c
   boost::algorithm::trim_if(authMetadata.restToken, boost::is_any_of("\"'"));
   boost::algorithm::trim_if(authMetadata.restUrl, boost::is_any_of("\"'"));
 
-  return true;
+  return boost::none;
+}
+
+// Deprecation plan.
+// Once users have updated their options to not use flush_log:
+//  - Delete this function.
+//  - Delete MapDProgramOptions::flush_log and all references to it.
+//    (Replaced by LogOptions::auto_flush_.)
+void MapDProgramOptions::temporarily_support_deprecated_log_options_201904() {
+  if (!flush_log) {
+    log_options_.auto_flush_ = false;
+  }
 }
 
 int main(int argc, char** argv) {
-  MapDProgramOptions prog_config_opts;
-  int return_code = 0;
+  MapDProgramOptions prog_config_opts(argv[0]);
 
-  if (!prog_config_opts.parse_command_line(argc, argv, return_code)) {
-    return return_code;
-  };
+  if (auto return_code = prog_config_opts.parse_command_line(argc, argv)) {
+    return *return_code;
+  }
+
   // rudimetary signal handling to try to guarantee the logging gets flushed to
   // files on shutdown
   register_signal_handler();
-  google::InstallFailureFunction(&shutdown_handler);
+  logger::set_once_fatal_func(&shutdown_handler);
 
   // start background thread to clean up _DELETE_ME files
   std::atomic<bool> running{true};

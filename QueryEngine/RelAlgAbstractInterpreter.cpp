@@ -23,7 +23,6 @@
 #include "RelLeftDeepInnerJoin.h"
 #include "RexVisitor.h"
 
-#include <glog/logging.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 

@@ -21,7 +21,6 @@
  *
  */
 #include "File.h"
-#include <glog/logging.h>
 #include <unistd.h>
 #include <boost/filesystem.hpp>
 #include <cstdio>
@@ -29,6 +28,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include "Logger.h"
 
 namespace File_Namespace {
 

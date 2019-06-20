@@ -25,9 +25,9 @@
 #ifndef QUERYENGINE_TARGETVALUE_H
 #define QUERYENGINE_TARGETVALUE_H
 
-#include <glog/logging.h>
 #include <boost/optional.hpp>
 #include <boost/variant.hpp>
+#include "Shared/Logger.h"
 
 #include <Shared/sqltypes.h>
 

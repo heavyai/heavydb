@@ -218,7 +218,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(
   std::string literal_name = "literal_" + std::to_string(lit_off);
 
   if (type_info.is_string() && enc_type != kENCODING_DICT) {
-    CHECK_EQ(literal_loads.size(), 3);
+    CHECK_EQ(literal_loads.size(), 3u);
 
     llvm::Value* var_start = literal_loads[0];
     llvm::Value* var_start_address = literal_loads[1];
@@ -249,7 +249,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(
 
   if (type_info.is_array() &&
       (enc_type == kENCODING_NONE || enc_type == kENCODING_GEOINT)) {
-    CHECK_EQ(literal_loads.size(), 2);
+    CHECK_EQ(literal_loads.size(), 2u);
 
     llvm::Value* var_start_address = literal_loads[0];
     llvm::Value* var_length = literal_loads[1];
@@ -271,7 +271,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenHoistedConstantsPlaceholders(
     return {placeholder0, placeholder1};
   }
 
-  CHECK_EQ(literal_loads.size(), 1);
+  CHECK_EQ(literal_loads.size(), 1u);
   llvm::Value* to_return_lv = literal_loads[0];
 
   auto placeholder0 = cgen_state_->ir_builder_.CreateLoad(

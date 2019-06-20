@@ -26,12 +26,12 @@
 #include <clang/Parse/ParseAST.h>
 #include <clang/Tooling/CommonOptionsParser.h>
 #include <clang/Tooling/Tooling.h>
-#include <glog/logging.h>
 #include <llvm/Support/Program.h>
 #include <llvm/Support/raw_ostream.h>
 #include <boost/process/search_path.hpp>
 #include <memory>
 #include "Execute.h"
+#include "Shared/Logger.h"
 
 using namespace clang;
 using namespace clang::tooling;

@@ -22,9 +22,9 @@
 #include <cstdint>
 #include <ctime>
 #include <map>
+#include <string>
 
 #include "../Shared/sqldefs.h"
-#include "../Shared/unreachable.h"
 
 namespace {
 
@@ -56,7 +56,7 @@ constexpr inline int64_t get_timestamp_precision_scale(const int32_t dimen) {
     case 9:
       return kNanoSecsPerSec;
     default:
-      UNREACHABLE();
+      throw std::runtime_error("Unknown dimen = " + std::to_string(dimen));
   }
   return -1;
 }
@@ -70,7 +70,7 @@ constexpr inline int64_t get_dateadd_timestamp_precision_scale(const DateaddFiel
     case daNANOSECOND:
       return kNanoSecsPerSec;
     default:
-      UNREACHABLE();
+      throw std::runtime_error("Unknown field = " + std::to_string(field));
   }
   return -1;
 }
@@ -84,7 +84,7 @@ constexpr inline int64_t get_extract_timestamp_precision_scale(const ExtractFiel
     case kNANOSECOND:
       return kNanoSecsPerSec;
     default:
-      UNREACHABLE();
+      throw std::runtime_error("Unknown field = " + std::to_string(field));
   }
   return -1;
 }
@@ -114,7 +114,7 @@ const inline std::pair<SQLOps, int64_t> get_dateadd_high_precision_adjusted_scal
         case 3:
           return {kDIVIDE, kMicroSecsPerSec};
         default:
-          UNREACHABLE();
+          throw std::runtime_error("Unknown dimen = " + std::to_string(dimen));
       }
     case daMICROSECOND:
       switch (dimen) {
@@ -125,7 +125,7 @@ const inline std::pair<SQLOps, int64_t> get_dateadd_high_precision_adjusted_scal
         case 3:
           return {kDIVIDE, kMilliSecsPerSec};
         default:
-          UNREACHABLE();
+          throw std::runtime_error("Unknown dimen = " + std::to_string(dimen));
       }
     case daMILLISECOND:
       switch (dimen) {
@@ -136,10 +136,10 @@ const inline std::pair<SQLOps, int64_t> get_dateadd_high_precision_adjusted_scal
         case 3:
           return {};
         default:
-          UNREACHABLE();
+          throw std::runtime_error("Unknown dimen = " + std::to_string(dimen));
       }
     default:
-      UNREACHABLE();
+      throw std::runtime_error("Unknown field = " + std::to_string(field));
   }
   return {};
 }

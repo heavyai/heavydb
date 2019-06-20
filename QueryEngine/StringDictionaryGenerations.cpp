@@ -16,8 +16,6 @@
 
 #include "StringDictionaryGenerations.h"
 
-#include <glog/logging.h>
-
 void StringDictionaryGenerations::setGeneration(const uint32_t id,
                                                 const size_t generation) {
   id_to_generation_.emplace(id, generation);

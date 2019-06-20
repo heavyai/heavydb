@@ -21,7 +21,6 @@
  *
  **/
 
-#include <glog/logging.h>
 #include <rapidjson/document.h>
 #include <termios.h>
 #include <boost/algorithm/string.hpp>
@@ -49,6 +48,7 @@
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "MapDRelease.h"
 #include "MapDServer.h"
+#include "Shared/Logger.h"
 #include "Shared/StringTransform.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/ThriftTypesConvert.h"

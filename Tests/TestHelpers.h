@@ -18,11 +18,13 @@
 #define TEST_HELPERS_H_
 
 #include "../QueryEngine/TargetValue.h"
+#include "Shared/Logger.h"
 
 #include "LeafHostInfo.h"
 
 #include <gtest/gtest.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/program_options.hpp>
 #include <boost/variant.hpp>
 
 namespace TestHelpers {
@@ -187,6 +189,13 @@ std::vector<LeafHostInfo> to_leaf_host_info(std::vector<std::string>& server_inf
   }
 
   return host_infos;
+}
+
+void init_logger_stderr_only(int argc, char const* const* argv) {
+  logger::LogOptions log_options(argv[0]);
+  log_options.max_files_ = 0;  // stderr only by default
+  log_options.parse_command_line(argc, argv);
+  logger::init(log_options);
 }
 
 }  // namespace TestHelpers

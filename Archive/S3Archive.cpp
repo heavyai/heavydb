@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 #include "S3Archive.h"
-#include <glog/logging.h>
 #include <atomic>
 #include <boost/filesystem.hpp>
+#include "Shared/Logger.h"
 
 #include <aws/core/Aws.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>

@@ -15,8 +15,8 @@
  */
 
 #include "QueryTemplateGenerator.h"
+#include "Shared/Logger.h"
 
-#include <glog/logging.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Verifier.h>

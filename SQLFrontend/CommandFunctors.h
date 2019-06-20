@@ -25,17 +25,6 @@
 
 #include "Shared/base64.h"
 
-// NOTE:  These alternative checks are required because of changes to glog
-template <typename T1>
-inline auto NESTED_CHECK(T1&& t1) {
-  CHECK(std::forward<T1>(t1));
-}
-
-template <typename T1, typename T2>
-inline auto NESTED_CHECK_EQ(T1&& t1, T2&& t2) {
-  CHECK_EQ(std::forward<T1>(t1), std::forward<T2>(t2));
-}
-
 template <typename CONTEXT_OP_POLICY>
 class ContextOperations {
  public:
@@ -314,11 +303,11 @@ StandardCommand(ListColumns, {
     std::vector<std::string> keys_with_spec;
     rapidjson::Document document;
     document.Parse(key_metainfo.c_str());
-    NESTED_CHECK(!document.HasParseError());
-    NESTED_CHECK(document.IsArray());
+    CHECK(!document.HasParseError());
+    CHECK(document.IsArray());
     for (auto it = document.Begin(); it != document.End(); ++it) {
       const auto& key_with_spec_json = *it;
-      NESTED_CHECK(key_with_spec_json.IsObject());
+      CHECK(key_with_spec_json.IsObject());
       const std::string type = key_with_spec_json["type"].GetString();
       const std::string name = key_with_spec_json["name"].GetString();
       auto key_with_spec = type + " (" + name + ")";
@@ -329,7 +318,7 @@ StandardCommand(ListColumns, {
             key_with_spec_json["foreign_column"].GetString();
         key_with_spec += foreign_table + "(" + foreign_column + ")";
       } else {
-        NESTED_CHECK(type == "SHARD KEY");
+        CHECK(type == "SHARD KEY");
       }
       keys_with_spec.push_back(key_with_spec);
     }
@@ -558,19 +547,18 @@ StandardCommand(GetOptimizedSchema, {
   decltype(p[1])& table_name(p[1]);
 
   auto get_row_count = [](const TQueryResult& query_result) -> size_t {
-    NESTED_CHECK(!query_result.row_set.row_desc.empty());
+    CHECK(!query_result.row_set.row_desc.empty());
     if (query_result.row_set.columns.empty()) {
       return 0;
     }
-    NESTED_CHECK_EQ(query_result.row_set.columns.size(),
-                    query_result.row_set.row_desc.size());
+    CHECK_EQ(query_result.row_set.columns.size(), query_result.row_set.row_desc.size());
     return query_result.row_set.columns.front().nulls.size();
   };
 
   // runs a simple single integer value query and returns that single int value returned
   auto run_query = [get_row_count](ContextType& context, std::string query) -> int {
     thrift_op<kSQL>(context, query.c_str());
-    NESTED_CHECK(get_row_count(context.query_return));
+    CHECK(get_row_count(context.query_return));
     // std::cerr << "return value is " <<
     // context.query_return.row_set.columns[0].data.int_col[0];
     return context.query_return.row_set.columns[0].data.int_col[0];

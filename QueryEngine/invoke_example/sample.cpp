@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <glog/logging.h>
 #include <cassert>
 #include <chrono>
 #include <cstdint>
 #include <cstring>
 #include <fstream>
 #include <iostream>
+#include "Shared/Logger.h"
 #include "cuda.h"
 
 template <typename TimeT = std::chrono::milliseconds>

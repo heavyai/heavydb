@@ -27,8 +27,8 @@
 #include "../QueryEngine/ResultSet.h"
 #include "../QueryEngine/RuntimeFunctions.h"
 #include "../StringDictionary/StringDictionary.h"
+#include "TestHelpers.h"
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -3314,7 +3314,7 @@ TEST(ReduceRandomGroups, BaselineHashColumnar_Large_NullVal_0075) {
 }
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
+  TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
   int err{0};

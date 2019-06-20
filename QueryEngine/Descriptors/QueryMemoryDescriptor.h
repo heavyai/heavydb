@@ -30,8 +30,8 @@
 #include "ColSlotContext.h"
 #include "Types.h"
 
-#include <glog/logging.h>
 #include <boost/optional.hpp>
+#include "Shared/Logger.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -43,7 +43,6 @@
 
 #include <Shared/SqlTypesLayout.h>
 #include <Shared/TargetInfo.h>
-#include <Shared/unreachable.h>
 
 extern bool g_cluster;
 

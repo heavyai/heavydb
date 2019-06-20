@@ -18,7 +18,7 @@
 #include "../Shared/funcannotations.h"
 
 #ifndef __CUDACC__
-#include <glog/logging.h>
+#include <cstdlib>  // abort()
 #endif
 
 extern "C" NEVER_INLINE DEVICE int32_t extract_hour(const int64_t lcltime) {

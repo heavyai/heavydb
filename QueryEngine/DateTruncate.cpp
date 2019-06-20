@@ -15,11 +15,10 @@
  */
 
 #include "DateTruncate.h"
-#include "../Shared/unreachable.h"
 #include "ExtractFromTime.h"
 
 #ifndef __CUDACC__
-#include <glog/logging.h>
+#include <cstdlib>  // abort()
 #endif
 
 #include <ctime>

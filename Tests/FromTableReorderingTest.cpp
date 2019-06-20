@@ -30,7 +30,6 @@
 #include "../SqliteConnector/SqliteConnector.h"
 #include "DistributedLoader.h"
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 TEST(Ordering, Basic) {
@@ -365,7 +364,7 @@ TEST(Ordering, Triple) {
 }
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
+  TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
   int err{0};

@@ -104,6 +104,7 @@ class GlobalFileMgr : public AbstractBufferMgr {  // implements
   // Buffer API
   AbstractBuffer* alloc(const size_t numBytes) override {
     LOG(FATAL) << "Operation not supported";
+    return nullptr;  // satisfy return-type warning
   }
 
   void free(AbstractBuffer* buffer) override { LOG(FATAL) << "Operation not supported"; }

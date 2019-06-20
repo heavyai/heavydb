@@ -15,7 +15,6 @@
  */
 
 #include "CpuBufferMgr.h"
-#include <glog/logging.h>
 #include "../../../CudaMgr/CudaMgr.h"
 #include "CpuBuffer.h"
 

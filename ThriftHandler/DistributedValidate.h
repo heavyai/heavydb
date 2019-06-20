@@ -17,8 +17,8 @@
 #pragma once
 
 #include <Shared/measure.h>
-#include <glog/logging.h>
 #include "Catalog/Catalog.h"
+#include "Shared/Logger.h"
 
 #include "LeafAggregator.h"
 #include "MapDServer.h"

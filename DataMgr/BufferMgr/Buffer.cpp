@@ -23,12 +23,12 @@
 //
 //  Copyright (c) 2014 MapD Technologies, Inc. All rights reserved.
 //
-#include <glog/logging.h>
 #include <cassert>
 #include <stdexcept>
 
 #include "Buffer.h"
 #include "BufferMgr.h"
+#include "Shared/Logger.h"
 
 namespace Buffer_Namespace {
 

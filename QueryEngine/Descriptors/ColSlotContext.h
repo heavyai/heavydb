@@ -24,7 +24,7 @@
 
 #pragma once
 
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 #include <algorithm>
 #include <string>

@@ -21,7 +21,6 @@
  */
 
 #include <gdal.h>
-#include <glog/logging.h>
 #include <ogrsf_frmts.h>
 #include <unistd.h>
 #include <boost/algorithm/string.hpp>
@@ -34,7 +33,6 @@
 #include <fstream>
 #include <future>
 #include <iomanip>
-#include <iostream>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -58,11 +56,9 @@
 #include "../Shared/scope.h"
 #include "../Shared/shard_key.h"
 #include "../Shared/thread_count.h"
-#include "../Shared/unreachable.h"
+#include "Shared/Logger.h"
 #include "Shared/SqlTypesLayout.h"
 
-#include <iostream>
-#include <vector>
 #include "Importer.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Utils/ChunkAccessorTable.h"
@@ -74,8 +70,6 @@
 #include "../Archive/PosixFileArchive.h"
 #include "../Archive/S3Archive.h"
 #include "ArrowImporter.h"
-
-using std::ostream;
 
 inline auto get_filesize(const std::string& file_path) {
   boost::filesystem::path boost_file_path{file_path};
@@ -115,6 +109,20 @@ using OGRSpatialReferenceUqPtr =
     std::unique_ptr<OGRSpatialReference, OGRSpatialReferenceDeleter>;
 
 }  // namespace
+
+// For logging std::vector<std::string> row.
+namespace boost {
+namespace log {
+formatting_ostream& operator<<(formatting_ostream& out, std::vector<std::string>& row) {
+  out << '[';
+  for (size_t i = 0; i < row.size(); ++i) {
+    out << (i ? ", " : "") << row[i];
+  }
+  out << ']';
+  return out;
+}
+}  // namespace log
+}  // namespace boost
 
 namespace Importer_NS {
 
@@ -1465,20 +1473,6 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     default:
       CHECK(false) << "TypedImportBuffer::add_value() does not support type " << type;
   }
-}
-
-template <typename T>
-ostream& operator<<(ostream& out, const std::vector<T>& v) {
-  out << "[";
-  size_t last = v.size() - 1;
-  for (size_t i = 0; i < v.size(); ++i) {
-    out << v[i];
-    if (i != last) {
-      out << ", ";
-    }
-  }
-  out << "]";
-  return out;
 }
 
 bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
@@ -4522,7 +4516,7 @@ ImportStatus Importer::importGDAL(
 #endif
 
   // make an import buffer for each thread
-  CHECK_EQ(import_buffers_vec.size(), 0);
+  CHECK_EQ(import_buffers_vec.size(), 0u);
   import_buffers_vec.resize(max_threads);
   for (size_t i = 0; i < max_threads; i++) {
     for (const auto cd : loader->get_column_descs()) {

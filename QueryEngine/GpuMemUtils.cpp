@@ -18,12 +18,11 @@
 #include "Allocators/CudaAllocator.h"
 #include "Allocators/ThrustAllocator.h"
 #include "GpuInitGroups.h"
+#include "Shared/Logger.h"
 #include "StreamingTopN.h"
 
 #include "../CudaMgr/CudaMgr.h"
 #include "GroupByAndAggregate.h"
-
-#include <glog/logging.h>
 
 void copy_to_gpu(Data_Namespace::DataMgr* data_mgr,
                  CUdeviceptr dst,

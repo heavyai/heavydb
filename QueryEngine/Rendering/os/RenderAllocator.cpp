@@ -15,8 +15,8 @@
  */
 
 #include "../RenderAllocator.h"
-#include <glog/logging.h>
 #include "../../GpuInitGroups.h"
+#include "Shared/Logger.h"
 
 RenderAllocator::RenderAllocator(int8_t* preallocated_ptr,
                                  const size_t preallocated_size,

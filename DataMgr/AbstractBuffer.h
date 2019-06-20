@@ -22,11 +22,11 @@
 #ifndef DATAMGR_MEMORY_ABSTRACTBUFFER_H
 #define DATAMGR_MEMORY_ABSTRACTBUFFER_H
 
-#include <glog/logging.h>
-#include "../Shared/sqltypes.h"
-#include "../Shared/types.h"
 #include "Encoder.h"
 #include "MemoryLevel.h"
+#include "Shared/Logger.h"
+#include "Shared/sqltypes.h"
+#include "Shared/types.h"
 
 #ifdef BUFFER_MUTEX
 #include <boost/thread/locks.hpp>

@@ -20,10 +20,10 @@
 #include "GpuInitGroups.h"
 #include "GpuMemUtils.h"
 #include "ResultSet.h"
+#include "Shared/Logger.h"
 #include "StreamingTopN.h"
 
 #include <Shared/checked_alloc.h>
-#include <glog/logging.h>
 
 namespace {
 
@@ -372,7 +372,7 @@ void QueryMemoryInitializer::initColumnarGroups(
   int32_t init_val_idx = 0;
   for (int32_t i = 0; i < agg_col_count; ++i) {
     if (query_mem_desc.getPaddedSlotWidthBytes(i) > 0) {
-      CHECK_LT(init_val_idx, init_vals.size());
+      CHECK_LT(static_cast<size_t>(init_val_idx), init_vals.size());
       switch (query_mem_desc.getPaddedSlotWidthBytes(i)) {
         case 1:
           buffer_ptr = initColumnarBuffer<int8_t>(
@@ -500,7 +500,7 @@ std::vector<ssize_t> QueryMemoryInitializer::allocateCountDistinctBuffers(
       CHECK(!agg_info.sql_type.is_varlen());
 
       const auto agg_col_idx = query_mem_desc.getSlotIndexForSingleSlotCol(target_idx);
-      CHECK_LT(agg_col_idx, agg_col_count);
+      CHECK_LT(static_cast<size_t>(agg_col_idx), agg_col_count);
 
       CHECK_EQ(static_cast<size_t>(query_mem_desc.getLogicalSlotWidthBytes(agg_col_idx)),
                sizeof(int64_t));

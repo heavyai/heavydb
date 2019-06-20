@@ -20,12 +20,8 @@
 #include <cstring>
 #include "Shared/DateConverters.h"
 #include "Shared/InlineNullValues.h"
+#include "Shared/Logger.h"
 #include "Shared/sqltypes.h"
-#include "Shared/unreachable.h"
-
-#ifndef CHECK  // if not collide with the one in glog/logging.h
-#include "always_assert.h"
-#endif
 
 namespace {
 

@@ -26,6 +26,7 @@
 #include <vector>
 #include "../../Shared/types.h"
 #include "Page.h"
+#include "Shared/Logger.h"
 
 namespace File_Namespace {
 

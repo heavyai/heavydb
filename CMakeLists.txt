@@ -71,6 +71,8 @@ if(PREFER_STATIC_LIBS)
   endif()
 
   set(CUDA_USE_STATIC_CUDA_RUNTIME ON CACHE STRING "Use static CUDA runtime")
+else()
+  add_definitions("-DBOOST_LOG_DYN_LINK")
 endif()
 
 option(ENABLE_JAVA_REMOTE_DEBUG "Enable Java Remote Debug" OFF )
@@ -107,6 +109,11 @@ if(ENABLE_CUDA)
 else()
   set(CUDA_LIBRARIES "")
   set(MAPD_PACKAGE_FLAGS "${MAPD_PACKAGE_FLAGS}-cpu")
+endif()
+
+option(SUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS "Suppress NullLogger deprecated warnings.")
+if (SUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS)
+  add_definitions("-DSUPPRESS_NULL_LOGGER_DEPRECATION_WARNINGS")
 endif()
 
 option(ENABLE_CUDA_KERNEL_DEBUG "Enable debugging symbols for CUDA device Kernels" OFF)
@@ -155,6 +162,7 @@ if(ENABLE_FOLLY)
   else()
     include_directories(${Folly_INCLUDE_DIRS})
     add_definitions("-DHAVE_FOLLY")
+    list(APPEND Folly_LIBRARIES ${Glog_LIBRARIES})
   endif()
 endif()
 
@@ -168,7 +176,7 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 if(APPLE OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
     AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 3.6 OR CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL 3.6))
     OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 4.9))
-  find_package( Boost COMPONENTS filesystem program_options regex system timer REQUIRED QUIET )
+  find_package( Boost COMPONENTS log log_setup filesystem program_options regex system thread timer REQUIRED )
 else()
   message(FATAL_ERROR, "GCC v4.9 or clang v3.6 (or newer) is required")
 endif()
@@ -564,9 +572,9 @@ add_custom_target(rerun_cmake ALL
   )
 add_dependencies(omnisci_server rerun_cmake)
 
-target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
+target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
 
-target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${Glog_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
+target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
 
 macro(set_dpkg_arch arch_in arch_out)
   if("${arch_in}" STREQUAL "x86_64")

@@ -25,6 +25,7 @@
 #include "../QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "../QueryEngine/ResultSet.h"
 #include "Shared/measure.h"
+#include "TestHelpers.h"
 
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
 #include <cuda_runtime.h>
@@ -1280,7 +1281,7 @@ TEST(Reduction, Baseline) {
   std::reverse(target_infos.begin(), target_infos.end());
 
   const auto device_type = ExecutorDeviceType::CPU;
-  CHECK_GT(key_count, 1);
+  CHECK_GT(key_count, 1u);
   size_t row_size = key_count * sizeof(int64_t);
   std::vector<int8_t> group_col_widths(key_count, sizeof(int64_t));
   QueryMemoryDescriptor query_mem_desc(
@@ -1832,7 +1833,7 @@ TEST(Reduction, PerfectHash) {
 }
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
+  TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   g_gpus_present = is_gpu_present();
 #ifndef HAVE_CUDA

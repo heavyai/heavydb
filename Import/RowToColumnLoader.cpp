@@ -23,31 +23,8 @@
  * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
  **/
 
-#include <glog/logging.h>
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/trim.hpp>
-#include <boost/regex.hpp>
-#include <cstring>
-#include <iostream>
-#include <iterator>
-#include <string>
-
-#include "Shared/mapd_shared_ptr.h"
-#include "Shared/sqltypes.h"
-
-#include <chrono>
-#include <thread>
-
-#include <boost/program_options.hpp>
-
-// include files for Thrift and MapD Thrift Services
-#include <thrift/protocol/TBinaryProtocol.h>
-#include <thrift/transport/TBufferTransports.h>
-#include <thrift/transport/TSocket.h>
-#include "Importer.h"
 #include "RowToColumnLoader.h"
-#include "gen-cpp/MapD.h"
-#include "gen-cpp/mapd_types.h"
+#include "Shared/Logger.h"
 
 using namespace ::apache::thrift;
 using namespace ::apache::thrift::protocol;
@@ -84,6 +61,7 @@ SQLTypes get_sql_types(const TColumnType& ct) {
       return SQLTypes::kSMALLINT;
     default:
       LOG(FATAL) << "Unsupported TColumnType found, should not be possible";
+      return SQLTypes::kNULLT;  // satisfy return-type warning
   }
 }
 
@@ -181,7 +159,6 @@ void populate_TColumn(TStringValue ts,
                       TColumn& input_col,
                       const Importer_NS::CopyParams& copy_params) {
   // create datum and push data to column structure from row data
-
   switch (column_type_info.get_type()) {
     case SQLTypes::kARRAY:
       LOG(FATAL) << "Trying to process ARRAY at item level something is wrong";

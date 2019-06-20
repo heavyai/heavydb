@@ -23,7 +23,6 @@
  * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
  **/
 
-#include <glog/logging.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/trim.hpp>
 #include <boost/regex.hpp>
@@ -33,6 +32,7 @@
 #include <string>
 
 #include "RowToColumnLoader.h"
+#include "Shared/Logger.h"
 #include "Shared/ThriftClient.h"
 #include "Shared/sqltypes.h"
 
@@ -499,8 +499,6 @@ int main(int argc, char** argv) {
       transformations;
   ThriftConnectionType conn_type;
 
-  google::InitGoogleLogging(argv[0]);
-
   namespace po = boost::program_options;
 
   po::options_description desc("Options");
@@ -570,6 +568,10 @@ int main(int argc, char** argv) {
   positionalOptions.add("table", 1);
   positionalOptions.add("database", 1);
 
+  logger::LogOptions log_options(argv[0]);
+  log_options.max_files_ = 0;  // stderr only
+  desc.add(log_options.get_options());
+
   po::variables_map vm;
 
   try {
@@ -602,6 +604,8 @@ int main(int argc, char** argv) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;
   }
+
+  logger::init(log_options);
 
   if (http) {
     conn_type = ThriftConnectionType::HTTP;

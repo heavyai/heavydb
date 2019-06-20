@@ -21,9 +21,9 @@
 #include "Execute.h"
 #include "RelAlgTranslator.h"
 #include "ScalarExprVisitor.h"
+#include "Shared/Logger.h"
 #include "WindowExpressionRewrite.h"
 
-#include <glog/logging.h>
 #include <unordered_set>
 
 namespace {

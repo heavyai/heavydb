@@ -92,9 +92,9 @@ class StringDictionary {
       const std::vector<std::vector<int32_t>>& source_array_ids,
       const StringDictionary* source_dict);
 
-  static const int32_t INVALID_STR_ID;
-  static const size_t MAX_STRLEN = (1 << 15) - 1;
-  static const size_t MAX_STRCOUNT = (1U << 31) - 1;
+  static constexpr int32_t INVALID_STR_ID = -1;
+  static constexpr size_t MAX_STRLEN = (1 << 15) - 1;
+  static constexpr size_t MAX_STRCOUNT = (1U << 31) - 1;
 
  private:
   struct StringIdxEntry {

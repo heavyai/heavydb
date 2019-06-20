@@ -99,7 +99,7 @@ void Executor::ExecutionDispatch::runImpl(
     }
     if (eo.with_dynamic_watchdog &&
         !dynamic_watchdog_set_.test_and_set(std::memory_order_acquire)) {
-      CHECK_GT(eo.dynamic_watchdog_time_limit, 0);
+      CHECK_GT(eo.dynamic_watchdog_time_limit, 0u);
       auto cycle_budget = dynamic_watchdog_init(eo.dynamic_watchdog_time_limit);
       LOG(INFO) << "Dynamic Watchdog budget: CPU: "
                 << std::to_string(eo.dynamic_watchdog_time_limit) << "ms, "

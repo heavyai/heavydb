@@ -107,7 +107,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
   const bool hoist_literals = co.hoist_literals_;
   auto col_id = col_var->get_column_id();
   const int rte_idx = adjusted_range_table_index(col_var);
-  CHECK_LT(rte_idx, cgen_state_->frag_offsets_.size());
+  CHECK_LT(static_cast<size_t>(rte_idx), cgen_state_->frag_offsets_.size());
   const auto catalog = executor()->getCatalog();
   CHECK(catalog);
   if (col_var->get_table_id() > 0) {
@@ -403,8 +403,9 @@ llvm::Value* CodeGenerator::codgenAdjustFixedEncNull(llvm::Value* val,
 }
 
 llvm::Value* CodeGenerator::foundOuterJoinMatch(const ssize_t nesting_level) const {
-  CHECK_GE(nesting_level, size_t(0));
-  CHECK_LE(nesting_level, cgen_state_->outer_join_match_found_per_level_.size());
+  CHECK_GE(nesting_level, ssize_t(0));
+  CHECK_LE(nesting_level,
+           static_cast<ssize_t>(cgen_state_->outer_join_match_found_per_level_.size()));
   return cgen_state_->outer_join_match_found_per_level_[nesting_level - 1];
 }
 

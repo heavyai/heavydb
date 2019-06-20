@@ -252,7 +252,8 @@ std::vector<PushedDownFilterInfo> find_push_down_filters(
     CHECK_EQ(to_original_rte_idx.size(), input_permutation.size());
     for (size_t i = 0; i < input_permutation.size(); ++i) {
       CHECK_LT(input_permutation[i], to_original_rte_idx.size());
-      CHECK_EQ(to_original_rte_idx[input_permutation[i]], to_original_rte_idx.size());
+      CHECK_EQ(static_cast<size_t>(to_original_rte_idx[input_permutation[i]]),
+               to_original_rte_idx.size());
       to_original_rte_idx[input_permutation[i]] = i;
     }
   } else {
@@ -278,7 +279,7 @@ std::vector<PushedDownFilterInfo> find_push_down_filters(
   }
   for (const auto& kv : filters_per_nesting_level) {
     CHECK_GE(kv.first, 0);
-    CHECK_LT(kv.first, input_size_prefix_sums.size());
+    CHECK_LT(static_cast<size_t>(kv.first), input_size_prefix_sums.size());
     size_t input_prev = (kv.first > 1) ? input_size_prefix_sums[kv.first - 2] : 0;
     size_t input_start = kv.first ? input_size_prefix_sums[kv.first - 1] : 0;
     size_t input_next = input_size_prefix_sums[kv.first];

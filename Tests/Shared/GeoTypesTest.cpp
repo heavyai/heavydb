@@ -15,8 +15,8 @@
  */
 
 #include <Shared/geo_types.h>
+#include "Tests/TestHelpers.h"
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 using namespace Geo_namespace;
@@ -307,7 +307,7 @@ TEST(GeoMisc, Inequality) {
 }
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
+  TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
   int err{0};

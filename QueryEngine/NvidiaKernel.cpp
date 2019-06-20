@@ -17,8 +17,8 @@
 #include "NvidiaKernel.h"
 
 #include "../Shared/mapdpath.h"
+#include "Shared/Logger.h"
 
-#include <glog/logging.h>
 #include <boost/filesystem/operations.hpp>
 
 #ifdef HAVE_CUDA

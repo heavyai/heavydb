@@ -21,7 +21,6 @@
  */
 
 #include "FileBuffer.h"
-#include <glog/logging.h>
 #include <future>
 #include <map>
 #include <thread>

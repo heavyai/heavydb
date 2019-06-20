@@ -22,15 +22,14 @@
  */
 
 #include "Calcite.h"
-#include <glog/logging.h>
 #include <thread>
 #include <utility>
 #include "Catalog/Catalog.h"
 #include "Shared/ConfigResolve.h"
+#include "Shared/Logger.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/mapdpath.h"
 #include "Shared/measure.h"
-#include "Shared/unreachable.h"
 
 #include "Shared/fixautotools.h"
 
@@ -459,6 +458,7 @@ TPlanResult Calcite::processImpl(
       LOG(FATAL)
           << "Error occurred trying to communicate with calcite server, the error was: '"
           << ex.what() << "', omnisci_server restart will be required";
+      return ret;  // satisfy return-type warning
     }
   } else {
     LOG(INFO) << "Not routing to Calcite, server is not up";
@@ -505,24 +505,22 @@ std::string Calcite::getUserDefinedFunctionWhitelist() {
   return "";
 }
 
-void Calcite::close_calcite_server() {
+void Calcite::close_calcite_server(bool log) {
   if (server_available_) {
-    LOG(INFO) << "Shutting down Calcite server";
+    LOG_IF(INFO, log) << "Shutting down Calcite server";
     try {
       std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
           clientP = get_client(remote_calcite_port_);
       clientP.first->shutdown();
       clientP.second->close();
     } catch (const std::exception& e) {
-      LOG(ERROR) << "Error shutting down Calcite server: " << e.what();
+      std::cerr << "Error shutting down Calcite server: " << e.what();
     }
-    LOG(INFO) << "shut down Calcite";
+    LOG_IF(INFO, log) << "shut down Calcite";
     server_available_ = false;
   }
 }
 
 Calcite::~Calcite() {
-  LOG(INFO) << "Destroy Calcite Class";
-  close_calcite_server();
-  LOG(INFO) << "End of Calcite Destructor ";
+  close_calcite_server(false);
 }

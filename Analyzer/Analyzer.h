@@ -24,7 +24,8 @@
 #ifndef ANALYZER_H
 #define ANALYZER_H
 
-#include <glog/logging.h>
+#include "../Shared/Logger.h"
+
 #include <cstdint>
 #include <iostream>
 #include <list>
@@ -33,6 +34,7 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
 
