@@ -2147,6 +2147,8 @@ TEST(Select, Strings) {
     c("SELECT COUNT(*) FROM test WHERE str <> 'bar';", dt);
     c("SELECT COUNT(*) FROM test WHERE 'bar' <> str;", dt);
     c("SELECT COUNT(*) FROM test WHERE str = 'foo' OR str = 'bar';", dt);
+    // The following tests throw Cast from dictionary-encoded string to none-encoded not
+    // supported for distributed queries in distributed mode
     SKIP_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE str = real_str;", dt));
     c("SELECT COUNT(*) FROM test WHERE str <> str;", dt);
     SKIP_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE ss <> str;", dt));
@@ -2163,7 +2165,9 @@ TEST(Select, Strings) {
     SKIP_ON_AGGREGATOR(
         ASSERT_EQ(2 * g_num_rows,
                   v<int64_t>(run_simple_agg(
-                      "SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(str) = 3;", dt))));
+                      "SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(str) = 3;",
+                      dt))));  // Cast from dictionary-encoded string to none-encoded not
+                               // supported for distributed queries
     ASSERT_EQ(g_num_rows,
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE str ILIKE 'f%%';", dt)));
@@ -5953,12 +5957,10 @@ TEST(Select, Subqueries) {
       "emptytab. y END yy, sum(x) "
       "FROM emptytab GROUP BY emptytab. x, yy;",
       dt);
-    // Throws join table must be replicated in distributed
-    SKIP_ON_AGGREGATOR(
-        c("WITH d1 AS (SELECT deptno, dname FROM dept LIMIT 10) SELECT ename, dname FROM "
-          "emp, d1 WHERE emp.deptno = "
-          "d1.deptno ORDER BY ename ASC LIMIT 10;",
-          dt));
+    c("WITH d1 AS (SELECT deptno, dname FROM dept LIMIT 10) SELECT ename, dname FROM "
+      "emp, d1 WHERE emp.deptno = "
+      "d1.deptno ORDER BY ename ASC LIMIT 10;",
+      dt);
     c("SELECT x FROM (SELECT x, MAX(y), COUNT(*) AS n FROM test GROUP BY x HAVING MAX(y) "
       "> 42) ORDER BY n;",
       dt);
@@ -6049,6 +6051,9 @@ TEST(Select, Subqueries) {
       dt);
     c("SELECT x FROM test WHERE x = (SELECT MIN(X) m FROM test GROUP BY x HAVING x <= "
       "(SELECT MIN(x) FROM test));",
+      dt);
+    c("SELECT test.z, SUM(test.y) s FROM test JOIN (SELECT x FROM test_inner) b ON "
+      "test.x = b.x GROUP BY test.z ORDER BY s;",
       dt);
   }
 }
@@ -6288,14 +6293,13 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
     c("SELECT COUNT(*) from test_inner a, bweq_test b where a.x = b.x OR (a.x IS NULL "
       "and b.x IS NULL);",
       dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT t1.fixed_null_str FROM (SELECT fixed_null_str, SUM(x) n1 FROM test "
-          "GROUP BY fixed_null_str) t1 INNER "
-          "JOIN (SELECT fixed_null_str, SUM(y) n2 FROM test GROUP BY fixed_null_str) t2 "
-          "ON ((t1.fixed_null_str = "
-          "t2.fixed_null_str) OR (t1.fixed_null_str IS NULL AND t2.fixed_null_str IS "
-          "NULL));",
-          dt));
+    c("SELECT t1.fixed_null_str FROM (SELECT fixed_null_str, SUM(x) n1 FROM test "
+      "GROUP BY fixed_null_str) t1 INNER "
+      "JOIN (SELECT fixed_null_str, SUM(y) n2 FROM test GROUP BY fixed_null_str) t2 "
+      "ON ((t1.fixed_null_str = "
+      "t2.fixed_null_str) OR (t1.fixed_null_str IS NULL AND t2.fixed_null_str IS "
+      "NULL));",
+      dt);
   }
 }
 
@@ -6960,16 +6964,15 @@ TEST(Select, Joins_ComplexQueries) {
       "test_inner WHERE x = 7) AS b ON a.str "
       "= b.str WHERE a.y < 42;",
       dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN "
-          "(select str,count(*) "
-          "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN "
-          "(select "
-          "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit "
-          "40) "
-          "c on "
-          "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
-          dt));
+    c("SELECT a.str as key0,a.fixed_str as key1,COUNT(*) AS color FROM test a JOIN "
+      "(select str,count(*) "
+      "from test group by str order by COUNT(*) desc limit 40) b on a.str=b.str JOIN "
+      "(select "
+      "fixed_str,count(*) from test group by fixed_str order by count(*) desc limit "
+      "40) "
+      "c on "
+      "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
+      dt);
     SKIP_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR "
           "false;",
@@ -12612,19 +12615,18 @@ TEST(Select, GeoSpatial_Projection) {
         GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1}));
 
     // Sample() version of above
-    SKIP_ON_AGGREGATOR(
-        compare_geo_target(
-            run_simple_agg("SELECT SAMPLE(p) FROM geospatial_test WHERE id = 1;", dt),
-            GeoPointTargetValue({1., 1.}));
-        compare_geo_target(
-            run_simple_agg("SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1;", dt),
-            GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.}));
-        compare_geo_target(
-            run_simple_agg("SELECT SAMPLE(poly) FROM geospatial_test WHERE id = 1;", dt),
-            GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}));
-        compare_geo_target(
-            run_simple_agg("SELECT SAMPLE(mpoly) FROM geospatial_test WHERE id = 1;", dt),
-            GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1})));
+    SKIP_ON_AGGREGATOR(compare_geo_target(
+        run_simple_agg("SELECT SAMPLE(p) FROM geospatial_test WHERE id = 1;", dt),
+        GeoPointTargetValue({1., 1.})));
+    SKIP_ON_AGGREGATOR(compare_geo_target(
+        run_simple_agg("SELECT SAMPLE(l) FROM geospatial_test WHERE id = 1;", dt),
+        GeoLineStringTargetValue({1., 0., 2., 2., 3., 3.})));
+    SKIP_ON_AGGREGATOR(compare_geo_target(
+        run_simple_agg("SELECT SAMPLE(poly) FROM geospatial_test WHERE id = 1;", dt),
+        GeoPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3})));
+    SKIP_ON_AGGREGATOR(compare_geo_target(
+        run_simple_agg("SELECT SAMPLE(mpoly) FROM geospatial_test WHERE id = 1;", dt),
+        GeoMultiPolyTargetValue({0., 0., 2., 0., 0., 2.}, {3}, {1})));
 
     // Sample() version of above with GROUP BY
     compare_geo_target(
@@ -13626,17 +13628,17 @@ TEST(Select, GeoSpatial_Projection) {
         v<double>(run_simple_agg(
             "SELECT ST_YMin(gp4326) from geospatial_test limit 1 offset 1;", dt)),
         static_cast<double>(0.001)));
-    SKIP_ON_AGGREGATOR(ASSERT_NEAR(
+    ASSERT_NEAR(
         static_cast<double>(2 * 7 + 1),
         v<double>(run_simple_agg(
             "SELECT ST_XMax(l) from geospatial_test order by id limit 1 offset 7;", dt)),
-        static_cast<double>(0.0)));
-    SKIP_ON_AGGREGATOR(ASSERT_NEAR(
+        static_cast<double>(0.0));
+    ASSERT_NEAR(
         static_cast<double>(2 + 1),
         v<double>(run_simple_agg(
             "SELECT ST_YMax(mpoly) from geospatial_test order by id limit 1 offset 2;",
             dt)),
-        static_cast<double>(0.0)));
+        static_cast<double>(0.0));
 
     // Point accessors, Linestring indexing
     ASSERT_NEAR(
