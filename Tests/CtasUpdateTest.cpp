@@ -826,6 +826,95 @@ TEST_P(Ctas, CreateTableAsSelect) {
   }
 }
 
+TEST(Itas, SyntaxCheck) {
+  std::string ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+
+  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val int);",
+                                 g_session);
+  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_TARGET (id int);", g_session);
+
+  ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
+  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+
+  ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+
+  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int);", g_session);
+  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val int);",
+                                 g_session);
+
+  ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
+  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+
+  ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+
+  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int);", g_session);
+  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_TARGET (id int encoding FIXED(8));",
+                                 g_session);
+
+  ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
+  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+
+  ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+
+  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int encoding FIXED(8));",
+                                 g_session);
+  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_TARGET (id int);", g_session);
+
+  ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
+  EXPECT_NO_THROW(QueryRunner::run_ddl_statement(ddl, g_session));
+
+  ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+
+  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val timestamp(0));",
+                                 g_session);
+  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val timestamp(3));",
+                                 g_session);
+
+  ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
+  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+
+  ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+
+  QueryRunner::run_ddl_statement(
+      "CREATE TABLE ITAS_SOURCE (id int, val text encoding none);", g_session);
+  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val text);",
+                                 g_session);
+
+  ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
+  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+
+  ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+  ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
+  QueryRunner::run_ddl_statement(ddl, g_session);
+
+  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val decimal(10,2));",
+                                 g_session);
+  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val decimal(10,3));",
+                                 g_session);
+
+  ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
+  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+}
+
 TEST(Itas, DifferentColumnNames) {
   QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;", g_session);
 

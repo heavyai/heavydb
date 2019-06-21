@@ -2449,7 +2449,7 @@ void InsertIntoTableAsSelectStmt::populateData(
                                  source_cd->columnType.get_type_name() +
                                  "' and target '" + target_cd->columnName + " " +
                                  target_cd->columnType.get_type_name() +
-                                 "' columns do not match.");
+                                 "' column types do not match.");
       }
       if (source_cd->columnType.is_array()) {
         if (source_cd->columnType.get_subtype() != target_cd->columnType.get_subtype()) {
@@ -2457,7 +2457,7 @@ void InsertIntoTableAsSelectStmt::populateData(
                                    source_cd->columnType.get_type_name() +
                                    "' and target '" + target_cd->columnName + " " +
                                    target_cd->columnType.get_type_name() +
-                                   "' columns do not match.");
+                                   "' array column element types do not match.");
         }
       }
 
@@ -2473,11 +2473,11 @@ void InsertIntoTableAsSelectStmt::populateData(
 
         if ((sourceType.get_dimension() != targetType.get_dimension()) ||
             (sourceType.get_scale() != targetType.get_scale())) {
-          throw std::runtime_error("Source '" + source_cd->columnName + " " +
-                                   source_cd->columnType.get_type_name() +
-                                   "' and target '" + target_cd->columnName + " " +
-                                   target_cd->columnType.get_type_name() +
-                                   "' columns do not match.");
+          throw std::runtime_error(
+              "Source '" + source_cd->columnName + " " +
+              source_cd->columnType.get_type_name() + "' and target '" +
+              target_cd->columnName + " " + target_cd->columnType.get_type_name() +
+              "' decimal columns dimension and or scale do not match.");
         }
       }
 
@@ -2490,6 +2490,26 @@ void InsertIntoTableAsSelectStmt::populateData(
                                    target_cd->columnType.get_type_name() +
                                    "' columns string encodings do not match.");
         }
+      }
+
+      if (source_cd->columnType.is_timestamp() && target_cd->columnType.is_timestamp()) {
+        if (source_cd->columnType.get_dimension() !=
+            target_cd->columnType.get_dimension()) {
+          throw std::runtime_error("Source '" + source_cd->columnName + " " +
+                                   source_cd->columnType.get_type_name() +
+                                   "' and target '" + target_cd->columnName + " " +
+                                   target_cd->columnType.get_type_name() +
+                                   "' timestamp column precisions do not match.");
+        }
+      }
+
+      if (!source_cd->columnType.is_string() &&
+          source_cd->columnType.get_size() > target_cd->columnType.get_size()) {
+        throw std::runtime_error("Source '" + source_cd->columnName + " " +
+                                 source_cd->columnType.get_type_name() +
+                                 "' and target '" + target_cd->columnName + " " +
+                                 target_cd->columnType.get_type_name() +
+                                 "' column encoding sizes do not match.");
       }
     }
   }
