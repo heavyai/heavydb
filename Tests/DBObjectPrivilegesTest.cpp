@@ -23,7 +23,6 @@
 namespace {
 std::shared_ptr<Calcite> g_calcite;
 using SessionInfoPtr = std::unique_ptr<Catalog_Namespace::SessionInfo>;
-std::unique_ptr<QueryRunner::IROutputFile> g_ir_output_file;
 SessionInfoPtr g_session;
 
 Catalog_Namespace::UserMetadata user;
@@ -49,7 +48,7 @@ auto run_multiple_agg(const std::string& query_str,
                       const ExecutorDeviceType device_type,
                       SessionInfoPtr& session = g_session) {
   return QueryRunner::run_multiple_agg(
-      query_str, session, device_type, false, true, g_ir_output_file);
+      query_str, session, device_type, false, true, nullptr);
 }
 
 TargetValue run_simple_agg(const std::string& query_str,
