@@ -48,18 +48,17 @@ using namespace Fragmenter_Namespace;
 #define BASE_PATH "./tmp"
 #endif
 
-namespace {
-std::unique_ptr<SessionInfo> g_session;
+using QR = QueryRunner::QueryRunner;
 
-std::shared_ptr<Calcite> g_calcite = nullptr;
+namespace {
 
 inline void run_ddl_statement(const string& input_str) {
-  QueryRunner::run_ddl_statement(input_str, g_session);
+  QR::get()->runDDLStatement(input_str);
 }
 
 bool load_data_test(string table_name, size_t num_rows) {
   vector<size_t> insert_col_hashs =
-      populate_table_random(table_name, num_rows, g_session->getCatalog());
+      populate_table_random(table_name, num_rows, *QR::get()->getCatalog());
   return true;
 }
 
@@ -74,15 +73,15 @@ static size_t load_data_for_thread_test_2(int num_rows, string table_name) {
   if (num_rows <
       initial_num_rows) {  // to handle special case when only few rows should be added
     insert_col_hashs =
-        populate_table_random(table_name, num_rows, g_session->getCatalog());
+        populate_table_random(table_name, num_rows, *QR::get()->getCatalog());
   } else {
     for (int cur_num_rows = initial_num_rows; cur_num_rows <= num_rows;
          cur_num_rows += num_rows_step) {
       if (cur_num_rows == num_rows) {
         insert_col_hashs =
-            populate_table_random(table_name, num_rows_step, g_session->getCatalog());
+            populate_table_random(table_name, num_rows_step, *QR::get()->getCatalog());
       } else {
-        populate_table_random(table_name, num_rows_step, g_session->getCatalog());
+        populate_table_random(table_name, num_rows_step, *QR::get()->getCatalog());
       }
     }
   }
@@ -369,7 +368,7 @@ int main(int argc, char* argv[]) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
 
-  g_session.reset(QueryRunner::get_session(BASE_PATH));
+  QR::init(BASE_PATH);
 
   int err{0};
   try {
@@ -377,6 +376,6 @@ int main(int argc, char* argv[]) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  g_session.reset(nullptr);
+  QR::reset();
   return err;
 }

@@ -42,6 +42,8 @@
 
 using namespace Catalog_Namespace;
 
+using QR = QueryRunner::QueryRunner;
+
 namespace {
 struct UpdelTestConfig {
   static bool showMeasuredTime;
@@ -84,11 +86,8 @@ struct ScalarTargetValueExtractor : public boost::static_visitor<std::string> {
 // namespace
 namespace {
 
-std::unique_ptr<SessionInfo> g_session;
-bool g_hoist_literals{true};
-
 inline void run_ddl_statement(const std::string& input_str) {
-  QueryRunner::run_ddl_statement(input_str, g_session);
+  QR::get()->runDDLStatement(input_str);
 }
 
 template <class T>
@@ -101,8 +100,7 @@ T v(const TargetValue& r) {
 }
 
 std::shared_ptr<ResultSet> run_query(const std::string& query_str) {
-  return QueryRunner::run_multiple_agg(
-      query_str, g_session, ExecutorDeviceType::CPU, g_hoist_literals, true);
+  return QR::get()->runSQL(query_str, ExecutorDeviceType::CPU, true, true);
 }
 
 bool compare_agg(const std::string& table,
@@ -144,7 +142,7 @@ void update_common(const std::string& table,
   std::vector<ScalarTargetValue> rhsValues;
   update_prepare_offsets_values<T>(cnt, step, val, fragOffsets, rhsValues);
   Fragmenter_Namespace::InsertOrderFragmenter::updateColumn(
-      &g_session->getCatalog(),
+      QR::get()->getCatalog().get(),
       table,
       column,
       0,  // 1st frag since we have only 100 rows
@@ -271,7 +269,7 @@ bool compare_row(const std::string& table,
                  const ResultRow& newr,
                  const TargetValue& val,
                  const bool commit) {
-  const auto cat = &g_session->getCatalog();
+  const auto cat = QR::get()->getCatalog();
   const auto td = cat->getMetadataForTable(table);
   const auto cdl = cat->getAllColumnMetadataForTable(td->tableId, false, false, false);
   const auto cds = std::vector<const ColumnDescriptor*>(cdl.begin(), cdl.end());
@@ -372,11 +370,11 @@ void import_table_file(const std::string& table, const std::string& file) {
   CHECK_EQ(parse_trees.size(), size_t(1));
 
   const auto& stmt = parse_trees.front();
-  Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
-  if (!ddl) {
-    throw std::runtime_error("Not a DDLStmt: " + query_str);
+  auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(stmt.get());
+  if (!copy_stmt) {
+    throw std::runtime_error("Expected a CopyTableStatment: " + query_str);
   }
-  ddl->execute(*g_session);
+  QR::get()->runImport(copy_stmt);
 }
 
 bool prepare_table_for_delete(const std::string& table = "trips",
@@ -391,7 +389,7 @@ bool prepare_table_for_delete(const std::string& table = "trips",
   }
   auto ms = measure<>::execution([&]() {
     Fragmenter_Namespace::InsertOrderFragmenter::updateColumn(
-        &g_session->getCatalog(),
+        QR::get()->getCatalog().get(),
         table,
         column,
         0,  // 1st frag since we have only 100 rows
@@ -453,7 +451,7 @@ bool delete_and_immediately_vacuum_rows(const std::string& table,
   }
 
   // delete and vacuum rows supposedly immediately
-  auto cat = &g_session->getCatalog();
+  auto cat = QR::get()->getCatalog().get();
   auto td = cat->getMetadataForTable(table);
   auto cd = cat->getMetadataForColumn(td->tableId, deleted_column);
   const_cast<ColumnDescriptor*>(cd)->isDeletedCol = true;
@@ -514,7 +512,7 @@ bool delete_and_vacuum_varlen_rows(const std::string& table,
 
   if (manual_vacuum) {
     ms = measure<>::execution([&]() {
-      auto cat = &g_session->getCatalog();
+      auto cat = QR::get()->getCatalog().get();
       const auto td = cat->getMetadataForTable(table,
                                                /*populateFragmenter=*/true);
       auto executor = Executor::getExecutor(cat->getCurrentDB().dbId);
@@ -1084,7 +1082,7 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
-  g_session.reset(QueryRunner::get_session(BASE_PATH));
+  QR::init(BASE_PATH);
 
   // the data files for perf tests are too big to check in, so perf tests
   // are done privately in someone's dev host. prog option seems a overkill.
@@ -1111,6 +1109,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  g_session.reset(nullptr);
+  QR::reset();
   return err;
 }

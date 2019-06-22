@@ -37,10 +37,10 @@
 #define BASE_PATH "./tmp"
 #endif
 
-constexpr size_t c_calcite_port = 36279;
-
 using namespace Catalog_Namespace;
 using namespace TestHelpers;
+
+using QR = QueryRunner::QueryRunner;
 
 #define SKIP_NO_GPU()                                        \
   if (skip_tests(dt)) {                                      \
@@ -50,17 +50,14 @@ using namespace TestHelpers;
   }
 
 namespace {
-std::unique_ptr<SessionInfo> g_session;
+
 std::shared_ptr<Calcite> g_calcite = nullptr;
 std::string udf_file_name_base("../../Tests/Udf/udf_sample");
-
-bool g_hoist_literals{true};
 
 std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
                                             const ExecutorDeviceType device_type,
                                             const bool allow_loop_joins) {
-  return QueryRunner::run_multiple_agg(
-      query_str, g_session, device_type, g_hoist_literals, allow_loop_joins);
+  return QR::get()->runSQL(query_str, device_type, true, allow_loop_joins);
 }
 
 std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
@@ -75,31 +72,6 @@ TargetValue run_simple_agg(const std::string& query_str,
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(1), crt_row.size());
   return crt_row[0];
-}
-
-void calcite_shutdown_handler() {
-  if (g_calcite) {
-    g_calcite->close_calcite_server();
-  }
-}
-
-void mapd_signal_handler(int signal_number) {
-  LOG(ERROR) << "Interrupt signal (" << signal_number << ") received.";
-  calcite_shutdown_handler();
-  // shut down logging force a flush
-  logger::shutdown();
-  // terminate program
-  if (signal_number == SIGTERM) {
-    std::exit(EXIT_SUCCESS);
-  } else {
-    std::exit(signal_number);
-  }
-}
-
-void register_signal_handler() {
-  std::signal(SIGTERM, mapd_signal_handler);
-  std::signal(SIGSEGV, mapd_signal_handler);
-  std::signal(SIGABRT, mapd_signal_handler);
 }
 
 std::string get_udf_filename() {
@@ -120,29 +92,19 @@ std::string get_udf_ast_filename() {
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
-  return device_type == ExecutorDeviceType::GPU &&
-         !g_session->getCatalog().getDataMgr().gpusPresent();
+  return device_type == ExecutorDeviceType::GPU && !QR::get()->gpusPresent();
 #else
   return device_type == ExecutorDeviceType::GPU;
 #endif
 }
 
 inline void run_ddl_statement(const std::string& query) {
-  QueryRunner::run_ddl_statement(query, g_session);
+  QR::get()->runDDLStatement(query);
 }
 
 class SQLTestEnv : public ::testing::Environment {
  public:
   void SetUp() override {
-    boost::filesystem::path base_path{BASE_PATH};
-    CHECK(boost::filesystem::exists(base_path));
-    auto system_db_file = base_path / "mapd_catalogs" / OMNISCI_DEFAULT_DB;
-    auto data_dir = base_path / "mapd_data";
-    UserMetadata user;
-    DBMetadata db;
-
-    register_signal_handler();
-
     boost::filesystem::path udf_file((get_udf_filename()));
     if (!boost::filesystem::exists(udf_file)) {
       throw std::runtime_error("udf file: " + udf_file.string() + " does not exist");
@@ -152,43 +114,9 @@ class SQLTestEnv : public ::testing::Environment {
     auto compile_result = compiler.compileUdf();
     EXPECT_EQ(compile_result, 0);
 
-    g_calcite = std::make_shared<Calcite>(
-        -1, c_calcite_port, base_path.string(), 1024, "", compiler.getAstFileName());
-    ExtensionFunctionsWhitelist::addUdfs(g_calcite->getUserDefinedFunctionWhitelist());
+    QR::init(BASE_PATH, compiler.getAstFileName());
 
-    MapDParameters mapd_parms;
-    auto dataMgr = std::make_shared<Data_Namespace::DataMgr>(
-        data_dir.string(), mapd_parms, false, 0);
-    // if no catalog create one
-    auto& sys_cat = SysCatalog::instance();
-    sys_cat.init(base_path.string(),
-                 dataMgr,
-                 {},
-                 g_calcite,
-                 !boost::filesystem::exists(system_db_file),
-                 mapd_parms.aggregator,
-                 {});
-    CHECK(sys_cat.getMetadataForUser(OMNISCI_ROOT_USER, user));
-    // if no user create one
-    if (!sys_cat.getMetadataForUser("gtest", user)) {
-      sys_cat.createUser("gtest", "test!test!", false, "");
-      CHECK(sys_cat.getMetadataForUser("gtest", user));
-    }
-    // if no db create one
-    if (!sys_cat.getMetadataForDB("gtest_db", db)) {
-      sys_cat.createDatabase("gtest_db", user.userId);
-      CHECK(sys_cat.getMetadataForDB("gtest_db", db));
-    }
-
-    g_session.reset(new SessionInfo(std::make_shared<Catalog>(base_path.string(),
-                                                              db,
-                                                              dataMgr,
-                                                              std::vector<LeafHostInfo>{},
-                                                              g_calcite,
-                                                              false),
-                                    user,
-                                    ExecutorDeviceType::GPU,
-                                    ""));
+    g_calcite = QR::get()->getCalcite();
   }
 
   void TearDown() override {
@@ -206,6 +134,8 @@ class SQLTestEnv : public ::testing::Environment {
     if (boost::filesystem::exists(udf_ast_file)) {
       boost::filesystem::remove(udf_ast_file);
     }
+
+    QR::reset();
   }
 };
 }  // namespace
@@ -319,8 +249,6 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
   ::testing::AddGlobalTestEnvironment(new SQLTestEnv);
-
-  LOG(INFO) << "*** Finished setting up test environment ***";
 
   int err{0};
   try {

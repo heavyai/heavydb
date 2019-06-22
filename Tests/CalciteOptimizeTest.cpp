@@ -12,13 +12,15 @@
 #include "TestHelpers.h"
 #include "gen-cpp/CalciteServer.h"
 
+using QR = QueryRunner::QueryRunner;
 namespace {
-std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
+
 std::shared_ptr<Calcite> g_calcite;
 
 inline void run_ddl_statement(const std::string& query) {
-  QueryRunner::run_ddl_statement(query, g_session);
+  QR::get()->runDDLStatement(query);
 }
+
 }  // namespace
 
 struct ViewObject : testing::Test {
@@ -52,21 +54,24 @@ struct ViewObject : testing::Test {
 };
 
 TEST_F(ViewObject, BasicTest) {
+  auto session = QR::get()->getSession();
+  CHECK(session);
+
   TPlanResult tresult =
-      g_calcite->process(*g_session, "select i1 from table1", {}, true, false, false);
+      g_calcite->process(*session, "select i1 from table1", {}, true, false, false);
 
   TPlanResult vresult = g_calcite->process(
-      *g_session, "select i1 from view_view_table1", {}, true, false, false);
+      *session, "select i1 from view_view_table1", {}, true, false, false);
 
   EXPECT_EQ(vresult.plan_result, tresult.plan_result);
 
   TPlanResult ovresult = g_calcite->process(
-      *g_session, "select i1 from view_view_table1", {}, true, false, true);
+      *session, "select i1 from view_view_table1", {}, true, false, true);
 
   EXPECT_EQ(ovresult.plan_result, tresult.plan_result);
 
   TPlanResult tab_result = g_calcite->process(
-      *g_session,
+      *session,
       "SELECT shape_table.rowid FROM shape_table, attribute_table WHERE "
       "shape_table.block_group_id = attribute_table.block_group_id",
       {},
@@ -74,7 +79,7 @@ TEST_F(ViewObject, BasicTest) {
       false,
       true);
   TPlanResult view_result =
-      g_calcite->process(*g_session,
+      g_calcite->process(*session,
                          "SELECT shape_view.rowid FROM shape_view, attribute_view WHERE "
                          "shape_view.block_group_id = attribute_view.block_group_id",
                          {},
@@ -88,8 +93,8 @@ int main(int argc, char* argv[]) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
-  g_session.reset(QueryRunner::get_session(BASE_PATH));
-  g_calcite = g_session->getCatalog().getCalciteMgr();
+  QR::init(BASE_PATH);
+  g_calcite = QR::get()->getCatalog()->getCalciteMgr();
 
   int err{0};
   try {
@@ -97,6 +102,6 @@ int main(int argc, char* argv[]) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  g_session.reset(nullptr);
+  QR::reset();
   return err;
 }

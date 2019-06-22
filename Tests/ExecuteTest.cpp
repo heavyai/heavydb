@@ -58,10 +58,10 @@ extern bool g_enable_window_functions;
 
 extern size_t g_leaf_count;
 
+using QR = QueryRunner::QueryRunner;
+
 namespace {
 
-std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
-std::unique_ptr<QueryRunner::IROutputFile> g_ir_output_file;
 bool g_hoist_literals{true};
 size_t g_shard_count{0};
 bool g_use_row_iterator{true};
@@ -69,8 +69,8 @@ size_t g_num_leafs{1};
 bool g_keep_test_data{false};
 
 size_t choose_shard_count() {
-  CHECK(g_session);
-  const auto cuda_mgr = g_session->getCatalog().getDataMgr().getCudaMgr();
+  auto session = QR::get()->getSession();
+  const auto cuda_mgr = session->getCatalog().getDataMgr().getCudaMgr();
   const int device_count = cuda_mgr ? cuda_mgr->getDeviceCount() : 0;
   return g_num_leafs * (device_count > 1 ? device_count : 1);
 }
@@ -133,24 +133,19 @@ std::string build_create_table_statement(
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
                                             const ExecutorDeviceType device_type,
                                             const bool allow_loop_joins) {
-  return QueryRunner::run_multiple_agg(query_str,
-                                       g_session,
-                                       device_type,
-                                       g_hoist_literals,
-                                       allow_loop_joins,
-                                       g_ir_output_file);
+  return QR::get()->runSQL(query_str, device_type, g_hoist_literals, allow_loop_joins);
 }
 
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
                                             const ExecutorDeviceType device_type) {
-  return run_multiple_agg(query_str, device_type, true);
+  return QR::get()->runSQL(query_str, device_type, g_hoist_literals, true);
 }
 
 TargetValue run_simple_agg(const string& query_str,
                            const ExecutorDeviceType device_type,
                            const bool geo_return_geo_tv = true,
                            const bool allow_loop_joins = true) {
-  auto rows = run_multiple_agg(query_str, device_type, allow_loop_joins);
+  auto rows = QR::get()->runSQL(query_str, device_type, allow_loop_joins);
   if (geo_return_geo_tv) {
     rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
   }
@@ -172,18 +167,12 @@ TargetValue get_first_target(const string& query_str,
 }
 
 inline void run_ddl_statement(const std::string& create_table_stmt) {
-  QueryRunner::run_ddl_statement(create_table_stmt, g_session);
-}
-
-inline void run_sql_statements(const std::string& sql_stmts,
-                               const ExecutorDeviceType device_type) {
-  QueryRunner::run_sql_statements(sql_stmts, g_session, device_type);
+  QR::get()->runDDLStatement(create_table_stmt);
 }
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
-  return device_type == ExecutorDeviceType::GPU &&
-         !g_session->getCatalog().getDataMgr().gpusPresent();
+  return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
 #else
   return device_type == ExecutorDeviceType::GPU;
 #endif
@@ -213,8 +202,8 @@ class SQLiteComparator {
   void compare_arrow_output(const std::string& query_string,
                             const std::string& sqlite_query_string,
                             const ExecutorDeviceType device_type) {
-    const auto results = QueryRunner::run_multiple_agg(
-        query_string, g_session, device_type, g_hoist_literals, true);
+    const auto results =
+        QR::get()->runSQL(query_string, device_type, g_hoist_literals, true);
     const auto arrow_mapd_results = result_set_arrow_loopback(nullptr, results);
     compare_impl(arrow_mapd_results.get(), sqlite_query_string, device_type, false);
   }
@@ -4753,18 +4742,12 @@ namespace {
 
 const size_t g_array_test_row_count{20};
 
-std::unique_ptr<Importer_NS::Loader> get_loader(const TableDescriptor* td) {
-  auto& cat = g_session->getCatalog();
-  auto loader = std::make_unique<Importer_NS::Loader>(cat, td);
-  return loader;
-}
-
 void import_array_test(const std::string& table_name) {
   CHECK_EQ(size_t(0), g_array_test_row_count % 4);
-  auto& cat = g_session->getCatalog();
+  auto& cat = QR::get()->getSession()->getCatalog();
   const auto td = cat.getMetadataForTable(table_name);
   CHECK(td);
-  auto loader = get_loader(td);
+  auto loader = QR::get()->getLoader(td);
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
   const auto col_descs =
       cat.getAllColumnMetadataForTable(td->tableId, false, false, false);
@@ -5855,7 +5838,7 @@ TEST(Alter, AfterAlterGeoColumnName) {
       "point", "linestring", "polygon", "multipolygon"};
   for (auto& geo_type : geo_types) {
     run_ddl_statement("create table alter_geo_column_test (abc " + geo_type + ");");
-    auto& cat = g_session->getCatalog();
+    auto& cat = QR::get()->getSession()->getCatalog();
     const auto td = cat.getMetadataForTable("alter_geo_column_test");
     CHECK(td);
     const auto cd = cat.getMetadataForColumn(td->tableId, "abc");
@@ -6875,7 +6858,7 @@ TEST(Select, Joins_MultiCompositeColumns) {
 
     if (dt == ExecutorDeviceType::CPU) {
       // Clear CPU memory and hash table caches
-      QueryRunner::clear_cpu_memory(g_session);
+      QR::get()->clearCpuMemory();
     }
   }
 }
@@ -6889,7 +6872,7 @@ TEST(Select, Joins_BuildHashTable) {
 
     if (dt == ExecutorDeviceType::CPU) {
       // Clear CPU memory and hash table caches
-      QueryRunner::clear_cpu_memory(g_session);
+      QR::get()->clearCpuMemory();
     }
   }
 }
@@ -6948,7 +6931,7 @@ TEST(Select, Joins_CoalesceColumns) {
         dt));
     if (dt == ExecutorDeviceType::CPU) {
       // Clear CPU memory and hash table caches
-      QueryRunner::clear_cpu_memory(g_session);
+      QR::get()->clearCpuMemory();
     }
   }
 }
@@ -7040,7 +7023,7 @@ TEST(Select, Joins_TimeAndDate) {
 
     if (dt == ExecutorDeviceType::CPU) {
       // Clear CPU memory and hash table caches
-      QueryRunner::clear_cpu_memory(g_session);
+      QR::get()->clearCpuMemory();
     }
   }
 }
@@ -15197,7 +15180,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
     const auto create_test_inner_deleted =
         build_create_table_statement(columns_definition, "test_inner_deleted", {"", 0}, {}, 2, with_delete_support );
     run_ddl_statement(create_test_inner_deleted);
-    auto& cat = g_session->getCatalog();
+    auto& cat = QR::get()->getSession()->getCatalog();
     const auto td = cat.getMetadataForTable("test_inner_deleted");
     CHECK(td);
     const auto cd = cat.getMetadataForColumn(td->tableId, "deleted");
@@ -16069,6 +16052,7 @@ int main(int argc, char** argv) {
                      po::value<std::string>(),
                      "Dump IR for all executed queries to file. Currently only supports "
                      "single node tests.");
+
   desc.add_options()(
       "test-help",
       "Print all ExecuteTest specific options (for gtest options use `--help`).");
@@ -16095,14 +16079,13 @@ int main(int argc, char** argv) {
 
   g_enable_window_functions = true;
 
-  g_session.reset(QueryRunner::get_session(BASE_PATH));
-
+  QR::init(BASE_PATH);
   if (vm.count("with-sharding")) {
     g_shard_count = choose_shard_count();
   }
   if (vm.count("dump-ir")) {
     const auto filename = vm["dump-ir"].as<std::string>();
-    g_ir_output_file = std::make_unique<QueryRunner::IROutputFile>(filename);
+    QR::get()->setIRFilename(filename);
   }
 
   if (vm.count("keep-data")) {
@@ -16145,6 +16128,6 @@ int main(int argc, char** argv) {
     drop_tables();
     drop_views();
   }
-  g_session.reset(nullptr);
+  QR::reset();
   return err;
 }

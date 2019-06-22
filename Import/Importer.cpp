@@ -4867,10 +4867,16 @@ int RenderGroupAnalyzer::insertBoundsAndReturnRenderGroup(
   return firstAvailableRenderGroup;
 }
 
-void ImportDriver::import_geo_table(const std::string& file_path,
-                                    const std::string& table_name,
-                                    const bool compression,
-                                    const bool create_table) {
+ImportDriver::ImportDriver(std::shared_ptr<Catalog_Namespace::Catalog> cat,
+                           const Catalog_Namespace::UserMetadata& user,
+                           const ExecutorDeviceType dt)
+    : QueryRunner(std::make_unique<Catalog_Namespace::SessionInfo>(cat, user, dt, "")) {}
+
+void ImportDriver::importGeoTable(const std::string& file_path,
+                                  const std::string& table_name,
+                                  const bool compression,
+                                  const bool create_table) {
+  CHECK(session_info_);
   const std::string geo_column_name(OMNISCI_GEO_PREFIX);
 
   CopyParams copy_params;
@@ -4893,7 +4899,7 @@ void ImportDriver::import_geo_table(const std::string& file_path,
     cd.columnName = col_name_sanitized;
   }
 
-  auto& cat = session_->getCatalog();
+  auto& cat = session_info_->getCatalog();
 
   if (create_table) {
     const auto td = cat.getMetadataForTable(table_name);
@@ -4942,7 +4948,7 @@ void ImportDriver::import_geo_table(const std::string& file_path,
     }
 
     stmt.append(" (" + boost::algorithm::join(col_stmts, ",") + ");");
-    QueryRunner::run_ddl_statement(stmt, session_);
+    runDDLStatement(stmt);
 
     LOG(INFO) << "Created table: " << table_name;
   } else {

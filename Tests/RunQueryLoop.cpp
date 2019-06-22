@@ -19,6 +19,8 @@
 
 #include <boost/program_options.hpp>
 
+using QR = QueryRunner::QueryRunner;
+
 int main(int argc, char** argv) {
   std::string db_path;
   std::string query;
@@ -60,10 +62,9 @@ int main(int argc, char** argv) {
     device_type = ExecutorDeviceType::CPU;
   }
 
-  std::unique_ptr<Catalog_Namespace::SessionInfo> session(
-      QueryRunner::get_session(db_path.c_str()));
+  QR::init(db_path.c_str());
   for (size_t i = 0; i < iter; ++i) {
-    QueryRunner::run_multiple_agg(query, session, device_type, true, true);
+    QR::get()->runSQL(query, device_type, true, true);
   }
   return 0;
 }

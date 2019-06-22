@@ -35,20 +35,17 @@
 
 using namespace std;
 
+using QR = QueryRunner::QueryRunner;
 namespace {
 
-std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
-bool g_hoist_literals{true};
-
 inline void run_ddl_statement(const std::string query_str) {
-  QueryRunner::run_ddl_statement(query_str, g_session);
+  QR::get()->runDDLStatement(query_str);
 }
 
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
                                             const ExecutorDeviceType device_type,
                                             const bool allow_loop_joins) {
-  return QueryRunner::run_multiple_agg(
-      query_str, g_session, device_type, g_hoist_literals, allow_loop_joins);
+  return QR::get()->runSQL(query_str, device_type, true, allow_loop_joins);
 }
 
 std::shared_ptr<ResultSet> run_multiple_agg(const string& query_str,
@@ -67,8 +64,7 @@ T v(const TargetValue& r) {
 
 bool skip_tests(const ExecutorDeviceType device_type) {
 #ifdef HAVE_CUDA
-  return device_type == ExecutorDeviceType::GPU &&
-         !g_session->getCatalog().getDataMgr().gpusPresent();
+  return device_type == ExecutorDeviceType::GPU && !QR::get()->gpusPresent();
 #else
   return device_type == ExecutorDeviceType::GPU;
 #endif
@@ -94,8 +90,7 @@ class SQLiteComparator {
   void compare_arrow_output(const std::string& query_string,
                             const std::string& sqlite_query_string,
                             const ExecutorDeviceType device_type) {
-    const auto results = QueryRunner::run_select_query(
-        query_string, g_session, device_type, g_hoist_literals, true);
+    const auto results = QR::get()->runSelectQuery(query_string, device_type, true, true);
     const auto arrow_mapd_results = result_set_arrow_loopback(results);
     compare_impl(arrow_mapd_results.get(), sqlite_query_string, device_type, false);
   }
@@ -720,7 +715,7 @@ int main(int argc, char* argv[]) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
 
-  g_session.reset(QueryRunner::get_session(BASE_PATH));
+  QR::init(BASE_PATH);
 
   int err{0};
   err = create_and_populate_tables();
@@ -735,6 +730,6 @@ int main(int argc, char* argv[]) {
   }
 
   drop_tables();
-  g_session.reset(nullptr);
+  QR::reset();
   return err;
 }

@@ -35,7 +35,7 @@
 #define BASE_PATH "./tmp"
 #endif
 
-std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
+using QR = QueryRunner::QueryRunner;
 
 class TestColumnDescriptor {
  public:
@@ -627,80 +627,73 @@ struct Update
   Update() { columnDescriptors = GetParam(); }
 };
 
+namespace {
+
+void run_ddl_statement(const std::string& stmt) {
+  QR::get()->runDDLStatement(stmt);
+}
+
+std::shared_ptr<ResultSet> run_multiple_agg(const std::string& sql,
+                                            const ExecutorDeviceType dt) {
+  return QR::get()->runSQL(sql, ExecutorDeviceType::CPU, true, true);
+}
+
+}  // namespace
+
 TEST(Ctas, SyntaxCheck) {
   std::string ddl = "DROP TABLE IF EXISTS CTAS_SOURCE;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
   ddl = "DROP TABLE IF EXISTS CTAS_TARGET;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
 
-  QueryRunner::run_ddl_statement("CREATE TABLE CTAS_SOURCE (id int);", g_session);
+  run_ddl_statement("CREATE TABLE CTAS_SOURCE (id int);");
 
   ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
-  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+  run_ddl_statement(ddl);
+  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
   ddl = "DROP TABLE CTAS_TARGET;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
 
   ddl = "CREATE TEMPORARY TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
-  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+  run_ddl_statement(ddl);
+  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
   ddl = "DROP TABLE CTAS_TARGET;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
 
   ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE WITH( FRAGMENT_SIZE=3 );";
-  QueryRunner::run_ddl_statement(ddl, g_session);
-  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+  run_ddl_statement(ddl);
+  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
   ddl = "DROP TABLE CTAS_TARGET;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
 
   ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE WITH( MAX_CHUNK_SIZE=3 );";
-  QueryRunner::run_ddl_statement(ddl, g_session);
-  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+  run_ddl_statement(ddl);
+  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
   ddl = "DROP TABLE CTAS_TARGET;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
 }
 
 TEST(Ctas, LiteralStringTest) {
   std::string ddl = "DROP TABLE IF EXISTS CTAS_SOURCE;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
   ddl = "DROP TABLE IF EXISTS CTAS_TARGET;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
 
-  QueryRunner::run_ddl_statement("CREATE TABLE CTAS_SOURCE (id int, val int);",
-                                 g_session);
+  run_ddl_statement("CREATE TABLE CTAS_SOURCE (id int, val int);");
 
-  QueryRunner::run_multiple_agg("INSERT INTO CTAS_SOURCE VALUES(1,1); ",
-                                g_session,
-                                ExecutorDeviceType::CPU,
-                                true,
-                                true,
-                                nullptr);
-  QueryRunner::run_multiple_agg("INSERT INTO CTAS_SOURCE VALUES(2,2); ",
-                                g_session,
-                                ExecutorDeviceType::CPU,
-                                true,
-                                true,
-                                nullptr);
-  QueryRunner::run_multiple_agg("INSERT INTO CTAS_SOURCE VALUES(3,3); ",
-                                g_session,
-                                ExecutorDeviceType::CPU,
-                                true,
-                                true,
-                                nullptr);
+  run_multiple_agg("INSERT INTO CTAS_SOURCE VALUES(1,1); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO CTAS_SOURCE VALUES(2,2); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO CTAS_SOURCE VALUES(3,3); ", ExecutorDeviceType::CPU);
 
   ddl =
       "CREATE TABLE CTAS_TARGET AS select id, val, (case when val=1 then 'aa' else 'bb' "
       "end) as txt FROM CTAS_SOURCE;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
 
   auto check = [](int id, std::string txt) {
-    auto select_result = QueryRunner::run_multiple_agg(
+    auto select_result = run_multiple_agg(
         "SELECT txt FROM CTAS_TARGET WHERE id=" + std::to_string(id) + ";",
-        g_session,
-        ExecutorDeviceType::CPU,
-        true,
-        true,
-        nullptr);
+        ExecutorDeviceType::CPU);
 
     const auto select_crt_row = select_result->getNextRow(true, false);
     const auto mapd_variant = select_crt_row[0];
@@ -717,8 +710,8 @@ TEST(Ctas, LiteralStringTest) {
 }
 
 TEST_P(Ctas, CreateTableAsSelect) {
-  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE;", g_session);
-  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS CTAS_TARGET;", g_session);
+  run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS CTAS_TARGET;");
 
   std::string create_sql = "CREATE TABLE CTAS_SOURCE (id int";
   for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
@@ -734,7 +727,7 @@ TEST_P(Ctas, CreateTableAsSelect) {
 
   LOG(INFO) << create_sql;
 
-  QueryRunner::run_ddl_statement(create_sql, g_session);
+  run_ddl_statement(create_sql);
 
   size_t num_rows = 25;
 
@@ -747,27 +740,24 @@ TEST_P(Ctas, CreateTableAsSelect) {
     }
     insert_sql += ");";
 
-    //    LOG(INFO) << "insert_sql: " << insert_sql;
-
-    QueryRunner::run_multiple_agg(
-        insert_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
+    run_multiple_agg(insert_sql, ExecutorDeviceType::CPU);
   }
 
   // execute CTAS
   std::string create_ctas_sql = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
   LOG(INFO) << create_ctas_sql;
 
-  QueryRunner::run_ddl_statement(create_ctas_sql, g_session);
+  run_ddl_statement(create_ctas_sql);
 
   // check tables
-  Catalog_Namespace::Catalog& cat = g_session->getCatalog();
-  const TableDescriptor* td_source = cat.getMetadataForTable("CTAS_SOURCE");
-  const TableDescriptor* td_target = cat.getMetadataForTable("CTAS_TARGET");
+  auto cat = QR::get()->getCatalog();
+  const TableDescriptor* td_source = cat->getMetadataForTable("CTAS_SOURCE");
+  const TableDescriptor* td_target = cat->getMetadataForTable("CTAS_TARGET");
 
   auto source_cols =
-      cat.getAllColumnMetadataForTable(td_source->tableId, false, true, false);
+      cat->getAllColumnMetadataForTable(td_source->tableId, false, true, false);
   auto target_cols =
-      cat.getAllColumnMetadataForTable(td_target->tableId, false, true, false);
+      cat->getAllColumnMetadataForTable(td_target->tableId, false, true, false);
 
   ASSERT_EQ(source_cols.size(), target_cols.size());
 
@@ -795,12 +785,10 @@ TEST_P(Ctas, CreateTableAsSelect) {
   std::string select_ctas_sql = "SELECT * FROM CTAS_TARGET ORDER BY id;";
 
   LOG(INFO) << select_sql;
-  auto select_result = QueryRunner::run_multiple_agg(
-      select_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
+  auto select_result = run_multiple_agg(select_sql, ExecutorDeviceType::CPU);
 
   LOG(INFO) << select_ctas_sql;
-  auto select_ctas_result = QueryRunner::run_multiple_agg(
-      select_ctas_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
+  auto select_ctas_result = run_multiple_agg(select_ctas_sql, ExecutorDeviceType::CPU);
 
   ASSERT_EQ(num_rows, select_result->rowCount());
   ASSERT_EQ(num_rows, select_ctas_result->rowCount());
@@ -828,126 +816,96 @@ TEST_P(Ctas, CreateTableAsSelect) {
 
 TEST(Itas, SyntaxCheck) {
   std::string ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
   ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
 
-  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val int);",
-                                 g_session);
-  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_TARGET (id int);", g_session);
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val int);");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int);");
 
   ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
 
   ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
   ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
 
-  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int);", g_session);
-  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val int);",
-                                 g_session);
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int);");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val int);");
 
   ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
 
   ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
   ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
 
-  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int);", g_session);
-  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_TARGET (id int encoding FIXED(8));",
-                                 g_session);
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int);");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int encoding FIXED(8));");
 
   ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
 
   ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
   ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
 
-  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int encoding FIXED(8));",
-                                 g_session);
-  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_TARGET (id int);", g_session);
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int encoding FIXED(8));");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int);");
 
   ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_NO_THROW(QueryRunner::run_ddl_statement(ddl, g_session));
+  EXPECT_NO_THROW(run_ddl_statement(ddl));
 
   ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
   ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
 
-  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val timestamp(0));",
-                                 g_session);
-  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val timestamp(3));",
-                                 g_session);
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val timestamp(0));");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val timestamp(3));");
 
   ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
 
   ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
   ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
 
-  QueryRunner::run_ddl_statement(
-      "CREATE TABLE ITAS_SOURCE (id int, val text encoding none);", g_session);
-  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val text);",
-                                 g_session);
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val text encoding none);");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val text);");
 
   ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
 
   ddl = "DROP TABLE IF EXISTS ITAS_SOURCE;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
   ddl = "DROP TABLE IF EXISTS ITAS_TARGET;";
-  QueryRunner::run_ddl_statement(ddl, g_session);
+  run_ddl_statement(ddl);
 
-  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val decimal(10,2));",
-                                 g_session);
-  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val decimal(10,3));",
-                                 g_session);
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val decimal(10,2));");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (id int, val decimal(10,3));");
 
   ddl = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
-  EXPECT_THROW(QueryRunner::run_ddl_statement(ddl, g_session), std::runtime_error);
+  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
 }
 
 TEST(Itas, DifferentColumnNames) {
-  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;", g_session);
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
 
-  QueryRunner::run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val int);",
-                                 g_session);
+  run_ddl_statement("CREATE TABLE ITAS_SOURCE (id int, val int);");
 
-  QueryRunner::run_multiple_agg("INSERT INTO ITAS_SOURCE VALUES(1,10); ",
-                                g_session,
-                                ExecutorDeviceType::CPU,
-                                true,
-                                true,
-                                nullptr);
-  QueryRunner::run_multiple_agg("INSERT INTO ITAS_SOURCE VALUES(2,20); ",
-                                g_session,
-                                ExecutorDeviceType::CPU,
-                                true,
-                                true,
-                                nullptr);
-  QueryRunner::run_multiple_agg("INSERT INTO ITAS_SOURCE VALUES(3,30); ",
-                                g_session,
-                                ExecutorDeviceType::CPU,
-                                true,
-                                true,
-                                nullptr);
+  run_multiple_agg("INSERT INTO ITAS_SOURCE VALUES(1,10); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO ITAS_SOURCE VALUES(2,20); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO ITAS_SOURCE VALUES(3,30); ", ExecutorDeviceType::CPU);
 
   auto check = [](int id, int64_t val) {
-    auto select_result = QueryRunner::run_multiple_agg(
+    auto select_result = run_multiple_agg(
         "SELECT target_val FROM ITAS_TARGET WHERE target_id=" + std::to_string(id) + ";",
-        g_session,
-        ExecutorDeviceType::CPU,
-        true,
-        true,
-        nullptr);
+        ExecutorDeviceType::CPU);
 
     const auto select_crt_row = select_result->getNextRow(true, false);
     const auto mapd_variant = select_crt_row[0];
@@ -957,55 +915,45 @@ TEST(Itas, DifferentColumnNames) {
     ASSERT_EQ(val, mapd_val);
   };
 
-  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;", g_session);
-  QueryRunner::run_ddl_statement(
-      "CREATE TABLE ITAS_TARGET (target_id int, target_val int);", g_session);
-  QueryRunner::run_ddl_statement(
-      "INSERT INTO ITAS_TARGET SELECT id, val FROM ITAS_SOURCE;", g_session);
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (target_id int, target_val int);");
+  run_ddl_statement("INSERT INTO ITAS_TARGET SELECT id, val FROM ITAS_SOURCE;");
 
   check(1, 10);
   check(2, 20);
   check(3, 30);
 
-  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;", g_session);
-  QueryRunner::run_ddl_statement(
-      "CREATE TABLE ITAS_TARGET (target_id int, target_val int);", g_session);
-  QueryRunner::run_ddl_statement(
-      "INSERT INTO ITAS_TARGET (target_id, target_val) SELECT id, val FROM ITAS_SOURCE;",
-      g_session);
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (target_id int, target_val int);");
+  run_ddl_statement(
+      "INSERT INTO ITAS_TARGET (target_id, target_val) SELECT id, val FROM ITAS_SOURCE;");
 
   check(1, 10);
   check(2, 20);
   check(3, 30);
 
-  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;", g_session);
-  QueryRunner::run_ddl_statement(
-      "CREATE TABLE ITAS_TARGET (target_id int, target_val int);", g_session);
-  QueryRunner::run_ddl_statement(
-      "INSERT INTO ITAS_TARGET (target_val, target_id) SELECT val, id FROM ITAS_SOURCE;",
-      g_session);
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (target_id int, target_val int);");
+  run_ddl_statement(
+      "INSERT INTO ITAS_TARGET (target_val, target_id) SELECT val, id FROM ITAS_SOURCE;");
 
   check(1, 10);
   check(2, 20);
   check(3, 30);
 
-  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;", g_session);
-  QueryRunner::run_ddl_statement(
-      "CREATE TABLE ITAS_TARGET (target_id int, target_val int);", g_session);
-  QueryRunner::run_ddl_statement(
-      "INSERT INTO ITAS_TARGET (target_id, target_val) SELECT val, id FROM ITAS_SOURCE;",
-      g_session);
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (target_id int, target_val int);");
+  run_ddl_statement(
+      "INSERT INTO ITAS_TARGET (target_id, target_val) SELECT val, id FROM ITAS_SOURCE;");
 
   check(10, 1);
   check(20, 2);
   check(30, 3);
 
-  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;", g_session);
-  QueryRunner::run_ddl_statement(
-      "CREATE TABLE ITAS_TARGET (target_id int, target_val int);", g_session);
-  QueryRunner::run_ddl_statement(
-      "INSERT INTO ITAS_TARGET (target_val, target_id) SELECT id, val FROM ITAS_SOURCE;",
-      g_session);
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
+  run_ddl_statement("CREATE TABLE ITAS_TARGET (target_id int, target_val int);");
+  run_ddl_statement(
+      "INSERT INTO ITAS_TARGET (target_val, target_id) SELECT id, val FROM ITAS_SOURCE;");
 
   check(10, 1);
   check(20, 2);
@@ -1014,8 +962,8 @@ TEST(Itas, DifferentColumnNames) {
 
 void itasTestBody(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
                   std::string targetPartitionScheme = ")") {
-  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;", g_session);
-  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;", g_session);
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
 
   std::string create_source_sql = "CREATE TABLE ITAS_SOURCE (id int";
   std::string create_target_sql = "CREATE TABLE ITAS_TARGET (id int";
@@ -1037,8 +985,8 @@ void itasTestBody(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDesc
   LOG(INFO) << create_source_sql;
   LOG(INFO) << create_target_sql;
 
-  QueryRunner::run_ddl_statement(create_source_sql, g_session);
-  QueryRunner::run_ddl_statement(create_target_sql, g_session);
+  run_ddl_statement(create_source_sql);
+  run_ddl_statement(create_target_sql);
 
   size_t num_rows = 25;
 
@@ -1051,29 +999,24 @@ void itasTestBody(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDesc
     }
     insert_sql += ");";
 
-    //    LOG(INFO) << "insert_sql: " << insert_sql;
-
-    QueryRunner::run_multiple_agg(
-        insert_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
+    run_multiple_agg(insert_sql, ExecutorDeviceType::CPU);
   }
 
   // execute CTAS
   std::string insert_itas_sql = "INSERT INTO ITAS_TARGET SELECT * FROM ITAS_SOURCE;";
   LOG(INFO) << insert_itas_sql;
 
-  QueryRunner::run_ddl_statement(insert_itas_sql, g_session);
+  run_ddl_statement(insert_itas_sql);
 
   // compare source against CTAS
   std::string select_sql = "SELECT * FROM ITAS_SOURCE ORDER BY id;";
   std::string select_itas_sql = "SELECT * FROM ITAS_TARGET ORDER BY id;";
 
   LOG(INFO) << select_sql;
-  auto select_result = QueryRunner::run_multiple_agg(
-      select_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
+  auto select_result = run_multiple_agg(select_sql, ExecutorDeviceType::CPU);
 
   LOG(INFO) << select_itas_sql;
-  auto select_itas_result = QueryRunner::run_multiple_agg(
-      select_itas_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
+  auto select_itas_result = run_multiple_agg(select_itas_sql, ExecutorDeviceType::CPU);
 
   ASSERT_EQ(num_rows, select_result->rowCount());
   ASSERT_EQ(num_rows, select_itas_result->rowCount());
@@ -1119,7 +1062,7 @@ TEST_P(Update, UpdateColumnByColumn) {
     return;
   }
 
-  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS update_test;", g_session);
+  run_ddl_statement("DROP TABLE IF EXISTS update_test;");
 
   std::string create_sql = "CREATE TABLE update_test(id int";
   for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
@@ -1137,7 +1080,7 @@ TEST_P(Update, UpdateColumnByColumn) {
 
   LOG(INFO) << create_sql;
 
-  QueryRunner::run_ddl_statement(create_sql, g_session);
+  run_ddl_statement(create_sql);
 
   size_t num_rows = 10;
 
@@ -1151,10 +1094,7 @@ TEST_P(Update, UpdateColumnByColumn) {
     }
     insert_sql += ");";
 
-    //    LOG(INFO) << "insert_sql: " << insert_sql;
-
-    QueryRunner::run_multiple_agg(
-        insert_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
+    run_multiple_agg(insert_sql, ExecutorDeviceType::CPU);
   }
 
   // execute Updates
@@ -1170,8 +1110,7 @@ TEST_P(Update, UpdateColumnByColumn) {
 
   LOG(INFO) << update_sql;
 
-  QueryRunner::run_multiple_agg(
-      update_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
+  run_multiple_agg(update_sql, ExecutorDeviceType::CPU);
 
   // compare source against CTAS
   std::string select_sql = "SELECT id";
@@ -1182,8 +1121,7 @@ TEST_P(Update, UpdateColumnByColumn) {
   select_sql += " FROM update_test ORDER BY id;";
 
   LOG(INFO) << select_sql;
-  auto select_result = QueryRunner::run_multiple_agg(
-      select_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
+  auto select_result = run_multiple_agg(select_sql, ExecutorDeviceType::CPU);
 
   for (unsigned int row = 0; row < num_rows; row++) {
     const auto select_crt_row = select_result->getNextRow(true, false);
@@ -1214,7 +1152,7 @@ void updateColumnByLiteralTest(
     return;
   }
 
-  QueryRunner::run_ddl_statement("DROP TABLE IF EXISTS update_test;", g_session);
+  run_ddl_statement("DROP TABLE IF EXISTS update_test;");
 
   std::string create_sql = "CREATE TABLE update_test(id int";
   for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
@@ -1232,7 +1170,7 @@ void updateColumnByLiteralTest(
 
   LOG(INFO) << create_sql;
 
-  QueryRunner::run_ddl_statement(create_sql, g_session);
+  run_ddl_statement(create_sql);
 
   size_t num_rows = 10;
 
@@ -1249,10 +1187,7 @@ void updateColumnByLiteralTest(
     }
     insert_sql += ");";
 
-    //    LOG(INFO) << "insert_sql: " << insert_sql;
-
-    QueryRunner::run_multiple_agg(
-        insert_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
+    run_multiple_agg(insert_sql, ExecutorDeviceType::CPU);
   }
 
   // execute Updates
@@ -1268,8 +1203,7 @@ void updateColumnByLiteralTest(
     }
     update_sql += " WHERE id=" + std::to_string(row) + ";";
     LOG(INFO) << update_sql;
-    QueryRunner::run_multiple_agg(
-        update_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
+    run_multiple_agg(update_sql, ExecutorDeviceType::CPU);
   }
 
   // compare source against CTAS
@@ -1280,8 +1214,7 @@ void updateColumnByLiteralTest(
   select_sql += " FROM update_test ORDER BY id;";
 
   LOG(INFO) << select_sql;
-  auto select_result = QueryRunner::run_multiple_agg(
-      select_sql, g_session, ExecutorDeviceType::CPU, true, true, nullptr);
+  auto select_result = run_multiple_agg(select_sql, ExecutorDeviceType::CPU);
 
   for (unsigned int row = 0; row < num_rows; row++) {
     const auto select_crt_row = select_result->getNextRow(true, false);
@@ -1582,19 +1515,17 @@ INSTANTIATE_TEST_CASE_P(
     }));
 
 int main(int argc, char* argv[]) {
-  int err = 0;
+  testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);
 
+  QR::init(BASE_PATH);
+
+  int err{0};
   try {
-    testing::InitGoogleTest(&argc, argv);
-    g_session.reset(QueryRunner::get_session(BASE_PATH));
-
     err = RUN_ALL_TESTS();
-
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
-    err = -1;
   }
-
+  QR::reset();
   return err;
 }

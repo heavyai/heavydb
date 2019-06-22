@@ -29,19 +29,19 @@
 #define BASE_PATH "./tmp"
 #endif
 
+using QR = QueryRunner::QueryRunner;
+
 namespace {
 
-std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
-
-inline void run_ddl_statement(const std::string& create_table_stmt) {
-  QueryRunner::run_ddl_statement(create_table_stmt, g_session);
+inline void run_ddl_statement(const std::string& stmt) {
+  QR::get()->runDDLStatement(stmt);
 }
 
 std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
                                             const ExecutorDeviceType device_type) {
-  return QueryRunner::run_multiple_agg(
-      query_str, g_session, device_type, false, false, nullptr);
+  return QR::get()->runSQL(query_str, device_type, false, false);
 }
+
 #define ASSERT_METADATA(type, tag)                                   \
   template <typename T, bool enabled = std::is_same<T, type>::value> \
   void assert_metadata(const ChunkStats& chunkStats,                 \
@@ -107,7 +107,7 @@ auto check_fragment_metadata(Args&&... args) -> auto {
 
 template <typename FUNC, typename... Args>
 void run_op_per_fragment(const TableDescriptor* td, FUNC f, Args&&... args) {
-  const auto shards = g_session->getCatalog().getPhysicalTablesDescriptors(td);
+  const auto shards = QR::get()->getCatalog()->getPhysicalTablesDescriptors(td);
   for (const auto shard : shards) {
     auto* fragmenter = shard->fragmenter;
     CHECK(fragmenter);
@@ -223,8 +223,8 @@ class MultiFragMetadataUpdate : public ::testing::Test {
 TEST_F(MultiFragMetadataUpdate, NoChanges) {
   std::vector<std::map<int, ChunkMetadata>> metadata_for_fragments;
   {
-    const auto& cat = g_session->getCatalog();
-    const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
+    const auto cat = QR::get()->getCatalog();
+    const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
     // Get chunk metadata before recomputing
     auto store_original_metadata =
@@ -233,13 +233,13 @@ TEST_F(MultiFragMetadataUpdate, NoChanges) {
         };
 
     run_op_per_fragment(td, store_original_metadata);
-    recompute_metadata(td, cat);
+    recompute_metadata(td, *cat);
   }
 
   // Make sure metadata matches after recomputing
   {
-    const auto& cat = g_session->getCatalog();
-    const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
+    const auto cat = QR::get()->getCatalog();
+    const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
     auto* fragmenter = td->fragmenter;
     CHECK(fragmenter);
@@ -299,8 +299,8 @@ using MetadataUpdate_Sharded = MetadataUpdate<4>;
   TEST_F1(test_class, test_name, Sharded)
 
 void BODY_F(MetadataUpdate, InitialMetadata) {
-  const auto& cat = g_session->getCatalog();
-  const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
+  const auto cat = QR::get()->getCatalog();
+  const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   run_op_per_fragment(
       td,
@@ -355,8 +355,8 @@ void BODY_F(MetadataUpdate, InitialMetadata) {
 }
 
 void BODY_F(MetadataUpdate, IntUpdate) {
-  const auto& cat = g_session->getCatalog();
-  const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
+  const auto cat = QR::get()->getCatalog();
+  const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   run_multiple_agg("UPDATE " + g_table_name + " SET x = 3 WHERE x = 1;",
                    ExecutorDeviceType::CPU);
@@ -367,25 +367,25 @@ void BODY_F(MetadataUpdate, IntUpdate) {
   run_multiple_agg("UPDATE " + g_table_name + " SET x = 0 WHERE x = 3;",
                    ExecutorDeviceType::CPU);
 
-  recompute_metadata(td, cat);
+  recompute_metadata(td, *cat);
   // Check int col: expected range 1,2 nulls
   run_op_per_fragment(td, check_fragment_metadata(1, (int32_t)0, 2, true));
 }
 
 void BODY_F(MetadataUpdate, IntRemoveNull) {
-  const auto& cat = g_session->getCatalog();
-  const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
+  const auto cat = QR::get()->getCatalog();
+  const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   run_multiple_agg("UPDATE " + g_table_name + " SET x = 3;", ExecutorDeviceType::CPU);
 
-  recompute_metadata(td, cat);
+  recompute_metadata(td, *cat);
   // Check int col: expected range 1,2 nulls
   run_op_per_fragment(td, check_fragment_metadata(1, (int32_t)3, 3, false));
 }
 
 void BODY_F(MetadataUpdate, NotNullInt) {
-  const auto& cat = g_session->getCatalog();
-  const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
+  const auto cat = QR::get()->getCatalog();
+  const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   run_multiple_agg("UPDATE " + g_table_name + " SET y = " +
                        std::to_string(std::numeric_limits<int32_t>::lowest() + 1) +
@@ -398,78 +398,78 @@ void BODY_F(MetadataUpdate, NotNullInt) {
 
   run_multiple_agg("UPDATE " + g_table_name + " SET y = 1;", ExecutorDeviceType::CPU);
 
-  recompute_metadata(td, cat);
+  recompute_metadata(td, *cat);
   run_op_per_fragment(td, check_fragment_metadata(2, (int32_t)1, 1, false));
 }
 
 void BODY_F(MetadataUpdate, DateNarrowRange) {
-  const auto& cat = g_session->getCatalog();
-  const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
+  const auto cat = QR::get()->getCatalog();
+  const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   run_multiple_agg("UPDATE " + g_table_name + " SET d = '1/1/2010';",
                    ExecutorDeviceType::CPU);
 
-  recompute_metadata(td, cat);
+  recompute_metadata(td, *cat);
   // Check date in days 32 col: expected range 1262304000,1262304000 nulls
   run_op_per_fragment(td,
                       check_fragment_metadata(6, (int64_t)1262304000, 1262304000, false));
 }
 
 void BODY_F(MetadataUpdate, SmallDateNarrowMin) {
-  const auto& cat = g_session->getCatalog();
-  const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
+  const auto cat = QR::get()->getCatalog();
+  const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   run_multiple_agg(
       "UPDATE " + g_table_name + " SET dd = '1/1/2010' WHERE dd = '1/1/1940';",
       ExecutorDeviceType::CPU);
 
-  recompute_metadata(td, cat);
+  recompute_metadata(td, *cat);
   run_op_per_fragment(td,
                       check_fragment_metadata(7, (int64_t)1262304000, 1356912000, false));
 }
 
 void BODY_F(MetadataUpdate, SmallDateNarrowMax) {
-  const auto& cat = g_session->getCatalog();
-  const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
+  const auto cat = QR::get()->getCatalog();
+  const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   run_multiple_agg(
       "UPDATE " + g_table_name + " SET dd = '1/1/2010' WHERE dd = '12/31/2012';",
       ExecutorDeviceType::CPU);
 
-  recompute_metadata(td, cat);
+  recompute_metadata(td, *cat);
   run_op_per_fragment(td,
                       check_fragment_metadata(7, (int64_t)-946771200, 1262304000, false));
 }
 
 void BODY_F(MetadataUpdate, DeleteReset) {
-  const auto& cat = g_session->getCatalog();
-  const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
+  const auto cat = QR::get()->getCatalog();
+  const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   run_multiple_agg("DELETE FROM  " + g_table_name + " WHERE dd = '12/31/2012';",
                    ExecutorDeviceType::CPU);
   run_op_per_fragment(td, check_fragment_metadata(-1, false, true, false));
 
-  vacuum_and_recompute_metadata(td, cat);
+  vacuum_and_recompute_metadata(td, *cat);
   run_op_per_fragment(td, check_fragment_metadata(-1, false, false, false));
 }
 
 void BODY_F(MetadataUpdate, EncodedStringNull) {
-  const auto& cat = g_session->getCatalog();
-  const auto td = cat.getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
+  const auto cat = QR::get()->getCatalog();
+  const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
 
   TestHelpers::ValuesGenerator gen(g_table_name);
   for (int sh = 0; sh < std::max(1, td->nShards); ++sh) {
     run_multiple_agg(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "'abc'", sh),
                      ExecutorDeviceType::CPU);
   }
-  vacuum_and_recompute_metadata(td, cat);
+  vacuum_and_recompute_metadata(td, *cat);
   run_op_per_fragment(td, check_fragment_metadata(8, 0, 1, false));
 
   for (int sh = 0; sh < std::max(1, td->nShards); ++sh) {
     run_multiple_agg(gen(1, 1, 1, 1, 1, "'1/1/2010'", "'1/1/2010'", "null", sh),
                      ExecutorDeviceType::CPU);
   }
-  vacuum_and_recompute_metadata(td, cat);
+  vacuum_and_recompute_metadata(td, *cat);
   run_op_per_fragment(td, check_fragment_metadata(8, 0, 1, true));
 }
 
@@ -486,7 +486,8 @@ TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, EncodedStringNull)
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  g_session.reset(QueryRunner::get_session(BASE_PATH));
+
+  QR::init(BASE_PATH);
 
   int err{0};
   try {
@@ -494,6 +495,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  g_session.reset(nullptr);
+  QR::reset();
   return err;
 }

@@ -51,6 +51,8 @@
 #include "../Shared/ThreadController.h"
 #include "../Shared/checked_alloc.h"
 
+#include "QueryRunner/QueryRunner.h"
+
 // Some builds of boost::geometry require iostream, but don't explicitly include it.
 // Placing in own section to ensure it's included after iostream.
 #include <boost/geometry/index/rtree.hpp>
@@ -969,20 +971,16 @@ class Importer : public DataStreamSink {
   static std::mutex init_gdal_mutex;
 };
 
-class ImportDriver {
+class ImportDriver : public QueryRunner::QueryRunner {
  public:
-  ImportDriver(std::shared_ptr<Catalog_Namespace::Catalog> c,
+  ImportDriver(std::shared_ptr<Catalog_Namespace::Catalog> cat,
                const Catalog_Namespace::UserMetadata& user,
-               const ExecutorDeviceType t = ExecutorDeviceType::GPU)
-      : session_(new Catalog_Namespace::SessionInfo(c, user, t, "")) {}
+               const ExecutorDeviceType dt = ExecutorDeviceType::GPU);
 
-  void import_geo_table(const std::string& file_path,
-                        const std::string& table_name,
-                        const bool compression = true,
-                        const bool create_table = true);
-
- private:
-  std::unique_ptr<Catalog_Namespace::SessionInfo> session_;
+  void importGeoTable(const std::string& file_path,
+                      const std::string& table_name,
+                      const bool compression = true,
+                      const bool create_table = true);
 };
 
 }  // namespace Importer_NS

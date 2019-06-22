@@ -31,20 +31,18 @@
 #endif
 
 using namespace std::literals::string_literals;
-
+using QR = QueryRunner::QueryRunner;
 namespace {
 
 bool g_keep_test_data{false};
-std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 
 inline void run_ddl_statement(const std::string& create_table_stmt) {
-  QueryRunner::run_ddl_statement(create_table_stmt, g_session);
+  QR::get()->runDDLStatement(create_table_stmt);
 }
 
 std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
                                             const ExecutorDeviceType device_type) {
-  return QueryRunner::run_multiple_agg(
-      query_str, g_session, device_type, false, false, nullptr);
+  return QR::get()->runSQL(query_str, device_type, false, false);
 }
 
 }  // namespace
@@ -111,13 +109,13 @@ auto query = [](std::string query_str) {
 
 auto get_metadata_vec =
     [](std::string table_name, std::string column_name = "x"s) -> auto {
-  auto& cat = g_session->getCatalog();
-  auto& data_manager = cat.getDataMgr();
+  auto cat = QR::get()->getCatalog();
+  auto& data_manager = cat->getDataMgr();
 
-  auto table_desc = cat.getMetadataForTable(table_name);
-  auto column_desc = cat.getMetadataForColumn(table_desc->tableId, column_name);
+  auto table_desc = cat->getMetadataForTable(table_name);
+  auto column_desc = cat->getMetadataForColumn(table_desc->tableId, column_name);
   ChunkKey timestamp_ck{
-      cat.getCurrentDB().dbId, table_desc->tableId, column_desc->columnId};
+      cat->getCurrentDB().dbId, table_desc->tableId, column_desc->columnId};
 
   std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
   data_manager.getChunkMetadataVecForKeyPrefix(chunkMetadataVec, timestamp_ck);
@@ -1504,7 +1502,7 @@ int main(int argc, char** argv) {
     g_keep_test_data = true;
   }
 
-  g_session.reset(QueryRunner::get_session(BASE_PATH));
+  QR::init(BASE_PATH);
 
   int err{0};
   try {
@@ -1512,6 +1510,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  g_session.reset(nullptr);
+  QR::reset();
   return err;
 }

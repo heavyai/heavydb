@@ -43,12 +43,11 @@ using namespace Planner;
 #define BASE_PATH "./tmp"
 #endif
 
+using QR = QueryRunner::QueryRunner;
 namespace {
-std::unique_ptr<SessionInfo> g_session;
-auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
 
 inline void run_ddl_statement(const string& input_str) {
-  QueryRunner::run_ddl_statement(input_str, g_session);
+  QR::get()->runDDLStatement(input_str);
 }
 
 RootPlan* plan_dml(const string& input_str) {
@@ -59,10 +58,10 @@ RootPlan* plan_dml(const string& input_str) {
   CHECK_EQ(parse_trees.size(), size_t(1));
   const auto& stmt = parse_trees.front();
   Parser::DMLStmt* dml = dynamic_cast<Parser::DMLStmt*>(stmt.get());
-  CHECK(dml != nullptr);
+  CHECK(dml);
   Query query;
-  dml->analyze(g_session->getCatalog(), query);
-  Optimizer optimizer(query, g_session->getCatalog());
+  dml->analyze(*QR::get()->getCatalog(), query);
+  Optimizer optimizer(query, *QR::get()->getCatalog());
   RootPlan* plan = optimizer.optimize();
   return plan;
 }
@@ -76,32 +75,35 @@ TEST(ParseAnalyzePlan, Create) {
                                     "h real, i float, j double, k bigint encoding diff, "
                                     "l text not null encoding dict, m "
                                     "timestamp(0), n time(0), o date);"););
-  ASSERT_TRUE(g_session->getCatalog().getMetadataForTable("fat") != nullptr);
+  ASSERT_TRUE(QR::get()->getCatalog()->getMetadataForTable("fat") != nullptr);
   ASSERT_NO_THROW(
       run_ddl_statement(
           "create table if not exists skinny (a smallint, b int, c bigint);"););
-  ASSERT_TRUE(g_session->getCatalog().getMetadataForTable("skinny") != nullptr);
+  ASSERT_TRUE(QR::get()->getCatalog()->getMetadataForTable("skinny") != nullptr);
   ASSERT_NO_THROW(
       run_ddl_statement(
           "create table if not exists smallfrag (a int, b text, c bigint) with "
           "(fragment_size = 1000, page_size = 512);"););
-  const TableDescriptor* td = g_session->getCatalog().getMetadataForTable("smallfrag");
+  const TableDescriptor* td = QR::get()->getCatalog()->getMetadataForTable("smallfrag");
+  CHECK(td);
   EXPECT_TRUE(td->maxFragRows == 1000 && td->fragPageSize == 512);
   ASSERT_NO_THROW(
       run_ddl_statement(
           "create table if not exists testdict (a varchar(100) encoding dict(8), c "
           "text encoding dict);"););
-  td = g_session->getCatalog().getMetadataForTable("testdict");
+  td = QR::get()->getCatalog()->getMetadataForTable("testdict");
+  CHECK(td);
   const ColumnDescriptor* cd =
-      g_session->getCatalog().getMetadataForColumn(td->tableId, "a");
+      QR::get()->getCatalog()->getMetadataForColumn(td->tableId, "a");
   const DictDescriptor* dd =
-      g_session->getCatalog().getMetadataForDict(cd->columnType.get_comp_param());
+      QR::get()->getCatalog()->getMetadataForDict(cd->columnType.get_comp_param());
   ASSERT_TRUE(dd != nullptr);
   EXPECT_EQ(dd->dictNBits, 8);
   const std::string db_name("chelsea");
   ASSERT_NO_THROW(run_ddl_statement("CREATE DATABASE " + db_name + ";"));
   ASSERT_NO_THROW(run_ddl_statement("CREATE DATABASE IF NOT EXISTS " + db_name + ";"));
   Catalog_Namespace::DBMetadata db;
+  auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
   EXPECT_TRUE(sys_cat.getMetadataForDB(db_name, db));
   EXPECT_EQ(db.dbName, db_name);
   ASSERT_NO_THROW(run_ddl_statement("DROP DATABASE " + db_name + ";"));
@@ -340,7 +342,7 @@ int main(int argc, char* argv[]) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   ::testing::InitGoogleTest(&argc, argv);
 
-  g_session.reset(QueryRunner::get_session(BASE_PATH));
+  QR::init(BASE_PATH);
 
   int err{0};
   try {
@@ -350,7 +352,7 @@ int main(int argc, char* argv[]) {
   }
 
   drop_views_and_tables();
-  g_session.reset(nullptr);
+  QR::reset();
 
   return err;
 }

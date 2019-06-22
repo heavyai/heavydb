@@ -35,31 +35,30 @@
 #define BASE_PATH "./tmp"
 #endif
 
-using namespace std;
 using namespace Catalog_Namespace;
 using namespace TestHelpers;
 
+using QR = QueryRunner::QueryRunner;
+
 namespace {
 
-std::unique_ptr<SessionInfo> g_session;
 bool g_hoist_literals{true};
 
-inline void run_ddl_statement(const string& input_str) {
-  QueryRunner::run_ddl_statement(input_str, g_session);
+inline void run_ddl_statement(const std::string& input_str) {
+  QR::get()->runDDLStatement(input_str);
 }
 
-std::shared_ptr<ResultSet> run_query(const string& query_str) {
-  return QueryRunner::run_multiple_agg(
-      query_str, g_session, ExecutorDeviceType::CPU, g_hoist_literals, true);
+std::shared_ptr<ResultSet> run_query(const std::string& query_str) {
+  return QR::get()->runSQL(query_str, ExecutorDeviceType::CPU, g_hoist_literals, true);
 }
 
 template <typename E = std::runtime_error>
-bool alter_common(const string& table,
-                  const string& column,
-                  const string& type,
-                  const string& comp,
-                  const string& val,
-                  const string& val2,
+bool alter_common(const std::string& table,
+                  const std::string& column,
+                  const std::string& type,
+                  const std::string& comp,
+                  const std::string& val,
+                  const std::string& val2,
                   const bool expect_throw = false) {
   std::string alter_query = "alter table " + table + " add column " + column + " " + type;
   if (val != "") {
@@ -118,9 +117,10 @@ bool alter_common(const string& table,
   }
 }
 
-void import_table_file(const string& table, const string& file) {
-  std::string query_str = string("COPY trips FROM '") + "../../Tests/Import/datafiles/" +
-                          file + "' WITH (header='true');";
+void import_table_file(const std::string& table, const std::string& file) {
+  const auto query_str = std::string("COPY trips FROM '") +
+                         "../../Tests/Import/datafiles/" + file +
+                         "' WITH (header='true');";
 
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
@@ -131,11 +131,11 @@ void import_table_file(const string& table, const string& file) {
   CHECK_EQ(parse_trees.size(), size_t(1));
 
   const auto& stmt = parse_trees.front();
-  Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt.get());
-  if (!ddl) {
-    throw std::runtime_error("Not a DDLStmt: " + query_str);
+  auto copy_stmt = dynamic_cast<Parser::CopyTableStmt*>(stmt.get());
+  if (!copy_stmt) {
+    throw std::runtime_error("Expected a CopyTableStatment: " + query_str);
   }
-  ddl->execute(*g_session);
+  QR::get()->runImport(copy_stmt);
 }
 
 // don't use R"()" format; somehow it causes many blank lines
@@ -159,9 +159,9 @@ const char* create_table_trips =
     "            deleted                 BOOLEAN"
     "            ) WITH (FRAGMENT_SIZE=50);";  // so 2 fragments here
 
-void init_table_data(const string& table = "trips",
-                     const string& create_table_cmd = create_table_trips,
-                     const string& file = "trip_data_b.txt") {
+void init_table_data(const std::string& table = "trips",
+                     const std::string& create_table_cmd = create_table_trips,
+                     const std::string& file = "trip_data_b.txt") {
   run_ddl_statement("drop table if exists " + table + ";");
   run_ddl_statement(create_table_cmd);
   if (file.size()) {
@@ -204,6 +204,7 @@ std::vector<std::tuple<std::string, std::string, std::string, std::string>> type
        "'MULTIPOLYGON(((0 0,0 9,9 9,9 0),(1 1,2 2,3 3)))'",
        "MULTIPOLYGON (((9 0,9 9,0 9,0 0,9 0),(3 3,2 2,1 1,3 3)))"),
 };
+#undef MT
 
 TEST_F(AlterColumnTest, Add_column_with_default) {
   int cid = 0;
@@ -257,7 +258,7 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
-  g_session.reset(QueryRunner::get_session(BASE_PATH));
+  QR::init(BASE_PATH);
 
   int err{0};
   try {
@@ -265,6 +266,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  g_session.reset(nullptr);
+  QR::reset();
   return err;
 }

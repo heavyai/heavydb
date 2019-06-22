@@ -20,10 +20,9 @@
 #define BASE_PATH "./tmp"
 #endif
 
+using QR = QueryRunner::QueryRunner;
 namespace {
 std::shared_ptr<Calcite> g_calcite;
-using SessionInfoPtr = std::unique_ptr<Catalog_Namespace::SessionInfo>;
-SessionInfoPtr g_session;
 
 Catalog_Namespace::UserMetadata user;
 std::vector<DBObject> privObjects;
@@ -39,30 +38,8 @@ T v(const TargetValue& r) {
   return *p;
 }
 
-inline void run_ddl_statement(const std::string& query,
-                              SessionInfoPtr& session_ptr = g_session) {
-  QueryRunner::run_ddl_statement(query, session_ptr);
-}
-
-auto run_multiple_agg(const std::string& query_str,
-                      const ExecutorDeviceType device_type,
-                      SessionInfoPtr& session = g_session) {
-  return QueryRunner::run_multiple_agg(
-      query_str, session, device_type, false, true, nullptr);
-}
-
-TargetValue run_simple_agg(const std::string& query_str,
-                           const ExecutorDeviceType device_type,
-                           SessionInfoPtr& session = g_session,
-                           const bool geo_return_geo_tv = true,
-                           const bool allow_loop_joins = true) {
-  auto rows = run_multiple_agg(query_str, device_type, session);
-  if (geo_return_geo_tv) {
-    rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
-  }
-  auto crt_row = rows->getNextRow(true, true);
-  CHECK_EQ(size_t(1), crt_row.size());
-  return crt_row[0];
+inline void run_ddl_statement(const std::string& query) {
+  QR::get()->runDDLStatement(query);
 }
 
 }  // namespace
@@ -230,39 +207,45 @@ struct DashboardObject : testing::Test {
   Roles role_;
 
   DashboardDescriptor vd1;
+
   void setup_dashboards() {
-    auto& gcat = g_session->getCatalog();
+    auto session = QR::get()->getSession();
+    CHECK(session);
+    auto& cat = session->getCatalog();
     vd1.dashboardName = dname1;
     vd1.dashboardState = dstate;
     vd1.imageHash = dhash;
     vd1.dashboardMetadata = dmeta;
-    vd1.userId = g_session->get_currentUser().userId;
-    vd1.user = g_session->get_currentUser().userName;
-    id = gcat.createDashboard(vd1);
-    sys_cat.createDBObject(g_session->get_currentUser(),
-                           dname1,
-                           DBObjectType::DashboardDBObjectType,
-                           gcat,
-                           id);
+    vd1.userId = session->get_currentUser().userId;
+    vd1.user = session->get_currentUser().userName;
+    id = cat.createDashboard(vd1);
+    sys_cat.createDBObject(
+        session->get_currentUser(), dname1, DBObjectType::DashboardDBObjectType, cat, id);
   }
 
   void drop_dashboards() {
-    auto& gcat = g_session->getCatalog();
-    if (gcat.getMetadataForDashboard(id)) {
-      gcat.deleteMetadataForDashboard(id);
+    auto session = QR::get()->getSession();
+    CHECK(session);
+    auto& cat = session->getCatalog();
+    if (cat.getMetadataForDashboard(id)) {
+      cat.deleteMetadataForDashboard(id);
     }
   }
+
   explicit DashboardObject() {
     drop_dashboards();
     setup_dashboards();
   }
+
   ~DashboardObject() override { drop_dashboards(); }
 };
 
 TEST_F(GrantSyntax, MultiPrivilegeGrantRevoke) {
-  auto& g_cat = g_session->getCatalog();
+  auto session = QR::get()->getSession();
+  CHECK(session);
+  auto& cat = session->getCatalog();
   DBObject tbl_object("tbl", DBObjectType::TableDBObjectType);
-  tbl_object.loadKey(g_cat);
+  tbl_object.loadKey(cat);
   tbl_object.resetPrivileges();
   auto tbl_object_select = tbl_object;
   auto tbl_object_insert = tbl_object;
@@ -270,11 +253,11 @@ TEST_F(GrantSyntax, MultiPrivilegeGrantRevoke) {
   tbl_object_insert.setPrivileges(AccessPrivileges::INSERT_INTO_TABLE);
   std::vector<DBObject> objects = {tbl_object_select, tbl_object_insert};
   ASSERT_NO_THROW(
-      sys_cat.grantDBObjectPrivilegesBatch({"Arsenal", "Juventus"}, objects, g_cat));
+      sys_cat.grantDBObjectPrivilegesBatch({"Arsenal", "Juventus"}, objects, cat));
   EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", objects), true);
   EXPECT_EQ(sys_cat.checkPrivileges("Juventus", objects), true);
   ASSERT_NO_THROW(
-      sys_cat.revokeDBObjectPrivilegesBatch({"Arsenal", "Juventus"}, objects, g_cat));
+      sys_cat.revokeDBObjectPrivilegesBatch({"Arsenal", "Juventus"}, objects, cat));
   EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", objects), false);
   EXPECT_EQ(sys_cat.checkPrivileges("Juventus", objects), false);
 
@@ -385,14 +368,16 @@ TEST(UserRoles, RoleHierarchies) {
   EXPECT_NO_THROW(run_ddl_statement("GRANT UPDATE ON TABLE hr_tbl1 TO hr_r4;"));
 
   // check that we see privileges gratnted via roles' hierarchy
-  auto& g_cat = g_session->getCatalog();
+  auto session = QR::get()->getSession();
+  CHECK(session);
+  auto& cat = session->getCatalog();
   AccessPrivileges tbl_privs;
   ASSERT_NO_THROW(tbl_privs.add(AccessPrivileges::SELECT_FROM_TABLE));
   ASSERT_NO_THROW(tbl_privs.add(AccessPrivileges::INSERT_INTO_TABLE));
   ASSERT_NO_THROW(tbl_privs.add(AccessPrivileges::DELETE_FROM_TABLE));
   ASSERT_NO_THROW(tbl_privs.add(AccessPrivileges::UPDATE_IN_TABLE));
   DBObject tbl1_object("hr_tbl1", DBObjectType::TableDBObjectType);
-  tbl1_object.loadKey(g_cat);
+  tbl1_object.loadKey(cat);
   ASSERT_NO_THROW(tbl1_object.setPrivileges(tbl_privs));
   privObjects.clear();
   privObjects.push_back(tbl1_object);
@@ -788,7 +773,9 @@ TEST_F(DatabaseObject, DatabaseAllTest) {
 }
 
 TEST_F(TableObject, AccessDefaultsTest) {
-  auto& g_cat = g_session->getCatalog();
+  auto session = QR::get()->getSession();
+  CHECK(session);
+  auto& cat = session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Bayern"));
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
   AccessPrivileges epl_privs;
@@ -801,9 +788,9 @@ TEST_F(TableObject, AccessDefaultsTest) {
   DBObject epl_object("epl", DBObjectType::TableDBObjectType);
   DBObject seriea_object("seriea", DBObjectType::TableDBObjectType);
   DBObject bundesliga_object("bundesliga", DBObjectType::TableDBObjectType);
-  epl_object.loadKey(g_cat);
-  seriea_object.loadKey(g_cat);
-  bundesliga_object.loadKey(g_cat);
+  epl_object.loadKey(cat);
+  seriea_object.loadKey(cat);
+  bundesliga_object.loadKey(cat);
   ASSERT_NO_THROW(epl_object.setPrivileges(epl_privs));
   ASSERT_NO_THROW(seriea_object.setPrivileges(seriea_privs));
   ASSERT_NO_THROW(bundesliga_object.setPrivileges(bundesliga_privs));
@@ -817,7 +804,9 @@ TEST_F(TableObject, AccessDefaultsTest) {
   EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
 }
 TEST_F(TableObject, AccessAfterGrantsTest) {
-  auto& g_cat = g_session->getCatalog();
+  auto session = QR::get()->getSession();
+  CHECK(session);
+  auto& cat = session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Bayern"));
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
   AccessPrivileges epl_privs;
@@ -830,15 +819,15 @@ TEST_F(TableObject, AccessAfterGrantsTest) {
   DBObject epl_object("epl", DBObjectType::TableDBObjectType);
   DBObject seriea_object("seriea", DBObjectType::TableDBObjectType);
   DBObject bundesliga_object("bundesliga", DBObjectType::TableDBObjectType);
-  epl_object.loadKey(g_cat);
-  seriea_object.loadKey(g_cat);
-  bundesliga_object.loadKey(g_cat);
+  epl_object.loadKey(cat);
+  seriea_object.loadKey(cat);
+  bundesliga_object.loadKey(cat);
   ASSERT_NO_THROW(epl_object.setPrivileges(epl_privs));
   ASSERT_NO_THROW(seriea_object.setPrivileges(seriea_privs));
   ASSERT_NO_THROW(bundesliga_object.setPrivileges(bundesliga_privs));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", epl_object, g_cat));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Sudens", bundesliga_object, g_cat));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("OldLady", seriea_object, g_cat));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Arsenal", epl_object, cat));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Sudens", bundesliga_object, cat));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("OldLady", seriea_object, cat));
 
   privObjects.push_back(epl_object);
   EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
@@ -860,7 +849,9 @@ TEST_F(TableObject, AccessAfterGrantsTest) {
 }
 
 TEST_F(TableObject, AccessAfterRevokesTest) {
-  auto& g_cat = g_session->getCatalog();
+  auto session = QR::get()->getSession();
+  CHECK(session);
+  auto& cat = session->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
   ASSERT_NO_THROW(sys_cat.grantRole("Gunners", "Arsenal"));
   AccessPrivileges epl_privs;
@@ -874,15 +865,15 @@ TEST_F(TableObject, AccessAfterRevokesTest) {
   DBObject epl_object("epl", DBObjectType::TableDBObjectType);
   DBObject seriea_object("seriea", DBObjectType::TableDBObjectType);
   DBObject bundesliga_object("bundesliga", DBObjectType::TableDBObjectType);
-  epl_object.loadKey(g_cat);
-  seriea_object.loadKey(g_cat);
-  bundesliga_object.loadKey(g_cat);
+  epl_object.loadKey(cat);
+  seriea_object.loadKey(cat);
+  bundesliga_object.loadKey(cat);
   ASSERT_NO_THROW(epl_object.setPrivileges(epl_privs));
   ASSERT_NO_THROW(seriea_object.setPrivileges(seriea_privs));
   ASSERT_NO_THROW(bundesliga_object.setPrivileges(bundesliga_privs));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Gunners", epl_object, g_cat));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", bundesliga_object, g_cat));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("OldLady", seriea_object, g_cat));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Gunners", epl_object, cat));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", bundesliga_object, cat));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("OldLady", seriea_object, cat));
 
   privObjects.push_back(epl_object);
   EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
@@ -909,9 +900,9 @@ TEST_F(TableObject, AccessAfterRevokesTest) {
   ASSERT_NO_THROW(epl_object.setPrivileges(epl_privs));
   ASSERT_NO_THROW(seriea_object.setPrivileges(seriea_privs));
   ASSERT_NO_THROW(bundesliga_object.setPrivileges(bundesliga_privs));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", epl_object, g_cat));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Bayern", bundesliga_object, g_cat));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("OldLady", seriea_object, g_cat));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", epl_object, cat));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Bayern", bundesliga_object, cat));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("OldLady", seriea_object, cat));
 
   epl_object.resetPrivileges();
 
@@ -952,7 +943,9 @@ TEST_F(TableObject, AccessAfterRevokesTest) {
 
 void testViewPermissions(std::string user, std::string roleToGrant) {
   DBObject bill_view("bill_view", DBObjectType::ViewDBObjectType);
-  auto& cat = g_session->getCatalog();
+  auto session = QR::get()->getSession();
+  CHECK(session);
+  auto& cat = session->getCatalog();
   bill_view.loadKey(cat);
   std::vector<DBObject> privs;
 
@@ -1014,8 +1007,9 @@ TEST_F(ViewObject, GroupRoleFooGetsGrants) {
 }
 
 TEST_F(ViewObject, CalciteViewResolution) {
-  TPlanResult result = ::g_calcite->process(
-      *g_session, "select * from bill_table", {}, true, false, false);
+  const auto session = QR::get()->getSession();
+  TPlanResult result =
+      ::g_calcite->process(*session, "select * from bill_table", {}, true, false, false);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -1028,7 +1022,7 @@ TEST_F(ViewObject, CalciteViewResolution) {
   EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
 
   result =
-      ::g_calcite->process(*g_session, "select * from bill_view", {}, true, false, false);
+      ::g_calcite->process(*session, "select * from bill_view", {}, true, false, false);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -1041,7 +1035,7 @@ TEST_F(ViewObject, CalciteViewResolution) {
   EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
 
   result = ::g_calcite->process(
-      *g_session, "select * from bill_view_outer", {}, true, false, false);
+      *session, "select * from bill_view_outer", {}, true, false, false);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -1055,14 +1049,14 @@ TEST_F(ViewObject, CalciteViewResolution) {
 }
 
 TEST_F(DashboardObject, AccessDefaultsTest) {
-  auto& g_cat = g_session->getCatalog();
+  const auto cat = QR::get()->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("Gunners", "Bayern"));
   ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Arsenal"));
   AccessPrivileges dash_priv;
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
   privObjects.clear();
   DBObject dash_object(id, DBObjectType::DashboardDBObjectType);
-  dash_object.loadKey(g_cat);
+  dash_object.loadKey(*cat);
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
 
@@ -1073,17 +1067,17 @@ TEST_F(DashboardObject, AccessDefaultsTest) {
 }
 
 TEST_F(DashboardObject, AccessAfterGrantsTest) {
-  auto& g_cat = g_session->getCatalog();
+  const auto cat = QR::get()->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("Gunners", "Arsenal"));
   AccessPrivileges dash_priv;
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
   privObjects.clear();
   DBObject dash_object(id, DBObjectType::DashboardDBObjectType);
-  dash_object.loadKey(g_cat);
+  dash_object.loadKey(*cat);
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivilegesBatch(
-      {"Gunners", "Juventus"}, {dash_object}, g_cat));
+  ASSERT_NO_THROW(
+      sys_cat.grantDBObjectPrivilegesBatch({"Gunners", "Juventus"}, {dash_object}, *cat));
 
   privObjects.clear();
   privObjects.push_back(dash_object);
@@ -1094,32 +1088,32 @@ TEST_F(DashboardObject, AccessAfterGrantsTest) {
 }
 
 TEST_F(DashboardObject, AccessAfterRevokesTest) {
-  auto& g_cat = g_session->getCatalog();
+  const auto cat = QR::get()->getCatalog();
   ASSERT_NO_THROW(sys_cat.grantRole("OldLady", "Juventus"));
   ASSERT_NO_THROW(sys_cat.grantRole("Sudens", "Bayern"));
   AccessPrivileges dash_priv;
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
   privObjects.clear();
   DBObject dash_object(id, DBObjectType::DashboardDBObjectType);
-  dash_object.loadKey(g_cat);
+  dash_object.loadKey(*cat);
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
   ASSERT_NO_THROW(
-      sys_cat.grantDBObjectPrivilegesBatch({"OldLady", "Arsenal"}, {dash_object}, g_cat));
+      sys_cat.grantDBObjectPrivilegesBatch({"OldLady", "Arsenal"}, {dash_object}, *cat));
 
   EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
   EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
   EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), true);
   EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
 
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("OldLady", dash_object, g_cat));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("OldLady", dash_object, *cat));
   EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
   EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), true);
   EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
   EXPECT_EQ(sys_cat.checkPrivileges("Bayern", privObjects), false);
 
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", dash_object, g_cat));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", dash_object, g_cat));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Arsenal", dash_object, *cat));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", dash_object, *cat));
   EXPECT_EQ(sys_cat.checkPrivileges("Chelsea", privObjects), true);
   EXPECT_EQ(sys_cat.checkPrivileges("Arsenal", privObjects), false);
   EXPECT_EQ(sys_cat.checkPrivileges("Juventus", privObjects), false);
@@ -1127,9 +1121,9 @@ TEST_F(DashboardObject, AccessAfterRevokesTest) {
 }
 
 TEST_F(DashboardObject, GranteesDefaultListTest) {
-  auto& g_cat = g_session->getCatalog();
+  const auto cat = QR::get()->getCatalog();
   auto perms_list =
-      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
+      sys_cat.getMetadataForObject(cat->getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int size = static_cast<int>(perms_list.size());
@@ -1137,9 +1131,9 @@ TEST_F(DashboardObject, GranteesDefaultListTest) {
 }
 
 TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
-  auto& g_cat = g_session->getCatalog();
+  const auto cat = QR::get()->getCatalog();
   auto perms_list =
-      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
+      sys_cat.getMetadataForObject(cat->getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs1 = static_cast<int>(perms_list.size());
@@ -1148,13 +1142,13 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
   privObjects.clear();
   DBObject dash_object(id, DBObjectType::DashboardDBObjectType);
-  dash_object.loadKey(g_cat);
+  dash_object.loadKey(*cat);
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
   ASSERT_NO_THROW(
-      sys_cat.grantDBObjectPrivilegesBatch({"OldLady", "Bayern"}, {dash_object}, g_cat));
+      sys_cat.grantDBObjectPrivilegesBatch({"OldLady", "Bayern"}, {dash_object}, *cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
+      sys_cat.getMetadataForObject(cat->getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs2 = static_cast<int>(perms_list.size());
@@ -1166,9 +1160,9 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
 
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::EDIT_DASHBOARD));
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
-  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", dash_object, g_cat));
+  ASSERT_NO_THROW(sys_cat.grantDBObjectPrivileges("Bayern", dash_object, *cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
+      sys_cat.getMetadataForObject(cat->getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs3 = static_cast<int>(perms_list.size());
@@ -1179,9 +1173,9 @@ TEST_F(DashboardObject, GranteesListAfterGrantsTest) {
 }
 
 TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
-  auto& g_cat = g_session->getCatalog();
+  const auto cat = QR::get()->getCatalog();
   auto perms_list =
-      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
+      sys_cat.getMetadataForObject(cat->getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs1 = static_cast<int>(perms_list.size());
@@ -1191,13 +1185,13 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::EDIT_DASHBOARD));
   privObjects.clear();
   DBObject dash_object(id, DBObjectType::DashboardDBObjectType);
-  dash_object.loadKey(g_cat);
+  dash_object.loadKey(*cat);
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
   privObjects.push_back(dash_object);
   ASSERT_NO_THROW(
-      sys_cat.grantDBObjectPrivilegesBatch({"Gunners", "Bayern"}, {dash_object}, g_cat));
+      sys_cat.grantDBObjectPrivilegesBatch({"Gunners", "Bayern"}, {dash_object}, *cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
+      sys_cat.getMetadataForObject(cat->getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs2 = static_cast<int>(perms_list.size());
@@ -1210,9 +1204,9 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
 
   ASSERT_NO_THROW(dash_priv.remove(AccessPrivileges::VIEW_DASHBOARD));
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", dash_object, g_cat));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", dash_object, *cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
+      sys_cat.getMetadataForObject(cat->getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs3 = static_cast<int>(perms_list.size());
@@ -1224,9 +1218,9 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
 
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::VIEW_DASHBOARD));
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", dash_object, g_cat));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Gunners", dash_object, *cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
+      sys_cat.getMetadataForObject(cat->getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs4 = static_cast<int>(perms_list.size());
@@ -1236,9 +1230,9 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
 
   ASSERT_NO_THROW(dash_priv.add(AccessPrivileges::EDIT_DASHBOARD));
   ASSERT_NO_THROW(dash_object.setPrivileges(dash_priv));
-  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Bayern", dash_object, g_cat));
+  ASSERT_NO_THROW(sys_cat.revokeDBObjectPrivileges("Bayern", dash_object, *cat));
   perms_list =
-      sys_cat.getMetadataForObject(g_cat.getCurrentDB().dbId,
+      sys_cat.getMetadataForObject(cat->getCurrentDB().dbId,
                                    static_cast<int>(DBObjectType::DashboardDBObjectType),
                                    id);
   int recs5 = static_cast<int>(perms_list.size());
@@ -1247,11 +1241,11 @@ TEST_F(DashboardObject, GranteesListAfterRevokesTest) {
 }
 
 void create_tables(std::string prefix, int max) {
-  auto& cat = g_session->getCatalog();
+  const auto cat = QR::get()->getCatalog();
   for (int i = 0; i < max; i++) {
     std::string name = prefix + std::to_string(i);
     run_ddl_statement("CREATE TABLE " + name + " (id integer);");
-    auto td = cat.getMetadataForTable(name, false);
+    auto td = cat->getMetadataForTable(name, false);
     ASSERT_TRUE(td);
     ASSERT_EQ(td->isView, false);
     ASSERT_EQ(td->tableName, name);
@@ -1259,12 +1253,12 @@ void create_tables(std::string prefix, int max) {
 }
 
 void create_views(std::string prefix, int max) {
-  auto& cat = g_session->getCatalog();
+  const auto cat = QR::get()->getCatalog();
   for (int i = 0; i < max; i++) {
     std::string name = "view_" + prefix + std::to_string(i);
     run_ddl_statement("CREATE VIEW " + name + " AS SELECT * FROM " + prefix +
                       std::to_string(i) + ";");
-    auto td = cat.getMetadataForTable(name, false);
+    auto td = cat->getMetadataForTable(name, false);
     ASSERT_TRUE(td);
     ASSERT_EQ(td->isView, true);
     ASSERT_EQ(td->tableName, name);
@@ -1272,7 +1266,9 @@ void create_views(std::string prefix, int max) {
 }
 
 void create_dashboards(std::string prefix, int max) {
-  auto& cat = g_session->getCatalog();
+  auto session = QR::get()->getSession();
+  CHECK(session);
+  auto& cat = session->getCatalog();
   for (int i = 0; i < max; i++) {
     std::string name = "dash_" + prefix + std::to_string(i);
     DashboardDescriptor vd;
@@ -1280,20 +1276,22 @@ void create_dashboards(std::string prefix, int max) {
     vd.dashboardState = name;
     vd.imageHash = name;
     vd.dashboardMetadata = name;
-    vd.userId = g_session->get_currentUser().userId;
-    ASSERT_EQ(0, g_session->get_currentUser().userId);
-    vd.user = g_session->get_currentUser().userName;
+    vd.userId = session->get_currentUser().userId;
+    ASSERT_EQ(0, session->get_currentUser().userId);
+    vd.user = session->get_currentUser().userName;
     cat.createDashboard(vd);
 
     auto fvd = cat.getMetadataForDashboard(
-        std::to_string(g_session->get_currentUser().userId), name);
+        std::to_string(session->get_currentUser().userId), name);
     ASSERT_TRUE(fvd);
     ASSERT_EQ(fvd->dashboardName, name);
   }
 }
 
 void assert_grants(std::string prefix, int i, bool expected) {
-  auto& cat = g_session->getCatalog();
+  auto session = QR::get()->getSession();
+  CHECK(session);
+  auto& cat = session->getCatalog();
 
   DBObject tablePermission(prefix + std::to_string(i), DBObjectType::TableDBObjectType);
   try {
@@ -1315,7 +1313,7 @@ void assert_grants(std::string prefix, int i, bool expected) {
       viewPermission.getPrivileges().hasPermission(ViewPrivileges::SELECT_FROM_VIEW));
 
   auto fvd =
-      cat.getMetadataForDashboard(std::to_string(g_session->get_currentUser().userId),
+      cat.getMetadataForDashboard(std::to_string(session->get_currentUser().userId),
                                   "dash_" + prefix + std::to_string(i));
   DBObject dashPermission(fvd->dashboardId, DBObjectType::DashboardDBObjectType);
   try {
@@ -1328,13 +1326,15 @@ void assert_grants(std::string prefix, int i, bool expected) {
 }
 
 void check_grant_access(std::string prefix, int max) {
-  auto& cat = g_session->getCatalog();
+  auto session = QR::get()->getSession();
+  CHECK(session);
+  auto& cat = session->getCatalog();
 
   for (int i = 0; i < max; i++) {
     assert_grants(prefix, i, false);
 
     auto fvd =
-        cat.getMetadataForDashboard(std::to_string(g_session->get_currentUser().userId),
+        cat.getMetadataForDashboard(std::to_string(session->get_currentUser().userId),
                                     "dash_" + prefix + std::to_string(i));
     run_ddl_statement("GRANT SELECT ON TABLE " + prefix + std::to_string(i) + " TO bob;");
     run_ddl_statement("GRANT SELECT ON VIEW view_" + prefix + std::to_string(i) +
@@ -1354,37 +1354,39 @@ void check_grant_access(std::string prefix, int max) {
 }
 
 void drop_dashboards(std::string prefix, int max) {
-  auto& cat = g_session->getCatalog();
+  auto session = QR::get()->getSession();
+  CHECK(session);
+  auto& cat = session->getCatalog();
 
   for (int i = 0; i < max; i++) {
     std::string name = "dash_" + prefix + std::to_string(i);
 
-    cat.deleteMetadataForDashboard(std::to_string(g_session->get_currentUser().userId),
+    cat.deleteMetadataForDashboard(std::to_string(session->get_currentUser().userId),
                                    name);
     auto fvd = cat.getMetadataForDashboard(
-        std::to_string(g_session->get_currentUser().userId), name);
+        std::to_string(session->get_currentUser().userId), name);
     ASSERT_FALSE(fvd);
   }
 }
 
 void drop_views(std::string prefix, int max) {
-  auto& cat = g_session->getCatalog();
+  const auto cat = QR::get()->getCatalog();
 
   for (int i = 0; i < max; i++) {
     std::string name = "view_" + prefix + std::to_string(i);
     run_ddl_statement("DROP VIEW " + name + ";");
-    auto td = cat.getMetadataForTable(name, false);
+    auto td = cat->getMetadataForTable(name, false);
     ASSERT_FALSE(td);
   }
 }
 
 void drop_tables(std::string prefix, int max) {
-  auto& cat = g_session->getCatalog();
+  const auto cat = QR::get()->getCatalog();
 
   for (int i = 0; i < max; i++) {
     std::string name = prefix + std::to_string(i);
     run_ddl_statement("DROP TABLE " + name + ";");
-    auto td = cat.getMetadataForTable(name, false);
+    auto td = cat->getMetadataForTable(name, false);
     ASSERT_FALSE(td);
   }
 }
@@ -1514,6 +1516,21 @@ TEST(SysCatalog, RenameUser_UserDoesntExist) {
                std::runtime_error);
 }
 
+namespace {
+
+std::unique_ptr<QR> get_qr_for_user(
+    const std::string& user_name,
+    const Catalog_Namespace::UserMetadata& user_metadata) {
+  auto session = std::make_unique<Catalog_Namespace::SessionInfo>(
+      Catalog_Namespace::Catalog::get(user_name),
+      user_metadata,
+      ExecutorDeviceType::CPU,
+      "");
+  return std::make_unique<QR>(std::move(session));
+}
+
+}  // namespace
+
 TEST(SysCatalog, RenameUser_AlreadyLoggedInQueryAfterRename) {
   using namespace std::string_literals;
   auto username = "chuck"s;
@@ -1533,9 +1550,9 @@ TEST(SysCatalog, RenameUser_AlreadyLoggedInQueryAfterRename) {
   auto username_out(username);
   auto database_out(database_name);
 
-  run_ddl_statement("CREATE USER chuck (password='password');");
-  run_ddl_statement("CREATE DATABASE nydb (owner='chuck');");
-  run_ddl_statement("ALTER USER chuck (default_db='nydb')");
+  EXPECT_NO_THROW(run_ddl_statement("CREATE USER chuck (password='password');"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE DATABASE nydb (owner='chuck');"));
+  EXPECT_NO_THROW(run_ddl_statement("ALTER USER chuck (default_db='nydb')"));
 
   // Check ability to login
   ASSERT_NO_THROW(
@@ -1549,11 +1566,9 @@ TEST(SysCatalog, RenameUser_AlreadyLoggedInQueryAfterRename) {
   ASSERT_NO_THROW(
       sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
 
-  SessionInfoPtr chuck_session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get("nydb"s), user_meta2, ExecutorDeviceType::CPU, "");
-
-  run_ddl_statement("create table chaos ( x integer );", chuck_session);
-  run_multiple_agg("insert into chaos values ( 1234 );", dt, chuck_session);
+  auto chuck_qr = get_qr_for_user("nydb"s, user_meta2);
+  EXPECT_NO_THROW(chuck_qr->runDDLStatement("create table chaos ( x integer );"));
+  EXPECT_NO_THROW(chuck_qr->runSQL("insert into chaos values ( 1234 );", dt));
 
   // Rename should be fine
   EXPECT_NO_THROW(run_ddl_statement("ALTER USER chuck RENAME TO cryingchuck;"););
@@ -1561,21 +1576,20 @@ TEST(SysCatalog, RenameUser_AlreadyLoggedInQueryAfterRename) {
   rename_successful = true;
 
   // After the rename, can we query with the old session?
-  EXPECT_THROW(run_simple_agg("select x from chaos limit 1;", dt, chuck_session),
-               std::runtime_error);
+  EXPECT_THROW(chuck_qr->runSQL("select x from chaos limit 1;", dt), std::runtime_error);
 
   Catalog_Namespace::UserMetadata user_meta3;
   username_out = "cryingchuck"s;
   ASSERT_NO_THROW(
       sys_cat.login(database_out, username_out, "password"s, user_meta3, false));
 
-  SessionInfoPtr cryingchuck_session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get("nydb"s), user_meta3, ExecutorDeviceType::CPU, "");
-
+  auto cryingchuck_qr = get_qr_for_user("nydb"s, user_meta3);
   // After the rename, can we query with the new session?
-  ASSERT_EQ(1234,
-            v<int64_t>(
-                run_simple_agg("select x from chaos limit 1;", dt, cryingchuck_session)));
+  auto result = cryingchuck_qr->runSQL("select x from chaos limit 1;", dt);
+  ASSERT_EQ(result->rowCount(), size_t(1));
+  const auto crt_row = result->getNextRow(true, true);
+  ASSERT_EQ(crt_row.size(), size_t(1));
+  ASSERT_EQ(1234, v<int64_t>(crt_row[0]));
 }
 
 TEST(SysCatalog, RenameUser_ReloginWithOldName) {
@@ -1597,15 +1611,13 @@ TEST(SysCatalog, RenameUser_ReloginWithOldName) {
   auto username_out(username);
   auto database_out(database_name);
 
-  run_ddl_statement("CREATE USER chuck (password='password');");
-  run_ddl_statement("CREATE DATABASE nydb (owner='chuck');");
-  run_ddl_statement("ALTER USER chuck (default_db='nydb')");
+  EXPECT_NO_THROW(run_ddl_statement("CREATE USER chuck (password='password');"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE DATABASE nydb (owner='chuck');"));
+  EXPECT_NO_THROW(run_ddl_statement("ALTER USER chuck (default_db='nydb')"));
 
   // Check ability to login
   ASSERT_NO_THROW(
       sys_cat.login(database_out, username_out, "password"s, user_meta, false));
-
-  auto dt = ExecutorDeviceType::CPU;
 
   Catalog_Namespace::UserMetadata user_meta2;
   username_out = "chuck"s;
@@ -1613,11 +1625,12 @@ TEST(SysCatalog, RenameUser_ReloginWithOldName) {
   ASSERT_NO_THROW(
       sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
 
-  SessionInfoPtr chuck_session = std::make_unique<Catalog_Namespace::SessionInfo>(
+  auto chuck_session = std::make_unique<Catalog_Namespace::SessionInfo>(
       Catalog_Namespace::Catalog::get("nydb"s), user_meta2, ExecutorDeviceType::CPU, "");
-
-  run_ddl_statement("create table chaos ( x integer );", chuck_session);
-  run_multiple_agg("insert into chaos values ( 1234 );", dt, chuck_session);
+  auto chuck_qr = std::make_unique<QR>(std::move(chuck_session));
+  EXPECT_NO_THROW(chuck_qr->runDDLStatement("create table chaos ( x integer );"));
+  EXPECT_NO_THROW(
+      chuck_qr->runSQL("insert into chaos values ( 1234 );", ExecutorDeviceType::CPU));
 
   // Rename should be fine
   EXPECT_NO_THROW(run_ddl_statement("ALTER USER chuck RENAME TO cryingchuck;"););
@@ -1644,9 +1657,11 @@ TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
     run_ddl_statement("DROP DATABASE Ferengi;");
   };
 
-  run_ddl_statement("CREATE USER quark (password='password',is_super='false');");
-  run_ddl_statement("CREATE USER rom (password='password',is_super='false');");
-  run_ddl_statement("CREATE DATABASE Ferengi (owner='rom');");
+  EXPECT_NO_THROW(
+      run_ddl_statement("CREATE USER quark (password='password',is_super='false');"));
+  EXPECT_NO_THROW(
+      run_ddl_statement("CREATE USER rom (password='password',is_super='false');"));
+  EXPECT_NO_THROW(run_ddl_statement("CREATE DATABASE Ferengi (owner='rom');"));
 
   auto database_out = "Ferengi"s;
   auto username_out = "rom"s;
@@ -1663,19 +1678,23 @@ TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
   ASSERT_NO_THROW(
       sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
 
-  SessionInfoPtr rom_session = std::make_unique<Catalog_Namespace::SessionInfo>(
+  auto rom_session = std::make_unique<Catalog_Namespace::SessionInfo>(
       Catalog_Namespace::Catalog::get("Ferengi"s),
       user_meta2,
       ExecutorDeviceType::CPU,
       "");
+  auto rom_qr = std::make_unique<QR>(std::move(rom_session));
 
-  run_ddl_statement("create table bank_account ( latinum integer );", rom_session);
-  run_ddl_statement("create view riches as select * from bank_account;", rom_session);
-  run_multiple_agg("insert into bank_account values (1234);", dt, rom_session);
+  EXPECT_NO_THROW(
+      rom_qr->runDDLStatement("create table bank_account ( latinum integer );"));
+  EXPECT_NO_THROW(
+      rom_qr->runDDLStatement("create view riches as select * from bank_account;"));
+  EXPECT_NO_THROW(rom_qr->runSQL("insert into bank_account values (1234);", dt));
 
-  run_ddl_statement("grant access on database Ferengi to quark;", rom_session);
-  run_ddl_statement("grant select on table bank_account to quark;", rom_session);
-  run_ddl_statement("grant select on view riches to quark;", rom_session);
+  EXPECT_NO_THROW(rom_qr->runDDLStatement("grant access on database Ferengi to quark;"));
+  EXPECT_NO_THROW(
+      rom_qr->runDDLStatement("grant select on table bank_account to quark;"));
+  EXPECT_NO_THROW(rom_qr->runDDLStatement("grant select on view riches to quark;"));
 
   run_ddl_statement("ALTER USER quark RENAME TO renamed_quark;");
 
@@ -1687,15 +1706,15 @@ TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
   ASSERT_NO_THROW(
       sys_cat.login(database_out, username_out, "password"s, user_meta3, false));
 
-  SessionInfoPtr renamed_quark_session = std::make_unique<Catalog_Namespace::SessionInfo>(
+  auto renamed_quark_session = std::make_unique<Catalog_Namespace::SessionInfo>(
       Catalog_Namespace::Catalog::get("Ferengi"s),
       user_meta3,
       ExecutorDeviceType::CPU,
       "");
+  auto renamed_quark_qr = std::make_unique<QR>(std::move(renamed_quark_session));
 
-  EXPECT_NO_THROW(
-      run_multiple_agg("select * from bank_account;", dt, renamed_quark_session));
-  EXPECT_NO_THROW(run_multiple_agg("select * from riches;", dt, renamed_quark_session));
+  EXPECT_NO_THROW(renamed_quark_qr->runSQL("select * from bank_account;", dt));
+  EXPECT_NO_THROW(renamed_quark_qr->runSQL("select * from riches;", dt));
 }
 
 TEST(SysCatalog, RenameUser_SuperUserRenameCheck) {
@@ -1725,15 +1744,14 @@ TEST(SysCatalog, RenameUser_SuperUserRenameCheck) {
   ASSERT_NO_THROW(
       sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
 
-  SessionInfoPtr rom_session = std::make_unique<Catalog_Namespace::SessionInfo>(
+  auto rom_session = std::make_unique<Catalog_Namespace::SessionInfo>(
       Catalog_Namespace::Catalog::get("Ferengi"s),
       user_meta2,
       ExecutorDeviceType::CPU,
       "");
-
-  EXPECT_THROW(
-      run_ddl_statement("ALTER USER quark RENAME TO renamed_quark;", rom_session),
-      std::runtime_error);
+  auto rom_qr = std::make_unique<QR>(std::move(rom_session));
+  EXPECT_THROW(rom_qr->runDDLStatement("ALTER USER quark RENAME TO renamed_quark;"),
+               std::runtime_error);
 }
 
 TEST(SysCatalog, RenameDatabase_Basic) {
@@ -1819,11 +1837,9 @@ TEST(SysCatalog, RenameDatabase_WrongUser) {
       sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
 
   // Should not be permissable
-  SessionInfoPtr alternate_session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get("qworg"s), user_meta2, ExecutorDeviceType::CPU, "");
-  EXPECT_THROW(
-      run_ddl_statement("ALTER DATABASE fnews RENAME TO cnn;", alternate_session),
-      std::runtime_error);
+  auto alternate_qr = get_qr_for_user("qworg"s, user_meta2);
+  EXPECT_THROW(alternate_qr->runDDLStatement("ALTER DATABASE fnews RENAME TO cnn;"),
+               std::runtime_error);
 }
 
 TEST(SysCatalog, RenameDatabase_SuperUser) {
@@ -1867,14 +1883,10 @@ TEST(SysCatalog, RenameDatabase_SuperUser) {
   ASSERT_NO_THROW(
       sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
 
-  SessionInfoPtr alternate_session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get("trouble"s),
-      user_meta2,
-      ExecutorDeviceType::CPU,
-      "");
+  auto alternate_qr = get_qr_for_user("trouble"s, user_meta2);
+  EXPECT_NO_THROW(
+      alternate_qr->runDDLStatement("ALTER DATABASE paternitydb RENAME TO nachovater;"));
 
-  EXPECT_NO_THROW(run_ddl_statement("ALTER DATABASE paternitydb RENAME TO nachovater;",
-                                    alternate_session));
   rename_successful = true;
 }
 
@@ -1977,21 +1989,20 @@ TEST(SysCatalog, RenameDatabase_PrivsTest) {
   ASSERT_NO_THROW(
       sys_cat.login(database_out, username_out, "password"s, user_meta2, false));
 
-  SessionInfoPtr rom_session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get("Ferengi"s),
-      user_meta2,
-      ExecutorDeviceType::CPU,
-      "");
+  auto rom_qr = get_qr_for_user("Ferengi"s, user_meta2);
+  EXPECT_NO_THROW(
+      rom_qr->runDDLStatement("create table bank_account ( latinum integer );"));
+  EXPECT_NO_THROW(
+      rom_qr->runDDLStatement("create view riches as select * from bank_account;"));
+  EXPECT_NO_THROW(rom_qr->runSQL("insert into bank_account values (1234);", dt));
 
-  run_ddl_statement("create table bank_account ( latinum integer );", rom_session);
-  run_ddl_statement("create view riches as select * from bank_account;", rom_session);
-  run_multiple_agg("insert into bank_account values (1234);", dt, rom_session);
+  EXPECT_NO_THROW(rom_qr->runDDLStatement("grant access on database Ferengi to quark;"));
+  EXPECT_NO_THROW(
+      rom_qr->runDDLStatement("grant select on table bank_account to quark;"));
+  EXPECT_NO_THROW(rom_qr->runDDLStatement("grant select on view riches to quark;"));
 
-  run_ddl_statement("grant access on database Ferengi to quark;", rom_session);
-  run_ddl_statement("grant select on table bank_account to quark;", rom_session);
-  run_ddl_statement("grant select on view riches to quark;", rom_session);
-
-  run_ddl_statement("ALTER DATABASE Ferengi RENAME TO grandnagus;", rom_session);
+  EXPECT_NO_THROW(
+      rom_qr->runDDLStatement("ALTER DATABASE Ferengi RENAME TO grandnagus;"));
 
   rename_successful = true;
 
@@ -2001,14 +2012,10 @@ TEST(SysCatalog, RenameDatabase_PrivsTest) {
   ASSERT_NO_THROW(
       sys_cat.login(database_out, username_out, "password"s, user_meta3, false));
 
-  SessionInfoPtr quark_session = std::make_unique<Catalog_Namespace::SessionInfo>(
-      Catalog_Namespace::Catalog::get("grandnagus"s),
-      user_meta3,
-      ExecutorDeviceType::CPU,
-      "");
+  auto quark_qr = get_qr_for_user("grandnagus"s, user_meta3);
 
-  EXPECT_NO_THROW(run_multiple_agg("select * from bank_account;", dt, quark_session));
-  EXPECT_NO_THROW(run_multiple_agg("select * from riches;", dt, quark_session));
+  EXPECT_NO_THROW(quark_qr->runSQL("select * from bank_account;", dt));
+  EXPECT_NO_THROW(quark_qr->runSQL("select * from riches;", dt));
 }
 
 TEST(SysCatalog, GetDatabaseList) {
@@ -2319,8 +2326,9 @@ int main(int argc, char* argv[]) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
-  g_session.reset(QueryRunner::get_session(BASE_PATH));
-  g_calcite = g_session->getCatalog().getCalciteMgr();
+  QR::init(BASE_PATH);
+
+  g_calcite = QR::get()->getCatalog()->getCalciteMgr();
 
   int err{0};
   try {
@@ -2328,6 +2336,6 @@ int main(int argc, char* argv[]) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  g_session.reset(nullptr);
+  QR::reset();
   return err;
 }

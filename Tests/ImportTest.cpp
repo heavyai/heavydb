@@ -55,16 +55,16 @@ size_t g_num_leafs{1};
     return;                                              \
   }
 
-std::unique_ptr<Catalog_Namespace::SessionInfo> g_session;
 bool g_hoist_literals{true};
 
+using QR = QueryRunner::QueryRunner;
+
 inline void run_ddl_statement(const string& input_str) {
-  QueryRunner::run_ddl_statement(input_str, g_session);
+  QR::get()->runDDLStatement(input_str);
 }
 
 std::shared_ptr<ResultSet> run_query(const string& query_str) {
-  return QueryRunner::run_multiple_agg(
-      query_str, g_session, ExecutorDeviceType::CPU, g_hoist_literals, true);
+  return QR::get()->runSQL(query_str, ExecutorDeviceType::CPU, g_hoist_literals);
 }
 
 bool compare_agg(const int64_t cnt, const double avg) {
@@ -113,7 +113,7 @@ bool import_test_common_geo(const string& query_str,
   if (!ddl) {
     return false;
   }
-  ddl->execute(*g_session);
+  ddl->execute(*QR::get()->getSession());
 
   // was it a geo copy from?
   bool was_geo_copy_from = ddl->was_geo_copy_from();
@@ -147,15 +147,16 @@ void import_test_geofile_importer(const std::string& file_str,
                                   const std::string& table_name,
                                   const bool compression,
                                   const bool create_table = true) {
-  Importer_NS::ImportDriver import_driver(QueryRunner::get_catalog(g_session.get()),
-                                          QueryRunner::get_user_metadata(g_session.get()),
-                                          ExecutorDeviceType::CPU);
+  Importer_NS::ImportDriver import_driver(
+      QR::get()->getCatalog(),
+      QueryRunner::get_user_metadata(QR::get()->getSession()),
+      ExecutorDeviceType::CPU);
 
   auto file_path = boost::filesystem::path("../../Tests/Import/datafiles/" + file_str);
 
   ASSERT_TRUE(boost::filesystem::exists(file_path));
 
-  ASSERT_NO_THROW(import_driver.import_geo_table(
+  ASSERT_NO_THROW(import_driver.importGeoTable(
       file_path.string(), table_name, compression, create_table));
 }
 
@@ -328,7 +329,7 @@ class ImportTestMiniSort : public ::testing::Test {
 };
 
 void create_minisort_table_on_column(const std::string& column_name) {
-  EXPECT_NO_THROW(run_ddl_statement(
+  ASSERT_NO_THROW(run_ddl_statement(
       std::string(create_table_mini_sort) +
       (column_name.size() ? " with (sort_column='" + column_name + "');" : ";")));
   EXPECT_NO_THROW(
@@ -545,7 +546,7 @@ std::string convert_date_to_string(int64_t d) {
 }
 
 inline void run_mixed_dates_test() {
-  EXPECT_NO_THROW(run_ddl_statement(
+  ASSERT_NO_THROW(run_ddl_statement(
       "COPY import_test_date FROM '../../Tests/Import/datafiles/mixed_dates.txt';"));
 
   auto rows = run_query("SELECT * FROM import_test_date;");
@@ -1444,7 +1445,7 @@ int main(int argc, char** argv) {
 
   logger::init(log_options);
 
-  g_session.reset(QueryRunner::get_session(BASE_PATH));
+  QR::init(BASE_PATH);
 
   int err{0};
   try {
@@ -1452,6 +1453,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
-  g_session.reset(nullptr);
+  QR::reset();
   return err;
 }
