@@ -4941,7 +4941,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     return root_plan_ptr;
   };
 
-  auto handle_ddl = [&cat, &session_info, &_return, &chkptlLock, &table_locks, this](
+  auto handle_ddl = [&session_info, &_return, &chkptlLock, &table_locks, this](
                         Parser::DDLStmt* ddl) -> bool {
     if (!ddl) {
       return false;
@@ -4973,9 +4973,9 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       }
 
       if (g_cluster && !leaf_aggregator_.leafCount()) {
-        // Don't allow to import on a single leaf in any case
+        // Don't allow copy from imports directly on a leaf node
         throw std::runtime_error(
-            {"Cannot import on an individual leaf. Please import from an Aggregator."});
+            "Cannot import on an individual leaf. Please import from the Aggregator.");
       } else if (leaf_aggregator_.leafCount() > 0) {
         _return.execution_time_ms += measure<>::execution(
             [&]() { execute_distributed_copy_statement(import_stmt, session_info); });
