@@ -110,12 +110,12 @@ if [ "$ID" == "ubuntu" ] ; then
       libxmlsec1-dev
   elif [ "$VERSION_ID" == "16.04" ]; then
     sudo $PACKAGER install libtool
-     # Install gcc 6
+     # Install gcc 7
     sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
     sudo $PACKAGER update
-    sudo $PACKAGER install g++-6
-    sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-6 60 \
-                             --slave /usr/bin/g++ g++ /usr/bin/g++-6
+    sudo $PACKAGER install g++-7
+    sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 70 \
+                             --slave /usr/bin/g++ g++ /usr/bin/g++-7
     sudo update-alternatives --config gcc
   fi
 
