@@ -62,4 +62,4 @@ endif(M_LIBRARY)
 ########################################################################
 # Print summary
 ########################################################################
-message(STATUS "Building muparserx version: ${MUPARSERX_VERSION}")
+# message(STATUS "Building muparserx version: ${MUPARSERX_VERSION}")
