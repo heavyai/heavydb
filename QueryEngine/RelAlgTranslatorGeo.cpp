@@ -467,6 +467,29 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       }
       arg_ti.set_subtype(kGEOGRAPHY);
       return arg0;
+    } else if (rex_function->getName() == std::string("ST_Point")) {
+      CHECK_EQ(size_t(2), rex_function->size());
+      auto translated_function_args(translateFunctionArgs(rex_function));
+      CHECK_EQ(size_t(2), translated_function_args.size());
+      auto d_ti = SQLTypeInfo(kDOUBLE, true);
+      auto da_ti = SQLTypeInfo(kARRAY, true);
+      da_ti.set_subtype(kDOUBLE);
+      da_ti.set_size(16);
+      // create array expr with function arg components
+      auto cast_translated_function_args = {translated_function_args[0]->add_cast(d_ti),
+                                            translated_function_args[1]->add_cast(d_ti)};
+      auto ae =
+          makeExpr<Analyzer::ArrayExpr>(da_ti, cast_translated_function_args, 0, true);
+      arg_ti.set_type(kPOINT);
+      arg_ti.set_subtype(kGEOMETRY);
+      arg_ti.set_input_srid(0);
+      arg_ti.set_output_srid(0);
+      arg_ti.set_compression(kENCODING_NONE);
+      // cast it to  tinyint[16]
+      SQLTypeInfo tia_ti = SQLTypeInfo(kARRAY, true);
+      tia_ti.set_subtype(kTINYINT);
+      tia_ti.set_size(16);
+      return {makeExpr<Analyzer::UOper>(tia_ti, false, kCAST, ae)};
     } else {
       throw QueryNotSupported("Unsupported argument: " + rex_function->getName());
     }

@@ -197,7 +197,8 @@ std::shared_ptr<Analyzer::Expr> WindowFunction::deep_copy() const {
 }
 
 ExpressionPtr ArrayExpr::deep_copy() const {
-  return makeExpr<Analyzer::ArrayExpr>(type_info, contained_expressions_, expr_index_);
+  return makeExpr<Analyzer::ArrayExpr>(
+      type_info, contained_expressions_, expr_index_, local_alloc_);
 }
 
 SQLTypeInfo BinOper::analyze_type_info(SQLOps op,

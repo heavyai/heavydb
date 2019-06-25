@@ -102,6 +102,11 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
   std::unordered_map<llvm::Value*, llvm::Value*> const_arr_size;
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
+    const auto arg_cast = dynamic_cast<const Analyzer::UOper*>(arg);
+    const auto arg0 =
+        (arg_cast && arg_cast->get_optype() == kCAST) ? arg_cast->get_operand() : arg;
+    const auto array_expr_arg = dynamic_cast<const Analyzer::ArrayExpr*>(arg0);
+    auto is_local_alloc = (array_expr_arg && array_expr_arg->isLocalAlloc());
     const auto& arg_ti = arg->get_type_info();
     const auto arg_lvs = codegen(arg, true, co);
     // TODO(adb / d): Assuming no const array cols for geo (for now)
@@ -117,6 +122,9 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
         const_arr_size[arg_lvs.front()] = arg_lvs.back();
       } else {
         CHECK_EQ(size_t(1), arg_lvs.size());
+        if (is_local_alloc && arg_ti.get_size() > 0) {
+          const_arr_size[arg_lvs.front()] = cgen_state_->llInt(arg_ti.get_size());
+        }
       }
       orig_arg_lvs.push_back(arg_lvs.front());
     }
@@ -487,7 +495,8 @@ llvm::Value* CodeGenerator::castArrayPointer(llvm::Value* ptr,
         (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT));
   switch (elem_ti.get_size()) {
     case 1:
-      return ptr;
+      return cgen_state_->ir_builder_.CreatePointerCast(
+          ptr, llvm::Type::getInt8PtrTy(cgen_state_->context_));
     case 2:
       return cgen_state_->ir_builder_.CreatePointerCast(
           ptr, llvm::Type::getInt16PtrTy(cgen_state_->context_));

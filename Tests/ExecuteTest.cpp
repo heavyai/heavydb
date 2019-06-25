@@ -13860,6 +13860,42 @@ TEST(Select, GeoSpatial_Projection) {
     EXPECT_THROW(
         run_multiple_agg("SELECT p, count(*) FROM geospatial_test GROUP BY p;", dt),
         std::runtime_error);
+
+    // ST_Point geo constructor
+    ASSERT_NEAR(
+        static_cast<double>(1.4142135),
+        v<double>(run_simple_agg("SELECT ST_Distance(ST_Point(0,0), ST_Point(1,1)) "
+                                 "from geospatial_test limit 1;",
+                                 dt)),
+        static_cast<double>(0.00001));
+    ASSERT_NEAR(
+        static_cast<double>(1.34536240),
+        v<double>(run_simple_agg(
+            "SELECT ST_Distance(ST_Point(f + 0.2, d - 0.1), ST_Point(f * 2.0, d/2)) "
+            "from test limit 1;",
+            dt)),
+        static_cast<double>(0.00001));
+    // Cartesian distance between Paris and LA, point constructors
+    ASSERT_NEAR(
+        static_cast<double>(13653148.0),
+        v<double>(run_simple_agg(
+            "SELECT ST_Distance("
+            "ST_Transform(ST_SetSRID(ST_Point(-118.4079, 33.9434), 4326), 900913), "
+            "ST_Transform(ST_SetSRID(ST_Point(2.5559, 49.0083), 4326), 900913)) "
+            "from geospatial_test limit 1;",
+            dt)),
+        static_cast<double>(10000.0));
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(
+                  run_simple_agg("SELECT ST_Intersects("
+                                 "ST_GeomFromText('POLYGON((0 0, 2 0, 2 2, 0 2, 0 0))'), "
+                                 "ST_Point(f - 0.1, 3.0 - d/f )) FROM test limit 1;",
+                                 dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg(
+                  "SELECT COUNT(*) FROM geospatial_test WHERE "
+                  "ST_Contains(poly, ST_Point(0.1 + ST_NRings(poly)/10.0, 0.1));",
+                  dt)));
   }
 }
 

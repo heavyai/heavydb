@@ -195,7 +195,7 @@ class ArrayElementStringLiteralEncodingVisitor : public DeepCopyVisitor {
 
     const auto& type_info = array_expr->get_type_info();
     return makeExpr<Analyzer::ArrayExpr>(
-        type_info, args_copy, array_expr->getExprIndex());
+        type_info, args_copy, array_expr->getExprIndex(), array_expr->isLocalAlloc());
   }
 };
 

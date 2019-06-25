@@ -1367,16 +1367,19 @@ class ArrayExpr : public Expr {
  public:
   ArrayExpr(SQLTypeInfo const& array_ti,
             ExpressionPtrVector const& array_exprs,
-            int expr_index)
+            int expr_index,
+            bool local_alloc = false)
       : Expr(preInitTweakedTypeInfo(array_ti))
       , contained_expressions_(array_exprs)
-      , expr_index_(expr_index) {}
+      , expr_index_(expr_index)
+      , local_alloc_(local_alloc) {}
 
   Analyzer::ExpressionPtr deep_copy() const override;
   std::string toString() const override;
   bool operator==(Expr const& rhs) const override;
   size_t getElementCount() const { return contained_expressions_.size(); }
   int32_t getExprIndex() const { return expr_index_; }
+  bool isLocalAlloc() const { return local_alloc_; }
 
   const Analyzer::Expr* getElement(const size_t i) const {
     CHECK_LT(i, contained_expressions_.size());
@@ -1393,6 +1396,7 @@ class ArrayExpr : public Expr {
   SQLTypeInfo tweaked_type_info_;
   ExpressionPtrVector contained_expressions_;
   int expr_index_;
+  bool local_alloc_;
 };
 
 /*
