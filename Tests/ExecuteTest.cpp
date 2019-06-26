@@ -6996,6 +6996,13 @@ TEST(Select, Joins_TimeAndDate) {
     c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.o = b.dt32;", dt);
     c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.o = b.dt16;", dt);
 
+    // Empty
+    c("SELECT COUNT(*) FROM test a, test_empty b WHERE a.m = b.m;", dt);
+    c("SELECT COUNT(*) FROM test a, test_empty b WHERE a.n = b.n;", dt);
+    c("SELECT COUNT(*) FROM test a, test_empty b WHERE a.o = b.o;", dt);
+    c("SELECT COUNT(*) FROM test a, test_empty b WHERE a.o1 = b.o1;", dt);
+    c("SELECT COUNT(*) FROM test a, test_empty b WHERE a.o2 = b.o2;", dt);
+
     // Bitwise path addition
     c("SELECT COUNT(*) FROM test a, test_inner b where a.m = b.ts or (a.m is null and "
       "b.ts is null);",
@@ -15369,7 +15376,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         {g_shard_count ? "str" : "", g_shard_count},
         {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
         2,
-        with_delete_support);
+        with_delete_support,
+        g_aggregator);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
         "CREATE TABLE test_empty(x int not null, y int, z smallint, t bigint, b boolean, "

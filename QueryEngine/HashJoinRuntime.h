@@ -38,6 +38,7 @@ struct HashEntryInfo {
   alignas(sizeof(int64_t)) int64_t bucket_normalization;
 
   inline size_t getNormalizedHashEntryCount() const {
+    CHECK_GT(bucket_normalization, 0);
     auto modulo_res = hash_entry_count % static_cast<size_t>(bucket_normalization);
     auto entry_count = hash_entry_count / static_cast<size_t>(bucket_normalization);
     if (modulo_res) {

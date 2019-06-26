@@ -199,11 +199,14 @@ HashEntryInfo get_bucketized_hash_entry_info(SQLTypeInfo const& context_ti,
     return EmptyRangeSize{};
   };
 
-  auto bucket_normalization = context_ti.get_type() == kDATE ? col_range.getBucket() : 1;
   auto empty_range = empty_range_check(col_range, is_bw_eq);
   if (empty_range) {
-    return {size_t(*empty_range), bucket_normalization};
+    return {size_t(*empty_range), 1};
   }
+
+  int64_t bucket_normalization =
+      context_ti.get_type() == kDATE ? col_range.getBucket() : 1;
+  CHECK_GT(bucket_normalization, 0);
   return {size_t(col_range.getIntMax() - col_range.getIntMin() + 1 + (is_bw_eq ? 1 : 0)),
           bucket_normalization};
 }
