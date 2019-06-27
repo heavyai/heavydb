@@ -1015,10 +1015,9 @@ size_t TypedImportBuffer::add_arrow_values(const ColumnDescriptor* cd,
   }
 }
 
+// this is exclusively used by load_table_binary_columnar
 size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& col) {
   size_t dataSize = 0;
-  const auto type = cd->columnType.is_decimal() ? decimal_to_int_type(cd->columnType)
-                                                : cd->columnType.get_type();
   if (cd->columnType.get_notnull()) {
     // We can't have any null values for this column; to have them is an error
     if (std::any_of(col.nulls.begin(), col.nulls.end(), [](int i) { return i != 0; })) {
@@ -1026,7 +1025,7 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
     }
   }
 
-  switch (type) {
+  switch (cd->columnType.get_type()) {
     case kBOOLEAN: {
       dataSize = col.data.int_col.size();
       bool_buffer_->reserve(dataSize);
@@ -1075,7 +1074,9 @@ size_t TypedImportBuffer::add_values(const ColumnDescriptor* cd, const TColumn& 
       }
       break;
     }
-    case kBIGINT: {
+    case kBIGINT:
+    case kNUMERIC:
+    case kDECIMAL: {
       dataSize = col.data.int_col.size();
       bigint_buffer_->reserve(dataSize);
       for (size_t i = 0; i < dataSize; i++) {
