@@ -290,8 +290,10 @@ void SysCatalog::createUserRoles() {
     sqliteConnector_->query(
         "CREATE TABLE mapd_roles(roleName text, userName text, UNIQUE(roleName, "
         "userName))");
-    sqliteConnector_->query("SELECT name FROM mapd_users WHERE name <> \'" +
-                            OMNISCI_ROOT_USER + "\'");
+    // need to account for old conversions where we are building and moving
+    // from pre version 4.0 and 'mapd' was default superuser
+    sqliteConnector_->query("SELECT name FROM mapd_users WHERE name NOT IN ( \'" +
+                            OMNISCI_ROOT_USER + "\', 'mapd')");
     size_t numRows = sqliteConnector_->getNumRows();
     vector<string> user_names;
     for (size_t i = 0; i < numRows; ++i) {
@@ -2016,7 +2018,7 @@ void SysCatalog::buildUserRoleMap() {
     auto* rl = getGrantee(roleName);
     if (!rl) {
       throw runtime_error("Data inconsistency when building role map. Role " + roleName +
-                          " not found in the map.");
+                          " from db not found in the map.");
     }
     std::pair<std::string, std::string> roleVecElem(roleName, userName);
     granteeRooles.push_back(roleVecElem);
