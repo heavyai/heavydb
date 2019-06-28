@@ -13892,9 +13892,6 @@ TEST(Select, GeoSpatial_Projection) {
 }
 
 TEST(Select, GeoSpatial_GeoJoin) {
-  SKIP_ALL_ON_AGGREGATOR();  // TODO(adb): if we replicate the poly table during table
-                             // creation we should be able to lift this constraint
-
   // Test loop joins
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -13906,14 +13903,14 @@ TEST(Select, GeoSpatial_GeoJoin) {
         true,
         false));
 
-    ASSERT_EQ(
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
             "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
             "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2 OFFSET 1;",
             dt,
             true,
-            false)));
+            false))));
 
     const auto trivial_loop_join_state = g_trivial_loop_join_threshold;
     g_trivial_loop_join_threshold = 1;
@@ -13921,22 +13918,22 @@ TEST(Select, GeoSpatial_GeoJoin) {
       g_trivial_loop_join_threshold = trivial_loop_join_state;
     };
 
-    EXPECT_THROW(
+    SKIP_ON_AGGREGATOR(EXPECT_THROW(
         run_multiple_agg(
             "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
             "b ON ST_Contains(b.poly, a.p);",
             dt,
             false),
-        std::runtime_error);
+        std::runtime_error));
 
     // Geometry projection not supported for outer joins
-    EXPECT_THROW(
+    SKIP_ON_AGGREGATOR(EXPECT_THROW(
         run_multiple_agg(
             "SELECT b.poly FROM geospatial_test a LEFT JOIN geospatial_inner_join_test "
             "b ON ST_Contains(b.poly, a.p);",
             dt,
             false),
-        std::runtime_error);
+        std::runtime_error));
   }
 
   const auto enable_overlaps_hashjoin_state = g_enable_overlaps_hashjoin;
@@ -13954,12 +13951,13 @@ TEST(Select, GeoSpatial_GeoJoin) {
         "b ON ST_Contains(b.poly, a.p);",
         dt));
 
-    ASSERT_EQ(
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
             "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
             "b ON ST_Contains(b.poly, a.p) WHERE b.id = 2 OFFSET 1;",
-            dt)));
+            dt))));
+
     ASSERT_EQ(
         static_cast<int64_t>(3),
         v<int64_t>(run_simple_agg(
@@ -13975,12 +13973,12 @@ TEST(Select, GeoSpatial_GeoJoin) {
             dt)));
 
     // with compression
-    ASSERT_EQ(
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
             "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
             "b ON ST_Contains(b.poly, a.gp4326) WHERE b.id = 2 OFFSET 1;",
-            dt)));
+            dt))));
 
     ASSERT_EQ(
         static_cast<int64_t>(3),
