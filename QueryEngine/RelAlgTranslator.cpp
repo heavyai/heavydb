@@ -1495,6 +1495,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     return translateArrayFunction(rex_function);
   }
 
+  if (rex_function->getName() == std::string("ST_GeomFromText") ||
+      rex_function->getName() == std::string("ST_GeogFromText") ||
+      rex_function->getName() == std::string("ST_Point")) {
+    throw QueryNotSupported("Geo constructor " + rex_function->getName() +
+                            " currently not supported in this context");
+  }
   if (!ExtensionFunctionsWhitelist::get(rex_function->getName()) &&
       !ExtensionFunctionsWhitelist::get_udf(rex_function->getName())) {
     throw QueryNotSupported("Function " + rex_function->getName() + " not supported");
