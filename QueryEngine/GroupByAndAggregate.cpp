@@ -511,8 +511,8 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
       if (agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
         const auto error_rate = agg_expr->get_error_rate();
         if (error_rate) {
-          CHECK(error_rate->get_type_info().get_type() == kSMALLINT);
-          CHECK_GE(error_rate->get_constval().smallintval, 1);
+          CHECK(error_rate->get_type_info().get_type() == kINT);
+          CHECK_GE(error_rate->get_constval().intval, 1);
           bitmap_sz_bits = hll_size_for_rate(error_rate->get_constval().smallintval);
         } else {
           bitmap_sz_bits = g_hll_precision_bits;

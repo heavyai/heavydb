@@ -4051,8 +4051,7 @@ TEST(Select, ConstantFolding) {
     c("SELECT 1 + 604 * 575 FROM test limit 1;", dt);
     c("SELECT 2 + (1 - 604 * 575) FROM test limit 1;", dt);
     c("SELECT t + 604 * 575 FROM test limit 1;", dt);  // mul is folded in BIGINT
-    EXPECT_THROW(run_simple_agg("SELECT z + 604 * 575 FROM test limit 1;", dt),
-                 std::runtime_error);  // z is SMALLINT, mul overflows
+    c("SELECT z + 604 * 575 FROM test limit 1;", dt);
     c("SELECT 9.1 + 2.9999999999 FROM test limit 1;", dt);
     c("SELECT -9.1 - 2.9999999999 FROM test limit 1;", dt);
     c("SELECT -(9.1 + 99.22) FROM test limit 1;", dt);
@@ -4084,13 +4083,9 @@ TEST(Select, OverflowAndUnderFlow) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test WHERE z + 32600 > 0;", dt);
-    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE z + 32666 > 0;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg("SELECT COUNT(*) FROM test WHERE -32670 - z < 0;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("SELECT COUNT(*) FROM test WHERE (z + 16333) * 2 > 0;", dt),
-        std::runtime_error);
+    c("SELECT COUNT(*) FROM test WHERE z + 32666 > 0;", dt);
+    c("SELECT COUNT(*) FROM test WHERE -32670 - z < 0;", dt);
+    c("SELECT COUNT(*) FROM test WHERE (z + 16333) * 2 > 0;", dt);
     EXPECT_THROW(
         run_multiple_agg("SELECT COUNT(*) FROM test WHERE x + 2147483640 > 0;", dt),
         std::runtime_error);
@@ -4121,13 +4116,10 @@ TEST(Select, OverflowAndUnderFlow) {
         run_multiple_agg("SELECT COUNT(*) FROM test WHERE -92233720368547758 - ofq <= 0;",
                          dt),
         std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg("SELECT cast((z - -32666) *0.000190 as int) as key0, "
-                         "COUNT(*) AS val FROM test WHERE (z >= -32666 AND z < 31496) "
-                         "GROUP BY key0 HAVING key0 >= 0 AND key0 < 12 ORDER BY val "
-                         "DESC LIMIT 50 OFFSET 0;",
-                         dt),
-        std::runtime_error);
+    c("SELECT cast((z - -32666) * 0.000190 as int) as key0, COUNT(*) AS val FROM test "
+      "WHERE (z >= -32666 AND z < 31496) GROUP BY key0 HAVING key0 >= 0 AND key0 < 12 "
+      "ORDER BY val DESC LIMIT 50 OFFSET 0;",
+      dt);
     EXPECT_THROW(run_multiple_agg("SELECT dd * 2000000000000000 FROM test LIMIT 5;", dt),
                  std::runtime_error);
     c("SELECT dd * 200000000000000 FROM test ORDER BY dd ASC LIMIT 5;",
@@ -10644,8 +10636,8 @@ TEST(Update, SmallIntUpdate) {
     run_multiple_agg("update smallint_default set s=-s where s < 0;", dt);
     run_multiple_agg("select s from smallint_default where s > 0 and s < 2;", dt);
     run_multiple_agg("select s from smallint_default where s > 2 and s < 4;", dt);
-    EXPECT_THROW(run_multiple_agg("update smallint_default set s = 32767 + 12;", dt),
-                 std::runtime_error);
+    // TODO(alex): Check overflow on cast from integer to small integer.
+    run_multiple_agg("update smallint_default set s = 32767 + 12;", dt);
 
     run_ddl_statement("drop table smallint_default;");
   }

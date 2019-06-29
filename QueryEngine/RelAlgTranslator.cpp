@@ -41,7 +41,7 @@ namespace {
 SQLTypeInfo build_type_info(const SQLTypes sql_type,
                             const int scale,
                             const int precision) {
-  SQLTypeInfo ti(sql_type, 0, 0, false);
+  SQLTypeInfo ti(sql_type, 0, 0, true);
   ti.set_scale(scale);
   ti.set_precision(precision);
   return ti;
@@ -211,9 +211,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
     if (agg_kind == kAPPROX_COUNT_DISTINCT && rex->size() == 2) {
       err_rate = std::dynamic_pointer_cast<Analyzer::Constant>(
           scalar_sources[rex->getOperand(1)]);
-      if (!err_rate || err_rate->get_type_info().get_type() != kSMALLINT ||
-          err_rate->get_constval().smallintval < 1 ||
-          err_rate->get_constval().smallintval > 100) {
+      if (!err_rate || err_rate->get_type_info().get_type() != kINT ||
+          err_rate->get_constval().intval < 1 || err_rate->get_constval().intval > 100) {
         throw std::runtime_error(
             "APPROX_COUNT_DISTINCT's second parameter should be SMALLINT literal between "
             "1 and 100");
@@ -241,8 +240,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
       }
       auto lit_expr = scale ? Parser::FixedPtLiteral::analyzeValue(val, scale, precision)
                             : Parser::IntLiteral::analyzeValue(val);
-      auto ret = scale && lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
-      return ret;
+      return lit_ti != target_ti ? lit_expr->add_cast(target_ti) : lit_expr;
     }
     case kTEXT: {
       return Parser::StringLiteral::analyzeValue(rex_literal->getVal<std::string>());

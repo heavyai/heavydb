@@ -837,11 +837,6 @@ TEST_F(MetadataUpdate, MetadataSmallIntNotNull) {
     ASSERT_EQ(post_smallint_minval, -32767);
     ASSERT_EQ(post_smallint_maxval, 32767);
 
-    // Check out-of-range max -- should wrap around to -117 here, then not widen the
-    // metadata
-    EXPECT_THROW(query("update smallint_not_null_table set x=32767+12 where x < 15;"),
-                 std::runtime_error);
-
     post_metadata = get_metadata_vec("smallint_not_null_table");
     ASSERT_EQ(post_metadata.size(), 1U);
     post_metadata_chunk = post_metadata[0].second;

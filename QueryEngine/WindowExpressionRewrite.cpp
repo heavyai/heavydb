@@ -72,12 +72,13 @@ std::shared_ptr<Analyzer::WindowFunction> rewrite_sum_window(const Analyzer::Exp
     return nullptr;
   }
   const auto count_window_expr =
-      dynamic_cast<const Analyzer::WindowFunction*>(window_gt_zero->get_left_operand());
+      std::dynamic_pointer_cast<const Analyzer::WindowFunction>(
+          remove_cast(window_gt_zero->get_own_left_operand()));
   if (!count_window_expr ||
       count_window_expr->getKind() != SqlWindowFunctionKind::COUNT) {
     return nullptr;
   }
-  if (!window_sum_and_count_match(sum_window_expr.get(), count_window_expr)) {
+  if (!window_sum_and_count_match(sum_window_expr.get(), count_window_expr.get())) {
     return nullptr;
   }
   CHECK(sum_window_expr);
