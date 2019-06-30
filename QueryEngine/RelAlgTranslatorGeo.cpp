@@ -469,22 +469,39 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       return arg0;
     } else if (rex_function->getName() == std::string("ST_Point")) {
       CHECK_EQ(size_t(2), rex_function->size());
-      auto translated_function_args(translateFunctionArgs(rex_function));
-      CHECK_EQ(size_t(2), translated_function_args.size());
-      auto d_ti = SQLTypeInfo(kDOUBLE, true);
-      auto da_ti = SQLTypeInfo(kARRAY, true);
-      da_ti.set_subtype(kDOUBLE);
-      da_ti.set_size(16);
-      // create array expr with function arg components
-      auto cast_translated_function_args = {translated_function_args[0]->add_cast(d_ti),
-                                            translated_function_args[1]->add_cast(d_ti)};
-      auto ae =
-          makeExpr<Analyzer::ArrayExpr>(da_ti, cast_translated_function_args, 0, true);
       arg_ti.set_type(kPOINT);
       arg_ti.set_subtype(kGEOMETRY);
       arg_ti.set_input_srid(0);
       arg_ti.set_output_srid(0);
       arg_ti.set_compression(kENCODING_NONE);
+
+      auto coord1 = translateScalarRex(rex_function->getOperand(0));
+      auto coord2 = translateScalarRex(rex_function->getOperand(1));
+      auto d_ti = SQLTypeInfo(kDOUBLE, true);
+      auto cast_coord1 = coord1->add_cast(d_ti);
+      auto cast_coord2 = coord2->add_cast(d_ti);
+      // First try to fold to geo literal
+      auto fold1 = fold_expr(cast_coord1.get());
+      auto fold2 = fold_expr(cast_coord2.get());
+      auto const_coord1 = std::dynamic_pointer_cast<Analyzer::Constant>(fold1);
+      auto const_coord2 = std::dynamic_pointer_cast<Analyzer::Constant>(fold2);
+      if (const_coord1 && const_coord2) {
+        CHECK(const_coord1->get_type_info().get_type() == kDOUBLE);
+        CHECK(const_coord2->get_type_info().get_type() == kDOUBLE);
+        std::string wkt = "POINT(" +
+                          std::to_string(const_coord1->get_constval().doubleval) + " " +
+                          std::to_string(const_coord2->get_constval().doubleval) + ")";
+        RexLiteral rex_literal{wkt, kTEXT, kNULLT, 0, 0, 0, 0};
+        auto args = translateGeoLiteral(&rex_literal, arg_ti, false);
+        CHECK(arg_ti.get_type() == kPOINT);
+        return args;
+      }
+      // Couldn't fold to geo literal, construct on the fly
+      auto da_ti = SQLTypeInfo(kARRAY, true);
+      da_ti.set_subtype(kDOUBLE);
+      da_ti.set_size(16);
+      auto cast_coords = {cast_coord1, cast_coord2};
+      auto ae = makeExpr<Analyzer::ArrayExpr>(da_ti, cast_coords, 0, true);
       // cast it to  tinyint[16]
       SQLTypeInfo tia_ti = SQLTypeInfo(kARRAY, true);
       tia_ti.set_subtype(kTINYINT);
