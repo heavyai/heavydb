@@ -163,14 +163,14 @@ class MultiFragMetadataUpdate : public ::testing::Test {
 
     TestHelpers::ValuesGenerator gen(g_table_name);
 
-    for (size_t i = 0; i < 5; i++) {
+    for (int i = 0; i < 5; i++) {
       std::string date_str = i % 2 == 0 ? "'1/1/2019'" : "'2/2/2020'";
       const auto insert_query =
           gen(i, i, i, i * 1.1, i * 1.2, date_str, date_str, "'foo'");
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     }
 
-    for (size_t i = 0; i < 5; i++) {
+    for (int i = 0; i < 5; i++) {
       std::string date_str = i % 2 == 0 ? "'5/30/2021'" : "'6/30/2022'";
       const int multiplier = i % 2 == 0 ? -1 : 1;
       const auto insert_query = gen(multiplier * i,
@@ -202,7 +202,7 @@ class MultiFragMetadataUpdate : public ::testing::Test {
       run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     }
 
-    for (size_t i = 0; i < 5; i++) {
+    for (int i = 0; i < 5; i++) {
       const auto insert_query = gen("null",
                                     std::numeric_limits<int32_t>::max(),
                                     "null",

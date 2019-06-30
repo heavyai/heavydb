@@ -717,6 +717,14 @@ IntFracRepr decimal_to_int_frac(const int64_t dec, const SQLTypeInfo& ti) {
   return {integral_part, dec - integral_part * scale, scale};
 }
 
+template <class T>
+T safe_narrow(const int64_t v) {
+  if (v > std::numeric_limits<T>::max() || v < std::numeric_limits<T>::min()) {
+    throw std::runtime_error("Overflow or underflow");
+  }
+  return static_cast<T>(v);
+}
+
 }  // namespace
 
 void Constant::cast_number(const SQLTypeInfo& new_type_info) {
@@ -754,12 +762,12 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
     case kINT:
       switch (new_type_info.get_type()) {
         case kTINYINT:
-          constval.tinyintval = (int8_t)constval.intval;
+          constval.tinyintval = safe_narrow<int8_t>(constval.intval);
           break;
         case kINT:
           break;
         case kSMALLINT:
-          constval.smallintval = (int16_t)constval.intval;
+          constval.smallintval = safe_narrow<int16_t>(constval.intval);
           break;
         case kBIGINT:
           constval.bigintval = (int64_t)constval.intval;
@@ -784,7 +792,7 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
     case kSMALLINT:
       switch (new_type_info.get_type()) {
         case kTINYINT:
-          constval.tinyintval = (int8_t)constval.smallintval;
+          constval.tinyintval = safe_narrow<int8_t>(constval.smallintval);
           break;
         case kINT:
           constval.intval = (int32_t)constval.smallintval;
@@ -814,13 +822,13 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
     case kBIGINT:
       switch (new_type_info.get_type()) {
         case kTINYINT:
-          constval.tinyintval = (int8_t)constval.bigintval;
+          constval.tinyintval = safe_narrow<int8_t>(constval.bigintval);
           break;
         case kINT:
-          constval.intval = (int32_t)constval.bigintval;
+          constval.intval = safe_narrow<int32_t>(constval.bigintval);
           break;
         case kSMALLINT:
-          constval.smallintval = (int16_t)constval.bigintval;
+          constval.smallintval = safe_narrow<int16_t>(constval.bigintval);
           break;
         case kBIGINT:
           break;
@@ -907,13 +915,13 @@ void Constant::cast_number(const SQLTypeInfo& new_type_info) {
           for (int i = 0; i < type_info.get_scale(); i++) {
             constval.bigintval /= 10;
           }
-          constval.tinyintval = (int8_t)constval.bigintval;
+          constval.tinyintval = safe_narrow<int8_t>(constval.bigintval);
           break;
         case kINT:
           for (int i = 0; i < type_info.get_scale(); i++) {
             constval.bigintval /= 10;
           }
-          constval.intval = (int32_t)constval.bigintval;
+          constval.intval = safe_narrow<int32_t>(constval.bigintval);
           break;
         case kSMALLINT:
           for (int i = 0; i < type_info.get_scale(); i++) {

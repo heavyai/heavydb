@@ -5067,7 +5067,7 @@ void import_coalesce_cols_join_test(const int id, bool with_delete_support) {
                             "(x int not null, y int, str text, dup_str text, d date, t "
                             "time, tz timestamp, dn decimal(5));");
   TestHelpers::ValuesGenerator gen(table_name);
-  for (size_t i = 0; i < 5; i++) {
+  for (int i = 0; i < 5; i++) {
     const auto insert_query = gen(i,
                                   20 - i,
                                   "'test'",
@@ -6456,7 +6456,7 @@ TEST(Select, Joins_Negative_ShardKey) {
         std::to_string(num_shards) + ");";
     run_ddl_statement(table_ddl_2);
 
-    for (size_t i = 0; i < 5; i++) {
+    for (int i = 0; i < 5; i++) {
       for (const auto table : {"shard_test_negative_1", "shard_test_negative_2"}) {
         const std::string insert_query{"INSERT INTO " + std::string(table) + " VALUES(" +
                                        std::to_string(i - 1) + ", " + std::to_string(i) +
@@ -10636,8 +10636,8 @@ TEST(Update, SmallIntUpdate) {
     run_multiple_agg("update smallint_default set s=-s where s < 0;", dt);
     run_multiple_agg("select s from smallint_default where s > 0 and s < 2;", dt);
     run_multiple_agg("select s from smallint_default where s > 2 and s < 4;", dt);
-    // TODO(alex): Check overflow on cast from integer to small integer.
-    run_multiple_agg("update smallint_default set s = 32767 + 12;", dt);
+    EXPECT_THROW(run_multiple_agg("update smallint_default set s = 32767 + 12;", dt),
+                 std::runtime_error);
 
     run_ddl_statement("drop table smallint_default;");
   }
