@@ -301,7 +301,7 @@ void CodeGenerator::codegenCastBetweenIntTypesOverflowChecks(
     llvm::Value* operand_lv,
     const SQLTypeInfo& operand_ti,
     const SQLTypeInfo& ti,
-    const uint64_t scale) {
+    const int64_t scale) {
   llvm::Value* chosen_max{nullptr};
   llvm::Value* chosen_min{nullptr};
   std::tie(chosen_max, chosen_min) =
@@ -313,27 +313,38 @@ void CodeGenerator::codegenCastBetweenIntTypesOverflowChecks(
   auto cast_fail = llvm::BasicBlock::Create(
       cgen_state_->context_, "cast_fail", cgen_state_->row_func_);
   auto operand_max = static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue() / scale;
-  llvm::Value* operand_max_lv = llvm::ConstantInt::get(
-      get_int_type(8 * ti.get_logical_size(), cgen_state_->context_), operand_max);
+  auto operand_min = static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue() / scale;
+  const auto ti_llvm_type =
+      get_int_type(8 * ti.get_logical_size(), cgen_state_->context_);
+  llvm::Value* operand_max_lv = llvm::ConstantInt::get(ti_llvm_type, operand_max);
+  llvm::Value* operand_min_lv = llvm::ConstantInt::get(ti_llvm_type, operand_min);
   const bool is_narrowing = operand_ti.get_logical_size() > ti.get_logical_size();
   if (is_narrowing) {
-    operand_max_lv = cgen_state_->ir_builder_.CreateSExt(
-        operand_max_lv,
-        get_int_type(8 * operand_ti.get_logical_size(), cgen_state_->context_));
+    const auto operand_ti_llvm_type =
+        get_int_type(8 * operand_ti.get_logical_size(), cgen_state_->context_);
+    operand_max_lv =
+        cgen_state_->ir_builder_.CreateSExt(operand_max_lv, operand_ti_llvm_type);
+    operand_min_lv =
+        cgen_state_->ir_builder_.CreateSExt(operand_min_lv, operand_ti_llvm_type);
   }
-  llvm::Value* detected{nullptr};
+  llvm::Value* over{nullptr};
+  llvm::Value* under{nullptr};
   if (operand_ti.get_notnull()) {
-    detected = cgen_state_->ir_builder_.CreateICmpSGT(operand_lv, operand_max_lv);
+    over = cgen_state_->ir_builder_.CreateICmpSGT(operand_lv, operand_max_lv);
+    under = cgen_state_->ir_builder_.CreateICmpSLE(operand_lv, operand_min_lv);
   } else {
     const auto type_name =
         is_narrowing ? numeric_type_name(operand_ti) : numeric_type_name(ti);
-    detected = toBool(cgen_state_->emitCall(
+    const auto null_operand_val = cgen_state_->llInt(inline_int_null_val(operand_ti));
+    const auto null_bool_val = cgen_state_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false));
+    over = toBool(cgen_state_->emitCall(
         "gt_" + type_name + "_nullable_lhs",
-        {operand_lv,
-         operand_max_lv,
-         cgen_state_->llInt(inline_int_null_val(operand_ti)),
-         cgen_state_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))}));
+        {operand_lv, operand_max_lv, null_operand_val, null_bool_val}));
+    under = toBool(cgen_state_->emitCall(
+        "le_" + type_name + "_nullable_lhs",
+        {operand_lv, operand_min_lv, null_operand_val, null_bool_val}));
   }
+  const auto detected = cgen_state_->ir_builder_.CreateOr(over, under, "overflow");
   cgen_state_->ir_builder_.CreateCondBr(detected, cast_fail, cast_ok);
 
   cgen_state_->ir_builder_.SetInsertPoint(cast_fail);

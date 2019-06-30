@@ -55,7 +55,7 @@ class CodeGenerator {
   void codegenCastBetweenIntTypesOverflowChecks(llvm::Value* operand_lv,
                                                 const SQLTypeInfo& operand_ti,
                                                 const SQLTypeInfo& ti,
-                                                const uint64_t scale);
+                                                const int64_t scale);
 
   // Generates the index of the current row in the context of query execution.
   llvm::Value* posArg(const Analyzer::Expr*) const;
