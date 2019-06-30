@@ -1439,7 +1439,7 @@ int main(int argc, char** argv) {
 
   desc.add_options()(
       "test-help",
-      "Print all ExecuteTest specific options (for gtest options use `--help`).");
+      "Print all ImportTest specific options (for gtest options use `--help`).");
 
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
@@ -1450,7 +1450,7 @@ int main(int argc, char** argv) {
   po::notify(vm);
 
   if (vm.count("test-help")) {
-    std::cout << "Usage: ExecuteTest" << std::endl << std::endl;
+    std::cout << "Usage: ImportTest" << std::endl << std::endl;
     std::cout << desc << std::endl;
     return 0;
   }
