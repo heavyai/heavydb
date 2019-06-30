@@ -239,38 +239,7 @@ llvm::Value* CodeGenerator::codegenCastBetweenIntTypes(llvm::Value* operand_lv,
         operand_lv = cgen_state_->ir_builder_.CreateSExt(
             operand_lv, get_int_type(64, cgen_state_->context_));
 
-        llvm::Value* chosen_max{nullptr};
-        llvm::Value* chosen_min{nullptr};
-        std::tie(chosen_max, chosen_min) = cgen_state_->inlineIntMaxMin(8, true);
-
-        cgen_state_->needs_error_check_ = true;
-        auto cast_to_decimal_ok = llvm::BasicBlock::Create(
-            cgen_state_->context_, "cast_to_decimal_ok", cgen_state_->row_func_);
-        auto cast_to_decimal_fail = llvm::BasicBlock::Create(
-            cgen_state_->context_, "cast_to_decimal_fail", cgen_state_->row_func_);
-        auto operand_max =
-            static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue() / scale;
-        auto operand_max_lv =
-            llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), operand_max);
-        llvm::Value* detected{nullptr};
-        if (operand_ti.get_notnull()) {
-          detected = cgen_state_->ir_builder_.CreateICmpSGT(operand_lv, operand_max_lv);
-        } else {
-          detected = toBool(cgen_state_->emitCall(
-              "gt_" + numeric_type_name(ti) + "_nullable_lhs",
-              {operand_lv,
-               operand_max_lv,
-               cgen_state_->llInt(inline_int_null_val(operand_ti)),
-               cgen_state_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))}));
-        }
-        cgen_state_->ir_builder_.CreateCondBr(
-            detected, cast_to_decimal_fail, cast_to_decimal_ok);
-
-        cgen_state_->ir_builder_.SetInsertPoint(cast_to_decimal_fail);
-        cgen_state_->ir_builder_.CreateRet(
-            cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
-
-        cgen_state_->ir_builder_.SetInsertPoint(cast_to_decimal_ok);
+        codegenCastBetweenIntTypesOverflowChecks(operand_lv, operand_ti, ti, scale);
 
         if (operand_ti.get_notnull()) {
           operand_lv = cgen_state_->ir_builder_.CreateMul(operand_lv, scale_lv);
@@ -303,6 +272,10 @@ llvm::Value* CodeGenerator::codegenCastBetweenIntTypes(llvm::Value* operand_lv,
         method_name,
         {operand_lv, scale_lv, cgen_state_->llInt(inline_int_null_val(operand_ti))});
   }
+  if (ti.is_integer() && operand_ti.is_integer() &&
+      operand_ti.get_logical_size() > ti.get_logical_size()) {
+    codegenCastBetweenIntTypesOverflowChecks(operand_lv, operand_ti, ti, 1);
+  }
 
   const auto operand_width =
       static_cast<llvm::IntegerType*>(operand_lv->getType())->getBitWidth();
@@ -322,6 +295,52 @@ llvm::Value* CodeGenerator::codegenCastBetweenIntTypes(llvm::Value* operand_lv,
                                {operand_lv,
                                 cgen_state_->inlineIntNull(operand_ti),
                                 cgen_state_->inlineIntNull(ti)});
+}
+
+void CodeGenerator::codegenCastBetweenIntTypesOverflowChecks(
+    llvm::Value* operand_lv,
+    const SQLTypeInfo& operand_ti,
+    const SQLTypeInfo& ti,
+    const uint64_t scale) {
+  llvm::Value* chosen_max{nullptr};
+  llvm::Value* chosen_min{nullptr};
+  std::tie(chosen_max, chosen_min) =
+      cgen_state_->inlineIntMaxMin(ti.get_logical_size(), true);
+
+  cgen_state_->needs_error_check_ = true;
+  auto cast_ok =
+      llvm::BasicBlock::Create(cgen_state_->context_, "cast_ok", cgen_state_->row_func_);
+  auto cast_fail = llvm::BasicBlock::Create(
+      cgen_state_->context_, "cast_fail", cgen_state_->row_func_);
+  auto operand_max = static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue() / scale;
+  llvm::Value* operand_max_lv = llvm::ConstantInt::get(
+      get_int_type(8 * ti.get_logical_size(), cgen_state_->context_), operand_max);
+  const bool is_narrowing = operand_ti.get_logical_size() > ti.get_logical_size();
+  if (is_narrowing) {
+    operand_max_lv = cgen_state_->ir_builder_.CreateSExt(
+        operand_max_lv,
+        get_int_type(8 * operand_ti.get_logical_size(), cgen_state_->context_));
+  }
+  llvm::Value* detected{nullptr};
+  if (operand_ti.get_notnull()) {
+    detected = cgen_state_->ir_builder_.CreateICmpSGT(operand_lv, operand_max_lv);
+  } else {
+    const auto type_name =
+        is_narrowing ? numeric_type_name(operand_ti) : numeric_type_name(ti);
+    detected = toBool(cgen_state_->emitCall(
+        "gt_" + type_name + "_nullable_lhs",
+        {operand_lv,
+         operand_max_lv,
+         cgen_state_->llInt(inline_int_null_val(operand_ti)),
+         cgen_state_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))}));
+  }
+  cgen_state_->ir_builder_.CreateCondBr(detected, cast_fail, cast_ok);
+
+  cgen_state_->ir_builder_.SetInsertPoint(cast_fail);
+  cgen_state_->ir_builder_.CreateRet(
+      cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+
+  cgen_state_->ir_builder_.SetInsertPoint(cast_ok);
 }
 
 llvm::Value* CodeGenerator::codegenCastToFp(llvm::Value* operand_lv,
