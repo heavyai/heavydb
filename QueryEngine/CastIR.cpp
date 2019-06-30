@@ -41,16 +41,24 @@ llvm::Value* CodeGenerator::codegenCast(const Analyzer::UOper* uoper,
   return codegenCast(operand_lv, operand_ti, ti, operand_as_const, co);
 }
 
+namespace {
+
+bool byte_array_cast(const SQLTypeInfo& operand_ti, const SQLTypeInfo& ti) {
+  return (operand_ti.is_array() && ti.is_array() && ti.get_subtype() == kTINYINT &&
+          operand_ti.get_size() > 0 && operand_ti.get_size() == ti.get_size());
+}
+
+}  // namespace
+
 llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
                                         const SQLTypeInfo& operand_ti,
                                         const SQLTypeInfo& ti,
                                         const bool operand_is_const,
                                         const CompilationOptions& co) {
-  if (operand_ti.is_array() && ti.is_array() && ti.get_subtype() == kTINYINT &&
-      operand_ti.get_size() > 0 && operand_ti.get_size() == ti.get_size()) {
-    auto* array_type = get_int_array_type(8, ti.get_size(), cgen_state_->context_);
+  if (byte_array_cast(operand_ti, ti)) {
+    auto* byte_array_type = get_int_array_type(8, ti.get_size(), cgen_state_->context_);
     return cgen_state_->ir_builder_.CreatePointerCast(operand_lv,
-                                                      array_type->getPointerTo());
+                                                      byte_array_type->getPointerTo());
   }
   if (operand_lv->getType()->isIntegerTy()) {
     if (operand_ti.is_string()) {
