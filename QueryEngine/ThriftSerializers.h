@@ -30,7 +30,7 @@
 #include "Descriptors/Types.h"
 
 #include <Shared/ThriftTypesConvert.h>
-#include <glog/logging.h>
+#include "Shared/Logger.h"
 
 namespace ThriftSerializers {
 
