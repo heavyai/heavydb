@@ -20,7 +20,6 @@
 #include "DictRef.h"
 #include "LeafHostInfo.h"
 
-#include <glog/logging.h>
 #include <memory>
 #include <mutex>
 
