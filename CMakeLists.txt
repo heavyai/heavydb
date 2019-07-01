@@ -322,9 +322,9 @@ add_subdirectory(ThirdParty/linenoise)
 include_directories(ThirdParty/sqlite3)
 add_subdirectory(ThirdParty/sqlite3)
 
-#rdkafka
-include_directories(ThirdParty/librdkafka/src-cpp)
-add_subdirectory(ThirdParty/librdkafka)
+# rdkafka
+find_package(RdKafka REQUIRED)
+include_directories(${RdKafka_INCLUDE_DIRS})
 
 # aws-sdk
 option(ENABLE_AWS_S3 "Enable AWS S3 support" ON)

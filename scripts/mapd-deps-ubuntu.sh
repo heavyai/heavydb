@@ -158,6 +158,9 @@ make -j $(nproc)
 make install
 popd
 
+# librdkafka
+install_rdkafka
+
 # glslang (with spirv-tools)
 VERS=7.11.3113 # 2/8/19
 rm -rf glslang

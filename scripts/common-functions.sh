@@ -189,3 +189,31 @@ function install_gdal() {
     # gdal
     download_make_install ${HTTP_DEPS}/gdal-${GDAL_VERSION}.tar.gz "" "--without-geos --with-libkml=$PREFIX --with-proj=$PREFIX"
 }
+
+RDKAFKA_VERSION=1.1.0
+
+function install_rdkafka() {
+    if [ "$1" == "static" ]; then
+      STATIC="ON"
+    else
+      STATIC="OFF"
+    fi
+    VERS=${RDKAFKA_VERSION}
+    download https://github.com/edenhill/librdkafka/archive/v$VERS.tar.gz
+    extract v$VERS.tar.gz
+    BDIR="librdkafka-$VERS/build"
+    mkdir -p $BDIR
+    pushd $BDIR
+    cmake \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=$PREFIX \
+        -DRDKAFKA_BUILD_STATIC=$STATIC \
+        -DRDKAFKA_BUILD_EXAMPLES=OFF \
+        -DRDKAFKA_BUILD_TESTS=OFF \
+        -DWITH_SASL=OFF \
+        -DWITH_SSL=ON \
+        ..
+    makej
+    make install
+    popd
+}

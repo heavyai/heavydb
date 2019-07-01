@@ -164,6 +164,9 @@ extract go$VERS.linux-$ARCH.tar.gz
 rm -rf $PREFIX/go || true
 mv go $PREFIX
 
+# librdkafka
+install_rdkafka
+
 VERS=3.0.2
 wget --continue https://github.com/cginternals/glbinding/archive/v$VERS.tar.gz
 tar xvf v$VERS.tar.gz

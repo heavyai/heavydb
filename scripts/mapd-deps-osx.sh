@@ -23,6 +23,7 @@ brew install glog
 brew install wget
 brew install jq
 brew install c-blosc
+brew install librdkafka
 
 #brew install thrift
 # custom thrift formula pinned to specific supported version

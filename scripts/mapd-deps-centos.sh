@@ -189,6 +189,9 @@ makej
 make install
 popd
 
+# librdkafka
+install_rdkafka static
+
 # backend rendering
 VERS=1.6.21
 # http://download.sourceforge.net/libpng/libpng-$VERS.tar.xz
