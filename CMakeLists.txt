@@ -802,6 +802,7 @@ set(CPACK_RESOURCE_FILE_LICENSE "${EULA_FILE}")
 install(FILES "${EULA_FILE}" DESTINATION ".")
 
 install(PROGRAMS startomnisci DESTINATION ".")
+install(PROGRAMS scripts/inneromnisci DESTINATION "scripts")
 install(PROGRAMS insert_sample_data DESTINATION ".")
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")

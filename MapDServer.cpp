@@ -61,6 +61,9 @@ extern bool g_skip_intermediate_count;
 
 bool g_enable_thrift_logs{false};
 
+std::atomic<bool> g_running{true};
+std::atomic<int> g_saw_signal{-1};
+
 TableGenerations table_generations_from_thrift(
     const std::vector<TTableGeneration>& thrift_table_generations) {
   TableGenerations table_generations;
@@ -84,29 +87,58 @@ void shutdown_handler() {
   }
 }
 
-void mapd_signal_handler(int signal_number) {
-  LOG(INFO) << "Interrupt signal (" << signal_number << ") received.\n";
-  shutdown_handler();
-  // shut down logging force a flush
-  logger::shutdown();
-  // terminate program
-  if (signal_number == SIGTERM) {
-    std::exit(EXIT_SUCCESS);
-  } else {
-    std::exit(signal_number);
+void register_signal_handler(int signum, void (*handler)(int)) {
+  struct sigaction act;
+  memset(&act, 0, sizeof(act));
+  if (handler != SIG_DFL && handler != SIG_IGN) {
+    // block all signal deliveries while inside the signal handler
+    sigfillset(&act.sa_mask);
   }
+  act.sa_handler = handler;
+  sigaction(signum, &act, NULL);
 }
 
-void register_signal_handler() {
-  // it appears we send both a signal SIGINT(2) and SIGTERM(15) each time we
-  // exit the startomnisci script.
-  // Only catching the SIGTERM(15) to avoid double shut down request
-  // register SIGTERM and signal handler
-  std::signal(SIGTERM, mapd_signal_handler);
-  std::signal(SIGSEGV, mapd_signal_handler);
-  std::signal(SIGABRT, mapd_signal_handler);
+// Signal handler to set a global flag telling the server to exit.
+// Do not call other functions inside this (or any) signal handler
+// unless you really know what you are doing. See also:
+//   man 7 signal-safety
+//   man 7 signal
+//   https://en.wikipedia.org/wiki/Reentrancy_(computing)
+void omnisci_signal_handler(int signum) {
+  // Record the signal number for logging during shutdown.
+  // Only records the first signal if called more than once.
+  int expected_signal{-1};
+  if (!g_saw_signal.compare_exchange_strong(expected_signal, signum)) {
+    return;  // this wasn't the first signal
+  }
+
+  // This point should never be reached more than once.
+
+  // Tell heartbeat() to shutdown by unsetting the 'g_running' flag.
+  // If 'g_running' is already false, this has no effect and the
+  // shutdown is already in progress. If a core dump is in progress,
+  // say if we CHECK'ed and Logger.cpp called abort(), this should be
+  // harmless because heartbeat() will notice and skip calling exit().
+  g_running = false;
+
+  // Wait briefly to give heartbeat() a head start on the shutdown work.
+  sleep(2);
+
+  // Trigger whatever default action this signal would have done,
+  // such as terminate the process or dump core.
+  register_signal_handler(signum, SIG_DFL);
+  kill(getpid(), signum);
+}
+
+void register_signal_handlers() {
+  register_signal_handler(SIGINT, omnisci_signal_handler);
+  register_signal_handler(SIGQUIT, omnisci_signal_handler);
+  register_signal_handler(SIGHUP, omnisci_signal_handler);
+  register_signal_handler(SIGTERM, omnisci_signal_handler);
+  register_signal_handler(SIGSEGV, omnisci_signal_handler);
+  register_signal_handler(SIGABRT, omnisci_signal_handler);
   // Thrift secure socket can cause problems with SIGPIPE
-  std::signal(SIGPIPE, SIG_IGN);
+  register_signal_handler(SIGPIPE, SIG_IGN);
 }
 
 void start_server(TThreadedServer& server, const int port) {
@@ -810,6 +842,44 @@ void MapDProgramOptions::temporarily_support_deprecated_log_options_201904() {
   }
 }
 
+void heartbeat() {
+  // Block signals for this heartbeat thread, only.
+  sigset_t set;
+  sigfillset(&set);
+  int result = pthread_sigmask(SIG_BLOCK, &set, NULL);
+  if (result != 0) {
+    throw std::runtime_error("heartbeat() thread startup failed");
+  }
+
+  // Sleep until omnisci_signal_handler or anything clears the g_running flag.
+  VLOG(1) << "heartbeat thread starting";
+  while (::g_running) {
+    using namespace std::chrono;
+    std::this_thread::sleep_for(1s);
+  }
+  VLOG(1) << "heartbeat thread exiting";
+
+  // Get the signal number if there was a signal.
+  int signum = g_saw_signal;
+  if (signum >= 1 && signum != SIGTERM) {
+    LOG(INFO) << "Interrupt signal (" << signum << ") received.";
+  }
+
+  // if dumping core, try to do some quick stuff
+  if (signum == SIGQUIT || signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE) {
+    logger::shutdown();
+    shutdown_handler();
+    return;
+  }
+
+  // do an orderly shutdown
+  if (signum <= 0 || signum == SIGTERM) {
+    exit(EXIT_SUCCESS);
+  } else {
+    exit(signum);
+  }
+}
+
 int main(int argc, char** argv) {
   MapDProgramOptions prog_config_opts(argv[0]);
 
@@ -817,19 +887,24 @@ int main(int argc, char** argv) {
     return *return_code;
   }
 
-  // rudimetary signal handling to try to guarantee the logging gets flushed to
-  // files on shutdown
-  register_signal_handler();
+  // try to enforce an orderly shutdown even after a signal
+  register_signal_handlers();
+
+  // register shutdown procedures for when a CHECK or a LOG(FATAL) happens
   logger::set_once_fatal_func(&shutdown_handler);
 
+  // register shutdown procedures for when a normal exit() shutdown happens
+  atexit(&shutdown_handler);
+  atexit(&logger::shutdown);
+
   // start background thread to clean up _DELETE_ME files
-  std::atomic<bool> running{true};
   const unsigned int wait_interval =
       300;  // wait time in secs after looking for deleted file before looking again
   std::thread file_delete_thread(file_delete,
-                                 std::ref(running),
+                                 std::ref(g_running),
                                  wait_interval,
                                  prog_config_opts.base_path + "/mapd_data");
+  std::thread heartbeat_thread(heartbeat);
 
   if (!g_enable_thrift_logs) {
     apache::thrift::GlobalOutput.setOutputFunction([](const char* msg) {});
@@ -916,8 +991,13 @@ int main(int argc, char** argv) {
     LOG(FATAL) << "No High Availability module available, please contact OmniSci support";
   }
 
-  running = false;
+  // There doesn't seem to be any documented way to make Thrift's
+  // TThreadedServer stop serving except to exit() from another thread.
+  UNREACHABLE() << "THRIFT LAYER EXITED";
+
+  g_running = false;
   file_delete_thread.join();
+  heartbeat_thread.join();
 
   return 0;
 };

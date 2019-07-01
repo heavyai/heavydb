@@ -2,116 +2,64 @@
 
 set -e
 
-trap 'trap - SIGTERM && kill -- -$$' SIGINT SIGTERM EXIT
+function get_script_location()    # https://stackoverflow.com/a/246128
+{
+    SOURCE="${BASH_SOURCE[0]}"
+    while [ -h "$SOURCE" ]; do # resolve $SOURCE until the file is no longer a symlink
+      DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+      # Note symlinks will fail on macOS due to missing readlink command
+      SOURCE="$(readlink "$SOURCE")"
+      [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE" # if $SOURCE was a relative symlink, we need to resolve it relative to the path where the symlink file was located
+    done
+    DIR="$( cd -P "$( dirname "$SOURCE" )" >/dev/null 2>&1 && pwd )"
+    echo $DIR
+}
 
-MAPD_TCP_PORT=${MAPD_TCP_PORT:=6274}
-MAPD_HTTP_PORT=${MAPD_HTTP_PORT:=6278}
-MAPD_WEB_PORT=${MAPD_WEB_PORT:=6273}
-MAPD_CALCITE_PORT=${MAPD_CALCITE_PORT:=6279}
+DIR=$(get_script_location)
 
-
-MAPD_DATA=${MAPD_DATA:="data"}
-
-while (( $# )); do
-    case "$1" in
-        --read-only)
-            RO="--read-only" ;;
-        --base-port)
-            shift
-            MAPD_WEB_PORT=$1
-            MAPD_TCP_PORT=$(($MAPD_WEB_PORT-1))
-            MAPD_HTTP_PORT=$(($MAPD_WEB_PORT-2))
-            MAPD_CALCITE_PORT=$(($MAPD_WEB_PORT+1))
-            ;;
-        --data)
-            shift
-            MAPD_DATA=$1
-            ;;
-        --enable-https)
-            HTTPS="--enable-https" ;;
-        --cert)
-            shift
-            HTTPS_CERT="--cert $1" ;;
-        --key)
-            shift
-            HTTPS_KEY="--key $1" ;;
-        --config)
-            shift
-            if [ -e "$1" ]; then
-                CONFIG="--config $1"
-            else
-                echo "WARN: config file does not exist, ignoring: --config $1" >&2
-            fi
-            ;;
-        --non-interactive)
-            NON_INTERACTIVE=true ;;
-        --disable-open-frontend)
-            DISABLE_OPEN_FRONTEND=true ;;
-        --verbose)
-            VERBOSE="--verbose" ;;
-        *)
-            break ;;
-    esac
-    shift
-done
-
-echo "Backend TCP:  localhost:${MAPD_TCP_PORT}"
-echo "Backend HTTP: localhost:${MAPD_HTTP_PORT}"
-echo "Frontend Web: localhost:${MAPD_WEB_PORT}"
-echo "Calcite TCP: localhost:${MAPD_CALCITE_PORT}"
-
-if [ ! -d $MAPD_DATA/mapd_data ]; then
-    mkdir -p $MAPD_DATA
-    ./bin/initdb -f --data $MAPD_DATA
-
-    if [ ! "$NON_INTERACTIVE" = true ]; then
-        echo "Download and insert sample data? Y/n"
-        read choice
-        if [ -z "$choice" ]; then choice="Y"; fi
-        case $choice in
-            [yY]* )
-                INSERT_SAMPLE_DATA=true;;
-        esac
-    fi
+if [[ -t 0 || -p /dev/stdin ]]; then    # http://tldp.org/LDP/abs/html/intandnonint.html
+    TTY=$(tty)
+else
+    unset TTY
 fi
 
-./bin/omnisci_server $MAPD_DATA $RO --port $MAPD_TCP_PORT --http-port $MAPD_HTTP_PORT --calcite-port $MAPD_CALCITE_PORT $CONFIG $VERBOSE $* &
-MAPDPID=$!
+echo "${0##*/} $$ running"
 
-if [ "$INSERT_SAMPLE_DATA" = true ]; then
-    echo "- omnisci_server started"
-    echo "- sleeping for 5s while server starts"
-    sleep 5
-
-    if [ ! "$NON_INTERACTIVE" = true ]; then
-        DIR=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
-        . "$DIR/insert_sample_data"
-    fi
-fi
-
-if [ -d frontend ] && [ -e ./bin/omnisci_web_server ]; then
-    ./bin/omnisci_web_server $RO --port $MAPD_WEB_PORT --backend-url "http://localhost:${MAPD_HTTP_PORT}" --data $MAPD_DATA $HTTPS $HTTPS_CERT $HTTPS_KEY $CONFIG $VERBOSE &
-
-    if [ ! -z "$HTTPS" ] ; then
-        MAPDFRONTEND="https://localhost:${MAPD_WEB_PORT}"
+if [ $(which setsid) != "" ]; then
+    # creates a new process group (and a new session)
+    # to see process groups (PGID's), try 'pstree -g' or something like:
+    #     ps -u yourname -o pid,ppid,pgid,args | head -1 ; ps -u yourname -o pid,ppid,pgid,args | grep -E 'omnisci|calcite' | grep -v grep
+    if [ -v TTY ]; then
+      setsid -w $DIR/scripts/inneromnisci "$@" <$TTY &
     else
-        MAPDFRONTEND="http://localhost:${MAPD_WEB_PORT}"
+      setsid -w $DIR/scripts/inneromnisci --non-interactive "$@" &
     fi
-
-    echo "- sleeping for 5s while server starts"
-    sleep 5
-
-    if [ ! "$DISABLE_OPEN_FRONTEND" = true ]; then
-        if hash open 2>/dev/null; then
-            open "$MAPDFRONTEND" 2> /dev/null || true
-        elif hash xdg-open 2>/dev/null; then
-            xdg-open "$MAPDFRONTEND" 2> /dev/null || true
-        else
-            echo "Navigate to: $MAPDFRONTEND"
-        fi
+    SUBPID=$!
+else
+    # setsid missing on macOS
+    # this should still work but not quite as cleanly as with setsid
+    if [ -v TTY ]; then
+      $DIR/scripts/inneromnisci "$@" <$TTY &
     else
-        echo "Navigate to: $MAPDFRONTEND"
+      $DIR/scripts/inneromnisci --non-interactive "$@" &
     fi
+    SUBPID=$!
 fi
 
-wait $MAPDPID
+# Immediately kill the single $SUBPID process if this script gets a signal.
+# This script will also exit due to the wait on the last line unblocking and/or
+# because bash will always stop this script if a CTRL-C is typed.
+trap 'set +e ; trap - SIGTERM ; echo ; echo "${0##*/} $$ shutting down" ; kill $SUBPID 2>/dev/null' SIGHUP SIGINT SIGTERM
+
+# To be safe kill the entire $SUBPID process group when this script exits for any reason.
+# This happens after a short delay to give OmniSciDB C++ a chance to shut itself down cleanly
+# if an earlier signal+trap triggered this exit.
+trap 'set +e ; trap - SIGTERM ; sleep 1 ; kill -- -$SUBPID 2>/dev/null ; sleep 1 ; echo "${0##*/} $$ exited"' EXIT
+
+# Be aware that CTRL-C has special handling by bash. Pressing
+# CTRL-C at the terminal causes Bash to send SIGINT to the entire
+# process group before this trap gets run. Bash also kills this
+# script after CTRL-C after the trap runs even if we wanted this
+# script to keep running.
+
+wait $SUBPID

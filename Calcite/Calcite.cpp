@@ -514,7 +514,10 @@ void Calcite::close_calcite_server(bool log) {
       clientP.first->shutdown();
       clientP.second->close();
     } catch (const std::exception& e) {
-      std::cerr << "Error shutting down Calcite server: " << e.what();
+      if (std::string(e.what()) != "connect() failed: Connection refused" &&
+          std::string(e.what()) != "No more data to read.") {
+        std::cerr << "Error shutting down Calcite server: " << e.what();
+      }  // else Calcite already shut down
     }
     LOG_IF(INFO, log) << "shut down Calcite";
     server_available_ = false;
