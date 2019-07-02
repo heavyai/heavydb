@@ -912,29 +912,30 @@ int main(int argc, char** argv) {
     apache::thrift::GlobalOutput.setOutputFunction([](const char* msg) {});
   }
 
-  g_mapd_handler = mapd::make_shared<MapDHandler>(prog_config_opts.db_leaves,
-                                                  prog_config_opts.string_leaves,
-                                                  prog_config_opts.base_path,
-                                                  prog_config_opts.cpu_only,
-                                                  prog_config_opts.allow_multifrag,
-                                                  prog_config_opts.jit_debug,
-                                                  prog_config_opts.read_only,
-                                                  prog_config_opts.allow_loop_joins,
-                                                  prog_config_opts.enable_rendering,
-                                                  prog_config_opts.enable_spirv,
-                                                  prog_config_opts.enable_auto_clear_render_mem,
-                                                  prog_config_opts.render_oom_retry_threshold,
-                                                  prog_config_opts.render_mem_bytes,
-                                                  prog_config_opts.num_gpus,
-                                                  prog_config_opts.start_gpu,
-                                                  prog_config_opts.reserved_gpu_mem,
-                                                  prog_config_opts.num_reader_threads,
-                                                  prog_config_opts.authMetadata,
-                                                  prog_config_opts.mapd_parameters,
-                                                  prog_config_opts.enable_legacy_syntax,
-                                                  prog_config_opts.idle_session_duration,
-                                                  prog_config_opts.max_session_duration,
-                                                  prog_config_opts.udf_file_name);
+  g_mapd_handler =
+      mapd::make_shared<MapDHandler>(prog_config_opts.db_leaves,
+                                     prog_config_opts.string_leaves,
+                                     prog_config_opts.base_path,
+                                     prog_config_opts.cpu_only,
+                                     prog_config_opts.allow_multifrag,
+                                     prog_config_opts.jit_debug,
+                                     prog_config_opts.read_only,
+                                     prog_config_opts.allow_loop_joins,
+                                     prog_config_opts.enable_rendering,
+                                     prog_config_opts.enable_spirv,
+                                     prog_config_opts.enable_auto_clear_render_mem,
+                                     prog_config_opts.render_oom_retry_threshold,
+                                     prog_config_opts.render_mem_bytes,
+                                     prog_config_opts.num_gpus,
+                                     prog_config_opts.start_gpu,
+                                     prog_config_opts.reserved_gpu_mem,
+                                     prog_config_opts.num_reader_threads,
+                                     prog_config_opts.authMetadata,
+                                     prog_config_opts.mapd_parameters,
+                                     prog_config_opts.enable_legacy_syntax,
+                                     prog_config_opts.idle_session_duration,
+                                     prog_config_opts.max_session_duration,
+                                     prog_config_opts.udf_file_name);
 
   mapd::shared_ptr<TServerSocket> serverSocket;
   if (!prog_config_opts.mapd_parameters.ssl_cert_file.empty() &&
