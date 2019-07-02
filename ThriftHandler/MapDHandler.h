@@ -127,6 +127,7 @@ class MapDHandler : public MapDIf {
               const bool enable_rendering,
               const bool enable_spirv,
               const bool enable_auto_clear_render_mem,
+              const int render_oom_retry_threshold,
               const size_t render_mem_bytes,
               const int num_gpus,
               const int start_gpu,

@@ -248,11 +248,13 @@ class MapDProgramOptions {
   bool enable_rendering = false;
   bool enable_spirv = false;
   bool enable_auto_clear_render_mem = false;
+  int render_oom_retry_threshold = 0;  // in milliseconds
+  size_t render_mem_bytes = 500000000;
+  size_t render_poly_cache_bytes = 300000000;
+
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
   unsigned dynamic_watchdog_time_limit = 10000;
-
-  size_t render_mem_bytes = 500000000;
 
   /**
    * Can be used to override the number of gpus detected on the system
@@ -921,6 +923,7 @@ int main(int argc, char** argv) {
                                                   prog_config_opts.enable_rendering,
                                                   prog_config_opts.enable_spirv,
                                                   prog_config_opts.enable_auto_clear_render_mem,
+                                                  prog_config_opts.render_oom_retry_threshold,
                                                   prog_config_opts.render_mem_bytes,
                                                   prog_config_opts.num_gpus,
                                                   prog_config_opts.start_gpu,
