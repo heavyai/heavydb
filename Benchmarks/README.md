@@ -156,6 +156,16 @@ Example 2:
 python ./run-benchmark.py -u user -p password -s mapd-server.example.com -n mapd_db -t flights_2008_10k -l TestLabel -d /home/mapd/queries/flights -i 10 -g 4 -e mapd_db,file_json -U dest_user -P password -S mapd-dest-server.mapd.com -N mapd_dest_db -T benchmark_results -j /home/mapd/benchmark_results/example.json
 ```
 
+#### Comparing results
+
+The python script `analyze-benchmark.py` can be used to compare results between benchmark runs. To use the script, results for each benchmark run must be stored in .json format using `file_json` DESTINATION. Two directories can be passed to the script: "sample" (`-s`) containing .json test results from the base sample set; and another, "reference" (`-r`) with the results to use for comparison.
+
+Example usage:
+```
+python analyze-benchmark.py -s ./results/base_test -r ./results/example_test1
+```
+where `./results/base_test` and `./results/example_test1` directories contain the .json output files from the `run-benchmark.py` script for their respective test runs.
+
 ## Import Benchmark
 
 The import benchmark script `./run-benchmark-import.py` is used to run a data import from a file local to the benchmarking machine, and report various times associated with the import of that data.
