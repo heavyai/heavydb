@@ -211,7 +211,7 @@ OmniSciDB has the following dependencies:
 | [Go](https://golang.org/) | 1.6 | yes |
 | [Boost](http://www.boost.org/) | 1.65.0 | yes |
 | [OpenJDK](http://openjdk.java.net/) | 1.7 | yes |
-| [CUDA](http://nvidia.com/cuda) | 9.0 | yes, if compiling with GPU support |
+| [CUDA](http://nvidia.com/cuda) | 10.0 | yes, if compiling with GPU support |
 | [gperftools](https://github.com/gperftools/gperftools) | | yes |
 | [gdal](http://gdal.org/) | 2.3 | yes |
 | [Arrow](https://arrow.apache.org/) | 0.11.0 | yes |
