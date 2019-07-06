@@ -150,11 +150,4 @@ inline void count_distinct_set_union(
   }
 }
 
-inline void count_distinct_set_union(const int64_t new_set_handle,
-                                     const int64_t old_set_handle,
-                                     const CountDistinctDescriptor& count_distinct_desc) {
-  count_distinct_set_union(
-      new_set_handle, old_set_handle, count_distinct_desc, count_distinct_desc);
-}
-
 #endif

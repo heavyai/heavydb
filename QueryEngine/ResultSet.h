@@ -27,8 +27,12 @@
 
 #include "../Chunk/Chunk.h"
 #include "CardinalityEstimator.h"
+#include "CgenState.h"
 #include "ResultSetBufferAccessors.h"
+#include "ResultSetReduction.h"
 #include "TargetValue.h"
+
+#include <llvm/IR/Value.h>
 
 #include <atomic>
 #include <functional>
@@ -83,7 +87,8 @@ class ResultSetStorage {
                    const bool buff_is_provided);
 
   void reduce(const ResultSetStorage& that,
-              const std::vector<std::string>& serialized_varlen_buffer) const;
+              const std::vector<std::string>& serialized_varlen_buffer,
+              const ReductionCode::FuncPtr reduction_func_ptr) const;
 
   void rewriteAggregateBufferOffsets(
       const std::vector<std::string>& serialized_varlen_buffer) const;
@@ -116,6 +121,12 @@ class ResultSetStorage {
                               const std::vector<TargetInfo>& targets,
                               const std::vector<int64_t>& agg_init_vals);
 
+  ReductionCode reduceOneEntryJIT(const ResultSetStorage& that) const;
+
+  ReductionCode reduceOneEntryNoCollisionsRowWiseJIT(const ResultSetStorage& that) const;
+
+  ReductionCode reduceOneEntrySlotsBaselineJIT(const ResultSetStorage& that) const;
+
  private:
   void reduceEntriesNoCollisionsColWise(
       int8_t* this_buff,
@@ -134,7 +145,26 @@ class ResultSetStorage {
       int8_t* this_buff,
       const int8_t* that_buff,
       const ResultSetStorage& that,
-      const std::vector<std::string>& serialized_varlen_buffer) const;
+      const std::vector<std::string>& serialized_varlen_buffer,
+      const ReductionCode::FuncPtr reduction_func_ptr) const;
+
+  void reduceOneSlotJIT(llvm::Value* this_ptr1,
+                        llvm::Value* this_ptr2,
+                        llvm::Value* that_ptr1,
+                        llvm::Value* that_ptr2,
+                        const TargetInfo& target_info,
+                        const size_t target_logical_idx,
+                        const size_t target_slot_idx,
+                        const size_t init_agg_val_idx,
+                        const ResultSetStorage& that,
+                        const size_t first_slot_idx_for_target,
+                        CgenState* cgen_state) const;
+
+  void reduceOneCountDistinctSlotJIT(llvm::Value* this_ptr1,
+                                     llvm::Value* that_ptr1,
+                                     const size_t target_logical_idx,
+                                     const ResultSetStorage& that,
+                                     CgenState* cgen_state) const;
 
   bool isEmptyEntry(const size_t entry_idx, const int8_t* buff) const;
   bool isEmptyEntry(const size_t entry_idx) const;
@@ -144,13 +174,15 @@ class ResultSetStorage {
                               const int8_t* that_buff,
                               const size_t i,
                               const size_t that_entry_count,
-                              const ResultSetStorage& that) const;
+                              const ResultSetStorage& that,
+                              const ReductionCode::FuncPtr reduction_func_ptr) const;
 
   void reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
                                    const int64_t* that_buff,
                                    const size_t that_entry_idx,
                                    const size_t that_entry_count,
-                                   const ResultSetStorage& that) const;
+                                   const ResultSetStorage& that,
+                                   const ReductionCode::FuncPtr reduction_func_ptr) const;
 
   void initializeBaselineValueSlots(int64_t* this_entry_slots) const;
 
@@ -868,5 +900,9 @@ void fill_empty_key(void* key_ptr, const size_t key_count, const size_t key_widt
 bool can_use_parallel_algorithms(const ResultSet& rows);
 
 bool use_parallel_algorithms(const ResultSet& rows);
+
+int8_t get_width_for_slot(const size_t target_slot_idx,
+                          const bool float_argument_input,
+                          const QueryMemoryDescriptor& query_mem_desc);
 
 #endif  // QUERYENGINE_RESULTSET_H

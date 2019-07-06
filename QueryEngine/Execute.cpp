@@ -883,9 +883,16 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
     reduced_results = first;
   }
 
+#ifdef WITH_REDUCTION_JIT
+  const auto& this_storage = *(results_per_device[0].first->getStorage());
+  const auto reduction_code = this_storage.reduceOneEntryJIT(this_storage);
+  ReductionCode::FuncPtr reduction_func_ptr = reduction_code.func_ptr;
+#else
+  ReductionCode::FuncPtr reduction_func_ptr = nullptr;
+#endif  // WITH_REDUCTION_JIT
   for (size_t i = 1; i < results_per_device.size(); ++i) {
-    reduced_results->getStorage()->reduce(*(results_per_device[i].first->getStorage()),
-                                          {});
+    reduced_results->getStorage()->reduce(
+        *(results_per_device[i].first->getStorage()), {}, reduction_func_ptr);
   }
 
   return reduced_results;

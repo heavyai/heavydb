@@ -238,7 +238,7 @@ class QueryMemoryDescriptor {
   bool hasNulls() const { return has_nulls_; }
   GroupByMemSharing getGpuMemSharing() const { return sharing_; }
 
-  const CountDistinctDescriptor getCountDistinctDescriptor(const size_t idx) const {
+  const CountDistinctDescriptor& getCountDistinctDescriptor(const size_t idx) const {
     CHECK_LT(idx, count_distinct_descriptors_.size());
     return count_distinct_descriptors_[idx];
   }

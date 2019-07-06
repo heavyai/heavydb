@@ -146,9 +146,9 @@ void fill_empty_key(void* key_ptr, const size_t key_count, const size_t key_widt
 
 // Driver method for various buffer layouts, actual work is done by reduceOne* methods.
 // Reduces the entries of `that` into the buffer of this ResultSetStorage object.
-void ResultSetStorage::reduce(
-    const ResultSetStorage& that,
-    const std::vector<std::string>& serialized_varlen_buffer) const {
+void ResultSetStorage::reduce(const ResultSetStorage& that,
+                              const std::vector<std::string>& serialized_varlen_buffer,
+                              const ReductionCode::FuncPtr reduction_func_ptr) const {
   auto entry_count = query_mem_desc_.getEntryCount();
   CHECK_GT(entry_count, size_t(0));
   if (query_mem_desc_.didOutputColumnar()) {
@@ -188,13 +188,20 @@ void ResultSetStorage::reduce(
                                         that.query_mem_desc_.getEntryCount());
         reduction_threads.emplace_back(std::async(
             std::launch::async,
-            [this, this_buff, that_buff, start_index, end_index, &that] {
+            [this,
+             this_buff,
+             that_buff,
+             start_index,
+             end_index,
+             reduction_func_ptr,
+             &that] {
               for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
                 reduceOneEntryBaseline(this_buff,
                                        that_buff,
                                        entry_idx,
                                        that.query_mem_desc_.getEntryCount(),
-                                       that);
+                                       that,
+                                       reduction_func_ptr);
               }
             }));
       }
@@ -206,8 +213,12 @@ void ResultSetStorage::reduce(
       }
     } else {
       for (size_t i = 0; i < that.query_mem_desc_.getEntryCount(); ++i) {
-        reduceOneEntryBaseline(
-            this_buff, that_buff, i, that.query_mem_desc_.getEntryCount(), that);
+        reduceOneEntryBaseline(this_buff,
+                               that_buff,
+                               i,
+                               that.query_mem_desc_.getEntryCount(),
+                               that,
+                               reduction_func_ptr);
       }
     }
     return;
@@ -244,11 +255,16 @@ void ResultSetStorage::reduce(
              that_buff,
              start_index,
              end_index,
+             reduction_func_ptr,
              &that,
              &serialized_varlen_buffer] {
               for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
-                reduceOneEntryNoCollisionsRowWise(
-                    entry_idx, this_buff, that_buff, that, serialized_varlen_buffer);
+                reduceOneEntryNoCollisionsRowWise(entry_idx,
+                                                  this_buff,
+                                                  that_buff,
+                                                  that,
+                                                  serialized_varlen_buffer,
+                                                  reduction_func_ptr);
               }
             }));
       }
@@ -270,7 +286,7 @@ void ResultSetStorage::reduce(
     } else {
       for (size_t i = 0; i < entry_count; ++i) {
         reduceOneEntryNoCollisionsRowWise(
-            i, this_buff, that_buff, that, serialized_varlen_buffer);
+            i, this_buff, that_buff, that, serialized_varlen_buffer, reduction_func_ptr);
       }
     }
   }
@@ -500,7 +516,8 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
     int8_t* this_buff,
     const int8_t* that_buff,
     const ResultSetStorage& that,
-    const std::vector<std::string>& serialized_varlen_buffer) const {
+    const std::vector<std::string>& serialized_varlen_buffer,
+    const ReductionCode::FuncPtr reduction_func_ptr) const {
   check_watchdog(entry_idx);
   CHECK(!query_mem_desc_.didOutputColumnar());
   if (isEmptyEntry(entry_idx, that_buff)) {
@@ -516,6 +533,11 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
     memcpy(this_targets_ptr - key_bytes_with_padding,
            that_targets_ptr - key_bytes_with_padding,
            key_bytes);
+  }
+
+  if (reduction_func_ptr) {
+    reduction_func_ptr(this_targets_ptr, that_targets_ptr);
+    return;
   }
 
   const auto& col_slot_context = query_mem_desc_.getColSlotContext();
@@ -776,11 +798,13 @@ GroupValueInfo get_group_value_reduction(int64_t* groups_buffer,
 
 // Reduces entry at position that_entry_idx in that_buff into this_buff. This is
 // the baseline layout, so the position in this_buff isn't known to be that_entry_idx.
-void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
-                                              const int8_t* that_buff,
-                                              const size_t that_entry_idx,
-                                              const size_t that_entry_count,
-                                              const ResultSetStorage& that) const {
+void ResultSetStorage::reduceOneEntryBaseline(
+    int8_t* this_buff,
+    const int8_t* that_buff,
+    const size_t that_entry_idx,
+    const size_t that_entry_count,
+    const ResultSetStorage& that,
+    const ReductionCode::FuncPtr reduction_func_ptr) const {
   check_watchdog(that_entry_idx);
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   CHECK(query_mem_desc_.getQueryDescriptionType() ==
@@ -827,15 +851,30 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
     }
     return;
   }
-  reduceOneEntrySlotsBaseline(
-      this_entry_slots, that_buff_i64, that_entry_idx, that_entry_count, that);
+  reduceOneEntrySlotsBaseline(this_entry_slots,
+                              that_buff_i64,
+                              that_entry_idx,
+                              that_entry_count,
+                              that,
+                              reduction_func_ptr);
 }
 
-void ResultSetStorage::reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
-                                                   const int64_t* that_buff,
-                                                   const size_t that_entry_idx,
-                                                   const size_t that_entry_count,
-                                                   const ResultSetStorage& that) const {
+void ResultSetStorage::reduceOneEntrySlotsBaseline(
+    int64_t* this_entry_slots,
+    const int64_t* that_buff,
+    const size_t that_entry_idx,
+    const size_t that_entry_count,
+    const ResultSetStorage& that,
+    const ReductionCode::FuncPtr reduction_func_ptr) const {
+  if (reduction_func_ptr) {
+    CHECK(!query_mem_desc_.didOutputColumnar());
+    const auto this_targets_ptr = reinterpret_cast<int8_t*>(this_entry_slots);
+    const auto that_targets_ptr = reinterpret_cast<const int8_t*>(
+        that_buff + get_row_qw_count(query_mem_desc_) * that_entry_idx +
+        get_slot_off_quad(query_mem_desc_));
+    reduction_func_ptr(this_targets_ptr, that_targets_ptr);
+    return;
+  }
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   size_t j = 0;
   size_t init_agg_val_idx = 0;
@@ -1090,9 +1129,9 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
   for (auto result_it = result_sets.begin() + 1; result_it != result_sets.end();
        ++result_it) {
     if (!serialized_varlen_buffer.empty()) {
-      result->reduce(*((*result_it)->storage_), serialized_varlen_buffer[ctr++]);
+      result->reduce(*((*result_it)->storage_), serialized_varlen_buffer[ctr++], nullptr);
     } else {
-      result->reduce(*((*result_it)->storage_), {});
+      result->reduce(*((*result_it)->storage_), {}, nullptr);
     }
   }
   return result_rs;
@@ -1363,8 +1402,6 @@ void ResultSetStorage::initializeBaselineValueSlots(int64_t* entry_slots) const 
     }                                                                             \
   } while (0)
 
-namespace {
-
 int8_t get_width_for_slot(const size_t target_slot_idx,
                           const bool float_argument_input,
                           const QueryMemoryDescriptor& query_mem_desc) {
@@ -1373,8 +1410,6 @@ int8_t get_width_for_slot(const size_t target_slot_idx,
   }
   return query_mem_desc.getPaddedSlotWidthBytes(target_slot_idx);
 }
-
-}  // namespace
 
 void ResultSetStorage::reduceOneSlot(
     int8_t* this_ptr1,

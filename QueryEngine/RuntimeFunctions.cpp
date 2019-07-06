@@ -413,6 +413,18 @@ DEF_AGG_ID_INT(16)
 DEF_AGG_ID_INT(8)
 #undef DEF_AGG_ID_INT
 
+#define DEF_WRITE_PROJECTION_INT(n)                                     \
+  extern "C" ALWAYS_INLINE void write_projection_int##n(                \
+      int8_t* slot_ptr, const int##n##_t val, const int64_t init_val) { \
+    if (val != init_val) {                                              \
+      *reinterpret_cast<int##n##_t*>(slot_ptr) = val;                   \
+    }                                                                   \
+  }
+
+DEF_WRITE_PROJECTION_INT(64)
+DEF_WRITE_PROJECTION_INT(32)
+#undef DEF_WRITE_PROJECTION_INT
+
 extern "C" ALWAYS_INLINE int64_t agg_sum_skip_val(int64_t* agg,
                                                   const int64_t val,
                                                   const int64_t skip_val) {
