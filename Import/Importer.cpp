@@ -4503,6 +4503,13 @@ ImportStatus Importer::importGDAL(
   OGRSpatialReferenceUqPtr poGeographicSR(new OGRSpatialReference());
   poGeographicSR->importFromEPSG(copy_params.geo_coords_srid);
 
+#if GDAL_VERSION_MAJOR >= 3
+  // GDAL 3.x (really Proj.4 6.x) now enforces lat, lon order
+  // this results in X and Y being transposed for angle-based
+  // coordinate systems. This restores the previous behavior.
+  poGeographicSR->SetAxisMappingStrategy(OAMS_TRADITIONAL_GIS_ORDER);
+#endif
+
 #if DISABLE_MULTI_THREADED_SHAPEFILE_IMPORT
   // just one "thread"
   size_t max_threads = 1;
