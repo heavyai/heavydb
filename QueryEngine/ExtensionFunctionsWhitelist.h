@@ -27,6 +27,7 @@
 
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "../Shared/sqltypes.h"
@@ -50,7 +51,8 @@ enum class ExtArgumentType {
   ArrayInt32,
   ArrayInt64,
   ArrayFloat,
-  ArrayDouble
+  ArrayDouble,
+  GeoPoint
 };
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type);
@@ -102,7 +104,8 @@ class ExtensionFunctionsWhitelist {
   static std::string toString(const std::vector<SQLTypeInfo>& arg_types);
   static std::string toString(const std::vector<ExtArgumentType>& sig_types);
 
-  static std::vector<std::string> getLLVMDeclarations();
+  static std::vector<std::string> getLLVMDeclarations(
+      const std::unordered_set<std::string>& udf_decls);
 
  private:
   static void addCommon(

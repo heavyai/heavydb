@@ -110,6 +110,55 @@ int32_t udf_diff(const int32_t x, const int32_t y) {
 }
 
 EXTENSION_NOINLINE
+double ST_X_Point(int8_t* p, int64_t psize, int32_t ic, int32_t isr, int32_t osr);
+
+EXTENSION_NOINLINE
+double ST_Y_Point(int8_t* p, int64_t psize, int32_t ic, int32_t isr, int32_t osr);
+
+struct GeoPoint {
+  int8_t* ptr;
+  std::size_t sz;
+  int32_t compression;
+  int32_t input_srid;
+  int32_t output_srid;
+
+  DEVICE std::size_t getSize() const { return sz; }
+
+  DEVICE int32_t getCompression() const { return compression; }
+
+  DEVICE int32_t getInputSrid() const { return input_srid; }
+
+  DEVICE int32_t getOutputSrid() const { return output_srid; }
+};
+
+EXTENSION_NOINLINE
+double point_x(GeoPoint p) {
+  return ST_X_Point(
+      p.ptr, p.getSize(), p.getCompression(), p.getInputSrid(), p.getOutputSrid());
+}
+
+EXTENSION_NOINLINE
+double point_y(GeoPoint p) {
+  return ST_Y_Point(
+      p.ptr, p.getSize(), p.getCompression(), p.getInputSrid(), p.getOutputSrid());
+}
+
+EXTENSION_NOINLINE
+int32_t point_compression(GeoPoint p) {
+  return p.getCompression();
+}
+
+EXTENSION_NOINLINE
+int32_t point_input_srid(GeoPoint p) {
+  return p.getInputSrid();
+}
+
+EXTENSION_NOINLINE
+int32_t point_output_srid(GeoPoint p) {
+  return p.getOutputSrid();
+}
+
+EXTENSION_NOINLINE
 double udf_range(const double high_price, const double low_price) {
   return high_price - low_price;
 }

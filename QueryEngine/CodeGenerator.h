@@ -420,6 +420,18 @@ class CodeGenerator {
                         llvm::Value* array_is_null,
                         std::vector<llvm::Value*>& output_args);
 
+  llvm::StructType* createPointStructType(const std::string& udf_func_name,
+                                          size_t param_num);
+
+  void codegenGeoPointArgs(const std::string& udf_func_name,
+                           size_t param_num,
+                           llvm::Value* point_buf,
+                           llvm::Value* point_size,
+                           llvm::Value* compression,
+                           llvm::Value* input_srid,
+                           llvm::Value* output_srid,
+                           std::vector<llvm::Value*>& output_args);
+
   std::vector<llvm::Value*> codegenFunctionOperCastArgs(
       const Analyzer::FunctionOper*,
       const ExtensionFunction*,

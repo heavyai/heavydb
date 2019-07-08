@@ -151,7 +151,7 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         return 1;
       }
       break;
-    case kLINESTRING:
+
     case kPOINT:
       if ((stype == ExtArgumentType::PInt8 || stype == ExtArgumentType::PInt16 ||
            stype == ExtArgumentType::PInt32 || stype == ExtArgumentType::PInt64 ||
@@ -159,7 +159,21 @@ static int match_arguments(const SQLTypeInfo& arg_type,
           sig_pos < max_pos && sig_types[sig_pos + 1] == ExtArgumentType::Int64) {
         penalty_score += 1000;
         return 2;
+      } else if (stype == ExtArgumentType::GeoPoint) {
+        penalty_score += 1000;
+        return 1;
       }
+      break;
+
+    case kLINESTRING:
+      if ((stype == ExtArgumentType::PInt8 || stype == ExtArgumentType::PInt16 ||
+           stype == ExtArgumentType::PInt32 || stype == ExtArgumentType::PInt64 ||
+           stype == ExtArgumentType::PFloat || stype == ExtArgumentType::PDouble) &&
+          sig_pos < max_pos && sig_types[sig_pos + 1] == ExtArgumentType::Int64) {
+        penalty_score += 1000;
+        return 2;
+      }
+      break;
 
     case kARRAY:
       if ((stype == ExtArgumentType::PInt8 || stype == ExtArgumentType::PInt16 ||
@@ -347,6 +361,16 @@ bool is_ext_arg_type_array(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ArrayInt64:
     case ExtArgumentType::ArrayFloat:
     case ExtArgumentType::ArrayDouble:
+      return true;
+
+    default:
+      return false;
+  }
+}
+
+bool is_ext_arg_type_geo(const ExtArgumentType ext_arg_type) {
+  switch (ext_arg_type) {
+    case ExtArgumentType::GeoPoint:
       return true;
 
     default:

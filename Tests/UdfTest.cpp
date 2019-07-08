@@ -211,9 +211,15 @@ TEST_F(UDFCompilerTest, UdfQuery) {
 
   run_ddl_statement("DROP TABLE IF EXISTS stocks;");
   run_ddl_statement("DROP TABLE IF EXISTS sal_emp;");
+  run_ddl_statement("DROP TABLE IF EXISTS geospatial_test;");
+
   run_ddl_statement(
       "CREATE TABLE stocks(symbol text, open_p int, high_p int, "
       "low_p int, close_p int, entry_d DATE);");
+  run_ddl_statement(
+      "CREATE TABLE geospatial_test (id INT, p POINT, "
+      "gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32), "
+      "gp4326none GEOMETRY(POINT,4326) ENCODING NONE) ;");
 
   run_ddl_statement("CREATE TABLE sal_emp(name text, pay_by_quarter integer[]);");
 
@@ -246,6 +252,13 @@ TEST_F(UDFCompilerTest, UdfQuery) {
 
   EXPECT_NO_THROW(run_multiple_agg(array_insert4, ExecutorDeviceType::CPU));
 
+  std::string point_insert1(
+      "INSERT into geospatial_test VALUES(0, 'POINT(55.8659449685365 "
+      "-4.25072511658072)', "
+      "'POINT(51.4618933852762 -0.926690306514502)', "
+      "'POINT(55.9523783996701 -3.20510306395594326)');");
+  EXPECT_NO_THROW(run_multiple_agg(point_insert1, ExecutorDeviceType::CPU));
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     ASSERT_EQ(7,
@@ -256,7 +269,6 @@ TEST_F(UDFCompilerTest, UdfQuery) {
               v<int64_t>(run_simple_agg("SELECT udf_range_int(high_p, low_p) from stocks "
                                         "where entry_d = '2019-05-03';",
                                         dt)));
-
     ASSERT_EQ(
         5000,
         v<int64_t>(run_simple_agg("select array_at_int32(pay_by_quarter, 0) from sal_emp "
@@ -304,6 +316,46 @@ TEST_F(UDFCompilerTest, UdfQuery) {
                   "select array_at_int32_is_null(pay_by_quarter, 1) from sal_emp "
                   "where name = 'Carla';",
                   dt)));
+
+    ASSERT_DOUBLE_EQ(55.8659449685365,
+                     v<double>(run_simple_agg(
+                         "select point_x(p) from geospatial_test WHERE id = 0;", dt)));
+    ASSERT_DOUBLE_EQ(-4.25072511658072,
+                     v<double>(run_simple_agg(
+                         "select point_y(p) from geospatial_test WHERE id = 0;", dt)));
+
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "select point_compression(p) from geospatial_test WHERE id = 0;", dt)));
+
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "select point_input_srid(p) from geospatial_test WHERE id = 0;", dt)));
+
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "select point_output_srid(p) from geospatial_test WHERE id = 0;", dt)));
+
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "select point_compression(gp4326) from geospatial_test WHERE id = 0;", dt)));
+
+    ASSERT_EQ(
+        4326,
+        v<int64_t>(run_simple_agg(
+            "select point_input_srid(gp4326) from geospatial_test WHERE id = 0;", dt)));
+
+    ASSERT_EQ(
+        4326,
+        v<int64_t>(run_simple_agg(
+            "select point_output_srid(gp4326) from geospatial_test WHERE id = 0;", dt)));
+
+    ASSERT_EQ(
+        0,
+        v<int64_t>(run_simple_agg(
+            "select point_compression(gp4326none) from geospatial_test WHERE id = 0;",
+            dt)));
   }
 
   EXPECT_THROW(run_simple_agg("SELECT udf_range_integer(high_p, low_p) from stocks where "
@@ -313,6 +365,7 @@ TEST_F(UDFCompilerTest, UdfQuery) {
 
   run_ddl_statement("DROP TABLE stocks;");
   run_ddl_statement("DROP TABLE sal_emp;");
+  run_ddl_statement("DROP TABLE geospatial_test;");
 }
 
 int main(int argc, char** argv) {

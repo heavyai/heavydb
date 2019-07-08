@@ -48,7 +48,8 @@ public class ExtensionFunction {
     ArrayInt32,
     ArrayInt64,
     ArrayFloat,
-    ArrayDouble
+    ArrayDouble,
+    GeoPoint
   }
   ;
 
@@ -123,6 +124,8 @@ public class ExtensionFunction {
         return "array_float";
       case ArrayDouble:
         return "array_double";
+      case GeoPoint:
+        return "geo_point";
     }
     assert false;
     return null;

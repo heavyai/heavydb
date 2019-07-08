@@ -1470,6 +1470,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         case ArrayFloat:
         case ArrayDouble:
           return SqlTypeName.ARRAY;
+        case GeoPoint:
+          return SqlTypeName.GEOMETRY;
       }
       assert false;
       return null;

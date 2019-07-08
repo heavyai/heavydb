@@ -153,6 +153,8 @@ std::string serialize_type(const ExtArgumentType type) {
       return "array_float";
     case ExtArgumentType::ArrayDouble:
       return "array_double";
+    case ExtArgumentType::GeoPoint:
+      return "geo_point";
     default:
       CHECK(false);
   }
@@ -230,12 +232,19 @@ std::string ExtensionFunction::toString() const {
 }
 
 // Converts the extension function signatures to their LLVM representation.
-std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations() {
+std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
+    const std::unordered_set<std::string>& udf_decls) {
   std::vector<std::string> declarations;
   for (const auto& kv : functions_) {
     const auto& signatures = kv.second;
     CHECK(!signatures.empty());
     for (const auto& signature : kv.second) {
+      // If there is a udf function declaration matching an extension function signature
+      // do not emit a duplicate declaration.
+      if (!udf_decls.empty() && udf_decls.find(signature.getName()) != udf_decls.end()) {
+        continue;
+      }
+
       std::string decl_prefix{"declare " + serialize_type(signature.getRet()) + " @" +
                               signature.getName()};
       std::vector<std::string> arg_strs;
@@ -308,6 +317,9 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "array_double") {
     return ExtArgumentType::ArrayDouble;
+  }
+  if (type_name == "geo_point") {
+    return ExtArgumentType::GeoPoint;
   }
 
   CHECK(false);

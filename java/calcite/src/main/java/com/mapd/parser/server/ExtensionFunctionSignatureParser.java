@@ -110,6 +110,7 @@ class ExtensionFunctionSignatureParser {
     if (type_name.startsWith(std_namespace_prefix)) {
       return deserializeType(type_name.substring(std_namespace_prefix.length()));
     }
+
     if (type_name.equals("bool") || type_name.equals("_Bool")) {
       return ExtensionFunction.ExtArgumentType.Bool;
     }
@@ -137,6 +138,9 @@ class ExtensionFunctionSignatureParser {
     }
     if (type_name.isEmpty() || type_name.equals("void")) {
       return ExtensionFunction.ExtArgumentType.Void;
+    }
+    if (type_name.equals("GeoPoint")) {
+      return ExtensionFunction.ExtArgumentType.GeoPoint;
     }
     if (type_name.endsWith(" *")) {
       return pointerType(deserializeType(type_name.substring(0, type_name.length() - 2)));

@@ -511,8 +511,8 @@ declare i64* @get_bin_from_k_heap_double(i64*, i32, i32, i32, i1, i1, i1, double
     gen_translate_null_key_sigs();
 
 #ifdef HAVE_CUDA
-std::string extension_function_decls() {
-  const auto decls = ExtensionFunctionsWhitelist::getLLVMDeclarations();
+std::string extension_function_decls(const std::unordered_set<std::string>& udf_decls) {
+  const auto decls = ExtensionFunctionsWhitelist::getLLVMDeclarations(udf_decls);
   return boost::algorithm::join(decls, "\n");
 }
 
@@ -549,7 +549,7 @@ void link_udf_module(const std::unique_ptr<llvm::Module>& udf_module,
   // with the same name as in module of UDF functions.
   for (auto& f : *udf_module.get()) {
     auto func = module.getFunction(f.getName());
-    if (!(func == nullptr)) {
+    if (!(func == nullptr) && !f.isDeclaration()) {
       LOG(FATAL) << "  Attempt to overwrite " << f.getName().str() << " in "
                  << module.getModuleIdentifier() << " from `"
                  << udf_module->getModuleIdentifier() << "`" << std::endl;
@@ -687,6 +687,7 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
 
   // Prevent the udf function(s) from being removed the way the runtime functions are
 
+  std::unordered_set<std::string> udf_declarations;
   if (is_udf_module_present()) {
     for (auto& f : udf_gpu_module->getFunctionList()) {
       llvm::Function* udf_function = module->getFunction(f.getName());
@@ -694,6 +695,12 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
       if (udf_function) {
         legalize_nvvm_ir(udf_function);
         roots.insert(udf_function);
+
+        // If we have a udf that declares a external function
+        // note it so we can avoid duplicate declarations
+        if (f.isDeclaration()) {
+          udf_declarations.insert(f.getName().str());
+        }
       }
     }
   }
@@ -704,6 +711,12 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
       if (udf_function) {
         legalize_nvvm_ir(udf_function);
         roots.insert(udf_function);
+
+        // If we have a udf that declares a external function
+        // note it so we can avoid duplicate declarations
+        if (f.isDeclaration()) {
+          udf_declarations.insert(f.getName().str());
+        }
       }
     }
   }
@@ -720,12 +733,13 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
   }
   module->print(os, nullptr);
   os.flush();
+
   for (auto& pFn : rt_funcs) {
     module->getFunctionList().push_back(pFn);
   }
   module->eraseNamedMetadata(md);
 
-  auto cuda_llir = cuda_rt_decls + extension_function_decls() + ss.str();
+  auto cuda_llir = cuda_rt_decls + extension_function_decls(udf_declarations) + ss.str();
 
   std::vector<std::pair<void*, void*>> native_functions;
   std::vector<std::tuple<void*, GpuCompilationContext*>> cached_functions;
