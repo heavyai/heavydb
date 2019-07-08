@@ -1,6 +1,7 @@
 #!/bin/bash
 
 HTTP_DEPS="https://dependencies.mapd.com/thirdparty"
+SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 function download() {
     wget --continue "$1"
@@ -50,11 +51,16 @@ function download_make_install() {
     popd
 }
 
-ARROW_VERSION=apache-arrow-0.11.1
+ARROW_VERSION=apache-arrow-0.13.0
 
 function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
   extract $ARROW_VERSION.tar.gz
+
+  pushd arrow-$ARROW_VERSION
+  patch -p 1 < ${SCRIPTS_DIR}/ARROW-5517-C-Only-check-header-basename-for-internal.patch
+  popd
+
   mkdir -p arrow-$ARROW_VERSION/cpp/build
   pushd arrow-$ARROW_VERSION/cpp/build
   cmake \
@@ -69,6 +75,8 @@ function install_arrow() {
     -DARROW_WITH_LZ4=OFF \
     -DARROW_WITH_SNAPPY=ON \
     -DARROW_WITH_ZSTD=OFF \
+    -DARROW_USE_GLOG=OFF \
+    -DARROW_JEMALLOC=OFF \
     -DARROW_BOOST_USE_SHARED=${ARROW_BOOST_USE_SHARED:="OFF"} \
     -DARROW_PARQUET=ON \
     -DTHRIFT_HOME=${THRIFT_HOME:-$PREFIX} \
@@ -76,7 +84,6 @@ function install_arrow() {
   makej
   make_install
   popd
-
 }
 
 SNAPPY_VERSION=1.1.7
@@ -86,6 +93,7 @@ function install_snappy() {
   mkdir -p snappy-$SNAPPY_VERSION/build
   pushd snappy-$SNAPPY_VERSION/build
   cmake \
+    -DCMAKE_CXX_FLAGS="-fPIC" \
     -DCMAKE_INSTALL_PREFIX=$PREFIX \
     -DCMAKE_BUILD_TYPE=Release \
     -DSNAPPY_BUILD_TESTS=OFF \

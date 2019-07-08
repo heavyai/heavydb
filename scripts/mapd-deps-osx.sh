@@ -35,8 +35,9 @@ brew install llvm@7
 
 #install_arrow
 brew install snappy
+brew unlink apache-arrow || true
 brew install -s ../ThirdParty/Arrow/apache-arrow.rb
-brew switch apache-arrow 0.11.1
+brew switch apache-arrow 0.13.0
 
 brew install golang
 brew install libpng

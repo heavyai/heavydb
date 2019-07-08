@@ -46,17 +46,9 @@ using ValueArray = boost::variant<std::vector<bool>,
                                   std::vector<double>,
                                   std::vector<std::string>>;
 
-#ifdef HAVE_ARROW_STATIC_RECORDBATCH_CTOR
 #define ARROW_RECORDBATCH_MAKE arrow::RecordBatch::Make
-#else
-#define ARROW_RECORDBATCH_MAKE std::make_shared<arrow::RecordBatch>
-#endif
 
-#ifdef HAVE_ARROW_APPENDVALUES
 #define APPENDVALUES AppendValues
-#else
-#define APPENDVALUES Append
-#endif
 
 namespace {
 
