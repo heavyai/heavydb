@@ -1596,7 +1596,9 @@ void MapDHandler::get_table_descriptor(TTableDescriptor& _return,
                                        const TSessionId& session,
                                        const std::string& table_name) {
   LOG_SESSION(session, "table_name", table_name);
-  LOG(ERROR) << "get_table_descriptor is deprecated, please fix application";
+  THROW_MAPD_EXCEPTION(
+      "get_table_descriptor is deprecated, please use 'row_desc' from "
+      "'get_table_details'.");
 }
 
 void MapDHandler::get_internal_table_details(TTableDetails& _return,
@@ -1694,7 +1696,9 @@ void MapDHandler::get_row_descriptor(TRowDescriptor& _return,
                                      const TSessionId& session,
                                      const std::string& table_name) {
   LOG_SESSION(session, "table_name", table_name);
-  LOG(ERROR) << "get_row_descriptor is deprecated, please fix application";
+  THROW_MAPD_EXCEPTION(
+      "get_row_descriptor is deprecated, please use 'row_desc' from "
+      "'get_table_details'.");
 }
 
 // DEPRECATED(2019-04-01) - use get_dashboard()
@@ -1702,7 +1706,7 @@ void MapDHandler::get_frontend_view(TFrontendView& _return,
                                     const TSessionId& session,
                                     const std::string& view_name) {
   LOG_SESSION(session);
-  LOG(ERROR) << "'get_frontend_view' is deprecated, please use 'get_dashboard'.";
+  THROW_MAPD_EXCEPTION("'get_frontend_view' is deprecated, please use 'get_dashboard'.");
 }
 
 void MapDHandler::get_link_view(TFrontendView& _return,
@@ -2008,7 +2012,8 @@ void MapDHandler::get_databases(std::vector<TDBInfo>& dbinfos,
 void MapDHandler::get_frontend_views(std::vector<TFrontendView>& view_names,
                                      const TSessionId& session) {
   LOG_SESSION(session);
-  LOG(ERROR) << "'get_frontend_views' is deprecated, please use 'get_dashboards'.";
+  THROW_MAPD_EXCEPTION(
+      "'get_frontend_views' is deprecated, please use 'get_dashboards'.");
 }
 
 void MapDHandler::set_execution_mode(const TSessionId& session,
@@ -3340,16 +3345,16 @@ void MapDHandler::create_frontend_view(const TSessionId& session,
                                        const std::string& image_hash,
                                        const std::string& view_metadata) {
   LOG_SESSION(session);
-  LOG(ERROR) << "'create_frontend_view' is deprecated, please use "
-                "'create_dashboard'.";
+  THROW_MAPD_EXCEPTION(
+      "'create_frontend_view' is deprecated, please use 'create_dashboard'.");
 }
 
 // DEPRECATED(2019-04-01) - use delete_dashboard()
 void MapDHandler::delete_frontend_view(const TSessionId& session,
                                        const std::string& view_name) {
   LOG_SESSION(session);
-  LOG(ERROR) << "'delete_frontend_view' is deprecated, please use "
-                "'delete_dashboard'.";
+  THROW_MAPD_EXCEPTION(
+      "'delete_frontend_view' is deprecated, please use 'delete_dashboard'.");
 }
 
 void MapDHandler::create_link(std::string& _return,
