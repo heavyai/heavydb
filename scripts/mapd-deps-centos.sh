@@ -238,14 +238,8 @@ install_gdal
 # Apache Arrow (see common-functions.sh)
 install_arrow
 
-VERS=1.12.6
-ARCH=$(uname -m)
-ARCH=${ARCH//x86_64/amd64}
-ARCH=${ARCH//aarch64/arm64}
-# https://dl.google.com/go/go$VERS.linux-$ARCH.tar.gz
-download ${HTTP_DEPS}/go$VERS.linux-$ARCH.tar.gz
-extract go$VERS.linux-$ARCH.tar.gz
-mv go $PREFIX
+# Go
+install_go
 
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)

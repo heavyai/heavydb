@@ -217,3 +217,17 @@ function install_rdkafka() {
     make install
     popd
 }
+
+GO_VERSION=1.12.6
+
+function install_go() {
+    VERS=${GO_VERSION}
+    ARCH=$(uname -m)
+    ARCH=${ARCH//x86_64/amd64}
+    ARCH=${ARCH//aarch64/arm64}
+    # https://dl.google.com/go/go$VERS.linux-$ARCH.tar.gz
+    download ${HTTP_DEPS}/go$VERS.linux-$ARCH.tar.gz
+    extract go$VERS.linux-$ARCH.tar.gz
+    rm -rf $PREFIX/go || true
+    mv go $PREFIX
+}

@@ -29,7 +29,6 @@ sudo apt install -y \
     g++ \
     libboost-all-dev \
     libgoogle-glog-dev \
-    golang \
     libssl-dev \
     libevent-dev \
     default-jre \
@@ -139,6 +138,9 @@ download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 ARROW_BOOST_USE_SHARED="ON"
 install_arrow
 
+# Go
+install_go
+
 VERS=3.0.2
 wget --continue https://github.com/cginternals/glbinding/archive/v$VERS.tar.gz
 tar xvf v$VERS.tar.gz
@@ -227,6 +229,7 @@ LD_LIBRARY_PATH=\$PREFIX/lib:\$LD_LIBRARY_PATH
 LD_LIBRARY_PATH=\$PREFIX/lib64:\$LD_LIBRARY_PATH
 
 PATH=/usr/local/cuda/bin:\$PATH
+PATH=\$PREFIX/go/bin:\$PATH
 PATH=\$PREFIX/bin:\$PATH
 
 VULKAN_SDK=\$PREFIX
@@ -234,7 +237,9 @@ VK_LAYER_PATH=\$PREFIX/etc/explicit_layer.d
 
 CMAKE_PREFIX_PATH=\$PREFIX:\$CMAKE_PREFIX_PATH
 
-export LD_LIBRARY_PATH PATH VULKAN_SDK VK_LAYER_PATH CMAKE_PREFIX_PATH
+GOROOT=\$PREFIX/go
+
+export LD_LIBRARY_PATH PATH VULKAN_SDK VK_LAYER_PATH CMAKE_PREFIX_PATH GOROOT
 EOF
 
 echo

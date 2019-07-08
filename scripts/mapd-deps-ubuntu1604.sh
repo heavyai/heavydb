@@ -25,7 +25,6 @@ sudo apt install -y \
     wget \
     curl \
     libgoogle-glog-dev \
-    golang \
     libssl-dev \
     libevent-dev \
     default-jre \
@@ -154,15 +153,8 @@ download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 ARROW_BOOST_USE_SHARED="ON"
 install_arrow
 
-VERS=1.11
-ARCH=$(uname -m)
-ARCH=${ARCH//x86_64/amd64}
-ARCH=${ARCH//aarch64/arm64}
-# https://dl.google.com/go/go$VERS.linux-$ARCH.tar.gz
-download ${HTTP_DEPS}/go$VERS.linux-$ARCH.tar.gz
-extract go$VERS.linux-$ARCH.tar.gz
-rm -rf $PREFIX/go || true
-mv go $PREFIX
+# Go
+install_go
 
 # librdkafka
 install_rdkafka
