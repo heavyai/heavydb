@@ -467,6 +467,7 @@ struct TSessionInfo {
   1: string user;
   2: string database;
   3: i64 start_time;
+  4: bool is_super;
 }
 
 struct TGeoFileLayerInfo {

@@ -527,9 +527,12 @@ void MapDHandler::get_hardware_info(TClusterHardwareInfo& _return,
 void MapDHandler::get_session_info(TSessionInfo& _return, const TSessionId& session) {
   LOG_SESSION(session);
   auto session_info = get_session_copy(session);
-  _return.user = session_info.get_currentUser().userName;
+  auto user_metadata = session_info.get_currentUser();
+
+  _return.user = user_metadata.userName;
   _return.database = session_info.getCatalog().getCurrentDB().dbName;
   _return.start_time = session_info.get_start_time();
+  _return.is_super = user_metadata.isSuper;
 }
 
 void MapDHandler::value_to_thrift_column(const TargetValue& tv,
