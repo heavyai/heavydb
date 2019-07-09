@@ -940,6 +940,7 @@ int main(int argc, char** argv) {
                                      prog_config_opts.udf_file_name);
 
   mapd::shared_ptr<TServerSocket> serverSocket;
+  mapd::shared_ptr<TServerSocket> httpServerSocket;
   if (!prog_config_opts.mapd_parameters.ssl_cert_file.empty() &&
       !prog_config_opts.mapd_parameters.ssl_key_file.empty()) {
     mapd::shared_ptr<TSSLSocketFactory> sslSocketFactory;
@@ -953,6 +954,8 @@ int main(int argc, char** argv) {
     sslSocketFactory->ciphers("ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
     serverSocket = mapd::shared_ptr<TServerSocket>(new TSSLServerSocket(
         prog_config_opts.mapd_parameters.omnisci_server_port, sslSocketFactory));
+    httpServerSocket = mapd::shared_ptr<TServerSocket>(
+        new TSSLServerSocket(prog_config_opts.http_port, sslSocketFactory));
     LOG(INFO) << " OmniSci server using encrypted connection. Cert file ["
               << prog_config_opts.mapd_parameters.ssl_cert_file << "], key file ["
               << prog_config_opts.mapd_parameters.ssl_key_file << "]";
@@ -960,6 +963,8 @@ int main(int argc, char** argv) {
     LOG(INFO) << " OmniSci server using unencrypted connection";
     serverSocket = mapd::shared_ptr<TServerSocket>(
         new TServerSocket(prog_config_opts.mapd_parameters.omnisci_server_port));
+    httpServerSocket =
+        mapd::shared_ptr<TServerSocket>(new TServerSocket(prog_config_opts.http_port));
   }
 
   if (prog_config_opts.mapd_parameters.ha_group_id.empty()) {
@@ -973,8 +978,7 @@ int main(int argc, char** argv) {
     TThreadedServer bufServer(
         processor, bufServerTransport, bufTransportFactory, bufProtocolFactory);
 
-    mapd::shared_ptr<TServerTransport> httpServerTransport(
-        new TServerSocket(prog_config_opts.http_port));
+    mapd::shared_ptr<TServerTransport> httpServerTransport(httpServerSocket);
     mapd::shared_ptr<TTransportFactory> httpTransportFactory(
         new THttpServerTransportFactory());
     mapd::shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());

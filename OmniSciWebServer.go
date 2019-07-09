@@ -143,6 +143,8 @@ func init() {
 	pflag.BoolP("enable-https-redirect", "", false, "enable HTTP to HTTPS redirect")
 	pflag.StringP("cert", "", "cert.pem", "certificate file for HTTPS")
 	pflag.StringP("peer-cert", "", "peercert.pem", "peer CA certificate PKI authentication")
+	pflag.StringP("ssl-cert", "", "sslcert.pem", "SSL validated public certificate")
+	pflag.StringP("ssl-private-key", "", "sslprivate.key", "SSL private key file")
 	pflag.StringP("key", "", "key.pem", "key file for HTTPS")
 	pflag.DurationP("timeout", "", 60*time.Minute, "maximum request duration")
 	pflag.Bool("profile", false, "enable profiling, accessible from /debug/pprof")
@@ -171,6 +173,8 @@ func init() {
 	viper.BindPFlag("web.enable-https-redirect", pflag.CommandLine.Lookup("enable-https-redirect"))
 	viper.BindPFlag("web.cert", pflag.CommandLine.Lookup("cert"))
 	viper.BindPFlag("web.peer-cert", pflag.CommandLine.Lookup("peer-cert"))
+	viper.BindPFlag("ssl-cert", pflag.CommandLine.Lookup("ssl-cert"))
+	viper.BindPFlag("ssl-private-key", pflag.CommandLine.Lookup("ssl-private-key"))
 	viper.BindPFlag("web.key", pflag.CommandLine.Lookup("key"))
 	viper.BindPFlag("web.timeout", pflag.CommandLine.Lookup("timeout"))
 	viper.BindPFlag("web.profile", pflag.CommandLine.Lookup("profile"))
@@ -233,7 +237,12 @@ func init() {
 
 	backendURLStr := viper.GetString("web.backend-url")
 	if backendURLStr == "" {
-		backendURLStr = "http://localhost:" + strconv.Itoa(viper.GetInt("http-port"))
+		s := "http"
+		if viper.IsSet("ssl-cert") && viper.IsSet("ssl-private-key") {
+			s = "https"
+			http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		}
+		backendURLStr = s + "://localhost:" + strconv.Itoa(viper.GetInt("http-port"))
 	}
 
 	backendURL, err = url.Parse(backendURLStr)
