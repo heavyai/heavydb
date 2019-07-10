@@ -5537,7 +5537,7 @@ void MapDHandler::get_license_claims(TLicenseInfo& _return,
 
 void MapDHandler::shutdown() {
   if (calcite_) {
-    calcite_->close_calcite_server();
+    calcite_->close_calcite_server(false);
   }
 
   if (render_handler_) {

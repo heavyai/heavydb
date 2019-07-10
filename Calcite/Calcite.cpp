@@ -500,6 +500,11 @@ std::string Calcite::getUserDefinedFunctionWhitelist() {
 }
 
 void Calcite::close_calcite_server(bool log) {
+  std::call_once(shutdown_once_flag_,
+                 [this, log]() { this->inner_close_calcite_server(log); });
+}
+
+void Calcite::inner_close_calcite_server(bool log) {
   if (server_available_) {
     LOG_IF(INFO, log) << "Shutting down Calcite server";
     try {

@@ -80,10 +80,11 @@ mapd::shared_ptr<MapDHandler> g_warmup_handler =
     0;  // global "g_warmup_handler" needed to avoid circular dependency
         // between "MapDHandler" & function "run_warmup_queries"
 mapd::shared_ptr<MapDHandler> g_mapd_handler = 0;
+std::once_flag g_shutdown_once_flag;
 
 void shutdown_handler() {
   if (g_mapd_handler) {
-    g_mapd_handler->shutdown();
+    std::call_once(g_shutdown_once_flag, []() { g_mapd_handler->shutdown(); });
   }
 }
 
@@ -869,8 +870,8 @@ void heartbeat() {
 
   // if dumping core, try to do some quick stuff
   if (signum == SIGQUIT || signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE) {
-    logger::shutdown();
     shutdown_handler();
+    logger::shutdown();
     return;
   }
 
@@ -896,8 +897,9 @@ int main(int argc, char** argv) {
   logger::set_once_fatal_func(&shutdown_handler);
 
   // register shutdown procedures for when a normal exit() shutdown happens
-  atexit(&shutdown_handler);
+  // be aware that atexit() functions run in reverse order
   atexit(&logger::shutdown);
+  atexit(&shutdown_handler);
 
   // start background thread to clean up _DELETE_ME files
   const unsigned int wait_interval =
@@ -994,10 +996,6 @@ int main(int argc, char** argv) {
   } else {  // running ha server
     LOG(FATAL) << "No High Availability module available, please contact OmniSci support";
   }
-
-  // There doesn't seem to be any documented way to make Thrift's
-  // TThreadedServer stop serving except to exit() from another thread.
-  UNREACHABLE() << "THRIFT LAYER EXITED";
 
   g_running = false;
   file_delete_thread.join();

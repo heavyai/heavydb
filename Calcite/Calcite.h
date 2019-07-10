@@ -24,6 +24,7 @@
 #ifndef CALCITE_H
 #define CALCITE_H
 
+#include <mutex>
 #include <string>
 #include <thread>
 #include <vector>
@@ -95,6 +96,7 @@ class Calcite {
                           const bool is_explain,
                           const bool is_view_optimize);
   std::vector<std::string> get_db_objects(const std::string ra);
+  void inner_close_calcite_server(bool log);
 
   std::thread calcite_server_thread_;
   int ping();
@@ -104,6 +106,7 @@ class Calcite {
   std::string ssl_trust_store_;
   std::string ssl_trust_password_;
   std::string session_prefix_;
+  std::once_flag shutdown_once_flag_;
 };
 
 #endif /* CALCITE_H */
