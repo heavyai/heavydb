@@ -263,18 +263,27 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
   if (shard_count) {
     CHECK(!col_range_info.bucket);
     /*
-      When a leaf node has less devices than shard count, the minimum distance between two
-      keys would be device_count because shards are stored consecutively across the
-      physical tables, i.e if a shard column has values 0 to 9, and 3 shards on each leaf,
-      then node 1 would have values: 0,1,2,6,7,8 and node 2 would have values: 3,4,5,9.
-      If each leaf node has only 1 device, in this case, all the keys from each node are
-      loaded on the device each.
+      when a node has fewer devices than shard count,
+      a) In a distributed setup, the minimum distance between two keys would be
+      device_count because shards are stored consecutively across the physical tables, i.e
+      if a shard column has values 0 to 9, and 3 shards on each leaf, then node 1 would
+      have values: 0,1,2,6,7,8 and node 2 would have values: 3,4,5,9. If each leaf node
+      has only 1 device, in this case, all the keys from each node are loaded on the
+      device each.
 
-      When a leaf node has device count equal to or more than shard count then
-      mininum distance is always atleast shard_count * no of leaf nodes.
+      b) In a single node setup, the distance would be minimum of device_count or
+      difference of device_count - shard_count. For example: If a single node server
+      running on 3 devices a shard column has values 0 to 9 in a table with 4 shards,
+      device to fragment keys mapping would be: device 1 - 4,8,3,7 device 2 - 1,5,9 device
+      3 - 2, 6 The bucket value would be 4(shards) - 3(devices) = 1 i.e. minimum of
+      device_count or difference.
+
+      When a node has device count equal to or more than shard count then the
+      minimum distance is always at least shard_count * no of leaf nodes.
     */
     if (device_count < shard_count) {
-      bucket = std::max(device_count, static_cast<size_t>(1));
+      bucket = g_leaf_count ? std::max(device_count, static_cast<size_t>(1))
+                            : std::min(device_count, shard_count - device_count);
     } else {
       bucket = shard_count * std::max(g_leaf_count, static_cast<size_t>(1));
     }
