@@ -598,8 +598,33 @@ func samlPostHandler(rw http.ResponseWriter, r *http.Request) {
 	}()
 }
 
+type ServeIndexOn404FileSystem struct {
+	http.FileSystem
+	Filename string
+}
+
+func (fs ServeIndexOn404FileSystem) Open(name string) (http.File, error) {
+	file, err := fs.FileSystem.Open(name)
+	if os.IsNotExist(err) {
+		if strings.HasPrefix(name, "/beta/") {
+			file, err = fs.FileSystem.Open("/beta/index.html")
+		} else {
+			file, err = fs.FileSystem.Open("/index.html")
+		}
+	}
+
+	if err != nil {
+		if stat, statErr := file.Stat(); statErr != nil {
+			fs.Filename = stat.Name()
+		}
+	}
+
+	return file, err
+}
+
 func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
-	h := http.StripPrefix("/", http.FileServer(http.Dir(frontend)))
+	fs := ServeIndexOn404FileSystem{http.Dir(frontend), ""}
+	h := http.StripPrefix("/", http.FileServer(fs))
 
 	if r.Method == "POST" {
 		h = httputil.NewSingleHostReverseProxy(backendURL)
@@ -635,7 +660,7 @@ func thriftOrFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if r.Method == "GET" && (r.URL.Path == "/" || r.URL.Path == "/beta/") {
+	if r.Method == "GET" && (r.URL.Path == "/" || r.URL.Path == "/beta/" || strings.HasSuffix(fs.Filename, ".html")) {
 		rw.Header().Del("Cache-Control")
 		rw.Header().Add("Cache-Control", "no-cache, no-store, must-revalidate")
 	}
