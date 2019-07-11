@@ -2133,6 +2133,8 @@ ExecutionResult RelAlgExecutor::handleRetry(
 
   // Attempt to retry using the kernel per fragment path. The smaller input size required
   // may allow the entire kernel to execute in GPU memory.
+  LOG(WARNING)
+      << "Query ran out of memory, retrying with multifragment kernels disabled.";
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   ExecutionOptions eo_no_multifrag{eo.output_columnar_hint,
                                    false,
@@ -2177,11 +2179,11 @@ ExecutionResult RelAlgExecutor::handleRetry(
   }
 
   handlePersistentError(error_code);
-
   // Failed to run on GPU due to OOM, retry on CPU if enabled
   if (!g_allow_cpu_retry) {
     throw std::runtime_error(getErrorMessageFromCode(error_code));
   }
+  LOG(WARNING) << "Query ran out of memory, attempting retry on CPU.";
 
   if (render_info) {
     render_info->setForceNonInSituData();
@@ -2234,6 +2236,10 @@ ExecutionResult RelAlgExecutor::handleRetry(
         throw std::runtime_error("Query ran out of output slots in the result");
       }
       max_groups_buffer_entry_guess *= 2;
+      LOG(WARNING) << "Query ran out of memory, retrying with max groups buffer entry "
+                      "guess equal to "
+                   << max_groups_buffer_entry_guess;
+
       continue;
     }
     handlePersistentError(error_code);
