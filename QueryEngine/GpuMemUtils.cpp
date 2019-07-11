@@ -83,6 +83,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
 
   if (use_bump_allocator) {
     CHECK(!prepend_index_buffer);
+    CHECK(!insitu_allocator);
 
     if (dispatch_mode == ExecutorDispatchMode::KernelPerFragment) {
       // Allocate an output buffer equal to the size of the number of rows in the
@@ -117,7 +118,7 @@ GpuGroupByBuffers create_dev_group_by_buffers(
                                     query_mem_desc.blocksShareMemory() ? 1 : grid_size_x);
           CHECK_LE(entry_count, std::numeric_limits<uint32_t>::max());
 
-          // TODO(adb): in-situ allocator support
+          // TODO(adb): render allocator support
           group_by_dev_buffers_mem =
               reinterpret_cast<CUdeviceptr>(cuda_allocator->alloc(mem_size));
         } catch (const OutOfMemory& e) {

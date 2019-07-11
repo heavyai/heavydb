@@ -1955,7 +1955,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     if (previous_count > 0 && !exe_unit_has_quals(ra_exe_unit)) {
       ra_exe_unit.scan_limit = static_cast<size_t>(previous_count);
     } else {
-      if (can_use_bump_allocator(ra_exe_unit, co, eo)) {
+      // TODO(adb): enable bump allocator path for render queries
+      if (can_use_bump_allocator(ra_exe_unit, co, eo) && !render_info) {
         ra_exe_unit.scan_limit = 0;
         ra_exe_unit.use_bump_allocator = true;
       } else if (!eo.just_explain) {
