@@ -57,7 +57,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   try {
     return executeRelAlgQueryNoRetry(query_ra, co, eo, render_info);
   } catch (const QueryMustRunOnCpu&) {
-    if (g_allow_cpu_retry) {
+    if (!g_allow_cpu_retry) {
       throw;
     }
   }
@@ -2012,6 +2012,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                      is_agg,
                      co,
                      eo,
+                     render_info,
                      queue_time_ms);
 }
 
@@ -2105,8 +2106,15 @@ ExecutionResult RelAlgExecutor::handleRetry(
     const bool is_agg,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
+    RenderInfo* render_info,
     const int64_t queue_time_ms) {
   auto error_code = error_code_in;
+  // The only error we should attempt to retry a work unit from is out of GPU memory
+  CHECK(error_code != 0);
+  CHECK(error_code == Executor::ERR_OUT_OF_GPU_MEM);
+
+  // Attempt to retry using the kernel per fragment path. The smaller input size required
+  // may allow the entire kernel to execute in GPU memory.
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   ExecutionOptions eo_no_multifrag{eo.output_columnar_hint,
                                    false,
@@ -2120,26 +2128,74 @@ ExecutionResult RelAlgExecutor::handleRetry(
                                    false,
                                    false,
                                    eo.gpu_input_mem_limit_percent};
-  ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                                     co.device_type_,
-                                                     QueryMemoryDescriptor(),
-                                                     nullptr,
-                                                     executor_),
-                         {}};
+  auto result = ExecutionResult{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                                            co.device_type_,
+                                                            QueryMemoryDescriptor(),
+                                                            nullptr,
+                                                            executor_),
+                                {}};
+
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-  if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
-    if (!g_allow_cpu_retry) {
-      throw std::runtime_error(getErrorMessageFromCode(error_code));
-    }
-    const auto ra_exe_unit = decide_approx_count_distinct_implementation(
-        work_unit.exe_unit, table_infos, executor_, co.device_type_, target_exprs_owned_);
+
+  const auto ra_exe_unit = decide_approx_count_distinct_implementation(
+      work_unit.exe_unit, table_infos, executor_, co.device_type_, target_exprs_owned_);
+  ColumnCacheMap column_cache;
+  result = {executor_->executeWorkUnit(&error_code,
+                                       max_groups_buffer_entry_guess,
+                                       is_agg,
+                                       table_infos,
+                                       ra_exe_unit,
+                                       co,
+                                       eo_no_multifrag,
+                                       cat_,
+                                       executor_->row_set_mem_owner_,
+                                       nullptr,
+                                       true,
+                                       column_cache),
+            targets_meta};
+  result.setQueueTime(queue_time_ms);
+  if (!error_code) {
+    return result;
+  }
+
+  handlePersistentError(error_code);
+
+  // Failed to run on GPU due to OOM, retry on CPU if enabled
+  if (!g_allow_cpu_retry) {
+    throw std::runtime_error(getErrorMessageFromCode(error_code));
+  }
+
+  if (render_info) {
+    render_info->setForceNonInSituData();
+  }
+
+  CompilationOptions co_cpu{ExecutorDeviceType::CPU,
+                            co.hoist_literals_,
+                            co.opt_level_,
+                            co.with_dynamic_watchdog_};
+  // Only reset the group buffer entry guess if we ran out of slots, which suggests a
+  // highly pathological input which prevented a good estimation of distinct tuple
+  // count.
+  // TODO(adb): with the current handlePersistentError code, this block will never be hit.
+  // Modify error handling to generate more explicit exceptions, and use the explicit
+  // exceptions propagated from the kernel to handle retries.
+  if (error_code < 0) {
+    max_groups_buffer_entry_guess = 0;
+  }
+  while (true) {
+    const auto ra_exe_unit =
+        decide_approx_count_distinct_implementation(work_unit.exe_unit,
+                                                    table_infos,
+                                                    executor_,
+                                                    co_cpu.device_type_,
+                                                    target_exprs_owned_);
     ColumnCacheMap column_cache;
     result = {executor_->executeWorkUnit(&error_code,
                                          max_groups_buffer_entry_guess,
                                          is_agg,
                                          table_infos,
                                          ra_exe_unit,
-                                         co,
+                                         co_cpu,
                                          eo_no_multifrag,
                                          cat_,
                                          executor_->row_set_mem_owner_,
@@ -2151,45 +2207,7 @@ ExecutionResult RelAlgExecutor::handleRetry(
     if (!error_code) {
       return result;
     }
-  }
-  handlePersistentError(error_code);
-  CompilationOptions co_cpu{ExecutorDeviceType::CPU,
-                            co.hoist_literals_,
-                            co.opt_level_,
-                            co.with_dynamic_watchdog_};
-  if (error_code) {
-    // Only reset the group buffer entry guess if we ran out of slots, which suggests a
-    // highly pathological input which prevented a good estimation of distinct tuple
-    // count.
     if (error_code < 0) {
-      max_groups_buffer_entry_guess = 0;
-    }
-    while (true) {
-      const auto ra_exe_unit =
-          decide_approx_count_distinct_implementation(work_unit.exe_unit,
-                                                      table_infos,
-                                                      executor_,
-                                                      co_cpu.device_type_,
-                                                      target_exprs_owned_);
-      ColumnCacheMap column_cache;
-      result = {executor_->executeWorkUnit(&error_code,
-                                           max_groups_buffer_entry_guess,
-                                           is_agg,
-                                           table_infos,
-                                           ra_exe_unit,
-                                           co_cpu,
-                                           eo_no_multifrag,
-                                           cat_,
-                                           executor_->row_set_mem_owner_,
-                                           nullptr,
-                                           true,
-                                           column_cache),
-                targets_meta};
-      result.setQueueTime(queue_time_ms);
-      if (!error_code) {
-        return result;
-      }
-      handlePersistentError(error_code);
       // Even the conservative guess failed; it should only happen when we group
       // by a huge cardinality array. Maybe we should throw an exception instead?
       // Such a heavy query is entirely capable of exhausting all the host memory.
@@ -2198,8 +2216,11 @@ ExecutionResult RelAlgExecutor::handleRetry(
         throw std::runtime_error("Query ran out of output slots in the result");
       }
       max_groups_buffer_entry_guess *= 2;
+      continue;
     }
+    handlePersistentError(error_code);
   }
+
   return result;
 }
 

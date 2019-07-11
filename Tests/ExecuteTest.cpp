@@ -7584,7 +7584,11 @@ TEST(Select, ArrowOutput) {
 }
 
 TEST(Select, WatchdogTest) {
+  const auto watchdog_state = g_enable_watchdog;
   g_enable_watchdog = true;
+  ScopeGuard reset_Watchdog_state = [&watchdog_state] {
+    g_enable_watchdog = watchdog_state;
+  };
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT x, SUM(f) AS n FROM test GROUP BY x ORDER BY n DESC LIMIT 5;", dt);

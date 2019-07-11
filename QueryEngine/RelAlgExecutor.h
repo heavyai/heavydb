@@ -260,6 +260,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                               const bool is_agg,
                               const CompilationOptions& co,
                               const ExecutionOptions& eo,
+                              RenderInfo* render_info,
                               const int64_t queue_time_ms);
 
   static void handlePersistentError(const int32_t error_code);
