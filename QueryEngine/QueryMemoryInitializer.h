@@ -38,6 +38,7 @@ class QueryMemoryInitializer {
                          const QueryMemoryDescriptor& query_mem_desc,
                          const int device_id,
                          const ExecutorDeviceType device_type,
+                         const ExecutorDispatchMode dispatch_mode,
                          const bool output_columnar,
                          const bool sort_on_gpu,
                          const int64_t num_rows,

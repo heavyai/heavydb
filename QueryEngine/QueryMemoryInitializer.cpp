@@ -153,6 +153,7 @@ QueryMemoryInitializer::QueryMemoryInitializer(
     const QueryMemoryDescriptor& query_mem_desc,
     const int device_id,
     const ExecutorDeviceType device_type,
+    const ExecutorDispatchMode dispatch_mode,
     const bool output_columnar,
     const bool sort_on_gpu,
     const int64_t num_rows,
@@ -203,7 +204,14 @@ QueryMemoryInitializer::QueryMemoryInitializer(
 
   size_t group_buffer_size{0};
   if (ra_exe_unit.use_bump_allocator) {
-    group_buffer_size = g_max_memory_allocation_size / query_mem_desc.getRowSize();
+    // For kernel per fragment execution, just allocate a buffer equivalent to the size of
+    // the fragment
+    if (dispatch_mode == ExecutorDispatchMode::KernelPerFragment) {
+      group_buffer_size = num_rows * query_mem_desc.getRowSize();
+    } else {
+      // otherwise, allocate a GPU buffer equivalent to the maximum GPU allocation size
+      group_buffer_size = g_max_memory_allocation_size / query_mem_desc.getRowSize();
+    }
   } else {
     group_buffer_size =
         query_mem_desc.getBufferSizeBytes(ra_exe_unit, thread_count, device_type);

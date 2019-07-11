@@ -59,6 +59,7 @@ QueryExecutionContext::QueryExecutionContext(
                                                             query_mem_desc,
                                                             device_id,
                                                             device_type,
+                                                            dispatch_mode,
                                                             output_columnar,
                                                             sort_on_gpu,
                                                             num_rows,

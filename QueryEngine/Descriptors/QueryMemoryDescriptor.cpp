@@ -211,6 +211,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
   bool shared_mem_for_group_by = false;
   int8_t group_col_compact_width = 0;
   int32_t idx_target_as_key = -1;
+  auto output_columnar = output_columnar_hint;
   std::vector<ssize_t> target_groupby_indices;
 
   switch (col_range_info.hash_type_) {
@@ -271,8 +272,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
             (GroupByAndAggregate::supportedExprForGpuSharedMemUsage(group_expr)) &&
             QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
                 count_distinct_descriptors) &&
-            !output_columnar_hint;  // TODO(Saman): add columnar support with the new smem
-                                    // support.
+            !output_columnar;  // TODO(Saman): add columnar support with the new smem
+                               // support.
 
         bool has_varlen_sample_agg = false;
         for (const auto& target_expr : ra_exe_unit.target_exprs) {
@@ -292,7 +293,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
                                   (device_type == ExecutorDeviceType::GPU) &&
                                   QueryMemoryDescriptor::countDescriptorsLogicallyEmpty(
                                       count_distinct_descriptors) &&
-                                  !output_columnar_hint;
+                                  !output_columnar;
       }
     } break;
     case QueryDescriptionType::GroupByBaselineHash: {
@@ -307,9 +308,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       col_slot_context = ColSlotContext(ra_exe_unit.target_exprs, target_groupby_indices);
 
       group_col_compact_width =
-          output_columnar_hint
-              ? 8
-              : pick_baseline_key_width(ra_exe_unit, query_infos, executor);
+          output_columnar ? 8
+                          : pick_baseline_key_width(ra_exe_unit, query_infos, executor);
 
       actual_col_range_info =
           ColRangeInfo{QueryDescriptionType::GroupByBaselineHash, 0, 0, 0, false};
@@ -317,10 +317,11 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     case QueryDescriptionType::Projection: {
       CHECK(!must_use_baseline_sort);
 
-      if (use_streaming_top_n(ra_exe_unit, output_columnar_hint)) {
+      if (use_streaming_top_n(ra_exe_unit, output_columnar)) {
         entry_count = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
       } else {
         if (ra_exe_unit.use_bump_allocator) {
+          output_columnar = false;
           entry_count = 0;
         } else {
           entry_count = ra_exe_unit.scan_limit
@@ -359,7 +360,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       shared_mem_for_group_by,
       count_distinct_descriptors,
       sort_on_gpu_hint,
-      output_columnar_hint,
+      output_columnar,
       render_info && render_info->isPotentialInSituRender(),
       must_use_baseline_sort);
 }
@@ -427,6 +428,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
   sort_on_gpu_ = sort_on_gpu_hint && canOutputColumnar() && !keyless_hash_;
 
   if (sort_on_gpu_) {
+    CHECK(!ra_exe_unit.use_bump_allocator);
     output_columnar_ = true;
   } else {
     switch (query_desc_type_) {
@@ -453,6 +455,9 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
   }
 
   if (isLogicalSizedColumnsAllowed()) {
+    // TODO(adb): Ensure fixed size buffer allocations are correct with all logical column
+    // sizes
+    CHECK(!ra_exe_unit.use_bump_allocator);
     col_slot_context_.setAllSlotsPaddedSizeToLogicalSize();
     col_slot_context_.validate();
   }
