@@ -12467,11 +12467,11 @@ TEST(Delete, Joins_ImplicitJoins) {
       "test_inner.x;",
       dt);
     c("SELECT bar.str FROM test, bar WHERE test.str = bar.str;", dt);
-    ASSERT_EQ(
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
         int64_t(3),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;",
-            dt)));
+            dt))));
     SKIP_ON_AGGREGATOR(
         ASSERT_EQ(7,
                   v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
