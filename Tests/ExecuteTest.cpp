@@ -280,10 +280,15 @@ class SQLiteComparator {
             if (ref_is_null) {
               // CHECK(!mapd_str_notnull); // JUST TO DEBUG SOMETHING TO BE UNCOMENTED
             } else {
-              CHECK(mapd_str_notnull);
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-              const auto mapd_val = *mapd_str_notnull;
-              ASSERT_EQ(ref_val, mapd_val);
+              if (mapd_str_notnull) {
+                const auto mapd_val = *mapd_str_notnull;
+                ASSERT_EQ(ref_val, mapd_val);
+              } else {
+                // not null but no data, so val is empty string
+                const auto mapd_val = "";
+                ASSERT_EQ(ref_val, mapd_val);
+              }
             }
             break;
           }
@@ -15022,6 +15027,36 @@ TEST(Select, LogicalSizedColumns) {
       ASSERT_EQ(int64_t(23), v<int64_t>(second_row[1]));
       ASSERT_EQ(int64_t(79), v<int64_t>(second_row[2]));
     }
+  }
+}
+
+TEST(Select, GroupEmptyBlank) {
+  std::vector<std::string> insert_queries = {"INSERT INTO blank_test VALUES('',1);",
+                                             "INSERT INTO blank_test VALUES('a',2);"};
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    const std::string drop_old_test{"DROP TABLE IF EXISTS blank_test;"};
+    run_ddl_statement(drop_old_test);
+    g_sqlite_comparator.query(drop_old_test);
+    std::string columns_definition{"t1 TEXT NOT NULL, i1 INTEGER"};
+    const std::string create_test =
+        build_create_table_statement(columns_definition,
+                                     "blank_test",
+                                     {g_shard_count ? "i1" : "", g_shard_count},
+                                     {},
+                                     10,
+                                     true);
+    run_ddl_statement(create_test);
+    g_sqlite_comparator.query("CREATE TABLE blank_test (t1 TEXT NOT NULL, i1 INTEGER);");
+
+    for (auto insert_query : insert_queries) {
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+
+    c("select t1 from blank_test group by t1 order by t1;", dt);
   }
 }
 
