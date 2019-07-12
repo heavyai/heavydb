@@ -83,6 +83,44 @@ struct TargetExprCodegenBuilder {
                llvm::Value* out_row_idx,
                GroupByAndAggregate::DiamondCodegen& diamond_codegen) const;
 
+  void codegenSampleExpressions(
+      GroupByAndAggregate* group_by_and_agg,
+      Executor* executor,
+      const QueryMemoryDescriptor& query_mem_desc,
+      const CompilationOptions& co,
+      const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+      const std::vector<llvm::Value*>& agg_out_vec,
+      llvm::Value* output_buffer_byte_stream,
+      llvm::Value* out_row_idx,
+      GroupByAndAggregate::DiamondCodegen& diamond_codegen) const;
+
+  void codegenSingleSlotSampleExpression(
+      GroupByAndAggregate* group_by_and_agg,
+      Executor* executor,
+      const QueryMemoryDescriptor& query_mem_desc,
+      const CompilationOptions& co,
+      const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+      const std::vector<llvm::Value*>& agg_out_vec,
+      llvm::Value* output_buffer_byte_stream,
+      llvm::Value* out_row_idx,
+      GroupByAndAggregate::DiamondCodegen& diamond_codegen) const;
+
+  void codegenMultiSlotSampleExpressions(
+      GroupByAndAggregate* group_by_and_agg,
+      Executor* executor,
+      const QueryMemoryDescriptor& query_mem_desc,
+      const CompilationOptions& co,
+      const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+      const std::vector<llvm::Value*>& agg_out_vec,
+      llvm::Value* output_buffer_byte_stream,
+      llvm::Value* out_row_idx,
+      GroupByAndAggregate::DiamondCodegen& diamond_codegen) const;
+
+  llvm::Value* codegenSlotEmptyKey(llvm::Value* agg_col_ptr,
+                                   std::vector<llvm::Value*>& target_lvs,
+                                   Executor* executor,
+                                   const int64_t init_val) const;
+
   size_t target_index_counter{0};
   size_t slot_index_counter{0};
 

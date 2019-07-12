@@ -5269,6 +5269,69 @@ void import_geospatial_join_test(const bool replicate_inner_table = false) {
   }
 }
 
+void import_logical_size_test() {
+  const std::string table_name("logical_size_test");
+  const std::string drop_old_logical_size_test{"DROP TABLE IF EXISTS " + table_name +
+                                               ";"};
+  run_ddl_statement(drop_old_logical_size_test);
+  g_sqlite_comparator.query(drop_old_logical_size_test);
+  std::string create_table_str("CREATE TABLE " + table_name + "(");
+  create_table_str += "big_int BIGINT NOT NULL, big_int_null BIGINT, ";
+  create_table_str += "id INT NOT NULL, id_null INT, ";
+  create_table_str += "small_int SMALLINT NOT NULL, small_int_null SMALLINT, ";
+  create_table_str += "tiny_int TINYINT NOT NULL, tiny_int_null TINYINT, ";
+  create_table_str += "float_not_null FLOAT NOT NULL, float_null FLOAT, ";
+  create_table_str += "double_not_null DOUBLE NOT NULL, double_null DOUBLE)";
+  run_ddl_statement(create_table_str + " with (fragment_size = 4);");
+  g_sqlite_comparator.query(create_table_str + ";");
+
+  auto query_maker = [&table_name](std::string str) {
+    return "INSERT INTO " + table_name + " VALUES (" + str + ");";
+  };
+
+  std::vector<std::string> insert_queries;
+  // fragment 0:
+  insert_queries.push_back(
+      query_maker("2002, -57, 7, 0, 73, 32767, 22, 127, 1.5, NULL, 11.5, -21.6"));
+  insert_queries.push_back(
+      query_maker("1001, 63, 6, NULL, 77, -32767, 21, NULL, 1.6, 1.1, 11.6, NULL"));
+  insert_queries.push_back(
+      query_maker("3003, 63, 5, 2, 79, NULL, 23, 125, 1.5, -1.3, 11.5, 22.3"));
+  insert_queries.push_back(
+      query_maker("3003, NULL, 4, 6, 78, 0, 20, 126, 1.7, -1.5, 11.7, 22.5"));
+  // fragment 1:
+  insert_queries.push_back(
+      query_maker("2002, NULL, 4, NULL, 75, -112, -13, -125, 2.5, -2.3, 22.5, -23.5"));
+  insert_queries.push_back(
+      query_maker("1001, -57, 6, 2, 77, NULL, -14, -126, 2.6, NULL, 22.6, 23.7"));
+  insert_queries.push_back(
+      query_maker("1001, 63, 7, 0, 78, -32767, -15, NULL, 2.7, 2.7, 22.7, NULL"));
+  insert_queries.push_back(
+      query_maker("1001, -57, 5, 6, 79, 32767, -12, -127, 2.6, -2.4, 22.6, -23.4"));
+  // fragment 2:
+  insert_queries.push_back(
+      query_maker("3003, 63, 5, 2, 79, -32767, 4, NULL, 3.6, 3.3, 32.6, -33.3"));
+  insert_queries.push_back(
+      query_maker("2002, -57, 7, 4, 76, 32767, 2, -1, 3.5, -3.7, 32.5, 33.7"));
+  insert_queries.push_back(
+      query_maker("3003, NULL, 4, NULL, 77, NULL, 3, -2, 3.7, NULL, 32.7, -33.5"));
+  insert_queries.push_back(
+      query_maker("1001, -57, 6, 0, 73, 2345, 1, -3, 3.4, 32.4, 32.5, NULL"));
+  // fragment 3:
+  insert_queries.push_back(
+      query_maker("1001, 63, 6, 4, 77, 0, 12, -3, 4.5, 4.3, 11.6, NULL"));
+  insert_queries.push_back(
+      query_maker("3003, -57, 4, 2, 78, 32767, 16, -1, 4.6, 4.1, 11.5, 22.3"));
+  insert_queries.push_back(
+      query_maker("2002, 63, 7, 6, 75, -32767, 13, -2, 4.7, -4.1, 22.7, -33.3"));
+  insert_queries.push_back(
+      query_maker("2002, NULL, 5, NULL, 76, NULL, 15, NULL, 4.4, NULL, 22.5, -23.4"));
+  for (auto insert_query : insert_queries) {
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+}
+
 }  // namespace
 
 TEST(Select, ArrayUnnest) {
@@ -14876,6 +14939,92 @@ TEST(Select, EmptyString) {
   }
 }
 
+TEST(Select, LogicalSizedColumns) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // non-grouped aggregate:
+    c("SELECT MIN(tiny_int), MAX(tiny_int), MIN(tiny_int_null), MAX(tiny_int_null), "
+      "COUNT(tiny_int), SUM(tiny_int), AVG(tiny_int) FROM logical_size_test;",
+      dt);
+    // single-column perfect hash group by:
+    c("SELECT id, COUNT(tiny_int), COUNT(tiny_int_null), MAX(tiny_int), MIN(TINY_INT),"
+      "SUM(tiny_int), SUM(tiny_int_null), AVG(tiny_int), AVG(tiny_int_null) "
+      "FROM logical_size_test GROUP BY id ORDER BY id;",
+      dt);
+    c("SELECT id, COUNT(small_int_null), COUNT(small_int), SUM(small_int_null), "
+      "SUM(small_int), AVG(small_int_null), AVG(small_int) "
+      "FROM logical_size_test GROUP BY id ORDER BY id",
+      dt);
+    c("SELECT id, MAX(tiny_int), MAX(small_int_null), MAX(big_int), MAX(tiny_int_null),"
+      "MAX(id_null), MAX(small_int) FROM logical_size_test GROUP BY id ORDER BY id;",
+      dt);
+    c("SELECT id, MIN(tiny_int), MIN(small_int_null), MIN(big_int_null), "
+      "MIN(tiny_int_null),"
+      "MIN(big_int), MIN(small_int) FROM logical_size_test GROUP BY id ORDER BY id;",
+      dt);
+    // single-slot SAMPLE statement:
+    // 16-bit sample
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT id, SAMPLE(small_int), COUNT(*) FROM logical_size_test"
+          " WHERE tiny_int < 0 GROUP BY id ORDER BY id;",
+          dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), crt_row.size());
+      ASSERT_EQ(int64_t(4), v<int64_t>(crt_row[0]));
+      ASSERT_EQ(int64_t(75), v<int64_t>(crt_row[1]));
+      ASSERT_EQ(int64_t(1), v<int64_t>(crt_row[2]));
+    }
+    // 8-bit sample
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT id, SAMPLE(tiny_int), MAX(small_int_null) FROM logical_size_test "
+          " WHERE small_int < 76 GROUP BY id ORDER BY id;",
+          dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), crt_row.size());
+      ASSERT_EQ(int64_t(4), v<int64_t>(crt_row[0]));
+      ASSERT_EQ(int64_t(-13), v<int64_t>(crt_row[1]));
+      ASSERT_EQ(int64_t(-112), v<int64_t>(crt_row[2]));
+    }
+    // multi-slot SAMPLE statements:
+    // CAS on 16-bit
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT id, SAMPLE(small_int), SAMPLE(tiny_int), SAMPLE(tiny_int_null), "
+          "SAMPLE(small_int_null), SAMPLE(float_not_null) FROM logical_size_test"
+          " WHERE big_int < 3000 GROUP BY id ORDER BY id;",
+          dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(6), crt_row.size());
+      ASSERT_EQ(int64_t(4), v<int64_t>(crt_row[0]));
+      ASSERT_EQ(int64_t(75), v<int64_t>(crt_row[1]));
+      ASSERT_EQ(int64_t(-13), v<int64_t>(crt_row[2]));
+      ASSERT_EQ(int64_t(-125), v<int64_t>(crt_row[3]));
+      ASSERT_EQ(int64_t(-112), v<int64_t>(crt_row[4]));
+      ASSERT_NEAR(float(2.5), v<float>(crt_row[5]), 0.01);
+    }
+    // CAS on 8-bit:
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT id, SAMPLE(tiny_int), SAMPLE(small_int) FROM logical_size_test"
+          " WHERE double_not_null < 20.0 GROUP BY id ORDER BY id;",
+          dt);
+      const auto first_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), first_row.size());
+      ASSERT_EQ(int64_t(4), v<int64_t>(first_row[0]));
+      ASSERT_TRUE(int64_t(20) == v<int64_t>(first_row[1]) ||
+                  int64_t(16) == v<int64_t>(first_row[1]));
+      ASSERT_EQ(int64_t(78), v<int64_t>(first_row[2]));
+      const auto second_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), second_row.size());
+      ASSERT_EQ(int64_t(5), v<int64_t>(second_row[0]));
+      ASSERT_EQ(int64_t(23), v<int64_t>(second_row[1]));
+      ASSERT_EQ(int64_t(79), v<int64_t>(second_row[2]));
+    }
+  }
+}
+
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,
@@ -15779,6 +15928,11 @@ int create_and_populate_tables(bool with_delete_support = true) {
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test_in_bitmap'";
     return -EEXIST;
+  }
+  try {
+    import_logical_size_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'logical_size_test'";
   }
   {
     std::string insert_query{"INSERT INTO test_in_bitmap VALUES('a');"};

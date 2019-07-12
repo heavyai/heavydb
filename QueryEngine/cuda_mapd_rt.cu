@@ -542,6 +542,161 @@ extern "C" __device__ void agg_min_int32_shared(int32_t* agg, const int32_t val)
   atomicMin(agg, val);
 }
 
+// TODO(Saman): use 16-bit atomicCAS for Turing
+extern "C" __device__ void atomicMax16(int16_t* agg, const int16_t val) {
+  // properly align the input pointer:
+  unsigned int* base_address_u32 =
+      reinterpret_cast<unsigned int*>(reinterpret_cast<size_t>(agg) & ~0x3);
+
+  unsigned int old_value = *base_address_u32;
+  unsigned int swap_value, compare_value;
+  do {
+    compare_value = old_value;
+    swap_value =
+        (reinterpret_cast<size_t>(agg) & 0x2)
+            ? static_cast<unsigned int>(max(static_cast<int16_t>(old_value >> 16), val))
+                      << 16 |
+                  (old_value & 0xFFFF)
+            : (old_value & 0xFFFF0000) |
+                  static_cast<unsigned int>(
+                      max(static_cast<int16_t>(old_value & 0xFFFF), val));
+    old_value = atomicCAS(base_address_u32, compare_value, swap_value);
+  } while (old_value != compare_value);
+}
+
+extern "C" __device__ void atomicMax8(int8_t* agg, const int8_t val) {
+  // properly align the input pointer:
+  unsigned int* base_address_u32 =
+      reinterpret_cast<unsigned int*>(reinterpret_cast<size_t>(agg) & ~0x3);
+
+  // __byte_perm(unsigned int A, unsigned int B, unsigned int s):
+  // if s == 0x3214 returns {A[31..24], A[23..16], A[15..8], B[7..0]}
+  // if s == 0x3240 returns {A[31..24], A[23..16], B[7...0], A[7..0]}
+  // if s == 0x3410 returns {A[31..24], B[7....0], A[15..8], A[7..0]}
+  // if s == 0x4210 returns {B[7....0], A[23..16], A[15..8], A[7..0]}
+  constexpr unsigned int byte_permutations[] = {0x3214, 0x3240, 0x3410, 0x4210};
+  unsigned int old_value = *base_address_u32;
+  unsigned int swap_value, compare_value;
+  do {
+    compare_value = old_value;
+    auto max_value = static_cast<unsigned int>(
+        // compare val with its corresponding bits in the compare_value
+        max(val,
+            static_cast<int8_t>(__byte_perm(
+                compare_value, 0, (reinterpret_cast<size_t>(agg) & 0x3) | 0x4440))));
+    swap_value = __byte_perm(
+        compare_value, max_value, byte_permutations[reinterpret_cast<size_t>(agg) & 0x3]);
+    old_value = atomicCAS(base_address_u32, compare_value, swap_value);
+  } while (compare_value != old_value);
+}
+
+extern "C" __device__ void atomicMin16(int16_t* agg, const int16_t val) {
+  // properly align the input pointer:
+  unsigned int* base_address_u32 =
+      reinterpret_cast<unsigned int*>(reinterpret_cast<size_t>(agg) & ~0x3);
+
+  unsigned int old_value = *base_address_u32;
+  unsigned int swap_value, compare_value;
+  do {
+    compare_value = old_value;
+    swap_value =
+        (reinterpret_cast<size_t>(agg) & 0x2)
+            ? static_cast<unsigned int>(min(static_cast<int16_t>(old_value >> 16), val))
+                      << 16 |
+                  (old_value & 0xFFFF)
+            : (old_value & 0xFFFF0000) |
+                  static_cast<unsigned int>(
+                      min(static_cast<int16_t>(old_value & 0xFFFF), val));
+    old_value = atomicCAS(base_address_u32, compare_value, swap_value);
+  } while (old_value != compare_value);
+}
+
+extern "C" __device__ void atomicMin16SkipVal(int16_t* agg,
+                                              const int16_t val,
+                                              const int16_t skip_val) {
+  // properly align the input pointer:
+  unsigned int* base_address_u32 =
+      reinterpret_cast<unsigned int*>(reinterpret_cast<size_t>(agg) & ~0x3);
+
+  unsigned int old_value = *base_address_u32;
+  unsigned int swap_value, compare_value;
+  do {
+    compare_value = old_value;
+    int16_t selected_old_val = (reinterpret_cast<size_t>(agg) & 0x2)
+                                   ? static_cast<int16_t>(old_value >> 16)
+                                   : static_cast<int16_t>(old_value & 0xFFFF);
+
+    swap_value =
+        (reinterpret_cast<size_t>(agg) & 0x2)
+            ? static_cast<unsigned int>(
+                  selected_old_val == skip_val ? val : min(selected_old_val, val))
+                      << 16 |
+                  (old_value & 0xFFFF)
+            : (old_value & 0xFFFF0000) |
+                  static_cast<unsigned int>(
+                      selected_old_val == skip_val ? val : min(selected_old_val, val));
+    old_value = atomicCAS(base_address_u32, compare_value, swap_value);
+  } while (old_value != compare_value);
+}
+
+extern "C" __device__ void atomicMin8(int8_t* agg, const int8_t val) {
+  // properly align the input pointer:
+  unsigned int* base_address_u32 =
+      reinterpret_cast<unsigned int*>(reinterpret_cast<size_t>(agg) & ~0x3);
+
+  constexpr unsigned int byte_permutations[] = {0x3214, 0x3240, 0x3410, 0x4210};
+  unsigned int old_value = *base_address_u32;
+  unsigned int swap_value, compare_value;
+  do {
+    compare_value = old_value;
+    auto min_value = static_cast<unsigned int>(
+        min(val,
+            static_cast<int8_t>(__byte_perm(
+                compare_value, 0, (reinterpret_cast<size_t>(agg) & 0x3) | 0x4440))));
+    swap_value = __byte_perm(
+        compare_value, min_value, byte_permutations[reinterpret_cast<size_t>(agg) & 0x3]);
+    old_value = atomicCAS(base_address_u32, compare_value, swap_value);
+  } while (compare_value != old_value);
+}
+
+extern "C" __device__ void atomicMin8SkipVal(int8_t* agg,
+                                             const int8_t val,
+                                             const int8_t skip_val) {
+  // properly align the input pointer:
+  unsigned int* base_address_u32 =
+      reinterpret_cast<unsigned int*>(reinterpret_cast<size_t>(agg) & ~0x3);
+
+  constexpr unsigned int byte_permutations[] = {0x3214, 0x3240, 0x3410, 0x4210};
+  unsigned int old_value = *base_address_u32;
+  unsigned int swap_value, compare_value;
+  do {
+    compare_value = old_value;
+    int8_t selected_old_val = static_cast<int8_t>(
+        __byte_perm(compare_value, 0, (reinterpret_cast<size_t>(agg) & 0x3) | 0x4440));
+    auto min_value = static_cast<unsigned int>(
+        selected_old_val == skip_val ? val : min(val, selected_old_val));
+    swap_value = __byte_perm(
+        compare_value, min_value, byte_permutations[reinterpret_cast<size_t>(agg) & 0x3]);
+    old_value = atomicCAS(base_address_u32, compare_value, swap_value);
+  } while (compare_value != old_value);
+}
+
+extern "C" __device__ void agg_max_int16_shared(int16_t* agg, const int16_t val) {
+  return atomicMax16(agg, val);
+}
+
+extern "C" __device__ void agg_max_int8_shared(int8_t* agg, const int8_t val) {
+  return atomicMax8(agg, val);
+}
+
+extern "C" __device__ void agg_min_int16_shared(int16_t* agg, const int16_t val) {
+  return atomicMin16(agg, val);
+}
+
+extern "C" __device__ void agg_min_int8_shared(int8_t* agg, const int8_t val) {
+  return atomicMin8(agg, val);
+}
+
 extern "C" __device__ void agg_min_double_shared(int64_t* agg, const double val) {
   atomicMin(reinterpret_cast<double*>(agg), val);
 }
@@ -604,6 +759,38 @@ extern "C" __device__ void agg_max_int32_skip_val_shared(int32_t* agg,
                                                          const int32_t skip_val) {
   if (val != skip_val) {
     agg_max_int32_shared(agg, val);
+  }
+}
+
+extern "C" __device__ void agg_max_int16_skip_val_shared(int16_t* agg,
+                                                         const int16_t val,
+                                                         const int16_t skip_val) {
+  if (val != skip_val) {
+    agg_max_int16_shared(agg, val);
+  }
+}
+
+extern "C" __device__ void agg_min_int16_skip_val_shared(int16_t* agg,
+                                                         const int16_t val,
+                                                         const int16_t skip_val) {
+  if (val != skip_val) {
+    atomicMin16SkipVal(agg, val, skip_val);
+  }
+}
+
+extern "C" __device__ void agg_max_int8_skip_val_shared(int8_t* agg,
+                                                        const int8_t val,
+                                                        const int8_t skip_val) {
+  if (val != skip_val) {
+    agg_max_int8_shared(agg, val);
+  }
+}
+
+extern "C" __device__ void agg_min_int8_skip_val_shared(int8_t* agg,
+                                                        const int8_t val,
+                                                        const int8_t skip_val) {
+  if (val != skip_val) {
+    atomicMin8SkipVal(agg, val, skip_val);
   }
 }
 
@@ -865,6 +1052,66 @@ extern "C" __device__ bool slotEmptyKeyCAS(int64_t* slot,
   } else {
     return false;
   }
+}
+
+extern "C" __device__ bool slotEmptyKeyCAS_int32(int32_t* slot,
+                                                 int32_t new_val,
+                                                 int32_t init_val) {
+  unsigned int* slot_address = reinterpret_cast<unsigned int*>(slot);
+  unsigned int compare_value = static_cast<unsigned int>(init_val);
+  unsigned int swap_value = static_cast<unsigned int>(new_val);
+
+  const unsigned int old_value = atomicCAS(slot_address, compare_value, swap_value);
+  return old_value == compare_value;
+}
+#include <stdio.h>
+extern "C" __device__ bool slotEmptyKeyCAS_int16(int16_t* slot,
+                                                 int16_t new_val,
+                                                 int16_t init_val) {
+  unsigned int* base_slot_address =
+      reinterpret_cast<unsigned int*>(reinterpret_cast<size_t>(slot) & ~0x3);
+  unsigned int old_value = *base_slot_address;
+  unsigned int swap_value, compare_value;
+  do {
+    compare_value = old_value;
+    // exit criteria: if init_val does not exist in the slot (some other thread has
+    // succeeded)
+    if (static_cast<unsigned int>(init_val) !=
+        __byte_perm(
+            compare_value, 0, (reinterpret_cast<size_t>(slot) & 0x2 ? 0x3244 : 0x4410))) {
+      return false;
+    }
+    swap_value = __byte_perm(compare_value,
+                             static_cast<unsigned int>(new_val),
+                             (reinterpret_cast<size_t>(slot) & 0x2) ? 0x5410 : 0x3254);
+    old_value = atomicCAS(base_slot_address, compare_value, swap_value);
+  } while (compare_value != old_value);
+  return true;
+}
+
+extern "C" __device__ bool slotEmptyKeyCAS_int8(int8_t* slot,
+                                                int8_t new_val,
+                                                int8_t init_val) {
+  // properly align the slot address:
+  unsigned int* base_slot_address =
+      reinterpret_cast<unsigned int*>(reinterpret_cast<size_t>(slot) & ~0x3);
+  constexpr unsigned int byte_permutations[] = {0x3214, 0x3240, 0x3410, 0x4210};
+  unsigned int old_value = *base_slot_address;
+  unsigned int swap_value, compare_value;
+  do {
+    compare_value = old_value;
+    // exit criteria: if init_val does not exist in the slot (some other thread has
+    // succeeded)
+    if (static_cast<unsigned int>(init_val) !=
+        __byte_perm(compare_value, 0, (reinterpret_cast<size_t>(slot) & 0x3) | 0x4440)) {
+      return false;
+    }
+    swap_value = __byte_perm(compare_value,
+                             static_cast<unsigned int>(new_val),
+                             byte_permutations[reinterpret_cast<size_t>(slot) & 0x3]);
+    old_value = atomicCAS(base_slot_address, compare_value, swap_value);
+  } while (compare_value != old_value);
+  return true;
 }
 
 #include "../Utils/ChunkIter.cpp"

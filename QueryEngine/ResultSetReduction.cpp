@@ -1324,6 +1324,45 @@ void ResultSetStorage::initializeBaselineValueSlots(int64_t* entry_slots) const 
     }                                                                        \
   }
 
+// to be used for 8/16-bit kMIN and kMAX only
+#define AGGREGATE_ONE_VALUE_SMALL(                                    \
+    agg_kind__, val_ptr__, other_ptr__, chosen_bytes__, agg_info__)   \
+  do {                                                                \
+    if (chosen_bytes__ == sizeof(int16_t)) {                          \
+      auto val_ptr = reinterpret_cast<int16_t*>(val_ptr__);           \
+      auto other_ptr = reinterpret_cast<const int16_t*>(other_ptr__); \
+      agg_##agg_kind__##_int16(val_ptr, *other_ptr);                  \
+    } else if (chosen_bytes__ == sizeof(int8_t)) {                    \
+      auto val_ptr = reinterpret_cast<int8_t*>(val_ptr__);            \
+      auto other_ptr = reinterpret_cast<const int8_t*>(other_ptr__);  \
+      agg_##agg_kind__##_int8(val_ptr, *other_ptr);                   \
+    } else {                                                          \
+      UNREACHABLE();                                                  \
+    }                                                                 \
+  } while (0)
+
+// to be used for 8/16-bit kMIN and kMAX only
+#define AGGREGATE_ONE_NULLABLE_VALUE_SMALL(                                       \
+    agg_kind__, val_ptr__, other_ptr__, init_val__, chosen_bytes__, agg_info__)   \
+  do {                                                                            \
+    if (agg_info__.skip_null_val) {                                               \
+      if (chosen_bytes__ == sizeof(int16_t)) {                                    \
+        int16_t* val_ptr = reinterpret_cast<int16_t*>(val_ptr__);                 \
+        const int16_t* other_ptr = reinterpret_cast<const int16_t*>(other_ptr__); \
+        const auto null_val = static_cast<int16_t>(init_val__);                   \
+        agg_##agg_kind__##_int16_skip_val(val_ptr, *other_ptr, null_val);         \
+      } else if (chosen_bytes == sizeof(int8_t)) {                                \
+        int8_t* val_ptr = reinterpret_cast<int8_t*>(val_ptr__);                   \
+        const int8_t* other_ptr = reinterpret_cast<const int8_t*>(other_ptr__);   \
+        const auto null_val = static_cast<int8_t>(init_val__);                    \
+        agg_##agg_kind__##_int8_skip_val(val_ptr, *other_ptr, null_val);          \
+      }                                                                           \
+    } else {                                                                      \
+      AGGREGATE_ONE_VALUE_SMALL(                                                  \
+          agg_kind__, val_ptr__, other_ptr__, chosen_bytes__, agg_info__);        \
+    }                                                                             \
+  } while (0)
+
 namespace {
 
 int8_t get_width_for_slot(const size_t target_slot_idx,
@@ -1385,13 +1424,23 @@ void ResultSetStorage::reduceOneSlot(
         break;
       }
       case kMIN: {
-        AGGREGATE_ONE_NULLABLE_VALUE(
-            min, this_ptr1, that_ptr1, init_val, chosen_bytes, target_info);
+        if (static_cast<size_t>(chosen_bytes) <= sizeof(int16_t)) {
+          AGGREGATE_ONE_NULLABLE_VALUE_SMALL(
+              min, this_ptr1, that_ptr1, init_val, chosen_bytes, target_info);
+        } else {
+          AGGREGATE_ONE_NULLABLE_VALUE(
+              min, this_ptr1, that_ptr1, init_val, chosen_bytes, target_info);
+        }
         break;
       }
       case kMAX: {
-        AGGREGATE_ONE_NULLABLE_VALUE(
-            max, this_ptr1, that_ptr1, init_val, chosen_bytes, target_info);
+        if (static_cast<size_t>(chosen_bytes) <= sizeof(int16_t)) {
+          AGGREGATE_ONE_NULLABLE_VALUE_SMALL(
+              max, this_ptr1, that_ptr1, init_val, chosen_bytes, target_info);
+        } else {
+          AGGREGATE_ONE_NULLABLE_VALUE(
+              max, this_ptr1, that_ptr1, init_val, chosen_bytes, target_info);
+        }
         break;
       }
       default:
@@ -1399,8 +1448,25 @@ void ResultSetStorage::reduceOneSlot(
     }
   } else {
     switch (chosen_bytes) {
+      case 1: {
+        CHECK(query_mem_desc_.isLogicalSizedColumnsAllowed());
+        const auto rhs_proj_col = *reinterpret_cast<const int8_t*>(that_ptr1);
+        if (rhs_proj_col != init_val) {
+          *reinterpret_cast<int8_t*>(this_ptr1) = rhs_proj_col;
+        }
+        break;
+      }
+      case 2: {
+        CHECK(query_mem_desc_.isLogicalSizedColumnsAllowed());
+        const auto rhs_proj_col = *reinterpret_cast<const int16_t*>(that_ptr1);
+        if (rhs_proj_col != init_val) {
+          *reinterpret_cast<int16_t*>(this_ptr1) = rhs_proj_col;
+        }
+        break;
+      }
       case 4: {
-        CHECK(target_info.agg_kind != kSAMPLE);
+        CHECK(target_info.agg_kind != kSAMPLE ||
+              query_mem_desc_.isLogicalSizedColumnsAllowed());
         const auto rhs_proj_col = *reinterpret_cast<const int32_t*>(that_ptr1);
         if (rhs_proj_col != init_val) {
           *reinterpret_cast<int32_t*>(this_ptr1) = rhs_proj_col;
@@ -1564,22 +1630,42 @@ bool ResultSetStorage::reduceSingleRow(const int8_t* row_ptr,
                   agg_info);
               break;
             case kMIN:
-              AGGREGATE_ONE_NULLABLE_VALUE(
-                  min,
-                  reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
-                  reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
-                  agg_init_vals[agg_col_idx],
-                  chosen_bytes,
-                  agg_info);
+              if (static_cast<size_t>(chosen_bytes) <= sizeof(int16_t)) {
+                AGGREGATE_ONE_NULLABLE_VALUE_SMALL(
+                    min,
+                    reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
+                    reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
+                    agg_init_vals[agg_col_idx],
+                    chosen_bytes,
+                    agg_info);
+              } else {
+                AGGREGATE_ONE_NULLABLE_VALUE(
+                    min,
+                    reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
+                    reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
+                    agg_init_vals[agg_col_idx],
+                    chosen_bytes,
+                    agg_info);
+              }
               break;
             case kMAX:
-              AGGREGATE_ONE_NULLABLE_VALUE(
-                  max,
-                  reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
-                  reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
-                  agg_init_vals[agg_col_idx],
-                  chosen_bytes,
-                  agg_info);
+              if (static_cast<size_t>(chosen_bytes) <= sizeof(int16_t)) {
+                AGGREGATE_ONE_NULLABLE_VALUE_SMALL(
+                    max,
+                    reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
+                    reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
+                    agg_init_vals[agg_col_idx],
+                    chosen_bytes,
+                    agg_info);
+              } else {
+                AGGREGATE_ONE_NULLABLE_VALUE(
+                    max,
+                    reinterpret_cast<int8_t*>(&agg_vals[agg_col_idx]),
+                    reinterpret_cast<int8_t*>(&partial_agg_vals[agg_col_idx]),
+                    agg_init_vals[agg_col_idx],
+                    chosen_bytes,
+                    agg_info);
+              }
               break;
             default:
               CHECK(false);

@@ -120,6 +120,23 @@ void write_fp(int8_t* slot_ptr, const int64_t v, const size_t slot_bytes) {
   }
 }
 
+int64_t get_empty_key_sentinel(int8_t key_bytes) {
+  switch (key_bytes) {
+    case 8:
+      return EMPTY_KEY_64;
+    case 4:
+      return EMPTY_KEY_32;
+    case 2:
+      return EMPTY_KEY_16;
+    case 1:
+      return EMPTY_KEY_8;
+    default:
+      break;
+  }
+  UNREACHABLE();
+  return 0;
+}
+
 int8_t* fill_one_entry_no_collisions(int8_t* buff,
                                      const QueryMemoryDescriptor& query_mem_desc,
                                      const int64_t v,
@@ -222,6 +239,14 @@ void fill_one_entry_one_col(int8_t* ptr1,
       CHECK(!target_info.sql_type.is_fp());
       *reinterpret_cast<int32_t*>(ptr1) = vv;
       break;
+    case 2:
+      CHECK(!target_info.sql_type.is_fp());
+      *reinterpret_cast<int16_t*>(ptr1) = vv;
+      break;
+    case 1:
+      CHECK(!target_info.sql_type.is_fp());
+      *reinterpret_cast<int8_t*>(ptr1) = vv;
+      break;
     default:
       CHECK(false);
   }
@@ -259,8 +284,9 @@ int8_t* advance_to_next_columnar_key_buff(int8_t* key_ptr,
                                           const size_t key_idx) {
   CHECK(!query_mem_desc.hasKeylessHash());
   CHECK_LT(key_idx, query_mem_desc.groupColWidthsSize());
-  auto new_key_ptr =
-      key_ptr + query_mem_desc.getEntryCount() * query_mem_desc.groupColWidth(key_idx);
+  const auto column_offset =
+      query_mem_desc.getEntryCount() * query_mem_desc.groupColWidth(key_idx);
+  auto new_key_ptr = align_to_int64(key_ptr + column_offset);
   return new_key_ptr;
 }
 
@@ -272,6 +298,14 @@ void write_key(const int64_t k, int8_t* ptr, const int8_t key_bytes) {
     }
     case 4: {
       *reinterpret_cast<int32_t*>(ptr) = k;
+      break;
+    }
+    case 2: {
+      *reinterpret_cast<int16_t*>(ptr) = k;
+      break;
+    }
+    case 1: {
+      *reinterpret_cast<int8_t*>(ptr) = k;
       break;
     }
     default:
@@ -290,13 +324,13 @@ void fill_storage_buffer_perfect_hash_colwise(int8_t* buff,
   for (size_t key_idx = 0; key_idx < key_component_count; ++key_idx) {
     auto key_entry_ptr = col_ptr;
     const auto key_bytes = query_mem_desc.groupColWidth(key_idx);
-    CHECK_EQ(8, key_bytes);
+
     for (size_t i = 0; i < query_mem_desc.getEntryCount(); ++i) {
       if (i % 2 == 0) {
         const auto v = generator.getNextValue();
         write_key(v, key_entry_ptr, key_bytes);
       } else {
-        write_key(EMPTY_KEY_64, key_entry_ptr, key_bytes);
+        write_key(get_empty_key_sentinel(key_bytes), key_entry_ptr, key_bytes);
       }
       key_entry_ptr += key_bytes;
     }
@@ -520,9 +554,13 @@ QueryMemoryDescriptor perfect_hash_one_col_desc(
     const std::vector<TargetInfo>& target_infos,
     const int8_t num_bytes,
     const size_t min_val,
-    const size_t max_val) {
-  QueryMemoryDescriptor query_mem_desc(
-      QueryDescriptionType::GroupByPerfectHash, min_val, max_val, false, {8});
+    const size_t max_val,
+    std::vector<int8_t> group_column_widths = {8}) {
+  QueryMemoryDescriptor query_mem_desc(QueryDescriptionType::GroupByPerfectHash,
+                                       min_val,
+                                       max_val,
+                                       false,
+                                       group_column_widths);
   for (const auto& target_info : target_infos) {
     const auto slot_bytes =
         std::max(num_bytes, static_cast<int8_t>(target_info.sql_type.get_size()));
@@ -1456,6 +1494,7 @@ void test_iterate(const std::vector<TargetInfo>& target_infos,
       const auto& target_info = target_infos[i];
       const auto& ti = target_info.agg_kind == kAVG ? double_ti : target_info.sql_type;
       switch (ti.get_type()) {
+        case kTINYINT:
         case kSMALLINT:
         case kINT:
         case kBIGINT: {
@@ -1495,6 +1534,53 @@ std::vector<TargetInfo> generate_test_target_infos() {
     dict_string_ti.set_compression(kENCODING_DICT);
     dict_string_ti.set_comp_param(1);
     target_infos.push_back(TargetInfo{false, kMIN, dict_string_ti, null_ti, true, false});
+  }
+  return target_infos;
+}
+
+std::vector<TargetInfo> generate_custom_agg_target_infos(
+    std::vector<int8_t> group_columns,
+    std::vector<SQLAgg> sql_aggs,
+    std::vector<SQLTypes> agg_types,
+    std::vector<SQLTypes> arg_types) {
+  const auto num_targets = sql_aggs.size();
+  CHECK_EQ(agg_types.size(), num_targets);
+  CHECK_EQ(arg_types.size(), num_targets);
+  std::vector<TargetInfo> target_infos;
+  target_infos.reserve(group_columns.size() + num_targets);
+  auto find_group_col_type = [](int8_t group_width) {
+    switch (group_width) {
+      case 8:
+        return kBIGINT;
+      case 4:
+        return kINT;
+      case 2:
+        return kSMALLINT;
+      case 1:
+        return kTINYINT;
+      default:
+        UNREACHABLE();
+    }
+    UNREACHABLE();
+    return kINT;
+  };
+  // creating proper TargetInfo to represent group columns:
+  for (auto group_size : group_columns) {
+    target_infos.push_back(TargetInfo{false,
+                                      kMIN,
+                                      SQLTypeInfo{find_group_col_type(group_size), false},
+                                      SQLTypeInfo{kNULLT, false},
+                                      true,
+                                      false});
+  }
+  // creating proper TargetInfo for aggregate columns:
+  for (size_t i = 0; i < num_targets; i++) {
+    target_infos.push_back(TargetInfo{true,
+                                      sql_aggs[i],
+                                      SQLTypeInfo{agg_types[i], false},
+                                      SQLTypeInfo{arg_types[i], false},
+                                      true,
+                                      false});
   }
   return target_infos;
 }
@@ -1578,6 +1664,7 @@ void test_reduce(const std::vector<TargetInfo>& target_infos,
       const auto& target_info = target_infos[i];
       const auto& ti = target_info.agg_kind == kAVG ? double_ti : target_info.sql_type;
       switch (ti.get_type()) {
+        case kTINYINT:
         case kSMALLINT:
         case kINT:
         case kBIGINT: {
@@ -1907,6 +1994,34 @@ TEST(Iterate, PerfectHashOneColColumnar32) {
   test_iterate(target_infos, query_mem_desc);
 }
 
+TEST(Iterate, PerfectHashOneColColumnar16) {
+  std::vector<int8_t> group_column_widths{8};
+  const int8_t suggested_agg_width = 2;
+  const auto target_infos = generate_custom_agg_target_infos(
+      group_column_widths,
+      {kMAX, kMIN, kCOUNT, kSUM, kAVG},
+      {kSMALLINT, kSMALLINT, kINT, kINT, kDOUBLE},
+      {kSMALLINT, kSMALLINT, kSMALLINT, kSMALLINT, kSMALLINT});
+  auto query_mem_desc = perfect_hash_one_col_desc(
+      target_infos, suggested_agg_width, 0, 99, group_column_widths);
+  query_mem_desc.setOutputColumnar(true);
+  test_iterate(target_infos, query_mem_desc);
+}
+
+TEST(Iterate, PerfectHashOneColColumnar8) {
+  std::vector<int8_t> group_column_widths{8};
+  const int8_t suggested_agg_width = 1;
+  const auto target_infos = generate_custom_agg_target_infos(
+      group_column_widths,
+      {kMAX, kMIN, kCOUNT, kSUM, kAVG},
+      {kTINYINT, kTINYINT, kINT, kINT, kDOUBLE},
+      {kTINYINT, kTINYINT, kTINYINT, kTINYINT, kTINYINT});
+  auto query_mem_desc = perfect_hash_one_col_desc(
+      target_infos, suggested_agg_width, 0, 99, group_column_widths);
+  query_mem_desc.setOutputColumnar(true);
+  test_iterate(target_infos, query_mem_desc);
+}
+
 TEST(Iterate, PerfectHashOneColKeyless) {
   const auto target_infos = generate_test_target_infos();
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
@@ -1935,6 +2050,38 @@ TEST(Iterate, PerfectHashOneColColumnarKeyless) {
 TEST(Iterate, PerfectHashOneColColumnarKeyless32) {
   const auto target_infos = generate_test_target_infos();
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4, 0, 99);
+  query_mem_desc.setOutputColumnar(true);
+  query_mem_desc.setHasKeylessHash(true);
+  query_mem_desc.setTargetIdxForKey(2);
+  test_iterate(target_infos, query_mem_desc);
+}
+
+TEST(Iterate, PerfectHashOneColColumnarKeyless16) {
+  std::vector<int8_t> group_column_widths{8};
+  const int8_t suggested_agg_width = 2;
+  const auto target_infos = generate_custom_agg_target_infos(
+      group_column_widths,
+      {kAVG, kSUM, kMIN, kCOUNT, kMAX},
+      {kDOUBLE, kINT, kSMALLINT, kINT, kSMALLINT},
+      {kSMALLINT, kSMALLINT, kSMALLINT, kSMALLINT, kSMALLINT});
+  auto query_mem_desc =
+      perfect_hash_one_col_desc(target_infos, suggested_agg_width, 0, 99);
+  query_mem_desc.setOutputColumnar(true);
+  query_mem_desc.setHasKeylessHash(true);
+  query_mem_desc.setTargetIdxForKey(2);
+  test_iterate(target_infos, query_mem_desc);
+}
+
+TEST(Iterate, PerfectHashOneColColumnarKeyless8) {
+  std::vector<int8_t> group_column_widths{8};
+  const int8_t suggested_agg_width = 1;
+  const auto target_infos = generate_custom_agg_target_infos(
+      group_column_widths,
+      {kAVG, kSUM, kMIN, kCOUNT, kMAX},
+      {kDOUBLE, kINT, kTINYINT, kINT, kTINYINT},
+      {kTINYINT, kTINYINT, kTINYINT, kTINYINT, kTINYINT});
+  auto query_mem_desc =
+      perfect_hash_one_col_desc(target_infos, suggested_agg_width, 0, 99);
   query_mem_desc.setOutputColumnar(true);
   query_mem_desc.setHasKeylessHash(true);
   query_mem_desc.setTargetIdxForKey(2);
@@ -2048,6 +2195,38 @@ TEST(Reduce, PerfectHashOneColColumnar32) {
   test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
 }
 
+TEST(Reduce, PerfectHashOneColColumnar16) {
+  std::vector<int8_t> group_column_widths{8};
+  const int8_t suggested_agg_width = 2;
+  const auto target_infos = generate_custom_agg_target_infos(
+      group_column_widths,
+      {kMAX, kMIN, kCOUNT, kSUM, kAVG},
+      {kSMALLINT, kSMALLINT, kINT, kBIGINT, kDOUBLE},
+      {kSMALLINT, kSMALLINT, kSMALLINT, kSMALLINT, kSMALLINT});
+  auto query_mem_desc = perfect_hash_one_col_desc(
+      target_infos, suggested_agg_width, 0, 99, group_column_widths);
+  query_mem_desc.setOutputColumnar(true);
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+}
+
+TEST(Reduce, PerfectHashOneColColumnar8) {
+  std::vector<int8_t> group_column_widths{8};
+  const int8_t suggested_agg_width = 1;
+  const auto target_infos = generate_custom_agg_target_infos(
+      group_column_widths,
+      {kMAX, kMIN, kCOUNT, kSUM, kAVG},
+      {kTINYINT, kTINYINT, kINT, kBIGINT, kDOUBLE},
+      {kTINYINT, kTINYINT, kTINYINT, kTINYINT, kTINYINT});
+  auto query_mem_desc = perfect_hash_one_col_desc(
+      target_infos, suggested_agg_width, 0, 99, group_column_widths);
+  query_mem_desc.setOutputColumnar(true);
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+}
+
 TEST(Reduce, PerfectHashOneColKeyless) {
   const auto target_infos = generate_test_target_infos();
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 8, 0, 99);
@@ -2082,6 +2261,42 @@ TEST(Reduce, PerfectHashOneColColumnarKeyless) {
 TEST(Reduce, PerfectHashOneColColumnarKeyless32) {
   const auto target_infos = generate_test_target_infos();
   auto query_mem_desc = perfect_hash_one_col_desc(target_infos, 4, 0, 99);
+  query_mem_desc.setOutputColumnar(true);
+  query_mem_desc.setHasKeylessHash(true);
+  query_mem_desc.setTargetIdxForKey(2);
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+}
+
+TEST(Reduce, PerfectHashOneColColumnarKeyless16) {
+  std::vector<int8_t> group_column_widths{8};
+  const int8_t suggested_agg_width = 2;
+  const auto target_infos = generate_custom_agg_target_infos(
+      group_column_widths,
+      {kAVG, kSUM, kMIN, kCOUNT, kMAX},
+      {kDOUBLE, kINT, kSMALLINT, kINT, kSMALLINT},
+      {kSMALLINT, kSMALLINT, kSMALLINT, kSMALLINT, kSMALLINT});
+  auto query_mem_desc =
+      perfect_hash_one_col_desc(target_infos, suggested_agg_width, 0, 99);
+  query_mem_desc.setOutputColumnar(true);
+  query_mem_desc.setHasKeylessHash(true);
+  query_mem_desc.setTargetIdxForKey(2);
+  EvenNumberGenerator generator1;
+  EvenNumberGenerator generator2;
+  test_reduce(target_infos, query_mem_desc, generator1, generator2, 2);
+}
+
+TEST(Reduce, PerfectHashOneColColumnarKeyless8) {
+  std::vector<int8_t> group_column_widths{8};
+  const int8_t suggested_agg_width = 1;
+  const auto target_infos = generate_custom_agg_target_infos(
+      group_column_widths,
+      {kAVG, kSUM, kMIN, kCOUNT, kMAX},
+      {kDOUBLE, kINT, kTINYINT, kINT, kTINYINT},
+      {kTINYINT, kTINYINT, kTINYINT, kTINYINT, kTINYINT});
+  auto query_mem_desc =
+      perfect_hash_one_col_desc(target_infos, suggested_agg_width, 0, 99);
   query_mem_desc.setOutputColumnar(true);
   query_mem_desc.setHasKeylessHash(true);
   query_mem_desc.setTargetIdxForKey(2);

@@ -66,8 +66,12 @@ extern "C" void agg_min_double_skip_val(int64_t* agg,
 extern "C" int32_t agg_sum_int32(int32_t* agg, const int32_t val);
 
 extern "C" void agg_max_int32(int32_t* agg, const int32_t val);
+extern "C" void agg_max_int16(int16_t* agg, const int16_t val);
+extern "C" void agg_max_int8(int8_t* agg, const int8_t val);
 
 extern "C" void agg_min_int32(int32_t* agg, const int32_t val);
+extern "C" void agg_min_int16(int16_t* agg, const int16_t val);
+extern "C" void agg_min_int8(int8_t* agg, const int8_t val);
 
 extern "C" void agg_sum_float(int32_t* agg, const float val);
 
@@ -78,10 +82,22 @@ extern "C" void agg_min_float(int32_t* agg, const float val);
 extern "C" void agg_max_int32_skip_val(int32_t* agg,
                                        const int32_t val,
                                        const int32_t skip_val);
+extern "C" void agg_max_int16_skip_val(int16_t* agg,
+                                       const int16_t val,
+                                       const int16_t skip_val);
+extern "C" void agg_max_int8_skip_val(int8_t* agg,
+                                      const int8_t val,
+                                      const int8_t skip_val);
 
 extern "C" void agg_min_int32_skip_val(int32_t* agg,
                                        const int32_t val,
                                        const int32_t skip_val);
+extern "C" void agg_min_int16_skip_val(int16_t* agg,
+                                       const int16_t val,
+                                       const int16_t skip_val);
+extern "C" void agg_min_int8_skip_val(int8_t* agg,
+                                      const int8_t val,
+                                      const int8_t skip_val);
 
 extern "C" void agg_max_float_skip_val(int32_t* agg,
                                        const float val,

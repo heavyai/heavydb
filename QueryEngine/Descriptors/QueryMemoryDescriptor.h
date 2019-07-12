@@ -250,6 +250,8 @@ class QueryMemoryDescriptor {
   bool didOutputColumnar() const { return output_columnar_; }
   void setOutputColumnar(const bool val);
 
+  bool isLogicalSizedColumnsAllowed() const;
+
   bool mustUseBaselineSort() const { return must_use_baseline_sort_; }
 
   // TODO(adb): remove and store this info more naturally in another

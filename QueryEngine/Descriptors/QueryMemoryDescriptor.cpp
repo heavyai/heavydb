@@ -447,12 +447,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     }
   }
 
-  // For columnar output projection layouts we resize the slots to use the logical size of
-  // the data type instead of the minimum slot width (calculated and set above). In
-  // distributed mode, result sets are serialized using rowwise iterators, so we use
-  // consistent slot widths for now
-  if (output_columnar_ && !g_cluster &&
-      query_desc_type_ == QueryDescriptionType::Projection) {
+  if (isLogicalSizedColumnsAllowed()) {
     col_slot_context_.setAllSlotsPaddedSizeToLogicalSize();
     col_slot_context_.validate();
   }
@@ -931,10 +926,22 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
 
 void QueryMemoryDescriptor::setOutputColumnar(const bool val) {
   output_columnar_ = val;
-  if (output_columnar_ && !g_cluster &&
-      query_desc_type_ == QueryDescriptionType::Projection) {
+  if (isLogicalSizedColumnsAllowed()) {
     col_slot_context_.setAllSlotsPaddedSizeToLogicalSize();
   }
+}
+
+/*
+ * Indicates the query types that are currently allowed to use the logical
+ * sized columns instead of padded sized ones.
+ */
+bool QueryMemoryDescriptor::isLogicalSizedColumnsAllowed() const {
+  // In distributed mode, result sets are serialized using rowwise iterators, so we use
+  // consistent slot widths for now
+  return output_columnar_ && !g_cluster &&
+         (query_desc_type_ == QueryDescriptionType::Projection ||
+          (query_desc_type_ == QueryDescriptionType::GroupByPerfectHash &&
+           getGroupbyColCount() == 1));
 }
 
 size_t QueryMemoryDescriptor::getBufferColSlotCount() const {
