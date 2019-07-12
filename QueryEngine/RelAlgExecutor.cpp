@@ -38,7 +38,7 @@
 #include <numeric>
 
 bool g_skip_intermediate_count{true};
-
+extern bool g_enable_bump_allocator;
 namespace {
 
 bool node_is_aggregate(const RelAlgNode* ra) {
@@ -1884,8 +1884,8 @@ void build_render_targets(
 inline bool can_use_bump_allocator(const RelAlgExecutionUnit& ra_exe_unit,
                                    const CompilationOptions& co,
                                    const ExecutionOptions& eo) {
-  return (co.device_type_ == ExecutorDeviceType::GPU) && !eo.output_columnar_hint &&
-         ra_exe_unit.sort_info.order_entries.empty();
+  return g_enable_bump_allocator && (co.device_type_ == ExecutorDeviceType::GPU) &&
+         !eo.output_columnar_hint && ra_exe_unit.sort_info.order_entries.empty();
 }
 
 }  // namespace

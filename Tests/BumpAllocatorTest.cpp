@@ -33,6 +33,8 @@ using QR = QueryRunner::QueryRunner;
 extern bool g_allow_cpu_retry;
 extern size_t g_max_memory_allocation_size;
 extern size_t g_min_memory_allocation_size;
+extern bool g_enable_bump_allocator;
+
 namespace {
 
 size_t g_num_gpus{0};
@@ -297,6 +299,8 @@ int main(int argc, char** argv) {
   }
 
   logger::init(log_options);
+
+  g_enable_bump_allocator = true;
 
   if (!setup()) {
     // No GPUs detected, bypass the test

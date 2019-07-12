@@ -58,6 +58,9 @@ unsigned send_timeout{300000};
 extern bool g_cache_string_hash;
 extern size_t g_leaf_count;
 extern bool g_skip_intermediate_count;
+extern bool g_enable_bump_allocator;
+extern size_t g_max_memory_allocation_size;
+extern size_t g_min_memory_allocation_size;
 
 bool g_enable_thrift_logs{false};
 
@@ -566,6 +569,31 @@ void MapDProgramOptions::fillAdvancedOptions() {
           ->implicit_value(true),
       "Remove quals from the filtered count if they are covered by a "
       "join condition (currently only ST_Contains).");
+  developer_desc.add_options()(
+      "max-output-projection-allocation-bytes",
+      po::value<size_t>(&g_max_memory_allocation_size)
+          ->default_value(g_max_memory_allocation_size),
+      "Maximum allocation size for a fixed output buffer allocation for projection "
+      "queries with no pre-flight count. Default is the maximum slab size (sizes greater "
+      "than the maximum slab size have no affect). Requires bump allocator.");
+  developer_desc.add_options()(
+      "min-output-projection-allocation-bytes",
+      po::value<size_t>(&g_min_memory_allocation_size)
+          ->default_value(g_min_memory_allocation_size),
+      "Minimum allocation size for a fixed output buffer allocation for projection "
+      "queries with no pre-flight count. If an allocation of this size cannot be "
+      "obtained, the query will be retried with different execution parameters and/or on "
+      "CPU (if allow-cpu-retry is enabled). Requires bump allocator.");
+  developer_desc.add_options()(
+      "enable-bump-allocator",
+      po::value<bool>(&g_enable_bump_allocator)
+          ->default_value(g_enable_bump_allocator)
+          ->implicit_value(true),
+      "Enable the bump allocator for projection queries on GPU. The bump allocator will "
+      "allocate a fixed size buffer for each query, track the number of rows passing the "
+      "kernel during query execution, and copy back only the rows that passed the kernel "
+      "to CPU after execution. When disabled, pre-flight count queries are used to size "
+      "the output buffer for projection queries.");
   developer_desc.add_options()("ssl-cert",
                                po::value<std::string>(&mapd_parameters.ssl_cert_file)
                                    ->default_value(std::string("")),

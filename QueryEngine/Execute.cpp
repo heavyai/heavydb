@@ -90,6 +90,7 @@ size_t g_max_memory_allocation_size{2000000000};  // set to max slab size
 size_t g_min_memory_allocation_size{
     256};  // minimum memory allocation required for projection query output buffer
            // without pre-flight count
+bool g_enable_bump_allocator{false};
 double g_bump_allocator_step_reduction{0.75};
 
 int const Executor::max_gpu_count;

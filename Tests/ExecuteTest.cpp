@@ -55,6 +55,7 @@ extern bool g_enable_overlaps_hashjoin;
 extern double g_gpu_mem_limit_percent;
 
 extern bool g_enable_window_functions;
+extern bool g_enable_bump_allocator;
 
 extern size_t g_leaf_count;
 
@@ -16280,6 +16281,11 @@ int main(int argc, char** argv) {
                          ->default_value(g_enable_columnar_output)
                          ->implicit_value(true),
                      "Enable/disable using columnar output format.");
+  desc.add_options()("enable-bump-allocator",
+                     po::value<bool>(&g_enable_bump_allocator)
+                         ->default_value(g_enable_bump_allocator)
+                         ->implicit_value(true),
+                     "Enable the bump allocator for projection queries on GPU.");
   desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
   desc.add_options()(
       "use-existing-data",
