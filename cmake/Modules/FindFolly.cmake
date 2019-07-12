@@ -63,12 +63,14 @@ find_library(Folly_DC_LIBRARY
   /usr/local/homebrew/lib
   /opt/local/lib)
 
+find_package(OpenSSL REQUIRED)
+
 if(Folly_USE_STATIC_LIBS)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ${_CMAKE_FIND_LIBRARY_SUFFIXES})
 endif()
 
 # Set standard CMake FindPackage variables if found.
-set(Folly_LIBRARIES ${Folly_LIBRARY} ${Folly_DC_LIBRARY} ${CMAKE_DL_LIBS})
+set(Folly_LIBRARIES ${Folly_LIBRARY} ${Folly_DC_LIBRARY} ${OPENSSL_LIBRARIES} ${CMAKE_DL_LIBS})
 set(Folly_LIBRARY_DIRS ${Folly_LIBRARY_DIR})
 set(Folly_INCLUDE_DIRS ${Folly_LIBRARY_DIR}/../include)
 
