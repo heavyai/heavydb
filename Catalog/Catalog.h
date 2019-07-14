@@ -242,6 +242,7 @@ class Catalog {
   void CheckAndExecuteMigrationsPostBuildMaps();
   void updateDictionaryNames();
   void updateTableDescriptorSchema();
+  void updateFixlenArrayColumns();
   void updateFrontendViewSchema();
   void updateLinkSchema();
   void updateFrontendViewAndLinkUsers();
