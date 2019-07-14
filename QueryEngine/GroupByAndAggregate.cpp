@@ -103,6 +103,16 @@ bool has_count_distinct(const RelAlgExecutionUnit& ra_exe_unit) {
   return false;
 }
 
+bool is_column_range_too_big_for_perfect_hash(const ColRangeInfo& col_range_info,
+                                              const int64_t max_entry_count) {
+  try {
+    return static_cast<int64_t>(checked_int64_t(col_range_info.max) -
+                                checked_int64_t(col_range_info.min)) >= max_entry_count;
+  } catch (...) {
+    return true;
+  }
+}
+
 }  // namespace
 
 ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
@@ -168,7 +178,7 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   }
   if ((!ra_exe_unit_.groupby_exprs.front()->get_type_info().is_string() &&
        !expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get(), *executor_->catalog_)) &&
-      col_range_info.max >= col_range_info.min + max_entry_count &&
+      is_column_range_too_big_for_perfect_hash(col_range_info, max_entry_count) &&
       !col_range_info.bucket) {
     return {QueryDescriptionType::GroupByBaselineHash,
             col_range_info.min,
@@ -1138,11 +1148,12 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
   CHECK(query_mem_desc.getGroupbyColCount() == ra_exe_unit_.groupby_exprs.size());
   for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
     const auto col_range_info = getExprRangeInfo(group_expr.get());
-    const auto translated_null_value =
+    const auto translated_null_value = static_cast<int64_t>(
         query_mem_desc.isSingleColumnGroupByWithPerfectHash()
-            ? query_mem_desc.getMaxVal() +
+            ? checked_int64_t(query_mem_desc.getMaxVal()) +
                   (query_mem_desc.getBucket() ? query_mem_desc.getBucket() : 1)
-            : col_range_info.max + (col_range_info.bucket ? col_range_info.bucket : 1);
+            : checked_int64_t(col_range_info.max) +
+                  (col_range_info.bucket ? col_range_info.bucket : 1));
 
     const bool col_has_nulls =
         query_mem_desc.getQueryDescriptionType() ==

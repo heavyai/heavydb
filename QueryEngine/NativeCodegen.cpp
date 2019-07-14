@@ -283,7 +283,7 @@ std::string gen_translate_null_key_sigs() {
   for (const std::string key_type : {"int8_t", "int16_t", "int32_t", "int64_t"}) {
     const auto key_llvm_type = cpp_to_llvm_name(key_type);
     result += "declare i64 @translate_null_key_" + key_type + "(" + key_llvm_type + ", " +
-              key_llvm_type + ", " + key_llvm_type + ");\n";
+              key_llvm_type + ", i64);\n";
   }
   return result;
 }

@@ -572,12 +572,13 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     const auto& ti = group_by_col->get_type_info();
     const auto key_type = get_int_type(ti.get_logical_size() * 8, cgen_state_->context_);
     orig_group_key = group_key;
-    group_key = cgen_state_->emitCall(translator_func_name + numeric_type_name(ti),
-                                      {group_key,
-                                       static_cast<llvm::Value*>(llvm::ConstantInt::get(
-                                           key_type, inline_int_null_val(ti))),
-                                       static_cast<llvm::Value*>(llvm::ConstantInt::get(
-                                           key_type, translated_null_val))});
+    group_key = cgen_state_->emitCall(
+        translator_func_name + numeric_type_name(ti),
+        {group_key,
+         static_cast<llvm::Value*>(
+             llvm::ConstantInt::get(key_type, inline_int_null_val(ti))),
+         static_cast<llvm::Value*>(llvm::ConstantInt::get(
+             llvm::Type::getInt64Ty(cgen_state_->context_), translated_null_val))});
   }
   group_key = cgen_state_->ir_builder_.CreateBitCast(
       cgen_state_->castToTypeIn(group_key, col_width * 8),

@@ -1377,6 +1377,30 @@ TEST(Select, FilterAndGroupBy) {
   }
 }
 
+TEST(Select, GroupByBoundariesAndNull) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      std::string query(
+          "SELECT CAST(CASE WHEN x = 7 THEN 2147483647 ELSE null END AS INTEGER) AS "
+          "col0, COUNT(*) FROM test GROUP BY col0 ORDER BY col0 ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
+    {
+      std::string query(
+          "SELECT smallint_nulls, COUNT(*) FROM test GROUP BY smallint_nulls ORDER BY "
+          "smallint_nulls ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
+    {
+      std::string query(
+          "SELECT CAST(CASE WHEN x = 7 THEN 127 ELSE null END AS TINYINT) AS col0, "
+          "COUNT(*) FROM test GROUP BY col0 ORDER BY col0 ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
+  }
+}
+
 TEST(Select, Arrays) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
