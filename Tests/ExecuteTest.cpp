@@ -6186,6 +6186,14 @@ TEST(Select, Joins_Arrays) {
   }
 }
 
+TEST(Select, Joins_ShardedEmptyTable) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_ON_AGGREGATOR(
+        c("select count(*) from emptytab a, emptytab2 b where a.x = b.x;", dt));
+  }
+}
+
 TEST(Select, Joins_EmptyTable) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -15975,6 +15983,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
     const std::string drop_old_empty{"DROP TABLE IF EXISTS emptytab;"};
     run_ddl_statement(drop_old_empty);
     g_sqlite_comparator.query(drop_old_empty);
+
     const std::string create_empty{
         "CREATE TABLE emptytab(x int not null, y int, t bigint not null, f float not "
         "null, d double not null, dd "
@@ -15983,6 +15992,18 @@ int create_and_populate_tables(bool with_delete_support = true) {
     g_sqlite_comparator.query(create_empty + ";");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'emptytab'";
+    return -EEXIST;
+  }
+  try {
+    const std::string drop_old_empty2{"DROP TABLE IF EXISTS emptytab2;"};
+    run_ddl_statement(drop_old_empty2);
+    g_sqlite_comparator.query(drop_old_empty2);
+
+    run_ddl_statement(
+        "CREATE TABLE emptytab2(x int, shard key (x)) WITH (shard_count=4);");
+    g_sqlite_comparator.query("CREATE TABLE emptytab2(x int);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'emptytab2'";
     return -EEXIST;
   }
   try {
@@ -16167,6 +16188,8 @@ void drop_tables() {
   g_sqlite_comparator.query(drop_subquery_test);
   const std::string drop_empty_test{"DROP TABLE emptytab;"};
   run_ddl_statement(drop_empty_test);
+  const std::string drop_empty_test2{"DROP TABLE emptytab2;"};
+  run_ddl_statement(drop_empty_test2);
   g_sqlite_comparator.query(drop_empty_test);
   run_ddl_statement("DROP TABLE text_group_by_test;");
   const std::string drop_join_test{"DROP TABLE join_test;"};

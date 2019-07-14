@@ -115,7 +115,9 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getAllColumnFragments(
     col_frags.push_back(col_frag);
     elem_counts.push_back(elem_count);
   }
-  CHECK(!col_frags.empty());
+  if (col_frags.empty()) {
+    return {nullptr, 0};
+  }
   CHECK_EQ(col_frags.size(), elem_counts.size());
   const auto total_elem_count =
       std::accumulate(elem_counts.begin(), elem_counts.end(), size_t(0));
@@ -275,6 +277,9 @@ const int8_t* ColumnFetcher::transferColumnIfNeeded(
     Data_Namespace::DataMgr* data_mgr,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_id) {
+  if (!columnar_results) {
+    return nullptr;
+  }
   const auto& col_buffers = columnar_results->getColumnBuffers();
   CHECK_LT(static_cast<size_t>(col_id), col_buffers.size());
   if (memory_level == Data_Namespace::GPU_LEVEL) {

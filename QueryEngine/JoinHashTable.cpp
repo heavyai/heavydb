@@ -573,8 +573,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::fetchFragments(
   {
     std::lock_guard<std::mutex> fragment_fetch_lock(fragment_fetch_mutex);
     if (has_multi_frag) {
-      if (effective_memory_level == Data_Namespace::GPU_LEVEL) {
-        CHECK(col_buff != nullptr);
+      if (effective_memory_level == Data_Namespace::GPU_LEVEL && col_buff) {
         CHECK_NE(elem_count, size_t(0));
         int8_t* dev_col_buff = nullptr;
         dev_col_buff = dev_buff_owner.allocate(elem_count * elem_width);
