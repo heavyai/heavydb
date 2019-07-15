@@ -2970,6 +2970,9 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
             throw std::runtime_error(cd.columnName +
                                      ": Compression parameter for Fixed encoding on "
                                      "TIME or TIMESTAMP must be 32.");
+          } else if (cd.columnType.is_high_precision_timestamp()) {
+            throw std::runtime_error(
+                "Fixed encoding is not supported for TIMESTAMP(3|6|9).");
           }
           break;
         case kDECIMAL:
