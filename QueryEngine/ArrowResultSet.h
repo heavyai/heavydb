@@ -16,13 +16,10 @@
 
 #pragma once
 
-#include "../Shared/sqltypes.h"
-#include "ArrowUtil.h"
 #include "CompilationOptions.h"
 #include "DataMgr/DataMgr.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "ResultSet.h"
-#include "Shared/SqlTypesLayout.h"
 #include "TargetMetaInfo.h"
 #include "TargetValue.h"
 
@@ -238,4 +235,3 @@ template <>
 struct ScaleEpochValues<arrow::Date32Builder> : public std::true_type {};
 template <>
 struct ScaleEpochValues<arrow::Date64Builder> : public std::true_type {};
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    

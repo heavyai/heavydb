@@ -4417,8 +4417,10 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
   const auto& cat = session_info.getCatalog();
   CHECK(device_type == ExecutorDeviceType::CPU ||
         session_info.get_executor_device_type() == ExecutorDeviceType::GPU);
-  CompilationOptions co = {
-      device_type, true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog};
+  CompilationOptions co = {session_info.get_executor_device_type(),
+                           true,
+                           ExecutorOptLevel::Default,
+                           g_enable_dynamic_watchdog};
   ExecutionOptions eo = {false,
                          allow_multifrag_,
                          false,

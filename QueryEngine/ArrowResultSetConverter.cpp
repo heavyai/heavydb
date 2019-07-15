@@ -113,7 +113,7 @@ inline SQLTypes get_physical_type(const SQLTypeInfo& ti) {
 }
 
 template <typename TYPE, typename C_TYPE>
-void                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              create_or_append_value(const ScalarTargetValue& val_cty,
+void create_or_append_value(const ScalarTargetValue& val_cty,
                             std::shared_ptr<ValueArray>& values,
                             const size_t max_size) {
   auto pval_cty = boost::get<C_TYPE>(&val_cty);
@@ -150,7 +150,7 @@ void create_or_append_validity(const ScalarTargetValue& value,
   } else if (col_type.is_fp()) {
     is_valid = inline_fp_null_val(col_type) != static_cast<double>(*pvalue);
   } else {
-    UNREACHABLE();                                                                                                                                                                                                        
+    UNREACHABLE();
   }
 
   if (!null_bitmap) {

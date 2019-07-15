@@ -15,6 +15,7 @@
  */
 
 #include "ArrowResultSet.h"
+#include "ArrowUtil.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
 
 #include <arrow/api.h>
