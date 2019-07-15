@@ -56,6 +56,7 @@ extern double g_gpu_mem_limit_percent;
 
 extern bool g_enable_window_functions;
 extern bool g_enable_bump_allocator;
+extern bool g_reduction_jit_interp;
 
 extern size_t g_leaf_count;
 
@@ -16437,6 +16438,11 @@ int main(int argc, char** argv) {
                      po::value<std::string>(),
                      "Dump IR for all executed queries to file. Currently only supports "
                      "single node tests.");
+  desc.add_options()("reduction-jit-interp",
+                     po::value<bool>(&g_reduction_jit_interp)
+                         ->default_value(g_reduction_jit_interp)
+                         ->implicit_value(true),
+                     "Use interpreter for reduction generated code");
 
   desc.add_options()(
       "test-help",

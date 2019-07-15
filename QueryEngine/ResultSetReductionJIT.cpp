@@ -28,23 +28,30 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_os_ostream.h>
+#include <llvm/Transforms/Utils/Cloning.h>
+
+extern std::unique_ptr<llvm::Module> g_rt_module;
+bool g_reduction_jit_interp{false};
 
 namespace {
 
-llvm::Module* read_template_module(llvm::LLVMContext& context) {
-  llvm::SMDiagnostic err;
-
-  auto buffer_or_error = llvm::MemoryBuffer::getFile(mapd_root_abs_path() +
-                                                     "/QueryEngine/RuntimeFunctions.bc");
-  CHECK(!buffer_or_error.getError());
-  llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
-
-  auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
-  CHECK(!owner.takeError());
-  auto module = owner.get().release();
-  CHECK(module);
-
-  return module;
+std::unique_ptr<llvm::Module> read_template_module(llvm::LLVMContext& context,
+                                                   CgenState* cgen_state) {
+  return llvm::CloneModule(
+#if LLVM_VERSION_MAJOR >= 7
+      *g_rt_module.get(),
+#else
+      g_rt_module.get(),
+#endif
+      cgen_state->vmap_,
+      [](const llvm::GlobalValue* gv) {
+        auto func = llvm::dyn_cast<llvm::Function>(gv);
+        if (!func) {
+          return true;
+        }
+        return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
+                func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage);
+      });
 }
 
 void emit_aggregate_one_value(const std::string& agg_kind,
@@ -196,7 +203,7 @@ ReductionCode setup_reduction_function() {
   reduction_code.cgen_state.reset(new CgenState({}, false));
   auto cgen_state = reduction_code.cgen_state.get();
   auto& ctx = cgen_state->context_;
-  std::unique_ptr<llvm::Module> module(read_template_module(ctx));
+  std::unique_ptr<llvm::Module> module(read_template_module(ctx, cgen_state));
   cgen_state->module_ = module.get();
   const auto pi8_type = llvm::PointerType::get(get_int_type(8, ctx), 0);
   const auto func_type =
@@ -233,6 +240,26 @@ ReductionCode ResultSetStorage::reduceOneEntryJIT(const ResultSetStorage& that) 
     }
   }
 }
+
+namespace {
+
+ExecutionEngineWrapper generate_native_reduction_code(llvm::Function* func) {
+  auto module = func->getParent();
+
+  llvm::ExecutionEngine* execution_engine{nullptr};
+
+  std::string err_str;
+  std::unique_ptr<llvm::Module> owner(module);
+  llvm::EngineBuilder eb(std::move(owner));
+  eb.setErrorStr(&err_str);
+  eb.setEngineKind(llvm::EngineKind::Interpreter);
+  execution_engine = eb.create();
+  CHECK(execution_engine);
+
+  return ExecutionEngineWrapper(execution_engine);
+}
+
+}  // namespace
 
 ReductionCode ResultSetStorage::reduceOneEntryNoCollisionsRowWiseJIT(
     const ResultSetStorage& that) const {
@@ -319,10 +346,14 @@ ReductionCode ResultSetStorage::reduceOneEntryNoCollisionsRowWiseJIT(
   verify_function_ir(reduction_code.ir_func);
   CompilationOptions co{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false};
   reduction_code.module.release();
-  auto ee = CodeGenerator::generateNativeCPUCode(
-      reduction_code.ir_func, {reduction_code.ir_func}, co);
-  reduction_code.func_ptr = reinterpret_cast<ReductionCode::FuncPtr>(
-      ee->getPointerToFunction(reduction_code.ir_func));
+  auto ee = g_reduction_jit_interp
+                ? generate_native_reduction_code(reduction_code.ir_func)
+                : CodeGenerator::generateNativeCPUCode(
+                      reduction_code.ir_func, {reduction_code.ir_func}, co);
+  reduction_code.func_ptr = g_reduction_jit_interp
+                                ? nullptr
+                                : reinterpret_cast<ReductionCode::FuncPtr>(
+                                      ee->getPointerToFunction(reduction_code.ir_func));
   reduction_code.execution_engine = std::move(ee);
   return reduction_code;
 }
@@ -388,10 +419,14 @@ ReductionCode ResultSetStorage::reduceOneEntrySlotsBaselineJIT(
   verify_function_ir(reduction_code.ir_func);
   CompilationOptions co{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false};
   reduction_code.module.release();
-  auto ee = CodeGenerator::generateNativeCPUCode(
-      reduction_code.ir_func, {reduction_code.ir_func}, co);
-  reduction_code.func_ptr = reinterpret_cast<ReductionCode::FuncPtr>(
-      ee->getPointerToFunction(reduction_code.ir_func));
+  auto ee = g_reduction_jit_interp
+                ? generate_native_reduction_code(reduction_code.ir_func)
+                : CodeGenerator::generateNativeCPUCode(
+                      reduction_code.ir_func, {reduction_code.ir_func}, co);
+  reduction_code.func_ptr = g_reduction_jit_interp
+                                ? nullptr
+                                : reinterpret_cast<ReductionCode::FuncPtr>(
+                                      ee->getPointerToFunction(reduction_code.ir_func));
   reduction_code.execution_engine = std::move(ee);
   return reduction_code;
 }

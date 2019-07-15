@@ -2437,7 +2437,8 @@ TEST(MoreReduce, MissingValues) {
     buff2[1 * 3 + 2] = 0;
     buff2[2 * 3 + 2] = 5;
   }
-  storage1->reduce(*storage2, {}, nullptr);
+  ReductionCode reduction_code{};
+  storage1->reduce(*storage2, {}, reduction_code);
   {
     const auto row = rs1->getNextRow(false, false);
     CHECK_EQ(size_t(2), row.size());
@@ -2489,7 +2490,8 @@ TEST(MoreReduce, MissingValuesKeyless) {
     buff2[1 * 2 + 1] = 0;
     buff2[2 * 2 + 1] = 5;
   }
-  storage1->reduce(*storage2, {}, nullptr);
+  ReductionCode reduction_code{};
+  storage1->reduce(*storage2, {}, reduction_code);
   {
     const auto row = rs1->getNextRow(false, false);
     CHECK_EQ(size_t(2), row.size());
@@ -2559,7 +2561,8 @@ TEST(MoreReduce, OffsetRewrite) {
   }
 
   storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
-  storage1->reduce(*storage2, serialized_varlen_buffer, nullptr);
+  ReductionCode reduction_code{};
+  storage1->reduce(*storage2, serialized_varlen_buffer, reduction_code);
   rs1->setSeparateVarlenStorageValid(true);
   {
     const auto row = rs1->getNextRow(false, false);
@@ -2659,7 +2662,8 @@ TEST(MoreReduce, OffsetRewriteGeo) {
   }
 
   storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
-  storage1->reduce(*storage2, serialized_varlen_buffer, nullptr);
+  ReductionCode reduction_code{};
+  storage1->reduce(*storage2, serialized_varlen_buffer, reduction_code);
   rs1->setGeoReturnType(ResultSet::GeoReturnType::WktString);
   rs1->setSeparateVarlenStorageValid(true);
   {
@@ -2755,7 +2759,8 @@ TEST(MoreReduce, OffsetRewriteGeoKeyless) {
   }
 
   storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
-  storage1->reduce(*storage2, serialized_varlen_buffer, nullptr);
+  ReductionCode reduction_code{};
+  storage1->reduce(*storage2, serialized_varlen_buffer, reduction_code);
   rs1->setGeoReturnType(ResultSet::GeoReturnType::WktString);
   rs1->setSeparateVarlenStorageValid(true);
   {

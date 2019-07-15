@@ -19,13 +19,43 @@
 #include "CgenState.h"
 
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/IR/Module.h>
+
+class ExecutionEngineWrapper {
+ public:
+  ExecutionEngineWrapper();
+  ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine);
+  ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine,
+                         const CompilationOptions& co);
+
+  ExecutionEngineWrapper(const ExecutionEngineWrapper& other) = delete;
+  ExecutionEngineWrapper(ExecutionEngineWrapper&& other) = default;
+
+  ExecutionEngineWrapper& operator=(const ExecutionEngineWrapper& other) = delete;
+  ExecutionEngineWrapper& operator=(ExecutionEngineWrapper&& other) = default;
+
+  ExecutionEngineWrapper& operator=(llvm::ExecutionEngine* execution_engine);
+
+  llvm::ExecutionEngine* get() { return execution_engine_.get(); }
+  const llvm::ExecutionEngine* get() const { return execution_engine_.get(); }
+
+  llvm::ExecutionEngine& operator*() { return *execution_engine_; }
+  const llvm::ExecutionEngine& operator*() const { return *execution_engine_; }
+
+  llvm::ExecutionEngine* operator->() { return execution_engine_.get(); }
+  const llvm::ExecutionEngine* operator->() const { return execution_engine_.get(); }
+
+ private:
+  std::unique_ptr<llvm::ExecutionEngine> execution_engine_;
+  std::unique_ptr<llvm::JITEventListener> intel_jit_listener_;
+};
 
 struct ReductionCode {
   using FuncPtr = void (*)(int8_t*, const int8_t*);
 
   std::unique_ptr<CgenState> cgen_state;
-  std::unique_ptr<llvm::ExecutionEngine> execution_engine;
+  ExecutionEngineWrapper execution_engine;
   std::unique_ptr<llvm::Module> module;
   llvm::Function* ir_func;
   FuncPtr func_ptr;

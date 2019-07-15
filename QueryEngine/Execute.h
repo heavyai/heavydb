@@ -45,8 +45,6 @@
 #include "../StringDictionary/StringDictionary.h"
 #include "../StringDictionary/StringDictionaryProxy.h"
 
-#include <llvm/ExecutionEngine/ExecutionEngine.h>
-#include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
@@ -91,6 +89,7 @@ extern size_t g_big_group_threshold;
 extern bool g_enable_window_functions;
 extern size_t g_max_memory_allocation_size;
 extern double g_bump_allocator_step_reduction;
+extern bool g_reduction_jit_interp;
 
 class QueryCompilationDescriptor;
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
@@ -329,35 +328,6 @@ using PerFragmentCB =
 using LLVMValueVector = std::vector<llvm::Value*>;
 
 class QueryCompilationDescriptor;
-
-class ExecutionEngineWrapper {
- public:
-  ExecutionEngineWrapper();
-  ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine);
-  ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine,
-                         const CompilationOptions& co);
-
-  ExecutionEngineWrapper(const ExecutionEngineWrapper& other) = delete;
-  ExecutionEngineWrapper(ExecutionEngineWrapper&& other) = default;
-
-  ExecutionEngineWrapper& operator=(const ExecutionEngineWrapper& other) = delete;
-  ExecutionEngineWrapper& operator=(ExecutionEngineWrapper&& other) = default;
-
-  ExecutionEngineWrapper& operator=(llvm::ExecutionEngine* execution_engine);
-
-  llvm::ExecutionEngine* get() { return execution_engine_.get(); }
-  const llvm::ExecutionEngine* get() const { return execution_engine_.get(); }
-
-  llvm::ExecutionEngine& operator*() { return *execution_engine_; }
-  const llvm::ExecutionEngine& operator*() const { return *execution_engine_; }
-
-  llvm::ExecutionEngine* operator->() { return execution_engine_.get(); }
-  const llvm::ExecutionEngine* operator->() const { return execution_engine_.get(); }
-
- private:
-  std::unique_ptr<llvm::ExecutionEngine> execution_engine_;
-  std::unique_ptr<llvm::JITEventListener> intel_jit_listener_;
-};
 
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,

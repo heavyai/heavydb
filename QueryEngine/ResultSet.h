@@ -88,7 +88,7 @@ class ResultSetStorage {
 
   void reduce(const ResultSetStorage& that,
               const std::vector<std::string>& serialized_varlen_buffer,
-              const ReductionCode::FuncPtr reduction_func_ptr) const;
+              ReductionCode& reduction_code) const;
 
   void rewriteAggregateBufferOffsets(
       const std::vector<std::string>& serialized_varlen_buffer) const;
@@ -146,7 +146,7 @@ class ResultSetStorage {
       const int8_t* that_buff,
       const ResultSetStorage& that,
       const std::vector<std::string>& serialized_varlen_buffer,
-      const ReductionCode::FuncPtr reduction_func_ptr) const;
+      ReductionCode& reduction_code) const;
 
   void reduceOneSlotJIT(llvm::Value* this_ptr1,
                         llvm::Value* this_ptr2,
@@ -175,14 +175,14 @@ class ResultSetStorage {
                               const size_t i,
                               const size_t that_entry_count,
                               const ResultSetStorage& that,
-                              const ReductionCode::FuncPtr reduction_func_ptr) const;
+                              ReductionCode& reduction_code) const;
 
   void reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
                                    const int64_t* that_buff,
                                    const size_t that_entry_idx,
                                    const size_t that_entry_count,
                                    const ResultSetStorage& that,
-                                   const ReductionCode::FuncPtr reduction_func_ptr) const;
+                                   ReductionCode& reduction_code) const;
 
   void initializeBaselineValueSlots(int64_t* this_entry_slots) const;
 

@@ -573,6 +573,11 @@ void MapDProgramOptions::fillAdvancedOptions() {
                                    ->default_value(g_enable_window_functions)
                                    ->implicit_value(true),
                                "Enable experimental window function support.");
+  developer_desc.add_options()("reduction-jit-interp",
+                               po::value<bool>(&g_reduction_jit_interp)
+                                   ->default_value(g_reduction_jit_interp)
+                                   ->implicit_value(true),
+                               "Use interpreter for reduction generated code");
   developer_desc.add_options()(
       "jit-debug-ir",
       po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),
