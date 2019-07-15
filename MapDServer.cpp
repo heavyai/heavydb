@@ -610,7 +610,7 @@ bool trim_and_check_file_exists(std::string& filename, const std::string desc) {
   if (!filename.empty()) {
     boost::algorithm::trim_if(filename, boost::is_any_of("\"'"));
     if (!boost::filesystem::exists(filename)) {
-      LOG(ERROR) << desc << " " << filename << " does not exist.";
+      std::cerr << desc << " " << filename << " does not exist." << std::endl;
       return false;
     }
   }
