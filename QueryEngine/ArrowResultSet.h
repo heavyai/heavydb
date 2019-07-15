@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_ARROWRESULTSET_H
-#define QUERYENGINE_ARROWRESULTSET_H
+#pragma once
 
 #include "../Shared/sqltypes.h"
 #include "ArrowUtil.h"
@@ -29,18 +28,6 @@
 
 #include <arrow/api.h>
 #include "arrow/ipc/api.h"
-
-#ifdef HAVE_ARROW_STATIC_RECORDBATCH_CTOR
-#define ARROW_RECORDBATCH_MAKE arrow::RecordBatch::Make
-#else
-#define ARROW_RECORDBATCH_MAKE std::make_shared<arrow::RecordBatch>
-#endif
-
-#ifdef HAVE_ARROW_APPENDVALUES
-#define APPENDVALUES AppendValues
-#else
-#define APPENDVALUES Append
-#endif
 
 using ValueArray = boost::variant<std::vector<bool>,
                                   std::vector<int8_t>,
@@ -229,23 +216,14 @@ class ArrowResultSetConverter {
   inline void appendToColumnBuilder(
       ColumnBuilder& column_builder,
       const ValueArray& values,
-      const std::shared_ptr<std::vector<bool>>& is_valid) const {
-    const std::vector<C_TYPE>& vals = boost::get<std::vector<C_TYPE>>(values);
+      const std::shared_ptr<std::vector<bool>>& is_valid) const;
 
-    auto typed_builder = static_cast<BuilderType*>(column_builder.builder.get());
-    if (column_builder.field->nullable()) {
-      CHECK(is_valid.get());
-      ARROW_THROW_NOT_OK(typed_builder->APPENDVALUES(vals, *is_valid));
-    } else {
-      ARROW_THROW_NOT_OK(typed_builder->APPENDVALUES(vals));
-    }
-  }
   inline std::shared_ptr<arrow::Array> finishColumnBuilder(
       ColumnBuilder& column_builder) const;
 
   std::shared_ptr<ResultSet> results_;
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_ = nullptr;
-  ExecutorDeviceType device_type_;
+  ExecutorDeviceType device_type_ = ExecutorDeviceType::GPU;
   int32_t device_id_ = 0;
   std::vector<std::string> col_names_;
   int32_t top_n_;
@@ -253,4 +231,11 @@ class ArrowResultSetConverter {
   friend class ArrowResultSet;
 };
 
-#endif  // QUERYENGINE_ARROWRESULTSET_H
+template <typename T>
+struct ScaleEpochValues : public std::false_type {};
+
+template <>
+struct ScaleEpochValues<arrow::Date32Builder> : public std::true_type {};
+template <>
+struct ScaleEpochValues<arrow::Date64Builder> : public std::true_type {};
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    

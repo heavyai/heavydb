@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "../Shared/DateConverters.h"
 #include "ArrowResultSet.h"
 #include "Execute.h"
 
@@ -25,6 +26,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
+#include <type_traits>
 
 #include "arrow/api.h"
 #include "arrow/io/memory.h"
@@ -36,6 +38,18 @@
 #include <cuda.h>
 #endif  // HAVE_CUDA
 #include <future>
+
+#ifdef HAVE_ARROW_STATIC_RECORDBATCH_CTOR
+#define ARROW_RECORDBATCH_MAKE arrow::RecordBatch::Make
+#else
+#define ARROW_RECORDBATCH_MAKE std::make_shared<arrow::RecordBatch>
+#endif
+
+#ifdef HAVE_ARROW_APPENDVALUES
+#define APPENDVALUES AppendValues
+#else
+#define APPENDVALUES Append
+#endif
 
 using namespace arrow;
 
@@ -99,7 +113,7 @@ inline SQLTypes get_physical_type(const SQLTypeInfo& ti) {
 }
 
 template <typename TYPE, typename C_TYPE>
-void create_or_append_value(const ScalarTargetValue& val_cty,
+void                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              create_or_append_value(const ScalarTargetValue& val_cty,
                             std::shared_ptr<ValueArray>& values,
                             const size_t max_size) {
   auto pval_cty = boost::get<C_TYPE>(&val_cty);
@@ -136,7 +150,7 @@ void create_or_append_validity(const ScalarTargetValue& value,
   } else if (col_type.is_fp()) {
     is_valid = inline_fp_null_val(col_type) != static_cast<double>(*pvalue);
   } else {
-    UNREACHABLE();
+    UNREACHABLE();                                                                                                                                                                                                        
   }
 
   if (!null_bitmap) {
@@ -399,8 +413,11 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
                 *scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
             break;
           case kDATE:
-            create_or_append_value<int32_t, int64_t>(
-                *scalar_value, value_seg[j], entry_count);
+            device_type_ == ExecutorDeviceType::GPU
+                ? create_or_append_value<int64_t, int64_t>(
+                      *scalar_value, value_seg[j], entry_count)
+                : create_or_append_value<int32_t, int64_t>(
+                      *scalar_value, value_seg[j], entry_count);
             create_or_append_validity<int64_t>(
                 *scalar_value, column.col_type, null_bitmap_seg[j], entry_count);
             break;
@@ -509,10 +526,9 @@ std::shared_ptr<arrow::DataType> ArrowResultSetConverter::getArrowType(
     case kTIME:
       return time32(TimeUnit::SECOND);
     case kDATE:
-      // TODO(wamsi) : Remove date64() once support is added in cudf.
-      // date32() support is not implemented in cuDF.
-      // Hence, if client requests for date on GPU, return date64()
-      // for the time being, till support is added.
+      // TODO(wamsi) : Remove date64() once support is added in cuDF.
+      // date32() support is not implemented in cuDF.Hence, if client requests for date on
+      // GPU, return date64() for the time being, till support is added.
       return device_type_ == ExecutorDeviceType::GPU ? date64() : date32();
     case kTIMESTAMP:
       switch (mapd_type.get_precision()) {
@@ -614,6 +630,32 @@ std::shared_ptr<arrow::Array> ArrowResultSetConverter::finishColumnBuilder(
   }
 }
 
+template <typename BuilderType, typename C_TYPE>
+void ArrowResultSetConverter::appendToColumnBuilder(
+    ColumnBuilder& column_builder,
+    const ValueArray& values,
+    const std::shared_ptr<std::vector<bool>>& is_valid) const {
+  std::vector<C_TYPE> vals = boost::get<std::vector<C_TYPE>>(values);
+
+  if (ScaleEpochValues<BuilderType>()) {
+    auto scale_sec_to_millisec = [](auto seconds) { return seconds * kMilliSecsPerSec; };
+    auto scale_values = [&](auto epoch) {
+      return std::is_same<BuilderType, Date32Builder>::value
+                 ? DateConverters::get_epoch_days_from_seconds(epoch)
+                 : scale_sec_to_millisec(epoch);
+    };
+    std::transform(vals.begin(), vals.end(), vals.begin(), scale_values);
+  }
+
+  auto typed_builder = static_cast<BuilderType*>(column_builder.builder.get());
+  if (column_builder.field->nullable()) {
+    CHECK(is_valid.get());
+    ARROW_THROW_NOT_OK(typed_builder->APPENDVALUES(vals, *is_valid));
+  } else {
+    ARROW_THROW_NOT_OK(typed_builder->APPENDVALUES(vals));
+  }
+}
+
 void ArrowResultSetConverter::append(
     ColumnBuilder& column_builder,
     const ValueArray& values,
@@ -647,7 +689,11 @@ void ArrowResultSetConverter::append(
       appendToColumnBuilder<TimestampBuilder, int64_t>(column_builder, values, is_valid);
       break;
     case kDATE:
-      appendToColumnBuilder<Date32Builder, int32_t>(column_builder, values, is_valid);
+      device_type_ == ExecutorDeviceType::GPU
+          ? appendToColumnBuilder<Date64Builder, int64_t>(
+                column_builder, values, is_valid)
+          : appendToColumnBuilder<Date32Builder, int32_t>(
+                column_builder, values, is_valid);
       break;
     case kCHAR:
     case kVARCHAR:
