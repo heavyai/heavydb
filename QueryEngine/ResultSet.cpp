@@ -853,6 +853,14 @@ size_t ResultSet::getLimit() {
   return keep_first_;
 }
 
+std::shared_ptr<const std::vector<std::string>> ResultSet::getDictionary(
+    const int dict_id) const {
+  const auto sdp =
+      executor_ ? executor_->getStringDictionaryProxy(dict_id, row_set_mem_owner_, false)
+                : row_set_mem_owner_->getStringDictProxy(dict_id);
+  return sdp->getDictionary()->copyStrings();
+}
+
 bool can_use_parallel_algorithms(const ResultSet& rows) {
   return !rows.isTruncated();
 }

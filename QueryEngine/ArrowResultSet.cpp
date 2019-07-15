@@ -15,7 +15,6 @@
  */
 
 #include "ArrowResultSet.h"
-#include "ArrowUtil.h"
 #include "Descriptors/RelAlgExecutionDescriptor.h"
 
 #include <arrow/api.h>
@@ -47,14 +46,16 @@ SQLTypeInfo type_from_arrow_field(const arrow::Field& field) {
 
 }  // namespace
 
-ArrowResultSet::ArrowResultSet(const std::shared_ptr<arrow::RecordBatch>& record_batch)
-    : record_batch_(record_batch), crt_row_idx_(0) {
-  auto schema = record_batch->schema();
+ArrowResultSet::ArrowResultSet(const ExecutionResult* results,
+                               const std::shared_ptr<ResultSet>& rows)
+    : results_(const_cast<ExecutionResult*>(results)), rows_(rows), crt_row_idx_(0) {
+  resultSetArrowLoopback();
+  auto schema = record_batch_->schema();
   for (int i = 0; i < schema->num_fields(); ++i) {
     std::shared_ptr<arrow::Field> field = schema->field(i);
     SQLTypeInfo type_info = type_from_arrow_field(*schema->field(i));
     column_metainfo_.emplace_back(field->name(), type_info);
-    columns_.emplace_back(record_batch->column(i));
+    columns_.emplace_back(record_batch_->column(i));
   }
 }
 
@@ -157,22 +158,21 @@ size_t ArrowResultSet::rowCount() const {
   return record_batch_->num_rows();
 }
 
-std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
-    const ExecutionResult* results,
-    const std::shared_ptr<ResultSet>& rows) {
+void ArrowResultSet::resultSetArrowLoopback() {
   std::vector<std::string> col_names;
 
-  if (results) {
-    const auto& targets_meta = results->getTargetsMeta();
+  if (results_) {
+    const auto& targets_meta = results_->getTargetsMeta();
     for (auto& meta : targets_meta) {
       col_names.push_back(meta.get_resname());
     }
   } else {
-    for (unsigned int i = 0; i < rows->colCount(); i++) {
+    for (unsigned int i = 0; i < rows_->colCount(); i++) {
       col_names.push_back("col_" + std::to_string(i));
     }
   }
-  const auto serialized_arrow_output = rows->getSerializedArrowOutput(col_names, -1);
+  const auto converter = ArrowResultSetConverter(rows_, col_names, -1);
+  const auto serialized_arrow_output = converter.getSerializedArrowOutput();
 
   arrow::io::BufferReader schema_reader(serialized_arrow_output.schema);
 
@@ -184,7 +184,10 @@ std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
   ARROW_THROW_NOT_OK(arrow::ipc::ReadRecordBatch(schema, &records_reader, &batch));
 
   CHECK_EQ(schema->num_fields(), batch->num_columns());
+}
 
+std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
+    const ExecutionResult& results) {
   // NOTE(wesm): About memory ownership
 
   // After calling ReadRecordBatch, the buffers inside arrow::RecordBatch now
@@ -192,11 +195,11 @@ std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
   // copy). Not necessary to retain these buffers. Same is true of any
   // dictionaries contained in serialized_arrow_output.schema; the arrays
   // reference that memory (zero copy).
-
-  return boost::make_unique<ArrowResultSet>(batch);
+  return std::make_unique<ArrowResultSet>(&results, results.getRows());
 }
 
 std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
-    const ExecutionResult& results) {
-  return result_set_arrow_loopback(&results, results.getRows());
+    const ExecutionResult* results,
+    const std::shared_ptr<ResultSet>& rows) {
+  return std::make_unique<ArrowResultSet>(results, rows);
 }

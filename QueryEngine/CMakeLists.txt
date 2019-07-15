@@ -9,6 +9,7 @@ set(query_engine_source_files
     ArithmeticIR.cpp
     ArrayIR.cpp
     ArrayOps.cpp
+    ArrowResultSetConverter.cpp
     ArrowResultSet.cpp
     ArrowUtil.cpp
     BaselineJoinHashTable.cpp
@@ -77,7 +78,6 @@ set(query_engine_source_files
     ResultSet.cpp
     ResultSetIteration.cpp
     ResultSetReduction.cpp
-    ResultSetConversion.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LoopControlFlow/JoinLoop.cpp
     ResultSetSort.cpp
     RuntimeFunctions.cpp

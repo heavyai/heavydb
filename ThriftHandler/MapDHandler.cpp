@@ -56,6 +56,7 @@
 #include "Parser/ReservedKeywords.h"
 #include "Parser/parser.h"
 #include "Planner/Planner.h"
+#include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
@@ -926,11 +927,11 @@ void MapDHandler::deallocate_df(const TSessionId& session,
   std::vector<char> sm_handle(df.sm_handle.begin(), df.sm_handle.end());
   std::vector<char> df_handle(df.df_handle.begin(), df.df_handle.end());
   ArrowResult result{sm_handle, df.sm_size, df_handle, df.df_size, dev_ptr};
-  deallocate_arrow_result(
+  ArrowResultSet::deallocateArrowResultBuffer(
       result,
       device_type == TDeviceType::CPU ? ExecutorDeviceType::CPU : ExecutorDeviceType::GPU,
       device_id,
-      data_mgr_.get());
+      data_mgr_);
 }
 
 std::string MapDHandler::apply_copy_to_shim(const std::string& query_str) {
@@ -4438,11 +4439,14 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
   RelAlgExecutor ra_executor(executor.get(), cat);
   const auto result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
   const auto rs = result.getRows();
-  const auto copy = rs->getArrowCopy(data_mgr_.get(),
-                                     device_type,
-                                     device_id,
-                                     getTargetNames(result.getTargetsMeta()),
-                                     first_n);
+  const auto converter =
+      std::make_unique<ArrowResultSetConverter>(rs,
+                                                data_mgr_,
+                                                device_type,
+                                                device_id,
+                                                getTargetNames(result.getTargetsMeta()),
+                                                first_n);
+  const auto copy = converter->getArrowResult();
   _return.sm_handle = std::string(copy.sm_handle.begin(), copy.sm_handle.end());
   _return.sm_size = copy.sm_size;
   _return.df_handle = std::string(copy.df_handle.begin(), copy.df_handle.end());
