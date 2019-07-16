@@ -79,7 +79,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
   INJECT_TIMER(executeRelAlgQueryNoRetry);
   decltype(subqueries_)().swap(subqueries_);
 
-  const auto ra = deserialize_ra_dag(query_ra, cat_, this);
+  const auto ra = deserialize_ra_dag(
+      query_ra, cat_, this, render_info ? render_info->getRenderQueryOptsPtr() : nullptr);
+
   // capture the lock acquistion time
   auto clock_begin = timer_start();
   std::lock_guard<std::mutex> lock(executor_->execute_mutex_);

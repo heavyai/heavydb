@@ -109,12 +109,14 @@ if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
   list(APPEND query_engine_source_files
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/ExecuteRenderInterface.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RenderAllocator.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RenderInfo.cpp)
+    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RenderInfo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/ee/RenderRelAlgUtils.cpp)
 else()
   list(APPEND query_engine_source_files
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/ExecuteRenderInterface.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RenderAllocator.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RenderInfo.cpp)
+    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RenderInfo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/Rendering/os/RenderRelAlgUtils.cpp)
 endif()
 
 set(group_by_hash_test_files
