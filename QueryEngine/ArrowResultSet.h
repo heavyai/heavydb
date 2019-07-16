@@ -23,9 +23,12 @@
 #include "TargetMetaInfo.h"
 #include "TargetValue.h"
 
-#include <arrow/api.h>
+#include <type_traits>
+
+#include "arrow/api.h"
 #include "arrow/ipc/api.h"
 
+// TODO(wamsi): ValueArray is not optimal. Remove it and inherrit from base vector class.
 using ValueArray = boost::variant<std::vector<bool>,
                                   std::vector<int8_t>,
                                   std::vector<int16_t>,
@@ -85,7 +88,9 @@ struct ArrowResult {
 // to make it work within the existing execution test framework.
 class ArrowResultSet {
  public:
-  ArrowResultSet(const ExecutionResult* results, const std::shared_ptr<ResultSet>& rows);
+  ArrowResultSet(const std::shared_ptr<ResultSet>& rows,
+                 const std::vector<TargetMetaInfo>& targets_meta);
+  ArrowResultSet(const std::shared_ptr<ResultSet>& rows) : ArrowResultSet(rows, {}) {}
 
   ArrowResultSetRowIterator rowIterator(size_t from_index,
                                         bool translate_strings,
@@ -124,9 +129,14 @@ class ArrowResultSet {
 
  private:
   void resultSetArrowLoopback();
+  template <typename Type, typename ArrayType>
+  void appendValue(std::vector<TargetValue>& row,
+                   const arrow::Array& column,
+                   const Type null_val,
+                   const size_t idx) const;
 
-  ExecutionResult* results_;
   std::shared_ptr<ResultSet> rows_;
+  std::vector<TargetMetaInfo> targets_meta_;
   std::shared_ptr<arrow::RecordBatch> record_batch_;
 
   // Boxed arrays from the record batch. The result of RecordBatch::column is
@@ -229,9 +239,7 @@ class ArrowResultSetConverter {
 };
 
 template <typename T>
-struct ScaleEpochValues : public std::false_type {};
-
-template <>
-struct ScaleEpochValues<arrow::Date32Builder> : public std::true_type {};
-template <>
-struct ScaleEpochValues<arrow::Date64Builder> : public std::true_type {};
+constexpr auto scale_epoch_values() {
+  return std::is_same<T, arrow::Date32Builder>::value ||
+         std::is_same<T, arrow::Date64Builder>::value;
+}

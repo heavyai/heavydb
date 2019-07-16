@@ -26,7 +26,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <string>
-#include <type_traits>
 
 #include "arrow/api.h"
 #include "arrow/io/memory.h"
@@ -526,9 +525,9 @@ std::shared_ptr<arrow::DataType> ArrowResultSetConverter::getArrowType(
     case kTIME:
       return time32(TimeUnit::SECOND);
     case kDATE:
-      // TODO(wamsi) : Remove date64() once support is added in cuDF.
-      // date32() support is not implemented in cuDF.Hence, if client requests for date on
-      // GPU, return date64() for the time being, till support is added.
+      // TODO(wamsi) : Remove date64() once date32() support is added in cuDF. date32()
+      // Currently support for date32() is missing in cuDF.Hence, if client requests for
+      // date on GPU, return date64() for the time being, till support is added.
       return device_type_ == ExecutorDeviceType::GPU ? date64() : date32();
     case kTIMESTAMP:
       switch (mapd_type.get_precision()) {
@@ -562,8 +561,7 @@ void ArrowResultSet::deallocateArrowResultBuffer(
     std::shared_ptr<Data_Namespace::DataMgr>& data_mgr) {
   // Remove shared memory on sysmem
   CHECK_EQ(sizeof(key_t), result.sm_handle.size());
-  key_t schema_key;
-  memcpy(&schema_key, &result.sm_handle[0], sizeof(key_t));
+  const key_t& schema_key = *(key_t*)(&result.sm_handle[0]);
   auto shm_id = shmget(schema_key, result.sm_size, 0666);
   if (shm_id < 0) {
     throw std::runtime_error(
@@ -576,8 +574,7 @@ void ArrowResultSet::deallocateArrowResultBuffer(
 
   if (device_type == ExecutorDeviceType::CPU) {
     CHECK_EQ(sizeof(key_t), result.df_handle.size());
-    key_t df_key;
-    memcpy(&df_key, &result.df_handle[0], sizeof(key_t));
+    const key_t& df_key = *(key_t*)(&result.df_handle[0]);
     auto shm_id = shmget(df_key, result.df_size, 0666);
     if (shm_id < 0) {
       throw std::runtime_error(
@@ -637,7 +634,7 @@ void ArrowResultSetConverter::appendToColumnBuilder(
     const std::shared_ptr<std::vector<bool>>& is_valid) const {
   std::vector<C_TYPE> vals = boost::get<std::vector<C_TYPE>>(values);
 
-  if (ScaleEpochValues<BuilderType>()) {
+  if (scale_epoch_values<BuilderType>()) {
     auto scale_sec_to_millisec = [](auto seconds) { return seconds * kMilliSecsPerSec; };
     auto scale_values = [&](auto epoch) {
       return std::is_same<BuilderType, Date32Builder>::value

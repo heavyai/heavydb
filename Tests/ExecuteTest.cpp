@@ -206,7 +206,7 @@ class SQLiteComparator {
     const auto results =
         QR::get()->runSQL(query_string, device_type, g_hoist_literals, true);
     const auto arrow_mapd_results = result_set_arrow_loopback(nullptr, results);
-    compare_impl(arrow_mapd_results.get(), sqlite_query_string, device_type, false);
+    compare_impl(arrow_mapd_results.get(), sqlite_query_string, device_type, false, true);
   }
 
   void compare(const std::string& query_string,
@@ -228,7 +228,8 @@ class SQLiteComparator {
   void compare_impl(const MapDResults* mapd_results,
                     const std::string& sqlite_query_string,
                     const ExecutorDeviceType device_type,
-                    bool timestamp_approx) {
+                    const bool timestamp_approx,
+                    const bool is_arrow = false) {
     connector_.query(sqlite_query_string);
     ASSERT_EQ(connector_.getNumRows(), mapd_results->rowCount());
     const int num_rows{static_cast<int>(connector_.getNumRows())};
@@ -366,7 +367,11 @@ class SQLiteComparator {
                             dimen > 0 ? nsec : timegm(&tm_struct),
                             dimen > 0 ? 10 * pow(10, dimen) : 10);
               } else {
-                ASSERT_EQ(*mapd_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct));
+                if (is_arrow && mapd_type == kDATE) {
+                  ASSERT_EQ(*mapd_as_int_p, timegm(&tm_struct) * kMilliSecsPerSec);
+                } else {
+                  ASSERT_EQ(*mapd_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct));
+                }
               }
             }
             break;
@@ -7652,6 +7657,9 @@ TEST(Select, ArrowOutput) {
     c_arrow("SELECT x, y, z, t, f, d, str, ofd, ofq FROM test ORDER BY x ASC, y ASC;",
             dt);
     c_arrow("SELECT null_str, COUNT(*) FROM test GROUP BY null_str;", dt);
+    c_arrow("SELECT m,m_3,m_6,m_9 from test", dt);
+    c_arrow("SELECT o, o1, o2 from test", dt);
+    c_arrow("SELECT n from test", dt);
   }
 }
 
