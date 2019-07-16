@@ -88,7 +88,7 @@ class ResultSetStorage {
 
   void reduce(const ResultSetStorage& that,
               const std::vector<std::string>& serialized_varlen_buffer,
-              ReductionCode& reduction_code) const;
+              const ReductionCode& reduction_code) const;
 
   void rewriteAggregateBufferOffsets(
       const std::vector<std::string>& serialized_varlen_buffer) const;
@@ -128,6 +128,9 @@ class ResultSetStorage {
   ReductionCode reduceOneEntrySlotsBaselineJIT(const ResultSetStorage& that) const;
 
  private:
+  ReductionCode finalizeReductionCode(ReductionCode reduction_code,
+                                      CgenState* cgen_state) const;
+
   void reduceEntriesNoCollisionsColWise(
       int8_t* this_buff,
       const int8_t* that_buff,
@@ -146,7 +149,7 @@ class ResultSetStorage {
       const int8_t* that_buff,
       const ResultSetStorage& that,
       const std::vector<std::string>& serialized_varlen_buffer,
-      ReductionCode& reduction_code) const;
+      const ReductionCode& reduction_code) const;
 
   void reduceOneSlotJIT(llvm::Value* this_ptr1,
                         llvm::Value* this_ptr2,
@@ -158,13 +161,13 @@ class ResultSetStorage {
                         const size_t init_agg_val_idx,
                         const ResultSetStorage& that,
                         const size_t first_slot_idx_for_target,
-                        CgenState* cgen_state) const;
+                        const ReductionCode& reduction_code) const;
 
   void reduceOneCountDistinctSlotJIT(llvm::Value* this_ptr1,
                                      llvm::Value* that_ptr1,
                                      const size_t target_logical_idx,
                                      const ResultSetStorage& that,
-                                     CgenState* cgen_state) const;
+                                     const ReductionCode& reduction_code) const;
 
   bool isEmptyEntry(const size_t entry_idx, const int8_t* buff) const;
   bool isEmptyEntry(const size_t entry_idx) const;
@@ -175,14 +178,14 @@ class ResultSetStorage {
                               const size_t i,
                               const size_t that_entry_count,
                               const ResultSetStorage& that,
-                              ReductionCode& reduction_code) const;
+                              const ReductionCode& reduction_code) const;
 
   void reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
                                    const int64_t* that_buff,
                                    const size_t that_entry_idx,
                                    const size_t that_entry_count,
                                    const ResultSetStorage& that,
-                                   ReductionCode& reduction_code) const;
+                                   const ReductionCode& reduction_code) const;
 
   void initializeBaselineValueSlots(int64_t* this_entry_slots) const;
 

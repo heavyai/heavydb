@@ -70,15 +70,6 @@ std::unique_ptr<llvm::Module> rt_udf_cpu_module;
 
 namespace {
 
-void verify_function_ir(const llvm::Function* func) {
-  std::stringstream err_ss;
-  llvm::raw_os_ostream err_os(err_ss);
-  if (llvm::verifyFunction(*func, &err_os)) {
-    func->print(llvm::outs());
-    LOG(FATAL) << err_ss.str();
-  }
-}
-
 #if defined(HAVE_CUDA) || !defined(WITH_JIT_DEBUG)
 void eliminate_dead_self_recursive_funcs(
     llvm::Module& M,
@@ -131,6 +122,8 @@ void optimize_ir(llvm::Function* query_func,
 }
 #endif
 
+}  // namespace
+
 template <class T>
 std::string serialize_llvm_object(const T* llvm_obj) {
   std::stringstream ss;
@@ -139,8 +132,6 @@ std::string serialize_llvm_object(const T* llvm_obj) {
   os.flush();
   return ss.str();
 }
-
-}  // namespace
 
 ExecutionEngineWrapper::ExecutionEngineWrapper() {}
 
@@ -165,6 +156,15 @@ ExecutionEngineWrapper& ExecutionEngineWrapper::operator=(
   execution_engine_.reset(execution_engine);
   intel_jit_listener_ = nullptr;
   return *this;
+}
+
+void verify_function_ir(const llvm::Function* func) {
+  std::stringstream err_ss;
+  llvm::raw_os_ostream err_os(err_ss);
+  if (llvm::verifyFunction(*func, &err_os)) {
+    func->print(llvm::outs());
+    LOG(FATAL) << err_ss.str();
+  }
 }
 
 std::vector<std::pair<void*, void*>> Executor::getCodeFromCache(const CodeCacheKey& key,
@@ -873,8 +873,6 @@ void Executor::initializeNVPTXBackend() const {
   nvptx_target_machine_ = CodeGenerator::initializeNVPTXBackend();
 }
 
-namespace {
-
 llvm::Module* read_template_module(llvm::LLVMContext& context) {
   llvm::SMDiagnostic err;
 
@@ -890,6 +888,8 @@ llvm::Module* read_template_module(llvm::LLVMContext& context) {
 
   return module;
 }
+
+namespace {
 
 void bind_pos_placeholders(const std::string& pos_fn_name,
                            const bool use_resume_param,

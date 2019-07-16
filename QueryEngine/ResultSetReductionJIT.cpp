@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "Execute.h"
 #include "ResultSet.h"
 
 #include "CodeGenerator.h"
@@ -35,8 +36,10 @@ bool g_reduction_jit_interp{false};
 
 namespace {
 
-std::unique_ptr<llvm::Module> read_template_module(llvm::LLVMContext& context,
-                                                   CgenState* cgen_state) {
+thread_local CodeCache g_code_cache(10000);
+
+std::unique_ptr<llvm::Module> runtime_module_shallow_copy(llvm::LLVMContext& context,
+                                                          CgenState* cgen_state) {
   return llvm::CloneModule(
 #if LLVM_VERSION_MAJOR >= 7
       *g_rt_module.get(),
@@ -189,33 +192,29 @@ void emit_write_projection(llvm::Value* slot_pi8,
   }
 }
 
-void verify_function_ir(const llvm::Function* func) {
-  std::stringstream err_ss;
-  llvm::raw_os_ostream err_os(err_ss);
-  if (llvm::verifyFunction(*func, &err_os)) {
-    func->print(llvm::outs());
-    LOG(FATAL) << err_ss.str();
-  }
-}
-
 ReductionCode setup_reduction_function() {
   ReductionCode reduction_code;
   reduction_code.cgen_state.reset(new CgenState({}, false));
   auto cgen_state = reduction_code.cgen_state.get();
   auto& ctx = cgen_state->context_;
-  std::unique_ptr<llvm::Module> module(read_template_module(ctx, cgen_state));
+  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(ctx, cgen_state));
   cgen_state->module_ = module.get();
   const auto pi8_type = llvm::PointerType::get(get_int_type(8, ctx), 0);
-  const auto func_type =
-      llvm::FunctionType::get(llvm::Type::getVoidTy(ctx), {pi8_type, pi8_type}, false);
+  const auto pvoid_type = llvm::PointerType::get(llvm::Type::getVoidTy(ctx), 0);
+  const auto func_type = llvm::FunctionType::get(
+      llvm::Type::getVoidTy(ctx), {pi8_type, pi8_type, pvoid_type, pvoid_type}, false);
   const auto func = llvm::Function::Create(
       func_type, llvm::Function::ExternalLinkage, "reduce_one_entry", module.get());
   reduction_code.ir_func = func;
-  const auto query_arg_it = func->arg_begin();
-  const auto this_targets_ptr_arg = &*query_arg_it;
-  const auto that_targets_ptr_arg = &*(query_arg_it + 1);
+  const auto arg_it = func->arg_begin();
+  const auto this_targets_ptr_arg = &*arg_it;
+  const auto that_targets_ptr_arg = &*(arg_it + 1);
+  const auto this_qmd_arg = &*(arg_it + 2);
+  const auto that_qmd_arg = &*(arg_it + 3);
   this_targets_ptr_arg->setName("this_targets_ptr");
   that_targets_ptr_arg->setName("that_targets_ptr");
+  this_qmd_arg->setName("this_qmd");
+  that_qmd_arg->setName("that_qmd");
   const auto bb_entry = llvm::BasicBlock::Create(ctx, ".entry", func, 0);
   cgen_state->ir_builder_.SetInsertPoint(bb_entry);
   reduction_code.module = std::move(module);
@@ -274,9 +273,9 @@ ReductionCode ResultSetStorage::reduceOneEntryNoCollisionsRowWiseJIT(
   auto cgen_state = reduction_code.cgen_state.get();
   const auto& col_slot_context = query_mem_desc_.getColSlotContext();
 
-  const auto query_arg_it = reduction_code.ir_func->arg_begin();
-  const auto this_targets_ptr_arg = &*query_arg_it;
-  const auto that_targets_ptr_arg = &*(query_arg_it + 1);
+  const auto arg_it = reduction_code.ir_func->arg_begin();
+  const auto this_targets_ptr_arg = &*arg_it;
+  const auto that_targets_ptr_arg = &*(arg_it + 1);
   llvm::Value* this_targets_ptr = this_targets_ptr_arg;
   llvm::Value* that_targets_ptr = that_targets_ptr_arg;
   size_t init_agg_val_idx = 0;
@@ -316,7 +315,7 @@ ReductionCode ResultSetStorage::reduceOneEntryNoCollisionsRowWiseJIT(
                        init_agg_val_idx,
                        that,
                        slots_for_col.front(),
-                       reduction_code.cgen_state.get());
+                       reduction_code);
       auto increment_agg_val_idx_maybe =
           [&init_agg_val_idx, &target_logical_idx, this](const int slot_count) {
             if (query_mem_desc_.targetGroupbyIndicesSize() == 0 ||
@@ -342,20 +341,7 @@ ReductionCode ResultSetStorage::reduceOneEntryNoCollisionsRowWiseJIT(
       }
     }
   }
-  cgen_state->ir_builder_.CreateRetVoid();
-  verify_function_ir(reduction_code.ir_func);
-  CompilationOptions co{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false};
-  reduction_code.module.release();
-  auto ee = g_reduction_jit_interp
-                ? generate_native_reduction_code(reduction_code.ir_func)
-                : CodeGenerator::generateNativeCPUCode(
-                      reduction_code.ir_func, {reduction_code.ir_func}, co);
-  reduction_code.func_ptr = g_reduction_jit_interp
-                                ? nullptr
-                                : reinterpret_cast<ReductionCode::FuncPtr>(
-                                      ee->getPointerToFunction(reduction_code.ir_func));
-  reduction_code.execution_engine = std::move(ee);
-  return reduction_code;
+  return finalizeReductionCode(std::move(reduction_code), cgen_state);
 }
 
 ReductionCode ResultSetStorage::reduceOneEntrySlotsBaselineJIT(
@@ -372,9 +358,9 @@ ReductionCode ResultSetStorage::reduceOneEntrySlotsBaselineJIT(
   }
   ReductionCode reduction_code = setup_reduction_function();
   auto cgen_state = reduction_code.cgen_state.get();
-  const auto query_arg_it = reduction_code.ir_func->arg_begin();
-  const auto this_targets_ptr_arg = &*query_arg_it;
-  const auto that_targets_ptr_arg = &*(query_arg_it + 1);
+  const auto arg_it = reduction_code.ir_func->arg_begin();
+  const auto this_targets_ptr_arg = &*arg_it;
+  const auto that_targets_ptr_arg = &*(arg_it + 1);
   llvm::Value* this_ptr1 = this_targets_ptr_arg;
   llvm::Value* that_ptr1 = that_targets_ptr_arg;
   size_t j = 0;
@@ -401,7 +387,7 @@ ReductionCode ResultSetStorage::reduceOneEntrySlotsBaselineJIT(
                      init_agg_val_idx,
                      that,
                      j,
-                     cgen_state);
+                     reduction_code);
     if (query_mem_desc_.targetGroupbyIndicesSize() == 0) {
       init_agg_val_idx = advance_slot(init_agg_val_idx, target_info, false);
     } else {
@@ -415,8 +401,23 @@ ReductionCode ResultSetStorage::reduceOneEntrySlotsBaselineJIT(
     this_ptr1 = cgen_state->ir_builder_.CreateGEP(this_ptr1, next_slot_rel_off);
     that_ptr1 = cgen_state->ir_builder_.CreateGEP(that_ptr1, next_slot_rel_off);
   }
+  return finalizeReductionCode(std::move(reduction_code), cgen_state);
+}
+
+ReductionCode ResultSetStorage::finalizeReductionCode(ReductionCode reduction_code,
+                                                      CgenState* cgen_state) const {
   cgen_state->ir_builder_.CreateRetVoid();
   verify_function_ir(reduction_code.ir_func);
+  const auto key = serialize_llvm_object(reduction_code.ir_func);
+  auto val_ptr = g_code_cache.get({key});
+  if (val_ptr) {
+    return {
+        nullptr,
+        std::get<1>(val_ptr->first.front()).get(),
+        nullptr,
+        nullptr,
+        reinterpret_cast<ReductionCode::FuncPtr>(std::get<0>(val_ptr->first.front()))};
+  }
   CompilationOptions co{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false};
   reduction_code.module.release();
   auto ee = g_reduction_jit_interp
@@ -427,8 +428,16 @@ ReductionCode ResultSetStorage::reduceOneEntrySlotsBaselineJIT(
                                 ? nullptr
                                 : reinterpret_cast<ReductionCode::FuncPtr>(
                                       ee->getPointerToFunction(reduction_code.ir_func));
-  reduction_code.execution_engine = std::move(ee);
-  return reduction_code;
+  reduction_code.execution_engine = ee.get();
+  if (!g_reduction_jit_interp) {
+    std::tuple<void*, ExecutionEngineWrapper> cache_val =
+        std::make_tuple(reinterpret_cast<void*>(reduction_code.func_ptr), std::move(ee));
+    std::vector<std::tuple<void*, ExecutionEngineWrapper>> cache_vals;
+    cache_vals.emplace_back(std::move(cache_val));
+    Executor::addCodeToCache(
+        {key}, std::move(cache_vals), reduction_code.ir_func->getParent(), g_code_cache);
+  }
+  return std::move(reduction_code);
 }
 
 void ResultSetStorage::reduceOneSlotJIT(llvm::Value* this_ptr1,
@@ -441,7 +450,7 @@ void ResultSetStorage::reduceOneSlotJIT(llvm::Value* this_ptr1,
                                         const size_t init_agg_val_idx,
                                         const ResultSetStorage& that,
                                         const size_t first_slot_idx_for_target,
-                                        CgenState* cgen_state) const {
+                                        const ReductionCode& reduction_code) const {
   if (query_mem_desc_.targetGroupbyIndicesSize() > 0) {
     if (query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) >= 0) {
       return;
@@ -452,6 +461,7 @@ void ResultSetStorage::reduceOneSlotJIT(llvm::Value* this_ptr1,
   const auto chosen_bytes =
       get_width_for_slot(target_slot_idx, float_argument_input, query_mem_desc_);
   auto init_val = target_init_vals_[init_agg_val_idx];
+  const auto cgen_state = reduction_code.cgen_state.get();
   if (target_info.is_agg && target_info.agg_kind != kSAMPLE) {
     switch (target_info.agg_kind) {
       case kCOUNT:
@@ -459,7 +469,7 @@ void ResultSetStorage::reduceOneSlotJIT(llvm::Value* this_ptr1,
         if (is_distinct_target(target_info)) {
           CHECK_EQ(static_cast<size_t>(chosen_bytes), sizeof(int64_t));
           reduceOneCountDistinctSlotJIT(
-              this_ptr1, that_ptr1, target_logical_idx, that, cgen_state);
+              this_ptr1, that_ptr1, target_logical_idx, that, reduction_code);
           break;
         }
         CHECK_EQ(int64_t(0), init_val);
@@ -500,8 +510,8 @@ void ResultSetStorage::reduceOneSlotJIT(llvm::Value* this_ptr1,
 
 extern "C" void count_distinct_set_union_jit_rt(const int64_t new_set_handle,
                                                 const int64_t old_set_handle,
-                                                const int64_t that_qmd_handle,
-                                                const int64_t this_qmd_handle,
+                                                const void* that_qmd_handle,
+                                                const void* this_qmd_handle,
                                                 const int64_t target_logical_idx) {
   const auto that_qmd = reinterpret_cast<const QueryMemoryDescriptor*>(that_qmd_handle);
   const auto this_qmd = reinterpret_cast<const QueryMemoryDescriptor*>(this_qmd_handle);
@@ -515,23 +525,27 @@ extern "C" void count_distinct_set_union_jit_rt(const int64_t new_set_handle,
       new_set_handle, old_set_handle, new_count_distinct_desc, old_count_distinct_desc);
 }
 
-void ResultSetStorage::reduceOneCountDistinctSlotJIT(llvm::Value* this_ptr1,
-                                                     llvm::Value* that_ptr1,
-                                                     const size_t target_logical_idx,
-                                                     const ResultSetStorage& that,
-                                                     CgenState* cgen_state) const {
+void ResultSetStorage::reduceOneCountDistinctSlotJIT(
+    llvm::Value* this_ptr1,
+    llvm::Value* that_ptr1,
+    const size_t target_logical_idx,
+    const ResultSetStorage& that,
+    const ReductionCode& reduction_code) const {
   CHECK_LT(target_logical_idx, query_mem_desc_.getCountDistinctDescriptorsSize());
+  const auto cgen_state = reduction_code.cgen_state.get();
   const auto pi64_type = llvm::Type::getInt64PtrTy(cgen_state->context_);
   const auto old_set_handle = cgen_state->ir_builder_.CreateLoad(
       cgen_state->ir_builder_.CreateBitCast(this_ptr1, pi64_type));
   const auto new_set_handle = cgen_state->ir_builder_.CreateLoad(
       cgen_state->ir_builder_.CreateBitCast(that_ptr1, pi64_type));
-  cgen_state->emitExternalCall(
-      "count_distinct_set_union_jit_rt",
-      llvm::Type::getVoidTy(cgen_state->context_),
-      {new_set_handle,
-       old_set_handle,
-       cgen_state->llInt(reinterpret_cast<int64_t>(&that.query_mem_desc_)),
-       cgen_state->llInt(reinterpret_cast<int64_t>(&query_mem_desc_)),
-       cgen_state->llInt<int64_t>(target_logical_idx)});
+  const auto arg_it = reduction_code.ir_func->arg_begin();
+  const auto this_qmd_arg = &*(arg_it + 2);
+  const auto that_qmd_arg = &*(arg_it + 3);
+  cgen_state->emitExternalCall("count_distinct_set_union_jit_rt",
+                               llvm::Type::getVoidTy(cgen_state->context_),
+                               {new_set_handle,
+                                old_set_handle,
+                                that_qmd_arg,
+                                this_qmd_arg,
+                                cgen_state->llInt<int64_t>(target_logical_idx)});
 }

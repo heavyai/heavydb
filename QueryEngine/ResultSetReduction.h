@@ -52,10 +52,10 @@ class ExecutionEngineWrapper {
 };
 
 struct ReductionCode {
-  using FuncPtr = void (*)(int8_t*, const int8_t*);
+  using FuncPtr = void (*)(int8_t*, const int8_t*, const void*, const void*);
 
   std::unique_ptr<CgenState> cgen_state;
-  ExecutionEngineWrapper execution_engine;
+  llvm::ExecutionEngine* execution_engine;
   std::unique_ptr<llvm::Module> module;
   llvm::Function* ir_func;
   FuncPtr func_ptr;

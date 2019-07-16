@@ -329,6 +329,14 @@ using LLVMValueVector = std::vector<llvm::Value*>;
 
 class QueryCompilationDescriptor;
 
+using CodeCacheKey = std::vector<std::string>;
+typedef std::vector<
+    std::tuple<void*, ExecutionEngineWrapper, std::unique_ptr<GpuCompilationContext>>>
+    CodeCacheVal;
+typedef std::pair<CodeCacheVal, llvm::Module*> CodeCacheValWithModule;
+typedef LruCache<CodeCacheKey, CodeCacheValWithModule, boost::hash<CodeCacheKey>>
+    CodeCache;
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -757,6 +765,11 @@ class Executor {
                                                    const bool is_group_by,
                                                    const bool float_argument_input);
 
+  static void addCodeToCache(const CodeCacheKey&,
+                             std::vector<std::tuple<void*, ExecutionEngineWrapper>>,
+                             llvm::Module*,
+                             CodeCache&);
+
  private:
   static ResultSetPtr resultsUnion(ExecutionDispatch& execution_dispatch);
   std::vector<int64_t> getJoinHashTablePtrs(const ExecutorDeviceType device_type,
@@ -920,19 +933,8 @@ class Executor {
       const std::vector<uint64_t>& frag_offsets,
       const size_t frag_idx);
 
-  using CodeCacheKey = std::vector<std::string>;
-  typedef std::vector<
-      std::tuple<void*, ExecutionEngineWrapper, std::unique_ptr<GpuCompilationContext>>>
-      CodeCacheVal;
-  typedef std::pair<CodeCacheVal, llvm::Module*> CodeCacheValWithModule;
-  typedef LruCache<CodeCacheKey, CodeCacheValWithModule, boost::hash<CodeCacheKey>>
-      CodeCache;
   std::vector<std::pair<void*, void*>> getCodeFromCache(const CodeCacheKey&,
                                                         const CodeCache&);
-  void addCodeToCache(const CodeCacheKey&,
-                      std::vector<std::tuple<void*, ExecutionEngineWrapper>>,
-                      llvm::Module*,
-                      CodeCache&);
 
   void addCodeToCache(const CodeCacheKey&,
                       const std::vector<std::tuple<void*, GpuCompilationContext*>>&,

@@ -36,7 +36,7 @@ class LruCache {
     putCommon(it, key);
   }
 
-  const value_t* get(const key_t& key) {
+  value_t* get(const key_t& key) {
     auto it = cache_items_map_.find(key);
     if (it == cache_items_map_.end()) {
       return nullptr;

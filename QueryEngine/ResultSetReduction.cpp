@@ -129,16 +129,20 @@ inline int64_t get_component(const int8_t* group_by_buffer,
   return ret;
 }
 
-void run_reduction_code(ReductionCode& reduction_code,
+void run_reduction_code(const ReductionCode& reduction_code,
                         int8_t* this_targets_ptr,
-                        const int8_t* that_targets_ptr) {
+                        const int8_t* that_targets_ptr,
+                        const void* this_qmd,
+                        const void* that_qmd) {
   if (reduction_code.func_ptr) {
-    reduction_code.func_ptr(this_targets_ptr, that_targets_ptr);
+    reduction_code.func_ptr(this_targets_ptr, that_targets_ptr, this_qmd, that_qmd);
   } else {
-    reduction_code.execution_engine.get()->runFunction(
+    reduction_code.execution_engine->runFunction(
         reduction_code.ir_func,
         {llvm::GenericValue(this_targets_ptr),
-         llvm::GenericValue(const_cast<int8_t*>(that_targets_ptr))});
+         llvm::GenericValue(const_cast<int8_t*>(that_targets_ptr)),
+         llvm::GenericValue(const_cast<void*>(this_qmd)),
+         llvm::GenericValue(const_cast<void*>(that_qmd))});
   }
 }
 
@@ -163,7 +167,7 @@ void fill_empty_key(void* key_ptr, const size_t key_count, const size_t key_widt
 // Reduces the entries of `that` into the buffer of this ResultSetStorage object.
 void ResultSetStorage::reduce(const ResultSetStorage& that,
                               const std::vector<std::string>& serialized_varlen_buffer,
-                              ReductionCode& reduction_code) const {
+                              const ReductionCode& reduction_code) const {
   auto entry_count = query_mem_desc_.getEntryCount();
   CHECK_GT(entry_count, size_t(0));
   if (query_mem_desc_.didOutputColumnar()) {
@@ -526,7 +530,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
     const int8_t* that_buff,
     const ResultSetStorage& that,
     const std::vector<std::string>& serialized_varlen_buffer,
-    ReductionCode& reduction_code) const {
+    const ReductionCode& reduction_code) const {
   check_watchdog(entry_idx);
   CHECK(!query_mem_desc_.didOutputColumnar());
   if (isEmptyEntry(entry_idx, that_buff)) {
@@ -544,8 +548,12 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
            key_bytes);
   }
 
-  if (reduction_code.execution_engine.get()) {
-    run_reduction_code(reduction_code, this_targets_ptr, that_targets_ptr);
+  if (reduction_code.execution_engine) {
+    run_reduction_code(reduction_code,
+                       this_targets_ptr,
+                       that_targets_ptr,
+                       &query_mem_desc_,
+                       &that.query_mem_desc_);
     return;
   }
 
@@ -812,7 +820,7 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                                               const size_t that_entry_idx,
                                               const size_t that_entry_count,
                                               const ResultSetStorage& that,
-                                              ReductionCode& reduction_code) const {
+                                              const ReductionCode& reduction_code) const {
   check_watchdog(that_entry_idx);
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   CHECK(query_mem_desc_.getQueryDescriptionType() ==
@@ -867,19 +875,24 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                               reduction_code);
 }
 
-void ResultSetStorage::reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
-                                                   const int64_t* that_buff,
-                                                   const size_t that_entry_idx,
-                                                   const size_t that_entry_count,
-                                                   const ResultSetStorage& that,
-                                                   ReductionCode& reduction_code) const {
-  if (reduction_code.execution_engine.get()) {
+void ResultSetStorage::reduceOneEntrySlotsBaseline(
+    int64_t* this_entry_slots,
+    const int64_t* that_buff,
+    const size_t that_entry_idx,
+    const size_t that_entry_count,
+    const ResultSetStorage& that,
+    const ReductionCode& reduction_code) const {
+  if (reduction_code.execution_engine) {
     CHECK(!query_mem_desc_.didOutputColumnar());
     const auto this_targets_ptr = reinterpret_cast<int8_t*>(this_entry_slots);
     const auto that_targets_ptr = reinterpret_cast<const int8_t*>(
         that_buff + get_row_qw_count(query_mem_desc_) * that_entry_idx +
         get_slot_off_quad(query_mem_desc_));
-    run_reduction_code(reduction_code, this_targets_ptr, that_targets_ptr);
+    run_reduction_code(reduction_code,
+                       this_targets_ptr,
+                       that_targets_ptr,
+                       &query_mem_desc_,
+                       &that.query_mem_desc_);
     return;
   }
   const auto key_count = query_mem_desc_.getGroupbyColCount();

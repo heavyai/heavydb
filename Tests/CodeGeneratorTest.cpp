@@ -30,35 +30,6 @@
 #include "../Shared/mapdpath.h"
 #include "TestHelpers.h"
 
-namespace {
-
-llvm::Module* read_template_module(llvm::LLVMContext& context) {
-  llvm::SMDiagnostic err;
-
-  auto buffer_or_error = llvm::MemoryBuffer::getFile(mapd_root_abs_path() +
-                                                     "/QueryEngine/RuntimeFunctions.bc");
-  CHECK(!buffer_or_error.getError());
-  llvm::MemoryBuffer* buffer = buffer_or_error.get().get();
-
-  auto owner = llvm::parseBitcodeFile(buffer->getMemBufferRef(), context);
-  CHECK(!owner.takeError());
-  auto module = owner.get().release();
-  CHECK(module);
-
-  return module;
-}
-
-void verify_function_ir(const llvm::Function* func) {
-  std::stringstream err_ss;
-  llvm::raw_os_ostream err_os(err_ss);
-  if (llvm::verifyFunction(*func, &err_os)) {
-    func->print(llvm::outs());
-    LOG(FATAL) << err_ss.str();
-  }
-}
-
-}  // namespace
-
 TEST(CodeGeneratorTest, IntegerConstant) {
   auto& ctx = getGlobalLLVMContext();
   std::unique_ptr<llvm::Module> module(read_template_module(ctx));
