@@ -1016,10 +1016,6 @@ size_t QueryMemoryDescriptor::sharedMemBytes(const ExecutorDeviceType device_typ
   if (device_type == ExecutorDeviceType::CPU) {
     return 0;
   }
-  if (entry_count_ == 0 && query_desc_type_ == QueryDescriptionType::Projection) {
-    // Late stage memory allocation
-    return 0;
-  }
   // if performing keyless aggregate query with a single column group-by:
   if (sharing_ == GroupByMemSharing::SharedForKeylessOneColumnKnownRange) {
     CHECK_EQ(getRowSize(),
@@ -1030,12 +1026,7 @@ size_t QueryMemoryDescriptor::sharedMemBytes(const ExecutorDeviceType device_typ
           executor_->getCatalog()->getDataMgr().getCudaMgr()->getMaxSharedMemoryForAll());
     return shared_mem_size;
   }
-  const size_t shared_mem_threshold{0};
-  const size_t shared_mem_bytes{getBufferSizeBytes(ExecutorDeviceType::GPU)};
-  if (!usesGetGroupValueFast() || shared_mem_bytes > shared_mem_threshold) {
-    return 0;
-  }
-  return shared_mem_bytes;
+  return 0;
 }
 
 bool QueryMemoryDescriptor::isWarpSyncRequired(
