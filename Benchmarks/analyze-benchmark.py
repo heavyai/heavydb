@@ -42,6 +42,9 @@ class BenchmarkLoader:
     def fetchAttribute(self, attribute):
         result = []
         for experiment in self.data:
+            assert attribute in experiment["results"], (
+                attribute + " is not a valid attribute."
+            )
             result.append(experiment["results"][attribute])
         return result
 
@@ -171,18 +174,29 @@ def main(argv):
     try:
         opts, args = getopt.getopt(
             argv,
-            "hs:r:e:p",
-            ["help", "sample=", "reference=", "epsilon=", "print"],
+            "hs:r:e:a:p",
+            [
+                "help",
+                "sample=",
+                "reference=",
+                "epsilon=",
+                "attribute=",
+                "print",
+            ],
         )
     except getopt.GetOptError:
         print(
-            "python3 analyze-benchmark.py -s <sample dir> -r <reference dir> -e <epsilon> -p"
+            "python3 analyze-benchmark.py -s <sample dir> -r <reference dir> -e <epsilon> -a <attribute> -p"
         )
         sys.exit(2)
 
     dir_artifact_sample = ""
     dir_artifact_ref = ""
     epsilon = 0.05
+    query_attribute = (
+        "query_total_avg"
+    )  # default attribute to use for benchmark comparison
+
     to_print = False  # printing all the results, disabled by default
 
     for opt, arg in opts:
@@ -192,6 +206,7 @@ def main(argv):
     -s/--sample:\t\t\t directory of the results for the benchmarked sample branch
     -r/--reference:\t\t\t directory of the results for the benchmarked reference branch 
     -e/--epsilon:\t\t\t ratio tolerance for reporting results outside this range
+    -a/--attribute:\t\t\t attribute to be used for benchmark comparison (default: query_total_avg) 
     -p/--print:\t\t\t\t print all the results  
                 """
             )
@@ -205,6 +220,8 @@ def main(argv):
                 assert os.path.isdir(dir_artifact_ref)
             elif opt in ("-e", "--epsilon"):
                 epsilon = float(arg)
+            elif opt in ("-a", "--attribute"):
+                query_attribute = arg
             elif opt in ("-p", "--print"):
                 to_print = True
 
@@ -258,12 +275,12 @@ def main(argv):
                         first_header = False
 
                     analyzer = BenchAnalyzer(
-                        refBench, sampleBench, "query_total_avg"
+                        refBench, sampleBench, query_attribute
                     )
                     analyzer.findAnomaliesRatio(epsilon)
                     if to_print:
                         printer = PrettyPrint(
-                            refBench, sampleBench, "query_total_avg"
+                            refBench, sampleBench, query_attribute
                         )
                         printer.printAttribute()
                 else:
