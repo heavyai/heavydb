@@ -147,9 +147,7 @@ The [`startomnisci`](startomnisci) wrapper script may be used to start OmniSciDB
 
 - initializes the `data` storage directory via `initdb`, if required
 - starts the main OmniSciDB server, `omnisci_server`
-- starts the OmniSci web server, `omnisci_web_server`, for serving OmniSci Immerse
 - offers to download and import a sample dataset, using the `insert_sample_data` script
-- attempts to open OmniSci Immerse in your web browser
 
 Assuming you are in the `build` directory, and it is a subdirectory of the `omniscidb` repository, `startomnisci` may be run by:
 
@@ -167,10 +165,6 @@ Start the OmniSciDB server:
 
     ./bin/omnisci_server
 
-In a new terminal, start the OmniSci web server:
-
-    ./bin/omnisci_web_server
-
 If desired, insert a sample dataset by running the `insert_sample_data` script in a new terminal:
 
     ../insert_sample_data
@@ -179,13 +173,7 @@ You can now start using the database. The `omnisql` utility may be used to inter
 
     ./bin/omnisql -p HyperInteractive
 
-where `HyperInteractive` is the default password. The default user `mapd` is assumed if not provided.
-
-You can also interact with the database using the web-based OmniSci Immerse frontend by visiting the web server's default port of `6273`:
-
-[http://localhost:6273](http://localhost:6273)
-
-Note: usage of OmniSci Immerse is governed by a separate license agreement, provided under `EULA-CE.txt`. The version bundled with this project may only be used for non-commercial purposes.
+where `HyperInteractive` is the default password. The default user `admin` is assumed if not provided.
 
 # Code Style
 

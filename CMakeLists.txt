@@ -791,7 +791,7 @@ endif()
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   set(EULA_FILE "${CMAKE_SOURCE_DIR}/EULA-EE.txt")
 else()
-  set(EULA_FILE "${CMAKE_SOURCE_DIR}/EULA-CE.txt")
+  set(EULA_FILE "${CMAKE_SOURCE_DIR}/LICENSE.md")
 endif()
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "os")
