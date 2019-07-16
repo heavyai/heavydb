@@ -52,12 +52,11 @@ bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk,
 }
 
 inline bool query_has_inner_join(const RelAlgExecutionUnit& ra_exe_unit) {
-  for (const auto& join_condition : ra_exe_unit.join_quals) {
-    if (join_condition.type == JoinType::INNER) {
-      return true;
-    }
-  }
-  return false;
+  return (std::count_if(ra_exe_unit.join_quals.begin(),
+                        ra_exe_unit.join_quals.end(),
+                        [](const auto& join_condition) {
+                          return join_condition.type == JoinType::INNER;
+                        }) > 0);
 }
 
 }  // namespace
