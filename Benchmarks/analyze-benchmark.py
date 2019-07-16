@@ -18,7 +18,10 @@ class BenchmarkLoader:
         assert bench_filename in self.filename_list
 
         with open(self.dir_name + bench_filename) as json_file:
-            self.data = json.load(json_file)
+            self.data = sorted(
+                json.load(json_file),
+                key=lambda experiment: experiment["results"]["query_id"],
+            )
 
     def getFrontAttribute(self, attribute):
         if self.data:
