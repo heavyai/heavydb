@@ -23,6 +23,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/Jeffail/gabs"
@@ -37,28 +38,31 @@ import (
 )
 
 var (
-	port                int
-	httpsRedirectPort   int
-	backendURL          *url.URL
-	frontend            string
-	serversJSON         string
-	dataDir             string
-	tmpDir              string
-	certFile            string
-	peerCertFile        string
-	keyFile             string
-	docsDir             string
-	readOnly            bool
-	verbose             bool
-	enableHTTPS         bool
-	enableHTTPSAuth     bool
-	enableHTTPSRedirect bool
-	profile             bool
-	compress            bool
-	enableMetrics       bool
-	connTimeout         time.Duration
-	version             string
-	proxies             []reverseProxy
+	port                       int
+	httpsRedirectPort          int
+	backendURL                 *url.URL
+	jupyterURL                 *url.URL
+	jupyterPrefix              string
+	frontend                   string
+	serversJSON                string
+	dataDir                    string
+	tmpDir                     string
+	certFile                   string
+	peerCertFile               string
+	keyFile                    string
+	docsDir                    string
+	readOnly                   bool
+	verbose                    bool
+	enableHTTPS                bool
+	enableHTTPSAuth            bool
+	enableHTTPSRedirect        bool
+	profile                    bool
+	compress                   bool
+	enableMetrics              bool
+	stripOmniSciUsernameHeader bool
+	connTimeout                time.Duration
+	version                    string
+	proxies                    []reverseProxy
 )
 
 var (
@@ -93,6 +97,8 @@ var (
 )
 
 const (
+	// The name of the cookie that holds the client Thrift session ID
+	clientSessionCookieName = "omnisci_client_session_id"
 	// The name of the cookie that holds the real session ID from SAML login
 	thriftSessionCookieName = "omnisci_session"
 	// The name of the JavaScript visible cookie indicating SAML auth has succeeded
@@ -121,6 +127,8 @@ func init() {
 	pflag.StringP("backend-url", "b", "", "url to http-port on omnisci_server [http://localhost:6278]")
 	pflag.StringSliceP("reverse-proxy", "", nil, "additional endpoints to act as reverse proxies, format '/endpoint/:http://target.example.com'")
 	pflag.StringP("frontend", "f", "frontend", "path to frontend directory")
+	pflag.StringP("jupyter-url", "", "", "url for jupyter integration")
+	pflag.StringP("jupyter-prefix", "", "/jupyter", "Jupyter Hub base_url for Jupyter integration")
 	pflag.StringP("servers-json", "", "", "path to servers.json")
 	pflag.StringP("data", "d", "data", "path to OmniSci data directory")
 	pflag.StringP("tmpdir", "", "", "path for temporary file storage [/tmp]")
@@ -140,6 +148,7 @@ func init() {
 	pflag.Bool("profile", false, "enable profiling, accessible from /debug/pprof")
 	pflag.Bool("compress", false, "enable gzip compression")
 	pflag.Bool("metrics", false, "enable Thrift call metrics, accessible from /metrics")
+	pflag.Bool("no-strip-omnisci-username-header", false, "do not strip the X-OmniSci-Username header for Jupyter integration")
 	pflag.Bool("version", false, "return version")
 	pflag.CommandLine.MarkHidden("compress")
 	pflag.CommandLine.MarkHidden("profile")
@@ -154,6 +163,8 @@ func init() {
 	viper.BindPFlag("web.backend-url", pflag.CommandLine.Lookup("backend-url"))
 	viper.BindPFlag("web.reverse-proxy", pflag.CommandLine.Lookup("reverse-proxy"))
 	viper.BindPFlag("web.frontend", pflag.CommandLine.Lookup("frontend"))
+	viper.BindPFlag("web.jupyter-url", pflag.CommandLine.Lookup("jupyter-url"))
+	viper.BindPFlag("web.jupyter-prefix", pflag.CommandLine.Lookup("jupyter-prefix"))
 	viper.BindPFlag("web.servers-json", pflag.CommandLine.Lookup("servers-json"))
 	viper.BindPFlag("web.enable-https", pflag.CommandLine.Lookup("enable-https"))
 	viper.BindPFlag("web.enable-https-authentication", pflag.CommandLine.Lookup("enable-https-authentication"))
@@ -166,6 +177,7 @@ func init() {
 	viper.BindPFlag("web.compress", pflag.CommandLine.Lookup("compress"))
 	viper.BindPFlag("web.metrics", pflag.CommandLine.Lookup("metrics"))
 	viper.BindPFlag("web.docs", pflag.CommandLine.Lookup("docs"))
+	viper.BindPFlag("web.no-strip-omnisci-username-header", pflag.CommandLine.Lookup("no-strip-omnisci-username-header"))
 
 	viper.BindPFlag("data", pflag.CommandLine.Lookup("data"))
 	viper.BindPFlag("tmpdir", pflag.CommandLine.Lookup("tmpdir"))
@@ -228,6 +240,17 @@ func init() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	jupyterURLStr := viper.GetString("web.jupyter-url")
+	if jupyterURLStr != "" {
+		jupyterURL, err = url.Parse(jupyterURLStr)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	jupyterPrefix = viper.GetString("web.jupyter-prefix")
+	stripOmniSciUsernameHeader = !viper.GetBool("no-strip-omnisci-username-header")
 
 	for _, rp := range viper.GetStringSlice("web.reverse-proxy") {
 		s := strings.SplitN(rp, ":", 2)
@@ -678,6 +701,422 @@ func betaOrRedirectFrontendHandler(rw http.ResponseWriter, r *http.Request) {
 	thriftOrFrontendHandler(rw, r)
 }
 
+// Retrieve the actual OmniSci Thrift session ID, accounting for each possible source
+func getSessionIDForJupyter(r *http.Request) string {
+	samlAuthCookie, samlAuthCookieErr := r.Cookie(samlAuthCookieName)
+	sessionIDCookie, sessionIDCookieErr := r.Cookie(thriftSessionCookieName)
+
+	if samlAuthCookieErr == nil && sessionIDCookieErr == nil && samlAuthCookie.Value == "true" && sessionIDCookie != nil {
+		// Session was authenticated using SAML, session ID stored on secure cookie
+		return sessionIDCookie.Value
+	}
+
+	// Session was authenticated normally, session ID stored in client session cookie
+	clientSessionCookie, clientSessionCookieErr := r.Cookie(clientSessionCookieName)
+
+	if clientSessionCookieErr == nil && clientSessionCookie != nil {
+		return clientSessionCookie.Value
+	}
+
+	return ""
+}
+
+// Function copied from https://golang.org/src/net/http/httputil/reverseproxy.go source
+func cloneHeader(h http.Header) http.Header {
+	h2 := make(http.Header, len(h))
+	for k, vv := range h {
+		vv2 := make([]string, len(vv))
+		copy(vv2, vv)
+		h2[k] = vv2
+	}
+	return h2
+}
+
+// Function partially from https://golang.org/src/net/http/httputil/reverseproxy.go source
+func cloneRequest(r *http.Request) *http.Request {
+	outreq := r.WithContext(r.Context())
+	if r.ContentLength == 0 {
+		outreq.Body = nil
+	}
+
+	outreq.Header = cloneHeader(r.Header)
+
+	return outreq
+}
+
+func cloneJupyterRequest(r *http.Request, sessionID string, username string) *http.Request {
+	// Create a copy of the incoming request and point it towards Jupyter
+	newReq := cloneRequest(r)
+	newReq.URL.Scheme = jupyterURL.Scheme
+	newReq.URL.Host = jupyterURL.Host
+
+	return newReq
+}
+
+type jupyterNotebookParams struct {
+	NotebookName string
+	SQL          string
+}
+
+// Double-escape any double quotes in SQL, since it will be placed
+// inside both the Ibis string value in the notebook as well as
+// the JSON string value of the notebook JSON document
+func (p jupyterNotebookParams) EscapedSQL() string {
+	json, err := json.Marshal(p.SQL)
+
+	if err != nil {
+		log.Fatalln("Errors parsing SQL input to Jupyter notebook:", err)
+	}
+
+	jsonString := string(json)
+	innerJSONString := jsonString[1 : len(jsonString)-1]
+	escapedInnerJSONString := strings.Replace(innerJSONString, `\"`, `\\\"`, -1)
+
+	return escapedInnerJSONString
+}
+
+// Time format, not a hardcoded string - See https://golang.org/src/time/format.go
+var jupyterNotebookNameFormat = "OmniSci_2006-01-02_15:04:05.ipynb"
+
+// Text template parsed and constructed for use in main() below
+var jupyterNotebookTemplate *template.Template
+var jupyterNotebookTemplateText = `{
+	"name": "{{.NotebookName}}",
+	"path": "{{.NotebookName}}",
+	"type": "notebook",
+	"format": "json",
+	"content": {
+		"cells": [
+			{
+				"cell_type": "code",
+				"execution_count": null,
+				"metadata": {
+					"trusted": true
+				},
+				"outputs": [],
+				"source": [
+					"# If you get an exception about an invalid session id,\n",
+					"# click the Jupyter button in Immerse again and rerun this cell.\n",
+					"\n",
+					"import omniscidb_util\n",
+					"conn = omniscidb_util.ibis_connect_session()\n",
+					"conn"
+				]
+			},
+			{
+				"cell_type": "code",
+				"execution_count": null,
+				"metadata": {
+					"trusted": true
+				},
+				"outputs": [],
+				"source": [
+					{{ if .SQL -}}
+						"o = conn.sql(\"\"\"{{ .EscapedSQL }}\"\"\")\n",
+						"o"
+					{{- else -}}
+						"conn.list_tables()"
+					{{- end }}
+				]
+			}
+		],
+		"metadata": {
+			"kernelspec": {
+				"display_name": "Python 3",
+				"language": "python",
+				"name": "python3"
+			},
+			"language_info": {
+				"codemirror_mode": {
+					"name": "ipython",
+					"version": 3
+				},
+				"file_extension": ".py",
+				"mimetype": "text/x-python",
+				"name": "python",
+				"nbconvert_exporter": "python",
+				"pygments_lexer": "ipython3",
+				"version": "3.7.3"
+			}
+		},
+		"nbformat": 4,
+		"nbformat_minor": 4
+	}
+}`
+
+func checkForJupyterError(r *http.Response) error {
+	if r.StatusCode >= 200 && r.StatusCode < 300 {
+		return nil
+	}
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return errors.New(r.Status)
+	}
+
+	json, err := gabs.ParseJSON(body)
+	if err != nil {
+		return errors.New(r.Status)
+	}
+
+	msg, ok := json.Path("message").Data().(string)
+	if ok {
+		return errors.New(msg)
+	}
+	return errors.New(r.Status)
+}
+
+func createNewNotebook(r *http.Request, sessionID string, username string, sql string) error {
+	notebookName := time.Now().Format(jupyterNotebookNameFormat)
+
+	// Create new notebook
+	notebookParams := jupyterNotebookParams{
+		NotebookName: notebookName,
+		SQL:          sql,
+	}
+
+	var notebookBuffer bytes.Buffer
+	jupyterNotebookTemplate.Execute(&notebookBuffer, notebookParams)
+
+	// For this and following requests, use the incoming request to clone from and reuse auth headers
+	notebookCreateReq := cloneJupyterRequest(r, sessionID, username)
+	notebookCreateReq.Method = http.MethodPut
+	notebookCreateReq.URL.Path = jupyterPrefix + "/user/" + username + "/api/contents/" + notebookName
+	notebookCreateReq.Body = ioutil.NopCloser(&notebookBuffer)
+
+	notebookCreateResp, err := http.DefaultTransport.RoundTrip(notebookCreateReq)
+	if err != nil {
+		return err
+	}
+	defer notebookCreateResp.Body.Close()
+
+	err = checkForJupyterError(notebookCreateResp)
+	if err != nil {
+		return err
+	}
+
+	// Get the Jupyter workspace definition
+
+	// The original request is already to what we want - just clone and send it
+	// Later on, the original will go through the main reverse proxy and get the updated one we put
+	getWorkspaceRequest := cloneJupyterRequest(r, sessionID, username)
+
+	workspaceResp, err := http.DefaultTransport.RoundTrip(getWorkspaceRequest)
+	if err != nil {
+		return err
+	}
+	defer workspaceResp.Body.Close()
+
+	if workspaceResp.StatusCode > 299 {
+		return errors.New("Getting workspace definition failed with status " + workspaceResp.Status)
+	}
+
+	workspaceBodyBytes, err := ioutil.ReadAll(workspaceResp.Body)
+	if err != nil {
+		return err
+	}
+
+	workspace, err := gabs.ParseJSON(workspaceBodyBytes)
+	if err != nil {
+		return err
+	}
+
+	// Modify workspace to have our new notebook open in a tab and focused
+	notebookRef := "notebook:" + notebookName
+	workspace.ArrayAppend(notebookRef, "data", "layout-restorer:data", "main", "dock", "widgets")
+	workspace.Set(notebookRef, "data", "layout-restorer:data", "main", "current")
+	workspace.Set(notebookName, "data", notebookRef, "data", "path")
+	workspace.Set("Notebook", "data", notebookRef, "data", "factory")
+
+	workspaceString := workspace.String()
+
+	// Now put our modified workspace back again
+	putWorkspaceRequest := cloneJupyterRequest(r, sessionID, username)
+	putWorkspaceRequest.Method = http.MethodPut
+	putWorkspaceRequest.Header["Content-Type"] = []string{"application/json;charset=utf-8"}
+	putWorkspaceRequest.Header["Content-Length"] = []string{strconv.Itoa(len(workspaceString))}
+	putWorkspaceRequest.ContentLength = int64(len(workspaceString))
+	putWorkspaceRequest.Body = ioutil.NopCloser(strings.NewReader(workspaceString))
+
+	putWorkspaceResp, err := http.DefaultTransport.RoundTrip(putWorkspaceRequest)
+	if err != nil {
+		return err
+	}
+	defer putWorkspaceResp.Body.Close()
+
+	err = checkForJupyterError(putWorkspaceResp)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+type jupyterSessionFileParams struct {
+	SessionID string
+}
+
+var jupyterSessionFileTemplate *template.Template
+var jupyterSessionFileTemplateText = `{
+	"name": ".omniscisession",
+	"path": ".omniscisession",
+	"type": "file",
+	"format": "text",
+	"content": "{\"session\": \"{{.SessionID}}\"}"
+}`
+
+func createJupyterSessionFile(r *http.Request, sessionID, username string) error {
+	sessionParams := jupyterSessionFileParams{
+		SessionID: sessionID,
+	}
+
+	var sessionBuffer bytes.Buffer
+	jupyterSessionFileTemplate.Execute(&sessionBuffer, sessionParams)
+
+	// clone incoming request to reuse auth headers
+	sessionCreateReq := cloneJupyterRequest(r, sessionID, username)
+	sessionCreateReq.Method = http.MethodPut
+	sessionCreateReq.URL.Path = jupyterPrefix + "/user/" + username + "/api/contents/.jupyterscratch/.omniscisession"
+	sessionCreateReq.Header["Content-Length"] = []string{strconv.Itoa(sessionBuffer.Len())}
+	sessionCreateReq.ContentLength = int64(sessionBuffer.Len())
+	sessionCreateReq.Body = ioutil.NopCloser(&sessionBuffer)
+
+	sessionCreateResp, err := http.DefaultTransport.RoundTrip(sessionCreateReq)
+	if err != nil {
+		return err
+	}
+	defer sessionCreateResp.Body.Close()
+
+	err = checkForJupyterError(sessionCreateResp)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func handleJupyterError(rw http.ResponseWriter, msg string, err error) {
+	if err != nil {
+		msg += ": " + err.Error()
+	}
+
+	rw.WriteHeader(500)
+	rw.Write([]byte(msg))
+	log.Println(msg)
+}
+
+func jupyterProxyHandler(rw http.ResponseWriter, r *http.Request) {
+	h := httputil.NewSingleHostReverseProxy(jupyterURL)
+
+	pathParts := strings.Split(r.URL.Path, "/")
+
+	// Match iff we are hitting GET /jupyter/hub/login,
+	// where we need to receive query params and pass session ID header
+	if len(pathParts) > 3 && pathParts[2] == "hub" && pathParts[3] == "login" {
+		// Set session ID header for the Jupyter Hub OmniSci authenticator
+		sessionID := getSessionIDForJupyter(r)
+		if sessionID == "" {
+			handleJupyterError(rw, "Failed to get session ID from request", nil)
+			return
+		}
+		r.Header["X-OmniSci-SessionID"] = []string{sessionID}
+		if stripOmniSciUsernameHeader {
+			r.Header.Del("X-OmniSci-Username")
+		}
+
+		queryValues, err := url.ParseQuery(r.URL.RawQuery)
+
+		newnotebook := queryValues["newnotebook"]
+		if err == nil && newnotebook != nil && newnotebook[0] == "true" {
+			// Set cookies on the client indicating it wants to make a new OmniSci notebook on login
+			newNotebookCookie := &http.Cookie{
+				Name:     "newnotebook",
+				Value:    "true",
+				Path:     "/",
+				Expires:  time.Now().Add(5 * time.Minute),
+				HttpOnly: true,
+			}
+			http.SetCookie(rw, newNotebookCookie)
+
+			sqlValues := queryValues["sql"]
+			if sqlValues != nil {
+				escapedSQL := url.QueryEscape(sqlValues[0])
+
+				newNotebookSQLCookie := &http.Cookie{
+					Name:     "newnotebooksql",
+					Value:    escapedSQL,
+					Path:     "/",
+					Expires:  time.Now().Add(5 * time.Minute),
+					HttpOnly: true,
+				}
+				http.SetCookie(rw, newNotebookSQLCookie)
+			}
+		}
+	} else if len(pathParts) > 7 && pathParts[4] == "lab" && pathParts[5] == "api" && pathParts[6] == "workspaces" && pathParts[7] == "lab" {
+		// Match iff we are hitting GET /jupyter/user/<username>/lab/api/workspaces/lab for the first time -
+		// This is the request Hub sends to get the user's visible workspace (open notebooks)
+
+		// Retrieve the cookies we set earlier
+		newNotebookCookie, err := r.Cookie("newnotebook")
+		if err == nil && newNotebookCookie.Value == "true" {
+			newNotebookClearCookie := &http.Cookie{
+				Name:     "newnotebook",
+				Value:    "",
+				Path:     "/",
+				Expires:  time.Unix(0, 0),
+				MaxAge:   -1,
+				HttpOnly: true,
+			}
+			http.SetCookie(rw, newNotebookClearCookie)
+
+			newNotebookSQLCookie, err := r.Cookie("newnotebooksql")
+			sql := ""
+			if err == nil {
+				sql, err = url.QueryUnescape(newNotebookSQLCookie.Value)
+
+				if err != nil {
+					log.Fatal("Error unescaping SQL cookie for Jupyter: ", err)
+				}
+
+				newNotebookSQLClearCookie := &http.Cookie{
+					Name:     "newnotebooksql",
+					Value:    "",
+					Path:     "/",
+					Expires:  time.Unix(0, 0),
+					MaxAge:   -1,
+					HttpOnly: true,
+				}
+				http.SetCookie(rw, newNotebookSQLClearCookie)
+			}
+
+			// Create new notebook
+			sessionID := getSessionIDForJupyter(r)
+			if sessionID == "" {
+				handleJupyterError(rw, "Failed to get session ID from request", nil)
+				return
+			}
+			username := pathParts[3]
+
+			// create session file
+			createErr := createJupyterSessionFile(r, sessionID, username)
+			if createErr != nil {
+				handleJupyterError(rw, "Error creating session file", createErr)
+				return
+			}
+
+			// create new notebook
+			createErr = createNewNotebook(r, sessionID, username, sql)
+			if createErr != nil {
+				handleJupyterError(rw, "Error creating notebook", createErr)
+				return
+			}
+		}
+	}
+
+	// Pass original request through and reverse proxy
+	h.ServeHTTP(rw, r)
+}
+
 func httpToHTTPSRedirectHandler(rw http.ResponseWriter, r *http.Request) {
 	// Redirect HTTP request to same URL with only two changes: https scheme,
 	// and the main server port configured in the 'port' param, rather than the
@@ -813,6 +1252,16 @@ func main() {
 		alog = io.MultiWriter(os.Stdout, alf)
 	}
 
+	jupyterNotebookTemplate, err = template.New("jupyter-notebook").Parse(jupyterNotebookTemplateText)
+	if err != nil {
+		log.Fatalln("Error parsing Jupyter notebook template: ", err)
+	}
+
+	jupyterSessionFileTemplate, err = template.New("jupyter-session").Parse(jupyterSessionFileTemplateText)
+	if err != nil {
+		log.Fatalln("Error parsing Jupyter session file template: ", err)
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/saml-post", samlPostHandler)
 	mux.HandleFunc("/upload", uploadHandler)
@@ -827,6 +1276,10 @@ func main() {
 	mux.HandleFunc("/version.txt", versionHandler)
 	mux.HandleFunc("/_internal/set-servers-json", setServersJSONHandler)
 	mux.HandleFunc("/_internal/clear-servers-json", clearServersJSONHandler)
+
+	if jupyterURL != nil {
+		mux.HandleFunc(jupyterPrefix+"/", jupyterProxyHandler)
+	}
 
 	if profile {
 		mux.HandleFunc("/debug/pprof/", pprof.Index)
