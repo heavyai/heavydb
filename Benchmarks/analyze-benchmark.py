@@ -62,9 +62,23 @@ class BenchAnalyzer:
         self.__header_info = [ref.getRunTableName(), attribute]
         self.__label_name_ref = ref.fetchQueryNames()
         self.__label_name_sample = sample.fetchQueryNames()
+        self.__missing_queries_ref = []
+        self.__missing_queries_sample = []
+        self.collectMissingQueries()
         assert self.__label_name_ref == self.__label_name_sample
         self.__attribute_ref = ref.fetchAttribute(attribute)
         self.__attribute_sample = sample.fetchAttribute(attribute)
+
+    # collects all those queries that does not exist in both of the results
+    def collectMissingQueries(self):
+        for query in self.__label_name_ref:
+            if query not in self.__label_name_sample:
+                self.__missing_queries_sample.append(query)
+                self.__label_name_ref.remove(query)
+        for query in self.__label_name_sample:
+            if query not in self.__label_name_ref:
+                self.__missing_queries_ref.append(query)
+                self.__label_name_sample.remove(query)
 
     def printHeader(self):
         for h in self.__header_info:
@@ -93,6 +107,14 @@ class BenchAnalyzer:
                 )
         if found == False:
             print(": None", end="")
+        if self.__missing_queries_ref:
+            print("\n*** Missing queries from reference: ", end="")
+            for query in self.__missing_queries_ref:
+                print(query + " ")
+        if self.__missing_queries_sample:
+            print("\n*** Missing queries from sample: ", end="")
+            for query in self.__missing_queries_sample:
+                print(query + " ")
         print(
             "\n======================================================================="
         )
