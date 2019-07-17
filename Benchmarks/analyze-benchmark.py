@@ -38,14 +38,17 @@ class BenchmarkLoader:
     def getRunTableName(self):
         return self.getFrontAttribute("run_table")
 
-    # return a list of the attribute stored in self.data
-    def fetchAttribute(self, attribute):
+    # return a list of the attribute, from queries in query_names, stored in self.data
+    def fetchAttribute(self, attribute, query_names):
         result = []
-        for experiment in self.data:
-            assert attribute in experiment["results"], (
-                attribute + " is not a valid attribute."
-            )
-            result.append(experiment["results"][attribute])
+        for query in query_names:
+            for experiment in self.data:
+                assert attribute in experiment["results"], (
+                    attribute + " is not a valid attribute."
+                )
+                if query == experiment["results"]["query_id"]:
+                    result.append(experiment["results"][attribute])
+                    break
         return result
 
     def fetchQueryNames(self):
@@ -66,8 +69,12 @@ class BenchAnalyzer:
         self.__missing_queries_sample = []
         self.collectMissingQueries()
         assert self.__label_name_ref == self.__label_name_sample
-        self.__attribute_ref = ref.fetchAttribute(attribute)
-        self.__attribute_sample = sample.fetchAttribute(attribute)
+        self.__attribute_ref = ref.fetchAttribute(
+            attribute, self.__label_name_ref
+        )
+        self.__attribute_sample = sample.fetchAttribute(
+            attribute, self.__label_name_sample
+        )
 
     # collects all those queries that does not exist in both of the results
     def collectMissingQueries(self):
@@ -110,11 +117,11 @@ class BenchAnalyzer:
         if self.__missing_queries_ref:
             print("\n*** Missing queries from reference: ", end="")
             for query in self.__missing_queries_ref:
-                print(query + " ")
+                print(query + " ", end="")
         if self.__missing_queries_sample:
             print("\n*** Missing queries from sample: ", end="")
             for query in self.__missing_queries_sample:
-                print(query + " ")
+                print(query + " ", end="")
         print(
             "\n======================================================================="
         )
@@ -140,11 +147,29 @@ class PrettyPrint:
         self.__num_items_per_line = num_items_per_line
         self.__label_name_ref = ref.fetchQueryNames()
         self.__label_name_sample = sample.fetchQueryNames()
+        self.__missing_queries_ref = []
+        self.__missing_queries_sample = []
+        self.collectMissingQueries()
         assert self.__label_name_ref == self.__label_name_sample
-        self.__attribute_ref = ref.fetchAttribute(attribute)
-        self.__attribute_sample = sample.fetchAttribute(attribute)
+        self.__attribute_ref = ref.fetchAttribute(
+            attribute, self.__label_name_ref
+        )
+        self.__attribute_sample = sample.fetchAttribute(
+            attribute, self.__label_name_sample
+        )
         self.__ref_line_count = 0
         self.__sample_line_count = 0
+
+    # collects all those queries that does not exist in both of the results
+    def collectMissingQueries(self):
+        for query in self.__label_name_ref:
+            if query not in self.__label_name_sample:
+                self.__missing_queries_sample.append(query)
+                self.__label_name_ref.remove(query)
+        for query in self.__label_name_sample:
+            if query not in self.__label_name_ref:
+                self.__missing_queries_ref.append(query)
+                self.__label_name_sample.remove(query)
 
     def printSolidLine(self, pattern):
         for i in range(self.__num_items_per_line + 1):
