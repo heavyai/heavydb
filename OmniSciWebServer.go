@@ -795,27 +795,23 @@ var jupyterNotebookTemplateText = `{
 				},
 				"outputs": [],
 				"source": [
-					"# If you get an exception about an invalid session id,\n",
-					"# click the Jupyter button in Immerse again and rerun this cell.\n",
-					"\n",
-					"import omniscidb_util\n",
-					"conn = omniscidb_util.ibis_connect_session()\n",
-					"conn"
-				]
-			},
-			{
-				"cell_type": "code",
-				"execution_count": null,
-				"metadata": {
-					"trusted": true
-				},
-				"outputs": [],
-				"source": [
 					{{ if .SQL -}}
-						"o = conn.sql(\"\"\"{{ .EscapedSQL }}\"\"\")\n",
+						"# An Ibis connection object (con) is created on notebook startup.\n",
+						"# If you receive a session invalid or object not found error using it,\n",
+						"# please close the Jupyter Lab browser tab, relaunch from Immerse,\n",
+						"# and run this cell to recreate your con object using the\n",
+						"# omnisci_connect function.\n",
+						"con = omnisci_connect()\n",
+						"o = con.sql(\"\"\"{{ .EscapedSQL }}\"\"\")\n",
 						"o"
 					{{- else -}}
-						"conn.list_tables()"
+						"# An Ibis connection object (con) is created on notebook startup.\n",
+						"# If you receive a session invalid or object not found error using it,\n",
+						"# please close the Jupyter Lab browser tab, relaunch from Immerse,\n",
+						"# and run this cell to recreate your con object using the\n",
+						"# omnisci_connect function.\n",
+						"con = omnisci_connect()\n",
+						"con.list_tables()"
 					{{- end }}
 				]
 			}
