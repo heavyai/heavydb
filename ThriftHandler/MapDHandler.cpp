@@ -1919,7 +1919,7 @@ void MapDHandler::clear_gpu_memory(const TSessionId& session) {
     THROW_MAPD_EXCEPTION("Superuser privilege is required to run clear_gpu_memory");
   }
   try {
-    SysCatalog::clearGpuMemory();
+    Executor::clearMemory(Data_Namespace::MemoryLevel::GPU_LEVEL);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
@@ -1939,7 +1939,7 @@ void MapDHandler::clear_cpu_memory(const TSessionId& session) {
     THROW_MAPD_EXCEPTION("Superuser privilege is required to run clear_cpu_memory");
   }
   try {
-    SysCatalog::clearCpuMemory();
+    Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }

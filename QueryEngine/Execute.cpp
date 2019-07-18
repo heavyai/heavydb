@@ -25,6 +25,7 @@
 #include "DynamicWatchdog.h"
 #include "EquiJoinCondition.h"
 #include "ExpressionRewrite.h"
+#include "ExternalCacheInvalidators.h"
 #include "GpuMemUtils.h"
 #include "InPlaceSort.h"
 #include "JsonAccessors.h"
@@ -146,6 +147,30 @@ std::shared_ptr<Executor> Executor::getExecutor(
     auto it_ok = executors_.insert(std::make_pair(executor_key, executor));
     CHECK(it_ok.second);
     return executor;
+  }
+}
+
+void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level) {
+  switch (memory_level) {
+    case Data_Namespace::MemoryLevel::CPU_LEVEL:
+    case Data_Namespace::MemoryLevel::GPU_LEVEL: {
+      std::lock_guard<std::mutex> flush_lock(
+          execute_mutex_);  // Don't flush memory while queries are running
+
+      Catalog_Namespace::SysCatalog::instance().getDataMgr().clearMemory(memory_level);
+      if (memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+        // The hash table cache uses CPU memory not managed by the buffer manager. In the
+        // future, we should manage these allocations with the buffer manager directly.
+        // For now, assume the user wants to purge the hash table cache when they clear
+        // CPU memory (currently used in ExecuteTest to lower memory pressure)
+        JoinHashTableCacheInvalidator::invalidateCaches();
+      }
+    } break;
+    default: {
+      throw std::runtime_error(
+          "Clearing memory levels other than the CPU level or GPU level is not "
+          "supported.");
+    }
   }
 }
 

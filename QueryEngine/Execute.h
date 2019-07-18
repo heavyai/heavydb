@@ -357,6 +357,8 @@ class Executor {
     (decltype(executors_){}).swap(executors_);
   }
 
+  static void clearMemory(const Data_Namespace::MemoryLevel memory_level);
+
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, const size_t> AggInfo;
 
   std::shared_ptr<ResultSet> execute(const Planner::RootPlan* root_plan,

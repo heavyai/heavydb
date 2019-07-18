@@ -199,12 +199,12 @@ bool QueryRunner::gpusPresent() const {
 
 void QueryRunner::clearGpuMemory() const {
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
-  Catalog_Namespace::SysCatalog::clearGpuMemory();
+  Executor::clearMemory(Data_Namespace::MemoryLevel::GPU_LEVEL);
 }
 
 void QueryRunner::clearCpuMemory() const {
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
-  Catalog_Namespace::SysCatalog::clearCpuMemory();
+  Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL);
 }
 
 void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
