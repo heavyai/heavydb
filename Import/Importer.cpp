@@ -519,6 +519,10 @@ ArrayDatum NullArray(const SQLTypeInfo& ti) {
   return ArrayDatum(0, NULL, true);
 }
 
+ArrayDatum ImporterUtils::composeNullArray(const SQLTypeInfo& ti) {
+  return NullArray(ti);
+}
+
 void addBinaryStringArray(const TDatum& datum, std::vector<std::string>& string_vec) {
   const auto& arr = datum.val.arr_val;
   for (const auto& elem_datum : arr) {

@@ -5370,7 +5370,11 @@ void MapDHandler::insert_data(const TSessionId& session,
                thrift_insert_data.data[col_idx].var_len_data.size());
       for (const auto& t_arr_datum : thrift_insert_data.data[col_idx].var_len_data) {
         if (t_arr_datum.is_null) {
-          array_column->emplace_back(0, nullptr, true);
+          if (ti.get_size() > 0 && !ti.get_elem_type().is_string()) {
+            array_column->push_back(Importer_NS::ImporterUtils::composeNullArray(ti));
+          } else {
+            array_column->emplace_back(0, nullptr, true);
+          }
         } else {
           ArrayDatum arr_datum;
           arr_datum.length = t_arr_datum.payload.size();
