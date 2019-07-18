@@ -81,8 +81,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/replace.hpp>
-#include <boost/algorithm/string/trim.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/process/search_path.hpp>
@@ -370,6 +368,11 @@ void MapDHandler::connect_impl(TSessionId& session,
       return;
     }
   }
+  auto const roles = session_ptr->get_currentUser().isSuper
+                         ? std::vector<std::string>{{"super"}}
+                         : SysCatalog::instance().getRoles(
+                               false, false, session_ptr->get_currentUser().userName);
+  log_session.append_name_value_pairs("roles", boost::algorithm::join(roles, ","));
   LOG(INFO) << "User " << user_meta.userName << " connected to database " << dbname
             << " with public_session_id " << session_ptr->get_public_session_id();
 }
@@ -1168,6 +1171,8 @@ void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& s
   LOG_SESSION(session);
   auto session_info = get_session_copy(session);
   if (!session_info.get_currentUser().isSuper) {
+    // WARNING: This appears to not include roles a user is a member of,
+    // if the role has no permissions granted to it.
     roles =
         SysCatalog::instance().getRoles(session_info.get_currentUser().userName,
                                         session_info.getCatalog().getCurrentDB().dbId);
