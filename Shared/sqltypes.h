@@ -469,6 +469,10 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     return is_varlen() && !is_fixlen_array();
   }
 
+  inline bool is_dict_encoded_string() const {
+    return is_string() && compression == kENCODING_DICT;
+  }
+
   HOST DEVICE inline bool operator!=(const SQLTypeInfoCore& rhs) const {
     return type != rhs.get_type() || subtype != rhs.get_subtype() ||
            dimension != rhs.get_dimension() || scale != rhs.get_scale() ||

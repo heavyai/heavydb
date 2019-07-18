@@ -38,28 +38,16 @@
 #endif  // HAVE_CUDA
 #include <future>
 
-#ifdef HAVE_ARROW_STATIC_RECORDBATCH_CTOR
 #define ARROW_RECORDBATCH_MAKE arrow::RecordBatch::Make
-#else
-#define ARROW_RECORDBATCH_MAKE std::make_shared<arrow::RecordBatch>
-#endif
 
-#ifdef HAVE_ARROW_APPENDVALUES
 #define APPENDVALUES AppendValues
-#else
-#define APPENDVALUES Append
-#endif
 
 using namespace arrow;
 
 namespace {
 
-inline bool is_dict_enc_str(const SQLTypeInfo& ti) {
-  return ti.is_string() && ti.get_compression() == kENCODING_DICT;
-}
-
 inline SQLTypes get_dict_index_type(const SQLTypeInfo& ti) {
-  CHECK(is_dict_enc_str(ti));
+  CHECK(ti.is_dict_encoded_string());
   switch (ti.get_size()) {
     case 1:
       return kTINYINT;
@@ -76,7 +64,7 @@ inline SQLTypes get_dict_index_type(const SQLTypeInfo& ti) {
 }
 
 inline SQLTypeInfo get_dict_index_type_info(const SQLTypeInfo& ti) {
-  CHECK(is_dict_enc_str(ti));
+  CHECK(ti.is_dict_encoded_string());
   switch (ti.get_size()) {
     case 1:
       return SQLTypeInfo(kTINYINT, ti.get_notnull());
@@ -142,7 +130,7 @@ void create_or_append_validity(const ScalarTargetValue& value,
   bool is_valid = false;
   if (col_type.is_boolean()) {
     is_valid = inline_int_null_val(col_type) != static_cast<int8_t>(*pvalue);
-  } else if (is_dict_enc_str(col_type)) {
+  } else if (col_type.is_dict_encoded_string()) {
     is_valid = inline_int_null_val(col_type) != static_cast<int32_t>(*pvalue);
   } else if (col_type.is_integer() || col_type.is_time()) {
     is_valid = inline_int_null_val(col_type) != static_cast<int64_t>(*pvalue);
@@ -300,7 +288,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::convertToArrow(
   for (size_t i = 0; i < col_count; ++i) {
     const auto ti = results_->getColType(i);
     std::shared_ptr<arrow::Array> dict;
-    if (is_dict_enc_str(ti)) {
+    if (ti.is_dict_encoded_string()) {
       const int dict_id = ti.get_comp_param();
       if (memo.HasDictionaryId(dict_id)) {
         ARROW_THROW_NOT_OK(memo.GetDictionary(dict_id, &dict));
@@ -512,7 +500,7 @@ std::shared_ptr<arrow::DataType> ArrowResultSetConverter::getArrowType(
     case kCHAR:
     case kVARCHAR:
     case kTEXT:
-      if (is_dict_enc_str(mapd_type)) {
+      if (mapd_type.is_dict_encoded_string()) {
         CHECK(dict_values);
         const auto index_type =
             getArrowType(get_dict_index_type_info(mapd_type), nullptr);
@@ -600,8 +588,9 @@ void ArrowResultSetConverter::initializeColumnBuilder(
     const std::shared_ptr<arrow::Field>& field) const {
   column_builder.field = field;
   column_builder.col_type = col_type;
-  column_builder.physical_type = is_dict_enc_str(col_type) ? get_dict_index_type(col_type)
-                                                           : get_physical_type(col_type);
+  column_builder.physical_type = col_type.is_dict_encoded_string()
+                                     ? get_dict_index_type(col_type)
+                                     : get_physical_type(col_type);
 
   auto value_type = field->type();
   if (value_type->id() == Type::DICTIONARY) {
