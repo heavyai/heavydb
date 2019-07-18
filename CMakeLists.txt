@@ -130,6 +130,11 @@ if(XCODE)
   add_definitions("-DXCODE")
 endif()
 
+option(ENABLE_ARROW_DEBUG "Enable Arrow Debug Helpers" ON)
+if (ENABLE_ARROW_DEBUG)
+  add_definitions("-DENABLE_ARROW_DEBUG")
+endif()
+
 # fixme: hack works for Homebrew, might not work for Conda
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(OPENSSL_ROOT_DIR "/usr/local/opt/openssl/")

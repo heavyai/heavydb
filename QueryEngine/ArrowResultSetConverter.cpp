@@ -702,9 +702,9 @@ void ArrowResultSetConverter::append(
   }
 }
 
-/*
 // helpers for debugging
 
+#ifdef ENABLE_ARROW_DEBUG
 void print_serialized_schema(const uint8_t* data, const size_t length) {
   io::BufferReader reader(std::make_shared<arrow::Buffer>(data, length));
   std::shared_ptr<Schema> schema;
@@ -727,4 +727,4 @@ void print_serialized_records(const uint8_t* data,
   io::BufferReader buffer_reader(std::make_shared<arrow::Buffer>(data, length));
   ARROW_THROW_NOT_OK(ipc::ReadRecordBatch(schema, &buffer_reader, &batch));
 }
-*/
+#endif
