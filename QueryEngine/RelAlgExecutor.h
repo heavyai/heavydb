@@ -254,15 +254,17 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
 
   bool isRowidLookup(const WorkUnit& work_unit);
 
-  ExecutionResult handleRetry(const int32_t error_code_in,
-                              const RelAlgExecutor::WorkUnit& work_unit,
-                              const std::vector<TargetMetaInfo>& targets_meta,
-                              const bool is_agg,
-                              const CompilationOptions& co,
-                              const ExecutionOptions& eo,
-                              RenderInfo* render_info,
-                              const int64_t queue_time_ms);
+  ExecutionResult handleOutOfMemoryRetry(const RelAlgExecutor::WorkUnit& work_unit,
+                                         const std::vector<TargetMetaInfo>& targets_meta,
+                                         const bool is_agg,
+                                         const CompilationOptions& co,
+                                         const ExecutionOptions& eo,
+                                         RenderInfo* render_info,
+                                         const bool was_multifrag_kernel_launch,
+                                         const int64_t queue_time_ms);
 
+  // Allows an out of memory error through if CPU retry is enabled. Otherwise, throws an
+  // appropriate exception corresponding to the query error code.
   static void handlePersistentError(const int32_t error_code);
 
   WorkUnit createWorkUnit(const RelAlgNode*, const SortInfo&, const bool just_explain);

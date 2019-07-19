@@ -24,6 +24,7 @@
 #include "Descriptors/QueryFragmentDescriptor.h"
 #include "DynamicWatchdog.h"
 #include "EquiJoinCondition.h"
+#include "ErrorHandling.h"
 #include "ExpressionRewrite.h"
 #include "ExternalCacheInvalidators.h"
 #include "GpuMemUtils.h"
@@ -1080,7 +1081,6 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
 }  // namespace
 
 ResultSetPtr Executor::executeWorkUnit(
-    int32_t* error_code,
     size_t& max_groups_buffer_entry_guess,
     const bool is_agg,
     const std::vector<InputTableInfo>& query_infos,
@@ -1093,8 +1093,7 @@ ResultSetPtr Executor::executeWorkUnit(
     const bool has_cardinality_estimation,
     ColumnCacheMap& column_cache) {
   try {
-    return executeWorkUnitImpl(error_code,
-                               max_groups_buffer_entry_guess,
+    return executeWorkUnitImpl(max_groups_buffer_entry_guess,
                                is_agg,
                                true,
                                query_infos,
@@ -1107,8 +1106,7 @@ ResultSetPtr Executor::executeWorkUnit(
                                has_cardinality_estimation,
                                column_cache);
   } catch (const CompilationRetryNewScanLimit& e) {
-    return executeWorkUnitImpl(error_code,
-                               max_groups_buffer_entry_guess,
+    return executeWorkUnitImpl(max_groups_buffer_entry_guess,
                                is_agg,
                                false,
                                query_infos,
@@ -1124,7 +1122,6 @@ ResultSetPtr Executor::executeWorkUnit(
 }
 
 ResultSetPtr Executor::executeWorkUnitImpl(
-    int32_t* error_code,
     size_t& max_groups_buffer_entry_guess,
     const bool is_agg,
     const bool allow_single_frag_table_opt,
@@ -1151,9 +1148,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
 
   int8_t crt_min_byte_width{get_min_byte_width()};
   do {
-    *error_code = 0;
     ExecutionDispatch execution_dispatch(
-        this, ra_exe_unit, query_infos, cat, row_set_mem_owner, error_code, render_info);
+        this, ra_exe_unit, query_infos, cat, row_set_mem_owner, render_info);
     ColumnFetcher column_fetcher(this, column_cache);
     std::unique_ptr<QueryCompilationDescriptor> query_comp_desc_owned;
     std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
@@ -1218,34 +1214,34 @@ ResultSetPtr Executor::executeWorkUnitImpl(
 
       const auto context_count =
           get_context_count(device_type, available_cpus, available_gpus.size());
-      dispatchFragments(dispatch,
-                        execution_dispatch,
-                        query_infos,
-                        eo,
-                        is_agg,
-                        allow_single_frag_table_opt,
-                        context_count,
-                        *query_comp_desc_owned,
-                        *query_mem_desc_owned,
-                        fragment_descriptor,
-                        available_gpus,
-                        available_cpus);
-    }
-    if (eo.with_dynamic_watchdog && interrupted_ && *error_code == ERR_OUT_OF_TIME) {
-      *error_code = ERR_INTERRUPTED;
+      try {
+        dispatchFragments(dispatch,
+                          execution_dispatch,
+                          query_infos,
+                          eo,
+                          is_agg,
+                          allow_single_frag_table_opt,
+                          context_count,
+                          *query_comp_desc_owned,
+                          *query_mem_desc_owned,
+                          fragment_descriptor,
+                          available_gpus,
+                          available_cpus);
+      } catch (QueryExecutionError& e) {
+        if (eo.with_dynamic_watchdog && interrupted_ &&
+            e.getErrorCode() == ERR_OUT_OF_TIME) {
+          throw QueryExecutionError(ERR_INTERRUPTED);
+        }
+        cat.getDataMgr().freeAllBuffers();
+        if (e.getErrorCode() == ERR_OVERFLOW_OR_UNDERFLOW &&
+            static_cast<size_t>(crt_min_byte_width << 1) <= sizeof(int64_t)) {
+          crt_min_byte_width <<= 1;
+          continue;
+        }
+        throw;
+      }
     }
     cat.getDataMgr().freeAllBuffers();
-    if (*error_code == ERR_OVERFLOW_OR_UNDERFLOW) {
-      crt_min_byte_width <<= 1;
-      continue;
-    }
-    if (*error_code != 0) {
-      return std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                         ExecutorDeviceType::CPU,
-                                         QueryMemoryDescriptor(),
-                                         nullptr,
-                                         this);
-    }
     if (is_agg) {
       try {
         return collectAllDeviceResults(execution_dispatch,
@@ -1254,14 +1250,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                        query_comp_desc_owned->getDeviceType(),
                                        row_set_mem_owner);
       } catch (ReductionRanOutOfSlots&) {
-        *error_code = ERR_OUT_OF_SLOTS;
-        std::vector<TargetInfo> targets;
-        for (const auto target_expr : ra_exe_unit.target_exprs) {
-          targets.push_back(get_target_info(target_expr, g_bigint_count));
-        }
-        // TODO(adb): use move semantics to transfer QMD
-        return std::make_shared<ResultSet>(
-            targets, ExecutorDeviceType::CPU, *query_mem_desc_owned, nullptr, this);
+        throw QueryExecutionError(ERR_OUT_OF_SLOTS);
       } catch (OverflowOrUnderflow&) {
         crt_min_byte_width <<= 1;
         continue;
@@ -1285,13 +1274,12 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                                           const Catalog_Namespace::Catalog& cat,
                                           PerFragmentCB& cb) {
   const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
-
-  int error_code = 0;
   ColumnCacheMap column_cache;
 
   std::vector<InputTableInfo> table_infos{table_info};
+  // TODO(adb): ensure this is under a try / catch
   ExecutionDispatch execution_dispatch(
-      this, ra_exe_unit, table_infos, cat, row_set_mem_owner_, &error_code, nullptr);
+      this, ra_exe_unit, table_infos, cat, row_set_mem_owner_, nullptr);
   ColumnFetcher column_fetcher(this, column_cache);
   std::unique_ptr<QueryCompilationDescriptor> query_comp_desc_owned;
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;

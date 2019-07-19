@@ -540,7 +540,6 @@ class Executor {
     mutable std::vector<uint64_t> all_frag_row_offsets_;
     mutable std::mutex all_frag_row_offsets_mutex_;
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
-    int32_t* error_code_;
     RenderInfo* render_info_;
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>> all_fragment_results_;
     std::atomic_flag dynamic_watchdog_set_ = ATOMIC_FLAG_INIT;
@@ -562,7 +561,6 @@ class Executor {
                       const std::vector<InputTableInfo>& query_infos,
                       const Catalog_Namespace::Catalog& cat,
                       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                      int32_t* error_code,
                       RenderInfo* render_info);
 
     ExecutionDispatch(const ExecutionDispatch&) = delete;
@@ -589,7 +587,7 @@ class Executor {
              const QueryMemoryDescriptor& query_mem_desc,
              const FragmentsList& frag_ids,
              const ExecutorDispatchMode kernel_dispatch_mode,
-             const int64_t rowid_lookup_key) noexcept;
+             const int64_t rowid_lookup_key);
 
     const RelAlgExecutionUnit& getExecutionUnit() const;
 
@@ -600,8 +598,7 @@ class Executor {
     friend class QueryCompilationDescriptor;
   };
 
-  ResultSetPtr executeWorkUnit(int32_t* error_code,
-                               size_t& max_groups_buffer_entry_guess,
+  ResultSetPtr executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                const bool is_agg,
                                const std::vector<InputTableInfo>&,
                                const RelAlgExecutionUnit&,
@@ -780,8 +777,7 @@ class Executor {
       const QueryMemoryDescriptor&) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
-  ResultSetPtr executeWorkUnitImpl(int32_t* error_code,
-                                   size_t& max_groups_buffer_entry_guess,
+  ResultSetPtr executeWorkUnitImpl(size_t& max_groups_buffer_entry_guess,
                                    const bool is_agg,
                                    const bool allow_single_frag_table_opt,
                                    const std::vector<InputTableInfo>&,

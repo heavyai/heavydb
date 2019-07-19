@@ -66,8 +66,6 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                              const UpdateLogForFragment::Callback& cb) {
   CHECK(cb);
   const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
-
-  int error_code = 0;
   ColumnCacheMap column_cache;
 
   const auto count =
@@ -79,13 +77,8 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
   const auto count_all_exe_unit = create_count_all_execution_unit(ra_exe_unit, count);
 
   std::vector<InputTableInfo> table_infos{table_info};
-  ExecutionDispatch execution_dispatch(this,
-                                       count_all_exe_unit,
-                                       table_infos,
-                                       cat,
-                                       row_set_mem_owner,
-                                       &error_code,
-                                       nullptr);
+  ExecutionDispatch execution_dispatch(
+      this, count_all_exe_unit, table_infos, cat, row_set_mem_owner, nullptr);
   ColumnFetcher column_fetcher(this, column_cache);
   const auto execution_descriptors =
       execution_dispatch.compile(0, 8, co, eo, column_fetcher, false);
@@ -125,7 +118,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
     const auto count_ptr = boost::get<int64_t>(count_scalar_tv);
     CHECK(count_ptr);
     ExecutionDispatch current_fragment_execution_dispatch(
-        this, ra_exe_unit, table_infos, cat, row_set_mem_owner, &error_code, nullptr);
+        this, ra_exe_unit, table_infos, cat, row_set_mem_owner, nullptr);
     const auto execution_descriptors = current_fragment_execution_dispatch.compile(
         *count_ptr, 8, co, eo, column_fetcher, false);
     // We may want to consider in the future allowing this to execute on devices other
@@ -140,9 +133,6 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
         {FragmentsPerTable{table_id, {fragment_index}}},
         ExecutorDispatchMode::KernelPerFragment,
         -1);
-    if (error_code) {
-      throw std::runtime_error(RelAlgExecutor::getErrorMessageFromCode(error_code));
-    }
     const auto& proj_fragment_results =
         current_fragment_execution_dispatch.getFragmentResults();
     if (proj_fragment_results.empty()) {
