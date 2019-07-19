@@ -589,19 +589,15 @@ TEST(Insert, NullArrayNullEmpty) {
     run_ddl_statement("DROP TABLE IF EXISTS table_array_fixlen_text;");
     EXPECT_NO_THROW(
         run_ddl_statement("create table table_array_fixlen_text (strings text[2]);"));
-    EXPECT_NO_THROW(
-        run_multiple_agg("INSERT INTO table_array_fixlen_text VALUES(NULL);", dt));
+    EXPECT_THROW(
+        run_multiple_agg("INSERT INTO table_array_fixlen_text VALUES(NULL);", dt),
+        std::runtime_error);
     EXPECT_THROW(run_multiple_agg("INSERT INTO table_array_fixlen_text VALUES({});", dt),
                  std::runtime_error);
     EXPECT_NO_THROW(
         run_multiple_agg("INSERT INTO table_array_fixlen_text VALUES({NULL,NULL});", dt));
     EXPECT_NO_THROW(
         run_multiple_agg("INSERT INTO table_array_fixlen_text VALUES({'a','b'});", dt));
-    ASSERT_EQ(
-        2,
-        v<int64_t>(run_simple_agg(
-            "SELECT count(*) FROM table_array_fixlen_text WHERE strings IS NOT NULL;",
-            dt)));
     ASSERT_EQ(
         1,
         v<int64_t>(run_simple_agg(
@@ -610,7 +606,8 @@ TEST(Insert, NullArrayNullEmpty) {
     ASSERT_EQ(
         1,
         v<int64_t>(run_simple_agg(
-            "SELECT count(*) FROM table_array_fixlen_text WHERE strings IS NULL;", dt)));
+            "SELECT count(*) FROM table_array_fixlen_text WHERE strings[2] IS NULL;",
+            dt)));
 
     run_ddl_statement("DROP TABLE IF EXISTS table_array_with_nulls;");
     EXPECT_NO_THROW(run_ddl_statement(create_table_array_with_nulls));

@@ -256,9 +256,6 @@ inline void put_null(void* ndptr, const SQLTypeInfo& ntype, const std::string co
   }
 
   switch (ntype.get_type()) {
-    case kTEXT: {
-      CHECK(ntype.get_compression() == kENCODING_DICT);
-    }  // fall-through
     case kBOOLEAN:
     case kTINYINT:
     case kSMALLINT:
@@ -296,7 +293,7 @@ inline void put_null(void* ndptr, const SQLTypeInfo& ntype, const std::string co
       break;
     default:
       //! this f is currently only for putting fixed-size data in place
-      //! this f is not yet for putting var-size
+      //! this f is not yet for putting var-size or dict-encoded data
       CHECK(false);
   }
 }
@@ -308,9 +305,6 @@ inline void put_null_array(void* ndptr,
     throw std::runtime_error("NULL value on NOT NULL column '" + col_name + "'");
 
   switch (ntype.get_type()) {
-    case kTEXT: {
-      CHECK(ntype.get_compression() == kENCODING_DICT);
-    }  // fall-through
     case kBOOLEAN:
     case kTINYINT:
     case kSMALLINT:
@@ -348,7 +342,7 @@ inline void put_null_array(void* ndptr,
       break;
     default:
       //! this f is currently only for putting fixed-size data in place
-      //! this f is not yet for putting var-size
+      //! this f is not yet for putting var-size or dict-encoded data
       CHECK(false);
   }
 }
