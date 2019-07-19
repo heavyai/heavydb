@@ -585,19 +585,21 @@ bool backchannel(int action, ClientContext* cc, const std::string& ccn = "") {
   }
   if (state == INTERRUPTIBLE && action == INTERRUPT) {
     CHECK(context);
+    mapd::shared_ptr<ThriftClientConnection> connMgr;
     mapd::shared_ptr<TTransport> transport2;
     mapd::shared_ptr<TProtocol> protocol2;
     mapd::shared_ptr<TTransport> socket2;
+    connMgr = std::make_shared<ThriftClientConnection>();
     if (context->http || context->https) {
-      transport2 = openHttpClientTransport(context->server_host,
-                                           context->port,
-                                           ca_cert_name,
-                                           context->https,
-                                           context->skip_host_verify);
+      transport2 = connMgr->open_http_client_transport(context->server_host,
+                                                       context->port,
+                                                       ca_cert_name,
+                                                       context->https,
+                                                       context->skip_host_verify);
       protocol2 = mapd::shared_ptr<TProtocol>(new TJSONProtocol(transport2));
     } else {
-      transport2 =
-          openBufferedClientTransport(context->server_host, context->port, ca_cert_name);
+      transport2 = connMgr->open_buffered_client_transport(
+          context->server_host, context->port, ca_cert_name);
       protocol2 = mapd::shared_ptr<TProtocol>(new TBinaryProtocol(transport2));
     }
     MapDClient c2(protocol2);
@@ -1161,16 +1163,17 @@ int main(int argc, char** argv) {
   if (!vm.count("passwd")) {
     passwd = mapd_getpass();
   }
-
+  mapd::shared_ptr<ThriftClientConnection> connMgr;
+  connMgr = std::make_shared<ThriftClientConnection>();
   mapd::shared_ptr<TTransport> transport;
   mapd::shared_ptr<TProtocol> protocol;
   mapd::shared_ptr<TTransport> socket;
   if (https || http) {
-    transport =
-        openHttpClientTransport(server_host, port, ca_cert_name, https, skip_host_verify);
+    transport = connMgr->open_http_client_transport(
+        server_host, port, ca_cert_name, https, skip_host_verify);
     protocol = mapd::shared_ptr<TProtocol>(new TJSONProtocol(transport));
   } else {
-    transport = openBufferedClientTransport(server_host, port, ca_cert_name);
+    transport = connMgr->open_buffered_client_transport(server_host, port, ca_cert_name);
     protocol = mapd::shared_ptr<TProtocol>(new TBinaryProtocol(transport));
   }
   MapDClient c(protocol);
