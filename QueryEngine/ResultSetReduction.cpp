@@ -132,15 +132,30 @@ inline int64_t get_component(const int8_t* group_by_buffer,
 void run_reduction_code(const ReductionCode& reduction_code,
                         int8_t* this_targets_ptr,
                         const int8_t* that_targets_ptr,
+                        const int32_t that_entry_idx,
+                        const int32_t that_entry_count,
                         const void* this_qmd,
                         const void* that_qmd) {
   if (reduction_code.func_ptr) {
-    reduction_code.func_ptr(this_targets_ptr, that_targets_ptr, this_qmd, that_qmd);
+    reduction_code.func_ptr(this_targets_ptr,
+                            that_targets_ptr,
+                            that_entry_idx,
+                            that_entry_count,
+                            this_qmd,
+                            that_qmd);
   } else {
+    static std::mutex s_interp_lock;
+    std::lock_guard<std::mutex> s_interp_guard(s_interp_lock);
+    auto that_entry_idx_gv = llvm::GenericValue();
+    that_entry_idx_gv.IntVal = llvm::APInt(32, that_entry_idx);
+    auto that_entry_count_gv = llvm::GenericValue();
+    that_entry_count_gv.IntVal = llvm::APInt(32, that_entry_count);
     reduction_code.execution_engine->runFunction(
-        reduction_code.ir_func,
+        reduction_code.ir_reduce_func_idx,
         {llvm::GenericValue(this_targets_ptr),
          llvm::GenericValue(const_cast<int8_t*>(that_targets_ptr)),
+         that_entry_idx_gv,
+         that_entry_count_gv,
          llvm::GenericValue(const_cast<void*>(this_qmd)),
          llvm::GenericValue(const_cast<void*>(that_qmd))});
   }
@@ -532,30 +547,34 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
     const std::vector<std::string>& serialized_varlen_buffer,
     const ReductionCode& reduction_code) const {
   check_watchdog(entry_idx);
-  CHECK(!query_mem_desc_.didOutputColumnar());
-  if (isEmptyEntry(entry_idx, that_buff)) {
-    return;
-  }
-  const auto key_bytes = get_key_bytes_rowwise(query_mem_desc_);
-  const auto key_bytes_with_padding = align_to_int64(key_bytes);
-  auto this_targets_ptr =
-      row_ptr_rowwise(this_buff, query_mem_desc_, entry_idx) + key_bytes_with_padding;
-  auto that_targets_ptr =
-      row_ptr_rowwise(that_buff, query_mem_desc_, entry_idx) + key_bytes_with_padding;
-  if (key_bytes) {  // copy the key from right hand side
-    memcpy(this_targets_ptr - key_bytes_with_padding,
-           that_targets_ptr - key_bytes_with_padding,
-           key_bytes);
-  }
-
   if (reduction_code.execution_engine) {
+    CHECK(!query_mem_desc_.didOutputColumnar());
     run_reduction_code(reduction_code,
-                       this_targets_ptr,
-                       that_targets_ptr,
+                       this_buff,
+                       that_buff,
+                       entry_idx,
+                       that.query_mem_desc_.getEntryCount(),
                        &query_mem_desc_,
                        &that.query_mem_desc_);
     return;
   }
+
+  CHECK(!query_mem_desc_.didOutputColumnar());
+  if (isEmptyEntry(entry_idx, that_buff)) {
+    return;
+  }
+
+  const auto this_row_ptr = row_ptr_rowwise(this_buff, query_mem_desc_, entry_idx);
+  const auto that_row_ptr = row_ptr_rowwise(that_buff, query_mem_desc_, entry_idx);
+
+  const auto key_bytes = get_key_bytes_rowwise(query_mem_desc_);
+  if (key_bytes) {  // copy the key from right hand side
+    memcpy(this_row_ptr, that_row_ptr, key_bytes);
+  }
+
+  const auto key_bytes_with_padding = align_to_int64(key_bytes);
+  auto this_targets_ptr = this_row_ptr + key_bytes_with_padding;
+  auto that_targets_ptr = that_row_ptr + key_bytes_with_padding;
 
   const auto& col_slot_context = query_mem_desc_.getColSlotContext();
 
@@ -625,8 +644,6 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
 }
 
 namespace {
-
-using GroupValueInfo = std::pair<int64_t*, bool>;
 
 GroupValueInfo get_matching_group_value_columnar_reduction(int64_t* groups_buffer,
                                                            const uint32_t h,
@@ -767,6 +784,8 @@ inline GroupValueInfo get_matching_group_value_reduction(
   }
 }
 
+}  // namespace
+
 GroupValueInfo get_group_value_reduction(int64_t* groups_buffer,
                                          const uint32_t groups_buffer_entry_count,
                                          const int64_t* key,
@@ -811,8 +830,6 @@ GroupValueInfo get_group_value_reduction(int64_t* groups_buffer,
   return {nullptr, true};
 }
 
-}  // namespace
-
 // Reduces entry at position that_entry_idx in that_buff into this_buff. This is
 // the baseline layout, so the position in this_buff isn't known to be that_entry_idx.
 void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
@@ -822,6 +839,17 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                                               const ResultSetStorage& that,
                                               const ReductionCode& reduction_code) const {
   check_watchdog(that_entry_idx);
+  if (reduction_code.execution_engine) {
+    CHECK(!query_mem_desc_.didOutputColumnar());
+    run_reduction_code(reduction_code,
+                       this_buff,
+                       that_buff,
+                       that_entry_idx,
+                       that_entry_count,
+                       &query_mem_desc_,
+                       &that.query_mem_desc_);
+    return;
+  }
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   CHECK(query_mem_desc_.getQueryDescriptionType() ==
         QueryDescriptionType::GroupByBaselineHash);
@@ -882,19 +910,6 @@ void ResultSetStorage::reduceOneEntrySlotsBaseline(
     const size_t that_entry_count,
     const ResultSetStorage& that,
     const ReductionCode& reduction_code) const {
-  if (reduction_code.execution_engine) {
-    CHECK(!query_mem_desc_.didOutputColumnar());
-    const auto this_targets_ptr = reinterpret_cast<int8_t*>(this_entry_slots);
-    const auto that_targets_ptr = reinterpret_cast<const int8_t*>(
-        that_buff + get_row_qw_count(query_mem_desc_) * that_entry_idx +
-        get_slot_off_quad(query_mem_desc_));
-    run_reduction_code(reduction_code,
-                       this_targets_ptr,
-                       that_targets_ptr,
-                       &query_mem_desc_,
-                       &that.query_mem_desc_);
-    return;
-  }
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   size_t j = 0;
   size_t init_agg_val_idx = 0;

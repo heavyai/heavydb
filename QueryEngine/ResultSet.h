@@ -128,6 +128,12 @@ class ResultSetStorage {
   ReductionCode reduceOneEntrySlotsBaselineJIT(const ResultSetStorage& that) const;
 
  private:
+  void isEmptyJit(const ReductionCode& reduction_code) const;
+
+  void reduceOneEntryNoCollisionsRowWiseIdxJIT(const ReductionCode& reduction_code) const;
+
+  void reduceOneEntryBaselineJIT(const ReductionCode& reduction_code) const;
+
   ReductionCode finalizeReductionCode(ReductionCode reduction_code,
                                       CgenState* cgen_state) const;
 
@@ -907,5 +913,21 @@ bool use_parallel_algorithms(const ResultSet& rows);
 int8_t get_width_for_slot(const size_t target_slot_idx,
                           const bool float_argument_input,
                           const QueryMemoryDescriptor& query_mem_desc);
+
+size_t get_byteoff_of_slot(const size_t slot_idx,
+                           const QueryMemoryDescriptor& query_mem_desc);
+
+using GroupValueInfo = std::pair<int64_t*, bool>;
+
+GroupValueInfo get_group_value_reduction(int64_t* groups_buffer,
+                                         const uint32_t groups_buffer_entry_count,
+                                         const int64_t* key,
+                                         const uint32_t key_count,
+                                         const size_t key_width,
+                                         const QueryMemoryDescriptor& query_mem_desc,
+                                         const int64_t* that_buff_i64,
+                                         const size_t that_entry_idx,
+                                         const size_t that_entry_count,
+                                         const uint32_t row_size_quad);
 
 #endif  // QUERYENGINE_RESULTSET_H

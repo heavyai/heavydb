@@ -73,13 +73,6 @@ TargetValue make_avg_target_value(const int8_t* ptr1,
   return pair_to_double({sum, count}, target_info.sql_type, false);
 }
 
-// Gets the byte offset, starting from the beginning of the row targets buffer, of
-// the value in position slot_idx (only makes sense for row-wise representation).
-size_t get_byteoff_of_slot(const size_t slot_idx,
-                           const QueryMemoryDescriptor& query_mem_desc) {
-  return query_mem_desc.getPaddedColWidthForRange(0, slot_idx);
-}
-
 // Given the entire buffer for the result set, buff, finds the beginning of the
 // column for slot_idx. Only makes sense for column-wise representation.
 const int8_t* advance_col_buff_to_slot(const int8_t* buff,
@@ -111,6 +104,13 @@ const int8_t* advance_col_buff_to_slot(const int8_t* buff,
   return nullptr;
 }
 }  // namespace
+
+// Gets the byte offset, starting from the beginning of the row targets buffer, of
+// the value in position slot_idx (only makes sense for row-wise representation).
+size_t get_byteoff_of_slot(const size_t slot_idx,
+                           const QueryMemoryDescriptor& query_mem_desc) {
+  return query_mem_desc.getPaddedColWidthForRange(0, slot_idx);
+}
 
 std::vector<TargetValue> ResultSet::getRowAt(
     const size_t global_entry_idx,
@@ -1875,10 +1875,7 @@ bool ResultSetStorage::isEmptyEntry(const size_t entry_idx, const int8_t* buff) 
     CHECK_GE(query_mem_desc_.getTargetIdxForKey(), 0);
     CHECK_LT(static_cast<size_t>(query_mem_desc_.getTargetIdxForKey()),
              target_init_vals_.size());
-    const auto key_bytes_with_padding =
-        align_to_int64(get_key_bytes_rowwise(query_mem_desc_));
-    const auto rowwise_target_ptr =
-        row_ptr_rowwise(buff, query_mem_desc_, entry_idx) + key_bytes_with_padding;
+    const auto rowwise_target_ptr = row_ptr_rowwise(buff, query_mem_desc_, entry_idx);
     const auto target_slot_off =
         get_byteoff_of_slot(query_mem_desc_.getTargetIdxForKey(), query_mem_desc_);
     return read_int_from_buff(rowwise_target_ptr + target_slot_off,
