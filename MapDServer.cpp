@@ -33,6 +33,7 @@
 #include "Shared/Logger.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/file_delete.h"
+#include "Shared/mapd_shared_mutex.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/scope.h"
 
@@ -66,6 +67,10 @@ bool g_enable_thrift_logs{false};
 
 std::atomic<bool> g_running{true};
 std::atomic<int> g_saw_signal{-1};
+
+mapd_shared_mutex g_thrift_mutex;
+TThreadedServer* g_thrift_http_server{nullptr};
+TThreadedServer* g_thrift_buf_server{nullptr};
 
 TableGenerations table_generations_from_thrift(
     const std::vector<TTableGeneration>& thrift_table_generations) {
@@ -120,18 +125,25 @@ void omnisci_signal_handler(int signum) {
 
   // Tell heartbeat() to shutdown by unsetting the 'g_running' flag.
   // If 'g_running' is already false, this has no effect and the
-  // shutdown is already in progress. If a core dump is in progress,
-  // say if we CHECK'ed and Logger.cpp called abort(), this should be
-  // harmless because heartbeat() will notice and skip calling exit().
+  // shutdown is already in progress.
   g_running = false;
 
-  // Wait briefly to give heartbeat() a head start on the shutdown work.
-  sleep(2);
+  // Handle core dumps specially by pausing inside this signal handler
+  // because on some systems, some signals will execute their default
+  // action immediately when and if the signal handler returns.
+  // We would like to do some emergency cleanup before core dump.
+  if (signum == SIGQUIT || signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE) {
+    // Wait briefly to give heartbeat() a chance to flush the logs and
+    // do any other emergency shutdown tasks.
+    sleep(2);
 
-  // Trigger whatever default action this signal would have done,
-  // such as terminate the process or dump core.
-  register_signal_handler(signum, SIG_DFL);
-  kill(getpid(), signum);
+    // Explicitly trigger whatever default action this signal would
+    // have done, such as terminate the process or dump core.
+    // Signals are currently blocked so this new signal will be queued
+    // until this signal handler returns.
+    register_signal_handler(signum, SIG_DFL);
+    kill(getpid(), signum);
+  }
 }
 
 void register_signal_handlers() {
@@ -873,7 +885,7 @@ void MapDProgramOptions::temporarily_support_deprecated_log_options_201904() {
 }
 
 void heartbeat() {
-  // Block signals for this heartbeat thread, only.
+  // Block all signals for this heartbeat thread, only.
   sigset_t set;
   sigfillset(&set);
   int result = pthread_sigmask(SIG_BLOCK, &set, NULL);
@@ -897,16 +909,27 @@ void heartbeat() {
 
   // if dumping core, try to do some quick stuff
   if (signum == SIGQUIT || signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE) {
-    shutdown_handler();
+    if (g_mapd_handler) {
+      std::call_once(g_shutdown_once_flag,
+                     []() { g_mapd_handler->emergency_shutdown(); });
+    }
     logger::shutdown();
     return;
+    // core dump should begin soon after this, see omnisci_signal_handler()
   }
 
-  // do an orderly shutdown
-  if (signum <= 0 || signum == SIGTERM) {
-    exit(EXIT_SUCCESS);
-  } else {
-    exit(signum);
+  // trigger an orderly shutdown by telling Thrift to stop serving
+  {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(g_thrift_mutex);
+    auto httpserv = g_thrift_http_server;
+    if (httpserv) {
+      httpserv->stop();
+    }
+    auto bufserv = g_thrift_buf_server;
+    if (bufserv) {
+      bufserv->stop();
+    }
+    // main() should return soon after this
   }
 }
 
@@ -920,17 +943,14 @@ int main(int argc, char** argv) {
   // try to enforce an orderly shutdown even after a signal
   register_signal_handlers();
 
-  // register shutdown procedures for when a CHECK or a LOG(FATAL) happens
-  logger::set_once_fatal_func(&shutdown_handler);
-
-  // register shutdown procedures for when a normal exit() shutdown happens
+  // register shutdown procedures for when a normal shutdown happens
   // be aware that atexit() functions run in reverse order
   atexit(&logger::shutdown);
   atexit(&shutdown_handler);
 
   // start background thread to clean up _DELETE_ME files
   const unsigned int wait_interval =
-      300;  // wait time in secs after looking for deleted file before looking again
+      3;  // wait time in secs after looking for deleted file before looking again
   std::thread file_delete_thread(file_delete,
                                  std::ref(g_running),
                                  wait_interval,
@@ -994,6 +1014,11 @@ int main(int argc, char** argv) {
         mapd::shared_ptr<TServerSocket>(new TServerSocket(prog_config_opts.http_port));
   }
 
+  ScopeGuard pointer_to_thrift_guard = [] {
+    mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
+    g_thrift_buf_server = g_thrift_http_server = nullptr;
+  };
+
   if (prog_config_opts.mapd_parameters.ha_group_id.empty()) {
     mapd::shared_ptr<TProcessor> processor(new MapDProcessor(g_mapd_handler));
 
@@ -1004,6 +1029,10 @@ int main(int argc, char** argv) {
     mapd::shared_ptr<TServerTransport> bufServerTransport(serverSocket);
     TThreadedServer bufServer(
         processor, bufServerTransport, bufTransportFactory, bufProtocolFactory);
+    {
+      mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
+      g_thrift_buf_server = &bufServer;
+    }
 
     mapd::shared_ptr<TServerTransport> httpServerTransport(httpServerSocket);
     mapd::shared_ptr<TTransportFactory> httpTransportFactory(
@@ -1011,6 +1040,10 @@ int main(int argc, char** argv) {
     mapd::shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
     TThreadedServer httpServer(
         processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
+    {
+      mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
+      g_thrift_http_server = &httpServer;
+    }
 
     std::thread bufThread(start_server,
                           std::ref(bufServer),
@@ -1032,5 +1065,10 @@ int main(int argc, char** argv) {
   file_delete_thread.join();
   heartbeat_thread.join();
 
-  return 0;
+  int signum = g_saw_signal;
+  if (signum <= 0 || signum == SIGTERM) {
+    return 0;
+  } else {
+    return signum;
+  }
 };

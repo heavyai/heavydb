@@ -273,9 +273,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
   }
 }
 
-MapDHandler::~MapDHandler() {
-  LOG(INFO) << "omnisci_server exits." << std::endl;
-}
+MapDHandler::~MapDHandler() {}
 
 void MapDHandler::check_read_only(const std::string& str) {
   if (MapDHandler::read_only_) {
@@ -5545,12 +5543,16 @@ void MapDHandler::get_license_claims(TLicenseInfo& _return,
 }
 
 void MapDHandler::shutdown() {
-  if (calcite_) {
-    calcite_->close_calcite_server(false);
-  }
+  emergency_shutdown();
 
   if (render_handler_) {
     render_handler_->shutdown();
+  }
+}
+
+void MapDHandler::emergency_shutdown() {
+  if (calcite_) {
+    calcite_->close_calcite_server(false);
   }
 }
 

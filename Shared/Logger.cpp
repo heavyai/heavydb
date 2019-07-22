@@ -212,8 +212,7 @@ BOOST_NORETURN Logger<Severity::FATAL>::~Logger() {
     // Exceptions thrown by (*fatal_func)() are propagated here.
     std::call_once(g_fatal_func_flag, *fatal_func);
   }
-  shutdown();
-  abort();
+  abort();  // SIGABRT will be caught by MapDServer.cpp's signal handler
 }
 
 using ClogSync = sinks::synchronous_sink<sinks::text_ostream_backend>;

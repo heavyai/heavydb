@@ -438,8 +438,10 @@ class MapDHandler : public MapDIf {
       const std::string& signatures,
       const std::map<std::string, std::string>& device_ir_map) override;
 
-  void shutdown();
   // end of sync block for HAHandler and mapd.thrift
+
+  void shutdown();
+  void emergency_shutdown();
 
   TSessionId getInvalidSessionId() const;
 
