@@ -4875,16 +4875,18 @@ void import_gpu_sort_test() {
   const std::string drop_old_gpu_sort_test{"DROP TABLE IF EXISTS gpu_sort_test;"};
   run_ddl_statement(drop_old_gpu_sort_test);
   g_sqlite_comparator.query(drop_old_gpu_sort_test);
-  run_ddl_statement("CREATE TABLE gpu_sort_test(x int) WITH (fragment_size=2);");
-  g_sqlite_comparator.query("CREATE TABLE gpu_sort_test(x int);");
+  std::string create_query(
+      "CREATE TABLE gpu_sort_test (x bigint, y int, z smallint, t tinyint)");
+  run_ddl_statement(create_query + " WITH (fragment_size=2);");
+  g_sqlite_comparator.query(create_query + ";");
   TestHelpers::ValuesGenerator gen("gpu_sort_test");
   for (size_t i = 0; i < 4; ++i) {
-    const auto insert_query = gen(2);
+    const auto insert_query = gen(2, 2, 2, 2);
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (size_t i = 0; i < 6; ++i) {
-    const auto insert_query = gen(16000);
+    const auto insert_query = gen(16000, 16000, 16000, 127);
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -5725,9 +5727,13 @@ TEST(Select, OrRewrite) {
 TEST(Select, GpuSort) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT x, COUNT(*) AS n FROM gpu_sort_test GROUP BY x ORDER BY n DESC;", dt);
-    c("SELECT x, COUNT(*), COUNT(*) AS n FROM gpu_sort_test GROUP BY x ORDER BY n DESC;",
+    c("SELECT x, COUNT(*) AS val FROM gpu_sort_test GROUP BY x ORDER BY val DESC;", dt);
+    c("SELECT y, COUNT(*) AS val FROM gpu_sort_test GROUP BY y ORDER BY val DESC;", dt);
+    c("SELECT y, COUNT(*), COUNT(*) AS val FROM gpu_sort_test GROUP BY y ORDER BY val "
+      "DESC;",
       dt);
+    c("SELECT z, COUNT(*) AS val FROM gpu_sort_test GROUP BY z ORDER BY val DESC;", dt);
+    c("SELECT t, COUNT(*) AS val FROM gpu_sort_test GROUP BY t ORDER BY val DESC;", dt);
   }
 }
 
