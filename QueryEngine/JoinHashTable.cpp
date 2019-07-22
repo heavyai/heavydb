@@ -228,7 +228,6 @@ std::vector<std::pair<JoinHashTable::JoinHashTableCacheKey,
 std::mutex JoinHashTable::join_hash_table_cache_mutex_;
 
 size_t get_shard_count(const Analyzer::BinOper* join_condition,
-                       const RelAlgExecutionUnit& ra_exe_unit,
                        const Executor* executor) {
   const Analyzer::ColumnVar* inner_col{nullptr};
   const Analyzer::Expr* outer_col{nullptr};
@@ -242,7 +241,7 @@ size_t get_shard_count(const Analyzer::BinOper* join_condition,
   if (!inner_col || !outer_col) {
     return 0;
   }
-  return get_shard_count({inner_col, outer_col}, ra_exe_unit, executor);
+  return get_shard_count({inner_col, outer_col}, executor);
 }
 
 namespace {
@@ -268,7 +267,6 @@ bool shard_count_less_or_equal_device_count(const int inner_table_id,
 
 size_t get_shard_count(
     std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> equi_pair,
-    const RelAlgExecutionUnit& ra_exe_unit,
     const Executor* executor) {
   const auto inner_col = equi_pair.first;
   const auto outer_col = dynamic_cast<const Analyzer::ColumnVar*>(equi_pair.second);
@@ -305,7 +303,6 @@ size_t get_shard_count(
 std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
     const std::vector<InputTableInfo>& query_infos,
-    const RelAlgExecutionUnit& ra_exe_unit,
     const Data_Namespace::MemoryLevel memory_level,
     const HashType preferred_hash_type,
     const int device_count,
@@ -365,7 +362,6 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
       std::shared_ptr<JoinHashTable>(new JoinHashTable(qual_bin_oper,
                                                        inner_col,
                                                        query_infos,
-                                                       ra_exe_unit,
                                                        memory_level,
                                                        preferred_hash_type,
                                                        col_range,
@@ -720,7 +716,7 @@ void JoinHashTable::checkHashJoinReplicationConstraint(const int table_id) const
     const auto inner_td = executor_->getCatalog()->getMetadataForTable(table_id);
     CHECK(inner_td);
     size_t shard_count{0};
-    shard_count = get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_);
+    shard_count = get_shard_count(qual_bin_oper_.get(), executor_);
     if (!shard_count && !table_is_replicated(inner_td)) {
       throw TableMustBeReplicated(inner_td->tableName);
     }
@@ -1034,7 +1030,7 @@ void JoinHashTable::initOneToManyHashTable(
     const int device_id) {
   auto hash_entry_count = get_hash_entry_count(col_range_, isBitwiseEq());
 #ifdef HAVE_CUDA
-  const auto shard_count = get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_);
+  const auto shard_count = get_shard_count(qual_bin_oper_.get(), executor_);
   const size_t entries_per_shard =
       (shard_count ? get_entries_per_shard(hash_entry_count, shard_count) : 0);
   // Even if we join on dictionary encoded strings, the memory on the GPU is still
@@ -1428,7 +1424,7 @@ size_t get_entries_per_device(const size_t total_entries,
 // TODO(adb): unify with BaselineJoinHashTable
 size_t JoinHashTable::shardCount() const {
   return memory_level_ == Data_Namespace::GPU_LEVEL
-             ? get_shard_count(qual_bin_oper_.get(), ra_exe_unit_, executor_)
+             ? get_shard_count(qual_bin_oper_.get(), executor_)
              : 0;
 }
 

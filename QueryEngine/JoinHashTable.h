@@ -54,7 +54,6 @@ class JoinHashTable : public JoinHashTableInterface {
   static std::shared_ptr<JoinHashTable> getInstance(
       const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
       const std::vector<InputTableInfo>& query_infos,
-      const RelAlgExecutionUnit& ra_exe_unit,
       const Data_Namespace::MemoryLevel memory_level,
       const HashType preferred_hash_type,
       const int device_count,
@@ -127,7 +126,6 @@ class JoinHashTable : public JoinHashTableInterface {
   JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
                 const Analyzer::ColumnVar* col_var,
                 const std::vector<InputTableInfo>& query_infos,
-                const RelAlgExecutionUnit& ra_exe_unit,
                 const Data_Namespace::MemoryLevel memory_level,
                 const HashType preferred_hash_type,
                 const ExpressionRange& col_range,
@@ -142,7 +140,6 @@ class JoinHashTable : public JoinHashTableInterface {
       , hash_entry_count_(0)
       , col_range_(col_range)
       , executor_(executor)
-      , ra_exe_unit_(ra_exe_unit)
       , column_cache_(column_cache)
       , device_count_(device_count) {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
@@ -249,7 +246,6 @@ class JoinHashTable : public JoinHashTableInterface {
 #endif
   ExpressionRange col_range_;
   Executor* executor_;
-  const RelAlgExecutionUnit& ra_exe_unit_;
   ColumnCacheMap& column_cache_;
   const int device_count_;
   std::pair<const int8_t*, size_t> linearized_multifrag_column_;
@@ -290,13 +286,10 @@ inline std::string get_table_name_by_id(const int table_id,
 // TODO(alex): Functions below need to be moved to a separate translation unit, they don't
 // belong here.
 
-size_t get_shard_count(const Analyzer::BinOper* join_condition,
-                       const RelAlgExecutionUnit& ra_exe_unit,
-                       const Executor* executor);
+size_t get_shard_count(const Analyzer::BinOper* join_condition, const Executor* executor);
 
 size_t get_shard_count(
     std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*> equi_pair,
-    const RelAlgExecutionUnit& ra_exe_unit,
     const Executor* executor);
 
 bool needs_dictionary_translation(const Analyzer::ColumnVar* inner_col,

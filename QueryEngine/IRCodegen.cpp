@@ -408,7 +408,6 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
       hash_table_or_error = buildHashTableForQualifier(
           qual_bin_oper,
           query_infos,
-          ra_exe_unit,
           co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                      : MemoryLevel::CPU_LEVEL,
           JoinHashTableInterface::HashType::OneToOne,

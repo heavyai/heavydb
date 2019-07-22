@@ -467,11 +467,10 @@ void MapDProgramOptions::fillOptions() {
       po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
       "Number of reader threads to use.");
   help_desc.add_options()(
-      "overlaps-bucket-threshold",
-      po::value<double>(&g_overlaps_hashjoin_bucket_threshold)
-          ->default_value(g_overlaps_hashjoin_bucket_threshold),
-      "The minimum size of a bucket corresponding to a given inner table "
-      "range for the overlaps hash join.");
+      "overlaps-max-table-size-bytes",
+      po::value<size_t>(&g_overlaps_max_table_size_bytes)
+          ->default_value(g_overlaps_max_table_size_bytes),
+      "The maximum size in bytes of the hash table for an overlaps hash join.");
   help_desc.add_options()("port,p",
                           po::value<int>(&mapd_parameters.omnisci_server_port)
                               ->default_value(mapd_parameters.omnisci_server_port),

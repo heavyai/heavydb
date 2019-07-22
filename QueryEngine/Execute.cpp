@@ -82,7 +82,7 @@ size_t g_filter_push_down_passing_row_ubound{0};
 bool g_enable_columnar_output{false};
 bool g_enable_overlaps_hashjoin{false};
 bool g_cache_string_hash{false};
-double g_overlaps_hashjoin_bucket_threshold{0.1};
+size_t g_overlaps_max_table_size_bytes{1024 * 1024 * 1024};
 bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
 size_t g_big_group_threshold{20000};
@@ -1775,10 +1775,12 @@ bool Executor::skipFragmentPair(
   size_t shard_count{0};
   if (dynamic_cast<const Analyzer::ExpressionTuple*>(
           join_condition->get_left_operand())) {
+    auto inner_outer_pairs =
+        normalize_column_pairs(join_condition, *getCatalog(), getTemporaryTables());
     shard_count = BaselineJoinHashTable::getShardCountForCondition(
-        join_condition, ra_exe_unit, this);
+        join_condition, this, inner_outer_pairs);
   } else {
-    shard_count = get_shard_count(join_condition, ra_exe_unit, this);
+    shard_count = get_shard_count(join_condition, this);
   }
   if (shard_count && !ra_exe_unit.join_quals.empty()) {
     plan_state_->join_info_.sharded_range_table_indices_.emplace(table_idx);
@@ -2754,7 +2756,6 @@ void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_desc
 Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
     const std::vector<InputTableInfo>& query_infos,
-    const RelAlgExecutionUnit& ra_exe_unit,
     const MemoryLevel memory_level,
     const JoinHashTableInterface::HashType preferred_hash_type,
     ColumnCacheMap& column_cache) {
@@ -2766,18 +2767,12 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
   }
   try {
     if (qual_bin_oper->is_overlaps_oper()) {
-      join_hash_table = OverlapsJoinHashTable::getInstance(qual_bin_oper,
-                                                           query_infos,
-                                                           ra_exe_unit,
-                                                           memory_level,
-                                                           device_count,
-                                                           column_cache,
-                                                           this);
+      join_hash_table = OverlapsJoinHashTable::getInstance(
+          qual_bin_oper, query_infos, memory_level, device_count, column_cache, this);
     } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
                    qual_bin_oper->get_left_operand())) {
       join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
                                                            query_infos,
-                                                           ra_exe_unit,
                                                            memory_level,
                                                            preferred_hash_type,
                                                            device_count,
@@ -2787,7 +2782,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
       try {
         join_hash_table = JoinHashTable::getInstance(qual_bin_oper,
                                                      query_infos,
-                                                     ra_exe_unit,
                                                      memory_level,
                                                      preferred_hash_type,
                                                      device_count,
@@ -2800,7 +2794,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
             std::dynamic_pointer_cast<Analyzer::BinOper>(join_quals.front());
         join_hash_table = BaselineJoinHashTable::getInstance(join_qual,
                                                              query_infos,
-                                                             ra_exe_unit,
                                                              memory_level,
                                                              preferred_hash_type,
                                                              device_count,

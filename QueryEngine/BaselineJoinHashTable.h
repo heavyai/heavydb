@@ -45,16 +45,16 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   static std::shared_ptr<BaselineJoinHashTable> getInstance(
       const std::shared_ptr<Analyzer::BinOper> condition,
       const std::vector<InputTableInfo>& query_infos,
-      const RelAlgExecutionUnit& ra_exe_unit,
       const Data_Namespace::MemoryLevel memory_level,
       const HashType preferred_hash_type,
       const int device_count,
       ColumnCacheMap& column_map,
       Executor* executor);
 
-  static size_t getShardCountForCondition(const Analyzer::BinOper* condition,
-                                          const RelAlgExecutionUnit& ra_exe_unit,
-                                          const Executor* executor);
+  static size_t getShardCountForCondition(
+      const Analyzer::BinOper* condition,
+      const Executor* executor,
+      const std::vector<InnerOuter>& inner_outer_pairs);
 
   int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
                             const int device_id) noexcept override;
@@ -91,15 +91,14 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
  protected:
   BaselineJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
                         const std::vector<InputTableInfo>& query_infos,
-                        const RelAlgExecutionUnit& ra_exe_unit,
                         const Data_Namespace::MemoryLevel memory_level,
                         const HashType preferred_hash_type,
                         const size_t entry_count,
                         ColumnCacheMap& column_map,
-                        Executor* executor);
+                        Executor* executor,
+                        const std::vector<InnerOuter>& inner_outer_pairs);
 
-  static int getInnerTableId(const Analyzer::BinOper* condition,
-                             const Executor* executor);
+  static int getInnerTableId(const std::vector<InnerOuter>& inner_outer_pairs);
 
   virtual void reifyWithLayout(const int device_count,
                                const JoinHashTableInterface::HashType layout);
@@ -153,8 +152,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
     std::vector<ChunkKey> cache_key_chunks;  // used for the cache key
   };
 
-  CompositeKeyInfo getCompositeKeyInfo(
-      const std::vector<InnerOuter>& inner_outer_pairs) const;
+  CompositeKeyInfo getCompositeKeyInfo() const;
 
   void reify(const int device_count);
 
@@ -183,10 +181,33 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
     const size_t num_elements;
     const std::vector<ChunkKey> chunk_keys;
     const SQLOps optype;
+    const boost::optional<double> overlaps_hashjoin_bucket_threshold;
 
     bool operator==(const struct HashTableCacheKey& that) const {
+      bool oeq;
+      if (overlaps_hashjoin_bucket_threshold && that.overlaps_hashjoin_bucket_threshold) {
+        oeq = (std::abs(*overlaps_hashjoin_bucket_threshold -
+                        *that.overlaps_hashjoin_bucket_threshold) <= 0.00000001);
+      } else {
+        oeq = (overlaps_hashjoin_bucket_threshold ==
+               that.overlaps_hashjoin_bucket_threshold);
+      }
       return num_elements == that.num_elements && chunk_keys == that.chunk_keys &&
-             optype == that.optype;
+             optype == that.optype && oeq;
+    }
+
+    bool operator<(const struct HashTableCacheKey& that) const {
+      bool oeq;
+      if (overlaps_hashjoin_bucket_threshold && that.overlaps_hashjoin_bucket_threshold) {
+        oeq = (std::abs(*overlaps_hashjoin_bucket_threshold -
+                        *that.overlaps_hashjoin_bucket_threshold) <= 0.00000001);
+      } else {
+        oeq = (overlaps_hashjoin_bucket_threshold ==
+               that.overlaps_hashjoin_bucket_threshold);
+      }
+      return num_elements < that.num_elements && chunk_keys < that.chunk_keys &&
+             optype < that.optype && !oeq &&
+             overlaps_hashjoin_bucket_threshold < that.overlaps_hashjoin_bucket_threshold;
     }
   };
 
@@ -210,7 +231,6 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   size_t entry_count_;         // number of keys in the hash table
   size_t emitted_keys_count_;  // number of keys emitted across all rows
   Executor* executor_;
-  const RelAlgExecutionUnit& ra_exe_unit_;
   ColumnCacheMap& column_cache_;
   std::shared_ptr<std::vector<int8_t>> cpu_hash_table_buff_;
   std::mutex cpu_hash_table_buff_mutex_;
@@ -222,6 +242,12 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   std::map<LinearizedColumnCacheKey, LinearizedColumn> linearized_multifrag_columns_;
   std::mutex linearized_multifrag_column_mutex_;
   RowSetMemoryOwner linearized_multifrag_column_owner_;
+  std::vector<InnerOuter> inner_outer_pairs_;
+  const Catalog_Namespace::Catalog* catalog_;
+#ifdef HAVE_CUDA
+  unsigned block_size_;
+  unsigned grid_size_;
+#endif  // HAVE_CUDA
 
   struct HashTableCacheValue {
     const std::shared_ptr<std::vector<int8_t>> buffer;
@@ -229,6 +255,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
     const size_t entry_count;
     const size_t emitted_keys_count;
   };
+
+  const HashTableCacheValue* findHashTableOnCpuInCache(const HashTableCacheKey&);
 
   static std::vector<std::pair<HashTableCacheKey, HashTableCacheValue>> hash_table_cache_;
   static std::mutex hash_table_cache_mutex_;

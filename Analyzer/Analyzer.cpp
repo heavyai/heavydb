@@ -2239,7 +2239,7 @@ bool ArrayExpr::operator==(Expr const& rhs) const {
 std::string ColumnVar::toString() const {
   return "(ColumnVar table: " + std::to_string(table_id) +
          " column: " + std::to_string(column_id) + " rte: " + std::to_string(rte_idx) +
-         ") ";
+         " " + get_type_info().get_type_name() + ") ";
 }
 
 std::string ExpressionTuple::toString() const {
@@ -2348,6 +2348,9 @@ std::string BinOper::toString() const {
       break;
     case kARRAY_AT:
       op = "[] ";
+      break;
+    case kOVERLAPS:
+      op = "OVERLAPS ";
       break;
     default:
       break;

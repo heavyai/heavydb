@@ -1458,7 +1458,6 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
   const auto join_table_or_err =
       executor_->buildHashTableForQualifier(partition_key_cond,
                                             query_infos,
-                                            ra_exe_unit,
                                             memory_level,
                                             JoinHashTableInterface::HashType::OneToMany,
                                             column_cache_map);
