@@ -207,7 +207,7 @@ OmniSciDB has the following dependencies:
 | ------- | ----------- | -------- |
 | [CMake](https://cmake.org/) | 3.3 | yes |
 | [LLVM](http://llvm.org/) | 7.0 (8.0 recommended) | yes |
-| [GCC](http://gcc.gnu.org/) | 7.0 | no, if building with clang |
+| [GCC](http://gcc.gnu.org/) | 7.1 | no, if building with clang |
 | [Go](https://golang.org/) | 1.12 | yes |
 | [Boost](http://www.boost.org/) | 1.65.0 | yes |
 | [OpenJDK](http://openjdk.java.net/) | 1.7 | yes |
