@@ -816,7 +816,7 @@ void JoinHashTable::initOneToManyHashTableOnCpu(
     const int8_t* col_buff,
     const size_t num_elements,
     const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
-    const size_t hash_entry_count,
+    const HashEntryInfo hash_entry_info,
     const int32_t hash_join_invalid_val) {
   const auto inner_col = cols.first;
   CHECK(inner_col);
@@ -824,8 +824,8 @@ void JoinHashTable::initOneToManyHashTableOnCpu(
   if (cpu_hash_table_buff_) {
     return;
   }
-  cpu_hash_table_buff_ =
-      std::make_shared<std::vector<int32_t>>(2 * hash_entry_count + num_elements);
+  cpu_hash_table_buff_ = std::make_shared<std::vector<int32_t>>(
+      2 * hash_entry_info.getNormalizedHashEntryCount() + num_elements);
   const StringDictionaryProxy* sd_inner_proxy{nullptr};
   const StringDictionaryProxy* sd_outer_proxy{nullptr};
   if (ti.is_string()) {
@@ -845,7 +845,7 @@ void JoinHashTable::initOneToManyHashTableOnCpu(
     init_threads.emplace_back(std::async(std::launch::async,
                                          init_hash_join_buff,
                                          &(*cpu_hash_table_buff_)[0],
-                                         hash_entry_count,
+                                         hash_entry_info.getNormalizedHashEntryCount(),
                                          hash_join_invalid_val,
                                          thread_idx,
                                          thread_count));
@@ -856,20 +856,38 @@ void JoinHashTable::initOneToManyHashTableOnCpu(
   for (auto& child : init_threads) {
     child.get();
   }
-  fill_one_to_many_hash_table(&(*cpu_hash_table_buff_)[0],
-                              hash_entry_count,
-                              hash_join_invalid_val,
-                              {col_buff, num_elements},
-                              {static_cast<size_t>(ti.get_size()),
-                               col_range_.getIntMin(),
-                               col_range_.getIntMax(),
-                               inline_fixed_encoding_null_val(ti),
-                               isBitwiseEq(),
-                               col_range_.getIntMax() + 1,
-                               get_join_column_type_kind(ti)},
-                              sd_inner_proxy,
-                              sd_outer_proxy,
-                              thread_count);
+
+  if (ti.get_type() == kDATE) {
+    fill_one_to_many_hash_table_bucketized(&(*cpu_hash_table_buff_)[0],
+                                           hash_entry_info,
+                                           hash_join_invalid_val,
+                                           {col_buff, num_elements},
+                                           {static_cast<size_t>(ti.get_size()),
+                                            col_range_.getIntMin(),
+                                            col_range_.getIntMax(),
+                                            inline_fixed_encoding_null_val(ti),
+                                            isBitwiseEq(),
+                                            col_range_.getIntMax() + 1,
+                                            get_join_column_type_kind(ti)},
+                                           sd_inner_proxy,
+                                           sd_outer_proxy,
+                                           thread_count);
+  } else {
+    fill_one_to_many_hash_table(&(*cpu_hash_table_buff_)[0],
+                                hash_entry_info,
+                                hash_join_invalid_val,
+                                {col_buff, num_elements},
+                                {static_cast<size_t>(ti.get_size()),
+                                 col_range_.getIntMin(),
+                                 col_range_.getIntMax(),
+                                 inline_fixed_encoding_null_val(ti),
+                                 isBitwiseEq(),
+                                 col_range_.getIntMax() + 1,
+                                 get_join_column_type_kind(ti)},
+                                sd_inner_proxy,
+                                sd_outer_proxy,
+                                thread_count);
+  }
 }
 
 namespace {
@@ -1028,31 +1046,37 @@ void JoinHashTable::initOneToManyHashTable(
     const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
     const Data_Namespace::MemoryLevel effective_memory_level,
     const int device_id) {
-  auto hash_entry_count = get_hash_entry_count(col_range_, isBitwiseEq());
+  auto const inner_col = cols.first;
+  CHECK(inner_col);
+
+  auto hash_entry_info = get_bucketized_hash_entry_info(
+      inner_col->get_type_info(), col_range_, isBitwiseEq());
+
 #ifdef HAVE_CUDA
   const auto shard_count = get_shard_count(qual_bin_oper_.get(), executor_);
   const size_t entries_per_shard =
-      (shard_count ? get_entries_per_shard(hash_entry_count, shard_count) : 0);
+      (shard_count ? get_entries_per_shard(hash_entry_info.hash_entry_count, shard_count)
+                   : 0);
   // Even if we join on dictionary encoded strings, the memory on the GPU is still
   // needed once the join hash table has been built on the CPU.
   if (memory_level_ == Data_Namespace::GPU_LEVEL && shard_count) {
     const auto shards_per_device = (shard_count + device_count_ - 1) / device_count_;
     CHECK_GT(shards_per_device, 0u);
-    hash_entry_count = entries_per_shard * shards_per_device;
+    hash_entry_info.hash_entry_count = entries_per_shard * shards_per_device;
   }
 #else
   CHECK_EQ(Data_Namespace::CPU_LEVEL, effective_memory_level);
 #endif
   if (!device_id) {
-    hash_entry_count_ = hash_entry_count;
+    hash_entry_count_ = hash_entry_info.getNormalizedHashEntryCount();
   }
-  const auto inner_col = cols.first;
-  CHECK(inner_col);
+
 #ifdef HAVE_CUDA
   const auto& ti = inner_col->get_type_info();
   auto& data_mgr = executor_->getCatalog()->getDataMgr();
   if (memory_level_ == Data_Namespace::GPU_LEVEL) {
-    const size_t total_count = 2 * hash_entry_count + num_elements;
+    const size_t total_count =
+        2 * hash_entry_info.getNormalizedHashEntryCount() + num_elements;
     gpu_hash_table_buff_[device_id] = CudaAllocator::allocGpuAbstractBuffer(
         &data_mgr, total_count * sizeof(int32_t), device_id);
   }
@@ -1063,7 +1087,7 @@ void JoinHashTable::initOneToManyHashTable(
     {
       std::lock_guard<std::mutex> cpu_hash_table_buff_lock(cpu_hash_table_buff_mutex_);
       initOneToManyHashTableOnCpu(
-          col_buff, num_elements, cols, hash_entry_count, hash_join_invalid_val);
+          col_buff, num_elements, cols, hash_entry_info, hash_join_invalid_val);
     }
     if (inner_col->get_table_id() > 0) {
       putHashTableOnCpuToCache(chunk_key, num_elements, cols);
@@ -1091,7 +1115,7 @@ void JoinHashTable::initOneToManyHashTable(
     data_mgr.getCudaMgr()->setContext(device_id);
     init_hash_join_buff_on_device(
         reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
-        hash_entry_count,
+        hash_entry_info.getNormalizedHashEntryCount(),
         hash_join_invalid_val,
         executor_->blockSize(),
         executor_->gridSize());
@@ -1103,13 +1127,15 @@ void JoinHashTable::initOneToManyHashTable(
                                  isBitwiseEq(),
                                  col_range_.getIntMax() + 1,
                                  get_join_column_type_kind(ti)};
+    auto use_bucketization = inner_col->get_type_info().get_type() == kDATE;
+
     if (shard_count) {
       CHECK_GT(device_count_, 0);
       for (size_t shard = device_id; shard < shard_count; shard += device_count_) {
         ShardInfo shard_info{shard, entries_per_shard, shard_count, device_count_};
         fill_one_to_many_hash_table_on_device_sharded(
             reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
-            hash_entry_count,
+            hash_entry_info,
             hash_join_invalid_val,
             join_column,
             type_info,
@@ -1118,14 +1144,25 @@ void JoinHashTable::initOneToManyHashTable(
             executor_->gridSize());
       }
     } else {
-      fill_one_to_many_hash_table_on_device(
-          reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
-          hash_entry_count,
-          hash_join_invalid_val,
-          join_column,
-          type_info,
-          executor_->blockSize(),
-          executor_->gridSize());
+      if (use_bucketization) {
+        fill_one_to_many_hash_table_on_device_bucketized(
+            reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
+            hash_entry_info,
+            hash_join_invalid_val,
+            join_column,
+            type_info,
+            executor_->blockSize(),
+            executor_->gridSize());
+      } else {
+        fill_one_to_many_hash_table_on_device(
+            reinterpret_cast<int32_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr()),
+            hash_entry_info,
+            hash_join_invalid_val,
+            join_column,
+            type_info,
+            executor_->blockSize(),
+            executor_->gridSize());
+      }
     }
 #else
     CHECK(false);
@@ -1238,8 +1275,7 @@ std::vector<llvm::Value*> JoinHashTable::getHashJoinArgs(llvm::Value* hash_ptr,
     hash_join_idx_args.push_back(executor_->cgen_state_->llInt(
         inline_fixed_encoding_null_val(key_col_logical_ti)));
   }
-  auto special_date_bucketization_case =
-      key_col_ti.get_type() == kDATE && hash_type_ == HashType::OneToOne;
+  auto special_date_bucketization_case = key_col_ti.get_type() == kDATE;
   if (isBitwiseEq()) {
     if (special_date_bucketization_case) {
       hash_join_idx_args.push_back(executor_->cgen_state_->llInt(
@@ -1273,8 +1309,7 @@ HashJoinMatchingSet JoinHashTable::codegenMatchingSet(const CompilationOptions& 
   const int64_t sub_buff_size = getComponentBufferSize();
   const auto& key_col_ti = key_col->get_type_info();
 
-  auto bucketize =
-      (key_col_ti.get_type() == kDATE) && (this->hash_type_ == HashType::OneToOne);
+  auto bucketize = (key_col_ti.get_type() == kDATE);
   return codegenMatchingSet(hash_join_idx_args,
                             shard_count,
                             !key_col_ti.get_notnull(),

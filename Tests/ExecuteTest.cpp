@@ -15370,7 +15370,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
                                      {g_shard_count ? "x" : "", g_shard_count},
                                      {},
                                      2,
-                                     with_delete_support);
+                                     with_delete_support,
+                                     g_aggregator);
     run_ddl_statement(create_vacuum_test_alt);
     g_sqlite_comparator.query("CREATE TABLE vacuum_test_alt(x int not null, y int );");
 
