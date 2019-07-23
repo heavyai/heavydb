@@ -349,6 +349,16 @@ int64_t Truncate__3(const int64_t x, const int32_t y) {
 }
 
 EXTENSION_NOINLINE
+bool isNan(const double x) {
+  return std::isnan(x);
+}
+
+EXTENSION_NOINLINE
+bool isNan__(const float x) {
+  return std::isnan(x);
+}
+
+EXTENSION_NOINLINE
 double conv_4326_900913_x(const double x) {
   return x * 111319.490778;
 }

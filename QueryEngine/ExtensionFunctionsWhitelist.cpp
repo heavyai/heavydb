@@ -156,23 +156,22 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
    */
   switch (ext_arg_type) {
     case ExtArgumentType::Bool:
-      return SQLTypeInfo(kBOOLEAN, true);
+      return SQLTypeInfo(kBOOLEAN, false);
     case ExtArgumentType::Int8:
-      return SQLTypeInfo(kTINYINT, true);
+      return SQLTypeInfo(kTINYINT, false);
     case ExtArgumentType::Int16:
-      return SQLTypeInfo(kSMALLINT, true);
+      return SQLTypeInfo(kSMALLINT, false);
     case ExtArgumentType::Int32:
-      return SQLTypeInfo(kINT, true);
+      return SQLTypeInfo(kINT, false);
     case ExtArgumentType::Int64:
-      return SQLTypeInfo(kBIGINT, true);
+      return SQLTypeInfo(kBIGINT, false);
     case ExtArgumentType::Float:
-      return SQLTypeInfo(kFLOAT, true);
+      return SQLTypeInfo(kFLOAT, false);
     case ExtArgumentType::Double:
-      return SQLTypeInfo(kDOUBLE, true);
-    default:;
-      LOG(FATAL) << "ext_arg_type_to_type_info: ExtArgumentType `"
-                 << serialize_type(ext_arg_type)
-                 << "` cannot be converted to SQLTypeInfo, returning NULL" << std::endl;
+      return SQLTypeInfo(kDOUBLE, false);
+    default:
+      LOG(WARNING) << "ExtArgumentType `" << serialize_type(ext_arg_type)
+                   << "` cannot be converted to SQLTypeInfo. Returning nulltype.";
   }
   return SQLTypeInfo(kNULLT, false);
 }

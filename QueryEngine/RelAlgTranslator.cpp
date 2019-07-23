@@ -1500,15 +1500,25 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
                             " currently not supported in this context");
   }
 
-  auto atypes = translateFunctionArgs(rex_function);
+  auto arg_expr_list = translateFunctionArgs(rex_function);
   // Reset possibly wrong return type of rex_function to the return
   // type of the optimal valid implementation. The return type can be
   // wrong in the case of multiple implementations of UDF functions
   // that have different return types but Calcite specifies the return
   // type according to the first implementation.
-  auto ext_func_sig = bind_function(rex_function->getName(), atypes);
-  auto rtype = ext_arg_type_to_type_info(ext_func_sig.getRet());
-  return makeExpr<Analyzer::FunctionOper>(rtype, rex_function->getName(), atypes);
+  auto ext_func_sig = bind_function(rex_function->getName(), arg_expr_list);
+  auto ret_ti = ext_arg_type_to_type_info(ext_func_sig.getRet());
+  // By defualt, the extension function type will not allow nulls. If one of the arguments
+  // is nullable, the extension function must also explicitly allow nulls.
+  bool arguments_not_null = true;
+  for (const auto& arg_expr : arg_expr_list) {
+    if (!arg_expr->get_type_info().get_notnull()) {
+      arguments_not_null = false;
+      break;
+    }
+  }
+  ret_ti.set_notnull(arguments_not_null);
+  return makeExpr<Analyzer::FunctionOper>(ret_ti, rex_function->getName(), arg_expr_list);
 }
 
 namespace {

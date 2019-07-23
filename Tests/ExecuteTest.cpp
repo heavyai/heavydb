@@ -7489,6 +7489,22 @@ TEST(Select, RuntimeFunctions) {
         std::numeric_limits<float>::min(),
         v<float>(run_simple_agg(
             "SELECT FLOOR(fn / 1e-13) FROM test WHERE fn IS NULL LIMIT 1;", dt)));
+    {
+      auto result = run_multiple_agg("SELECT fn, isnan(fn) FROM test;", dt);
+      ASSERT_EQ(result->rowCount(), 2 * g_num_rows);
+      // Ensure the type for `isnan` is nullable
+      const auto func_ti = result->getColType(1);
+      ASSERT_FALSE(func_ti.get_notnull());
+      for (size_t i = 0; i < g_num_rows; i++) {
+        auto crt_row = result->getNextRow(false, false);
+        ASSERT_EQ(crt_row.size(), size_t(2));
+        if (std::numeric_limits<float>::min() == v<float>(crt_row[0])) {
+          ASSERT_EQ(std::numeric_limits<int8_t>::min(), v<int64_t>(crt_row[1]));
+        } else {
+          ASSERT_EQ(0, v<int64_t>(crt_row[1]));
+        }
+      }
+    }
   }
 }
 
