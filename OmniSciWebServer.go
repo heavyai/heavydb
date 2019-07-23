@@ -804,22 +804,17 @@ var jupyterNotebookTemplateText = `{
 				},
 				"outputs": [],
 				"source": [
+					"# An Ibis connection object (con) is created on notebook startup, which\n",
+					"# includes a pymapd connection object as a property (con.con).\n",
+					"# If you receive a session invalid or object not found error using it,\n",
+					"# please close the Jupyter Lab browser tab, relaunch from Immerse,\n",
+					"# and run this cell to recreate your con object using the\n",
+					"# omnisci_connect function.\n",
+					"con = omnisci_connect()\n",
 					{{ if .SQL -}}
-						"# An Ibis connection object (con) is created on notebook startup.\n",
-						"# If you receive a session invalid or object not found error using it,\n",
-						"# please close the Jupyter Lab browser tab, relaunch from Immerse,\n",
-						"# and run this cell to recreate your con object using the\n",
-						"# omnisci_connect function.\n",
-						"con = omnisci_connect()\n",
 						"o = con.sql(\"\"\"{{ .EscapedSQL }}\"\"\")\n",
 						"o"
 					{{- else -}}
-						"# An Ibis connection object (con) is created on notebook startup.\n",
-						"# If you receive a session invalid or object not found error using it,\n",
-						"# please close the Jupyter Lab browser tab, relaunch from Immerse,\n",
-						"# and run this cell to recreate your con object using the\n",
-						"# omnisci_connect function.\n",
-						"con = omnisci_connect()\n",
 						"con.list_tables()"
 					{{- end }}
 				]
