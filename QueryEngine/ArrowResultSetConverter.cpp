@@ -293,7 +293,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::convertToArrow(
       if (memo.HasDictionaryId(dict_id)) {
         ARROW_THROW_NOT_OK(memo.GetDictionary(dict_id, &dict));
       } else {
-        auto str_list = results_->getDictionary(dict_id);
+        auto str_list = results_->getStringDictionaryPayloadCopy(dict_id);
 
         arrow::StringBuilder builder;
         // TODO(andrewseidl): replace with AppendValues() once Arrow 0.7.1 support is

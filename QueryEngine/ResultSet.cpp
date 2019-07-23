@@ -853,11 +853,11 @@ size_t ResultSet::getLimit() {
   return keep_first_;
 }
 
-std::shared_ptr<const std::vector<std::string>> ResultSet::getDictionary(
+std::shared_ptr<const std::vector<std::string>> ResultSet::getStringDictionaryPayloadCopy(
     const int dict_id) const {
+  CHECK(executor_);
   const auto sdp =
-      executor_ ? executor_->getStringDictionaryProxy(dict_id, row_set_mem_owner_, false)
-                : row_set_mem_owner_->getStringDictProxy(dict_id);
+      executor_->getStringDictionaryProxy(dict_id, row_set_mem_owner_, false);
   return sdp->getDictionary()->copyStrings();
 }
 

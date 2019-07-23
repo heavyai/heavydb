@@ -513,7 +513,8 @@ class ResultSet {
     separate_varlen_storage_valid_ = val;
   }
 
-  std::shared_ptr<const std::vector<std::string>> getDictionary(const int dict_id) const;
+  std::shared_ptr<const std::vector<std::string>> getStringDictionaryPayloadCopy(
+      const int dict_id) const;
 
  private:
   void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;
