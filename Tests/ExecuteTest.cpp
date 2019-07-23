@@ -1138,6 +1138,35 @@ TEST(Select, FilterAndSimpleAggregation) {
   }
 }
 
+TEST(Select, AggregateOnEmptyTable) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) from empty_test_table;", dt);
+    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d) from empty_test_table;", dt);
+    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d) from empty_test_table;", dt);
+    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) from empty_test_table;", dt);
+    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d) from "
+      "empty_test_table;",
+      dt);
+    // skipped fragment
+    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) from empty_test_table "
+      "where id > 5;",
+      dt);
+    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d) from empty_test_table where "
+      "id > 5;",
+      dt);
+    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d) from empty_test_table where "
+      "id > 5;",
+      dt);
+    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) from empty_test_table where "
+      "id > 5;",
+      dt);
+    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d) from "
+      "empty_test_table where id > 5;",
+      dt);
+  }
+}
+
 TEST(Select, LimitAndOffset) {
   CHECK(g_num_rows >= 4);
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -5368,6 +5397,14 @@ void import_logical_size_test() {
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
+}
+
+void import_empty_table_test() {
+  std::string create_statement(
+      "CREATE TABLE empty_test_table (id int, x bigint, y int, z smallint, t tinyint, "
+      "f float, d double);");
+  run_ddl_statement(create_statement);
+  g_sqlite_comparator.query(create_statement);
 }
 
 }  // namespace
@@ -16059,6 +16096,11 @@ int create_and_populate_tables(bool with_delete_support = true) {
     import_logical_size_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'logical_size_test'";
+  }
+  try {
+    import_empty_table_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'empty_table_test'";
   }
   {
     std::string insert_query{"INSERT INTO test_in_bitmap VALUES('a');"};

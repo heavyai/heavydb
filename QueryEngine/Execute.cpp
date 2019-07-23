@@ -1391,7 +1391,7 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
     if (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
       entry.push_back(0);
     } else if (agg_info.agg_kind == kAVG) {
-      entry.push_back(inline_null_val(agg_info.agg_arg_type, float_argument_input));
+      entry.push_back(inline_null_val(agg_info.sql_type, float_argument_input));
       entry.push_back(0);
     } else if (agg_info.agg_kind == kSAMPLE) {
       if (agg_info.sql_type.is_geometry()) {
