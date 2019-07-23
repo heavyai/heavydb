@@ -45,6 +45,41 @@ llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type,
   return nullptr;
 }
 
+inline SQLTypeInfo get_sql_type_from_llvm_type(const llvm::Type* ll_type) {
+  CHECK(ll_type);
+  const auto bits = ll_type->getPrimitiveSizeInBits();
+
+  if (ll_type->isFloatingPointTy()) {
+    switch (bits) {
+      case 32:
+        return SQLTypeInfo(kFLOAT, true);
+      case 64:
+        return SQLTypeInfo(kDOUBLE, true);
+      default:
+        LOG(FATAL) << "Unsupported llvm floating point type: " << bits
+                   << ", only 32 and 64 bit floating point is supported.";
+    }
+  } else {
+    switch (bits) {
+      case 1:
+        return SQLTypeInfo(kBOOLEAN, true);
+      case 8:
+        return SQLTypeInfo(kTINYINT, true);
+      case 16:
+        return SQLTypeInfo(kSMALLINT, true);
+      case 32:
+        return SQLTypeInfo(kINT, true);
+      case 64:
+        return SQLTypeInfo(kBIGINT, true);
+      default:
+        LOG(FATAL) << "Unrecognized llvm type for SQL type: "
+                   << bits;  // TODO let's get the real name here
+    }
+  }
+  UNREACHABLE();
+  return SQLTypeInfo();
+}
+
 bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_oper) {
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
@@ -126,6 +161,14 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
   const auto args = codegenFunctionOperCastArgs(
       function_oper, &ext_func_sig, orig_arg_lvs, const_arr_size, co);
   auto ext_call = cgen_state_->emitExternalCall(ext_func_sig.getName(), ret_ty, args);
+  // Cast the return of the extension function to match the FunctionOper
+  const auto extension_ret_ti = get_sql_type_from_llvm_type(ret_ty);
+  if (bbs.args_null_bb &&
+      extension_ret_ti.get_type() != function_oper->get_type_info().get_type()) {
+    ext_call = codegenCast(
+        ext_call, extension_ret_ti, function_oper->get_type_info(), false, co);
+  }
+
   auto ext_call_nullcheck = endArgsNullcheck(bbs, ext_call, function_oper);
   cgen_state_->ext_call_cache_.push_back({function_oper, ext_call_nullcheck});
   return ext_call_nullcheck;
@@ -161,12 +204,23 @@ llvm::Value* CodeGenerator::endArgsNullcheck(
     CHECK(bbs.args_notnull_bb);
     cgen_state_->ir_builder_.CreateBr(bbs.args_null_bb);
     cgen_state_->ir_builder_.SetInsertPoint(bbs.args_null_bb);
-    auto ext_call_phi = cgen_state_->ir_builder_.CreatePHI(fn_ret_lv->getType(), 2);
+
+    // The return type of the FunctionOper. The extension function call will be cast to
+    // this type if required.
+    const auto& func_oper_ret_ti = function_oper->get_type_info();
+
+    auto ext_call_phi = cgen_state_->ir_builder_.CreatePHI(
+        func_oper_ret_ti.is_fp()
+            ? get_fp_type(func_oper_ret_ti.get_size() * 8, cgen_state_->context_)
+            : get_int_type(func_oper_ret_ti.get_size() * 8, cgen_state_->context_),
+        2);
+
     ext_call_phi->addIncoming(fn_ret_lv, bbs.args_notnull_bb);
-    const auto& ret_ti = function_oper->get_type_info();
+
     const auto null_lv =
-        ret_ti.is_fp() ? static_cast<llvm::Value*>(cgen_state_->inlineFpNull(ret_ti))
-                       : static_cast<llvm::Value*>(cgen_state_->inlineIntNull(ret_ti));
+        func_oper_ret_ti.is_fp()
+            ? static_cast<llvm::Value*>(cgen_state_->inlineFpNull(func_oper_ret_ti))
+            : static_cast<llvm::Value*>(cgen_state_->inlineIntNull(func_oper_ret_ti));
     ext_call_phi->addIncoming(null_lv, bbs.orig_bb);
     return ext_call_phi;
   }

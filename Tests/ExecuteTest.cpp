@@ -7477,6 +7477,18 @@ TEST(Select, RuntimeFunctions) {
         static_cast<float>(1171.11),
         v<float>(run_simple_agg(
             "SELECT TRUNCATE(CAST(1171.113 AS FLOAT),2) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<float>(11000000000000),
+                    v<float>(run_simple_agg(
+                        "SELECT FLOOR(f / 1e-13) FROM test WHERE f < 1.2 LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(
+        static_cast<float>(11000000000000),
+        v<float>(run_simple_agg(
+            "SELECT FLOOR(CAST(f / 1e-13 AS FLOAT)) FROM test WHERE f < 1.2 LIMIT 1;",
+            dt)));
+    ASSERT_FLOAT_EQ(
+        std::numeric_limits<float>::min(),
+        v<float>(run_simple_agg(
+            "SELECT FLOOR(fn / 1e-13) FROM test WHERE fn IS NULL LIMIT 1;", dt)));
   }
 }
 

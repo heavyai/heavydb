@@ -170,10 +170,9 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::Double:
       return SQLTypeInfo(kDOUBLE, true);
     default:;
-      std::cerr << "ext_arg_type_to_type_info: ExtArgumentType `"
-                << serialize_type(ext_arg_type)
-                << "` cannot be converted to SQLTypeInfo, returning NULL" << std::endl;
-      CHECK(false);  // should never reach here
+      LOG(FATAL) << "ext_arg_type_to_type_info: ExtArgumentType `"
+                 << serialize_type(ext_arg_type)
+                 << "` cannot be converted to SQLTypeInfo, returning NULL" << std::endl;
   }
   return SQLTypeInfo(kNULLT, false);
 }
