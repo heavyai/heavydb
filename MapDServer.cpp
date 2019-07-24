@@ -521,6 +521,7 @@ void MapDProgramOptions::fillOptions() {
       po::value<bool>(&flush_log)->default_value(flush_log)->implicit_value(true),
       R"(DEPRECATED - Immediately flush logs to disk. Set to false if this is a performance bottleneck.)"
       " Replaced by log-auto-flush.");
+
   help_desc.add(log_options_.get_options());
 }
 
