@@ -70,4 +70,8 @@ std::vector<std::string> split(const std::string& str, const std::string& delim)
 // trim any whitespace from the left and right ends of a string
 std::string strip(const std::string& str);
 
+// sanitize an SQL string
+bool remove_unquoted_newlines_linefeeds_and_tabs_from_sql_string(
+    std::string& str) noexcept;
+
 #endif  // SHARED_STRINGTRANSFORM_H
