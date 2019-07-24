@@ -47,11 +47,12 @@ public class TestServer {
   private volatile boolean threadHadFailure = false;
   private volatile AssertionError ae;
   private static CalciteServerWrapper csw = null;
-  private static SockTransportProperties skT = null;
+  private static SockTransportProperties client_skT = null;
+  private static SockTransportProperties server_skT = null;
 
   @BeforeClass
   public static void startServer() {
-    csw = new CalciteServerWrapper(11000, 11001, "/data", null, skT);
+    csw = new CalciteServerWrapper(11000, 11001, "/data", null, client_skT, server_skT);
     new Thread(csw).start();
   }
 

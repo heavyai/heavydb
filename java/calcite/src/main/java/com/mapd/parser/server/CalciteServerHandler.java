@@ -73,6 +73,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
   private SockTransportProperties skT;
   private Map<String, ExtensionFunction> extSigs = null;
   private String dataDir;
+
   // TODO MAT we need to merge this into common code base for these functions with
   // CalciteDirect since we are not deprecating this stuff yet
   CalciteServerHandler(int mapdPort,
@@ -81,7 +82,6 @@ class CalciteServerHandler implements CalciteServer.Iface {
           SockTransportProperties skT,
           String udfAstFile) {
     this.mapdPort = mapdPort;
-    this.skT = skT;
     this.dataDir = dataDir;
 
     Map<String, ExtensionFunction> udfSigs = null;

@@ -624,6 +624,16 @@ void MapDProgramOptions::fillAdvancedOptions() {
                                po::value<std::string>(&mapd_parameters.ssl_trust_password)
                                    ->default_value(std::string("")),
                                "SSL java trust store password.");
+
+  developer_desc.add_options()("ssl-keystore",
+                               po::value<std::string>(&mapd_parameters.ssl_keystore)
+                                   ->default_value(std::string("")),
+                               "SSL server credentials as a java key store.");
+  developer_desc.add_options()(
+      "ssl-keystore-password",
+      po::value<std::string>(&mapd_parameters.ssl_keystore_password)
+          ->default_value(std::string("")),
+      "SSL server keystore password.");
   developer_desc.add_options()(
       "udf",
       po::value<std::string>(&udf_file_name),
@@ -689,6 +699,9 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
       return 1;
     }
     if (!trim_and_check_file_exists(mapd_parameters.ssl_trust_store, "ssl trust store")) {
+      return 1;
+    }
+    if (!trim_and_check_file_exists(mapd_parameters.ssl_keystore, "ssl key store")) {
       return 1;
     }
     if (!trim_and_check_file_exists(mapd_parameters.ssl_key_file, "ssl key file")) {

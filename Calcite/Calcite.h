@@ -29,7 +29,15 @@
 #include <thread>
 #include <vector>
 #include "Shared/MapDParameters.h"
+#include "Shared/ThriftClient.h"
+#include "Shared/mapd_shared_ptr.h"
 #include "rapidjson/document.h"
+
+#include <thrift/transport/TTransport.h>
+
+using namespace apache::thrift::transport;
+
+class CalciteServerClient;
 
 namespace Catalog_Namespace {
 class SessionInfo;
@@ -97,14 +105,21 @@ class Calcite {
                           const bool is_view_optimize);
   std::vector<std::string> get_db_objects(const std::string ra);
   void inner_close_calcite_server(bool log);
+  std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
+  getClient(int port);
 
   std::thread calcite_server_thread_;
   int ping();
 
+  mapd::shared_ptr<ThriftClientConnection> connMgr_;
   bool server_available_;
   int remote_calcite_port_ = -1;
   std::string ssl_trust_store_;
   std::string ssl_trust_password_;
+  std::string ssl_key_file_;
+  std::string ssl_keystore_;
+  std::string ssl_keystore_password_;
+  std::string ssl_cert_file_;
   std::string session_prefix_;
   std::once_flag shutdown_once_flag_;
 };

@@ -27,6 +27,7 @@
 #include "Catalog/Catalog.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/Logger.h"
+#include "Shared/ThriftClient.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/mapdpath.h"
 #include "Shared/measure.h"
@@ -68,6 +69,10 @@ static void start_calcite_server_as_daemon(const int mapd_port,
                                            const size_t calcite_max_mem,
                                            const std::string& ssl_trust_store,
                                            const std::string& ssl_trust_password,
+                                           const std::string& ssl_keystore,
+                                           const std::string& ssl_keystore_password,
+                                           const std::string& ssl_key_file,
+                                           const std::string& ssl_cert_file,
                                            const std::string& udf_filename) {
   std::string const xDebug = "-Xdebug";
   std::string const remoteDebug =
@@ -84,8 +89,10 @@ static void start_calcite_server_as_daemon(const int mapd_port,
   std::string localPortD = std::to_string(port);
   std::string mapdPortP = "-m";
   std::string mapdPortD = std::to_string(mapd_port);
-  std::string mapdTrustStoreD = "-T";
-  std::string mapdTrustPasswd = "-P";
+  std::string mapdTrustStoreP = "-T";
+  std::string mapdTrustPasswdP = "-P";
+  std::string mapdKeyStoreP = "-Y";
+  std::string mapdKeyStorePasswdP = "-Z";
   std::string mapdLogDirectory = "-DMAPD_LOG_DIR=" + data_dir;
   std::string userDefinedFunctionsP = "";
   std::string userDefinedFunctionsD = "";
@@ -115,10 +122,14 @@ static void start_calcite_server_as_daemon(const int mapd_port,
                          localPortD.c_str(),
                          mapdPortP.c_str(),
                          mapdPortD.c_str(),
-                         mapdTrustStoreD.c_str(),
+                         mapdTrustStoreP.c_str(),
                          ssl_trust_store.c_str(),
-                         mapdTrustPasswd.c_str(),
+                         mapdTrustPasswdP.c_str(),
                          ssl_trust_password.c_str(),
+                         mapdKeyStoreP.c_str(),
+                         ssl_keystore.c_str(),
+                         mapdKeyStorePasswdP.c_str(),
+                         ssl_keystore_password.c_str(),
                          (char*)0);
     } else {
       i = wrapped_execlp("java",
@@ -136,10 +147,14 @@ static void start_calcite_server_as_daemon(const int mapd_port,
                          localPortD.c_str(),
                          mapdPortP.c_str(),
                          mapdPortD.c_str(),
-                         mapdTrustStoreD.c_str(),
+                         mapdTrustStoreP.c_str(),
                          ssl_trust_store.c_str(),
-                         mapdTrustPasswd.c_str(),
+                         mapdTrustPasswdP.c_str(),
                          ssl_trust_password.c_str(),
+                         mapdKeyStoreP.c_str(),
+                         ssl_keystore.c_str(),
+                         mapdKeyStorePasswdP.c_str(),
+                         ssl_keystore_password.c_str(),
                          userDefinedFunctionsP.c_str(),
                          userDefinedFunctionsD.c_str(),
                          (char*)0);
@@ -155,15 +170,18 @@ static void start_calcite_server_as_daemon(const int mapd_port,
   }
 }
 
-std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>> get_client(
-    int port) {
-  mapd::shared_ptr<TTransport> socket(new TSocket("localhost", port));
-  mapd::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
+std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
+Calcite::getClient(int port) {
+  const auto transport = connMgr_->open_buffered_client_transport(
+      "localhost", port, ssl_cert_file_, true, 2000, 5000, 5000);
+
   try {
     transport->open();
 
   } catch (TException& tx) {
     throw tx;
+  } catch (std::exception& ex) {
+    throw ex;
   }
   mapd::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
   mapd::shared_ptr<CalciteServerClient> client;
@@ -188,7 +206,7 @@ void Calcite::runServer(const int mapd_port,
     LOG(ERROR) << "Please check that you are not trying to run two servers on same port";
     LOG(ERROR) << "Attempting to shutdown orphaned Calcite server";
     try {
-      auto clientP = get_client(remote_calcite_port_);
+      auto clientP = getClient(remote_calcite_port_);
       clientP.first->shutdown();
       clientP.second->close();
       LOG(ERROR) << "orphaned Calcite server shutdown";
@@ -205,6 +223,10 @@ void Calcite::runServer(const int mapd_port,
                                  calcite_max_mem,
                                  ssl_trust_store_,
                                  ssl_trust_password_,
+                                 ssl_keystore_,
+                                 ssl_keystore_password_,
+                                 ssl_key_file_,
+                                 ssl_cert_file_,
                                  udf_filename);
 
   // check for new server for 5 seconds max
@@ -222,7 +244,7 @@ void Calcite::runServer(const int mapd_port,
     }
   }
   server_available_ = false;
-  LOG(FATAL) << "No calcite remote server running on port " << port;
+  LOG(FATAL) << "Could not connect to calcite remote server running on port " << port;
 }
 
 // ping existing server
@@ -230,7 +252,7 @@ void Calcite::runServer(const int mapd_port,
 int Calcite::ping() {
   try {
     auto ms = measure<>::execution([&]() {
-      auto clientP = get_client(remote_calcite_port_);
+      auto clientP = getClient(remote_calcite_port_);
       clientP.first->ping();
       clientP.second->close();
     });
@@ -258,6 +280,7 @@ void Calcite::init(const int mapd_port,
                    const std::string& udf_filename) {
   LOG(INFO) << "Creating Calcite Handler,  Calcite Port is " << calcite_port
             << " base data dir is " << data_dir;
+  connMgr_ = std::make_shared<ThriftClientConnection>();
   if (calcite_port < 0) {
     CHECK(false) << "JNI mode no longer supported.";
   }
@@ -278,6 +301,10 @@ Calcite::Calcite(const MapDParameters& mapd_parameter,
                  const std::string& udf_filename)
     : ssl_trust_store_(mapd_parameter.ssl_trust_store)
     , ssl_trust_password_(mapd_parameter.ssl_trust_password)
+    , ssl_key_file_(mapd_parameter.ssl_key_file)
+    , ssl_keystore_(mapd_parameter.ssl_keystore)
+    , ssl_keystore_password_(mapd_parameter.ssl_keystore_password)
+    , ssl_cert_file_(mapd_parameter.ssl_cert_file)
     , session_prefix_(session_prefix) {
   init(mapd_parameter.omnisci_server_port,
        mapd_parameter.calcite_port,
@@ -289,7 +316,7 @@ Calcite::Calcite(const MapDParameters& mapd_parameter,
 void Calcite::updateMetadata(std::string catalog, std::string table) {
   if (server_available_) {
     auto ms = measure<>::execution([&]() {
-      auto clientP = get_client(remote_calcite_port_);
+      auto clientP = getClient(remote_calcite_port_);
       clientP.first->updateMetadata(catalog, table);
       clientP.second->close();
     });
@@ -384,7 +411,7 @@ std::vector<TCompletionHint> Calcite::getCompletionHints(
   const auto user = session_info.get_currentUser().userName;
   const auto session = session_info.get_session_id();
   const auto catalog = cat.getCurrentDB().dbName;
-  auto client = get_client(remote_calcite_port_);
+  auto client = getClient(remote_calcite_port_);
   client.first->getCompletionHints(
       hints, user, session, catalog, visible_tables, sql_string, cursor);
   return hints;
@@ -430,7 +457,7 @@ TPlanResult Calcite::processImpl(
   if (server_available_) {
     try {
       auto ms = measure<>::execution([&]() {
-        auto clientP = get_client(remote_calcite_port_);
+        auto clientP = getClient(remote_calcite_port_);
         clientP.first->process(ret,
                                user,
                                session,
@@ -468,7 +495,7 @@ std::string Calcite::getExtensionFunctionWhitelist() {
     TPlanResult ret;
     std::string whitelist;
 
-    auto clientP = get_client(remote_calcite_port_);
+    auto clientP = getClient(remote_calcite_port_);
     clientP.first->getExtensionFunctionWhitelist(whitelist);
     clientP.second->close();
     VLOG(1) << whitelist;
@@ -486,7 +513,7 @@ std::string Calcite::getUserDefinedFunctionWhitelist() {
     TPlanResult ret;
     std::string whitelist;
 
-    auto clientP = get_client(remote_calcite_port_);
+    auto clientP = getClient(remote_calcite_port_);
     clientP.first->getUserDefinedFunctionWhitelist(whitelist);
     clientP.second->close();
     VLOG(1) << "User defined functions whitelist loaded from Calcite: " << whitelist;
@@ -508,7 +535,7 @@ void Calcite::inner_close_calcite_server(bool log) {
   if (server_available_) {
     LOG_IF(INFO, log) << "Shutting down Calcite server";
     try {
-      auto clientP = get_client(remote_calcite_port_);
+      auto clientP = getClient(remote_calcite_port_);
       clientP.first->shutdown();
       clientP.second->close();
     } catch (const std::exception& e) {
@@ -530,7 +557,7 @@ std::string Calcite::getRuntimeUserDefinedFunctionWhitelist() {
   if (server_available_) {
     TPlanResult ret;
     std::string whitelist;
-    auto clientP = get_client(remote_calcite_port_);
+    auto clientP = getClient(remote_calcite_port_);
     clientP.first->getRuntimeUserDefinedFunctionWhitelist(whitelist);
     clientP.second->close();
     VLOG(1) << "Runtime user defined functions whitelist loaded from Calcite: "
@@ -546,7 +573,7 @@ std::string Calcite::getRuntimeUserDefinedFunctionWhitelist() {
 
 void Calcite::setRuntimeUserDefinedFunction(std::string udf_string) {
   if (server_available_) {
-    auto clientP = get_client(remote_calcite_port_);
+    auto clientP = getClient(remote_calcite_port_);
     clientP.first->setRuntimeUserDefinedFunction(udf_string);
     clientP.second->close();
   } else {

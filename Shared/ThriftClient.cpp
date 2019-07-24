@@ -19,7 +19,6 @@
 #include <boost/filesystem.hpp>
 #include <iostream>
 #include <sstream>
-
 using namespace ::apache::thrift::transport;
 using Decision = AccessManager::Decision;
 
@@ -202,6 +201,7 @@ mapd::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transp
     }
     transport = mapd::shared_ptr<TTransport>(new TBufferedTransport(secure_socket));
   }
+
   return transport;
 }
 

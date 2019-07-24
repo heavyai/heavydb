@@ -20,10 +20,13 @@ import com.mapd.thrift.calciteserver.CalciteServer.Processor;
 
 import org.apache.thrift.server.TServer;
 import org.apache.thrift.server.TThreadPoolServer;
+import org.apache.thrift.transport.TSSLTransportFactory;
+import org.apache.thrift.transport.TSSLTransportFactory.TSSLTransportParameters;
 import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TServerTransport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 /**
  *
  * @author michael
@@ -38,6 +41,7 @@ public class CalciteServerWrapper implements Runnable {
   private String dataDir = ("data/");
   private int calcitePort = 6279;
   private boolean shutdown = false;
+  private SockTransportProperties server_skT_;
 
   public CalciteServerWrapper() {
     handler = new CalciteServerHandler(mapDPort, dataDir, null, null, "");
@@ -48,31 +52,42 @@ public class CalciteServerWrapper implements Runnable {
           int mapDPort,
           String dataDir,
           String extensionFunctionsAstFile,
-          SockTransportProperties skT) {
+          SockTransportProperties client_skT,
+          SockTransportProperties server_skT) {
     handler = new CalciteServerHandler(
-            mapDPort, dataDir, extensionFunctionsAstFile, skT, "");
+            mapDPort, dataDir, extensionFunctionsAstFile, client_skT, "");
     processor = new com.mapd.thrift.calciteserver.CalciteServer.Processor(handler);
     this.calcitePort = calcitePort;
     this.mapDPort = mapDPort;
+    this.server_skT_ = server_skT;
   }
 
   public CalciteServerWrapper(int calcitePort,
           int mapDPort,
           String dataDir,
           String extensionFunctionsAstFile,
-          SockTransportProperties skT,
+          SockTransportProperties client_skT,
+          SockTransportProperties server_skT,
           String userDefinedFunctionsFile) {
-    handler = new CalciteServerHandler(
-            mapDPort, dataDir, extensionFunctionsAstFile, skT, userDefinedFunctionsFile);
+    handler = new CalciteServerHandler(mapDPort,
+            dataDir,
+            extensionFunctionsAstFile,
+            client_skT,
+            userDefinedFunctionsFile);
     processor = new com.mapd.thrift.calciteserver.CalciteServer.Processor(handler);
     this.calcitePort = calcitePort;
     this.mapDPort = mapDPort;
+    this.server_skT_ = server_skT;
+    try {
+    } catch (Exception e) {
+      e.printStackTrace();
+    }
   }
 
   private void startServer(
           com.mapd.thrift.calciteserver.CalciteServer.Processor processor) {
     try {
-      TServerTransport serverTransport = new TServerSocket(calcitePort);
+      TServerTransport serverTransport = server_skT_.openServerTransport(calcitePort);
       server = new TThreadPoolServer(
               new TThreadPoolServer.Args(serverTransport).processor(processor));
 
@@ -85,6 +100,8 @@ public class CalciteServerWrapper implements Runnable {
 
     } catch (Exception e) {
       e.printStackTrace();
+      MAPDLOGGER.error(" Calcite server Failed to start ");
+      shutdown = true;
     }
   }
 
