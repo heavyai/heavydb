@@ -7533,7 +7533,7 @@ TEST(Select, RuntimeFunctions) {
             "SELECT FLOOR(fn / 1e-13) FROM test WHERE fn IS NULL LIMIT 1;", dt)));
     {
       auto result = run_multiple_agg("SELECT fn, isnan(fn) FROM test;", dt);
-      ASSERT_EQ(result->rowCount(), 2 * g_num_rows);
+      ASSERT_EQ(result->rowCount(), size_t(2 * g_num_rows));
       // Ensure the type for `isnan` is nullable
       const auto func_ti = result->getColType(1);
       ASSERT_FALSE(func_ti.get_notnull());
