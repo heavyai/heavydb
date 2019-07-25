@@ -1276,7 +1276,7 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
 #if HAVE_CUDA
   thrust::inclusive_scan(count_copy.begin(), count_copy.end(), count_copy.begin());
 #else
-  inclusive_scan(
+  ::inclusive_scan(
       count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
 #endif
   std::vector<std::future<void>> pos_threads;
@@ -1459,7 +1459,7 @@ void fill_one_to_many_hash_table_sharded_impl(
   std::vector<int32_t> count_copy(hash_entry_count, 0);
   CHECK_GT(hash_entry_count, int32_t(0));
   memcpy(&count_copy[1], count_buff, (hash_entry_count - 1) * sizeof(int32_t));
-  inclusive_scan(
+  ::inclusive_scan(
       count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
   std::vector<std::future<void>> pos_threads;
   for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
@@ -1760,7 +1760,7 @@ void fill_one_to_many_baseline_hash_table(
   std::vector<int32_t> count_copy(hash_entry_count, 0);
   CHECK_GT(hash_entry_count, 0u);
   memcpy(&count_copy[1], count_buff, (hash_entry_count - 1) * sizeof(int32_t));
-  inclusive_scan(
+  ::inclusive_scan(
       count_copy.begin(), count_copy.end(), count_copy.begin(), cpu_thread_count);
   std::vector<std::future<void>> pos_threads;
   for (size_t cpu_thread_idx = 0; cpu_thread_idx < cpu_thread_count; ++cpu_thread_idx) {
@@ -1981,7 +1981,8 @@ void approximate_distinct_tuples_overlaps(
     child.get();
   }
 
-  inclusive_scan(row_counts.begin(), row_counts.end(), row_counts.begin(), thread_count);
+  ::inclusive_scan(
+      row_counts.begin(), row_counts.end(), row_counts.begin(), thread_count);
 }
 
 void compute_bucket_sizes(std::vector<double>& bucket_sizes_for_dimension,
