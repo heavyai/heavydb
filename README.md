@@ -17,9 +17,9 @@ To find out more, please check out the [OmniSci Website](https://www.omnisci.com
 ## Diving In
 
 - How-tos, code snippets and more on the [OmniSci Blog](https://www.omnisci.com/blog/)
-- Tutorials
+- [Tutorials & Demos](https://github.com/snowcrash007/omniscidb/wiki/Tutorials-&-Demos)
 - Need a data set to practice with? Search the [Data Set Library](https://community.omnisci.com/browse/new-item2)
-- Video overview of the Architecture
+- Video overview of the [Architecture](https://github.com/snowcrash007/omniscidb/wiki/Architecture#video-overview)
 
 ## Learn more
 | [OmniSciDB](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Overview) | [Documentation](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Documentation) | [Setup](https://github.com/snowcrash007/omniscidb/wiki/Setup) | [Community & Resources](https://github.com/snowcrash007/omniscidb/wiki/Community-&-Resources) |
