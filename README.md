@@ -21,6 +21,11 @@ To find out more, please check out the [OmniSci Website](https://www.omnisci.com
 - Need a data set to practice with? Search the [Data Set Library](https://community.omnisci.com/browse/new-item2)
 - Video overview of the Architecture
 
+## Learn more
+| [OmniSciDB](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Overview) | [Documentation](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Documentation) | [Setup](https://github.com/snowcrash007/omniscidb/wiki/Setup) | [Community & Resources](https://github.com/snowcrash007/omniscidb/wiki/Community-&-Resources) |
+| -- | -- | --|--|
+| Overview of OmniSciDB| Developer Friendly Technical Documentation | Step-by-step getting started documentation | Important links, community resources and updates |
+
 # Downloads and Installation Instructions
 
 OmniSci provides pre-built binaries for Linux for stable releases of the project:
@@ -37,11 +42,6 @@ OmniSci provides pre-built binaries for Linux for stable releases of the project
 ***
 
 Get more detailed download instructions, videos, resources and tutorials by visiting our [Downloads](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Downloads) page and [Documentation](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Documentation).
-
-## Learn more
-| [OmniSciDB](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Overview) | [Documentation](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Documentation) | [Setup](https://github.com/snowcrash007/omniscidb/wiki/Setup) | [Community & Resources](https://github.com/snowcrash007/omniscidb/wiki/Community-&-Resources) |
-| -- | -- | --|--|
-| Overview of OmniSciDB| Developer Friendly Technical Documentation | Step-by-step getting started documentation | Important links, community resources and updates |
 
 # Contributing
 Developers are encouraged to contribute to this Open Source project to expand and enhance OmniSciDB capabilities. Check out our Contributing page on the wiki! If you have questions and would like to connect with the maintainers of this open source project, please visit the official [online forum and community.](https://community.omnisci.com/home)
