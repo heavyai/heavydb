@@ -28,7 +28,7 @@ To find out more, please check out the [OmniSci Website](https://www.omnisci.com
 
 # Downloads and Installation Instructions
 
-OmniSci provides pre-built binaries for Linux for stable releases of the project:
+## Pre-built binaries for Linux for stable releases of the project:
 
 | Distro | Package type | CPU/GPU | Download Link | Installation Guide |
 | --- | --- | --- | --- | --- |
@@ -40,6 +40,9 @@ OmniSci provides pre-built binaries for Linux for stable releases of the project
 | * | tarball | GPU | https://releases.omnisci.com/os/tar/omnisci-os-latest-Linux-x86_64-cuda.tar.gz |  |
 
 ***
+
+## Partner Marketplaces
+Developers can also access OmniSciDB through the partner marketplaces. Easily find installation guides, videos, quickstarts and more important resources on how to set up OmniSciDB on public cloud providers such as [AWS](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Partners#aws), [Google Cloud Platform](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Partners#google-cloud-platform), [Azure](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Partners#azure), [Docker](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Partners#docker) and more on the [Partner](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Partners) page.
 
 Get more detailed download instructions, videos, resources and tutorials by visiting our [Downloads](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Downloads) page and [Documentation](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Documentation).
 
