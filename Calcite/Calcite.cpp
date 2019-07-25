@@ -541,7 +541,7 @@ void Calcite::inner_close_calcite_server(bool log) {
     } catch (const std::exception& e) {
       if (std::string(e.what()) != "connect() failed: Connection refused" &&
           std::string(e.what()) != "No more data to read.") {
-        std::cerr << "Error shutting down Calcite server: " << e.what();
+        std::cerr << "Error shutting down Calcite server: " << e.what() << std::endl;
       }  // else Calcite already shut down
     }
     LOG_IF(INFO, log) << "shut down Calcite";
