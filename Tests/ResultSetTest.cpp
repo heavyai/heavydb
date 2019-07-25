@@ -35,6 +35,8 @@
 #include <queue>
 #include <random>
 
+extern bool g_reduction_jit_interp;
+
 TEST(Construct, Allocate) {
   std::vector<TargetInfo> target_infos;
   QueryMemoryDescriptor query_mem_desc;
@@ -2437,7 +2439,11 @@ TEST(MoreReduce, MissingValues) {
     buff2[1 * 3 + 2] = 0;
     buff2[2 * 3 + 2] = 5;
   }
+#ifdef WITH_REDUCTION_JIT
+  const auto reduction_code = storage1->reduceOneEntryJIT(*storage2);
+#else
   ReductionCode reduction_code{};
+#endif  // WITH_REDUCTION_JIT
   storage1->reduce(*storage2, {}, reduction_code);
   {
     const auto row = rs1->getNextRow(false, false);
@@ -2490,7 +2496,11 @@ TEST(MoreReduce, MissingValuesKeyless) {
     buff2[1 * 2 + 1] = 0;
     buff2[2 * 2 + 1] = 5;
   }
+#ifdef WITH_REDUCTION_JIT
+  const auto reduction_code = storage1->reduceOneEntryJIT(*storage2);
+#else
   ReductionCode reduction_code{};
+#endif  // WITH_REDUCTION_JIT
   storage1->reduce(*storage2, {}, reduction_code);
   {
     const auto row = rs1->getNextRow(false, false);
@@ -2561,7 +2571,11 @@ TEST(MoreReduce, OffsetRewrite) {
   }
 
   storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
+#ifdef WITH_REDUCTION_JIT
+  const auto reduction_code = storage1->reduceOneEntryJIT(*storage2);
+#else
   ReductionCode reduction_code{};
+#endif  // WITH_REDUCTION_JIT
   storage1->reduce(*storage2, serialized_varlen_buffer, reduction_code);
   rs1->setSeparateVarlenStorageValid(true);
   {
@@ -2662,7 +2676,11 @@ TEST(MoreReduce, OffsetRewriteGeo) {
   }
 
   storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
+#ifdef WITH_REDUCTION_JIT
+  const auto reduction_code = storage1->reduceOneEntryJIT(*storage2);
+#else
   ReductionCode reduction_code{};
+#endif  // WITH_REDUCTION_JIT
   storage1->reduce(*storage2, serialized_varlen_buffer, reduction_code);
   rs1->setGeoReturnType(ResultSet::GeoReturnType::WktString);
   rs1->setSeparateVarlenStorageValid(true);
@@ -2759,7 +2777,11 @@ TEST(MoreReduce, OffsetRewriteGeoKeyless) {
   }
 
   storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
+#ifdef WITH_REDUCTION_JIT
+  const auto reduction_code = storage1->reduceOneEntryJIT(*storage2);
+#else
   ReductionCode reduction_code{};
+#endif  // WITH_REDUCTION_JIT
   storage1->reduce(*storage2, serialized_varlen_buffer, reduction_code);
   rs1->setGeoReturnType(ResultSet::GeoReturnType::WktString);
   rs1->setSeparateVarlenStorageValid(true);
@@ -3536,6 +3558,19 @@ TEST(ReduceRandomGroups, BaselineHashColumnar_Large_NullVal_0075) {
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
+  namespace po = boost::program_options;
+
+  po::options_description desc("Options");
+
+  desc.add_options()("reduction-jit-interp",
+                     po::value<bool>(&g_reduction_jit_interp)
+                         ->default_value(g_reduction_jit_interp)
+                         ->implicit_value(true),
+                     "Use interpreter for reduction generated code");
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::notify(vm);
 
   int err{0};
   try {
