@@ -44,7 +44,7 @@ class CudaAllocator : public DeviceAllocator {
  public:
   CudaAllocator(Data_Namespace::DataMgr* data_mgr, const int device_id);
 
-  virtual ~CudaAllocator() {}
+  ~CudaAllocator() override {}
 
   static int8_t* alloc(Data_Namespace::DataMgr* data_mgr,
                        const size_t num_bytes,

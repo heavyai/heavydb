@@ -301,8 +301,9 @@ inline void put_null(void* ndptr, const SQLTypeInfo& ntype, const std::string co
 inline void put_null_array(void* ndptr,
                            const SQLTypeInfo& ntype,
                            const std::string col_name) {
-  if (ntype.get_notnull())
+  if (ntype.get_notnull()) {
     throw std::runtime_error("NULL value on NOT NULL column '" + col_name + "'");
+  }
 
   switch (ntype.get_type()) {
     case kBOOLEAN:

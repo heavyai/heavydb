@@ -153,7 +153,7 @@ struct LogShutdown {
 };
 
 // Optional pointer to function to call on LOG(FATAL).
-typedef void (*FatalFunc)();
+using FatalFunc = void (*)();
 void set_once_fatal_func(FatalFunc);
 
 using ChannelLogger = boost::log::sources::channel_logger_mt<Channel>;

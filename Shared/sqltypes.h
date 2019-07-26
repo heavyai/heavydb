@@ -601,8 +601,9 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       elem_ti.set_type(subtype);
       elem_ti.set_subtype(kNULLT);
       auto elem_size = elem_ti.get_storage_size();
-      if (elem_size < 1)
+      if (elem_size < 1) {
         return false;
+      }
       if (subtype == kFLOAT) {
         return *(float*)val == NULL_ARRAY_FLOAT;
       }
