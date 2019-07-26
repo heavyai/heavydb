@@ -2354,8 +2354,16 @@ int32_t Executor::executePlanWithGroupBy(
     CHECK(results);
     results->holdLiterals(hoist_buf);
   }
-  if (error_code && (render_allocator_map_ptr ||
-                     (!scan_limit || check_rows_less_than_needed(results, scan_limit)))) {
+  if (error_code < 0 && render_allocator_map_ptr) {
+    // More rows passed the filter than available slots. We don't have a count to check,
+    // so assume we met the limit if a scan limit is set
+    if (scan_limit != 0) {
+      return 0;
+    } else {
+      return error_code;
+    }
+  }
+  if (error_code && (!scan_limit || check_rows_less_than_needed(results, scan_limit))) {
     return error_code;  // unlucky, not enough results and we ran out of slots
   }
 
