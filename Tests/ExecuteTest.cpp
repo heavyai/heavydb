@@ -2496,6 +2496,7 @@ TEST(Select, StringsNoneEncoding) {
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_%%%';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_ba%';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE '%eal_bar';", dt);
+    c("SELECT * FROM test_lots_cols WHERE real_str LIKE '%' ORDER BY x0 ASC;", dt);
     c("SELECT * FROM test WHERE real_str LIKE '%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE real_str LIKE 'real_f%%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE real_str LIKE 'real_f%\%' ORDER BY x ASC, y ASC;", dt);
@@ -5405,11 +5406,42 @@ void import_logical_size_test() {
 }
 
 void import_empty_table_test() {
+  const std::string drop_table{"DROP TABLE IF EXISTS empty_test_table;"};
+  run_ddl_statement(drop_table);
+  g_sqlite_comparator.query(drop_table);
   std::string create_statement(
       "CREATE TABLE empty_test_table (id int, x bigint, y int, z smallint, t tinyint, "
       "f float, d double);");
   run_ddl_statement(create_statement);
   g_sqlite_comparator.query(create_statement);
+}
+
+void import_test_table_with_lots_of_columns() {
+  const size_t num_columns = 50;
+  const std::string table_name("test_lots_cols");
+  const std::string drop_table("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement(drop_table);
+  g_sqlite_comparator.query(drop_table);
+  std::string create_query("CREATE TABLE " + table_name + "(");
+  std::string insert_query1("INSERT INTO " + table_name + " VALUES (");
+  std::string insert_query2(insert_query1);
+
+  for (size_t i = 0; i < num_columns - 1; i++) {
+    create_query += ("x" + std::to_string(i) + " INTEGER, ");
+    insert_query1 += (std::to_string(i) + ", ");
+    insert_query2 += (std::to_string(10000 + i) + ", ");
+  }
+  create_query += "real_str TEXT";
+  insert_query1 += "'real_foo');";
+  insert_query2 += "'real_bar');";
+
+  run_ddl_statement(create_query + " ENCODING NONE) with (fragment_size = 2);");
+  g_sqlite_comparator.query(create_query + ");");
+
+  for (size_t i = 0; i < 10; i++) {
+    run_multiple_agg(i % 2 ? insert_query2 : insert_query1, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(i % 2 ? insert_query2 : insert_query1);
+  }
 }
 
 }  // namespace
@@ -16110,6 +16142,11 @@ int create_and_populate_tables(bool with_delete_support = true) {
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'empty_table_test'";
   }
+  try {
+    import_test_table_with_lots_of_columns();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_lots_cols'";
+  }
   {
     std::string insert_query{"INSERT INTO test_in_bitmap VALUES('a');"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
@@ -16304,6 +16341,15 @@ void drop_tables() {
   const std::string drop_test_in_bitmap{"DROP TABLE test_in_bitmap;"};
   g_sqlite_comparator.query(drop_test_in_bitmap);
   run_ddl_statement(drop_test_in_bitmap);
+  const std::string drop_logical_size_test{"DROP TABLE logical_size_test;"};
+  g_sqlite_comparator.query(drop_logical_size_test);
+  run_ddl_statement(drop_logical_size_test);
+  const std::string drop_empty_test_table{"DROP TABLE empty_test_table;"};
+  g_sqlite_comparator.query(drop_empty_test_table);
+  run_ddl_statement(drop_empty_test_table);
+  const std::string drop_test_lots_cols{"DROP TABLE test_lots_cols;"};
+  g_sqlite_comparator.query(drop_test_lots_cols);
+  run_ddl_statement(drop_test_lots_cols);
 
   if (!g_aggregator) {
     const std::string drop_ctas_test{"DROP TABLE ctas_test;"};
