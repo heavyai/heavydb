@@ -2857,8 +2857,8 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
 
       _return.copy_params = copyparams_to_thrift(copy_params);
       _return.row_set.row_desc.resize(best_types.size());
-      TColumnType col;
       for (size_t col_idx = 0; col_idx < best_types.size(); col_idx++) {
+        TColumnType col;
         SQLTypes t = best_types[col_idx];
         EncodingType encodingType = best_encodings[col_idx];
         SQLTypeInfo ti(t, false, encodingType);
