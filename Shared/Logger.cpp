@@ -17,28 +17,22 @@
 #ifndef __CUDACC__
 
 #include "Logger.h"
+#include "StringTransform.h"
+
 #include <boost/algorithm/string.hpp>
+
 #include <cstdlib>
 #include <iostream>
 #include <regex>
 
 namespace logger {
 
-// Must match enum Severity in Logger.h.
-std::array<char const*, 8> const SeverityNames{
-    {"DEBUG4", "DEBUG3", "DEBUG2", "DEBUG1", "INFO", "WARNING", "ERROR", "FATAL"}};
-
-std::array<char, 8> const SeveritySymbols{{'4', '3', '2', '1', 'I', 'W', 'E', 'F'}};
-
-static_assert(Severity::NLEVELS == SeverityNames.size(),
-              "Size of SeverityNames must equal number of Severity levels.");
-static_assert(Severity::NLEVELS == SeveritySymbols.size(),
-              "Size of SeveritySymbols must equal number of Severity levels.");
-
 BOOST_LOG_ATTRIBUTE_KEYWORD(process_id, "ProcessID", attr::current_process_id::value_type)
+BOOST_LOG_ATTRIBUTE_KEYWORD(channel, "Channel", Channel)
 BOOST_LOG_ATTRIBUTE_KEYWORD(severity, "Severity", Severity)
 
-BOOST_LOG_GLOBAL_LOGGER_DEFAULT(g_logger, logger_t)
+BOOST_LOG_GLOBAL_LOGGER_DEFAULT(gChannelLogger, ChannelLogger)
+BOOST_LOG_GLOBAL_LOGGER_DEFAULT(gSeverityLogger, SeverityLogger)
 
 LogOptions::LogOptions(char const* argv0) : options_("Logging") {
   // Log file base_name matches name of program.
@@ -47,6 +41,7 @@ LogOptions::LogOptions(char const* argv0) : options_("Logging") {
                                     : boost::filesystem::path(argv0).filename().string();
   file_name_pattern_ = base_name + file_name_pattern_;
   symlink_ = base_name + symlink_;
+  std::string const channels = join(ChannelNames, " ");
   // Filter out DEBUG[1-4] severities from --help options
   std::string severities;
   for (auto const& name : SeverityNames) {
@@ -72,6 +67,9 @@ LogOptions::LogOptions(char const* argv0) : options_("Logging") {
       "log-severity-clog",
       po::value<Severity>(&severity_clog_)->default_value(severity_clog_),
       ("Log to console severity level: " + severities).c_str());
+  options_.add_options()("log-channels",
+                         po::value<Channels>(&channels_)->default_value(channels_),
+                         ("Log channel debug info: " + channels).c_str());
   options_.add_options()("log-auto-flush",
                          po::value<bool>(&auto_flush_)->default_value(auto_flush_),
                          "Flush logging buffer to file after each message.");
@@ -91,11 +89,7 @@ LogOptions::LogOptions(char const* argv0) : options_("Logging") {
 }
 
 boost::filesystem::path LogOptions::full_log_dir() const {
-  if (log_dir_.has_root_directory()) {
-    return log_dir_;
-  } else {
-    return base_path_ / log_dir_;
-  }
+  return log_dir_.has_root_directory() ? log_dir_ : base_path_ / log_dir_;
 }
 
 po::options_description const& LogOptions::get_options() const {
@@ -116,10 +110,15 @@ void LogOptions::set_base_path(std::string const& base_path) {
   base_path_ = base_path;
 }
 
-std::string replace_braces(std::string const& str, Severity const level) {
+template <typename TAG>
+std::string replace_braces(std::string const& str, TAG const tag) {
   constexpr std::regex::flag_type flags = std::regex::ECMAScript | std::regex::optimize;
   static std::regex const regex(R"(\{SEVERITY\})", flags);
-  return std::regex_replace(str, regex, SeverityNames[level]);
+  if /*constexpr*/ (std::is_same<TAG, Channel>::value) {
+    return std::regex_replace(str, regex, ChannelNames[tag]);
+  } else {
+    return std::regex_replace(str, regex, SeverityNames[tag]);
+  }
 }
 
 // Print decimal value for process_id (14620) instead of hex (0x0000391c)
@@ -156,33 +155,55 @@ sinks::text_file_backend::open_handler_type create_or_replace_symlink(
 
 boost::log::formatting_ostream& operator<<(
     boost::log::formatting_ostream& strm,
+    boost::log::to_log_manip<Channel, tag::channel> const& manip) {
+  return strm << ChannelSymbols[manip.get()];
+}
+
+boost::log::formatting_ostream& operator<<(
+    boost::log::formatting_ostream& strm,
     boost::log::to_log_manip<Severity, tag::severity> const& manip) {
   return strm << SeveritySymbols[manip.get()];
 }
 
-template <typename SINK>
+template <typename TAG, typename SINK>
 void set_formatter(SINK& sink) {
-  sink->set_formatter(
-      expr::stream << expr::format_date_time<boost::posix_time::ptime>(
-                          "TimeStamp", "%Y-%m-%dT%H:%M:%S.%f")
-                   << ' ' << severity << ' '
-                   << boost::phoenix::bind(&get_native_process_id, process_id.or_none())
-                   << ' ' << expr::smessage);
+  if /*constexpr*/ (std::is_same<TAG, Channel>::value) {
+    sink->set_formatter(
+        expr::stream << expr::format_date_time<boost::posix_time::ptime>(
+                            "TimeStamp", "%Y-%m-%dT%H:%M:%S.%f")
+                     << ' ' << channel << ' '
+                     << boost::phoenix::bind(&get_native_process_id, process_id.or_none())
+                     << ' ' << expr::smessage);
+  } else {
+    sink->set_formatter(
+        expr::stream << expr::format_date_time<boost::posix_time::ptime>(
+                            "TimeStamp", "%Y-%m-%dT%H:%M:%S.%f")
+                     << ' ' << severity << ' '
+                     << boost::phoenix::bind(&get_native_process_id, process_id.or_none())
+                     << ' ' << expr::smessage);
+  }
 }
 
-template <typename FILE_SINK>
+template <typename FILE_SINK, typename TAG>
 boost::shared_ptr<FILE_SINK> make_sink(LogOptions const& log_opts,
                                        boost::filesystem::path const& full_log_dir,
-                                       Severity const level) {
+                                       TAG const tag) {
   auto sink = boost::make_shared<FILE_SINK>(
       keywords::file_name =
-          full_log_dir / replace_braces(log_opts.file_name_pattern_, level),
+          full_log_dir / replace_braces(log_opts.file_name_pattern_, tag),
       keywords::auto_flush = log_opts.auto_flush_,
       keywords::rotation_size = log_opts.rotation_size_);
-  // INFO sink logs all other levels. Other sinks only log at their level or higher.
-  Severity const min_filter_level = level == Severity::INFO ? log_opts.severity_ : level;
-  sink->set_filter(min_filter_level <= severity);
-  set_formatter(sink);
+  if /*constexpr*/ (std::is_same<TAG, Channel>::value) {
+    sink->set_filter(channel == static_cast<Channel>(tag));
+    set_formatter<Channel>(sink);
+  } else {
+    // INFO sink logs all other levels. Other sinks only log at their level or higher.
+    Severity const min_filter_level = static_cast<Severity>(tag) == Severity::INFO
+                                          ? log_opts.severity_
+                                          : static_cast<Severity>(tag);
+    sink->set_filter(min_filter_level <= severity);
+    set_formatter<Severity>(sink);
+  }
   typename FILE_SINK::locked_backend_ptr backend = sink->locked_backend();
   if (log_opts.rotate_daily_) {
     backend->set_time_based_rotation(sinks::file::rotation_at_time_point(0, 0, 0));
@@ -192,7 +213,7 @@ boost::shared_ptr<FILE_SINK> make_sink(LogOptions const& log_opts,
                                   keywords::max_files = log_opts.max_files_,
                                   keywords::min_free_space = log_opts.min_free_space_));
   backend->set_open_handler(create_or_replace_symlink(
-      boost::weak_ptr<FILE_SINK>(sink), replace_braces(log_opts.symlink_, level)));
+      boost::weak_ptr<FILE_SINK>(sink), replace_braces(log_opts.symlink_, tag)));
   backend->scan_for_files();
   return sink;
 }
@@ -202,9 +223,9 @@ std::atomic<FatalFunc> g_fatal_func{nullptr};
 std::once_flag g_fatal_func_flag;
 
 template <>
-BOOST_NORETURN Logger<Severity::FATAL>::~Logger() {
+BOOST_NORETURN Logger<Severity, Severity::FATAL>::~Logger() {
   if (stream_) {
-    g_logger::get().push_record(
+    gSeverityLogger::get().push_record(
         boost::move(stream_->get_record()));  // flushes stream first
   }
   if (FatalFunc fatal_func = g_fatal_func.load()) {
@@ -224,12 +245,13 @@ boost::shared_ptr<CONSOLE_SINK> make_sink(LogOptions const& log_opts) {
   boost::shared_ptr<std::ostream> clog(&std::clog, boost::null_deleter());
   sink->locked_backend()->add_stream(clog);
   sink->set_filter(log_opts.severity_clog_ <= severity);
-  set_formatter(sink);
+  set_formatter<Severity>(sink);
   return sink;
 }
 
-// Locking/atomicity not needed for g_min_active_severity as it is only
-// modifed by init() once.
+// Locking/atomicity not needed for g_any_active_channels or g_min_active_severity
+// as they are modifed by init() once.
+bool g_any_active_channels{false};
 Severity g_min_active_severity{Severity::FATAL};
 
 void init(LogOptions const& log_opts) {
@@ -242,7 +264,7 @@ void init(LogOptions const& log_opts) {
     bool const log_dir_was_created = boost::filesystem::create_directory(full_log_dir);
     // Don't create separate log sinks for anything less than Severity::INFO.
     Severity const min_sink_level = std::max(Severity::INFO, log_opts.severity_);
-    for (int i = min_sink_level; i < Severity::NLEVELS; ++i) {
+    for (int i = min_sink_level; i < Severity::_NSEVERITIES; ++i) {
       Severity const level = static_cast<Severity>(i);
       core->add_sink(make_sink<FileSync>(log_opts, full_log_dir, level));
     }
@@ -250,6 +272,10 @@ void init(LogOptions const& log_opts) {
     if (log_dir_was_created) {
       LOG(INFO) << "Log directory(" << full_log_dir.native() << ") created.";
     }
+    for (auto const channel : log_opts.channels_) {
+      core->add_sink(make_sink<FileSync>(log_opts, full_log_dir, channel));
+    }
+    g_any_active_channels = !log_opts.channels_.empty();
   }
   core->add_sink(make_sink<ClogSync>(log_opts));
   g_min_active_severity = std::min(g_min_active_severity, log_opts.severity_clog_);
@@ -264,6 +290,34 @@ void set_once_fatal_func(FatalFunc fatal_func) {
 
 void shutdown() {
   boost::log::core::get()->remove_all_sinks();
+}
+
+// Used by boost::program_options when parsing enum Channel.
+std::istream& operator>>(std::istream& in, Channels& channels) {
+  std::string line;
+  std::getline(in, line);
+  std::regex const rex(R"(\w+)");
+  using TokenItr = std::regex_token_iterator<std::string::iterator>;
+  TokenItr const end;
+  for (TokenItr tok(line.begin(), line.end(), rex); tok != end; ++tok) {
+    auto itr = std::find(ChannelNames.cbegin(), ChannelNames.cend(), *tok);
+    if (itr == ChannelNames.cend()) {
+      in.setstate(std::ios_base::failbit);
+      break;
+    } else {
+      channels.emplace(static_cast<Channel>(itr - ChannelNames.cbegin()));
+    }
+  }
+  return in;
+}
+
+// Used by boost::program_options when stringifying Channels.
+std::ostream& operator<<(std::ostream& out, Channels const& channels) {
+  int i = 0;
+  for (auto const channel : channels) {
+    out << (i++ ? " " : "") << ChannelNames.at(channel);
+  }
+  return out;
 }
 
 // Used by boost::program_options when parsing enum Severity.
@@ -281,7 +335,7 @@ std::istream& operator>>(std::istream& in, Severity& sev) {
 
 // Used by boost::program_options when stringifying enum Severity.
 std::ostream& operator<<(std::ostream& out, Severity const& sev) {
-  return out << SeverityNames[sev];
+  return out << SeverityNames.at(sev);
 }
 
 }  // namespace logger

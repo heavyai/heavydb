@@ -39,6 +39,7 @@ Logging:
                                       WARNING ERROR FATAL
 --log-severity-clog arg (=WARNING)    Log to console severity level: INFO 
                                       WARNING ERROR FATAL
+--log-channels arg                    Log channel debug info: IR PTX
 --log-auto-flush arg (=1)             Flush logging buffer to file after each
                                       message.
 --log-max-files arg (=100)            Maximum number of log files to keep.
@@ -82,7 +83,24 @@ There are 7 CHECK macros:
 
 When a `CHECK*()` macro fails, a message is logged at the `FATAL` severity level and `abort()` is called.
 
-`LOG_IF` is a conditional `LOG` that only logs a message when the condition is true. Example: `LOG_IF(INFO, is_logged_in) << "User " << user << " is logged in."`
+`LOG_IF` is a conditional `LOG` that only logs a message when the condition is true.
+Example: `LOG_IF(INFO, is_logged_in) << "User " << user << " is logged in."`
+
+## Channels
+
+In addition to the above severity levels, developers have the option of creating independent channels
+outside of the Severity hierarchy. To add a new channel, add to the following 3 items in `Shared/Logger.h`:
+1. `enum Channel` - A distinct enum, e.g. `FOO`.
+2. `std::array ChannelNames` - The enum in string form, e.g. `"FOO"`.
+3. `std::array ChannelSymbols` - A unique single-character that shows up in the logs, e.g. `'O'` (`'F'` is reserved by `FATAL`.)
+
+One can then log to this channel just like a severity: `LOG(FOO) << message;`.
+
+To activate the channel, it must be given via the program options. E.g. to activate channels `FOO` and `BAR`:
+
+    omnisci_server --log-channels=FOO,BAR data
+
+This will cause all `FOO` and `BAR` log entries to be logged into their own separately named files.
 
 ## Deprecated Options
 
@@ -106,7 +124,7 @@ MapDHandler in particular uses an extension called LogSession which provides add
 
 where
 
-* `level` - 1 of 8 characters designating the log level: `4`, `3`, `2`, `1`, `I`, `W`, `E`, `F`
+* `level` - 1 of 8 characters designating the log level: `4`, `3`, `2`, `1`, `I`, `W`, `E`, `F`. In channel logs, it is the 1-character symbol for the channel.
 * `match_id` - integer value used to match up the `stdlog_begin`/`stdlog` pairs.
 * `time_ms` - time in milliseconds between begin and end of function call.
 

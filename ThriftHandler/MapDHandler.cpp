@@ -5565,7 +5565,7 @@ void MapDHandler::emergency_shutdown() {
 std::atomic<int64_t> LogSession::s_match{0};
 
 void LogSession::stdlog(logger::Severity severity, char const* label) {
-  if (logger::g_min_active_severity <= severity) {
+  if (logger::fast_logging_check(severity)) {
     std::stringstream ss;
     ss << file_ << ':' << line_ << ' ' << label << ' ' << func_ << ' ' << match_ << ' '
        << duration<std::chrono::milliseconds>() << ' ';
@@ -5600,7 +5600,7 @@ void LogSession::stdlog(logger::Severity severity, char const* label) {
       }
       ss << '}';
     }
-    BOOST_LOG_SEV(logger::g_logger::get(), severity) << ss.rdbuf();
+    BOOST_LOG_SEV(logger::gSeverityLogger::get(), severity) << ss.rdbuf();
   }
 }
 

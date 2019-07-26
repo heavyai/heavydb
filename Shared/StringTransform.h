@@ -19,13 +19,10 @@
 
 #include "Logger.h"
 
-#include <algorithm>
-#include <array>
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/algorithm/string/replace.hpp>
 #include <boost/regex.hpp>
+
+#include <algorithm>
 #include <iomanip>
-#include <set>
 #include <sstream>
 #include <string>
 
@@ -42,6 +39,18 @@ ssize_t inside_string_literal(
     const size_t start,
     const size_t length,
     const std::vector<std::pair<size_t, size_t>>& literal_positions);
+
+template <typename T>
+std::string join(T const& container, std::string const& delim) {
+  std::stringstream ss;
+  if (!container.empty()) {
+    ss << container.front();
+    for (auto itr = std::next(container.cbegin()); itr != container.cend(); ++itr) {
+      ss << delim << *itr;
+    }
+  }
+  return ss.str();
+}
 
 template <typename T>
 std::string to_string(T&& v) {

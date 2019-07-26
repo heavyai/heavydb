@@ -21,7 +21,6 @@
 #include <QueryEngine/ResultSet.h>
 #include <QueryRunner/QueryRunner.h>
 
-#include <glog/logging.h>
 #include <gtest/gtest.h>
 
 #ifndef BASE_PATH
@@ -262,7 +261,6 @@ TEST_F(MediumGpuBufferMemory, OutOfSlots) {
 }
 
 int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
   testing::InitGoogleTest(&argc, argv);
 
   namespace po = boost::program_options;
