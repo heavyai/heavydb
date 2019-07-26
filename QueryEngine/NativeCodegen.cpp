@@ -751,7 +751,6 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
                 "get_group_value_with_watchdog" ||
             get_gv_call.getCalledFunction()->getName() ==
                 "get_matching_group_value_perfect_hash" ||
-            get_gv_call.getCalledFunction()->getName() == "string_decode" ||
             get_gv_call.getCalledFunction()->getName() == "array_size" ||
             get_gv_call.getCalledFunction()->getName() == "linear_probabilistic_count") {
           mark_function_never_inline(cgen_state_->row_func_);
