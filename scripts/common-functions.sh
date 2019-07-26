@@ -227,7 +227,7 @@ function install_rdkafka() {
     popd
 }
 
-GO_VERSION=1.12.6
+GO_VERSION=1.14
 
 function install_go() {
     VERS=${GO_VERSION}
