@@ -729,7 +729,7 @@ llvm::Function* query_group_by_template_impl(llvm::Module* mod,
   ICmpInst* loop_or_exit =
       new ICmpInst(*bb_forbody, ICmpInst::ICMP_SLT, pos_inc, row_count, "");
   if (check_scan_limit) {
-    auto crt_matched = new LoadInst(crt_matched_ptr, "", false, bb_forbody);
+    auto crt_matched = new LoadInst(crt_matched_ptr, "crt_matched", false, bb_forbody);
     auto filter_match = BasicBlock::Create(
         mod->getContext(), "filter_match", query_func_ptr, bb_crit_edge);
     llvm::Value* new_total_matched =
