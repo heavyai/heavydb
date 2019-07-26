@@ -2716,8 +2716,7 @@ bool is_a_supported_geo_file(const std::string& path, bool include_gz) {
     return false;
   }
   if (include_gz) {
-    if (boost::iends_with(path, ".geojson.gz") || boost::iends_with(path, ".json.gz") ||
-        boost::iends_with(path, ".kml.gz")) {
+    if (boost::iends_with(path, ".geojson.gz") || boost::iends_with(path, ".json.gz")) {
       return true;
     }
   }
