@@ -1506,11 +1506,8 @@ void ResultSetStorage::reduceOneSlot(
 
         break;
       }
-      case 0: {
-        break;
-      }
       default:
-        CHECK(false);
+        LOG(FATAL) << "Invalid slot width: " << chosen_bytes;
     }
   }
 }
