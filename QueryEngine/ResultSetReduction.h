@@ -57,6 +57,7 @@ struct ReductionCode {
                            const int32_t,
                            const int32_t,
                            const void*,
+                           const void*,
                            const void*);
 
   std::unique_ptr<CgenState> cgen_state;

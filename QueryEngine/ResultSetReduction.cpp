@@ -135,14 +135,16 @@ void run_reduction_code(const ReductionCode& reduction_code,
                         const int32_t that_entry_idx,
                         const int32_t that_entry_count,
                         const void* this_qmd,
-                        const void* that_qmd) {
+                        const void* that_qmd,
+                        const void* serialized_varlen_buffer) {
   if (reduction_code.func_ptr) {
     reduction_code.func_ptr(this_targets_ptr,
                             that_targets_ptr,
                             that_entry_idx,
                             that_entry_count,
                             this_qmd,
-                            that_qmd);
+                            that_qmd,
+                            serialized_varlen_buffer);
   } else {
     static std::mutex s_interp_lock;
     std::lock_guard<std::mutex> s_interp_guard(s_interp_lock);
@@ -157,7 +159,8 @@ void run_reduction_code(const ReductionCode& reduction_code,
          that_entry_idx_gv,
          that_entry_count_gv,
          llvm::GenericValue(const_cast<void*>(this_qmd)),
-         llvm::GenericValue(const_cast<void*>(that_qmd))});
+         llvm::GenericValue(const_cast<void*>(that_qmd)),
+         llvm::GenericValue(const_cast<void*>(serialized_varlen_buffer))});
   }
 }
 
@@ -555,7 +558,8 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWise(
                        entry_idx,
                        that.query_mem_desc_.getEntryCount(),
                        &query_mem_desc_,
-                       &that.query_mem_desc_);
+                       &that.query_mem_desc_,
+                       &serialized_varlen_buffer);
     return;
   }
 
@@ -847,7 +851,8 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
                        that_entry_idx,
                        that_entry_count,
                        &query_mem_desc_,
-                       &that.query_mem_desc_);
+                       &that.query_mem_desc_,
+                       nullptr);
     return;
   }
   const auto key_count = query_mem_desc_.getGroupbyColCount();
@@ -1160,6 +1165,12 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
     }
   }
 
+#ifdef WITH_REDUCTION_JIT
+  const auto& this_storage = *result;
+  const auto reduction_code = this_storage.reduceOneEntryJIT(this_storage);
+#else
+  ReductionCode reduction_code{};
+#endif  // WITH_REDUCTION_JIT
   size_t ctr = 1;
   ReductionCode reduction_code{};
   for (auto result_it = result_sets.begin() + 1; result_it != result_sets.end();

@@ -202,8 +202,10 @@ ReductionCode setup_reduction_function(const QueryDescriptionType hash_type) {
   cgen_state->module_ = module.get();
   const auto pi8_type = llvm::PointerType::get(get_int_type(8, ctx), 0);
   const auto pvoid_type = llvm::PointerType::get(llvm::Type::getVoidTy(ctx), 0);
-  const auto func_type = llvm::FunctionType::get(
-      llvm::Type::getVoidTy(ctx), {pi8_type, pi8_type, pvoid_type, pvoid_type}, false);
+  const auto func_type =
+      llvm::FunctionType::get(llvm::Type::getVoidTy(ctx),
+                              {pi8_type, pi8_type, pvoid_type, pvoid_type, pvoid_type},
+                              false);
   const auto func = llvm::Function::Create(
       func_type, llvm::Function::PrivateLinkage, "reduce_one_entry", module.get());
   reduction_code.ir_reduce_func = func;
@@ -212,7 +214,7 @@ ReductionCode setup_reduction_function(const QueryDescriptionType hash_type) {
     const auto pvoid_type = llvm::PointerType::get(llvm::Type::getVoidTy(ctx), 0);
     const auto reduction_idx_func_type = llvm::FunctionType::get(
         llvm::Type::getVoidTy(ctx),
-        {pi8_type, pi8_type, i32_type, i32_type, pvoid_type, pvoid_type},
+        {pi8_type, pi8_type, i32_type, i32_type, pvoid_type, pvoid_type, pvoid_type},
         false);
     reduction_code.ir_reduce_func_idx =
         llvm::Function::Create(reduction_idx_func_type,
@@ -226,12 +228,14 @@ ReductionCode setup_reduction_function(const QueryDescriptionType hash_type) {
     const auto that_entry_count_arg = &*(arg_it + 3);
     const auto this_qmd_handle_arg = &*(arg_it + 4);
     const auto that_qmd_handle_arg = &*(arg_it + 5);
+    const auto serialized_varlen_buffer_arg = &*(arg_it + 6);
     this_buff_arg->setName("this_buff");
     that_buff_arg->setName("that_buff");
     that_entry_idx_arg->setName("that_entry_idx");
     that_entry_count_arg->setName("that_entry_count");
     this_qmd_handle_arg->setName("this_qmd_handle");
     that_qmd_handle_arg->setName("that_qmd_handle");
+    serialized_varlen_buffer_arg->setName("serialized_varlen_buffer");
   }
   {
     const auto is_empty_func_type =
@@ -264,8 +268,10 @@ ReductionCode setup_reduction_function(const QueryDescriptionType hash_type) {
   }
   const auto this_qmd_arg = &*(arg_it + 2);
   const auto that_qmd_arg = &*(arg_it + 3);
+  const auto serialized_varlen_buffer_arg = &*(arg_it + 4);
   this_qmd_arg->setName("this_qmd");
   that_qmd_arg->setName("that_qmd");
+  serialized_varlen_buffer_arg->setName("serialized_varlen_buffer_arg");
   const auto bb_entry = llvm::BasicBlock::Create(ctx, ".entry", func, 0);
   cgen_state->ir_builder_.SetInsertPoint(bb_entry);
   reduction_code.module = std::move(module);
@@ -335,13 +341,6 @@ void return_on_that_empty(const ReductionCode& reduction_code) {
 
 ReductionCode ResultSetStorage::reduceOneEntryNoCollisionsRowWiseJIT(
     const ResultSetStorage& that) const {
-  const auto sample_targets =
-      std::count_if(targets_.begin(), targets_.end(), [](const TargetInfo& target_info) {
-        return target_info.agg_kind == kSAMPLE;
-      });
-  if (sample_targets) {
-    return {};
-  }
   ReductionCode reduction_code =
       setup_reduction_function(query_mem_desc_.getQueryDescriptionType());
   return_on_that_empty(reduction_code);
@@ -413,7 +412,8 @@ ReductionCode ResultSetStorage::reduceOneEntryNoCollisionsRowWiseJIT(
               init_agg_val_idx += slot_count;
             }
           };
-      if (target_logical_idx + 1 == targets_.size()) {
+      if (target_logical_idx + 1 == targets_.size() &&
+          target_slot_idx + 1 >= slots_for_col.back()) {
         break;
       }
       if (UNLIKELY(two_slot_target)) {
@@ -436,13 +436,6 @@ ReductionCode ResultSetStorage::reduceOneEntryNoCollisionsRowWiseJIT(
 
 ReductionCode ResultSetStorage::reduceOneEntrySlotsBaselineJIT(
     const ResultSetStorage& that) const {
-  const auto sample_targets =
-      std::count_if(targets_.begin(), targets_.end(), [](const TargetInfo& target_info) {
-        return target_info.agg_kind == kSAMPLE;
-      });
-  if (sample_targets) {
-    return {};
-  }
   ReductionCode reduction_code =
       setup_reduction_function(query_mem_desc_.getQueryDescriptionType());
   auto cgen_state = reduction_code.cgen_state.get();
@@ -537,15 +530,19 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWiseIdxJIT(
   const auto entry_idx = &*(arg_it + 2);
   const auto this_qmd_handle = &*(arg_it + 4);
   const auto that_qmd_handle = &*(arg_it + 5);
+  const auto serialized_varlen_buffer_arg = &*(arg_it + 6);
   const auto row_bytes = cgen_state->llInt<int32_t>(get_row_bytes(query_mem_desc_));
   const auto row_off_in_bytes = cgen_state->ir_builder_.CreateMul(entry_idx, row_bytes);
   const auto this_row_ptr =
       cgen_state->ir_builder_.CreateGEP(this_buff, row_off_in_bytes);
   const auto that_row_ptr =
       cgen_state->ir_builder_.CreateGEP(that_buff, row_off_in_bytes);
-  cgen_state->ir_builder_.CreateCall(
-      reduction_code.ir_reduce_func,
-      {this_row_ptr, that_row_ptr, this_qmd_handle, that_qmd_handle});
+  cgen_state->ir_builder_.CreateCall(reduction_code.ir_reduce_func,
+                                     {this_row_ptr,
+                                      that_row_ptr,
+                                      this_qmd_handle,
+                                      that_qmd_handle,
+                                      serialized_varlen_buffer_arg});
   cgen_state->ir_builder_.CreateRetVoid();
   verify_function_ir(reduction_code.ir_reduce_func_idx);
 }
@@ -568,6 +565,7 @@ void ResultSetStorage::reduceOneEntryBaselineJIT(
   const auto that_entry_count = &*(arg_it + 3);
   const auto this_qmd_handle = &*(arg_it + 4);
   const auto that_qmd_handle = &*(arg_it + 5);
+  const auto serialized_varlen_buffer_arg = &*(arg_it + 6);
   const auto row_bytes = cgen_state->llInt<int32_t>(get_row_bytes(query_mem_desc_));
   const auto that_row_off = cgen_state->ir_builder_.CreateMul(that_entry_idx, row_bytes);
   const auto that_row_ptr = cgen_state->ir_builder_.CreateGEP(that_buff, that_row_off);
@@ -607,9 +605,12 @@ void ResultSetStorage::reduceOneEntryBaselineJIT(
   const auto key_byte_count_lv = cgen_state->llInt<int32_t>(key_byte_count);
   const auto that_targets_ptr =
       cgen_state->ir_builder_.CreateGEP(that_row_ptr, key_byte_count_lv);
-  cgen_state->ir_builder_.CreateCall(
-      reduction_code.ir_reduce_func,
-      {this_targets_ptr, that_targets_ptr, this_qmd_handle, that_qmd_handle});
+  cgen_state->ir_builder_.CreateCall(reduction_code.ir_reduce_func,
+                                     {this_targets_ptr,
+                                      that_targets_ptr,
+                                      this_qmd_handle,
+                                      that_qmd_handle,
+                                      serialized_varlen_buffer_arg});
   cgen_state->ir_builder_.CreateRetVoid();
   verify_function_ir(reduction_code.ir_reduce_func_idx);
 }
@@ -732,6 +733,50 @@ void ResultSetStorage::isEmptyJit(const ReductionCode& reduction_code) const {
   verify_function_ir(reduction_code.ir_is_empty_func);
 }
 
+namespace {
+
+void varlen_buffer_sample(int8_t* this_ptr1,
+                          int8_t* this_ptr2,
+                          const int8_t* that_ptr1,
+                          const int8_t* that_ptr2,
+                          const int64_t init_val) {
+  const auto rhs_proj_col = *reinterpret_cast<const int64_t*>(that_ptr1);
+  if (rhs_proj_col != init_val) {
+    *reinterpret_cast<int64_t*>(this_ptr1) = rhs_proj_col;
+  }
+  CHECK(this_ptr2 && that_ptr2);
+  *reinterpret_cast<int64_t*>(this_ptr2) = *reinterpret_cast<const int64_t*>(that_ptr2);
+}
+
+}  // namespace
+
+extern "C" void serialized_varlen_buffer_sample(
+    const void* serialized_varlen_buffer_handle,
+    int8_t* this_ptr1,
+    int8_t* this_ptr2,
+    const int8_t* that_ptr1,
+    const int8_t* that_ptr2,
+    const int64_t init_val,
+    const int64_t length_to_elems) {
+  if (!serialized_varlen_buffer_handle) {
+    varlen_buffer_sample(this_ptr1, this_ptr2, that_ptr1, that_ptr2, init_val);
+    return;
+  }
+  const auto& serialized_varlen_buffer =
+      *reinterpret_cast<const std::vector<std::string>*>(serialized_varlen_buffer_handle);
+  if (!serialized_varlen_buffer.empty()) {
+    const auto rhs_proj_col = *reinterpret_cast<const int64_t*>(that_ptr1);
+    CHECK_LT(static_cast<size_t>(rhs_proj_col), serialized_varlen_buffer.size());
+    const auto& varlen_bytes_str = serialized_varlen_buffer[rhs_proj_col];
+    const auto str_ptr = reinterpret_cast<const int8_t*>(varlen_bytes_str.c_str());
+    *reinterpret_cast<int64_t*>(this_ptr1) = reinterpret_cast<const int64_t>(str_ptr);
+    *reinterpret_cast<int64_t*>(this_ptr2) =
+        static_cast<int64_t>(varlen_bytes_str.size() / length_to_elems);
+  } else {
+    varlen_buffer_sample(this_ptr1, this_ptr2, that_ptr1, that_ptr2, init_val);
+  }
+}
+
 void ResultSetStorage::reduceOneSlotJIT(llvm::Value* this_ptr1,
                                         llvm::Value* this_ptr2,
                                         llvm::Value* that_ptr1,
@@ -795,8 +840,29 @@ void ResultSetStorage::reduceOneSlotJIT(llvm::Value* this_ptr1,
         LOG(FATAL) << "Invalid aggregate type";
     }
   } else {
-    CHECK(target_info.agg_kind != kSAMPLE) << "Not supported yet";
     emit_write_projection(this_ptr1, that_ptr1, init_val, chosen_bytes, cgen_state);
+    if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) {
+      CHECK(this_ptr2 && that_ptr2);
+      size_t length_to_elems{0};
+      if (target_info.sql_type.is_geometry()) {
+        // TODO: Assumes hard-coded sizes for geometry targets
+        length_to_elems = target_slot_idx == first_slot_idx_for_target ? 1 : 4;
+      } else {
+        const auto& elem_ti = target_info.sql_type.get_elem_type();
+        length_to_elems = target_info.sql_type.is_string() ? 1 : elem_ti.get_size();
+      }
+      const auto arg_it = reduction_code.ir_reduce_func->arg_begin();
+      const auto serialized_varlen_buffer_arg = &*(arg_it + 4);
+      cgen_state->emitExternalCall("serialized_varlen_buffer_sample",
+                                   llvm::Type::getVoidTy(cgen_state->context_),
+                                   {serialized_varlen_buffer_arg,
+                                    this_ptr1,
+                                    this_ptr2,
+                                    that_ptr1,
+                                    that_ptr2,
+                                    cgen_state->llInt<int64_t>(init_val),
+                                    cgen_state->llInt<int64_t>(length_to_elems)});
+    }
   }
 }
 
