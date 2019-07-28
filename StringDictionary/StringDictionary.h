@@ -146,17 +146,30 @@ class StringDictionary {
   std::string getStringChecked(const int string_id) const noexcept;
   std::pair<char*, size_t> getStringBytesChecked(const int string_id) const noexcept;
   uint32_t computeBucket(const uint32_t hash,
-                         const std::string str,
-                         const std::vector<int32_t>& data,
-                         const bool unique) const noexcept;
+                         const std::string& str,
+                         const std::vector<int32_t>& data) const noexcept;
+  uint32_t computeBucketFromStorageAndMemory(
+      const uint32_t hash,
+      const std::string& str,
+      const std::vector<int32_t>& data,
+      const int32_t storage_high_water_mark,
+      const std::vector<std::string>& input_strings,
+      const std::vector<size_t>& string_memory_ids) const noexcept;
   uint32_t computeUniqueBucketWithHash(const uint32_t hash,
                                        const std::vector<int32_t>& data) const noexcept;
+  void checkAndConditionallyIncreasePayloadCapacity(const size_t write_length);
+  void checkAndConditionallyIncreaseOffsetCapacity(const size_t write_length);
   void appendToStorage(const std::string& str) noexcept;
+  void appendToStorageBulk(const std::vector<std::string>& input_strings,
+                           const std::vector<size_t>& string_memory_ids,
+                           const size_t sum_new_strings_lengths) noexcept;
   PayloadString getStringFromStorage(const int string_id) const noexcept;
-  void addPayloadCapacity() noexcept;
-  void addOffsetCapacity() noexcept;
-  size_t addStorageCapacity(int fd) noexcept;
-  void* addMemoryCapacity(void* addr, size_t& mem_size) noexcept;
+  void addPayloadCapacity(const size_t min_capacity_requested = 0) noexcept;
+  void addOffsetCapacity(const size_t min_capacity_requested = 0) noexcept;
+  size_t addStorageCapacity(int fd, const size_t min_capacity_requested = 0) noexcept;
+  void* addMemoryCapacity(void* addr,
+                          size_t& mem_size,
+                          const size_t min_capacity_requested = 0) noexcept;
   void invalidateInvertedIndex() noexcept;
   std::vector<int32_t> getEquals(std::string pattern,
                                  std::string comp_operator,
