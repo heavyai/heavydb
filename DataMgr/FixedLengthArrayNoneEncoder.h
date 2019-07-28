@@ -140,7 +140,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
   }
 
   void updateMetadata(int8_t* array) {
-    update_elem_stats(ArrayDatum(array_size, array, DoNothingDeleter()));
+    update_elem_stats(ArrayDatum(array_size, array, is_null(array), DoNothingDeleter()));
   }
 
   Datum elem_min;
@@ -151,6 +151,60 @@ class FixedLengthArrayNoneEncoder : public Encoder {
  private:
   std::mutex EncoderMutex_;
   size_t array_size;
+
+  bool is_null(int8_t* array) {
+    if (buffer_->sqlType.get_notnull()) {
+      return false;
+    }
+    switch (buffer_->sqlType.get_subtype()) {
+      case kBOOLEAN: {
+        const bool* bool_array = (bool*)array;
+        return ((int8_t)bool_array[0] == NULL_ARRAY_BOOLEAN);
+      }
+      case kINT: {
+        const int32_t* int_array = (int32_t*)array;
+        return (int_array[0] == NULL_ARRAY_INT);
+      }
+      case kSMALLINT: {
+        const int16_t* smallint_array = (int16_t*)array;
+        return (smallint_array[0] == NULL_ARRAY_SMALLINT);
+      }
+      case kTINYINT: {
+        const int8_t* tinyint_array = (int8_t*)array;
+        return (tinyint_array[0] == NULL_ARRAY_TINYINT);
+      }
+      case kBIGINT:
+      case kNUMERIC:
+      case kDECIMAL: {
+        const int64_t* bigint_array = (int64_t*)array;
+        return (bigint_array[0] == NULL_ARRAY_BIGINT);
+      }
+      case kFLOAT: {
+        const float* flt_array = (float*)array;
+        return (flt_array[0] == NULL_ARRAY_FLOAT);
+      }
+      case kDOUBLE: {
+        const double* dbl_array = (double*)array;
+        return (dbl_array[0] == NULL_ARRAY_DOUBLE);
+      }
+      case kTIME:
+      case kTIMESTAMP:
+      case kDATE: {
+        const int64_t* tm_array = reinterpret_cast<int64_t*>(array);
+        return (tm_array[0] == NULL_ARRAY_BIGINT);
+      }
+      case kCHAR:
+      case kVARCHAR:
+      case kTEXT: {
+        assert(buffer_->sqlType.get_compression() == kENCODING_DICT);
+        const int32_t* int_array = (int32_t*)array;
+        return (int_array[0] == NULL_ARRAY_INT);
+      }
+      default:
+        assert(false);
+    }
+    return false;
+  }
 
   void update_elem_stats(const ArrayDatum& array) {
     if (array.is_null) {
@@ -189,31 +243,31 @@ class FixedLengthArrayNoneEncoder : public Encoder {
         }
       } break;
       case kSMALLINT: {
-        const int16_t* int_array = (int16_t*)array.pointer;
+        const int16_t* smallint_array = (int16_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int16_t); i++) {
-          if (int_array[i] == NULL_SMALLINT) {
+          if (smallint_array[i] == NULL_SMALLINT) {
             has_nulls = true;
           } else if (initialized) {
-            elem_min.smallintval = std::min(elem_min.smallintval, int_array[i]);
-            elem_max.smallintval = std::max(elem_max.smallintval, int_array[i]);
+            elem_min.smallintval = std::min(elem_min.smallintval, smallint_array[i]);
+            elem_max.smallintval = std::max(elem_max.smallintval, smallint_array[i]);
           } else {
-            elem_min.smallintval = int_array[i];
-            elem_max.smallintval = int_array[i];
+            elem_min.smallintval = smallint_array[i];
+            elem_max.smallintval = smallint_array[i];
             initialized = true;
           }
         }
       } break;
       case kTINYINT: {
-        const int8_t* int_array = (int8_t*)array.pointer;
+        const int8_t* tinyint_array = (int8_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int8_t); i++) {
-          if (int_array[i] == NULL_TINYINT) {
+          if (tinyint_array[i] == NULL_TINYINT) {
             has_nulls = true;
           } else if (initialized) {
-            elem_min.tinyintval = std::min(elem_min.tinyintval, int_array[i]);
-            elem_max.tinyintval = std::max(elem_max.tinyintval, int_array[i]);
+            elem_min.tinyintval = std::min(elem_min.tinyintval, tinyint_array[i]);
+            elem_max.tinyintval = std::max(elem_max.tinyintval, tinyint_array[i]);
           } else {
-            elem_min.tinyintval = int_array[i];
-            elem_max.tinyintval = int_array[i];
+            elem_min.tinyintval = tinyint_array[i];
+            elem_max.tinyintval = tinyint_array[i];
             initialized = true;
           }
         }
@@ -221,18 +275,18 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kBIGINT:
       case kNUMERIC:
       case kDECIMAL: {
-        const int64_t* int_array = (int64_t*)array.pointer;
+        const int64_t* bigint_array = (int64_t*)array.pointer;
         for (size_t i = 0; i < array.length / sizeof(int64_t); i++) {
-          if (int_array[i] == NULL_BIGINT) {
+          if (bigint_array[i] == NULL_BIGINT) {
             has_nulls = true;
           } else if (initialized) {
-            decimal_overflow_validator_.validate(int_array[i]);
-            elem_min.bigintval = std::min(elem_min.bigintval, int_array[i]);
-            elem_max.bigintval = std::max(elem_max.bigintval, int_array[i]);
+            decimal_overflow_validator_.validate(bigint_array[i]);
+            elem_min.bigintval = std::min(elem_min.bigintval, bigint_array[i]);
+            elem_max.bigintval = std::max(elem_max.bigintval, bigint_array[i]);
           } else {
-            decimal_overflow_validator_.validate(int_array[i]);
-            elem_min.bigintval = int_array[i];
-            elem_max.bigintval = int_array[i];
+            decimal_overflow_validator_.validate(bigint_array[i]);
+            elem_min.bigintval = bigint_array[i];
+            elem_max.bigintval = bigint_array[i];
             initialized = true;
           }
         }
