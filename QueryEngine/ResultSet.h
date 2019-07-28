@@ -123,19 +123,38 @@ class ResultSetStorage {
 
   ReductionCode reduceOneEntryJIT(const ResultSetStorage& that) const;
 
-  ReductionCode reduceOneEntryNoCollisionsRowWiseJIT(const ResultSetStorage& that) const;
-
-  ReductionCode reduceOneEntrySlotsBaselineJIT(const ResultSetStorage& that) const;
-
  private:
-  void isEmptyJit(const ReductionCode& reduction_code) const;
+  void isEmptyJIT(const ReductionCode& reduction_code) const;
 
-  void reduceOneEntryNoCollisionsRowWiseIdxJIT(const ReductionCode& reduction_code) const;
+  void reduceOneEntryNoCollisionsJIT(const ResultSetStorage& that,
+                                     const ReductionCode& reduction_code) const;
 
-  void reduceOneEntryBaselineJIT(const ReductionCode& reduction_code) const;
+  void reduceOneEntryBaselineJIT(const ResultSetStorage& that,
+                                 const ReductionCode& reduction_code) const;
 
-  ReductionCode finalizeReductionCode(ReductionCode reduction_code,
-                                      CgenState* cgen_state) const;
+  void reduceOneEntryNoCollisionsIdxJIT(const ReductionCode& reduction_code) const;
+
+  void reduceOneEntryBaselineIdxJIT(const ReductionCode& reduction_code) const;
+
+  void reduceOneSlotJIT(llvm::Value* this_ptr1,
+                        llvm::Value* this_ptr2,
+                        llvm::Value* that_ptr1,
+                        llvm::Value* that_ptr2,
+                        const TargetInfo& target_info,
+                        const size_t target_logical_idx,
+                        const size_t target_slot_idx,
+                        const size_t init_agg_val_idx,
+                        const ResultSetStorage& that,
+                        const size_t first_slot_idx_for_target,
+                        const ReductionCode& reduction_code) const;
+
+  void reduceOneCountDistinctSlotJIT(llvm::Value* this_ptr1,
+                                     llvm::Value* that_ptr1,
+                                     const size_t target_logical_idx,
+                                     const ResultSetStorage& that,
+                                     const ReductionCode& reduction_code) const;
+
+  ReductionCode finalizeReductionCode(ReductionCode reduction_code) const;
 
   void reduceEntriesNoCollisionsColWise(
       int8_t* this_buff,
@@ -156,24 +175,6 @@ class ResultSetStorage {
       const ResultSetStorage& that,
       const std::vector<std::string>& serialized_varlen_buffer,
       const ReductionCode& reduction_code) const;
-
-  void reduceOneSlotJIT(llvm::Value* this_ptr1,
-                        llvm::Value* this_ptr2,
-                        llvm::Value* that_ptr1,
-                        llvm::Value* that_ptr2,
-                        const TargetInfo& target_info,
-                        const size_t target_logical_idx,
-                        const size_t target_slot_idx,
-                        const size_t init_agg_val_idx,
-                        const ResultSetStorage& that,
-                        const size_t first_slot_idx_for_target,
-                        const ReductionCode& reduction_code) const;
-
-  void reduceOneCountDistinctSlotJIT(llvm::Value* this_ptr1,
-                                     llvm::Value* that_ptr1,
-                                     const size_t target_logical_idx,
-                                     const ResultSetStorage& that,
-                                     const ReductionCode& reduction_code) const;
 
   bool isEmptyEntry(const size_t entry_idx, const int8_t* buff) const;
   bool isEmptyEntry(const size_t entry_idx) const;

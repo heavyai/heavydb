@@ -1172,7 +1172,6 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
   ReductionCode reduction_code{};
 #endif  // WITH_REDUCTION_JIT
   size_t ctr = 1;
-  ReductionCode reduction_code{};
   for (auto result_it = result_sets.begin() + 1; result_it != result_sets.end();
        ++result_it) {
     if (!serialized_varlen_buffer.empty()) {
