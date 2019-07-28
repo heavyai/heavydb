@@ -137,6 +137,8 @@ class StringDictionary {
   bool fillRateIsHigh() const noexcept;
   void increaseCapacity() noexcept;
   int32_t getOrAddImpl(const std::string& str) noexcept;
+  void hashStrings(const std::vector<std::string>& string_vec,
+                   std::vector<uint32_t>& hashes) const noexcept;
   template <class T>
   void getOrAddBulkRemote(const std::vector<std::string>& string_vec, T* encoded_vec);
   int32_t getUnlocked(const std::string& str) const noexcept;

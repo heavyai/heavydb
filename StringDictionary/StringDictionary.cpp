@@ -281,6 +281,38 @@ void StringDictionary::getOrAddBulkArray(
   }
 }
 
+/**
+ * Method to rk_hash a vector of strings in parallel.
+ * @param string_vec input vector of strings to be hashed
+ * @param hashes space for the output - should be pre-sized to match string_vec size
+ */
+void StringDictionary::hashStrings(const std::vector<std::string>& string_vec,
+                                   std::vector<uint32_t>& hashes) const noexcept {
+  CHECK_EQ(string_vec.size(), hashes.size());
+  const size_t min_target_strings_per_thread{2000};
+  const size_t str_count = string_vec.size();
+  const size_t max_thread_count = std::thread::hardware_concurrency();
+  const size_t items_per_thread =
+      std::max<size_t>(min_target_strings_per_thread, str_count / max_thread_count + 1);
+
+  std::vector<std::thread> workers;
+  for (size_t string_id = 0; string_id < str_count; string_id += items_per_thread) {
+    workers.emplace_back(
+        [&string_vec, &hashes, string_id, str_count, items_per_thread]() {
+          const size_t end_id = std::min(string_id + items_per_thread, str_count);
+          for (size_t curr_id = string_id; curr_id < end_id; ++curr_id) {
+            if (string_vec[curr_id].empty()) {
+              continue;
+            }
+            hashes[curr_id] = rk_hash(string_vec[curr_id]);
+          }
+        });
+  }
+  for (auto& worker : workers) {
+    worker.join();
+  }
+}
+
 template <class T>
 void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec,
                                     T* encoded_vec) {
@@ -288,9 +320,13 @@ void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec,
     getOrAddBulkRemote(string_vec, encoded_vec);
     return;
   }
-  size_t out_idx{0};
-  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+  // Run rk_hash on the input strings up front, and in parallel,
+  // as the string hashing does not need to be behind the subsequent write_lock
+  std::vector<uint32_t> hashes(string_vec.size());
+  hashStrings(string_vec, hashes);
 
+  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+  size_t out_idx{0};
   for (const auto& str : string_vec) {
     if (str.empty()) {
       encoded_vec[out_idx++] = inline_int_null_value<T>();
@@ -298,7 +334,7 @@ void StringDictionary::getOrAddBulk(const std::vector<std::string>& string_vec,
     }
     CHECK(str.size() <= MAX_STRLEN);
     uint32_t bucket;
-    const uint32_t hash = rk_hash(str);
+    const uint32_t hash = hashes[out_idx];
     bucket = computeBucket(hash, str, str_ids_, false);
     if (str_ids_[bucket] != INVALID_STR_ID) {
       encoded_vec[out_idx++] = str_ids_[bucket];
