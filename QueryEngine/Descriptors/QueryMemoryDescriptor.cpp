@@ -44,13 +44,10 @@ std::vector<ssize_t> target_expr_group_by_indices(
     if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
       continue;
     }
-    size_t group_idx = 0;
-    for (const auto groupby_expr : groupby_exprs) {
-      if (*target_expr == *groupby_expr) {
-        indices[target_idx] = group_idx;
-        break;
-      }
-      ++group_idx;
+    const auto var_expr = dynamic_cast<const Analyzer::Var*>(target_expr);
+    if (var_expr && var_expr->get_which_row() == Analyzer::Var::kGROUPBY) {
+      indices[target_idx] = var_expr->get_varno() - 1;
+      continue;
     }
   }
   return indices;
