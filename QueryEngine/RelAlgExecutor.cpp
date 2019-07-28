@@ -1366,6 +1366,9 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
   const auto body = table_func_work_unit.body;
   CHECK(body);
 
+  const auto table_infos =
+      get_table_infos(table_func_work_unit.exe_unit.input_descs, executor_);
+
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      co.device_type_,
                                                      QueryMemoryDescriptor(),
@@ -1374,7 +1377,9 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
                          {}};
 
   try {
-    result = {executor_->executeTableFunction(), body->getOutputMetainfo()};
+    result = {executor_->executeTableFunction(
+                  table_func_work_unit.exe_unit, table_infos, co, eo, cat_),
+              body->getOutputMetainfo()};
   } catch (const QueryExecutionError& e) {
     handlePersistentError(e.getErrorCode());
     CHECK(e.getErrorCode() == Executor::ERR_OUT_OF_GPU_MEM);
@@ -3090,7 +3095,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   std::vector<Analyzer::Expr*> table_func_outputs;
   // TODO(adb): probably wrong
   target_exprs_owned_.push_back(std::make_shared<Analyzer::Var>(
-      SQLTypeInfo(kINT, true), Analyzer::Var::WhichRow::kOUTPUT, 0));
+      SQLTypeInfo(kDOUBLE, true), Analyzer::Var::WhichRow::kOUTPUT, 0));
   table_func_outputs.push_back(target_exprs_owned_.back().get());
 
   const TableFunctionExecutionUnit exe_unit = {

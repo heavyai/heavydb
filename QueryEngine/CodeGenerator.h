@@ -80,6 +80,8 @@ class CodeGenerator {
 
   static std::unique_ptr<llvm::TargetMachine> initializeNVPTXBackend();
 
+  static bool alwaysCloneRuntimeFunction(const llvm::Function* func);
+
   struct GPUCode {
     std::vector<std::pair<void*, void*>> native_functions;
     std::vector<std::tuple<void*, GpuCompilationContext*>> cached_functions;

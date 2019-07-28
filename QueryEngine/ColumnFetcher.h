@@ -85,4 +85,5 @@ class ColumnFetcher {
       columnarized_scan_table_cache_;
 
   friend class QueryCompilationDescriptor;
+  friend class TableFunctionExecutionContext;  // TODO(adb)
 };

@@ -385,7 +385,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
                 ra_exe_unit.use_bump_allocator ? num_allocated_rows
                                                : query_mem_desc_.getEntryCount(),
                 gpu_group_by_buffers,
-                ra_exe_unit,
+                &ra_exe_unit,
                 block_size_x,
                 grid_size_x,
                 device_id,
@@ -403,7 +403,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
               query_mem_desc_,
               query_mem_desc_.getEntryCount(),
               gpu_group_by_buffers,
-              ra_exe_unit,
+              &ra_exe_unit,
               block_size_x,
               grid_size_x,
               device_id,

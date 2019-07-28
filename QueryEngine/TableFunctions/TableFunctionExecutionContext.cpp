@@ -1,0 +1,281 @@
+/*
+ * Copyright 2019 OmniSci, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "QueryEngine/TableFunctions/TableFunctionExecutionContext.h"
+
+#include "Analyzer/Analyzer.h"
+#include "QueryEngine/ColumnFetcher.h"
+#include "QueryEngine/GpuMemUtils.h"
+#include "QueryEngine/TableFunctions/TableFunctionCompilationContext.h"
+#include "Shared/Logger.h"
+
+ResultSetPtr TableFunctionExecutionContext::execute(
+    const TableFunctionExecutionUnit& exe_unit,
+    const InputTableInfo& table_info,
+    const TableFunctionCompilationContext* compilation_context,
+    const ColumnFetcher& column_fetcher,
+    const ExecutorDeviceType device_type,
+    Executor* executor) {
+  CHECK(compilation_context);
+
+  std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
+
+  Analyzer::ColumnVar* col_var = exe_unit.table_func_inputs[0];
+  CHECK(col_var);
+  // TODO(adb): should always only be one fragment, because it's synthesized. But, need to
+  // check that assumption
+  auto [col_buf, elem_count] = ColumnFetcher::getOneColumnFragment(
+      executor,
+      *col_var,
+      table_info.info.fragments.front(),
+      device_type == ExecutorDeviceType::CPU ? Data_Namespace::MemoryLevel::CPU_LEVEL
+                                             : Data_Namespace::MemoryLevel::GPU_LEVEL,
+      0,
+      chunks_owner,
+      column_fetcher.columnarized_table_cache_);
+
+  std::vector<const int8_t*> col_buf_ptrs;
+  col_buf_ptrs.push_back(col_buf);
+
+  switch (device_type) {
+    case ExecutorDeviceType::CPU:
+      return launchCpuCode(
+          exe_unit, compilation_context, col_buf_ptrs, elem_count, executor);
+    case ExecutorDeviceType::GPU:
+      return launchGpuCode(exe_unit,
+                           compilation_context,
+                           col_buf_ptrs,
+                           elem_count,
+                           /*device_id=*/0,
+                           executor);
+  }
+  UNREACHABLE();
+  return nullptr;
+}
+
+ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
+    const TableFunctionExecutionUnit& exe_unit,
+    const TableFunctionCompilationContext* compilation_context,
+    std::vector<const int8_t*>& col_buf_ptrs,
+    const size_t elem_count,
+    Executor* executor) {
+  // TODO(adb): create literals buffer, merge w/ GPU
+  auto const_val = dynamic_cast<Analyzer::Constant*>(exe_unit.input_exprs[0]);
+  CHECK(const_val);
+  auto const_val_datum = const_val->get_constval();
+  int copy_multiplier = const_val_datum.intval;
+  col_buf_ptrs.push_back(reinterpret_cast<const int8_t*>(&copy_multiplier));
+
+  // setup the inputs
+  const auto byte_stream_ptr = reinterpret_cast<const int8_t**>(col_buf_ptrs.data());
+  CHECK(byte_stream_ptr);
+
+  // initialize output memory
+  QueryMemoryDescriptor query_mem_desc(
+      executor, elem_count, QueryDescriptionType::Projection);
+  query_mem_desc.setOutputColumnar(true);
+  query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});  // single 8 byte col, for now
+
+  auto new_elem_count = elem_count * copy_multiplier;
+
+  auto query_buffers = std::make_unique<QueryMemoryInitializer>(
+      exe_unit,
+      query_mem_desc,
+      /*device_id=*/0,
+      ExecutorDeviceType::CPU,
+      new_elem_count,
+      std::vector<std::vector<const int8_t*>>{col_buf_ptrs},
+      std::vector<std::vector<uint64_t>>{{0}},  // frag offsets
+      row_set_mem_owner_,
+      nullptr,
+      executor);
+
+  // setup the output
+  int64_t output_row_count = -1;
+  auto group_by_buffers_ptr = query_buffers->getGroupByBuffersPtr();
+  CHECK(group_by_buffers_ptr);
+
+  // execute
+  const auto kernel_element_count = static_cast<int64_t>(elem_count);
+  const auto err =
+      compilation_context->getFuncPtr()(byte_stream_ptr,
+                                        &kernel_element_count,
+                                        query_buffers->getGroupByBuffersPtr(),
+                                        &output_row_count);
+  if (err) {
+    throw std::runtime_error("Error executing table function: " + std::to_string(err));
+  }
+  if (output_row_count < 0) {
+    throw std::runtime_error("Table function did not properly set output row count.");
+  }
+
+  // Update entry count, it may differ from allocated mem size
+  query_buffers->getResultSet(0)->updateStorageEntryCount(output_row_count);
+
+  return query_buffers->getResultSetOwned(0);
+}
+
+namespace {
+enum {
+  ERROR_BUFFER,
+  COL_BUFFERS,
+  INPUT_ROW_COUNT,
+  OUTPUT_BUFFERS,
+  OUTPUT_ROW_COUNT,
+  KERNEL_PARAM_COUNT,
+};
+}
+
+ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
+    const TableFunctionExecutionUnit& exe_unit,
+    const TableFunctionCompilationContext* compilation_context,
+    std::vector<const int8_t*>& col_buf_ptrs,
+    const size_t elem_count,
+    const int device_id,
+    Executor* executor) {
+#ifdef HAVE_CUDA
+  auto& data_mgr = executor->catalog_->getDataMgr();
+  auto gpu_allocator = std::make_unique<CudaAllocator>(&data_mgr, device_id);
+  CHECK(gpu_allocator);
+
+  std::vector<CUdeviceptr> kernel_params(KERNEL_PARAM_COUNT, 0);
+
+  // TODO(adb): create literals buffer, merge w/ CPU
+  auto const_val = dynamic_cast<Analyzer::Constant*>(exe_unit.input_exprs[0]);
+  CHECK(const_val);
+  auto const_val_datum = const_val->get_constval();
+  int copy_multiplier = const_val_datum.intval;
+  auto copy_multiplier_gpu = gpu_allocator->alloc(sizeof(copy_multiplier));
+  gpu_allocator->copyToDevice(copy_multiplier_gpu,
+                              reinterpret_cast<int8_t*>(&copy_multiplier),
+                              sizeof(copy_multiplier));
+  col_buf_ptrs.push_back(reinterpret_cast<const int8_t*>(copy_multiplier_gpu));
+
+  // setup the inputs
+  auto byte_stream_ptr = gpu_allocator->alloc(col_buf_ptrs.size() * sizeof(int64_t));
+  gpu_allocator->copyToDevice(byte_stream_ptr,
+                              reinterpret_cast<int8_t*>(col_buf_ptrs.data()),
+                              col_buf_ptrs.size() * sizeof(int64_t));
+  kernel_params[COL_BUFFERS] = reinterpret_cast<CUdeviceptr>(byte_stream_ptr);
+
+  kernel_params[INPUT_ROW_COUNT] =
+      reinterpret_cast<CUdeviceptr>(gpu_allocator->alloc(sizeof(elem_count)));
+  gpu_allocator->copyToDevice(reinterpret_cast<int8_t*>(kernel_params[INPUT_ROW_COUNT]),
+                              reinterpret_cast<const int8_t*>(&elem_count),
+                              sizeof(elem_count));
+
+  kernel_params[ERROR_BUFFER] =
+      reinterpret_cast<CUdeviceptr>(gpu_allocator->alloc(sizeof(int32_t)));
+
+  // initialize output memory
+  QueryMemoryDescriptor query_mem_desc(
+      executor, elem_count, QueryDescriptionType::Projection);
+  query_mem_desc.setOutputColumnar(true);
+  query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});  // single 8 byte col, for now
+
+  auto new_elem_count = elem_count * copy_multiplier;
+
+  auto query_buffers = std::make_unique<QueryMemoryInitializer>(
+      exe_unit,
+      query_mem_desc,
+      device_id,
+      ExecutorDeviceType::GPU,
+      new_elem_count,
+      std::vector<std::vector<const int8_t*>>{col_buf_ptrs},
+      std::vector<std::vector<uint64_t>>{{0}},  // frag offsets
+      row_set_mem_owner_,
+      gpu_allocator.get(),
+      executor);
+
+  // setup the output
+  int64_t output_row_count = -1;
+  kernel_params[OUTPUT_ROW_COUNT] =
+      reinterpret_cast<CUdeviceptr>(gpu_allocator->alloc(sizeof(int64_t*)));
+  gpu_allocator->copyToDevice(reinterpret_cast<int8_t*>(kernel_params[OUTPUT_ROW_COUNT]),
+                              reinterpret_cast<int8_t*>(&output_row_count),
+                              sizeof(output_row_count));
+
+  auto group_by_buffers_ptr = query_buffers->getGroupByBuffersPtr();
+  CHECK(group_by_buffers_ptr);
+
+  const unsigned block_size_x = 1;  // executor->blockSize();
+  const unsigned block_size_y = 1;
+  const unsigned block_size_z = 1;
+  const unsigned grid_size_x = 1;  // executor->gridSize();
+  const unsigned grid_size_y = 1;
+  const unsigned grid_size_z = 1;
+
+  auto gpu_output_buffers = query_buffers->setupTableFunctionGpuBuffers(
+      query_mem_desc, device_id, block_size_x, grid_size_x);
+  kernel_params[OUTPUT_BUFFERS] = reinterpret_cast<CUdeviceptr>(gpu_output_buffers.first);
+
+  // execute
+  CHECK_EQ(static_cast<size_t>(KERNEL_PARAM_COUNT), kernel_params.size());
+
+  std::vector<void*> param_ptrs;
+  for (auto& param : kernel_params) {
+    param_ptrs.push_back(&param);
+  }
+
+  // Get cu func
+  const auto gpu_code_ptr = compilation_context->getGpuCode();
+  CHECK(gpu_code_ptr);
+  CHECK_LT(static_cast<size_t>(device_id), gpu_code_ptr->native_functions.size());
+  const auto native_function_pointer = gpu_code_ptr->native_functions[device_id].first;
+  auto cu_func = static_cast<CUfunction>(native_function_pointer);
+  checkCudaErrors(cuLaunchKernel(cu_func,
+                                 grid_size_x,
+                                 grid_size_y,
+                                 grid_size_z,
+                                 block_size_x,
+                                 block_size_y,
+                                 block_size_z,
+                                 0,  // shared mem bytes
+                                 nullptr,
+                                 &param_ptrs[0],
+                                 nullptr));
+  // TODO(adb): read errors
+
+  // read output row count from GPU
+  int64_t new_output_row_count = -1;
+  gpu_allocator->copyFromDevice(
+      reinterpret_cast<int8_t*>(&new_output_row_count),
+      reinterpret_cast<int8_t*>(kernel_params[OUTPUT_ROW_COUNT]),
+      sizeof(int64_t));
+  if (new_output_row_count < 0) {
+    throw std::runtime_error("Table function did not properly set output row count.");
+  }
+
+  // Update entry count, it may differ from allocated mem size
+  query_buffers->getResultSet(0)->updateStorageEntryCount(new_output_row_count);
+
+  // Copy back to CPU storage
+  query_buffers->copyGroupByBuffersFromGpu(&data_mgr,
+                                           query_mem_desc,
+                                           new_output_row_count,
+                                           gpu_output_buffers,
+                                           nullptr,
+                                           block_size_x,
+                                           grid_size_x,
+                                           device_id,
+                                           false);
+
+  return query_buffers->getResultSetOwned(0);
+#else
+  UNREACHABLE();
+  return nullptr;
+#endif
+}

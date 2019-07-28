@@ -38,6 +38,9 @@
 #include "RuntimeFunctions.h"
 #include "SpeculativeTopN.h"
 
+#include "TableFunctions/TableFunctionCompilationContext.h"
+#include "TableFunctions/TableFunctionExecutionContext.h"
+
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Parser/ParserNode.h"
@@ -1340,8 +1343,30 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
   }
 }
 
-ResultSetPtr Executor::executeTableFunction() {
-  return std::make_shared<ResultSet>("TODO");
+ResultSetPtr Executor::executeTableFunction(
+    const TableFunctionExecutionUnit exe_unit,
+    const std::vector<InputTableInfo>& table_infos,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo,
+    const Catalog_Namespace::Catalog& cat) {
+  INJECT_TIMER(Exec_executeTableFunction);
+  nukeOldState(false, table_infos, nullptr);
+
+  ColumnCacheMap column_cache;  // Note: if we add retries to the table function
+                                // framework, we may want to move this up a level
+
+  ColumnFetcher column_fetcher(this, column_cache);
+  TableFunctionCompilationContext compilation_context;
+  compilation_context.compile(exe_unit, co, this);
+
+  TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
+  CHECK_EQ(table_infos.size(), size_t(1));
+  return exe_context.execute(exe_unit,
+                             table_infos.front(),
+                             &compilation_context,
+                             column_fetcher,
+                             co.device_type_,
+                             this);
 }
 
 ResultSetPtr Executor::executeExplain(const QueryCompilationDescriptor& query_comp_desc) {
@@ -2830,13 +2855,13 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
 
 void Executor::nukeOldState(const bool allow_lazy_fetch,
                             const std::vector<InputTableInfo>& query_infos,
-                            const RelAlgExecutionUnit& ra_exe_unit) {
+                            const RelAlgExecutionUnit* ra_exe_unit) {
   const bool contains_left_deep_outer_join =
-      std::find_if(ra_exe_unit.join_quals.begin(),
-                   ra_exe_unit.join_quals.end(),
-                   [](const JoinCondition& join_condition) {
-                     return join_condition.type == JoinType::LEFT;
-                   }) != ra_exe_unit.join_quals.end();
+      ra_exe_unit && std::find_if(ra_exe_unit->join_quals.begin(),
+                                  ra_exe_unit->join_quals.end(),
+                                  [](const JoinCondition& join_condition) {
+                                    return join_condition.type == JoinType::LEFT;
+                                  }) != ra_exe_unit->join_quals.end();
   cgen_state_.reset(new CgenState(query_infos, contains_left_deep_outer_join));
   plan_state_.reset(
       new PlanState(allow_lazy_fetch && !contains_left_deep_outer_join, this));

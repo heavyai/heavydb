@@ -34,6 +34,7 @@
 
 class QueryMemoryInitializer {
  public:
+  // Row-based execution constructor
   QueryMemoryInitializer(const RelAlgExecutionUnit& ra_exe_unit,
                          const QueryMemoryDescriptor& query_mem_desc,
                          const int device_id,
@@ -48,6 +49,18 @@ class QueryMemoryInitializer {
                          RenderInfo* render_info,
                          std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                          DeviceAllocator* gpu_allocator,
+                         const Executor* executor);
+
+  // Table functions execution constructor
+  QueryMemoryInitializer(const TableFunctionExecutionUnit& exe_unit,
+                         const QueryMemoryDescriptor& query_mem_desc,
+                         const int device_id,
+                         const ExecutorDeviceType device_type,
+                         const int64_t num_rows,
+                         const std::vector<std::vector<const int8_t*>>& col_buffers,
+                         const std::vector<std::vector<uint64_t>>& frag_offsets,
+                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                         DeviceAllocator* device_allocator,
                          const Executor* executor);
 
   const auto getCountDistinctBitmapPtr() const { return count_distinct_bitmap_mem_; }
@@ -88,6 +101,24 @@ class QueryMemoryInitializer {
     CHECK_EQ(num_buffers_, group_by_buffers_.size());
     return num_buffers_;
   }
+
+#ifdef HAVE_CUDA
+  GpuGroupByBuffers setupTableFunctionGpuBuffers(
+      const QueryMemoryDescriptor& query_mem_desc,
+      const int device_id,
+      const unsigned block_size_x,
+      const unsigned grid_size_x);
+#endif
+
+  void copyGroupByBuffersFromGpu(Data_Namespace::DataMgr* data_mgr,
+                                 const QueryMemoryDescriptor& query_mem_desc,
+                                 const size_t entry_count,
+                                 const GpuGroupByBuffers& gpu_group_by_buffers,
+                                 const RelAlgExecutionUnit* ra_exe_unit,
+                                 const unsigned block_size_x,
+                                 const unsigned grid_size_x,
+                                 const int device_id,
+                                 const bool prepend_index_buffer) const;
 
  private:
   void initGroups(const QueryMemoryDescriptor& query_mem_desc,
@@ -152,16 +183,6 @@ class QueryMemoryInitializer {
                                    const GpuGroupByBuffers& gpu_group_by_buffers,
                                    const size_t projection_count,
                                    const int device_id);
-
-  void copyGroupByBuffersFromGpu(Data_Namespace::DataMgr* data_mgr,
-                                 const QueryMemoryDescriptor& query_mem_desc,
-                                 const size_t entry_count,
-                                 const GpuGroupByBuffers& gpu_group_by_buffers,
-                                 const RelAlgExecutionUnit& ra_exe_unit,
-                                 const unsigned block_size_x,
-                                 const unsigned grid_size_x,
-                                 const int device_id,
-                                 const bool prepend_index_buffer) const;
 
   void applyStreamingTopNOffsetCpu(const QueryMemoryDescriptor& query_mem_desc,
                                    const RelAlgExecutionUnit& ra_exe_unit);

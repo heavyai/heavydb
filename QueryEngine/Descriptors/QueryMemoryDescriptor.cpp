@@ -486,7 +486,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor()
 QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
                                              const size_t entry_count,
                                              const QueryDescriptionType query_desc_type)
-    : executor_(nullptr)
+    : executor_(executor)
     , allow_multifrag_(false)
     , query_desc_type_(query_desc_type)
     , keyless_hash_(false)

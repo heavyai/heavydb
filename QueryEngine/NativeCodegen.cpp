@@ -899,6 +899,21 @@ void Executor::initializeNVPTXBackend() const {
   nvptx_target_machine_ = CodeGenerator::initializeNVPTXBackend();
 }
 
+// A small number of runtime functions don't get through CgenState::emitCall. List them
+// explicitly here and always clone their implementation from the runtime module.
+bool CodeGenerator::alwaysCloneRuntimeFunction(const llvm::Function* func) {
+  return func->getName() == "query_stub_hoisted_literals" ||
+         func->getName() == "multifrag_query_hoisted_literals" ||
+         func->getName() == "query_stub" || func->getName() == "multifrag_query" ||
+         func->getName() == "fixed_width_int_decode" ||
+         func->getName() == "fixed_width_unsigned_decode" ||
+         func->getName() == "diff_fixed_width_int_decode" ||
+         func->getName() == "fixed_width_double_decode" ||
+         func->getName() == "fixed_width_float_decode" ||
+         func->getName() == "fixed_width_small_date_decode" ||
+         func->getName() == "record_error_code";
+}
+
 llvm::Module* read_template_module(llvm::LLVMContext& context) {
   llvm::SMDiagnostic err;
 
@@ -1553,25 +1568,6 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
   return hoisted_literals;
 }
 
-namespace {
-
-// A small number of runtime functions don't get through CgenState::emitCall. List them
-// explicitly here and always clone their implementation from the runtime module.
-bool always_clone_runtime_function(const llvm::Function* func) {
-  return func->getName() == "query_stub_hoisted_literals" ||
-         func->getName() == "multifrag_query_hoisted_literals" ||
-         func->getName() == "query_stub" || func->getName() == "multifrag_query" ||
-         func->getName() == "fixed_width_int_decode" ||
-         func->getName() == "fixed_width_unsigned_decode" ||
-         func->getName() == "diff_fixed_width_int_decode" ||
-         func->getName() == "fixed_width_double_decode" ||
-         func->getName() == "fixed_width_float_decode" ||
-         func->getName() == "fixed_width_small_date_decode" ||
-         func->getName() == "record_error_code";
-}
-
-}  // namespace
-
 std::tuple<Executor::CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
 Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                           const RelAlgExecutionUnit& ra_exe_unit,
@@ -1585,7 +1581,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                           const bool has_cardinality_estimation,
                           ColumnCacheMap& column_cache,
                           RenderInfo* render_info) {
-  nukeOldState(allow_lazy_fetch, query_infos, ra_exe_unit);
+  nukeOldState(allow_lazy_fetch, query_infos, &ra_exe_unit);
 
   GroupByAndAggregate group_by_and_aggregate(
       this, co.device_type_, ra_exe_unit, query_infos, row_set_mem_owner);
@@ -1636,7 +1632,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
         }
         return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
                 func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage ||
-                always_clone_runtime_function(func));
+                CodeGenerator::alwaysCloneRuntimeFunction(func));
       });
 
   if (co.device_type_ == ExecutorDeviceType::CPU) {

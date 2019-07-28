@@ -92,6 +92,8 @@ set(query_engine_source_files
     SpeculativeTopN.cpp
     StreamingTopN.cpp
     StringDictionaryGenerations.cpp
+    TableFunctions/TableFunctionCompilationContext.cpp
+    TableFunctions/TableFunctionExecutionContext.cpp
     TableGenerations.cpp
     TableOptimizer.cpp
     TargetExprBuilder.cpp

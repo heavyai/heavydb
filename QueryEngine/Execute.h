@@ -635,9 +635,15 @@ class Executor {
   ResultSetPtr executeExplain(const QueryCompilationDescriptor&);
 
   /**
-   * @brief
+   * @brief Compiles and dispatches a table function; that is, a function that takes as
+   * input one or more columns and returns a ResultSet, which can be parsed by subsequent
+   * execution steps
    */
-  ResultSetPtr executeTableFunction();
+  ResultSetPtr executeTableFunction(const TableFunctionExecutionUnit exe_unit,
+                                    const std::vector<InputTableInfo>& table_infos,
+                                    const CompilationOptions& co,
+                                    const ExecutionOptions& eo,
+                                    const Catalog_Namespace::Catalog& cat);
 
   // TODO(alex): remove
   ExecutorDeviceType getDeviceTypeForTargets(
@@ -876,7 +882,7 @@ class Executor {
       ColumnCacheMap& column_cache);
   void nukeOldState(const bool allow_lazy_fetch,
                     const std::vector<InputTableInfo>& query_infos,
-                    const RelAlgExecutionUnit& ra_exe_unit);
+                    const RelAlgExecutionUnit* ra_exe_unit);
 
   std::vector<std::pair<void*, void*>> optimizeAndCodegenCPU(
       llvm::Function*,
@@ -1055,6 +1061,8 @@ class Executor {
   friend class PendingExecutionClosure;
   friend class RelAlgExecutor;
   friend class TableOptimizer;
+  friend class TableFunctionCompilationContext;
+  friend class TableFunctionExecutionContext;
   friend struct TargetExprCodegenBuilder;
   friend struct TargetExprCodegen;
 
