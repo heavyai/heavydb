@@ -59,7 +59,8 @@ std::unique_ptr<llvm::Module> runtime_module_shallow_copy(llvm::LLVMContext& con
 
 llvm::Value* emit_load(llvm::Value* ptr, llvm::Type* loaded_type, CgenState* cgen_state) {
   return cgen_state->ir_builder_.CreateLoad(
-      cgen_state->ir_builder_.CreateBitCast(ptr, loaded_type));
+      cgen_state->ir_builder_.CreateBitCast(ptr, loaded_type),
+      ptr->getName() + "_loaded");
 }
 
 llvm::Value* emit_load_i32(llvm::Value* ptr, CgenState* cgen_state) {
@@ -83,25 +84,30 @@ void emit_aggregate_one_value(const std::string& agg_kind,
   const auto pi64_type = llvm::Type::getInt64PtrTy(cgen_state->context_);
   const auto pf32_type = llvm::Type::getFloatPtrTy(cgen_state->context_);
   const auto pf64_type = llvm::Type::getDoublePtrTy(cgen_state->context_);
+  const auto dest_name = agg_kind + "_dest";
   if (sql_type.is_fp()) {
     if (chosen_bytes == sizeof(float)) {
-      const auto agg = cgen_state->ir_builder_.CreateBitCast(val_ptr, pi32_type);
+      const auto agg =
+          cgen_state->ir_builder_.CreateBitCast(val_ptr, pi32_type, dest_name);
       const auto val = emit_load(other_ptr, pf32_type, cgen_state);
       cgen_state->emitCall("agg_" + agg_kind + "_float", {agg, val});
     } else {
       CHECK_EQ(chosen_bytes, sizeof(double));
-      const auto agg = cgen_state->ir_builder_.CreateBitCast(val_ptr, pi64_type);
+      const auto agg =
+          cgen_state->ir_builder_.CreateBitCast(val_ptr, pi64_type, dest_name);
       const auto val = emit_load(other_ptr, pf64_type, cgen_state);
       cgen_state->emitCall("agg_" + agg_kind + "_double", {agg, val});
     }
   } else {
     if (chosen_bytes == sizeof(int32_t)) {
-      const auto agg = cgen_state->ir_builder_.CreateBitCast(val_ptr, pi32_type);
+      const auto agg =
+          cgen_state->ir_builder_.CreateBitCast(val_ptr, pi32_type, dest_name);
       const auto val = emit_load(other_ptr, pi32_type, cgen_state);
       cgen_state->emitCall("agg_" + agg_kind + "_int32", {agg, val});
     } else {
       CHECK_EQ(chosen_bytes, sizeof(int64_t));
-      const auto agg = cgen_state->ir_builder_.CreateBitCast(val_ptr, pi64_type);
+      const auto agg =
+          cgen_state->ir_builder_.CreateBitCast(val_ptr, pi64_type, dest_name);
       const auto val = emit_load(other_ptr, pi64_type, cgen_state);
       cgen_state->emitCall("agg_" + agg_kind, {agg, val});
     }
@@ -115,6 +121,7 @@ void emit_aggregate_one_nullable_value(const std::string& agg_kind,
                                        const size_t chosen_bytes,
                                        const TargetInfo& agg_info,
                                        CgenState* cgen_state) {
+  const auto dest_name = agg_kind + "_dest";
   if (agg_info.skip_null_val) {
     const auto pi32_type = llvm::Type::getInt32PtrTy(cgen_state->context_);
     const auto pi64_type = llvm::Type::getInt64PtrTy(cgen_state->context_);
@@ -123,7 +130,8 @@ void emit_aggregate_one_nullable_value(const std::string& agg_kind,
     const auto sql_type = get_compact_type(agg_info);
     if (sql_type.is_fp()) {
       if (chosen_bytes == sizeof(float)) {
-        const auto agg = cgen_state->ir_builder_.CreateBitCast(val_ptr, pi32_type);
+        const auto agg =
+            cgen_state->ir_builder_.CreateBitCast(val_ptr, pi32_type, dest_name);
         const auto val = emit_load(other_ptr, pf32_type, cgen_state);
         const auto init_val_lv =
             cgen_state->llFp(*reinterpret_cast<const float*>(may_alias_ptr(&init_val)));
@@ -131,7 +139,8 @@ void emit_aggregate_one_nullable_value(const std::string& agg_kind,
                              {agg, val, init_val_lv});
       } else {
         CHECK_EQ(chosen_bytes, sizeof(double));
-        const auto agg = cgen_state->ir_builder_.CreateBitCast(val_ptr, pi64_type);
+        const auto agg =
+            cgen_state->ir_builder_.CreateBitCast(val_ptr, pi64_type, dest_name);
         const auto val = emit_load(other_ptr, pf64_type, cgen_state);
         const auto init_val_lv =
             cgen_state->llFp(*reinterpret_cast<const double*>(may_alias_ptr(&init_val)));
@@ -140,14 +149,16 @@ void emit_aggregate_one_nullable_value(const std::string& agg_kind,
       }
     } else {
       if (chosen_bytes == sizeof(int32_t)) {
-        const auto agg = cgen_state->ir_builder_.CreateBitCast(val_ptr, pi32_type);
+        const auto agg =
+            cgen_state->ir_builder_.CreateBitCast(val_ptr, pi32_type, dest_name);
         const auto val = emit_load(other_ptr, pi32_type, cgen_state);
         const auto init_val_lv = cgen_state->llInt<int32_t>(init_val);
         cgen_state->emitCall("agg_" + agg_kind + "_int32_skip_val",
                              {agg, val, init_val_lv});
       } else {
         CHECK_EQ(chosen_bytes, sizeof(int64_t));
-        const auto agg = cgen_state->ir_builder_.CreateBitCast(val_ptr, pi64_type);
+        const auto agg =
+            cgen_state->ir_builder_.CreateBitCast(val_ptr, pi64_type, dest_name);
         const auto val = emit_load(other_ptr, pi64_type, cgen_state);
         const auto init_val_lv = cgen_state->llInt(init_val);
         cgen_state->emitCall("agg_" + agg_kind + "_skip_val", {agg, val, init_val_lv});
@@ -163,15 +174,16 @@ void emit_aggregate_one_count(llvm::Value* val_ptr,
                               llvm::Value* other_ptr,
                               const size_t chosen_bytes,
                               CgenState* cgen_state) {
+  const auto dest_name = "count_dest";
   if (chosen_bytes == sizeof(int32_t)) {
     const auto pi32_type = llvm::Type::getInt32PtrTy(cgen_state->context_);
-    const auto agg = cgen_state->ir_builder_.CreateBitCast(val_ptr, pi32_type);
+    const auto agg = cgen_state->ir_builder_.CreateBitCast(val_ptr, pi32_type, dest_name);
     const auto val = emit_load(other_ptr, pi32_type, cgen_state);
     cgen_state->emitCall("agg_sum_int32", {agg, val});
   } else {
     CHECK_EQ(chosen_bytes, sizeof(int64_t));
     const auto pi64_type = llvm::Type::getInt64PtrTy(cgen_state->context_);
-    const auto agg = cgen_state->ir_builder_.CreateBitCast(val_ptr, pi64_type);
+    const auto agg = cgen_state->ir_builder_.CreateBitCast(val_ptr, pi64_type, dest_name);
     const auto val = emit_load(other_ptr, pi64_type, cgen_state);
     cgen_state->emitCall("agg_sum", {agg, val});
   }
@@ -245,17 +257,20 @@ ReductionCode setup_reduction_function(const QueryDescriptionType hash_type) {
                                llvm::Function::InternalLinkage,
                                "is_empty_entry",
                                module.get());
+    const auto arg_it = reduction_code.ir_is_empty_func->arg_begin();
+    const auto row_ptr_arg = &*arg_it;
+    row_ptr_arg->setName("row_ptr");
   }
   const auto arg_it = func->arg_begin();
   switch (hash_type) {
-    case QueryDescriptionType::GroupByPerfectHash: {
+    case QueryDescriptionType::GroupByBaselineHash: {
       const auto this_targets_ptr_arg = &*arg_it;
       const auto that_targets_ptr_arg = &*(arg_it + 1);
       this_targets_ptr_arg->setName("this_targets_ptr");
       that_targets_ptr_arg->setName("that_targets_ptr");
       break;
     }
-    case QueryDescriptionType::GroupByBaselineHash: {
+    case QueryDescriptionType::GroupByPerfectHash: {
       const auto this_row_ptr_arg = &*arg_it;
       const auto that_row_ptr_arg = &*(arg_it + 1);
       this_row_ptr_arg->setName("this_row_ptr");
@@ -332,8 +347,8 @@ void return_on_that_empty(const ReductionCode& reduction_code) {
   auto cgen_state = reduction_code.cgen_state.get();
   const auto arg_it = reduction_code.ir_reduce_func->arg_begin();
   const auto that_row_ptr = &*(arg_it + 1);
-  const auto that_is_empty =
-      cgen_state->ir_builder_.CreateCall(reduction_code.ir_is_empty_func, that_row_ptr);
+  const auto that_is_empty = cgen_state->ir_builder_.CreateCall(
+      reduction_code.ir_is_empty_func, that_row_ptr, "that_is_empty");
   return_early(that_is_empty, reduction_code, reduction_code.ir_reduce_func);
 }
 
@@ -354,16 +369,20 @@ ReductionCode ResultSetStorage::reduceOneEntryNoCollisionsRowWiseJIT(
   const auto key_bytes = get_key_bytes_rowwise(query_mem_desc_);
   auto cgen_state = reduction_code.cgen_state.get();
   if (key_bytes) {  // copy the key from right hand side
-    cgen_state->ir_builder_.CreateMemCpy(
-        this_row_ptr, 0, that_row_ptr, 0, cgen_state->llInt<int32_t>(key_bytes));
+    cgen_state->ir_builder_.CreateMemCpy(this_row_ptr,
+                                         0,
+                                         that_row_ptr,
+                                         0,
+                                         cgen_state->llInt<int32_t>(key_bytes),
+                                         "copy_rhs_key");
   }
 
   const auto key_bytes_with_padding = align_to_int64(key_bytes);
   const auto key_bytes_lv = cgen_state->llInt<int32_t>(key_bytes_with_padding);
   const auto this_targets_start_ptr =
-      cgen_state->ir_builder_.CreateGEP(this_row_ptr, key_bytes_lv);
+      cgen_state->ir_builder_.CreateGEP(this_row_ptr, key_bytes_lv, "this_targets_start");
   const auto that_targets_start_ptr =
-      cgen_state->ir_builder_.CreateGEP(that_row_ptr, key_bytes_lv);
+      cgen_state->ir_builder_.CreateGEP(that_row_ptr, key_bytes_lv, "that_targets_start");
 
   llvm::Value* this_targets_ptr = this_targets_start_ptr;
   llvm::Value* that_targets_ptr = that_targets_start_ptr;
@@ -391,8 +410,11 @@ ReductionCode ResultSetStorage::reduceOneEntryNoCollisionsRowWiseJIT(
       const auto slot_off_val = query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx);
       const auto slot_off = cgen_state->llInt<int32_t>(slot_off_val);
       if (UNLIKELY(two_slot_target)) {
-        this_ptr2 = cgen_state->ir_builder_.CreateGEP(this_targets_ptr, slot_off);
-        that_ptr2 = cgen_state->ir_builder_.CreateGEP(that_targets_ptr, slot_off);
+        const auto desc = "target_" + std::to_string(target_logical_idx) + "_second_slot";
+        this_ptr2 =
+            cgen_state->ir_builder_.CreateGEP(this_targets_ptr, slot_off, "this_" + desc);
+        that_ptr2 =
+            cgen_state->ir_builder_.CreateGEP(that_targets_ptr, slot_off, "that_" + desc);
       }
       reduceOneSlotJIT(this_targets_ptr,
                        this_ptr2,
@@ -416,18 +438,22 @@ ReductionCode ResultSetStorage::reduceOneEntryNoCollisionsRowWiseJIT(
           target_slot_idx + 1 >= slots_for_col.back()) {
         break;
       }
+      const auto next_desc =
+          "target_" + std::to_string(target_logical_idx + 1) + "_first_slot";
       if (UNLIKELY(two_slot_target)) {
         increment_agg_val_idx_maybe(2);
         const auto two_slot_off = cgen_state->llInt<int32_t>(
             slot_off_val + query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx + 1));
-        this_targets_ptr =
-            cgen_state->ir_builder_.CreateGEP(this_targets_ptr, two_slot_off);
-        that_targets_ptr =
-            cgen_state->ir_builder_.CreateGEP(that_targets_ptr, two_slot_off);
+        this_targets_ptr = cgen_state->ir_builder_.CreateGEP(
+            this_targets_ptr, two_slot_off, "this_" + next_desc);
+        that_targets_ptr = cgen_state->ir_builder_.CreateGEP(
+            that_targets_ptr, two_slot_off, "that_" + next_desc);
       } else {
         increment_agg_val_idx_maybe(1);
-        this_targets_ptr = cgen_state->ir_builder_.CreateGEP(this_targets_ptr, slot_off);
-        that_targets_ptr = cgen_state->ir_builder_.CreateGEP(that_targets_ptr, slot_off);
+        this_targets_ptr = cgen_state->ir_builder_.CreateGEP(
+            this_targets_ptr, slot_off, "this_" + next_desc);
+        that_targets_ptr = cgen_state->ir_builder_.CreateGEP(
+            that_targets_ptr, slot_off, "that_" + next_desc);
       }
     }
   }
@@ -454,9 +480,12 @@ ReductionCode ResultSetStorage::reduceOneEntrySlotsBaselineJIT(
     if (target_info.is_agg &&
         (target_info.agg_kind == kAVG ||
          (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()))) {
+      const auto desc = "target_" + std::to_string(target_logical_idx) + "_second_slot";
       const auto second_slot_rel_off = cgen_state->llInt<int32_t>(sizeof(int64_t));
-      this_ptr2 = cgen_state->ir_builder_.CreateGEP(this_ptr1, second_slot_rel_off);
-      that_ptr2 = cgen_state->ir_builder_.CreateGEP(that_ptr1, second_slot_rel_off);
+      this_ptr2 = cgen_state->ir_builder_.CreateGEP(
+          this_ptr1, second_slot_rel_off, "this_" + desc);
+      that_ptr2 = cgen_state->ir_builder_.CreateGEP(
+          that_ptr1, second_slot_rel_off, "that_" + desc);
     }
     reduceOneSlotJIT(this_ptr1,
                      this_ptr2,
@@ -480,12 +509,14 @@ ReductionCode ResultSetStorage::reduceOneEntrySlotsBaselineJIT(
       }
     }
     j = advance_slot(j, target_info, false);
+    const auto next_desc =
+        "target_" + std::to_string(target_logical_idx + 1) + "_first_slot";
     auto next_slot_rel_off =
         cgen_state->llInt<int32_t>(init_agg_val_idx * sizeof(int64_t));
-    this_ptr1 =
-        cgen_state->ir_builder_.CreateGEP(this_targets_ptr_arg, next_slot_rel_off);
-    that_ptr1 =
-        cgen_state->ir_builder_.CreateGEP(that_targets_ptr_arg, next_slot_rel_off);
+    this_ptr1 = cgen_state->ir_builder_.CreateGEP(
+        this_targets_ptr_arg, next_slot_rel_off, next_desc);
+    that_ptr1 = cgen_state->ir_builder_.CreateGEP(
+        that_targets_ptr_arg, next_slot_rel_off, next_desc);
   }
   return finalizeReductionCode(std::move(reduction_code), cgen_state);
 }
@@ -532,11 +563,12 @@ void ResultSetStorage::reduceOneEntryNoCollisionsRowWiseIdxJIT(
   const auto that_qmd_handle = &*(arg_it + 5);
   const auto serialized_varlen_buffer_arg = &*(arg_it + 6);
   const auto row_bytes = cgen_state->llInt<int32_t>(get_row_bytes(query_mem_desc_));
-  const auto row_off_in_bytes = cgen_state->ir_builder_.CreateMul(entry_idx, row_bytes);
+  const auto row_off_in_bytes =
+      cgen_state->ir_builder_.CreateMul(entry_idx, row_bytes, "row_off_in_bytes");
   const auto this_row_ptr =
-      cgen_state->ir_builder_.CreateGEP(this_buff, row_off_in_bytes);
+      cgen_state->ir_builder_.CreateGEP(this_buff, row_off_in_bytes, "this_row_ptr");
   const auto that_row_ptr =
-      cgen_state->ir_builder_.CreateGEP(that_buff, row_off_in_bytes);
+      cgen_state->ir_builder_.CreateGEP(that_buff, row_off_in_bytes, "that_row_ptr");
   cgen_state->ir_builder_.CreateCall(reduction_code.ir_reduce_func,
                                      {this_row_ptr,
                                       that_row_ptr,
@@ -567,18 +599,20 @@ void ResultSetStorage::reduceOneEntryBaselineJIT(
   const auto that_qmd_handle = &*(arg_it + 5);
   const auto serialized_varlen_buffer_arg = &*(arg_it + 6);
   const auto row_bytes = cgen_state->llInt<int32_t>(get_row_bytes(query_mem_desc_));
-  const auto that_row_off = cgen_state->ir_builder_.CreateMul(that_entry_idx, row_bytes);
-  const auto that_row_ptr = cgen_state->ir_builder_.CreateGEP(that_buff, that_row_off);
-  const auto that_is_empty =
-      cgen_state->ir_builder_.CreateCall(reduction_code.ir_is_empty_func, that_row_ptr);
+  const auto that_row_off_in_bytes = cgen_state->ir_builder_.CreateMul(
+      that_entry_idx, row_bytes, "that_row_off_in_bytes");
+  const auto that_row_ptr =
+      cgen_state->ir_builder_.CreateGEP(that_buff, that_row_off_in_bytes, "that_row_ptr");
+  const auto that_is_empty = cgen_state->ir_builder_.CreateCall(
+      reduction_code.ir_is_empty_func, that_row_ptr, "that_is_empty");
   return_early(that_is_empty, reduction_code, reduction_code.ir_reduce_func_idx);
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   const auto pi64_type = llvm::Type::getInt64PtrTy(cgen_state->context_);
   const auto bool_type = llvm::Type::getInt8Ty(cgen_state->context_);
-  const auto this_targets_ptr_i64_ptr =
-      cgen_state->ir_builder_.CreateAlloca(pi64_type, cgen_state->llInt<int32_t>(1));
-  const auto this_is_empty_ptr =
-      cgen_state->ir_builder_.CreateAlloca(bool_type, cgen_state->llInt<int32_t>(1));
+  const auto this_targets_ptr_i64_ptr = cgen_state->ir_builder_.CreateAlloca(
+      pi64_type, cgen_state->llInt<int32_t>(1), "this_targets_ptr_out");
+  const auto this_is_empty_ptr = cgen_state->ir_builder_.CreateAlloca(
+      bool_type, cgen_state->llInt<int32_t>(1), "this_is_empty_out");
   cgen_state->emitExternalCall("get_group_value_reduction_rt",
                                llvm::Type::getVoidTy(ctx),
                                {this_buff,
@@ -591,20 +625,21 @@ void ResultSetStorage::reduceOneEntryBaselineJIT(
                                 row_bytes,
                                 this_targets_ptr_i64_ptr,
                                 this_is_empty_ptr});
-  const auto this_targets_ptr_i64 =
-      cgen_state->ir_builder_.CreateLoad(this_targets_ptr_i64_ptr);
-  llvm::Value* this_is_empty = cgen_state->ir_builder_.CreateLoad(this_is_empty_ptr);
-  this_is_empty =
-      cgen_state->ir_builder_.CreateTrunc(this_is_empty, get_int_type(1, ctx), "tobool");
+  const auto this_targets_ptr_i64 = cgen_state->ir_builder_.CreateLoad(
+      this_targets_ptr_i64_ptr, "this_targets_ptr_i64");
+  llvm::Value* this_is_empty =
+      cgen_state->ir_builder_.CreateLoad(this_is_empty_ptr, "this_is_empty");
+  this_is_empty = cgen_state->ir_builder_.CreateTrunc(
+      this_is_empty, get_int_type(1, ctx), "this_is_empty_bool");
   return_early(this_is_empty, reduction_code, reduction_code.ir_reduce_func_idx);
   const auto pi8_type = llvm::Type::getInt8PtrTy(cgen_state->context_);
   const auto key_qw_count = get_slot_off_quad(query_mem_desc_);
-  const auto this_targets_ptr =
-      cgen_state->ir_builder_.CreateBitCast(this_targets_ptr_i64, pi8_type);
+  const auto this_targets_ptr = cgen_state->ir_builder_.CreateBitCast(
+      this_targets_ptr_i64, pi8_type, "this_targets_ptr");
   const auto key_byte_count = key_qw_count * sizeof(int64_t);
   const auto key_byte_count_lv = cgen_state->llInt<int32_t>(key_byte_count);
-  const auto that_targets_ptr =
-      cgen_state->ir_builder_.CreateGEP(that_row_ptr, key_byte_count_lv);
+  const auto that_targets_ptr = cgen_state->ir_builder_.CreateGEP(
+      that_row_ptr, key_byte_count_lv, "that_targets_ptr");
   cgen_state->ir_builder_.CreateCall(reduction_code.ir_reduce_func,
                                      {this_targets_ptr,
                                       that_targets_ptr,
@@ -703,7 +738,7 @@ void ResultSetStorage::isEmptyJit(const ReductionCode& reduction_code) const {
     const auto target_slot_off =
         get_byteoff_of_slot(query_mem_desc_.getTargetIdxForKey(), query_mem_desc_);
     const auto slot_ptr = cgen_state->ir_builder_.CreateGEP(
-        keys_ptr, cgen_state->llInt<int32_t>(target_slot_off));
+        keys_ptr, cgen_state->llInt<int32_t>(target_slot_off), "is_empty_slot_ptr");
     const auto compact_sz = cgen_state->llInt<int32_t>(
         query_mem_desc_.getPaddedSlotWidthBytes(query_mem_desc_.getTargetIdxForKey()));
     key = cgen_state->emitExternalCall(
@@ -728,7 +763,8 @@ void ResultSetStorage::isEmptyJit(const ReductionCode& reduction_code) const {
         LOG(FATAL) << "Invalid key width";
     }
   }
-  const auto ret = cgen_state->ir_builder_.CreateICmpEQ(key, empty_key_val);
+  const auto ret =
+      cgen_state->ir_builder_.CreateICmpEQ(key, empty_key_val, "is_key_empty");
   cgen_state->ir_builder_.CreateRet(ret);
   verify_function_ir(reduction_code.ir_is_empty_func);
 }

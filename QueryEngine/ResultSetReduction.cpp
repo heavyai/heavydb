@@ -130,16 +130,16 @@ inline int64_t get_component(const int8_t* group_by_buffer,
 }
 
 void run_reduction_code(const ReductionCode& reduction_code,
-                        int8_t* this_targets_ptr,
-                        const int8_t* that_targets_ptr,
+                        int8_t* this_buff,
+                        const int8_t* that_buff,
                         const int32_t that_entry_idx,
                         const int32_t that_entry_count,
                         const void* this_qmd,
                         const void* that_qmd,
                         const void* serialized_varlen_buffer) {
   if (reduction_code.func_ptr) {
-    reduction_code.func_ptr(this_targets_ptr,
-                            that_targets_ptr,
+    reduction_code.func_ptr(this_buff,
+                            that_buff,
                             that_entry_idx,
                             that_entry_count,
                             this_qmd,
@@ -154,8 +154,8 @@ void run_reduction_code(const ReductionCode& reduction_code,
     that_entry_count_gv.IntVal = llvm::APInt(32, that_entry_count);
     reduction_code.execution_engine->runFunction(
         reduction_code.ir_reduce_func_idx,
-        {llvm::GenericValue(this_targets_ptr),
-         llvm::GenericValue(const_cast<int8_t*>(that_targets_ptr)),
+        {llvm::GenericValue(this_buff),
+         llvm::GenericValue(const_cast<int8_t*>(that_buff)),
          that_entry_idx_gv,
          that_entry_count_gv,
          llvm::GenericValue(const_cast<void*>(this_qmd)),
