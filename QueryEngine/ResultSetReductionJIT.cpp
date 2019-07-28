@@ -388,6 +388,9 @@ ReductionCode ResultSetStorage::reduceOneEntrySlotsBaselineJIT(
                      that,
                      j,
                      reduction_code);
+    if (target_logical_idx + 1 == targets_.size()) {
+      break;
+    }
     if (query_mem_desc_.targetGroupbyIndicesSize() == 0) {
       init_agg_val_idx = advance_slot(init_agg_val_idx, target_info, false);
     } else {
@@ -398,8 +401,10 @@ ReductionCode ResultSetStorage::reduceOneEntrySlotsBaselineJIT(
     j = advance_slot(j, target_info, false);
     auto next_slot_rel_off =
         cgen_state->llInt<int32_t>(init_agg_val_idx * sizeof(int64_t));
-    this_ptr1 = cgen_state->ir_builder_.CreateGEP(this_ptr1, next_slot_rel_off);
-    that_ptr1 = cgen_state->ir_builder_.CreateGEP(that_ptr1, next_slot_rel_off);
+    this_ptr1 =
+        cgen_state->ir_builder_.CreateGEP(this_targets_ptr_arg, next_slot_rel_off);
+    that_ptr1 =
+        cgen_state->ir_builder_.CreateGEP(that_targets_ptr_arg, next_slot_rel_off);
   }
   return finalizeReductionCode(std::move(reduction_code), cgen_state);
 }
