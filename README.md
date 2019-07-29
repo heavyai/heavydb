@@ -14,6 +14,8 @@ To find out more, please check out the [OmniSci Website](https://www.omnisci.com
 - [Load sample data.](#working-with-data) Sample sets can be found in the [Data Set Library](https://community.omnisci.com/browse/new-item2).
 - Perform a Sample Query
 
+For complete [download and installation instructions](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Documentation#downloads-and-installation-instructions), please visit the [Documentation](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Documentation) page.
+
 ## Diving In
 
 - How-tos, code snippets and more on the [OmniSci Blog](https://www.omnisci.com/blog/)
