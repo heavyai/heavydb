@@ -56,6 +56,7 @@ struct ReductionCode {
                            const int8_t*,
                            const int32_t,
                            const int32_t,
+                           const int32_t,
                            const void*,
                            const void*,
                            const void*);
@@ -66,5 +67,6 @@ struct ReductionCode {
   llvm::Function* ir_reduce_func;
   llvm::Function* ir_reduce_func_idx;
   llvm::Function* ir_is_empty_func;
+  llvm::Function* ir_reduce_loop;
   FuncPtr func_ptr;
 };

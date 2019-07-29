@@ -136,6 +136,8 @@ class ResultSetStorage {
 
   void reduceOneEntryBaselineIdxJIT(const ReductionCode& reduction_code) const;
 
+  void reduceLoopJIT(const ReductionCode& reduction_code) const;
+
   void reduceOneSlotJIT(llvm::Value* this_ptr1,
                         llvm::Value* this_ptr2,
                         llvm::Value* that_ptr1,
