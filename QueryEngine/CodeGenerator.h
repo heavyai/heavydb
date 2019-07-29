@@ -82,8 +82,7 @@ class CodeGenerator {
 
   struct GPUCode {
     std::vector<std::pair<void*, void*>> native_functions;
-    std::vector<std::tuple<void*, GpuCompilationContext*>>
-        cached_functions;
+    std::vector<std::tuple<void*, GpuCompilationContext*>> cached_functions;
   };
 
   struct GPUTarget {

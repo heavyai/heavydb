@@ -340,10 +340,10 @@ class ExecutionEngineWrapper {
   ExecutionEngineWrapper(const ExecutionEngineWrapper& other) = delete;
   ExecutionEngineWrapper(ExecutionEngineWrapper&& other) = default;
 
-  ExecutionEngineWrapper &operator=(const ExecutionEngineWrapper& other) = delete;
-  ExecutionEngineWrapper &operator=(ExecutionEngineWrapper&& other) = default;
+  ExecutionEngineWrapper& operator=(const ExecutionEngineWrapper& other) = delete;
+  ExecutionEngineWrapper& operator=(ExecutionEngineWrapper&& other) = default;
 
-  ExecutionEngineWrapper &operator=(llvm::ExecutionEngine* execution_engine);
+  ExecutionEngineWrapper& operator=(llvm::ExecutionEngine* execution_engine);
 
   llvm::ExecutionEngine* get() { return execution_engine_.get(); }
   const llvm::ExecutionEngine* get() const { return execution_engine_.get(); }
@@ -951,27 +951,23 @@ class Executor {
       const size_t frag_idx);
 
   using CodeCacheKey = std::vector<std::string>;
-  typedef std::vector<std::tuple<void*,
-                                 ExecutionEngineWrapper,
-                                 std::unique_ptr<GpuCompilationContext>>>
+  typedef std::vector<
+      std::tuple<void*, ExecutionEngineWrapper, std::unique_ptr<GpuCompilationContext>>>
       CodeCacheVal;
   typedef std::pair<CodeCacheVal, llvm::Module*> CodeCacheValWithModule;
   typedef LruCache<CodeCacheKey, CodeCacheValWithModule, boost::hash<CodeCacheKey>>
       CodeCache;
   std::vector<std::pair<void*, void*>> getCodeFromCache(const CodeCacheKey&,
                                                         const CodeCache&);
-  void addCodeToCache(
-      const CodeCacheKey&,
-      std::vector<std::tuple<void*, ExecutionEngineWrapper>>,
-      llvm::Module*,
-      CodeCache&);
+  void addCodeToCache(const CodeCacheKey&,
+                      std::vector<std::tuple<void*, ExecutionEngineWrapper>>,
+                      llvm::Module*,
+                      CodeCache&);
 
-  void addCodeToCache(
-      const CodeCacheKey&,
-      const std::vector<
-          std::tuple<void*, GpuCompilationContext*>>&,
-      llvm::Module*,
-      CodeCache&);
+  void addCodeToCache(const CodeCacheKey&,
+                      const std::vector<std::tuple<void*, GpuCompilationContext*>>&,
+                      llvm::Module*,
+                      CodeCache&);
 
   std::vector<int8_t> serializeLiterals(
       const std::unordered_map<int, CgenState::LiteralValues>& literals,

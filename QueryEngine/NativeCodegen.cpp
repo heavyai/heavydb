@@ -141,19 +141,14 @@ std::string serialize_llvm_object(const T* llvm_obj) {
 
 }  // namespace
 
-ExecutionEngineWrapper::ExecutionEngineWrapper()
-{
-}
+ExecutionEngineWrapper::ExecutionEngineWrapper() {}
 
 ExecutionEngineWrapper::ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine)
-    : execution_engine_(execution_engine)
-{
-}
+    : execution_engine_(execution_engine) {}
 
 ExecutionEngineWrapper::ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine,
                                                const CompilationOptions& co)
-    : execution_engine_(execution_engine)
-{
+    : execution_engine_(execution_engine) {
   if (execution_engine_) {
     if (co.register_intel_jit_listener_) {
       intel_jit_listener_.reset(llvm::JITEventListener::createIntelJITEventListener());
@@ -164,9 +159,8 @@ ExecutionEngineWrapper::ExecutionEngineWrapper(llvm::ExecutionEngine* execution_
   }
 }
 
-ExecutionEngineWrapper &ExecutionEngineWrapper::operator=(
-    llvm::ExecutionEngine* execution_engine)
-{
+ExecutionEngineWrapper& ExecutionEngineWrapper::operator=(
+    llvm::ExecutionEngine* execution_engine) {
   execution_engine_.reset(execution_engine);
   intel_jit_listener_ = nullptr;
   return *this;
@@ -198,9 +192,7 @@ void Executor::addCodeToCache(
   CodeCacheVal cache_val;
   for (auto& native_func : native_code) {
     cache_val.emplace_back(
-        std::get<0>(native_func),
-        std::move(std::get<1>(native_func)),
-        nullptr);
+        std::get<0>(native_func), std::move(std::get<1>(native_func)), nullptr);
   }
   cache.put(key,
             std::make_pair<decltype(cache_val), decltype(module)>(std::move(cache_val),
@@ -282,10 +274,7 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
 
   std::vector<std::tuple<void*, ExecutionEngineWrapper>> cache;
   cache.emplace_back(native_code, std::move(execution_engine));
-  addCodeToCache(key,
-                 std::move(cache),
-                 module,
-                 cpu_code_cache_);
+  addCodeToCache(key, std::move(cache), module, cpu_code_cache_);
 
   return {std::make_pair(native_code, nullptr)};
 }

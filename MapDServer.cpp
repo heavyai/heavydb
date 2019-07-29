@@ -571,7 +571,9 @@ void MapDProgramOptions::fillAdvancedOptions() {
       "`/tmp/mapdquery`.");
   developer_desc.add_options()(
       "intel-jit-profile",
-      po::value<bool>(&intel_jit_profile)->default_value(intel_jit_profile)->implicit_value(true),
+      po::value<bool>(&intel_jit_profile)
+          ->default_value(intel_jit_profile)
+          ->implicit_value(true),
       "Enable runtime support for the JIT code profiling using Intel VTune.");
   developer_desc.add_options()(
       "skip-intermediate-count",
