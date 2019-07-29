@@ -54,14 +54,28 @@
 
 #include <atomic>
 #include <mutex>
+#include <set>
 
 #endif
 
+#include <array>
 #include <sstream>
 
 namespace logger {
 
-// Must match std::array<> SeverityNames and SeveritySymbols in Logger.cpp.
+// Channel, ChannelNames, and ChannelSymbols must be updated together.
+enum Channel { IR = 0, PTX, _NCHANNELS };
+
+constexpr std::array<char const*, 2> ChannelNames{"IR", "PTX"};
+
+constexpr std::array<char, 2> ChannelSymbols{'R', 'P'};
+
+static_assert(Channel::_NCHANNELS == ChannelNames.size(),
+              "Size of ChannelNames must equal number of Channels.");
+static_assert(Channel::_NCHANNELS == ChannelSymbols.size(),
+              "Size of ChannelSymbols must equal number of Channels.");
+
+// Severity, SeverityNames, and SeveritySymbols must be updated together.
 enum Severity {
   DEBUG4 = 0,
   DEBUG3,
@@ -71,8 +85,24 @@ enum Severity {
   WARNING,
   ERROR,
   FATAL,
-  NLEVELS  // number of severity levels
+  _NSEVERITIES  // number of severity levels
 };
+
+constexpr std::array<char const*, 8> SeverityNames{"DEBUG4",
+                                                   "DEBUG3",
+                                                   "DEBUG2",
+                                                   "DEBUG1",
+                                                   "INFO",
+                                                   "WARNING",
+                                                   "ERROR",
+                                                   "FATAL"};
+
+constexpr std::array<char, 8> SeveritySymbols{'4', '3', '2', '1', 'I', 'W', 'E', 'F'};
+
+static_assert(Severity::_NSEVERITIES == SeverityNames.size(),
+              "Size of SeverityNames must equal number of Severity levels.");
+static_assert(Severity::_NSEVERITIES == SeveritySymbols.size(),
+              "Size of SeveritySymbols must equal number of Severity levels.");
 
 #ifndef __CUDACC__
 
@@ -82,6 +112,7 @@ namespace keywords = boost::log::keywords;
 namespace sinks = boost::log::sinks;
 namespace sources = boost::log::sources;
 namespace po = boost::program_options;
+using Channels = std::set<Channel>;
 
 // Filled by boost::program_options
 class LogOptions {
@@ -96,6 +127,7 @@ class LogOptions {
   std::string symlink_{".{SEVERITY}.log"};
   Severity severity_{Severity::INFO};
   Severity severity_clog_{Severity::WARNING};
+  Channels channels_;
   bool auto_flush_{true};
   size_t max_files_{100};
   size_t min_free_space_{20 << 20};
@@ -124,61 +156,70 @@ struct LogShutdown {
 typedef void (*FatalFunc)();
 void set_once_fatal_func(FatalFunc);
 
-using logger_t = boost::log::sources::severity_logger_mt<Severity>;
+using ChannelLogger = boost::log::sources::channel_logger_mt<Channel>;
+BOOST_LOG_GLOBAL_LOGGER(gChannelLogger, ChannelLogger)
 
-BOOST_LOG_GLOBAL_LOGGER(g_logger, logger_t)
+using SeverityLogger = boost::log::sources::severity_logger_mt<Severity>;
+BOOST_LOG_GLOBAL_LOGGER(gSeverityLogger, SeverityLogger)
 
 // Lifetime of Logger is each call to LOG().
-template <Severity SEVERITY>
+template <typename TAG, TAG tag>
 class Logger {
   // Pointers are used to minimize size of inline objects.
   std::unique_ptr<boost::log::record> record_;
   std::unique_ptr<boost::log::record_ostream> stream_;
 
+  inline auto makeUniqueRecord(Channel channel) {
+    return std::make_unique<boost::log::record>(
+        gChannelLogger::get().open_record(boost::log::keywords::channel = channel));
+  }
+  inline auto makeUniqueRecord(Severity severity) {
+    return std::make_unique<boost::log::record>(
+        gSeverityLogger::get().open_record(boost::log::keywords::severity = severity));
+  }
+  inline auto getLogger(Channel) { return gChannelLogger::get(); }
+  inline auto getLogger(Severity) { return gSeverityLogger::get(); }
+
  public:
-  Logger();
+  Logger() : record_{makeUniqueRecord(tag)} {
+    if (*record_) {
+      stream_ = std::make_unique<boost::log::record_ostream>(*record_);
+    }
+  }
   Logger(Logger&&) = default;
-  ~Logger();
+  ~Logger() {
+    if (stream_) {
+      getLogger(tag).push_record(boost::move(stream_->get_record()));
+    }
+  }
   inline operator bool() const { return static_cast<bool>(stream_); }
   // Must check operator bool() first before calling stream().
-  boost::log::record_ostream& stream(char const* file, int line);
+  boost::log::record_ostream& stream(char const* file, int line) {
+    return *stream_ << boost::filesystem::path(file).filename().native() << ':' << line
+                    << ' ';
+  }
 };
 
-template <Severity SEVERITY>
-Logger<SEVERITY>::Logger()
-    : record_(std::make_unique<boost::log::record>(
-          g_logger::get().open_record(boost::log::keywords::severity = SEVERITY))) {
-  if (*record_) {
-    stream_ = std::make_unique<boost::log::record_ostream>(*record_);
-  }
-}
-
-template <Severity SEVERITY>
-Logger<SEVERITY>::~Logger() {
-  if (stream_) {
-    g_logger::get().push_record(
-        boost::move(stream_->get_record()));  // flushes stream first
-  }
-}
-
 template <>
-BOOST_NORETURN Logger<Severity::FATAL>::~Logger();
+BOOST_NORETURN Logger<Severity, Severity::FATAL>::~Logger();
 
-template <Severity SEVERITY>
-boost::log::record_ostream& Logger<SEVERITY>::stream(char const* file, int line) {
-  return *stream_ << boost::filesystem::path(file).filename().native() << ':' << line
-                  << ' ';
+inline bool fast_logging_check(Channel) {
+  extern bool g_any_active_channels;
+  return g_any_active_channels;
 }
 
-extern Severity g_min_active_severity;
+inline bool fast_logging_check(Severity severity) {
+  extern Severity g_min_active_severity;
+  return g_min_active_severity <= severity;
+}
 
 // These macros risk inadvertent else-matching to the if statements,
 // which are fortunately prevented by our clang-tidy requirements.
 // These can be changed to for/while loops with slight performance degradation.
 
-#define LOG(severity)                                                         \
-  if (logger::g_min_active_severity <= logger::Severity::severity)            \
-    if (auto _omnisci_logger_ = logger::Logger<logger::Severity::severity>()) \
+#define LOG(tag)                                                                      \
+  if (logger::fast_logging_check(logger::tag))                                        \
+    if (auto _omnisci_logger_ = logger::Logger<decltype(logger::tag), logger::tag>()) \
   _omnisci_logger_.stream(__FILE__, __LINE__)
 
 #define CHECK(condition)            \
@@ -235,7 +276,7 @@ template <Severity severity>
 class NullLogger {
  public:
   NullLogger() {
-    if /* constexpr */ (severity == Severity::FATAL) {
+    if /*constexpr*/ (severity == Severity::FATAL) {
       abort();
     }
   }

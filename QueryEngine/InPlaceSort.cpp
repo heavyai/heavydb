@@ -31,6 +31,8 @@ void sort_groups_cpu(int64_t* val_buff,
                      const uint32_t chosen_bytes) {
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
+    case 1:
+    case 2:
     case 4:
     case 8:
       sort_on_cpu(val_buff, idx_buff, entry_count, desc, chosen_bytes);
@@ -48,6 +50,8 @@ void apply_permutation_cpu(int64_t* val_buff,
                            const uint32_t chosen_bytes) {
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
+    case 1:
+    case 2:
     case 4:
     case 8:
       apply_permutation_on_cpu(val_buff, idx_buff, entry_count, tmp_buff, chosen_bytes);
@@ -68,6 +72,8 @@ void sort_groups_gpu(int64_t* val_buff,
                      ThrustAllocator& alloc) {
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
+    case 1:
+    case 2:
     case 4:
     case 8:
       sort_on_gpu(val_buff, idx_buff, entry_count, desc, chosen_bytes, alloc);
@@ -85,6 +91,8 @@ void apply_permutation_gpu(int64_t* val_buff,
                            ThrustAllocator& alloc) {
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
+    case 1:
+    case 2:
     case 4:
     case 8:
       apply_permutation_on_gpu(val_buff, idx_buff, entry_count, chosen_bytes, alloc);

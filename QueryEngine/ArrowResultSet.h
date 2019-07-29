@@ -14,16 +14,29 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_ARROWRESULTSET_H
-#define QUERYENGINE_ARROWRESULTSET_H
+#pragma once
 
-#include "../Shared/sqltypes.h"
+#include "CompilationOptions.h"
+#include "DataMgr/DataMgr.h"
+#include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "ResultSet.h"
-#include "Shared/SqlTypesLayout.h"
 #include "TargetMetaInfo.h"
 #include "TargetValue.h"
 
-#include <arrow/api.h>
+#include <type_traits>
+
+#include "arrow/api.h"
+#include "arrow/ipc/api.h"
+
+// TODO(wamsi): ValueArray is not optimal. Remove it and inherrit from base vector class.
+using ValueArray = boost::variant<std::vector<bool>,
+                                  std::vector<int8_t>,
+                                  std::vector<int16_t>,
+                                  std::vector<int32_t>,
+                                  std::vector<int64_t>,
+                                  std::vector<float>,
+                                  std::vector<double>,
+                                  std::vector<std::string>>;
 
 class ArrowResultSet;
 
@@ -63,11 +76,21 @@ class ArrowResultSetRowIterator {
   friend class ArrowResultSet;
 };
 
+struct ArrowResult {
+  std::vector<char> sm_handle;
+  int64_t sm_size;
+  std::vector<char> df_handle;
+  int64_t df_size;
+  int8_t* df_dev_ptr;  // Only for device memory deallocation
+};
+
 // Expose Arrow buffers as a subset of the ResultSet interface
 // to make it work within the existing execution test framework.
 class ArrowResultSet {
  public:
-  ArrowResultSet(const std::shared_ptr<arrow::RecordBatch>& record_batch);
+  ArrowResultSet(const std::shared_ptr<ResultSet>& rows,
+                 const std::vector<TargetMetaInfo>& targets_meta);
+  ArrowResultSet(const std::shared_ptr<ResultSet>& rows) : ArrowResultSet(rows, {}) {}
 
   ArrowResultSetRowIterator rowIterator(size_t from_index,
                                         bool translate_strings,
@@ -98,7 +121,22 @@ class ArrowResultSet {
 
   size_t rowCount() const;
 
+  static void deallocateArrowResultBuffer(
+      const ArrowResult& result,
+      const ExecutorDeviceType device_type,
+      const size_t device_id,
+      std::shared_ptr<Data_Namespace::DataMgr>& data_mgr);
+
  private:
+  void resultSetArrowLoopback();
+  template <typename Type, typename ArrayType>
+  void appendValue(std::vector<TargetValue>& row,
+                   const arrow::Array& column,
+                   const Type null_val,
+                   const size_t idx) const;
+
+  std::shared_ptr<ResultSet> rows_;
+  std::vector<TargetMetaInfo> targets_meta_;
   std::shared_ptr<arrow::RecordBatch> record_batch_;
 
   // Boxed arrays from the record batch. The result of RecordBatch::column is
@@ -125,4 +163,83 @@ std::unique_ptr<ArrowResultSet> result_set_arrow_loopback(
     const ExecutionResult* results,
     const std::shared_ptr<ResultSet>& rows);
 
-#endif  // QUERYENGINE_ARROWRESULTSET_H
+class ArrowResultSetConverter {
+ public:
+  ArrowResultSetConverter(const std::shared_ptr<ResultSet>& results,
+                          const std::shared_ptr<Data_Namespace::DataMgr> data_mgr,
+                          const ExecutorDeviceType device_type,
+                          const int32_t device_id,
+                          const std::vector<std::string>& col_names,
+                          const int32_t first_n)
+      : results_(results)
+      , data_mgr_(data_mgr)
+      , device_type_(device_type)
+      , device_id_(device_id)
+      , col_names_(col_names)
+      , top_n_(first_n) {}
+
+  ArrowResult getArrowResult() const { return getArrowResultImpl(); }
+
+ private:
+  ArrowResultSetConverter(const std::shared_ptr<ResultSet>& results,
+                          const std::vector<std::string>& col_names,
+                          const int32_t first_n)
+      : results_(results), col_names_(col_names), top_n_(first_n) {}
+  std::shared_ptr<arrow::RecordBatch> convertToArrow(
+      arrow::ipc::DictionaryMemo& memo) const;
+  std::shared_ptr<arrow::RecordBatch> getArrowBatch(
+      const std::shared_ptr<arrow::Schema>& schema) const;
+  ArrowResult getArrowResultImpl() const;
+  std::shared_ptr<arrow::Field> makeField(
+      const std::string name,
+      const SQLTypeInfo& target_type,
+      const std::shared_ptr<arrow::Array>& dictionary) const;
+  std::shared_ptr<arrow::DataType> getArrowType(
+      const SQLTypeInfo& mapd_type,
+      const std::shared_ptr<arrow::Array>& dict_values) const;
+
+  struct SerializedArrowOutput {
+    std::shared_ptr<arrow::Buffer> schema;
+    std::shared_ptr<arrow::Buffer> records;
+  };
+  SerializedArrowOutput getSerializedArrowOutput() const;
+
+  struct ColumnBuilder {
+    std::shared_ptr<arrow::Field> field;
+    std::unique_ptr<arrow::ArrayBuilder> builder;
+    SQLTypeInfo col_type;
+    SQLTypes physical_type;
+  };
+  void initializeColumnBuilder(ColumnBuilder& column_builder,
+                               const SQLTypeInfo& col_type,
+                               const std::shared_ptr<arrow::Field>& field) const;
+  inline void reserveColumnBuilderSize(ColumnBuilder& column_builder,
+                                       const size_t row_count) const;
+  void append(ColumnBuilder& column_builder,
+              const ValueArray& values,
+              const std::shared_ptr<std::vector<bool>>& is_valid) const;
+
+  template <typename BuilderType, typename C_TYPE>
+  inline void appendToColumnBuilder(
+      ColumnBuilder& column_builder,
+      const ValueArray& values,
+      const std::shared_ptr<std::vector<bool>>& is_valid) const;
+
+  inline std::shared_ptr<arrow::Array> finishColumnBuilder(
+      ColumnBuilder& column_builder) const;
+
+  std::shared_ptr<ResultSet> results_;
+  std::shared_ptr<Data_Namespace::DataMgr> data_mgr_ = nullptr;
+  ExecutorDeviceType device_type_ = ExecutorDeviceType::GPU;
+  int32_t device_id_ = 0;
+  std::vector<std::string> col_names_;
+  int32_t top_n_;
+
+  friend class ArrowResultSet;
+};
+
+template <typename T>
+constexpr auto scale_epoch_values() {
+  return std::is_same<T, arrow::Date32Builder>::value ||
+         std::is_same<T, arrow::Date64Builder>::value;
+}

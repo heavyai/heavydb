@@ -1086,8 +1086,9 @@ int main(int argc, char* argv[]) {
     po::variables_map vm;
     po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
     po::notify(vm);
-
-    auto transport = openBufferedClientTransport(host, port, cert);
+    mapd::shared_ptr<ThriftClientConnection> connMgr;
+    connMgr = std::make_shared<ThriftClientConnection>();
+    auto transport = connMgr->open_buffered_client_transport(host, port, cert);
     transport->open();
     auto protocol = std::make_shared<TBinaryProtocol>(transport);
     g_client = std::make_shared<MapDClient>(protocol);

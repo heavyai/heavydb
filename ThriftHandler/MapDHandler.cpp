@@ -56,6 +56,7 @@
 #include "Parser/ReservedKeywords.h"
 #include "Parser/parser.h"
 #include "Planner/Planner.h"
+#include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
@@ -81,8 +82,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/replace.hpp>
-#include <boost/algorithm/string/trim.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/process/search_path.hpp>
@@ -277,9 +276,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
   }
 }
 
-MapDHandler::~MapDHandler() {
-  LOG(INFO) << "omnisci_server exits." << std::endl;
-}
+MapDHandler::~MapDHandler() {}
 
 void MapDHandler::check_read_only(const std::string& str) {
   if (MapDHandler::read_only_) {
@@ -372,6 +369,11 @@ void MapDHandler::connect_impl(TSessionId& session,
       return;
     }
   }
+  auto const roles = session_ptr->get_currentUser().isSuper
+                         ? std::vector<std::string>{{"super"}}
+                         : SysCatalog::instance().getRoles(
+                               false, false, session_ptr->get_currentUser().userName);
+  log_session.append_name_value_pairs("roles", boost::algorithm::join(roles, ","));
   LOG(INFO) << "User " << user_meta.userName << " connected to database " << dbname
             << " with public_session_id " << session_ptr->get_public_session_id();
 }
@@ -927,11 +929,11 @@ void MapDHandler::deallocate_df(const TSessionId& session,
   std::vector<char> sm_handle(df.sm_handle.begin(), df.sm_handle.end());
   std::vector<char> df_handle(df.df_handle.begin(), df.df_handle.end());
   ArrowResult result{sm_handle, df.sm_size, df_handle, df.df_size, dev_ptr};
-  deallocate_arrow_result(
+  ArrowResultSet::deallocateArrowResultBuffer(
       result,
       device_type == TDeviceType::CPU ? ExecutorDeviceType::CPU : ExecutorDeviceType::GPU,
       device_id,
-      data_mgr_.get());
+      data_mgr_);
 }
 
 std::string MapDHandler::apply_copy_to_shim(const std::string& query_str) {
@@ -1170,6 +1172,8 @@ void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& s
   LOG_SESSION(session);
   auto session_info = get_session_copy(session);
   if (!session_info.get_currentUser().isSuper) {
+    // WARNING: This appears to not include roles a user is a member of,
+    // if the role has no permissions granted to it.
     roles =
         SysCatalog::instance().getRoles(session_info.get_currentUser().userName,
                                         session_info.getCatalog().getCurrentDB().dbId);
@@ -1916,7 +1920,7 @@ void MapDHandler::clear_gpu_memory(const TSessionId& session) {
     THROW_MAPD_EXCEPTION("Superuser privilege is required to run clear_gpu_memory");
   }
   try {
-    SysCatalog::clearGpuMemory();
+    Executor::clearMemory(Data_Namespace::MemoryLevel::GPU_LEVEL);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
@@ -1936,7 +1940,7 @@ void MapDHandler::clear_cpu_memory(const TSessionId& session) {
     THROW_MAPD_EXCEPTION("Superuser privilege is required to run clear_cpu_memory");
   }
   try {
-    SysCatalog::clearCpuMemory();
+    Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
@@ -2714,8 +2718,7 @@ bool is_a_supported_geo_file(const std::string& path, bool include_gz) {
     return false;
   }
   if (include_gz) {
-    if (boost::iends_with(path, ".geojson.gz") || boost::iends_with(path, ".json.gz") ||
-        boost::iends_with(path, ".kml.gz")) {
+    if (boost::iends_with(path, ".geojson.gz") || boost::iends_with(path, ".json.gz")) {
       return true;
     }
   }
@@ -2855,8 +2858,8 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
 
       _return.copy_params = copyparams_to_thrift(copy_params);
       _return.row_set.row_desc.resize(best_types.size());
-      TColumnType col;
       for (size_t col_idx = 0; col_idx < best_types.size(); col_idx++) {
+        TColumnType col;
         SQLTypes t = best_types[col_idx];
         EncodingType encodingType = best_encodings[col_idx];
         SQLTypeInfo ti(t, false, encodingType);
@@ -4416,9 +4419,12 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
   const auto& cat = session_info.getCatalog();
   CHECK(device_type == ExecutorDeviceType::CPU ||
         session_info.get_executor_device_type() == ExecutorDeviceType::GPU);
-  CompilationOptions co = {
-      device_type, true, ExecutorOptLevel::Default, g_enable_dynamic_watchdog,
-      ExecutorExplainType::Default, intel_jit_profile_};
+  CompilationOptions co = {session_info.get_executor_device_type(),
+                           true,
+                           ExecutorOptLevel::Default,
+                           g_enable_dynamic_watchdog,
+                           ExecutorExplainType::Default,
+                           intel_jit_profile_};
   ExecutionOptions eo = {false,
                          allow_multifrag_,
                          false,
@@ -4439,11 +4445,14 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
   RelAlgExecutor ra_executor(executor.get(), cat);
   const auto result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
   const auto rs = result.getRows();
-  const auto copy = rs->getArrowCopy(data_mgr_.get(),
-                                     device_type,
-                                     device_id,
-                                     getTargetNames(result.getTargetsMeta()),
-                                     first_n);
+  const auto converter =
+      std::make_unique<ArrowResultSetConverter>(rs,
+                                                data_mgr_,
+                                                device_type,
+                                                device_id,
+                                                getTargetNames(result.getTargetsMeta()),
+                                                first_n);
+  const auto copy = converter->getArrowResult();
   _return.sm_handle = std::string(copy.sm_handle.begin(), copy.sm_handle.end());
   _return.sm_size = copy.sm_size;
   _return.df_handle = std::string(copy.df_handle.begin(), copy.df_handle.end());
@@ -5369,7 +5378,11 @@ void MapDHandler::insert_data(const TSessionId& session,
                thrift_insert_data.data[col_idx].var_len_data.size());
       for (const auto& t_arr_datum : thrift_insert_data.data[col_idx].var_len_data) {
         if (t_arr_datum.is_null) {
-          array_column->emplace_back(0, nullptr, true);
+          if (ti.get_size() > 0 && !ti.get_elem_type().is_string()) {
+            array_column->push_back(Importer_NS::ImporterUtils::composeNullArray(ti));
+          } else {
+            array_column->emplace_back(0, nullptr, true);
+          }
         } else {
           ArrayDatum arr_datum;
           arr_datum.length = t_arr_datum.payload.size();
@@ -5540,19 +5553,23 @@ void MapDHandler::get_license_claims(TLicenseInfo& _return,
 }
 
 void MapDHandler::shutdown() {
-  if (calcite_) {
-    calcite_->close_calcite_server(false);
-  }
+  emergency_shutdown();
 
   if (render_handler_) {
     render_handler_->shutdown();
   }
 }
 
+void MapDHandler::emergency_shutdown() {
+  if (calcite_) {
+    calcite_->close_calcite_server(false);
+  }
+}
+
 std::atomic<int64_t> LogSession::s_match{0};
 
 void LogSession::stdlog(logger::Severity severity, char const* label) {
-  if (logger::g_min_active_severity <= severity) {
+  if (logger::fast_logging_check(severity)) {
     std::stringstream ss;
     ss << file_ << ':' << line_ << ' ' << label << ' ' << func_ << ' ' << match_ << ' '
        << duration<std::chrono::milliseconds>() << ' ';
@@ -5587,7 +5604,7 @@ void LogSession::stdlog(logger::Severity severity, char const* label) {
       }
       ss << '}';
     }
-    BOOST_LOG_SEV(logger::g_logger::get(), severity) << ss.rdbuf();
+    BOOST_LOG_SEV(logger::gSeverityLogger::get(), severity) << ss.rdbuf();
   }
 }
 

@@ -408,7 +408,6 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
       hash_table_or_error = buildHashTableForQualifier(
           qual_bin_oper,
           query_infos,
-          ra_exe_unit,
           co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                      : MemoryLevel::CPU_LEVEL,
           JoinHashTableInterface::HashType::OneToOne,
@@ -544,7 +543,13 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     cgen_state_->ir_builder_.CreateStore(
         cgen_state_->ir_builder_.CreateAdd(array_idx, cgen_state_->llInt(int32_t(1))),
         array_idx_ptr);
-    const auto array_at_fname = "array_at_" + numeric_type_name(elem_ti);
+    auto array_at_fname = "array_at_" + numeric_type_name(elem_ti);
+    if (array_ti.get_size() < 0) {
+      if (array_ti.get_notnull()) {
+        array_at_fname = "notnull_" + array_at_fname;
+      }
+      array_at_fname = "varlen_" + array_at_fname;
+    }
     const auto ar_ret_ty =
         elem_ti.is_fp()
             ? (elem_ti.get_type() == kDOUBLE

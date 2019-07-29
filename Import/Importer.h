@@ -850,6 +850,7 @@ class ImporterUtils {
     }
     return false;
   }
+  static ArrayDatum composeNullArray(const SQLTypeInfo& ti);
 };
 
 class RenderGroupAnalyzer {

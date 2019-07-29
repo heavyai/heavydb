@@ -43,7 +43,9 @@ struct MapDParameters {
   std::string ssl_cert_file = "";    // file path to server's certified PKI certificate
   std::string ssl_key_file = "";     // file path to server's' private PKI key
   std::string ssl_trust_store = "";  // file path to java jks version of ssl_key_fle
-  std::string ssl_trust_password = "";  // pass phrae for java jks trust store.
+  std::string ssl_trust_password = "";
+  std::string ssl_keystore = "";
+  std::string ssl_keystore_password = "";  // pass phrae for java jks trust store.
   bool aggregator = false;
   bool enable_calcite_view_optimize =
       true;  // allow calcite to optimize the relalgebra for a view query

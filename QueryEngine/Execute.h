@@ -84,11 +84,13 @@ extern float g_filter_push_down_high_frac;
 extern size_t g_filter_push_down_passing_row_ubound;
 extern bool g_enable_columnar_output;
 extern bool g_enable_overlaps_hashjoin;
-extern double g_overlaps_hashjoin_bucket_threshold;
+extern size_t g_overlaps_max_table_size_bytes;
 extern bool g_strip_join_covered_quals;
 extern size_t g_constrained_by_in_threshold;
 extern size_t g_big_group_threshold;
 extern bool g_enable_window_functions;
+extern size_t g_max_memory_allocation_size;
+extern double g_bump_allocator_step_reduction;
 
 class QueryCompilationDescriptor;
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
@@ -385,6 +387,8 @@ class Executor {
     (decltype(executors_){}).swap(executors_);
   }
 
+  static void clearMemory(const Data_Namespace::MemoryLevel memory_level);
+
   typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, const size_t> AggInfo;
 
   std::shared_ptr<ResultSet> execute(const Planner::RootPlan* root_plan,
@@ -566,7 +570,6 @@ class Executor {
     mutable std::vector<uint64_t> all_frag_row_offsets_;
     mutable std::mutex all_frag_row_offsets_mutex_;
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
-    int32_t* error_code_;
     RenderInfo* render_info_;
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>> all_fragment_results_;
     std::atomic_flag dynamic_watchdog_set_ = ATOMIC_FLAG_INIT;
@@ -579,6 +582,7 @@ class Executor {
                  const QueryCompilationDescriptor& query_comp_desc,
                  const QueryMemoryDescriptor& query_mem_desc,
                  const FragmentsList& frag_list,
+                 const ExecutorDispatchMode kernel_dispatch_mode,
                  const int64_t rowid_lookup_key);
 
    public:
@@ -587,7 +591,6 @@ class Executor {
                       const std::vector<InputTableInfo>& query_infos,
                       const Catalog_Namespace::Catalog& cat,
                       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                      int32_t* error_code,
                       RenderInfo* render_info);
 
     ExecutionDispatch(const ExecutionDispatch&) = delete;
@@ -613,7 +616,8 @@ class Executor {
              const QueryCompilationDescriptor& query_comp_desc,
              const QueryMemoryDescriptor& query_mem_desc,
              const FragmentsList& frag_ids,
-             const int64_t rowid_lookup_key) noexcept;
+             const ExecutorDispatchMode kernel_dispatch_mode,
+             const int64_t rowid_lookup_key);
 
     const RelAlgExecutionUnit& getExecutionUnit() const;
 
@@ -624,8 +628,7 @@ class Executor {
     friend class QueryCompilationDescriptor;
   };
 
-  ResultSetPtr executeWorkUnit(int32_t* error_code,
-                               size_t& max_groups_buffer_entry_guess,
+  ResultSetPtr executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                const bool is_agg,
                                const std::vector<InputTableInfo>&,
                                const RelAlgExecutionUnit&,
@@ -682,6 +685,7 @@ class Executor {
                                const QueryCompilationDescriptor& query_comp_desc,
                                const QueryMemoryDescriptor& query_mem_desc,
                                const FragmentsList& frag_list,
+                               const ExecutorDispatchMode kernel_dispatch_mode,
                                const int64_t rowid_lookup_key)> dispatch,
       const ExecutionDispatch& execution_dispatch,
       const std::vector<InputTableInfo>& table_infos,
@@ -803,8 +807,7 @@ class Executor {
       const QueryMemoryDescriptor&) const;
   void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
-  ResultSetPtr executeWorkUnitImpl(int32_t* error_code,
-                                   size_t& max_groups_buffer_entry_guess,
+  ResultSetPtr executeWorkUnitImpl(size_t& max_groups_buffer_entry_guess,
                                    const bool is_agg,
                                    const bool allow_single_frag_table_opt,
                                    const std::vector<InputTableInfo>&,
@@ -886,7 +889,6 @@ class Executor {
   JoinHashTableOrError buildHashTableForQualifier(
       const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
       const std::vector<InputTableInfo>& query_infos,
-      const RelAlgExecutionUnit& ra_exe_unit,
       const MemoryLevel memory_level,
       const JoinHashTableInterface::HashType preferred_hash_type,
       ColumnCacheMap& column_cache);

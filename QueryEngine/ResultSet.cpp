@@ -767,15 +767,19 @@ void ResultSet::radixSortOnGpu(
   CudaAllocator cuda_allocator(data_mgr, device_id);
   std::vector<int64_t*> group_by_buffers(executor_->blockSize());
   group_by_buffers[0] = reinterpret_cast<int64_t*>(storage_->getUnderlyingBuffer());
-  auto dev_group_by_buffers = create_dev_group_by_buffers(&cuda_allocator,
-                                                          group_by_buffers,
-                                                          query_mem_desc_,
-                                                          executor_->blockSize(),
-                                                          executor_->gridSize(),
-                                                          device_id,
-                                                          true,
-                                                          true,
-                                                          nullptr);
+  auto dev_group_by_buffers =
+      create_dev_group_by_buffers(&cuda_allocator,
+                                  group_by_buffers,
+                                  query_mem_desc_,
+                                  executor_->blockSize(),
+                                  executor_->gridSize(),
+                                  device_id,
+                                  ExecutorDispatchMode::KernelPerFragment,
+                                  -1,
+                                  true,
+                                  true,
+                                  false,
+                                  nullptr);
   inplace_sort_gpu(
       order_entries, query_mem_desc_, dev_group_by_buffers, data_mgr, device_id);
   copy_group_by_buffers_from_gpu(
@@ -847,6 +851,14 @@ int64_t ResultSetStorage::mappedPtr(const int64_t remote_ptr) const {
 
 size_t ResultSet::getLimit() {
   return keep_first_;
+}
+
+std::shared_ptr<const std::vector<std::string>> ResultSet::getStringDictionaryPayloadCopy(
+    const int dict_id) const {
+  CHECK(executor_);
+  const auto sdp =
+      executor_->getStringDictionaryProxy(dict_id, row_set_mem_owner_, false);
+  return sdp->getDictionary()->copyStrings();
 }
 
 bool can_use_parallel_algorithms(const ResultSet& rows) {

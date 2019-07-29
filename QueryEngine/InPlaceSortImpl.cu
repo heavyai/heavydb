@@ -77,6 +77,14 @@ void sort_on_gpu(int64_t* val_buff,
                  ThrustAllocator& alloc) {
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
+    case 1:
+      sort_on_gpu(
+          reinterpret_cast<int8_t*>(val_buff), idx_buff, entry_count, desc, alloc);
+      break;
+    case 2:
+      sort_on_gpu(
+          reinterpret_cast<int16_t*>(val_buff), idx_buff, entry_count, desc, alloc);
+      break;
     case 4:
       sort_on_gpu(
           reinterpret_cast<int32_t*>(val_buff), idx_buff, entry_count, desc, alloc);
@@ -98,6 +106,12 @@ void sort_on_cpu(int64_t* val_buff,
                  const uint32_t chosen_bytes) {
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
+    case 1:
+      sort_on_cpu(reinterpret_cast<int8_t*>(val_buff), idx_buff, entry_count, desc);
+      break;
+    case 2:
+      sort_on_cpu(reinterpret_cast<int16_t*>(val_buff), idx_buff, entry_count, desc);
+      break;
     case 4:
       sort_on_cpu(reinterpret_cast<int32_t*>(val_buff), idx_buff, entry_count, desc);
       break;
@@ -118,6 +132,14 @@ void apply_permutation_on_gpu(int64_t* val_buff,
                               ThrustAllocator& alloc) {
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
+    case 1:
+      apply_permutation_on_gpu(
+          reinterpret_cast<int8_t*>(val_buff), idx_buff, entry_count, alloc);
+      break;
+    case 2:
+      apply_permutation_on_gpu(
+          reinterpret_cast<int16_t*>(val_buff), idx_buff, entry_count, alloc);
+      break;
     case 4:
       apply_permutation_on_gpu(
           reinterpret_cast<int32_t*>(val_buff), idx_buff, entry_count, alloc);
@@ -139,6 +161,18 @@ void apply_permutation_on_cpu(int64_t* val_buff,
                               const uint32_t chosen_bytes) {
 #ifdef HAVE_CUDA
   switch (chosen_bytes) {
+    case 1:
+      apply_permutation_on_cpu(reinterpret_cast<int8_t*>(val_buff),
+                               idx_buff,
+                               entry_count,
+                               reinterpret_cast<int8_t*>(tmp_buff));
+      break;
+    case 2:
+      apply_permutation_on_cpu(reinterpret_cast<int16_t*>(val_buff),
+                               idx_buff,
+                               entry_count,
+                               reinterpret_cast<int16_t*>(tmp_buff));
+      break;
     case 4:
       apply_permutation_on_cpu(reinterpret_cast<int32_t*>(val_buff),
                                idx_buff,

@@ -55,7 +55,7 @@ download_make_install ftp://ftp.gnu.org/gnu/autoconf/autoconf-2.69.tar.xz # "" "
 download_make_install ftp://ftp.gnu.org/gnu/automake/automake-1.16.1.tar.xz
 
 # gcc
-VERS=6.4.0
+VERS=7.4.0
 download ftp://ftp.gnu.org/gnu/gcc/gcc-$VERS/gcc-$VERS.tar.xz
 extract gcc-$VERS.tar.xz
 pushd gcc-$VERS
@@ -121,10 +121,10 @@ pushd boost_$VERS
 ./b2 cxxflags=-fPIC install --prefix=$PREFIX || true
 popd
 
-# https://github.com/Kitware/CMake/releases/download/v3.14.3/cmake-3.14.3.tar.gz
-CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-3.14.3.tar.gz
+# https://github.com/Kitware/CMake/releases/download/v3.14.5/cmake-3.14.5.tar.gz
+CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-3.14.5.tar.gz
 
-VERS=3.1.0
+VERS=3.1.5
 download https://github.com/google/double-conversion/archive/v$VERS.tar.gz
 extract v$VERS.tar.gz
 mkdir -p double-conversion-$VERS/build
@@ -134,7 +134,7 @@ makej
 make install
 popd
 
-VERS=2.2.1
+VERS=2.2.2
 download https://github.com/gflags/gflags/archive/v$VERS.tar.gz
 extract v$VERS.tar.gz
 mkdir -p gflags-$VERS/build
@@ -148,7 +148,7 @@ VERS=0.3.5
 CXXFLAGS="-fPIC" download_make_install https://github.com/google/glog/archive/v$VERS.tar.gz glog-$VERS "--enable-shared=no" # --build=powerpc64le-unknown-linux-gnu"
 
 # folly
-VERS=2.1.8
+VERS=2.1.10
 download_make_install https://github.com/libevent/libevent/releases/download/release-$VERS-stable/libevent-$VERS-stable.tar.gz
 
 VERS=2019.04.29.00
@@ -166,7 +166,7 @@ download_make_install ${HTTP_DEPS}/libedit-20170329-3.1.tar.gz
 # (see common-functions.sh)
 install_llvm
 
-VERS=7.64.1
+VERS=7.65.1
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
 download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
 
@@ -188,6 +188,9 @@ CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure \
 makej
 make install
 popd
+
+# librdkafka
+install_rdkafka static
 
 # backend rendering
 VERS=1.6.21
@@ -229,34 +232,14 @@ makej
 make install
 popd
 
-# GEO STUFF
-# expat
-download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_2_5/expat-2.2.5.tar.bz2
-# kml
-download ${HTTP_DEPS}/libkml-master.zip
-unzip -u libkml-master.zip
-pushd libkml-master
-./autogen.sh || true
-CXXFLAGS="-std=c++03" ./configure --with-expat-include-dir=$PREFIX/include/ --with-expat-lib-dir=$PREFIX/lib --prefix=$PREFIX --enable-static --disable-java --disable-python --disable-swig
-makej
-make install
-popd
-# proj
-download_make_install ${HTTP_DEPS}/proj-5.2.0.tar.gz
-# gdal
-download_make_install ${HTTP_DEPS}/gdal-2.3.2.tar.xz "" "--without-geos --with-libkml=$PREFIX --with-proj=$PREFIX"
+# Geo Support
+install_gdal
 
 # Apache Arrow (see common-functions.sh)
 install_arrow
 
-VERS=1.11
-ARCH=$(uname -m)
-ARCH=${ARCH//x86_64/amd64}
-ARCH=${ARCH//aarch64/arm64}
-# https://dl.google.com/go/go$VERS.linux-$ARCH.tar.gz
-download ${HTTP_DEPS}/go$VERS.linux-$ARCH.tar.gz
-extract go$VERS.linux-$ARCH.tar.gz
-mv go $PREFIX
+# Go
+install_go
 
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)

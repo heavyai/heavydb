@@ -29,7 +29,6 @@ sudo apt install -y \
     g++ \
     libboost-all-dev \
     libgoogle-glog-dev \
-    golang \
     libssl-dev \
     libevent-dev \
     default-jre \
@@ -69,32 +68,20 @@ sudo apt install -y \
     python-dev \
     python-yaml \
     swig \
+    pkg-config \
     libxerces-c-dev \
     libxmlsec1-dev
 
-# Needed to find xmltooling and xml_security_c
+# Needed to find sqlite3, xmltooling, and xml_security_c
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
+export PATH=$PREFIX/bin:$PATH
 
 # llvm
 # (see common-functions.sh)
 install_llvm
 
-# GEO STUFF
-# expat
-download_make_install https://github.com/libexpat/libexpat/releases/download/R_2_2_5/expat-2.2.5.tar.bz2
-# kml
-download ${HTTP_DEPS}/libkml-master.zip
-unzip -u libkml-master.zip
-pushd libkml-master
-./autogen.sh || true
-CXXFLAGS="-std=c++03" ./configure --with-expat-include-dir=$PREFIX/include/ --with-expat-lib-dir=$PREFIX/lib --prefix=$PREFIX --enable-static --disable-java --disable-python --disable-swig
-makej
-make install
-popd
-# proj.4
-download_make_install ${HTTP_DEPS}/proj-5.2.0.tar.gz
-# gdal
-download_make_install ${HTTP_DEPS}/gdal-2.3.2.tar.xz "" "--without-geos --with-libkml=$PREFIX --with-proj=$PREFIX"
+# Geo Support
+install_gdal
 
 # install AWS core and s3 sdk
 install_awscpp -j $(nproc)
@@ -151,6 +138,9 @@ download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 ARROW_BOOST_USE_SHARED="ON"
 install_arrow
 
+# Go
+install_go
+
 VERS=3.0.2
 wget --continue https://github.com/cginternals/glbinding/archive/v$VERS.tar.gz
 tar xvf v$VERS.tar.gz
@@ -169,6 +159,9 @@ cmake \
 make -j $(nproc)
 make install
 popd
+
+# librdkafka
+install_rdkafka
 
 # glslang (with spirv-tools)
 VERS=7.11.3113 # 2/8/19
@@ -236,6 +229,7 @@ LD_LIBRARY_PATH=\$PREFIX/lib:\$LD_LIBRARY_PATH
 LD_LIBRARY_PATH=\$PREFIX/lib64:\$LD_LIBRARY_PATH
 
 PATH=/usr/local/cuda/bin:\$PATH
+PATH=\$PREFIX/go/bin:\$PATH
 PATH=\$PREFIX/bin:\$PATH
 
 VULKAN_SDK=\$PREFIX
@@ -243,7 +237,9 @@ VK_LAYER_PATH=\$PREFIX/etc/explicit_layer.d
 
 CMAKE_PREFIX_PATH=\$PREFIX:\$CMAKE_PREFIX_PATH
 
-export LD_LIBRARY_PATH PATH VULKAN_SDK VK_LAYER_PATH CMAKE_PREFIX_PATH
+GOROOT=\$PREFIX/go
+
+export LD_LIBRARY_PATH PATH VULKAN_SDK VK_LAYER_PATH CMAKE_PREFIX_PATH GOROOT
 EOF
 
 echo

@@ -137,3 +137,42 @@ std::string strip(const std::string& str) {
   }
   return str.substr(i, j - i);
 }
+
+bool remove_unquoted_newlines_linefeeds_and_tabs_from_sql_string(
+    std::string& str) noexcept {
+  char inside_quote = 0;
+  bool previous_c_was_backslash = false;
+  for (auto& c : str) {
+    // if this character is a quote of either type
+    if (c == '\'' || c == '\"') {
+      // ignore if previous character was a backslash
+      if (!previous_c_was_backslash) {
+        // start or end of a quoted region
+        if (inside_quote == c) {
+          // end region
+          inside_quote = 0;
+        } else if (inside_quote == 0) {
+          // start region
+          inside_quote = c;
+        }
+      }
+    } else if (inside_quote == 0) {
+      // outside quoted region
+      if (c == '\n' || c == '\t' || c == '\r') {
+        // replace these with space
+        c = ' ';
+      }
+      // otherwise leave alone, including quotes of a different type
+    }
+    // handle backslashes, except for double backslashes
+    if (c == '\\') {
+      previous_c_was_backslash = !previous_c_was_backslash;
+    } else {
+      previous_c_was_backslash = false;
+    }
+  }
+  // if we didn't end a region, there were unclosed or mixed-nested quotes
+  // accounting for backslashes should mean that this should only be the
+  // case with truly malformed strings which Calcite will barf on anyway
+  return (inside_quote == 0);
+}

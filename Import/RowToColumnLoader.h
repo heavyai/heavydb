@@ -89,7 +89,6 @@ class RowToColumnLoader {
 
   mapd::shared_ptr<MapDClient> client_;
   TSessionId session_;
-  mapd::shared_ptr<apache::thrift::transport::TTransport> mytransport_;
 
   void createConnection(const ThriftClientConnection& con);
   void closeConnection();

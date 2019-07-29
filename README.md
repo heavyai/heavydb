@@ -206,15 +206,15 @@ OmniSciDB has the following dependencies:
 | Package | Min Version | Required |
 | ------- | ----------- | -------- |
 | [CMake](https://cmake.org/) | 3.3 | yes |
-| [LLVM](http://llvm.org/) | 4.0 (8.0 recommended) | yes |
-| [GCC](http://gcc.gnu.org/) | 6.1 | no, if building with clang |
-| [Go](https://golang.org/) | 1.6 | yes |
+| [LLVM](http://llvm.org/) | 7.0 (8.0 recommended) | yes |
+| [GCC](http://gcc.gnu.org/) | 7.0 | no, if building with clang |
+| [Go](https://golang.org/) | 1.12 | yes |
 | [Boost](http://www.boost.org/) | 1.65.0 | yes |
 | [OpenJDK](http://openjdk.java.net/) | 1.7 | yes |
-| [CUDA](http://nvidia.com/cuda) | 9.0 | yes, if compiling with GPU support |
+| [CUDA](http://nvidia.com/cuda) | 10.0 | yes, if compiling with GPU support |
 | [gperftools](https://github.com/gperftools/gperftools) | | yes |
 | [gdal](http://gdal.org/) | 2.3 | yes |
-| [Arrow](https://arrow.apache.org/) | 0.11.0 | yes |
+| [Arrow](https://arrow.apache.org/) | 0.13.0 | yes |
 
 Dependencies for `omnisci_web_server` and other Go utils are in [`ThirdParty/go`](ThirdParty/go). See [`ThirdParty/go/src/mapd/vendor/README.md`](ThirdParty/go/src/mapd/vendor/README.md) for instructions on how to add new deps.
 

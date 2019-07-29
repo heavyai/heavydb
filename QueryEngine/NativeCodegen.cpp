@@ -456,6 +456,18 @@ declare i32 @array_at_int32_t(i8*, i64, i32);
 declare i64 @array_at_int64_t(i8*, i64, i32);
 declare float @array_at_float(i8*, i64, i32);
 declare double @array_at_double(i8*, i64, i32);
+declare i8 @varlen_array_at_int8_t(i8*, i64, i32);
+declare i16 @varlen_array_at_int16_t(i8*, i64, i32);
+declare i32 @varlen_array_at_int32_t(i8*, i64, i32);
+declare i64 @varlen_array_at_int64_t(i8*, i64, i32);
+declare float @varlen_array_at_float(i8*, i64, i32);
+declare double @varlen_array_at_double(i8*, i64, i32);
+declare i8 @varlen_notnull_array_at_int8_t(i8*, i64, i32);
+declare i16 @varlen_notnull_array_at_int16_t(i8*, i64, i32);
+declare i32 @varlen_notnull_array_at_int32_t(i8*, i64, i32);
+declare i64 @varlen_notnull_array_at_int64_t(i8*, i64, i32);
+declare float @varlen_notnull_array_at_float(i8*, i64, i32);
+declare double @varlen_notnull_array_at_double(i8*, i64, i32);
 declare i8 @array_at_int8_t_checked(i8*, i64, i64, i8);
 declare i16 @array_at_int16_t_checked(i8*, i64, i64, i16);
 declare i32 @array_at_int32_t_checked(i8*, i64, i64, i32);
@@ -787,7 +799,6 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
                 "get_group_value_with_watchdog" ||
             get_gv_call.getCalledFunction()->getName() ==
                 "get_matching_group_value_perfect_hash" ||
-            get_gv_call.getCalledFunction()->getName() == "string_decode" ||
             get_gv_call.getCalledFunction()->getName() == "array_size" ||
             get_gv_call.getCalledFunction()->getName() == "linear_probabilistic_count") {
           mark_function_never_inline(cgen_state_->row_func_);
@@ -948,11 +959,13 @@ void set_row_func_argnames(llvm::Function* row_func,
   } else {
     arg_it->setName("group_by_buff");
     ++arg_it;
-    arg_it->setName("crt_match");
+    arg_it->setName("crt_matched");
     ++arg_it;
     arg_it->setName("total_matched");
     ++arg_it;
     arg_it->setName("old_total_matched");
+    ++arg_it;
+    arg_it->setName("max_matched");
     ++arg_it;
   }
 
@@ -1003,6 +1016,8 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     // total match count passed from the caller
     row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
     // old total match count returned to the caller
+    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    // max matched (total number of slots in the output buffer)
     row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
   }
 

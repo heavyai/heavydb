@@ -298,6 +298,55 @@ inline void put_null(void* ndptr, const SQLTypeInfo& ntype, const std::string co
   }
 }
 
+inline void put_null_array(void* ndptr,
+                           const SQLTypeInfo& ntype,
+                           const std::string col_name) {
+  if (ntype.get_notnull())
+    throw std::runtime_error("NULL value on NOT NULL column '" + col_name + "'");
+
+  switch (ntype.get_type()) {
+    case kBOOLEAN:
+    case kTINYINT:
+    case kSMALLINT:
+    case kINT:
+    case kBIGINT:
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
+    case kNUMERIC:
+    case kDECIMAL:
+      switch (ntype.get_size()) {
+        case 1:
+          *(int8_t*)ndptr = inline_int_null_array_value<int8_t>();
+          break;
+        case 2:
+          *(int16_t*)ndptr = inline_int_null_array_value<int16_t>();
+          break;
+        case 4:
+          *(int32_t*)ndptr = inline_int_null_array_value<int32_t>();
+          break;
+        case 8:
+          *(int64_t*)ndptr = inline_int_null_array_value<int64_t>();
+          break;
+        default:
+          abort();
+      }
+      break;
+    case kFLOAT:
+      *(float*)ndptr = inline_fp_null_array_value<float>();
+      break;
+    case kDOUBLE:
+      *(double*)ndptr = inline_fp_null_array_value<double>();
+      break;
+    default:
+      //! this f is currently only for putting fixed-size data in place
+      //! this f is not yet for putting var-size or dict-encoded data
+      CHECK(false);
+  }
+}
+
 template <typename T>
 inline bool get_scalar(void* ndptr, const SQLTypeInfo& ntype, T& v) {
   switch (ntype.get_type()) {

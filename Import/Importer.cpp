@@ -397,6 +397,47 @@ Datum NullDatum(SQLTypeInfo& ti) {
   return d;
 }
 
+Datum NullArrayDatum(SQLTypeInfo& ti) {
+  Datum d;
+  const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+  switch (type) {
+    case kBOOLEAN:
+      d.boolval = inline_fixed_encoding_null_array_val(ti);
+      break;
+    case kBIGINT:
+      d.bigintval = inline_fixed_encoding_null_array_val(ti);
+      break;
+    case kINT:
+      d.intval = inline_fixed_encoding_null_array_val(ti);
+      break;
+    case kSMALLINT:
+      d.smallintval = inline_fixed_encoding_null_array_val(ti);
+      break;
+    case kTINYINT:
+      d.tinyintval = inline_fixed_encoding_null_array_val(ti);
+      break;
+    case kFLOAT:
+      d.floatval = NULL_ARRAY_FLOAT;
+      break;
+    case kDOUBLE:
+      d.doubleval = NULL_ARRAY_DOUBLE;
+      break;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      d.bigintval = inline_fixed_encoding_null_array_val(ti);
+      break;
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON:
+      throw std::runtime_error("Internal error: geometry type in NullArrayDatum.");
+    default:
+      throw std::runtime_error("Internal error: invalid type in NullArrayDatum.");
+  }
+  return d;
+}
+
 ArrayDatum StringToArray(const std::string& s,
                          const SQLTypeInfo& ti,
                          const CopyParams& copy_params) {
@@ -461,16 +502,25 @@ ArrayDatum NullArray(const SQLTypeInfo& ti) {
   }
 
   if (len > 0) {
-    // NULL fixlen array: fill with scalar NULL sentinels
+    // Compose a NULL fixlen array
     int8_t* buf = (int8_t*)checked_malloc(len);
-    Datum d = NullDatum(elem_ti);
-    for (int8_t* p = buf; (p - buf) < len;) {
-      p = appendDatum(p, d, elem_ti);
+    // First scalar is a NULL_ARRAY sentinel
+    Datum d = NullArrayDatum(elem_ti);
+    int8_t* p = appendDatum(buf, d, elem_ti);
+    // Rest is filled with normal NULL sentinels
+    Datum d0 = NullDatum(elem_ti);
+    while ((p - buf) < len) {
+      p = appendDatum(p, d0, elem_ti);
     }
+    CHECK((p - buf) == len);
     return ArrayDatum(len, buf, true);
   }
   // NULL varlen array
   return ArrayDatum(0, NULL, true);
+}
+
+ArrayDatum ImporterUtils::composeNullArray(const SQLTypeInfo& ti) {
+  return NullArray(ti);
 }
 
 void addBinaryStringArray(const TDatum& datum, std::vector<std::string>& string_vec) {
@@ -741,11 +791,6 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         if (!is_null) {
           ArrayDatum d = StringToArray(val, ti, copy_params);
           if (d.is_null) {  // val could be "NULL"
-            if (ti.get_size() > 0) {
-              // TODO: remove once NULL fixlen arrays are allowed
-              throw std::runtime_error("Fixed length array column " + cd->columnName +
-                                       " currently cannot accept NULL arrays");
-            }
             addArray(NullArray(ti));
           } else {
             if (ti.get_size() > 0 && static_cast<size_t>(ti.get_size()) != d.length) {
@@ -755,11 +800,6 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
             addArray(d);
           }
         } else {
-          if (ti.get_size() > 0) {
-            // TODO: remove once NULL fixlen arrays are allowed
-            throw std::runtime_error("Fixed length array column " + cd->columnName +
-                                     " currently cannot accept NULL arrays");
-          }
           addArray(NullArray(ti));
         }
       }

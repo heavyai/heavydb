@@ -175,18 +175,20 @@ __global__ void set_valid_pos(int32_t* pos_buff,
   }
 }
 
-void fill_one_to_many_hash_table_on_device(int32_t* buff,
-                                           const int32_t hash_entry_count,
-                                           const int32_t invalid_slot_val,
-                                           const JoinColumn& join_column,
-                                           const JoinColumnTypeInfo& type_info,
-                                           const size_t block_size_x,
-                                           const size_t grid_size_x) {
+template <typename COUNT_MATCHES_FUNCTOR, typename FILL_ROW_IDS_FUNCTOR>
+void fill_one_to_many_hash_table_on_device_impl(int32_t* buff,
+                                                const int32_t hash_entry_count,
+                                                const int32_t invalid_slot_val,
+                                                const JoinColumn& join_column,
+                                                const JoinColumnTypeInfo& type_info,
+                                                const size_t block_size_x,
+                                                const size_t grid_size_x,
+                                                COUNT_MATCHES_FUNCTOR count_matches_func,
+                                                FILL_ROW_IDS_FUNCTOR fill_row_ids_func) {
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
-  SUFFIX(count_matches)<<<grid_size_x, block_size_x>>>(
-      count_buff, invalid_slot_val, join_column, type_info);
+  count_matches_func();
 
   set_valid_pos_flag<<<grid_size_x, block_size_x>>>(
       pos_buff, count_buff, hash_entry_count);
@@ -196,18 +198,107 @@ void fill_one_to_many_hash_table_on_device(int32_t* buff,
       count_buff_dev_ptr, count_buff_dev_ptr + hash_entry_count, count_buff_dev_ptr);
   set_valid_pos<<<grid_size_x, block_size_x>>>(pos_buff, count_buff, hash_entry_count);
   cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));
-  SUFFIX(fill_row_ids)<<<grid_size_x, block_size_x>>>(
-      buff, hash_entry_count, invalid_slot_val, join_column, type_info);
+  fill_row_ids_func();
+}
+
+void fill_one_to_many_hash_table_on_device(int32_t* buff,
+                                           const HashEntryInfo hash_entry_info,
+                                           const int32_t invalid_slot_val,
+                                           const JoinColumn& join_column,
+                                           const JoinColumnTypeInfo& type_info,
+                                           const size_t block_size_x,
+                                           const size_t grid_size_x) {
+  auto hash_entry_count = hash_entry_info.hash_entry_count;
+  auto count_matches_func = [hash_entry_count,
+                             grid_size_x,
+                             block_size_x,
+                             count_buff = buff + hash_entry_count,
+                             invalid_slot_val,
+                             join_column,
+                             type_info] {
+    SUFFIX(count_matches)<<<grid_size_x, block_size_x>>>(
+        count_buff, invalid_slot_val, join_column, type_info);
+  };
+
+  auto fill_row_ids_func = [grid_size_x,
+                            block_size_x,
+                            buff,
+                            hash_entry_count,
+                            invalid_slot_val,
+                            join_column,
+                            type_info] {
+    SUFFIX(fill_row_ids)<<<grid_size_x, block_size_x>>>(
+        buff, hash_entry_count, invalid_slot_val, join_column, type_info);
+  };
+
+  fill_one_to_many_hash_table_on_device_impl(buff,
+                                             hash_entry_count,
+                                             invalid_slot_val,
+                                             join_column,
+                                             type_info,
+                                             block_size_x,
+                                             grid_size_x,
+                                             count_matches_func,
+                                             fill_row_ids_func);
+}
+
+void fill_one_to_many_hash_table_on_device_bucketized(int32_t* buff,
+                                                      const HashEntryInfo hash_entry_info,
+                                                      const int32_t invalid_slot_val,
+                                                      const JoinColumn& join_column,
+                                                      const JoinColumnTypeInfo& type_info,
+                                                      const size_t block_size_x,
+                                                      const size_t grid_size_x) {
+  auto hash_entry_count = hash_entry_info.getNormalizedHashEntryCount();
+  auto count_matches_func = [grid_size_x,
+                             block_size_x,
+                             count_buff = buff + hash_entry_count,
+                             invalid_slot_val,
+                             join_column,
+                             type_info,
+                             bucket_normalization =
+                                 hash_entry_info.bucket_normalization] {
+    SUFFIX(count_matches_bucketized)<<<grid_size_x, block_size_x>>>(
+        count_buff, invalid_slot_val, join_column, type_info, bucket_normalization);
+  };
+
+  auto fill_row_ids_func = [grid_size_x,
+                            block_size_x,
+                            buff,
+                            hash_entry_count =
+                                hash_entry_info.getNormalizedHashEntryCount(),
+                            invalid_slot_val,
+                            join_column,
+                            type_info,
+                            bucket_normalization = hash_entry_info.bucket_normalization] {
+    SUFFIX(fill_row_ids_bucketized)<<<grid_size_x, block_size_x>>>(buff,
+                                                                   hash_entry_count,
+                                                                   invalid_slot_val,
+                                                                   join_column,
+                                                                   type_info,
+                                                                   bucket_normalization);
+  };
+
+  fill_one_to_many_hash_table_on_device_impl(buff,
+                                             hash_entry_count,
+                                             invalid_slot_val,
+                                             join_column,
+                                             type_info,
+                                             block_size_x,
+                                             grid_size_x,
+                                             count_matches_func,
+                                             fill_row_ids_func);
 }
 
 void fill_one_to_many_hash_table_on_device_sharded(int32_t* buff,
-                                                   const int32_t hash_entry_count,
+                                                   const HashEntryInfo hash_entry_info,
                                                    const int32_t invalid_slot_val,
                                                    const JoinColumn& join_column,
                                                    const JoinColumnTypeInfo& type_info,
                                                    const ShardInfo& shard_info,
                                                    const size_t block_size_x,
                                                    const size_t grid_size_x) {
+  auto hash_entry_count = hash_entry_info.hash_entry_count;
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   cudaMemset(count_buff, 0, hash_entry_count * sizeof(int32_t));

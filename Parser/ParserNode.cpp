@@ -1702,13 +1702,6 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
       if (c != nullptr && c->get_is_null()) {
         throw std::runtime_error("Cannot insert NULL into column " + cd->columnName);
       }
-    } else if (cd->columnType.is_fixlen_array()) {
-      // TODO: remove after NULL fixlen arrays are allowed
-      auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
-      if (c != nullptr && c->get_is_null()) {
-        throw std::runtime_error("Currently cannot insert NULL into column " +
-                                 cd->columnName);
-      }
     }
     e = e->add_cast(cd->columnType);
     tlist.emplace_back(new Analyzer::TargetEntry("", e, false));

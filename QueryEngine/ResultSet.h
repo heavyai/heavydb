@@ -30,9 +30,6 @@
 #include "ResultSetBufferAccessors.h"
 #include "TargetValue.h"
 
-#include "arrow/api.h"
-#include "arrow/ipc/api.h"
-
 #include <atomic>
 #include <functional>
 #include <list>
@@ -237,19 +234,6 @@ struct OneIntegerColumnRow {
   const bool valid;
 };
 
-struct ArrowResult {
-  std::vector<char> sm_handle;
-  int64_t sm_size;
-  std::vector<char> df_handle;
-  int64_t df_size;
-  int8_t* df_dev_ptr;  // Only for device memory deallocation
-};
-
-void deallocate_arrow_result(const ArrowResult& result,
-                             const ExecutorDeviceType device_type,
-                             const size_t device_id,
-                             Data_Namespace::DataMgr* data_mgr);
-
 class ResultSet;
 
 class ResultSetRowIterator {
@@ -369,8 +353,6 @@ class ResultSet {
   const ResultSetStorage* allocateStorage(const std::vector<int64_t>&) const;
 
   void updateStorageEntryCount(const size_t new_entry_count) {
-    // currently, should only be used for columnar projections
-    CHECK(query_mem_desc_.didOutputColumnar());
     CHECK(query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection);
     query_mem_desc_.setEntryCount(new_entry_count);
     CHECK(storage_);
@@ -489,21 +471,6 @@ class ResultSet {
   static std::unique_ptr<ResultSet> unserialize(const TSerializedRows& serialized_rows,
                                                 const Executor*);
 
-  struct SerializedArrowOutput {
-    std::shared_ptr<arrow::Buffer> schema;
-    std::shared_ptr<arrow::Buffer> records;
-  };
-
-  SerializedArrowOutput getSerializedArrowOutput(
-      const std::vector<std::string>& col_names,
-      const int32_t first_n) const;
-
-  ArrowResult getArrowCopy(Data_Namespace::DataMgr* data_mgr,
-                           const ExecutorDeviceType device_type,
-                           const size_t device_id,
-                           const std::vector<std::string>& col_names,
-                           const int32_t first_n) const;
-
   size_t getLimit();
 
   /**
@@ -545,6 +512,9 @@ class ResultSet {
   void setSeparateVarlenStorageValid(const bool val) {
     separate_varlen_storage_valid_ = val;
   }
+
+  std::shared_ptr<const std::vector<std::string>> getStringDictionaryPayloadCopy(
+      const int dict_id) const;
 
  private:
   void advanceCursorToNextEntry(ResultSetRowIterator& iter) const;
@@ -777,22 +747,6 @@ class ResultSet {
   Data_Namespace::DataMgr* getDataManager() const;
 
   int getGpuCount() const;
-
-  std::shared_ptr<arrow::RecordBatch> convertToArrow(
-      const std::vector<std::string>& col_names,
-      arrow::ipc::DictionaryMemo& memo,
-      const int32_t first_n) const;
-  std::shared_ptr<const std::vector<std::string>> getDictionary(const int dict_id) const;
-  std::shared_ptr<arrow::RecordBatch> getArrowBatch(
-      const std::shared_ptr<arrow::Schema>& schema,
-      const int32_t first_n) const;
-
-  ArrowResult getArrowCopyOnCpu(const std::vector<std::string>& col_names,
-                                const int32_t first_n) const;
-  ArrowResult getArrowCopyOnGpu(Data_Namespace::DataMgr* data_mgr,
-                                const size_t device_id,
-                                const std::vector<std::string>& col_names,
-                                const int32_t first_n) const;
 
   void serializeProjection(TSerializedRows& serialized_rows) const;
   void serializeVarlenAggColumn(int8_t* buf,

@@ -226,6 +226,44 @@ void Catalog::updateTableDescriptorSchema() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
+void Catalog::updateFixlenArrayColumns() {
+  cat_sqlite_lock sqlite_lock(this);
+  sqliteConnector_.query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_.query(
+        "select name from sqlite_master WHERE type='table' AND "
+        "name='mapd_version_history'");
+    if (sqliteConnector_.getNumRows() == 0) {
+      sqliteConnector_.query(
+          "CREATE TABLE mapd_version_history(version integer, migration_history text "
+          "unique)");
+    } else {
+      sqliteConnector_.query(
+          "select * from mapd_version_history where migration_history = "
+          "'notnull_fixlen_arrays'");
+      if (sqliteConnector_.getNumRows() != 0) {
+        // legacy fixlen arrays had migrated
+        // no need for further execution
+        sqliteConnector_.query("END TRANSACTION");
+        return;
+      }
+    }
+    // Insert check for migration
+    sqliteConnector_.query_with_text_params(
+        "INSERT INTO mapd_version_history(version, migration_history) values(?,?)",
+        std::vector<std::string>{std::to_string(MAPD_VERSION), "notnull_fixlen_arrays"});
+    LOG(INFO) << "Updating mapd_columns, legacy fixlen arrays";
+    // Upating all fixlen array columns
+    string queryString("UPDATE mapd_columns SET is_notnull=1 WHERE coltype=" +
+                       std::to_string(kARRAY) + " AND size>0;");
+    sqliteConnector_.query(queryString);
+  } catch (std::exception& e) {
+    sqliteConnector_.query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_.query("END TRANSACTION");
+}
+
 void Catalog::updateFrontendViewSchema() {
   cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
@@ -793,6 +831,7 @@ void Catalog::createDashboardSystemRoles() {
 
 void Catalog::CheckAndExecuteMigrations() {
   updateTableDescriptorSchema();
+  updateFixlenArrayColumns();
   updateFrontendViewAndLinkUsers();
   updateFrontendViewSchema();
   updateLinkSchema();

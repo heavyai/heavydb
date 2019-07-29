@@ -24,7 +24,9 @@
 #include "Descriptors/QueryFragmentDescriptor.h"
 #include "DynamicWatchdog.h"
 #include "EquiJoinCondition.h"
+#include "ErrorHandling.h"
 #include "ExpressionRewrite.h"
+#include "ExternalCacheInvalidators.h"
 #include "GpuMemUtils.h"
 #include "InPlaceSort.h"
 #include "JsonAccessors.h"
@@ -81,11 +83,17 @@ size_t g_filter_push_down_passing_row_ubound{0};
 bool g_enable_columnar_output{false};
 bool g_enable_overlaps_hashjoin{false};
 bool g_cache_string_hash{false};
-double g_overlaps_hashjoin_bucket_threshold{0.1};
+size_t g_overlaps_max_table_size_bytes{1024 * 1024 * 1024};
 bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
 size_t g_big_group_threshold{20000};
 bool g_enable_window_functions{true};
+size_t g_max_memory_allocation_size{2000000000};  // set to max slab size
+size_t g_min_memory_allocation_size{
+    256};  // minimum memory allocation required for projection query output buffer
+           // without pre-flight count
+bool g_enable_bump_allocator{false};
+double g_bump_allocator_step_reduction{0.75};
 
 int const Executor::max_gpu_count;
 
@@ -140,6 +148,30 @@ std::shared_ptr<Executor> Executor::getExecutor(
     auto it_ok = executors_.insert(std::make_pair(executor_key, executor));
     CHECK(it_ok.second);
     return executor;
+  }
+}
+
+void Executor::clearMemory(const Data_Namespace::MemoryLevel memory_level) {
+  switch (memory_level) {
+    case Data_Namespace::MemoryLevel::CPU_LEVEL:
+    case Data_Namespace::MemoryLevel::GPU_LEVEL: {
+      std::lock_guard<std::mutex> flush_lock(
+          execute_mutex_);  // Don't flush memory while queries are running
+
+      Catalog_Namespace::SysCatalog::instance().getDataMgr().clearMemory(memory_level);
+      if (memory_level == Data_Namespace::MemoryLevel::CPU_LEVEL) {
+        // The hash table cache uses CPU memory not managed by the buffer manager. In the
+        // future, we should manage these allocations with the buffer manager directly.
+        // For now, assume the user wants to purge the hash table cache when they clear
+        // CPU memory (currently used in ExecuteTest to lower memory pressure)
+        JoinHashTableCacheInvalidator::invalidateCaches();
+      }
+    } break;
+    default: {
+      throw std::runtime_error(
+          "Clearing memory levels other than the CPU level or GPU level is not "
+          "supported.");
+    }
   }
 }
 
@@ -975,6 +1007,11 @@ void checkWorkUnitWatchdog(const RelAlgExecutionUnit& ra_exe_unit,
     // Allow a query with no scan limit to run on small tables
     return;
   }
+  if (ra_exe_unit.use_bump_allocator) {
+    // Bump allocator removes the scan limit (and any knowledge of the size of the output
+    // relative to the size of the input), so we bypass this check for now
+    return;
+  }
   if (ra_exe_unit.sort_info.algorithm != SortAlgorithm::StreamingTopN &&
       ra_exe_unit.groupby_exprs.size() == 1 && !ra_exe_unit.groupby_exprs.front() &&
       (!ra_exe_unit.scan_limit ||
@@ -1037,13 +1074,13 @@ RelAlgExecutionUnit replace_scan_limit(const RelAlgExecutionUnit& ra_exe_unit_in
           ra_exe_unit_in.estimator,
           ra_exe_unit_in.sort_info,
           new_scan_limit,
+          ra_exe_unit_in.use_bump_allocator,
           ra_exe_unit_in.query_features};
 }
 
 }  // namespace
 
 ResultSetPtr Executor::executeWorkUnit(
-    int32_t* error_code,
     size_t& max_groups_buffer_entry_guess,
     const bool is_agg,
     const std::vector<InputTableInfo>& query_infos,
@@ -1056,8 +1093,7 @@ ResultSetPtr Executor::executeWorkUnit(
     const bool has_cardinality_estimation,
     ColumnCacheMap& column_cache) {
   try {
-    return executeWorkUnitImpl(error_code,
-                               max_groups_buffer_entry_guess,
+    return executeWorkUnitImpl(max_groups_buffer_entry_guess,
                                is_agg,
                                true,
                                query_infos,
@@ -1070,8 +1106,7 @@ ResultSetPtr Executor::executeWorkUnit(
                                has_cardinality_estimation,
                                column_cache);
   } catch (const CompilationRetryNewScanLimit& e) {
-    return executeWorkUnitImpl(error_code,
-                               max_groups_buffer_entry_guess,
+    return executeWorkUnitImpl(max_groups_buffer_entry_guess,
                                is_agg,
                                false,
                                query_infos,
@@ -1087,7 +1122,6 @@ ResultSetPtr Executor::executeWorkUnit(
 }
 
 ResultSetPtr Executor::executeWorkUnitImpl(
-    int32_t* error_code,
     size_t& max_groups_buffer_entry_guess,
     const bool is_agg,
     const bool allow_single_frag_table_opt,
@@ -1114,9 +1148,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
 
   int8_t crt_min_byte_width{get_min_byte_width()};
   do {
-    *error_code = 0;
     ExecutionDispatch execution_dispatch(
-        this, ra_exe_unit, query_infos, cat, row_set_mem_owner, error_code, render_info);
+        this, ra_exe_unit, query_infos, cat, row_set_mem_owner, render_info);
     ColumnFetcher column_fetcher(this, column_cache);
     std::unique_ptr<QueryCompilationDescriptor> query_comp_desc_owned;
     std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
@@ -1154,6 +1187,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                         const QueryCompilationDescriptor& query_comp_desc,
                         const QueryMemoryDescriptor& query_mem_desc,
                         const FragmentsList& frag_list,
+                        const ExecutorDispatchMode kernel_dispatch_mode,
                         const int64_t rowid_lookup_key) {
       INJECT_TIMER(execution_dispatch_run);
       execution_dispatch.run(chosen_device_type,
@@ -1163,6 +1197,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                              query_comp_desc,
                              query_mem_desc,
                              frag_list,
+                             kernel_dispatch_mode,
                              rowid_lookup_key);
     };
 
@@ -1180,34 +1215,34 @@ ResultSetPtr Executor::executeWorkUnitImpl(
 
       const auto context_count =
           get_context_count(device_type, available_cpus, available_gpus.size());
-      dispatchFragments(dispatch,
-                        execution_dispatch,
-                        query_infos,
-                        eo,
-                        is_agg,
-                        allow_single_frag_table_opt,
-                        context_count,
-                        *query_comp_desc_owned,
-                        *query_mem_desc_owned,
-                        fragment_descriptor,
-                        available_gpus,
-                        available_cpus);
-    }
-    if (eo.with_dynamic_watchdog && interrupted_ && *error_code == ERR_OUT_OF_TIME) {
-      *error_code = ERR_INTERRUPTED;
+      try {
+        dispatchFragments(dispatch,
+                          execution_dispatch,
+                          query_infos,
+                          eo,
+                          is_agg,
+                          allow_single_frag_table_opt,
+                          context_count,
+                          *query_comp_desc_owned,
+                          *query_mem_desc_owned,
+                          fragment_descriptor,
+                          available_gpus,
+                          available_cpus);
+      } catch (QueryExecutionError& e) {
+        if (eo.with_dynamic_watchdog && interrupted_ &&
+            e.getErrorCode() == ERR_OUT_OF_TIME) {
+          throw QueryExecutionError(ERR_INTERRUPTED);
+        }
+        cat.getDataMgr().freeAllBuffers();
+        if (e.getErrorCode() == ERR_OVERFLOW_OR_UNDERFLOW &&
+            static_cast<size_t>(crt_min_byte_width << 1) <= sizeof(int64_t)) {
+          crt_min_byte_width <<= 1;
+          continue;
+        }
+        throw;
+      }
     }
     cat.getDataMgr().freeAllBuffers();
-    if (*error_code == ERR_OVERFLOW_OR_UNDERFLOW) {
-      crt_min_byte_width <<= 1;
-      continue;
-    }
-    if (*error_code != 0) {
-      return std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                         ExecutorDeviceType::CPU,
-                                         QueryMemoryDescriptor(),
-                                         nullptr,
-                                         this);
-    }
     if (is_agg) {
       try {
         return collectAllDeviceResults(execution_dispatch,
@@ -1216,14 +1251,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                        query_comp_desc_owned->getDeviceType(),
                                        row_set_mem_owner);
       } catch (ReductionRanOutOfSlots&) {
-        *error_code = ERR_OUT_OF_SLOTS;
-        std::vector<TargetInfo> targets;
-        for (const auto target_expr : ra_exe_unit.target_exprs) {
-          targets.push_back(get_target_info(target_expr, g_bigint_count));
-        }
-        // TODO(adb): use move semantics to transfer QMD
-        return std::make_shared<ResultSet>(
-            targets, ExecutorDeviceType::CPU, *query_mem_desc_owned, nullptr, this);
+        throw QueryExecutionError(ERR_OUT_OF_SLOTS);
       } catch (OverflowOrUnderflow&) {
         crt_min_byte_width <<= 1;
         continue;
@@ -1247,13 +1275,12 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                                           const Catalog_Namespace::Catalog& cat,
                                           PerFragmentCB& cb) {
   const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
-
-  int error_code = 0;
   ColumnCacheMap column_cache;
 
   std::vector<InputTableInfo> table_infos{table_info};
+  // TODO(adb): ensure this is under a try / catch
   ExecutionDispatch execution_dispatch(
-      this, ra_exe_unit, table_infos, cat, row_set_mem_owner_, &error_code, nullptr);
+      this, ra_exe_unit, table_infos, cat, row_set_mem_owner_, nullptr);
   ColumnFetcher column_fetcher(this, column_cache);
   std::unique_ptr<QueryCompilationDescriptor> query_comp_desc_owned;
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
@@ -1273,6 +1300,7 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                            *query_comp_desc_owned,
                            *query_mem_desc_owned,
                            {{table_id, {fragment_index}}},
+                           ExecutorDispatchMode::KernelPerFragment,
                            -1);
   }
 
@@ -1364,7 +1392,7 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
     if (agg_info.agg_kind == kCOUNT || agg_info.agg_kind == kAPPROX_COUNT_DISTINCT) {
       entry.push_back(0);
     } else if (agg_info.agg_kind == kAVG) {
-      entry.push_back(inline_null_val(agg_info.agg_arg_type, float_argument_input));
+      entry.push_back(inline_null_val(agg_info.sql_type, float_argument_input));
       entry.push_back(0);
     } else if (agg_info.agg_kind == kSAMPLE) {
       if (agg_info.sql_type.is_geometry()) {
@@ -1528,6 +1556,7 @@ void Executor::dispatchFragments(
                              const QueryCompilationDescriptor& query_comp_desc,
                              const QueryMemoryDescriptor& query_mem_desc,
                              const FragmentsList& frag_list,
+                             const ExecutorDispatchMode kernel_dispatch_mode,
                              const int64_t rowid_lookup_key)> dispatch,
     const ExecutionDispatch& execution_dispatch,
     const std::vector<InputTableInfo>& table_infos,
@@ -1586,6 +1615,7 @@ void Executor::dispatchFragments(
                                              query_comp_desc,
                                              query_mem_desc,
                                              frag_list,
+                                             ExecutorDispatchMode::MultifragmentKernel,
                                              rowid_lookup_key));
         };
     fragment_descriptor.assignFragsToMultiDispatch(multifrag_kernel_dispatch);
@@ -1594,7 +1624,7 @@ void Executor::dispatchFragments(
     VLOG(1) << "Dispatching kernel per fragment";
     VLOG(1) << query_mem_desc.toString();
 
-    if (allow_single_frag_table_opt &&
+    if (!ra_exe_unit.use_bump_allocator && allow_single_frag_table_opt &&
         (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) &&
         table_infos.size() == 1 && table_infos.front().table_id > 0) {
       const auto max_frag_size =
@@ -1628,6 +1658,7 @@ void Executor::dispatchFragments(
                                          query_comp_desc,
                                          query_mem_desc,
                                          frag_list,
+                                         ExecutorDispatchMode::KernelPerFragment,
                                          rowid_lookup_key));
 
       ++frag_list_idx;
@@ -1733,10 +1764,12 @@ bool Executor::skipFragmentPair(
   size_t shard_count{0};
   if (dynamic_cast<const Analyzer::ExpressionTuple*>(
           join_condition->get_left_operand())) {
+    auto inner_outer_pairs =
+        normalize_column_pairs(join_condition, *getCatalog(), getTemporaryTables());
     shard_count = BaselineJoinHashTable::getShardCountForCondition(
-        join_condition, ra_exe_unit, this);
+        join_condition, this, inner_outer_pairs);
   } else {
-    shard_count = get_shard_count(join_condition, ra_exe_unit, this);
+    shard_count = get_shard_count(join_condition, this);
   }
   if (shard_count && !ra_exe_unit.join_quals.empty()) {
     plan_state_->join_info_.sharded_range_table_indices_.emplace(table_idx);
@@ -2322,8 +2355,16 @@ int32_t Executor::executePlanWithGroupBy(
     CHECK(results);
     results->holdLiterals(hoist_buf);
   }
-  if (error_code && (render_allocator_map_ptr ||
-                     (!scan_limit || check_rows_less_than_needed(results, scan_limit)))) {
+  if (error_code < 0 && render_allocator_map_ptr) {
+    // More rows passed the filter than available slots. We don't have a count to check,
+    // so assume we met the limit if a scan limit is set
+    if (scan_limit != 0) {
+      return 0;
+    } else {
+      return error_code;
+    }
+  }
+  if (error_code && (!scan_limit || check_rows_less_than_needed(results, scan_limit))) {
     return error_code;  // unlucky, not enough results and we ran out of slots
   }
 
@@ -2577,9 +2618,15 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         const SQLTypeInfo elem_ti = cd->columnType.get_elem_type();
         if (is_null) {
           if (size > 0) {
-            // NULL fixlen array: fill with scalar NULL sentinels
+            // NULL fixlen array: NULL_ARRAY sentinel followed by NULL sentinels
+            if (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT) {
+              throw std::runtime_error("Column " + cd->columnName +
+                                       " doesn't accept NULL values");
+            }
             int8_t* buf = (int8_t*)checked_malloc(size);
-            for (int8_t* p = buf; (p - buf) < size; p += elem_ti.get_size()) {
+            put_null_array(static_cast<void*>(buf), elem_ti, "");
+            for (int8_t* p = buf + elem_ti.get_size(); (p - buf) < size;
+                 p += elem_ti.get_size()) {
               put_null(static_cast<void*>(p), elem_ti, "");
             }
             arr_col_buffers[col_ids[col_idx]].emplace_back(size, buf, is_null);
@@ -2706,7 +2753,6 @@ void Executor::preloadFragOffsets(const std::vector<InputDescriptor>& input_desc
 Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const std::shared_ptr<Analyzer::BinOper>& qual_bin_oper,
     const std::vector<InputTableInfo>& query_infos,
-    const RelAlgExecutionUnit& ra_exe_unit,
     const MemoryLevel memory_level,
     const JoinHashTableInterface::HashType preferred_hash_type,
     ColumnCacheMap& column_cache) {
@@ -2718,18 +2764,12 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
   }
   try {
     if (qual_bin_oper->is_overlaps_oper()) {
-      join_hash_table = OverlapsJoinHashTable::getInstance(qual_bin_oper,
-                                                           query_infos,
-                                                           ra_exe_unit,
-                                                           memory_level,
-                                                           device_count,
-                                                           column_cache,
-                                                           this);
+      join_hash_table = OverlapsJoinHashTable::getInstance(
+          qual_bin_oper, query_infos, memory_level, device_count, column_cache, this);
     } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
                    qual_bin_oper->get_left_operand())) {
       join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
                                                            query_infos,
-                                                           ra_exe_unit,
                                                            memory_level,
                                                            preferred_hash_type,
                                                            device_count,
@@ -2739,7 +2779,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
       try {
         join_hash_table = JoinHashTable::getInstance(qual_bin_oper,
                                                      query_infos,
-                                                     ra_exe_unit,
                                                      memory_level,
                                                      preferred_hash_type,
                                                      device_count,
@@ -2752,7 +2791,6 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
             std::dynamic_pointer_cast<Analyzer::BinOper>(join_quals.front());
         join_hash_table = BaselineJoinHashTable::getInstance(join_qual,
                                                              query_infos,
-                                                             ra_exe_unit,
                                                              memory_level,
                                                              preferred_hash_type,
                                                              device_count,

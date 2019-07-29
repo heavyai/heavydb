@@ -1964,15 +1964,6 @@ void SysCatalog::buildRoleMap() {
   }
 }
 
-void SysCatalog::clearCpuMemory() {
-  SysCatalog::instance().getDataMgr().clearMemory(MemoryLevel::CPU_LEVEL);
-  JoinHashTableCacheInvalidator::invalidateCaches();
-}
-
-void SysCatalog::clearGpuMemory() {
-  SysCatalog::instance().getDataMgr().clearMemory(MemoryLevel::GPU_LEVEL);
-}
-
 void SysCatalog::populateRoleDbObjects(const std::vector<DBObject>& objects) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);

@@ -37,7 +37,7 @@ add_definitions("-DMAPD_EDITION_${MAPD_EDITION}")
 string(TOLOWER "${MAPD_EDITION}" MAPD_EDITION_LOWER)
 
 set(MAPD_VERSION_MAJOR "4")
-set(MAPD_VERSION_MINOR "8")
+set(MAPD_VERSION_MINOR "9")
 set(MAPD_VERSION_PATCH "0")
 set(MAPD_VERSION_EXTRA "dev")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
@@ -128,6 +128,11 @@ if(XCODE)
     set(CMAKE_EXE_LINKER_FLAGS "-F/Library/Frameworks -framework CUDA")
   endif()
   add_definitions("-DXCODE")
+endif()
+
+option(ENABLE_ARROW_DEBUG "Enable Arrow Debug Helpers" ON)
+if (ENABLE_ARROW_DEBUG)
+  add_definitions("-DENABLE_ARROW_DEBUG")
 endif()
 
 # fixme: hack works for Homebrew, might not work for Conda
@@ -286,14 +291,6 @@ add_subdirectory(ThirdParty/googletest)
 # Arrow
 find_package(Arrow REQUIRED)
 add_definitions("-DARROW_NO_DEPRECATED_API")
-if(HAVE_ARROW_STATIC_RECORDBATCH_CTOR)
-  add_definitions("-DHAVE_ARROW_STATIC_RECORDBATCH_CTOR")
-endif()
-if(HAVE_ARROW_APPENDVALUES)
-  add_definitions("-DHAVE_ARROW_APPENDVALUES")
-else()
-  message(WARNING "It appears that you have Arrow < 0.10.0. Please upgrade.")
-endif()
 include_directories(${Arrow_INCLUDE_DIRS})
 
 option(ENABLE_IMPORT_PARQUET "Enable Parquet Importer support" ON)
@@ -322,9 +319,9 @@ add_subdirectory(ThirdParty/linenoise)
 include_directories(ThirdParty/sqlite3)
 add_subdirectory(ThirdParty/sqlite3)
 
-#rdkafka
-include_directories(ThirdParty/librdkafka/src-cpp)
-add_subdirectory(ThirdParty/librdkafka)
+# rdkafka
+find_package(RdKafka REQUIRED)
+include_directories(${RdKafka_INCLUDE_DIRS})
 
 # aws-sdk
 option(ENABLE_AWS_S3 "Enable AWS S3 support" ON)

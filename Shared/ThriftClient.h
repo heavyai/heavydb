@@ -16,20 +16,23 @@
 
 #ifndef THRIFTCLIENT_H
 #define THRIFTCLIENT_H
+#include <thrift/protocol/TBinaryProtocol.h>
+#include <thrift/protocol/TJSONProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
+#include <thrift/transport/THttpClient.h>
+#include <thrift/transport/TSSLSocket.h>
+#include <thrift/transport/TSocket.h>
 #include <string>
 #include "Shared/mapd_shared_ptr.h"
 
+using namespace ::apache::thrift::transport;
+using namespace ::apache::thrift::protocol;
+using namespace ::apache::thrift::transport;
+
 enum class ThriftConnectionType { HTTPS, HTTP, BINARY, BINARY_SSL };
 
-struct ThriftClientConnection {
-  std::string server_host_;
-  int port_;
-  ThriftConnectionType conn_type_;
-  bool skip_host_verify_;
-  std::string ca_cert_name_;
-  std::string trust_cert_file_;
-
+class ThriftClientConnection {
+ public:
   ThriftClientConnection(const std::string& server_host,
                          const int port,
                          const ThriftConnectionType conn_type,
@@ -42,23 +45,37 @@ struct ThriftClientConnection {
       , skip_host_verify_(skip_host_verify)
       , ca_cert_name_(ca_cert_name)
       , trust_cert_file_(trust_cert_file){};
+
+  ThriftClientConnection(const std::string& ca_cert_name);
   ThriftClientConnection(){};
+
+  mapd::shared_ptr<TTransport> open_buffered_client_transport(
+      const std::string& server_host,
+      const int port,
+      const std::string& ca_cert_name,
+      const bool with_timeout = false,
+      const unsigned connect_timeout = 0,
+      const unsigned recv_timeount = 0,
+      const unsigned send_timeout = 0);
+
+  mapd::shared_ptr<TTransport> open_http_client_transport(
+      const std::string& server_host,
+      const int port,
+      const std::string& trust_cert_file_,
+      bool use_https,
+      bool skip_verify);
+
+  mapd::shared_ptr<TProtocol> get_protocol();
+
+ private:
+  std::string server_host_;
+  int port_;
+  ThriftConnectionType conn_type_;
+  bool skip_host_verify_;
+  std::string ca_cert_name_;
+  std::string trust_cert_file_;
+
+  mapd::shared_ptr<TSSLSocketFactory> factory_;
 };
-
-mapd::shared_ptr<::apache::thrift::transport::TTransport> openBufferedClientTransport(
-    const std::string& server_host,
-    const int port,
-    const std::string& ca_cert_name,
-    const bool with_timeout = false,
-    const unsigned connect_timeout = 0,
-    const unsigned recv_timeount = 0,
-    const unsigned send_timeout = 0);
-
-mapd::shared_ptr<::apache::thrift::transport::TTransport> openHttpClientTransport(
-    const std::string& server_host,
-    const int port,
-    const std::string& trust_cert_file,
-    bool use_https,
-    bool skip_verify);
 
 #endif  // THRIFTCLIENT_H

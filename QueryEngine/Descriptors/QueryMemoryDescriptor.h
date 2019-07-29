@@ -126,7 +126,9 @@ class QueryMemoryDescriptor {
       const RelAlgExecutionUnit&,
       const Executor* executor,
       const ExecutorDeviceType device_type,
+      const ExecutorDispatchMode dispatch_mode,
       const int device_id,
+      const int64_t num_rows,
       const std::vector<std::vector<const int8_t*>>& col_buffers,
       const std::vector<std::vector<uint64_t>>& frag_offsets,
       std::shared_ptr<RowSetMemoryOwner>,
@@ -268,6 +270,8 @@ class QueryMemoryDescriptor {
                             const unsigned thread_count,
                             const ExecutorDeviceType device_type) const;
   size_t getBufferSizeBytes(const ExecutorDeviceType device_type) const;
+  size_t getBufferSizeBytes(const ExecutorDeviceType device_type,
+                            const size_t override_entry_count) const;
 
   const ColSlotContext& getColSlotContext() const { return col_slot_context_; }
 

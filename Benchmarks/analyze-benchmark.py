@@ -18,7 +18,10 @@ class BenchmarkLoader:
         assert bench_filename in self.filename_list
 
         with open(self.dir_name + bench_filename) as json_file:
-            self.data = json.load(json_file)
+            self.data = sorted(
+                json.load(json_file),
+                key=lambda experiment: experiment["results"]["query_id"],
+            )
 
     def getFrontAttribute(self, attribute):
         if self.data:
@@ -35,11 +38,17 @@ class BenchmarkLoader:
     def getRunTableName(self):
         return self.getFrontAttribute("run_table")
 
-    # return a list of the attribute stored in self.data
-    def fetchAttribute(self, attribute):
+    # return a list of the attribute, from queries in query_names, stored in self.data
+    def fetchAttribute(self, attribute, query_names):
         result = []
-        for experiment in self.data:
-            result.append(experiment["results"][attribute])
+        for query in query_names:
+            for experiment in self.data:
+                assert attribute in experiment["results"], (
+                    attribute + " is not a valid attribute."
+                )
+                if query == experiment["results"]["query_id"]:
+                    result.append(experiment["results"][attribute])
+                    break
         return result
 
     def fetchQueryNames(self):
@@ -56,9 +65,27 @@ class BenchAnalyzer:
         self.__header_info = [ref.getRunTableName(), attribute]
         self.__label_name_ref = ref.fetchQueryNames()
         self.__label_name_sample = sample.fetchQueryNames()
+        self.__missing_queries_ref = []
+        self.__missing_queries_sample = []
+        self.collectMissingQueries()
         assert self.__label_name_ref == self.__label_name_sample
-        self.__attribute_ref = ref.fetchAttribute(attribute)
-        self.__attribute_sample = sample.fetchAttribute(attribute)
+        self.__attribute_ref = ref.fetchAttribute(
+            attribute, self.__label_name_ref
+        )
+        self.__attribute_sample = sample.fetchAttribute(
+            attribute, self.__label_name_sample
+        )
+
+    # collects all those queries that does not exist in both of the results
+    def collectMissingQueries(self):
+        for query in self.__label_name_ref:
+            if query not in self.__label_name_sample:
+                self.__missing_queries_sample.append(query)
+                self.__label_name_ref.remove(query)
+        for query in self.__label_name_sample:
+            if query not in self.__label_name_ref:
+                self.__missing_queries_ref.append(query)
+                self.__label_name_sample.remove(query)
 
     def printHeader(self):
         for h in self.__header_info:
@@ -87,6 +114,14 @@ class BenchAnalyzer:
                 )
         if found == False:
             print(": None", end="")
+        if self.__missing_queries_ref:
+            print("\n*** Missing queries from reference: ", end="")
+            for query in self.__missing_queries_ref:
+                print(query + " ", end="")
+        if self.__missing_queries_sample:
+            print("\n*** Missing queries from sample: ", end="")
+            for query in self.__missing_queries_sample:
+                print(query + " ", end="")
         print(
             "\n======================================================================="
         )
@@ -112,11 +147,29 @@ class PrettyPrint:
         self.__num_items_per_line = num_items_per_line
         self.__label_name_ref = ref.fetchQueryNames()
         self.__label_name_sample = sample.fetchQueryNames()
+        self.__missing_queries_ref = []
+        self.__missing_queries_sample = []
+        self.collectMissingQueries()
         assert self.__label_name_ref == self.__label_name_sample
-        self.__attribute_ref = ref.fetchAttribute(attribute)
-        self.__attribute_sample = sample.fetchAttribute(attribute)
+        self.__attribute_ref = ref.fetchAttribute(
+            attribute, self.__label_name_ref
+        )
+        self.__attribute_sample = sample.fetchAttribute(
+            attribute, self.__label_name_sample
+        )
         self.__ref_line_count = 0
         self.__sample_line_count = 0
+
+    # collects all those queries that does not exist in both of the results
+    def collectMissingQueries(self):
+        for query in self.__label_name_ref:
+            if query not in self.__label_name_sample:
+                self.__missing_queries_sample.append(query)
+                self.__label_name_ref.remove(query)
+        for query in self.__label_name_sample:
+            if query not in self.__label_name_ref:
+                self.__missing_queries_ref.append(query)
+                self.__label_name_sample.remove(query)
 
     def printSolidLine(self, pattern):
         for i in range(self.__num_items_per_line + 1):
@@ -168,18 +221,29 @@ def main(argv):
     try:
         opts, args = getopt.getopt(
             argv,
-            "hs:r:e:p",
-            ["help", "sample=", "reference=", "epsilon=", "print"],
+            "hs:r:e:a:p",
+            [
+                "help",
+                "sample=",
+                "reference=",
+                "epsilon=",
+                "attribute=",
+                "print",
+            ],
         )
     except getopt.GetOptError:
         print(
-            "python3 analyze-benchmark.py -s <sample dir> -r <reference dir> -e <epsilon> -p"
+            "python3 analyze-benchmark.py -s <sample dir> -r <reference dir> -e <epsilon> -a <attribute> -p"
         )
         sys.exit(2)
 
     dir_artifact_sample = ""
     dir_artifact_ref = ""
     epsilon = 0.05
+    query_attribute = (
+        "query_total_avg"
+    )  # default attribute to use for benchmark comparison
+
     to_print = False  # printing all the results, disabled by default
 
     for opt, arg in opts:
@@ -189,6 +253,7 @@ def main(argv):
     -s/--sample:\t\t\t directory of the results for the benchmarked sample branch
     -r/--reference:\t\t\t directory of the results for the benchmarked reference branch 
     -e/--epsilon:\t\t\t ratio tolerance for reporting results outside this range
+    -a/--attribute:\t\t\t attribute to be used for benchmark comparison (default: query_total_avg) 
     -p/--print:\t\t\t\t print all the results  
                 """
             )
@@ -202,6 +267,8 @@ def main(argv):
                 assert os.path.isdir(dir_artifact_ref)
             elif opt in ("-e", "--epsilon"):
                 epsilon = float(arg)
+            elif opt in ("-a", "--attribute"):
+                query_attribute = arg
             elif opt in ("-p", "--print"):
                 to_print = True
 
@@ -255,12 +322,12 @@ def main(argv):
                         first_header = False
 
                     analyzer = BenchAnalyzer(
-                        refBench, sampleBench, "query_total_avg"
+                        refBench, sampleBench, query_attribute
                     )
                     analyzer.findAnomaliesRatio(epsilon)
                     if to_print:
                         printer = PrettyPrint(
-                            refBench, sampleBench, "query_total_avg"
+                            refBench, sampleBench, query_attribute
                         )
                         printer.printAttribute()
                 else:

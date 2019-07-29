@@ -21,6 +21,7 @@
 #include "CardinalityEstimator.h"
 #include "ColumnFetcher.h"
 #include "EquiJoinCondition.h"
+#include "ErrorHandling.h"
 #include "ExpressionRewrite.h"
 #include "FromTableReordering.h"
 #include "InputMetadata.h"
@@ -38,7 +39,7 @@
 #include <numeric>
 
 bool g_skip_intermediate_count{true};
-
+extern bool g_enable_bump_allocator;
 namespace {
 
 bool node_is_aggregate(const RelAlgNode* ra) {
@@ -57,7 +58,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   try {
     return executeRelAlgQueryNoRetry(query_ra, co, eo, render_info);
   } catch (const QueryMustRunOnCpu&) {
-    if (g_enable_watchdog && !g_allow_cpu_retry) {
+    if (!g_allow_cpu_retry) {
       throw;
     }
   }
@@ -1460,7 +1461,6 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
   const auto join_table_or_err =
       executor_->buildHashTableForQualifier(partition_key_cond,
                                             query_infos,
-                                            ra_exe_unit,
                                             memory_level,
                                             JoinHashTableInterface::HashType::OneToMany,
                                             column_cache_map);
@@ -1740,10 +1740,12 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
 
 namespace {
 
-// Upper bound estimation for the number of groups. Not strictly correct and not
-// tight, but if the tables involved are really small we shouldn't waste time doing
-// the NDV estimation. We don't account for cross-joins and / or group by unnested
-// array, which is the reason this estimation isn't entirely reliable.
+/**
+ *  Upper bound estimation for the number of groups. Not strictly correct and not tight,
+ * but if the tables involved are really small we shouldn't waste time doing the NDV
+ * estimation. We don't account for cross-joins and / or group by unnested array, which is
+ * the reason this estimation isn't entirely reliable.
+ */
 size_t groups_approx_upper_bound(const std::vector<InputTableInfo>& table_infos) {
   CHECK(!table_infos.empty());
   const auto& first_table = table_infos.front();
@@ -1756,7 +1758,13 @@ size_t groups_approx_upper_bound(const std::vector<InputTableInfo>& table_infos)
   return std::max(max_num_groups, size_t(1));
 }
 
-bool can_use_scan_limit(const RelAlgExecutionUnit& ra_exe_unit) {
+/**
+ * Determines whether a query needs to compute the size of its output buffer. Returns true
+ * for projection queries with no LIMIT or a LIMIT that exceeds the high scan limit
+ * threshold (meaning it would be cheaper to compute the number of rows passing or use the
+ * bump allocator than allocate the current scan limit per GPU)
+ */
+bool compute_output_buffer_size(const RelAlgExecutionUnit& ra_exe_unit) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
     if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
       return false;
@@ -1875,6 +1883,13 @@ void build_render_targets(
   }
 }
 
+inline bool can_use_bump_allocator(const RelAlgExecutionUnit& ra_exe_unit,
+                                   const CompilationOptions& co,
+                                   const ExecutionOptions& eo) {
+  return g_enable_bump_allocator && (co.device_type_ == ExecutorDeviceType::GPU) &&
+         !eo.output_columnar_hint && ra_exe_unit.sort_info.order_entries.empty();
+}
+
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeWorkUnit(
@@ -1926,8 +1941,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     }
     return result;
   }
-  int32_t error_code{0};
-
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
   auto ra_exe_unit = decide_approx_count_distinct_implementation(
@@ -1939,14 +1952,19 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     max_groups_buffer_entry_guess =
         table_infos.front().info.fragments.front().getNumTuples();
     ra_exe_unit.scan_limit = max_groups_buffer_entry_guess;
-  } else if (!eo.just_explain && can_use_scan_limit(ra_exe_unit) &&
-             !isRowidLookup(work_unit)) {
+  } else if (compute_output_buffer_size(ra_exe_unit) && !isRowidLookup(work_unit)) {
     if (previous_count > 0 && !exe_unit_has_quals(ra_exe_unit)) {
       ra_exe_unit.scan_limit = static_cast<size_t>(previous_count);
     } else {
-      const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
-      if (filter_count_all >= 0) {
-        ra_exe_unit.scan_limit = std::max(filter_count_all, ssize_t(1));
+      // TODO(adb): enable bump allocator path for render queries
+      if (can_use_bump_allocator(ra_exe_unit, co, eo) && !render_info) {
+        ra_exe_unit.scan_limit = 0;
+        ra_exe_unit.use_bump_allocator = true;
+      } else if (!eo.just_explain) {
+        const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
+        if (filter_count_all >= 0) {
+          ra_exe_unit.scan_limit = std::max(filter_count_all, ssize_t(1));
+        }
       }
     }
   }
@@ -1960,7 +1978,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
 
   try {
     result = {executor_->executeWorkUnit(
-                  &error_code,
                   max_groups_buffer_entry_guess,
                   is_agg,
                   table_infos,
@@ -1978,8 +1995,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
         2 * std::min(groups_approx_upper_bound(table_infos),
                      getNDVEstimation(work_unit, is_agg, co, eo));
     CHECK_GT(max_groups_buffer_entry_guess, size_t(0));
-    result = {executor_->executeWorkUnit(&error_code,
-                                         max_groups_buffer_entry_guess,
+    result = {executor_->executeWorkUnit(max_groups_buffer_entry_guess,
                                          is_agg,
                                          table_infos,
                                          ra_exe_unit,
@@ -1991,8 +2007,18 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                                          true,
                                          column_cache),
               targets_meta};
+  } catch (const QueryExecutionError& e) {
+    handlePersistentError(e.getErrorCode());
+    return handleOutOfMemoryRetry(
+        {ra_exe_unit, work_unit.body, max_groups_buffer_entry_guess},
+        targets_meta,
+        is_agg,
+        co,
+        eo,
+        render_info,
+        e.wasMultifragKernelLaunch(),
+        queue_time_ms);
   }
-
   result.setQueueTime(queue_time_ms);
   if (render_info) {
     build_render_targets(
@@ -2004,17 +2030,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
           {}};
     }
   }
-  if (!error_code) {
-    return result;
-  }
-  handlePersistentError(error_code);
-  return handleRetry(error_code,
-                     {ra_exe_unit, work_unit.body, max_groups_buffer_entry_guess},
-                     targets_meta,
-                     is_agg,
-                     co,
-                     eo,
-                     queue_time_ms);
+  return result;
 }
 
 ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
@@ -2029,14 +2045,12 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
                                   nullptr);
   const auto count_all_exe_unit =
       create_count_all_execution_unit(work_unit.exe_unit, count);
-  int32_t error_code{0};
   size_t one{1};
   ResultSetPtr count_all_result;
   try {
     ColumnCacheMap column_cache;
     count_all_result =
-        executor_->executeWorkUnit(&error_code,
-                                   one,
+        executor_->executeWorkUnit(one,
                                    is_agg,
                                    get_table_infos(work_unit.exe_unit, executor_),
                                    count_all_exe_unit,
@@ -2047,10 +2061,8 @@ ssize_t RelAlgExecutor::getFilteredCountAll(const WorkUnit& work_unit,
                                    nullptr,
                                    false,
                                    column_cache);
-  } catch (...) {
-    return -1;
-  }
-  if (error_code) {
+  } catch (const std::exception& e) {
+    LOG(WARNING) << "Failed to run pre-flight filtered count with error " << e.what();
     return -1;
   }
   const auto count_row = count_all_result->getNextRow(false, false);
@@ -2100,15 +2112,30 @@ bool RelAlgExecutor::isRowidLookup(const WorkUnit& work_unit) {
   return false;
 }
 
-ExecutionResult RelAlgExecutor::handleRetry(
-    const int32_t error_code_in,
+ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
     const RelAlgExecutor::WorkUnit& work_unit,
     const std::vector<TargetMetaInfo>& targets_meta,
     const bool is_agg,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
+    RenderInfo* render_info,
+    const bool was_multifrag_kernel_launch,
     const int64_t queue_time_ms) {
-  auto error_code = error_code_in;
+  // Disable the bump allocator
+  // Note that this will have basically the same affect as using the bump allocator for
+  // the kernel per fragment path. Need to unify the max_groups_buffer_entry_guess = 0
+  // path and the bump allocator path for kernel per fragment execution.
+  auto ra_exe_unit_in = work_unit.exe_unit;
+  ra_exe_unit_in.use_bump_allocator = false;
+
+  auto result = ExecutionResult{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                                            co.device_type_,
+                                                            QueryMemoryDescriptor(),
+                                                            nullptr,
+                                                            executor_),
+                                {}};
+
+  const auto table_infos = get_table_infos(ra_exe_unit_in, executor_);
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   ExecutionOptions eo_no_multifrag{eo.output_columnar_hint,
                                    false,
@@ -2122,67 +2149,60 @@ ExecutionResult RelAlgExecutor::handleRetry(
                                    false,
                                    false,
                                    eo.gpu_input_mem_limit_percent};
-  ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                                     co.device_type_,
-                                                     QueryMemoryDescriptor(),
-                                                     nullptr,
-                                                     executor_),
-                         {}};
-  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-  if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
-    if (g_enable_watchdog && !g_allow_cpu_retry) {
-      throw std::runtime_error(getErrorMessageFromCode(error_code));
-    }
-    const auto ra_exe_unit = decide_approx_count_distinct_implementation(
-        work_unit.exe_unit, table_infos, executor_, co.device_type_, target_exprs_owned_);
-    ColumnCacheMap column_cache;
-    result = {executor_->executeWorkUnit(&error_code,
-                                         max_groups_buffer_entry_guess,
-                                         is_agg,
-                                         table_infos,
-                                         ra_exe_unit,
-                                         co,
-                                         eo_no_multifrag,
-                                         cat_,
-                                         executor_->row_set_mem_owner_,
-                                         nullptr,
-                                         true,
-                                         column_cache),
-              targets_meta};
-    result.setQueueTime(queue_time_ms);
-    if (!error_code) {
-      return result;
+
+  if (was_multifrag_kernel_launch) {
+    try {
+      // Attempt to retry using the kernel per fragment path. The smaller input size
+      // required may allow the entire kernel to execute in GPU memory.
+      LOG(WARNING) << "Multifrag query ran out of memory, retrying with multifragment "
+                      "kernels disabled.";
+      const auto ra_exe_unit = decide_approx_count_distinct_implementation(
+          ra_exe_unit_in, table_infos, executor_, co.device_type_, target_exprs_owned_);
+      ColumnCacheMap column_cache;
+      result = {executor_->executeWorkUnit(max_groups_buffer_entry_guess,
+                                           is_agg,
+                                           table_infos,
+                                           ra_exe_unit,
+                                           co,
+                                           eo_no_multifrag,
+                                           cat_,
+                                           executor_->row_set_mem_owner_,
+                                           nullptr,
+                                           true,
+                                           column_cache),
+                targets_meta};
+      result.setQueueTime(queue_time_ms);
+    } catch (const QueryExecutionError& e) {
+      handlePersistentError(e.getErrorCode());
+      LOG(WARNING) << "Kernel per fragment query ran out of memory, retrying on CPU.";
     }
   }
-  handlePersistentError(error_code);
-  if (co.device_type_ == ExecutorDeviceType::GPU) {
-    std::string out_of_memory{"Query ran out of GPU memory, punt to CPU"};
-    LOG(INFO) << out_of_memory;
-    if (g_enable_watchdog && !g_allow_cpu_retry) {
-      throw std::runtime_error(out_of_memory);
-    }
+
+  if (render_info) {
+    render_info->setForceNonInSituData();
   }
+
   CompilationOptions co_cpu{ExecutorDeviceType::CPU,
                             co.hoist_literals_,
                             co.opt_level_,
                             co.with_dynamic_watchdog_};
-  if (error_code) {
-    // Only reset the group buffer entry guess if we ran out of slots, which suggests a
-    // highly pathological input which prevented a good estimation of distinct tuple
-    // count.
-    if (error_code < 0) {
-      max_groups_buffer_entry_guess = 0;
-    }
-    while (true) {
-      const auto ra_exe_unit =
-          decide_approx_count_distinct_implementation(work_unit.exe_unit,
-                                                      table_infos,
-                                                      executor_,
-                                                      co_cpu.device_type_,
-                                                      target_exprs_owned_);
-      ColumnCacheMap column_cache;
-      result = {executor_->executeWorkUnit(&error_code,
-                                           max_groups_buffer_entry_guess,
+
+  // Only reset the group buffer entry guess if we ran out of slots, which
+  // suggests a
+  // highly pathological input which prevented a good estimation of distinct tuple
+  // count. For projection queries, this will force a per-fragment scan limit, which is
+  // compatible with the CPU path
+  VLOG(1) << "Resetting max groups buffer entry guess.";
+  max_groups_buffer_entry_guess = 0;
+
+  int iteration_ctr = -1;
+  while (true) {
+    iteration_ctr++;
+    auto ra_exe_unit = decide_approx_count_distinct_implementation(
+        ra_exe_unit_in, table_infos, executor_, co_cpu.device_type_, target_exprs_owned_);
+    ColumnCacheMap column_cache;
+    try {
+      result = {executor_->executeWorkUnit(max_groups_buffer_entry_guess,
                                            is_agg,
                                            table_infos,
                                            ra_exe_unit,
@@ -2194,39 +2214,58 @@ ExecutionResult RelAlgExecutor::handleRetry(
                                            true,
                                            column_cache),
                 targets_meta};
-      result.setQueueTime(queue_time_ms);
-      if (!error_code) {
-        return result;
+    } catch (const QueryExecutionError& e) {
+      // Ran out of slots
+      if (e.getErrorCode() < 0) {
+        // Even the conservative guess failed; it should only happen when we group
+        // by a huge cardinality array. Maybe we should throw an exception instead?
+        // Such a heavy query is entirely capable of exhausting all the host memory.
+        CHECK(max_groups_buffer_entry_guess);
+        // Only allow two iterations of increasingly large entry guesses up to a maximum
+        // of 512MB per column per kernel
+        if (g_enable_watchdog || iteration_ctr > 1) {
+          throw std::runtime_error("Query ran out of output slots in the result");
+        }
+        max_groups_buffer_entry_guess *= 2;
+        LOG(WARNING) << "Query ran out of slots in the output buffer, retrying with max "
+                        "groups buffer entry "
+                        "guess equal to "
+                     << max_groups_buffer_entry_guess;
+      } else {
+        handlePersistentError(e.getErrorCode());
       }
-      handlePersistentError(error_code);
-      // Even the conservative guess failed; it should only happen when we group
-      // by a huge cardinality array. Maybe we should throw an exception instead?
-      // Such a heavy query is entirely capable of exhausting all the host memory.
-      CHECK(max_groups_buffer_entry_guess);
-      if (g_enable_watchdog) {
-        throw std::runtime_error("Query ran out of output slots in the result");
-      }
-      max_groups_buffer_entry_guess *= 2;
+      continue;
     }
+    result.setQueueTime(queue_time_ms);
+    return result;
   }
   return result;
 }
 
 void RelAlgExecutor::handlePersistentError(const int32_t error_code) {
+  LOG(ERROR) << "Query execution failed with error "
+             << getErrorMessageFromCode(error_code);
   if (error_code == Executor::ERR_SPECULATIVE_TOP_OOM) {
     throw SpeculativeTopNFailed();
   }
-  if (error_code == Executor::ERR_OUT_OF_GPU_MEM &&
-      (!g_enable_watchdog || g_allow_cpu_retry)) {
+  if (error_code == Executor::ERR_OUT_OF_GPU_MEM) {
     // We ran out of GPU memory, this doesn't count as an error if the query is
-    // allowed to continue on CPU because either the watchdog is disabled or
-    // retry on CPU is explicitly allowed through --allow-cpu-retry.
+    // allowed to continue on CPU because retry on CPU is explicitly allowed through
+    // --allow-cpu-retry.
+    LOG(INFO) << "Query ran out of GPU memory, attempting punt to CPU";
+    if (!g_allow_cpu_retry) {
+      throw std::runtime_error(
+          "Query ran out of GPU memory, unable to automatically retry on CPU");
+    }
     return;
   }
   throw std::runtime_error(getErrorMessageFromCode(error_code));
 }
 
 std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {
+  if (error_code < 0) {
+    return "Ran out of slots in the query output buffer";
+  }
   switch (error_code) {
     case Executor::ERR_DIV_BY_ZERO:
       return "Division by zero";
@@ -2519,6 +2558,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
                                         nullptr,
                                         sort_info,
                                         0,
+                                        false,
                                         query_features};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
@@ -2594,6 +2634,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                         nullptr,
                                         sort_info,
                                         0,
+                                        false,
                                         query_features};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
@@ -2843,6 +2884,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
            nullptr,
            sort_info,
            0,
+           false,
            query_features},
           aggregate,
           max_groups_buffer_entry_default_guess,
@@ -2923,6 +2965,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
            nullptr,
            sort_info,
            0,
+           false,
            query_features},
           project,
           max_groups_buffer_entry_default_guess,
@@ -2989,6 +3032,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
                                         nullptr,
                                         sort_info,
                                         0,
+                                        false,
                                         query_features};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);

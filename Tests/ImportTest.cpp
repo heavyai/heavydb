@@ -694,7 +694,19 @@ TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
     }
     const auto date_arr2 = boost::get<ArrayTargetValue>(&crt_row[2]);
     CHECK(date_arr2);
-    // TODO: Check !date_arr2->is_initialized() too if NULL fixlen arrays are allowed
+    if (i == 9) {
+      // Fixlen array - not NULL, filled with NULLs
+      CHECK(date_arr2->is_initialized());
+      const auto& vec = date_arr2->get();
+      for (size_t k = 0; k < vec.size(); k++) {
+        const auto date = v<int64_t>(vec[k]);
+        const auto date_str = convert_date_to_string(static_cast<int64_t>(date));
+        ASSERT_EQ("NULL", date_str);
+      }
+    } else {
+      // NULL fixlen array
+      CHECK(!date_arr2->is_initialized());
+    }
   }
 }
 
@@ -1427,7 +1439,7 @@ int main(int argc, char** argv) {
 
   desc.add_options()(
       "test-help",
-      "Print all ExecuteTest specific options (for gtest options use `--help`).");
+      "Print all ImportTest specific options (for gtest options use `--help`).");
 
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
@@ -1438,7 +1450,7 @@ int main(int argc, char** argv) {
   po::notify(vm);
 
   if (vm.count("test-help")) {
-    std::cout << "Usage: ExecuteTest" << std::endl << std::endl;
+    std::cout << "Usage: ImportTest" << std::endl << std::endl;
     std::cout << desc << std::endl;
     return 0;
   }

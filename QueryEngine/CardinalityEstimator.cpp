@@ -15,6 +15,7 @@
  */
 
 #include "CardinalityEstimator.h"
+#include "ErrorHandling.h"
 #include "ExpressionRewrite.h"
 #include "RelAlgExecutor.h"
 
@@ -37,36 +38,37 @@ size_t RelAlgExecutor::getNDVEstimation(const WorkUnit& work_unit,
                                         const CompilationOptions& co,
                                         const ExecutionOptions& eo) {
   const auto estimator_exe_unit = create_ndv_execution_unit(work_unit.exe_unit);
-  int32_t error_code{0};
   size_t one{1};
   ColumnCacheMap column_cache;
-  const auto estimator_result =
-      executor_->executeWorkUnit(&error_code,
-                                 one,
-                                 is_agg,
-                                 get_table_infos(work_unit.exe_unit, executor_),
-                                 estimator_exe_unit,
-                                 co,
-                                 eo,
-                                 cat_,
-                                 executor_->row_set_mem_owner_,
-                                 nullptr,
-                                 false,
-                                 column_cache);
-  if (error_code == Executor::ERR_OUT_OF_TIME) {
-    throw std::runtime_error("Cardinality estimation query ran out of time");
-  }
-  if (error_code == Executor::ERR_INTERRUPTED) {
-    throw std::runtime_error("Cardinality estimation query has been interrupted");
-  }
-  if (error_code) {
+  try {
+    const auto estimator_result =
+        executor_->executeWorkUnit(one,
+                                   is_agg,
+                                   get_table_infos(work_unit.exe_unit, executor_),
+                                   estimator_exe_unit,
+                                   co,
+                                   eo,
+                                   cat_,
+                                   executor_->row_set_mem_owner_,
+                                   nullptr,
+                                   false,
+                                   column_cache);
+    if (!estimator_result) {
+      return 1;
+    }
+    return std::max(estimator_result->getNDVEstimator(), size_t(1));
+  } catch (const QueryExecutionError& e) {
+    if (e.getErrorCode() == Executor::ERR_OUT_OF_TIME) {
+      throw std::runtime_error("Cardinality estimation query ran out of time");
+    }
+    if (e.getErrorCode() == Executor::ERR_INTERRUPTED) {
+      throw std::runtime_error("Cardinality estimation query has been interrupted");
+    }
     throw std::runtime_error("Failed to run the cardinality estimation query: " +
-                             getErrorMessageFromCode(error_code));
+                             getErrorMessageFromCode(e.getErrorCode()));
   }
-  if (!estimator_result) {
-    return 1;
-  }
-  return std::max(estimator_result->getNDVEstimator(), size_t(1));
+  UNREACHABLE();
+  return 1;
 }
 
 RelAlgExecutionUnit create_ndv_execution_unit(const RelAlgExecutionUnit& ra_exe_unit) {

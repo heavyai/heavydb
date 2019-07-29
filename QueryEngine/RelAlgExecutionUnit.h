@@ -69,6 +69,7 @@ struct RelAlgExecutionUnit {
   const std::shared_ptr<Analyzer::Estimator> estimator;
   const SortInfo sort_info;
   size_t scan_limit;
+  bool use_bump_allocator{false};
   QueryFeatureDescriptor query_features;
 };
 

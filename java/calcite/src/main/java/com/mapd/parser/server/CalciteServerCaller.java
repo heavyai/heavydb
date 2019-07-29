@@ -37,7 +37,8 @@ import java.nio.file.Paths;
 import java.util.Properties;
 
 public class CalciteServerCaller {
-  private SockTransportProperties skT = null;
+  private SockTransportProperties client_skT = null;
+  private SockTransportProperties server_skT = null;
   private final static Logger MAPDLOGGER =
           LoggerFactory.getLogger(CalciteServerCaller.class);
   private CommandLine cmd = null;
@@ -67,6 +68,15 @@ public class CalciteServerCaller {
                                       .desc("SSL_trust_password")
                                       .longOpt("trust_store_pw")
                                       .build();
+
+    Option ssl_keystore =
+            Option.builder("Y").hasArg().desc("SSL keystore").longOpt("keystore").build();
+
+    Option ssl_keystore_password = Option.builder("Z")
+                                           .hasArg()
+                                           .desc("SSL keystore password")
+                                           .longOpt("keystore_password")
+                                           .build();
 
     Option mapdPort = Option.builder("m")
                               .hasArg()
@@ -99,6 +109,8 @@ public class CalciteServerCaller {
     options.addOption(mapdPort);
     options.addOption(ssl_trust_store);
     options.addOption(ssl_trust_passwd);
+    options.addOption(ssl_keystore);
+    options.addOption(ssl_keystore_password);
     options.addOption(udf_file);
 
     CommandLineParser parser = new DefaultParser();
@@ -117,6 +129,8 @@ public class CalciteServerCaller {
     String extensionsDir = cmd.getOptionValue("extensions", "build/QueryEngine");
     String trust_store = cmd.getOptionValue("trust_store", "");
     String trust_store_pw = cmd.getOptionValue("trust_store_pw", "");
+    String key_store = cmd.getOptionValue("keystore", "");
+    String key_store_pw = cmd.getOptionValue("keystore_password", "");
     String udfName = cmd.getOptionValue("udf", "");
 
     final Path extensionFunctionsAstFile =
@@ -135,14 +149,24 @@ public class CalciteServerCaller {
 
     try {
       if (trust_store == null || trust_store.isEmpty()) {
-        boolean load_trust_store = false;
-        skT = new SockTransportProperties(load_trust_store);
+        client_skT = SockTransportProperties.getUnencryptedClient();
+        // client_skT = new SockTransportProperties(load_trust_store);
       } else {
-        skT = new SockTransportProperties(trust_store, trust_store_pw);
+        client_skT = SockTransportProperties.getEncryptedClientSpecifiedTrustStore(
+                trust_store, trust_store_pw);
+      }
+
+      if (key_store != null && !key_store.isEmpty()) {
+        // If suppled a key store load a server transport, otherwise server_skT can stay
+        // as null
+        server_skT = SockTransportProperties.getEncryptedServer(key_store, key_store_pw);
+      } else {
+        server_skT = SockTransportProperties.getUnecryptedServer();
       }
     } catch (Exception ex) {
       MAPDLOGGER.error(
               "Supplied java trust stored could not be opened " + ex.getMessage());
+      exit(0);
     }
 
     Path udfPath;
@@ -159,7 +183,8 @@ public class CalciteServerCaller {
             mapdPortNum,
             dataDir,
             extensionFunctionsAstFile.toString(),
-            skT,
+            client_skT,
+            server_skT,
             udfName);
 
     while (true) {
