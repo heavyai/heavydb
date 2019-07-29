@@ -5169,34 +5169,6 @@ void MapDHandler::execute_distributed_copy_statement(
   copy_stmt->execute(session_info, importer_factory);
 }
 
-Planner::RootPlan* MapDHandler::parse_to_plan(
-    const std::string& query_str,
-    const Catalog_Namespace::SessionInfo& session_info) {
-  auto& cat = session_info.getCatalog();
-  ParserWrapper pw{query_str};
-  // if this is a calcite select or explain select run in calcite
-  if (!pw.is_ddl && !pw.is_update_dml &&
-      !(pw.getExplainType() == ParserWrapper::ExplainType::Other)) {
-    const std::string actual_query{pw.isSelectExplain() ? pw.actual_query : query_str};
-    const auto query_ra =
-        calcite_
-            ->process(session_info,
-                      legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                      {},
-                      legacy_syntax_,
-                      pw.isCalciteExplain(),
-                      mapd_parameters_.enable_calcite_view_optimize)
-            .plan_result;
-    auto root_plan = translate_query(query_ra, cat);
-    CHECK(root_plan);
-    if (pw.isSelectExplain()) {
-      root_plan->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
-    }
-    return root_plan;
-  }
-  return nullptr;
-}
-
 std::string MapDHandler::parse_to_ra(
     const std::string& query_str,
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,

@@ -638,8 +638,6 @@ class MapDHandler : public MapDIf {
                                    const std::vector<std::string>& visible_tables,
                                    const std::string& sql,
                                    const int cursor);
-  Planner::RootPlan* parse_to_plan(const std::string& query_str,
-                                   const Catalog_Namespace::SessionInfo& session_info);
   Planner::RootPlan* parse_to_plan_legacy(
       const std::string& query_str,
       const Catalog_Namespace::SessionInfo& session_info,
