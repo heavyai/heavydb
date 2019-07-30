@@ -1974,26 +1974,15 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                                                      executor_),
                          {}};
 
-  try {
-    result = {executor_->executeWorkUnit(
-                  max_groups_buffer_entry_guess,
-                  is_agg,
-                  table_infos,
-                  ra_exe_unit,
-                  co,
-                  eo,
-                  cat_,
-                  executor_->row_set_mem_owner_,
-                  render_info,
-                  groups_approx_upper_bound(table_infos) <= g_big_group_threshold,
-                  column_cache),
-              targets_meta};
-  } catch (const CardinalityEstimationRequired&) {
-    max_groups_buffer_entry_guess =
-        2 * std::min(groups_approx_upper_bound(table_infos),
-                     getNDVEstimation(work_unit, is_agg, co, eo));
-    CHECK_GT(max_groups_buffer_entry_guess, size_t(0));
-    result = {executor_->executeWorkUnit(max_groups_buffer_entry_guess,
+  auto execute_and_handle_errors =
+      [&](const auto max_groups_buffer_entry_guess_in,
+          const bool has_cardinality_estimation) -> ExecutionResult {
+    // Note that the groups buffer entry guess may be modified during query execution.
+    // Create a local copy so we can track those changes if we need to attempt a retry due
+    // to OOM
+    auto local_groups_buffer_entry_guess = max_groups_buffer_entry_guess_in;
+    try {
+      return {executor_->executeWorkUnit(local_groups_buffer_entry_guess,
                                          is_agg,
                                          table_infos,
                                          ra_exe_unit,
@@ -2002,21 +1991,35 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
                                          cat_,
                                          executor_->row_set_mem_owner_,
                                          render_info,
-                                         true,
+                                         has_cardinality_estimation,
                                          column_cache),
               targets_meta};
-  } catch (const QueryExecutionError& e) {
-    handlePersistentError(e.getErrorCode());
-    return handleOutOfMemoryRetry(
-        {ra_exe_unit, work_unit.body, max_groups_buffer_entry_guess},
-        targets_meta,
-        is_agg,
-        co,
-        eo,
-        render_info,
-        e.wasMultifragKernelLaunch(),
-        queue_time_ms);
+    } catch (const QueryExecutionError& e) {
+      handlePersistentError(e.getErrorCode());
+      return handleOutOfMemoryRetry(
+          {ra_exe_unit, work_unit.body, local_groups_buffer_entry_guess},
+          targets_meta,
+          is_agg,
+          co,
+          eo,
+          render_info,
+          e.wasMultifragKernelLaunch(),
+          queue_time_ms);
+    }
+  };
+
+  try {
+    result = execute_and_handle_errors(
+        max_groups_buffer_entry_guess,
+        groups_approx_upper_bound(table_infos) <= g_big_group_threshold);
+  } catch (const CardinalityEstimationRequired&) {
+    const auto estimated_groups_buffer_entry_guess =
+        2 * std::min(groups_approx_upper_bound(table_infos),
+                     getNDVEstimation(work_unit, is_agg, co, eo));
+    CHECK_GT(estimated_groups_buffer_entry_guess, size_t(0));
+    result = execute_and_handle_errors(estimated_groups_buffer_entry_guess, true);
   }
+
   result.setQueueTime(queue_time_ms);
   if (render_info) {
     build_render_targets(
