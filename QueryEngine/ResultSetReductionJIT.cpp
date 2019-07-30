@@ -18,6 +18,7 @@
 #include "ResultSet.h"
 
 #include "CodeGenerator.h"
+#include "DynamicWatchdog.h"
 #include "IRCodegenUtils.h"
 #include "LLVMFunctionAttributesUtil.h"
 #include "LLVMGlobalContext.h"
@@ -38,6 +39,7 @@ bool g_reduction_jit_interp{false};
 namespace {
 
 thread_local CodeCache g_code_cache(10000);
+const int32_t WATCHDOG_ERROR{-1};
 
 std::unique_ptr<llvm::Module> runtime_module_shallow_copy(llvm::LLVMContext& context,
                                                           CgenState* cgen_state) {
@@ -319,7 +321,7 @@ llvm::Function* setup_reduce_loop(const CgenState* cgen_state) {
   const auto pi8_type = llvm::PointerType::get(get_int_type(8, ctx), 0);
   const auto i32_type = get_int_type(32, ctx);
   const auto pvoid_type = llvm::PointerType::get(llvm::Type::getVoidTy(ctx), 0);
-  const auto func_type = llvm::FunctionType::get(llvm::Type::getVoidTy(ctx),
+  const auto func_type = llvm::FunctionType::get(i32_type,
                                                  {pi8_type,
                                                   pi8_type,
                                                   i32_type,
@@ -389,14 +391,19 @@ bool is_group_query(const QueryDescriptionType hash_type) {
 
 void return_early(llvm::Value* cond,
                   const ReductionCode& reduction_code,
-                  llvm::Function* func) {
+                  llvm::Function* func,
+                  int error_code) {
   auto cgen_state = reduction_code.cgen_state.get();
   auto& ctx = cgen_state->context_;
   const auto early_return = llvm::BasicBlock::Create(ctx, ".early_return", func, 0);
   const auto do_reduction = llvm::BasicBlock::Create(ctx, ".do_reduction", func, 0);
   cgen_state->ir_builder_.CreateCondBr(cond, early_return, do_reduction);
   cgen_state->ir_builder_.SetInsertPoint(early_return);
-  cgen_state->ir_builder_.CreateRetVoid();
+  if (func->getReturnType()->isVoidTy()) {
+    cgen_state->ir_builder_.CreateRetVoid();
+  } else {
+    cgen_state->ir_builder_.CreateRet(cgen_state->llInt<int32_t>(error_code));
+  }
   cgen_state->ir_builder_.SetInsertPoint(do_reduction);
 }
 
@@ -482,6 +489,14 @@ extern "C" void get_group_value_reduction_rt(int8_t* groups_buffer,
                                              row_size_bytes >> 3);
   *buff_out = gvi.first;
   *empty = gvi.second;
+}
+
+extern "C" uint8_t check_watchdog_rt(const size_t sample_seed) {
+  if (UNLIKELY(g_enable_dynamic_watchdog && (sample_seed & 0x3F) == 0 &&
+               dynamic_watchdog())) {
+    return true;
+  }
+  return false;
 }
 
 ReductionCode ResultSetStorage::reduceOneEntryJIT(const ResultSetStorage& that) const {
@@ -573,7 +588,8 @@ void ResultSetStorage::reduceOneEntryNoCollisionsJIT(
   const auto that_row_ptr = &*(arg_it + 1);
   const auto that_is_empty = cgen_state->ir_builder_.CreateCall(
       reduction_code.ir_is_empty_func, that_row_ptr, "that_is_empty");
-  return_early(that_is_empty, reduction_code, reduction_code.ir_reduce_func);
+  return_early(
+      that_is_empty, reduction_code, reduction_code.ir_reduce_func, WATCHDOG_ERROR);
 
   const auto key_bytes = get_key_bytes_rowwise(query_mem_desc_);
   if (key_bytes) {  // copy the key from right hand side
@@ -793,7 +809,8 @@ void ResultSetStorage::reduceOneEntryBaselineIdxJIT(
       cgen_state->ir_builder_.CreateGEP(that_buff, that_row_off_in_bytes, "that_row_ptr");
   const auto that_is_empty = cgen_state->ir_builder_.CreateCall(
       reduction_code.ir_is_empty_func, that_row_ptr, "that_is_empty");
-  return_early(that_is_empty, reduction_code, reduction_code.ir_reduce_func_idx);
+  return_early(
+      that_is_empty, reduction_code, reduction_code.ir_reduce_func_idx, WATCHDOG_ERROR);
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   const auto pi64_type = llvm::Type::getInt64PtrTy(cgen_state->context_);
   const auto bool_type = llvm::Type::getInt8Ty(cgen_state->context_);
@@ -819,7 +836,8 @@ void ResultSetStorage::reduceOneEntryBaselineIdxJIT(
       cgen_state->ir_builder_.CreateLoad(this_is_empty_ptr, "this_is_empty");
   this_is_empty = cgen_state->ir_builder_.CreateTrunc(
       this_is_empty, get_int_type(1, ctx), "this_is_empty_bool");
-  return_early(this_is_empty, reduction_code, reduction_code.ir_reduce_func_idx);
+  return_early(
+      this_is_empty, reduction_code, reduction_code.ir_reduce_func_idx, WATCHDOG_ERROR);
   const auto pi8_type = llvm::Type::getInt8PtrTy(cgen_state->context_);
   const auto key_qw_count = get_slot_off_quad(query_mem_desc_);
   const auto this_targets_ptr = cgen_state->ir_builder_.CreateBitCast(
@@ -860,7 +878,7 @@ void ResultSetStorage::reduceLoopJIT(const ReductionCode& reduction_code) const 
   const auto bb_exit =
       llvm::BasicBlock::Create(ctx, ".exit", reduction_code.ir_reduce_loop);
   cgen_state->ir_builder_.SetInsertPoint(bb_exit);
-  cgen_state->ir_builder_.CreateRetVoid();
+  cgen_state->ir_builder_.CreateRet(cgen_state->llInt<int32_t>(0));
   JoinLoop join_loop(
       JoinLoopKind::UpperBound,
       JoinType::INNER,
@@ -893,6 +911,16 @@ void ResultSetStorage::reduceLoopJIT(const ReductionCode& reduction_code) const 
             iterators.back(), get_int_type(32, ctx), "relative_entry_idx");
         const auto that_entry_idx =
             ir_builder.CreateAdd(loop_iter, start_index_arg, "that_entry_idx");
+        const auto watchdog_sample_seed =
+            ir_builder.CreateSExt(that_entry_idx, get_int_type(64, ctx));
+        const auto watchdog_triggered = cgen_state->emitExternalCall(
+            "check_watchdog_rt", get_int_type(8, ctx), {watchdog_sample_seed});
+        const auto watchdog_triggered_bool = cgen_state->ir_builder_.CreateICmpNE(
+            watchdog_triggered, cgen_state->llInt<int8_t>(0));
+        return_early(watchdog_triggered_bool,
+                     reduction_code,
+                     reduction_code.ir_reduce_loop,
+                     WATCHDOG_ERROR);
         ir_builder.CreateCall(reduction_code.ir_reduce_func_idx,
                               {this_buff_arg,
                                that_buff_arg,

@@ -138,15 +138,16 @@ void run_reduction_code(const ReductionCode& reduction_code,
                         const void* this_qmd,
                         const void* that_qmd,
                         const void* serialized_varlen_buffer) {
+  int err = 0;
   if (reduction_code.func_ptr) {
-    reduction_code.func_ptr(this_buff,
-                            that_buff,
-                            start_entry_idx,
-                            end_entry_idx,
-                            that_entry_count,
-                            this_qmd,
-                            that_qmd,
-                            serialized_varlen_buffer);
+    err = reduction_code.func_ptr(this_buff,
+                                  that_buff,
+                                  start_entry_idx,
+                                  end_entry_idx,
+                                  that_entry_count,
+                                  this_qmd,
+                                  that_qmd,
+                                  serialized_varlen_buffer);
   } else {
     static std::mutex s_interp_lock;
     std::lock_guard<std::mutex> s_interp_guard(s_interp_lock);
@@ -156,7 +157,7 @@ void run_reduction_code(const ReductionCode& reduction_code,
     end_entry_idx_gv.IntVal = llvm::APInt(32, end_entry_idx);
     auto that_entry_count_gv = llvm::GenericValue();
     that_entry_count_gv.IntVal = llvm::APInt(32, that_entry_count);
-    reduction_code.execution_engine->runFunction(
+    const auto ret = reduction_code.execution_engine->runFunction(
         reduction_code.ir_reduce_loop,
         {llvm::GenericValue(this_buff),
          llvm::GenericValue(const_cast<int8_t*>(that_buff)),
@@ -166,6 +167,12 @@ void run_reduction_code(const ReductionCode& reduction_code,
          llvm::GenericValue(const_cast<void*>(this_qmd)),
          llvm::GenericValue(const_cast<void*>(that_qmd)),
          llvm::GenericValue(const_cast<void*>(serialized_varlen_buffer))});
+    err = ret.IntVal.getSExtValue();
+  }
+  if (err) {
+    throw std::runtime_error(
+        "Query execution has exceeded the time limit or was interrupted during result "
+        "set reduction");
   }
 }
 
