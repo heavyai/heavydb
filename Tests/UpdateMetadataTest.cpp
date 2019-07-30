@@ -744,6 +744,57 @@ TEST_F(MetadataUpdate, MetadataTinyIntNotNull) {
   });
 }
 
+TEST_F(MetadataUpdate, MetadataAddColumnWithDeletes) {
+  if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
+    return;
+  }
+
+  make_table_cycler("numbers", "int")([&] {
+    query("insert into numbers values (1);");
+    query("insert into numbers values (2);");
+    query("insert into numbers values (3);");
+    query("insert into numbers values (4);");
+
+    {
+      auto result =
+          run_multiple_agg("select count(*) from numbers", ExecutorDeviceType::CPU);
+      const auto row = result->getNextRow(false, false);
+      ASSERT_EQ(row.size(), size_t(1));
+      ASSERT_EQ(TestHelpers::v<int64_t>(row[0]), int64_t(4));
+    }
+
+    query("delete from numbers where x > 2;");
+
+    {
+      auto result =
+          run_multiple_agg("select count(*) from numbers", ExecutorDeviceType::CPU);
+      const auto row = result->getNextRow(false, false);
+      ASSERT_EQ(row.size(), size_t(1));
+      ASSERT_EQ(TestHelpers::v<int64_t>(row[0]), int64_t(2));
+    }
+
+    auto pre_metadata = get_metadata_vec("numbers", "$deleted$");
+    ASSERT_EQ(pre_metadata.size(), 1U);
+    auto pre_metadata_chunk = pre_metadata[0].second;
+
+    ASSERT_EQ(pre_metadata_chunk.numElements, 4U);
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.min.tinyintval, int8_t(0));
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.max.tinyintval, int8_t(1));
+    ASSERT_EQ(pre_metadata_chunk.chunkStats.has_nulls, false);
+
+    run_ddl_statement("alter table numbers add column zebra int;");
+
+    auto post_metadata = get_metadata_vec("numbers", "$deleted$");
+    ASSERT_EQ(post_metadata.size(), 1U);
+    auto post_metadata_chunk = post_metadata[0].second;
+
+    ASSERT_EQ(post_metadata_chunk.numElements, 4U);
+    ASSERT_EQ(post_metadata_chunk.chunkStats.min.tinyintval, int8_t(0));
+    ASSERT_EQ(post_metadata_chunk.chunkStats.max.tinyintval, int8_t(1));
+    ASSERT_EQ(post_metadata_chunk.chunkStats.has_nulls, false);
+  });
+}
+
 TEST_F(MetadataUpdate, MetadataSmallIntNull) {
   if (!is_feature_enabled<CalciteUpdatePathSelector>()) {
     return;
