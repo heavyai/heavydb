@@ -150,31 +150,43 @@ class RexDeepCopyVisitor : public RexVisitorBase<std::unique_ptr<const RexScalar
   RetType visitRef(const RexRef* ref) const override { return ref->deepCopy(); }
 
   RetType visitOperator(const RexOperator* rex_operator) const override {
+    const auto rex_window_function_operator =
+        dynamic_cast<const RexWindowFunctionOperator*>(rex_operator);
+    if (rex_window_function_operator) {
+      return visitWindowFunctionOperator(rex_window_function_operator);
+    }
+
     const size_t operand_count = rex_operator->size();
     std::vector<RetType> new_opnds;
     for (size_t i = 0; i < operand_count; ++i) {
       new_opnds.push_back(visit(rex_operator->getOperand(i)));
     }
-    const auto rex_window_function_operator =
-        dynamic_cast<const RexWindowFunctionOperator*>(rex_operator);
-    if (rex_window_function_operator) {
-      const auto& partition_keys = rex_window_function_operator->getPartitionKeys();
-      std::vector<std::unique_ptr<const RexScalar>> disambiguated_partition_keys;
-      for (const auto& partition_key : partition_keys) {
-        disambiguated_partition_keys.emplace_back(visit(partition_key.get()));
-      }
-      std::vector<std::unique_ptr<const RexScalar>> disambiguated_order_keys;
-      const auto& order_keys = rex_window_function_operator->getOrderKeys();
-      for (const auto& order_key : order_keys) {
-        disambiguated_order_keys.emplace_back(visit(order_key.get()));
-      }
-      return rex_window_function_operator->disambiguatedOperands(
-          new_opnds,
-          disambiguated_partition_keys,
-          disambiguated_order_keys,
-          rex_window_function_operator->getCollation());
-    }
     return rex_operator->getDisambiguated(new_opnds);
+  }
+
+  RetType visitWindowFunctionOperator(
+      const RexWindowFunctionOperator* rex_window_function_operator) const {
+    const size_t operand_count = rex_window_function_operator->size();
+    std::vector<RetType> new_opnds;
+    for (size_t i = 0; i < operand_count; ++i) {
+      new_opnds.push_back(visit(rex_window_function_operator->getOperand(i)));
+    }
+
+    const auto& partition_keys = rex_window_function_operator->getPartitionKeys();
+    std::vector<std::unique_ptr<const RexScalar>> disambiguated_partition_keys;
+    for (const auto& partition_key : partition_keys) {
+      disambiguated_partition_keys.emplace_back(visit(partition_key.get()));
+    }
+    std::vector<std::unique_ptr<const RexScalar>> disambiguated_order_keys;
+    const auto& order_keys = rex_window_function_operator->getOrderKeys();
+    for (const auto& order_key : order_keys) {
+      disambiguated_order_keys.emplace_back(visit(order_key.get()));
+    }
+    return rex_window_function_operator->disambiguatedOperands(
+        new_opnds,
+        disambiguated_partition_keys,
+        disambiguated_order_keys,
+        rex_window_function_operator->getCollation());
   }
 
   RetType visitCase(const RexCase* rex_case) const override {

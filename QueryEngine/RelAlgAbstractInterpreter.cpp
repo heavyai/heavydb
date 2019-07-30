@@ -1227,9 +1227,58 @@ class CoalesceSecondaryProjectVisitor : public RexVisitor<bool> {
   bool defaultResult() const final { return true; }
 };
 
+// Detect the window function SUM pattern: CASE WHEN COUNT() > 0 THEN SUM ELSE 0
+bool is_window_function_sum(const RexScalar* rex) {
+  const auto case_operator = dynamic_cast<const RexCase*>(rex);
+  if (case_operator && case_operator->branchCount() == 1) {
+    const auto then_window =
+        dynamic_cast<const RexWindowFunctionOperator*>(case_operator->getThen(0));
+    if (then_window && then_window->getKind() == SqlWindowFunctionKind::SUM_INTERNAL) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Detect both window function operators and window function operators embedded in case
+// statements (for null handling)
+bool is_window_function_operator(const RexScalar* rex) {
+  if (dynamic_cast<const RexWindowFunctionOperator*>(rex)) {
+    return true;
+  }
+
+  // unwrap from casts, if they exist
+  const auto rex_cast = dynamic_cast<const RexOperator*>(rex);
+  if (rex_cast && rex_cast->getOperator() == kCAST) {
+    CHECK_EQ(rex_cast->size(), size_t(1));
+    return is_window_function_operator(rex_cast->getOperand(0));
+  }
+
+  if (is_window_function_sum(rex)) {
+    return true;
+  }
+  // Check for Window Function AVG:
+  // (CASE WHEN count > 0 THEN sum ELSE 0) / COUNT
+  const RexOperator* divide_operator = dynamic_cast<const RexOperator*>(rex);
+  if (divide_operator && divide_operator->getOperator() == kDIVIDE) {
+    CHECK_EQ(divide_operator->size(), size_t(2));
+    const auto case_operator =
+        dynamic_cast<const RexCase*>(divide_operator->getOperand(0));
+    const auto second_window =
+        dynamic_cast<const RexWindowFunctionOperator*>(divide_operator->getOperand(1));
+    if (case_operator && second_window &&
+        second_window->getKind() == SqlWindowFunctionKind::COUNT) {
+      if (is_window_function_sum(case_operator)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 inline bool project_has_window_function_input(const RelProject* ra_project) {
   for (size_t i = 0; i < ra_project->size(); i++) {
-    if (dynamic_cast<const RexWindowFunctionOperator*>(ra_project->getProjectAt(i))) {
+    if (is_window_function_operator(ra_project->getProjectAt(i))) {
       return true;
     }
   }
@@ -1338,6 +1387,301 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
   }
 }
 
+/**
+ * WindowFunctionDetectionVisitor detects the presence of embedded Window Function Rex
+ * Operators and returns a pointer to the WindowFunctionOperator. Only the first detected
+ * operator will be returned (e.g. a binary operator that is WindowFunc1 & WindowFunc2
+ * would return a pointer to WindowFunc1). Neither the window function operator nor its
+ * parent expression are modified.
+ */
+class WindowFunctionDetectionVisitor : public RexVisitor<const RexScalar*> {
+ protected:
+  // Detect embedded window function expressions in operators
+  const RexScalar* visitOperator(const RexOperator* rex_operator) const final {
+    if (is_window_function_operator(rex_operator)) {
+      return rex_operator;
+    }
+
+    const size_t operand_count = rex_operator->size();
+    for (size_t i = 0; i < operand_count; ++i) {
+      const auto operand = rex_operator->getOperand(i);
+      if (is_window_function_operator(operand)) {
+        // Handle both RexWindowFunctionOperators and window functions built up from
+        // multiple RexScalar objects (e.g. AVG)
+        return operand;
+      }
+      const auto operandResult = visit(operand);
+      if (operandResult) {
+        return operandResult;
+      }
+    }
+
+    return defaultResult();
+  }
+
+  // Detect embedded window function expressions in case statements. Note that this may
+  // manifest as a nested case statement inside a top level case statement, as some window
+  // functions (sum, avg) are represented as a case statement. Use the
+  // is_window_function_operator helper to detect complete window function expressions.
+  const RexScalar* visitCase(const RexCase* rex_case) const final {
+    if (is_window_function_operator(rex_case)) {
+      return rex_case;
+    }
+
+    auto result = defaultResult();
+    for (size_t i = 0; i < rex_case->branchCount(); ++i) {
+      const auto when = rex_case->getWhen(i);
+      result = is_window_function_operator(when) ? when : visit(when);
+      if (result) {
+        return result;
+      }
+      const auto then = rex_case->getThen(i);
+      result = is_window_function_operator(then) ? then : visit(then);
+      if (result) {
+        return result;
+      }
+    }
+    if (rex_case->getElse()) {
+      auto else_expr = rex_case->getElse();
+      result = is_window_function_operator(else_expr) ? else_expr : visit(else_expr);
+    }
+    return result;
+  }
+
+  const RexScalar* aggregateResult(const RexScalar* const& aggregate,
+                                   const RexScalar* const& next_result) const final {
+    // all methods calling aggregate result should be overriden
+    UNREACHABLE();
+    return nullptr;
+  }
+
+  const RexScalar* defaultResult() const final { return nullptr; }
+};
+
+/** Replaces the first occurrence of a WindowFunctionOperator rex with the provided
+ * `replacement_rex`. Typically used for splitting a complex rex into two simpler
+ * rexes, and forwarding one of the rexes to a later node. The forwarded rex
+ * is then replaced with a RexInput using this visitor.
+ * Note that for window function replacement, the overloads in this visitor must match the
+ * overloads in the detection visitor above, to ensure a detected window function
+ * expression is properly replaced.
+ */
+class RexWindowFuncReplacementVisitor : public RexDeepCopyVisitor {
+ public:
+  RexWindowFuncReplacementVisitor(std::unique_ptr<const RexScalar> replacement_rex)
+      : replacement_rex_(std::move(replacement_rex)) {}
+
+  ~RexWindowFuncReplacementVisitor() { CHECK(replacement_rex_ == nullptr); }
+
+ protected:
+  RetType visitOperator(const RexOperator* rex_operator) const final {
+    if (should_replace_operand(rex_operator)) {
+      return std::move(replacement_rex_);
+    }
+
+    const auto rex_window_function_operator =
+        dynamic_cast<const RexWindowFunctionOperator*>(rex_operator);
+    if (rex_window_function_operator) {
+      // Deep copy the embedded window function operator
+      return visitWindowFunctionOperator(rex_window_function_operator);
+    }
+
+    const size_t operand_count = rex_operator->size();
+    std::vector<RetType> new_opnds;
+    for (size_t i = 0; i < operand_count; ++i) {
+      const auto operand = rex_operator->getOperand(i);
+      if (should_replace_operand(operand)) {
+        new_opnds.push_back(std::move(replacement_rex_));
+      } else {
+        new_opnds.emplace_back(visit(rex_operator->getOperand(i)));
+      }
+    }
+    return rex_operator->getDisambiguated(new_opnds);
+  }
+
+  RetType visitCase(const RexCase* rex_case) const final {
+    if (should_replace_operand(rex_case)) {
+      return std::move(replacement_rex_);
+    }
+
+    std::vector<std::pair<RetType, RetType>> new_pair_list;
+    for (size_t i = 0; i < rex_case->branchCount(); ++i) {
+      auto when_operand = rex_case->getWhen(i);
+      auto then_operand = rex_case->getThen(i);
+      new_pair_list.emplace_back(
+          should_replace_operand(when_operand) ? std::move(replacement_rex_)
+                                               : visit(when_operand),
+          should_replace_operand(then_operand) ? std::move(replacement_rex_)
+                                               : visit(then_operand));
+    }
+    auto new_else = should_replace_operand(rex_case->getElse())
+                        ? std::move(replacement_rex_)
+                        : visit(rex_case->getElse());
+    return std::make_unique<RexCase>(new_pair_list, new_else);
+  }
+
+ private:
+  bool should_replace_operand(const RexScalar* rex) const {
+    return replacement_rex_ && is_window_function_operator(rex);
+  }
+
+  mutable std::unique_ptr<const RexScalar> replacement_rex_;
+};
+
+/**
+ * Propagate an input backwards in the RA tree. With the exception of joins, all inputs
+ * must be carried through the RA tree. This visitor takes as a parameter a source
+ * projection RA Node, then checks to see if any inputs do not reference the source RA
+ * node (which implies the inputs reference a node farther back in the tree). The input is
+ * then backported to the source projection node, and a new input is generated which
+ * references the input on the source RA node, thereby carrying the input through the
+ * intermediate query step.
+ */
+class RexInputBackpropagationVisitor : public RexDeepCopyVisitor {
+ public:
+  RexInputBackpropagationVisitor(RelProject* node) : node_(node) { CHECK(node_); }
+
+ protected:
+  RetType visitInput(const RexInput* rex_input) const final {
+    if (rex_input->getSourceNode() != node_) {
+      const auto cur_index = rex_input->getIndex();
+      auto cur_source_node = rex_input->getSourceNode();
+      std::string field_name = "";
+      if (auto cur_project_node = dynamic_cast<const RelProject*>(cur_source_node)) {
+        field_name = cur_project_node->getFieldName(cur_index);
+      }
+      node_->appendInput(field_name, rex_input->deepCopy());
+      return std::make_unique<RexInput>(node_, node_->size() - 1);
+    } else {
+      return rex_input->deepCopy();
+    }
+  }
+
+ private:
+  mutable RelProject* node_;
+};
+
+/**
+ * Detect the presence of window function operators nested inside expressions. Separate
+ * the window function operator from the expression, computing the expression as a
+ * subsequent step and replacing the window function operator with a RexInput. Also move
+ * all input nodes to the newly created project node.
+ * In pseudocode:
+ * for each rex in project list:
+ *    detect window function expression
+ *    if window function expression:
+ *        copy window function expression
+ *        replace window function expression in base expression w/ input
+ *        add base expression to new project node after the current node
+ *        replace base expression in current project node with the window function
+ expression copy
+ */
+void separate_window_function_expressions(
+    std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+  std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
+
+  WindowFunctionDetectionVisitor visitor;
+  for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
+    const auto node = *node_itr;
+    auto window_func_project_node = std::dynamic_pointer_cast<RelProject>(node);
+    if (!window_func_project_node) {
+      continue;
+    }
+
+    // map scalar expression index in the project node to wiondow function ptr
+    std::unordered_map<size_t, const RexScalar*> embedded_window_function_expressions;
+
+    // Iterate the target exprs of the project node and check for window function
+    // expressions. If an embedded expression exists, save it in the
+    // embedded_window_function_expressions map and split the expression into a window
+    // function expression and a parent expression in a subsequent project node
+    for (size_t i = 0; i < window_func_project_node->size(); i++) {
+      const auto scalar_rex = window_func_project_node->getProjectAt(i);
+      if (is_window_function_operator(scalar_rex)) {
+        // top level window function exprs are fine
+        continue;
+      }
+
+      if (const auto window_func_rex = visitor.visit(scalar_rex)) {
+        const auto ret = embedded_window_function_expressions.insert(
+            std::make_pair(i, window_func_rex));
+        CHECK(ret.second);
+      }
+    }
+
+    if (!embedded_window_function_expressions.empty()) {
+      std::vector<std::unique_ptr<const RexScalar>> new_scalar_exprs;
+
+      auto window_func_scalar_exprs =
+          window_func_project_node->getExpressionsAndRelease();
+      for (size_t rex_idx = 0; rex_idx < window_func_scalar_exprs.size(); ++rex_idx) {
+        const auto embedded_window_func_expr_pair =
+            embedded_window_function_expressions.find(rex_idx);
+        if (embedded_window_func_expr_pair ==
+            embedded_window_function_expressions.end()) {
+          new_scalar_exprs.emplace_back(
+              std::make_unique<const RexInput>(window_func_project_node.get(), rex_idx));
+        } else {
+          const auto window_func_rex_idx = embedded_window_func_expr_pair->first;
+          CHECK_LT(window_func_rex_idx, window_func_scalar_exprs.size());
+
+          const auto& window_func_rex = embedded_window_func_expr_pair->second;
+
+          RexDeepCopyVisitor copier;
+          auto window_func_rex_copy = copier.visit(window_func_rex);
+
+          auto window_func_parent_expr =
+              window_func_scalar_exprs[window_func_rex_idx].get();
+
+          // Replace window func rex with an input rex
+          auto window_func_result_input = std::make_unique<const RexInput>(
+              window_func_project_node.get(), window_func_rex_idx);
+          RexWindowFuncReplacementVisitor replacer(std::move(window_func_result_input));
+          auto new_parent_rex = replacer.visit(window_func_parent_expr);
+
+          // Put the parent expr in the new scalar exprs
+          new_scalar_exprs.emplace_back(std::move(new_parent_rex));
+
+          // Put the window func expr in cur scalar exprs
+          window_func_scalar_exprs[window_func_rex_idx] = std::move(window_func_rex_copy);
+        }
+      }
+
+      CHECK_EQ(window_func_scalar_exprs.size(), new_scalar_exprs.size());
+      window_func_project_node->setExpressions(window_func_scalar_exprs);
+
+      // Ensure any inputs from the node containing the expression (the "new" node)
+      // exist on the window function project node, e.g. if we had a binary operation
+      // involving an aggregate value or column not included in the top level
+      // projection list.
+      RexInputBackpropagationVisitor input_visitor(window_func_project_node.get());
+      for (size_t i = 0; i < new_scalar_exprs.size(); i++) {
+        if (dynamic_cast<const RexInput*>(new_scalar_exprs[i].get())) {
+          // ignore top level inputs, these were copied directly from the previous
+          // node
+          continue;
+        }
+        new_scalar_exprs[i] = input_visitor.visit(new_scalar_exprs[i].get());
+      }
+
+      // Build the new project node and insert it into the list after the project node
+      // containing the window function
+      auto new_project =
+          std::make_shared<RelProject>(new_scalar_exprs,
+                                       window_func_project_node->getFields(),
+                                       window_func_project_node);
+      node_list.insert(std::next(node_itr), new_project);
+
+      // Rebind all the following inputs
+      for (auto rebind_itr = std::next(node_itr, 2); rebind_itr != node_list.end();
+           rebind_itr++) {
+        (*rebind_itr)->replaceInput(window_func_project_node, new_project);
+      }
+    }
+  }
+  nodes.assign(node_list.begin(), node_list.end());
+}
+
 int64_t get_int_literal_field(const rapidjson::Value& obj,
                               const char field[],
                               const int64_t default_val) noexcept {
@@ -1414,6 +1758,7 @@ class RelAlgAbstractInterpreter {
       hoist_filter_cond_to_cross_join(nodes_);
     }
     eliminate_dead_columns(nodes_);
+    separate_window_function_expressions(nodes_);
     coalesce_nodes(nodes_, left_deep_joins);
     CHECK(nodes_.back().unique());
     create_left_deep_join(nodes_);

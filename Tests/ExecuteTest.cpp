@@ -15254,6 +15254,81 @@ TEST(Select, WindowFunctionSum) {
   c(query + " NULLS FIRST;", query + ";", dt);
 }
 
+TEST(Select, WindowFunctionComplexExpressions) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
+  {
+    std::string part1 =
+        R"(SELECT x, y, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC) - 1 r1 FROM test_window_func ORDER BY x ASC)";
+    std::string part2 = ", y ASC, r1 ASC;";
+    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+  }
+  {
+    std::string part1 =
+        R"(SELECT x, y, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC) - 1 r1, RANK() OVER (PARTITION BY y ORDER BY x ASC) + 1 r2, 1 + ( DENSE_RANK() OVER (PARTITION BY y ORDER BY x DESC) * 200 ) r3 FROM test_window_func ORDER BY x ASC)";
+    std::string part2 = ", y ASC, r1 ASC, r2 ASC, r3 ASC;";
+    c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+  }
+  {
+    std::string part1 =
+        R"(SELECT x, y, x - RANK() OVER (PARTITION BY x ORDER BY x ASC) r1, RANK() OVER (PARTITION BY y ORDER BY t ASC) / 2 r2 FROM test_window_func ORDER BY x ASC)";
+    std::string part2 = "r1 ASC, r2 ASC";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, " + part2,
+      dt);
+  }
+  {
+    std::string part1 =
+        R"(SELECT x, y, t - AVG(f) OVER (PARTITION BY y ORDER BY x ASC) - 1 r1, AVG(dd) OVER (PARTITION BY y ORDER BY t ASC) / 2 r2 FROM test_window_func ORDER BY x ASC)";
+    std::string part2 = "r1 ASC, r2 ASC";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, t ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, t ASC, " + part2,
+      dt);
+  }
+  {
+    std::string part1 =
+        R"(SELECT x, y, t - AVG(f) OVER (PARTITION BY y ORDER BY x ASC) - 1 r1, CASE WHEN x > 5 THEN 10 ELSE SUM(x) OVER (PARTITION BY y ORDER BY t ASC) END r2 FROM test_window_func ORDER BY x ASC)";
+    std::string part2 = "r1 ASC, r2 ASC";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, t ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, t ASC, " + part2,
+      dt);
+  }
+  {
+    std::string part1 =
+        R"(SELECT x, y, t - AVG(f) OVER (PARTITION BY y ORDER BY x ASC) - 1 r1, CASE WHEN x > 5 THEN SUM(x) OVER (PARTITION BY y ORDER BY t ASC) ELSE 10 END r2 FROM test_window_func ORDER BY x ASC)";
+    std::string part2 = "r1 ASC, r2 ASC";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, t ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, t ASC, " + part2,
+      dt);
+  }
+  {
+    std::string part1 =
+        R"(SELECT x, y, t - AVG(f) OVER (PARTITION BY y ORDER BY x ASC) - 1 r1, CASE WHEN SUM(x) OVER (PARTITION BY y ORDER BY t ASC) > 1 THEN 5 ELSE 10 END r2 FROM test_window_func ORDER BY x ASC)";
+    std::string part2 = "r1 ASC, r2 ASC";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, t ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, t ASC, " + part2,
+      dt);
+  }
+  {
+    std::string part1 =
+        R"(SELECT x, y, t - SUM(f) OVER (PARTITION BY y ORDER BY x ASC) - 1 r1, CASE WHEN x > 5 THEN 10 ELSE AVG(x) OVER (PARTITION BY y ORDER BY t ASC) END r2 FROM test_window_func ORDER BY x ASC)";
+    std::string part2 = "r1 ASC, r2 ASC";
+    c(part1 + " NULLS FIRST, y ASC NULLS FIRST, t ASC NULLS FIRST, " + part2,
+      part1 + ", y ASC, t ASC, " + part2,
+      dt);
+  }
+  {
+    // TODO(adb): support more complex embedded case expressions
+    std::string part1 =
+        R"(SELECT x, y, t - AVG(f) OVER (PARTITION BY y ORDER BY x ASC) - 1 r1, CASE WHEN x > 5 THEN AVG(dd) OVER (PARTITION BY y ORDER BY t ASC) ELSE SUM(x) OVER (PARTITION BY y ORDER BY t ASC) END r2 FROM test_window_func ORDER BY x ASC)";
+    std::string part2 = "r1 ASC, r2 ASC";
+    EXPECT_THROW(
+        run_multiple_agg(
+            part1 + " NULLS FIRST, y ASC NULLS FIRST, t ASC NULLS FIRST, " + part2, dt),
+        std::runtime_error);
+  }
+}
+
 TEST(Select, EmptyString) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
