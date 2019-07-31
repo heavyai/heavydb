@@ -34,12 +34,12 @@
 #include <llvm/Transforms/Utils/Cloning.h>
 
 extern std::unique_ptr<llvm::Module> g_rt_module;
-bool g_reduction_jit_interp{false};
 
 namespace {
 
 thread_local CodeCache g_code_cache(10000);
 const int32_t WATCHDOG_ERROR{-1};
+const size_t INTERP_THRESHOLD{50};
 
 std::unique_ptr<llvm::Module> runtime_module_shallow_copy(llvm::LLVMContext& context,
                                                           CgenState* cgen_state) {
@@ -1071,17 +1071,17 @@ ReductionCode ResultSetStorage::finalizeReductionCode(
   }
   CompilationOptions co{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false};
   reduction_code.module.release();
-  auto ee = g_reduction_jit_interp
+  const bool use_interp = query_mem_desc_.getEntryCount() < INTERP_THRESHOLD;
+  auto ee = use_interp
                 ? generate_native_reduction_code(reduction_code.ir_reduce_loop)
                 : CodeGenerator::generateNativeCPUCode(
                       reduction_code.ir_reduce_loop, {reduction_code.ir_reduce_loop}, co);
   reduction_code.func_ptr =
-      g_reduction_jit_interp
-          ? nullptr
-          : reinterpret_cast<ReductionCode::FuncPtr>(
-                ee->getPointerToFunction(reduction_code.ir_reduce_loop));
+      use_interp ? nullptr
+                 : reinterpret_cast<ReductionCode::FuncPtr>(
+                       ee->getPointerToFunction(reduction_code.ir_reduce_loop));
   reduction_code.execution_engine = ee.get();
-  if (g_reduction_jit_interp) {
+  if (use_interp) {
     reduction_code.own_execution_engine = std::move(ee);
   } else {
     std::tuple<void*, ExecutionEngineWrapper> cache_val =

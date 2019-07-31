@@ -35,8 +35,6 @@
 #include <queue>
 #include <random>
 
-extern bool g_reduction_jit_interp;
-
 TEST(Construct, Allocate) {
   std::vector<TargetInfo> target_infos;
   QueryMemoryDescriptor query_mem_desc;
@@ -3558,19 +3556,6 @@ TEST(ReduceRandomGroups, BaselineHashColumnar_Large_NullVal_0075) {
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
-  namespace po = boost::program_options;
-
-  po::options_description desc("Options");
-
-  desc.add_options()("reduction-jit-interp",
-                     po::value<bool>(&g_reduction_jit_interp)
-                         ->default_value(g_reduction_jit_interp)
-                         ->implicit_value(true),
-                     "Use interpreter for reduction generated code");
-
-  po::variables_map vm;
-  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
-  po::notify(vm);
 
   int err{0};
   try {
