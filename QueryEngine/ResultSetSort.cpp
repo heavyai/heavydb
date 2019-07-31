@@ -29,10 +29,6 @@
 
 #include "../Shared/thread_count.h"
 
-#include <thrust/copy.h>
-#include <thrust/device_vector.h>
-#include <thrust/sort.h>
-
 #include <future>
 
 std::unique_ptr<CudaMgr_Namespace::CudaMgr> g_cuda_mgr;  // for unit tests only
