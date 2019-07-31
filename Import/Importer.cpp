@@ -4941,13 +4941,12 @@ void ImportDriver::importGeoTable(const std::string& file_path,
     copy_params.geo_coords_comp_param = 0;
   }
 
-  const auto cds =
-      Importer::gdalToColumnDescriptors(file_path, geo_column_name, copy_params);
+  auto cds = Importer::gdalToColumnDescriptors(file_path, geo_column_name, copy_params);
   std::map<std::string, std::string> colname_to_src;
-  for (auto cd : cds) {
+  for (auto& cd : cds) {
     const auto col_name_sanitized = ImportHelpers::sanitize_name(cd.columnName);
     const auto ret =
-        colname_to_src.insert(std::make_pair(cd.columnName, col_name_sanitized));
+        colname_to_src.insert(std::make_pair(col_name_sanitized, cd.columnName));
     CHECK(ret.second);
     cd.columnName = col_name_sanitized;
   }
@@ -4968,31 +4967,31 @@ void ImportDriver::importGeoTable(const std::string& file_path,
     std::string stmt{"CREATE TABLE " + table_name};
     std::vector<std::string> col_stmts;
 
-    for (auto col : cds) {
-      if (col.columnType.get_type() == SQLTypes::kINTERVAL_DAY_TIME ||
-          col.columnType.get_type() == SQLTypes::kINTERVAL_YEAR_MONTH) {
+    for (auto& cd : cds) {
+      if (cd.columnType.get_type() == SQLTypes::kINTERVAL_DAY_TIME ||
+          cd.columnType.get_type() == SQLTypes::kINTERVAL_YEAR_MONTH) {
         throw std::runtime_error(
             "Unsupported type: INTERVAL_DAY_TIME or INTERVAL_YEAR_MONTH for col " +
-            col.columnName + " (table: " + table_name + ")");
+            cd.columnName + " (table: " + table_name + ")");
       }
 
-      if (col.columnType.get_type() == SQLTypes::kDECIMAL) {
-        if (col.columnType.get_precision() == 0 && col.columnType.get_scale() == 0) {
-          col.columnType.set_precision(14);
-          col.columnType.set_scale(7);
+      if (cd.columnType.get_type() == SQLTypes::kDECIMAL) {
+        if (cd.columnType.get_precision() == 0 && cd.columnType.get_scale() == 0) {
+          cd.columnType.set_precision(14);
+          cd.columnType.set_scale(7);
         }
       }
 
       std::string col_stmt;
-      col_stmt.append(col.columnName + " " + col.columnType.get_type_name() + " ");
+      col_stmt.append(cd.columnName + " " + cd.columnType.get_type_name() + " ");
 
-      if (col.columnType.get_compression() != EncodingType::kENCODING_NONE) {
-        col_stmt.append("ENCODING " + col.columnType.get_compression_name() + " ");
+      if (cd.columnType.get_compression() != EncodingType::kENCODING_NONE) {
+        col_stmt.append("ENCODING " + cd.columnType.get_compression_name() + " ");
       } else {
-        if (col.columnType.is_string()) {
+        if (cd.columnType.is_string()) {
           col_stmt.append("ENCODING NONE");
-        } else if (col.columnType.is_geometry()) {
-          if (col.columnType.get_output_srid() == 4326) {
+        } else if (cd.columnType.is_geometry()) {
+          if (cd.columnType.get_output_srid() == 4326) {
             col_stmt.append("ENCODING NONE");
           }
         }

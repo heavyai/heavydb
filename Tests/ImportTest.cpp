@@ -302,11 +302,11 @@ TEST(Detect, Numeric) {
 
 const char* create_table_mini_sort = R"(
   CREATE TABLE sortab(
-    i int, 
+    i int,
     f float,
-    ia int[2], 
-    pt point, 
-    sa text[], 
+    ia int[2],
+    pt point,
+    sa text[],
     s2 text encoding dict(16),
     dt date,
     d2 date ENCODING FIXED(16),
@@ -1366,6 +1366,20 @@ TEST_F(GeoGDALImportTest, Geodatabase_Simple) {
   import_test_geofile_importer(file_path.string(), "geospatial", false);
   check_geo_num_rows("omnisci_geo, ESTABLISHED", 87);
 }
+
+#ifdef __APPLE__
+TEST_F(GeoGDALImportTest, KML_Simple) {
+  LOG(INFO) << "Skipping GeoGDALImportTest.KML_Simple on Mac (GDAL implementation is "
+               "inadequate)";
+}
+#else
+TEST_F(GeoGDALImportTest, KML_Simple) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const auto file_path = boost::filesystem::path("KML/test.kml");
+  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  check_geo_num_rows("omnisci_geo, FID", 10);
+}
+#endif
 
 #ifdef HAVE_AWS_S3
 // s3 compressed (non-parquet) test cases
