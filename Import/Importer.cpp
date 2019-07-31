@@ -1699,8 +1699,8 @@ void Importer::set_geo_physical_import_buffer_columnar(
       CHECK(false) << "Geometry import columnar: ring sizes column size mismatch";
     }
     // Create ring_sizes array value and add it to the physical column
+    auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     for (auto ring_sizes : ring_sizes_column) {
-      auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
       std::vector<TDatum> td_ring_sizes;
       for (auto ring_size : ring_sizes) {
         TDatum td_ring_size;
@@ -1721,8 +1721,8 @@ void Importer::set_geo_physical_import_buffer_columnar(
       CHECK(false) << "Geometry import columnar: poly rings column size mismatch";
     }
     // Create poly_rings array value and add it to the physical column
+    auto cd_poly_rings = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     for (auto poly_rings : poly_rings_column) {
-      auto cd_poly_rings = catalog.getMetadataForColumn(cd->tableId, ++columnId);
       std::vector<TDatum> td_poly_rings;
       for (auto num_rings : poly_rings) {
         TDatum td_num_rings;
@@ -1742,8 +1742,8 @@ void Importer::set_geo_physical_import_buffer_columnar(
     if (bounds_column.size() != coords_row_count) {
       CHECK(false) << "Geometry import columnar: bounds column size mismatch";
     }
+    auto cd_bounds = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     for (auto bounds : bounds_column) {
-      auto cd_bounds = catalog.getMetadataForColumn(cd->tableId, ++columnId);
       std::vector<TDatum> td_bounds_data;
       for (auto b : bounds) {
         TDatum td_double;
