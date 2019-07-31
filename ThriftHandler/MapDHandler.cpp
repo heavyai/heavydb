@@ -404,6 +404,7 @@ void MapDHandler::disconnect_impl(const SessionMap::iterator& session_it) {
 }
 
 void MapDHandler::switch_database(const TSessionId& session, const std::string& dbname) {
+  LOG_SESSION(session);
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it_unsafe(session);
 
@@ -3784,7 +3785,8 @@ void MapDHandler::import_geo_table(const TSessionId& session,
     }
   }
 
-  // prepare to gather errors that would otherwise be exceptions, as we can only throw one
+  // prepare to gather errors that would otherwise be exceptions, as we can only throw
+  // one
   std::vector<std::string> caught_exception_messages;
 
   // prepare to time multi-layer import
@@ -4269,24 +4271,18 @@ void MapDHandler::check_session_exp_unsafe(const SessionMap::iterator& session_i
 
 // NOTE: Only call get_session_it_unsafe() while holding a lock on sessions_mutex_.
 SessionMap::iterator MapDHandler::get_session_it_unsafe(const TSessionId& session) {
-  auto calcite_session_prefix = calcite_->get_session_prefix();
-  auto prefix_length = calcite_session_prefix.size();
-  if (prefix_length) {
-    if (0 == session.compare(0, prefix_length, calcite_session_prefix)) {
-      // call coming from calcite, elevate user to be superuser
-      auto session_it =
-          get_session_from_map(session.substr(prefix_length + 1), sessions_);
-      check_session_exp_unsafe(session_it);
-      session_it->second->make_superuser();
-      session_it->second->update_last_used_time();
-      return session_it;
-    }
-  }
+  const auto calcite_session_prefix = calcite_->get_session_prefix();
+  const auto prefix_length = calcite_session_prefix.size();
+  auto is_calcite_prefix_match = [&]() {
+    return prefix_length &&
+           0 == session.compare(0, prefix_length, calcite_session_prefix);
+  };
 
-  auto session_it = get_session_from_map(session, sessions_);
+  auto session_it = get_session_from_map(
+      is_calcite_prefix_match() ? session.substr(prefix_length + 1) : session, sessions_);
   check_session_exp_unsafe(session_it);
-  session_it->second->reset_superuser();
-  session_it->second->update_last_used_time();
+  is_calcite_prefix_match() ? session_it->second->make_superuser()
+                            : session_it->second->reset_superuser();
   return session_it;
 }
 
@@ -4845,9 +4841,9 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                               filter_push_down_requests);
       } else if (pw.isCalciteExplain() && filter_push_down_requests.empty()) {
         // return the ra as the result:
-        // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
-        // no filter push down so we continue with the initial (unchanged) query's calcite
-        // explanation.
+        // If we reach here, the 'filter_push_down_request' turned out to be empty,
+        // i.e., no filter push down so we continue with the initial (unchanged) query's
+        // calcite explanation.
         query_ra =
             parse_to_ra(query_str, {}, session_info, boost::none, mapd_parameters_);
         convert_explain(_return, ResultSet(query_ra), true);
@@ -4860,9 +4856,9 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       }
       if (pw.isCalciteExplain()) {
         // return the ra as the result:
-        // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
-        // no filter push down so we continue with the initial (unchanged) query's calcite
-        // explanation.
+        // If we reach here, the 'filter_push_down_request' turned out to be empty,
+        // i.e., no filter push down so we continue with the initial (unchanged) query's
+        // calcite explanation.
         query_ra =
             parse_to_ra(query_str, {}, session_info, boost::none, mapd_parameters_);
         convert_explain(_return, ResultSet(query_ra), true);
@@ -4984,7 +4980,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     if (show_create_stmt) {
       // ParserNode ShowCreateTableStmt is currently unimplemented
       throw std::runtime_error(
-          "SHOW CREATE TABLE is currently unsupported. Use `\\d` from omnisql for table "
+          "SHOW CREATE TABLE is currently unsupported. Use `\\d` from omnisql for "
+          "table "
           "DDL.");
     }
 
@@ -5619,7 +5616,24 @@ void LogSession::stdlog(logger::Severity severity, char const* label) {
   }
 }
 
+void LogSession::update_session_last_used_duration() {
+  // 1) `Session_id_` will be empty during intial connect. 2)`Session_it` will be invalid
+  // during disconnect. SessionInfo will be erased from map by the time it reaches here.
+  // In both the above cases, no update is necessary so we can skip.
+  if (session_id_.empty()) {
+    return;
+  }
+  CHECK(handler_);
+  try {
+    auto session_it = handler_->get_session_it_unsafe(session_id_, true);
+    session_it->second->update_last_used_time();
+  } catch (TMapDException&) {
+    return;
+  }
+}
+
 LogSession::~LogSession() {
+  update_session_last_used_duration();
   stdlog(logger::Severity::INFO, "stdlog");
 }
 

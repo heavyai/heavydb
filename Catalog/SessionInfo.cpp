@@ -46,7 +46,7 @@ std::string SessionInfo::public_session_id() const {
   localtime_r(&start_time, &st);
   std::ostringstream ss;
   ss << (st.tm_min % 10) << std::setfill('0') << std::setw(2) << st.tm_sec << '-'
-     << session_id.substr(0, 4);
+     << session_id_.substr(0, 4);
   return ss.str();
 }
 

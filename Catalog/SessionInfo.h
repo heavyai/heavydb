@@ -70,9 +70,9 @@ class SessionInfo {
       , catalog_(cat)
       , currentUser_(user)
       , executor_device_type_(t)
-      , session_id(sid)
-      , last_used_time(time(0))
-      , start_time(time(0))
+      , session_id_(sid)
+      , last_used_time_(time(0))
+      , start_time_(time(0))
       , public_session_id_(public_session_id()) {}
   SessionInfo(std::shared_ptr<Catalog> cat,
               const UserMetadata& user,
@@ -84,7 +84,7 @@ class SessionInfo {
       , catalog_(s.catalog_)
       , currentUser_(s.currentUser_)
       , executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_))
-      , session_id(s.session_id)
+      , session_id_(s.session_id_)
       , public_session_id_(s.public_session_id_) {}
   MapDHandler* get_mapdHandler() const { return mapdHandler_.get(); }
   Catalog& getCatalog() const { return *catalog_; }
@@ -95,15 +95,15 @@ class SessionInfo {
     return executor_device_type_;
   }
   void set_executor_device_type(ExecutorDeviceType t) { executor_device_type_ = t; }
-  std::string get_session_id() const { return session_id; }
-  time_t get_last_used_time() const { return last_used_time; }
-  void update_last_used_time() { last_used_time = time(0); }
+  std::string get_session_id() const { return session_id_; }
+  time_t get_last_used_time() const { return last_used_time_; }
+  void update_last_used_time() { last_used_time_ = time(0); }
   void reset_superuser() { currentUser_.isSuper = currentUser_.isReallySuper; }
   void make_superuser() { currentUser_.isSuper = true; }
   bool checkDBAccessPrivileges(const DBObjectType& permissionType,
                                const AccessPrivileges& privs,
                                const std::string& objectName = "") const;
-  time_t get_start_time() const { return start_time; }
+  time_t get_start_time() const { return start_time_; }
   std::string const& get_public_session_id() const { return public_session_id_; }
   operator std::string() const { return public_session_id_; }
 
@@ -112,9 +112,9 @@ class SessionInfo {
   std::shared_ptr<Catalog> catalog_;
   UserMetadata currentUser_;
   std::atomic<ExecutorDeviceType> executor_device_type_;
-  const std::string session_id;
-  std::atomic<time_t> last_used_time;  // for cleaning up SessionInfo after client dies
-  std::atomic<time_t> start_time;      // for invalidating session after tolerance period
+  const std::string session_id_;
+  std::atomic<time_t> last_used_time_;  // for cleaning up SessionInfo after client dies
+  std::atomic<time_t> start_time_;      // for invalidating session after tolerance period
   const std::string public_session_id_;
   std::string public_session_id() const;
 };
