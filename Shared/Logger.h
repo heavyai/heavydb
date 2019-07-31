@@ -124,7 +124,7 @@ class LogOptions {
   boost::filesystem::path log_dir_{"mapd_log"};
   // file_name_pattern and symlink are prepended with base_name.
   std::string file_name_pattern_{".{SEVERITY}.%Y%m%d-%H%M%S.log"};
-  std::string symlink_{".{SEVERITY}.log"};
+  std::string symlink_{".{SEVERITY}"};
   Severity severity_{Severity::INFO};
   Severity severity_clog_{Severity::ERROR};
   Channels channels_;

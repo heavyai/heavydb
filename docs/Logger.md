@@ -28,14 +28,14 @@ Boost.Log is a flexible logging system with sources, a central core, and sinks. 
 `omnisci_server --help` includes the logging options:
 ```
 Logging:
---log-directory arg (="mapd_log")  Logging directory. May be relative to 
+--log-directory arg (="mapd_log")  Logging directory. May be relative to
                                       data directory, or absolute.
 --log-file-name arg (=omnisci_server.{SEVERITY}.%Y%m%d-%H%M%S.log)
-                                      Log file name relative to 
+                                      Log file name relative to
                                       log-directory.
---log-symlink arg (=omnisci_server.{SEVERITY}.log)
+--log-symlink arg (=omnisci_server.{SEVERITY})
                                       Symlink to active log.
---log-severity arg (=INFO)            Log to file severity level: INFO 
+--log-severity arg (=INFO)            Log to file severity level: INFO
                                       WARNING ERROR FATAL
 --log-severity-clog arg (=ERROR)      Log to console severity level: INFO
                                       WARNING ERROR FATAL
@@ -43,10 +43,10 @@ Logging:
 --log-auto-flush arg (=1)             Flush logging buffer to file after each
                                       message.
 --log-max-files arg (=100)            Maximum number of log files to keep.
---log-min-free-space arg (=20971520)  Minimum number of bytes left on device 
+--log-min-free-space arg (=20971520)  Minimum number of bytes left on device
                                       before oldest log files are deleted.
 --log-rotate-daily arg (=1)           Start new log files at midnight.
---log-rotation-size arg (=10485760)   Maximum file size in bytes before new 
+--log-rotation-size arg (=10485760)   Maximum file size in bytes before new
                                       log files are started.
 ```
 
