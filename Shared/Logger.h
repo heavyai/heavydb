@@ -121,7 +121,7 @@ class LogOptions {
 
  public:
   // Initialize to default values
-  boost::filesystem::path log_dir_{"omnisci_log"};
+  boost::filesystem::path log_dir_{"mapd_log"};
   // file_name_pattern and symlink are prepended with base_name.
   std::string file_name_pattern_{".{SEVERITY}.%Y%m%d-%H%M%S.log"};
   std::string symlink_{".{SEVERITY}.log"};
