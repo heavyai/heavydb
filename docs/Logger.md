@@ -28,7 +28,7 @@ Boost.Log is a flexible logging system with sources, a central core, and sinks. 
 `omnisci_server --help` includes the logging options:
 ```
 Logging:
---log-directory arg (="omnisci_log")  Logging directory. May be relative to 
+--log-directory arg (="mapd_log")  Logging directory. May be relative to 
                                       data directory, or absolute.
 --log-file-name arg (=omnisci_server.{SEVERITY}.%Y%m%d-%H%M%S.log)
                                       Log file name relative to 
