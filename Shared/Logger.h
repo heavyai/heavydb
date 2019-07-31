@@ -95,7 +95,7 @@ class LogOptions {
   std::string file_name_pattern_{".{SEVERITY}.%Y%m%d-%H%M%S.log"};
   std::string symlink_{".{SEVERITY}.log"};
   Severity severity_{Severity::INFO};
-  Severity severity_clog_{Severity::WARNING};
+  Severity severity_clog_{Severity::ERROR};
   bool auto_flush_{true};
   size_t max_files_{100};
   size_t min_free_space_{20 << 20};
