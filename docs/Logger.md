@@ -37,7 +37,7 @@ Logging:
                                       Symlink to active log.
 --log-severity arg (=INFO)            Log to file severity level: INFO 
                                       WARNING ERROR FATAL
---log-severity-clog arg (=WARNING)    Log to console severity level: INFO 
+--log-severity-clog arg (=ERROR)      Log to console severity level: INFO
                                       WARNING ERROR FATAL
 --log-channels arg                    Log channel debug info: IR PTX
 --log-auto-flush arg (=1)             Flush logging buffer to file after each
