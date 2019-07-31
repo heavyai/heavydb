@@ -1377,7 +1377,6 @@ void fill_one_to_many_hash_table_bucketized(int32_t* buff,
   auto bucket_normalization = hash_entry_info.bucket_normalization;
   auto hash_entry_count = hash_entry_info.getNormalizedHashEntryCount();
   auto launch_count_matches = [bucket_normalization,
-                               hash_entry_count,
                                count_buff = buff + hash_entry_count,
                                invalid_slot_val,
                                &join_column,
