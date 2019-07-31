@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 
-#include "Execute.h"
-#include "ResultSet.h"
+#include "ResultSetReductionJIT.h"
 
 #include "CodeGenerator.h"
 #include "DynamicWatchdog.h"
+#include "Execute.h"
 #include "IRCodegenUtils.h"
 #include "LLVMFunctionAttributesUtil.h"
 #include "LLVMGlobalContext.h"
 
+#include "Shared/likely.h"
 #include "Shared/mapdpath.h"
 
 #include <llvm/Bitcode/BitcodeReader.h>
@@ -35,12 +36,18 @@
 
 extern std::unique_ptr<llvm::Module> g_rt_module;
 
+CodeCache ResultSetReductionJIT::s_code_cache(10000);
+
 namespace {
 
-thread_local CodeCache g_code_cache(10000);
+// Error code to be returned when the watchdog timer triggers during the reduction.
 const int32_t WATCHDOG_ERROR{-1};
+// Use the LLVM interpreter, not the JIT, for a number of entries lower than the
+// threshold.
 const size_t INTERP_THRESHOLD{50};
 
+// Make a shallow copy (just declarations) of the runtime module. Function definitions are
+// cloned only if they're used from the generated code.
 std::unique_ptr<llvm::Module> runtime_module_shallow_copy(llvm::LLVMContext& context,
                                                           CgenState* cgen_state) {
   return llvm::CloneModule(
@@ -60,22 +67,26 @@ std::unique_ptr<llvm::Module> runtime_module_shallow_copy(llvm::LLVMContext& con
       });
 }
 
+// Load the value stored at 'ptr' as the given 'loaded_type'.
 llvm::Value* emit_load(llvm::Value* ptr, llvm::Type* loaded_type, CgenState* cgen_state) {
   return cgen_state->ir_builder_.CreateLoad(
       cgen_state->ir_builder_.CreateBitCast(ptr, loaded_type),
       ptr->getName() + "_loaded");
 }
 
+// Load the value stored at 'ptr' as a 32-bit signed integer.
 llvm::Value* emit_load_i32(llvm::Value* ptr, CgenState* cgen_state) {
   const auto pi32_type = llvm::Type::getInt32PtrTy(cgen_state->context_);
   return emit_load(ptr, pi32_type, cgen_state);
 }
 
+// Load the value stored at 'ptr' as a 64-bit signed integer.
 llvm::Value* emit_load_i64(llvm::Value* ptr, CgenState* cgen_state) {
   const auto pi64_type = llvm::Type::getInt64PtrTy(cgen_state->context_);
   return emit_load(ptr, pi64_type, cgen_state);
 }
 
+// Read a 32- or 64-bit integer stored at 'ptr' and sign extend to 64-bit.
 llvm::Value* emit_read_int_from_buff(llvm::Value* ptr,
                                      const int8_t compact_sz,
                                      CgenState* cgen_state) {
@@ -96,6 +107,8 @@ llvm::Value* emit_read_int_from_buff(llvm::Value* ptr,
   }
 }
 
+// Emit a runtime call to accumulate into the 'val_ptr' byte address the 'other_ptr'
+// value when the type is specified as not null.
 void emit_aggregate_one_value(const std::string& agg_kind,
                               llvm::Value* val_ptr,
                               llvm::Value* other_ptr,
@@ -137,6 +150,7 @@ void emit_aggregate_one_value(const std::string& agg_kind,
   }
 }
 
+// Same as above, but support nullable types as well.
 void emit_aggregate_one_nullable_value(const std::string& agg_kind,
                                        llvm::Value* val_ptr,
                                        llvm::Value* other_ptr,
@@ -193,6 +207,7 @@ void emit_aggregate_one_nullable_value(const std::string& agg_kind,
   }
 }
 
+// Emit code to accumulate the 'other_ptr' count into the 'val_ptr' destination.
 void emit_aggregate_one_count(llvm::Value* val_ptr,
                               llvm::Value* other_ptr,
                               const size_t chosen_bytes,
@@ -212,6 +227,9 @@ void emit_aggregate_one_count(llvm::Value* val_ptr,
   }
 }
 
+// Emit code to load the value stored at the 'other_pi8' as an integer of the given width
+// 'chosen_bytes' and write it to the 'slot_pi8' destination only if necessary (the
+// existing value at destination is the initialization value).
 void emit_write_projection(llvm::Value* slot_pi8,
                            llvm::Value* other_pi8,
                            const int64_t init_val,
@@ -230,6 +248,8 @@ void emit_write_projection(llvm::Value* slot_pi8,
   }
 }
 
+// Create the declaration for the 'is_empty_entry' function. Use private linkage since
+// it's a helper only called from the generated code and mark it as always inline.
 llvm::Function* setup_is_empty_entry(const CgenState* cgen_state) {
   auto& ctx = cgen_state->context_;
   const auto pi8_type = llvm::PointerType::get(get_int_type(8, ctx), 0);
@@ -243,6 +263,7 @@ llvm::Function* setup_is_empty_entry(const CgenState* cgen_state) {
   return func;
 }
 
+// Create the declaration for the 'reduce_one_entry' helper.
 llvm::Function* setup_reduce_one_entry(const CgenState* cgen_state,
                                        const QueryDescriptionType hash_type) {
   auto& ctx = cgen_state->context_;
@@ -284,6 +305,7 @@ llvm::Function* setup_reduce_one_entry(const CgenState* cgen_state,
   return func;
 }
 
+// Create the declaration for the 'reduce_one_entry_idx' helper.
 llvm::Function* setup_reduce_one_entry_idx(const CgenState* cgen_state) {
   auto& ctx = cgen_state->context_;
   const auto pi8_type = llvm::PointerType::get(get_int_type(8, ctx), 0);
@@ -316,6 +338,8 @@ llvm::Function* setup_reduce_one_entry_idx(const CgenState* cgen_state) {
   return func;
 }
 
+// Create the declaration for the 'reduce_loop' entry point. Use external linkage, this is
+// the public API of the generated code directly used from result set reduction.
 llvm::Function* setup_reduce_loop(const CgenState* cgen_state) {
   auto& ctx = cgen_state->context_;
   const auto pi8_type = llvm::PointerType::get(get_int_type(8, ctx), 0);
@@ -353,6 +377,8 @@ llvm::Function* setup_reduce_loop(const CgenState* cgen_state) {
   return func;
 }
 
+// Setup the reduction function and helpers declarations, create a module and a code
+// generation state object.
 ReductionCode setup_functions_ir(const QueryDescriptionType hash_type) {
   ReductionCode reduction_code{};
   reduction_code.cgen_state.reset(new CgenState({}, false));
@@ -360,15 +386,17 @@ ReductionCode setup_functions_ir(const QueryDescriptionType hash_type) {
   auto& ctx = cgen_state->context_;
   std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(ctx, cgen_state));
   cgen_state->module_ = module.get();
-  reduction_code.ir_is_empty_func = setup_is_empty_entry(cgen_state);
-  reduction_code.ir_reduce_func = setup_reduce_one_entry(cgen_state, hash_type);
-  reduction_code.ir_reduce_func_idx = setup_reduce_one_entry_idx(cgen_state);
+  reduction_code.ir_is_empty = setup_is_empty_entry(cgen_state);
+  reduction_code.ir_reduce_one_entry = setup_reduce_one_entry(cgen_state, hash_type);
+  reduction_code.ir_reduce_one_entry_idx = setup_reduce_one_entry_idx(cgen_state);
   reduction_code.ir_reduce_loop = setup_reduce_loop(cgen_state);
   reduction_code.module = std::move(module);
   return std::move(reduction_code);
 }
 
-ExecutionEngineWrapper generate_native_reduction_code(llvm::Function* func) {
+// When the number of entries is below 'INTERP_THRESHOLD', run the generated function in
+// its IR form, without compiling to native code.
+ExecutionEngineWrapper create_interpreter_engine(llvm::Function* func) {
   auto module = func->getParent();
 
   llvm::ExecutionEngine* execution_engine{nullptr};
@@ -389,6 +417,10 @@ bool is_group_query(const QueryDescriptionType hash_type) {
          hash_type == QueryDescriptionType::GroupByPerfectHash;
 }
 
+// Emit an early return from a function when the provided 'cond' is true, which the caller
+// code can use when entries are empty or the watchdog is triggered. For functions which
+// return void, the specified error code is ignored. For functions which return an
+// integer, the error code is returned.
 void return_early(llvm::Value* cond,
                   const ReductionCode& reduction_code,
                   llvm::Function* func,
@@ -407,6 +439,7 @@ void return_early(llvm::Value* cond,
   cgen_state->ir_builder_.SetInsertPoint(do_reduction);
 }
 
+// Variable length sample fast path (no serialized variable length buffer).
 void varlen_buffer_sample(int8_t* this_ptr1,
                           int8_t* this_ptr2,
                           const int8_t* that_ptr1,
@@ -448,6 +481,9 @@ extern "C" void serialized_varlen_buffer_sample(
     varlen_buffer_sample(this_ptr1, this_ptr2, that_ptr1, that_ptr2, init_val);
   }
 }
+
+// Wrappers to be called from the generated code, sharing implementation with the rest of
+// the system.
 
 extern "C" void count_distinct_set_union_jit_rt(const int64_t new_set_handle,
                                                 const int64_t old_set_handle,
@@ -499,43 +535,81 @@ extern "C" uint8_t check_watchdog_rt(const size_t sample_seed) {
   return false;
 }
 
-ReductionCode ResultSetStorage::reduceOneEntryJIT(const ResultSetStorage& that) const {
+ResultSetReductionJIT::ResultSetReductionJIT(const QueryMemoryDescriptor& query_mem_desc,
+                                             const std::vector<TargetInfo>& targets,
+                                             const std::vector<int64_t>& target_init_vals)
+    : query_mem_desc_(query_mem_desc)
+    , targets_(targets)
+    , target_init_vals_(target_init_vals) {}
+
+// The code generated for a reduction between two result set buffers is structured in
+// several functions and their IR is stored in the 'ReductionCode' structure. At a high
+// level, the pseudocode is:
+//
+// func is_empty_func(row_ptr):
+//   ...
+//
+// func reduce_func_baseline(this_ptr, that_ptr):
+//   if is_empty_func(that_ptr):
+//     return
+//   for each target in the row:
+//     reduce target from that_ptr into this_ptr
+//
+// func reduce_func_perfect_hash(this_ptr, that_ptr):
+//   if is_empty_func(that_ptr):
+//     return
+//   for each target in the row:
+//     reduce target from that_ptr into this_ptr
+//
+// func reduce_func_idx(this_buff, that_buff, that_entry_index):
+//   that_ptr = that_result_set[that_entry_index]
+//   # Retrieval of 'this_ptr' is different between perfect hash and baseline.
+//   this_ptr = this_result_set[that_entry_index]
+//                or
+//              get_row(key(that_row_ptr), this_result_set_buffer)
+//   reduce_func_[baseline|perfect_hash](this_ptr, that_ptr)
+//
+// func reduce_loop(this_buff, that_buff, start_entry_index, end_entry_index):
+//   for that_entry_index in [start_entry_index, end_entry_index):
+//     reduce_func_idx(this_buff, that_buff, that_entry_index)
+
+ReductionCode ResultSetReductionJIT::codegen() const {
   const auto hash_type = query_mem_desc_.getQueryDescriptionType();
   if (query_mem_desc_.didOutputColumnar() || !is_group_query(hash_type)) {
     return {};
   }
   ReductionCode reduction_code = setup_functions_ir(hash_type);
-  isEmptyJIT(reduction_code);
+  isEmpty(reduction_code);
   switch (query_mem_desc_.getQueryDescriptionType()) {
     case QueryDescriptionType::GroupByPerfectHash: {
-      reduceOneEntryNoCollisionsJIT(that, reduction_code);
-      reduceOneEntryNoCollisionsIdxJIT(reduction_code);
+      reduceOneEntryNoCollisions(reduction_code);
+      reduceOneEntryNoCollisionsIdx(reduction_code);
       break;
     }
     case QueryDescriptionType::GroupByBaselineHash: {
-      reduceOneEntryBaselineJIT(that, reduction_code);
-      reduceOneEntryBaselineIdxJIT(reduction_code);
+      reduceOneEntryBaseline(reduction_code);
+      reduceOneEntryBaselineIdx(reduction_code);
       break;
     }
     default: {
       LOG(FATAL) << "Unexpected query description type";
     }
   }
-  reduceLoopJIT(reduction_code);
+  reduceLoop(reduction_code);
   return finalizeReductionCode(std::move(reduction_code));
 }
 
-void ResultSetStorage::isEmptyJIT(const ReductionCode& reduction_code) const {
+void ResultSetReductionJIT::isEmpty(const ReductionCode& reduction_code) const {
   CHECK(is_group_query(query_mem_desc_.getQueryDescriptionType()));
   CHECK(!query_mem_desc_.didOutputColumnar());
   auto cgen_state = reduction_code.cgen_state.get();
   auto& ctx = cgen_state->context_;
   const auto bb_entry =
-      llvm::BasicBlock::Create(ctx, ".entry", reduction_code.ir_is_empty_func, 0);
+      llvm::BasicBlock::Create(ctx, ".entry", reduction_code.ir_is_empty, 0);
   cgen_state->ir_builder_.SetInsertPoint(bb_entry);
   llvm::Value* key{nullptr};
   llvm::Value* empty_key_val{nullptr};
-  const auto arg_it = reduction_code.ir_is_empty_func->arg_begin();
+  const auto arg_it = reduction_code.ir_is_empty->arg_begin();
   const auto keys_ptr = &*arg_it;
   if (query_mem_desc_.hasKeylessHash()) {
     CHECK(query_mem_desc_.getQueryDescriptionType() ==
@@ -573,22 +647,21 @@ void ResultSetStorage::isEmptyJIT(const ReductionCode& reduction_code) const {
   const auto ret =
       cgen_state->ir_builder_.CreateICmpEQ(key, empty_key_val, "is_key_empty");
   cgen_state->ir_builder_.CreateRet(ret);
-  verify_function_ir(reduction_code.ir_is_empty_func);
+  verify_function_ir(reduction_code.ir_is_empty);
 }
 
-void ResultSetStorage::reduceOneEntryNoCollisionsJIT(
-    const ResultSetStorage& that,
+void ResultSetReductionJIT::reduceOneEntryNoCollisions(
     const ReductionCode& reduction_code) const {
   auto cgen_state = reduction_code.cgen_state.get();
   const auto bb_entry = llvm::BasicBlock::Create(
-      cgen_state->context_, ".entry", reduction_code.ir_reduce_func, 0);
+      cgen_state->context_, ".entry", reduction_code.ir_reduce_one_entry, 0);
   cgen_state->ir_builder_.SetInsertPoint(bb_entry);
-  const auto arg_it = reduction_code.ir_reduce_func->arg_begin();
+  const auto arg_it = reduction_code.ir_reduce_one_entry->arg_begin();
   const auto this_row_ptr = &*arg_it;
   const auto that_row_ptr = &*(arg_it + 1);
   const auto that_is_empty = cgen_state->ir_builder_.CreateCall(
-      reduction_code.ir_is_empty_func, that_row_ptr, "that_is_empty");
-  return_early(that_is_empty, reduction_code, reduction_code.ir_reduce_func, 0);
+      reduction_code.ir_is_empty, that_row_ptr, "that_is_empty");
+  return_early(that_is_empty, reduction_code, reduction_code.ir_reduce_one_entry, 0);
 
   const auto key_bytes = get_key_bytes_rowwise(query_mem_desc_);
   if (key_bytes) {  // copy the key from right hand side
@@ -607,6 +680,16 @@ void ResultSetStorage::reduceOneEntryNoCollisionsJIT(
   const auto that_targets_start_ptr =
       cgen_state->ir_builder_.CreateGEP(that_row_ptr, key_bytes_lv, "that_targets_start");
 
+  reduceOneEntryTargetsNoCollisions(
+      reduction_code, this_targets_start_ptr, that_targets_start_ptr);
+  verify_function_ir(reduction_code.ir_reduce_one_entry);
+}
+
+void ResultSetReductionJIT::reduceOneEntryTargetsNoCollisions(
+    const ReductionCode& reduction_code,
+    llvm::Value* this_targets_start_ptr,
+    llvm::Value* that_targets_start_ptr) const {
+  auto cgen_state = reduction_code.cgen_state.get();
   const auto& col_slot_context = query_mem_desc_.getColSlotContext();
   llvm::Value* this_targets_ptr = this_targets_start_ptr;
   llvm::Value* that_targets_ptr = that_targets_start_ptr;
@@ -640,17 +723,16 @@ void ResultSetStorage::reduceOneEntryNoCollisionsJIT(
         that_ptr2 =
             cgen_state->ir_builder_.CreateGEP(that_targets_ptr, slot_off, "that_" + desc);
       }
-      reduceOneSlotJIT(this_targets_ptr,
-                       this_ptr2,
-                       that_targets_ptr,
-                       that_ptr2,
-                       target_info,
-                       target_logical_idx,
-                       target_slot_idx,
-                       init_agg_val_idx,
-                       that,
-                       slots_for_col.front(),
-                       reduction_code);
+      reduceOneSlot(this_targets_ptr,
+                    this_ptr2,
+                    that_targets_ptr,
+                    that_ptr2,
+                    target_info,
+                    target_logical_idx,
+                    target_slot_idx,
+                    init_agg_val_idx,
+                    slots_for_col.front(),
+                    reduction_code);
       auto increment_agg_val_idx_maybe =
           [&init_agg_val_idx, &target_logical_idx, this](const int slot_count) {
             if (query_mem_desc_.targetGroupbyIndicesSize() == 0 ||
@@ -682,17 +764,16 @@ void ResultSetStorage::reduceOneEntryNoCollisionsJIT(
     }
   }
   reduction_code.cgen_state->ir_builder_.CreateRetVoid();
-  verify_function_ir(reduction_code.ir_reduce_func);
+  verify_function_ir(reduction_code.ir_reduce_one_entry);
 }
 
-void ResultSetStorage::reduceOneEntryBaselineJIT(
-    const ResultSetStorage& that,
+void ResultSetReductionJIT::reduceOneEntryBaseline(
     const ReductionCode& reduction_code) const {
   auto cgen_state = reduction_code.cgen_state.get();
   const auto bb_entry = llvm::BasicBlock::Create(
-      cgen_state->context_, ".entry", reduction_code.ir_reduce_func, 0);
+      cgen_state->context_, ".entry", reduction_code.ir_reduce_one_entry, 0);
   cgen_state->ir_builder_.SetInsertPoint(bb_entry);
-  const auto arg_it = reduction_code.ir_reduce_func->arg_begin();
+  const auto arg_it = reduction_code.ir_reduce_one_entry->arg_begin();
   const auto this_targets_ptr_arg = &*arg_it;
   const auto that_targets_ptr_arg = &*(arg_it + 1);
   llvm::Value* this_ptr1 = this_targets_ptr_arg;
@@ -714,17 +795,16 @@ void ResultSetStorage::reduceOneEntryBaselineJIT(
       that_ptr2 = cgen_state->ir_builder_.CreateGEP(
           that_ptr1, second_slot_rel_off, "that_" + desc);
     }
-    reduceOneSlotJIT(this_ptr1,
-                     this_ptr2,
-                     that_ptr1,
-                     that_ptr2,
-                     target_info,
-                     target_logical_idx,
-                     j,
-                     init_agg_val_idx,
-                     that,
-                     j,
-                     reduction_code);
+    reduceOneSlot(this_ptr1,
+                  this_ptr2,
+                  that_ptr1,
+                  that_ptr2,
+                  target_info,
+                  target_logical_idx,
+                  j,
+                  init_agg_val_idx,
+                  j,
+                  reduction_code);
     if (target_logical_idx + 1 == targets_.size()) {
       break;
     }
@@ -746,19 +826,19 @@ void ResultSetStorage::reduceOneEntryBaselineJIT(
         that_targets_ptr_arg, next_slot_rel_off, next_desc);
   }
   reduction_code.cgen_state->ir_builder_.CreateRetVoid();
-  verify_function_ir(reduction_code.ir_reduce_func);
+  verify_function_ir(reduction_code.ir_reduce_one_entry);
 }
 
-void ResultSetStorage::reduceOneEntryNoCollisionsIdxJIT(
+void ResultSetReductionJIT::reduceOneEntryNoCollisionsIdx(
     const ReductionCode& reduction_code) const {
   CHECK(query_mem_desc_.getQueryDescriptionType() ==
         QueryDescriptionType::GroupByPerfectHash);
   auto cgen_state = reduction_code.cgen_state.get();
   auto& ctx = cgen_state->context_;
   const auto bb_entry =
-      llvm::BasicBlock::Create(ctx, ".entry", reduction_code.ir_reduce_func_idx, 0);
+      llvm::BasicBlock::Create(ctx, ".entry", reduction_code.ir_reduce_one_entry_idx, 0);
   cgen_state->ir_builder_.SetInsertPoint(bb_entry);
-  const auto arg_it = reduction_code.ir_reduce_func_idx->arg_begin();
+  const auto arg_it = reduction_code.ir_reduce_one_entry_idx->arg_begin();
   const auto this_buff = &*arg_it;
   const auto that_buff = &*(arg_it + 1);
   const auto entry_idx = &*(arg_it + 2);
@@ -772,17 +852,17 @@ void ResultSetStorage::reduceOneEntryNoCollisionsIdxJIT(
       cgen_state->ir_builder_.CreateGEP(this_buff, row_off_in_bytes, "this_row_ptr");
   const auto that_row_ptr =
       cgen_state->ir_builder_.CreateGEP(that_buff, row_off_in_bytes, "that_row_ptr");
-  cgen_state->ir_builder_.CreateCall(reduction_code.ir_reduce_func,
+  cgen_state->ir_builder_.CreateCall(reduction_code.ir_reduce_one_entry,
                                      {this_row_ptr,
                                       that_row_ptr,
                                       this_qmd_handle,
                                       that_qmd_handle,
                                       serialized_varlen_buffer_arg});
   cgen_state->ir_builder_.CreateRetVoid();
-  verify_function_ir(reduction_code.ir_reduce_func_idx);
+  verify_function_ir(reduction_code.ir_reduce_one_entry_idx);
 }
 
-void ResultSetStorage::reduceOneEntryBaselineIdxJIT(
+void ResultSetReductionJIT::reduceOneEntryBaselineIdx(
     const ReductionCode& reduction_code) const {
   CHECK(query_mem_desc_.getQueryDescriptionType() ==
         QueryDescriptionType::GroupByBaselineHash);
@@ -791,9 +871,9 @@ void ResultSetStorage::reduceOneEntryBaselineIdxJIT(
   auto cgen_state = reduction_code.cgen_state.get();
   auto& ctx = cgen_state->context_;
   const auto bb_entry =
-      llvm::BasicBlock::Create(ctx, ".entry", reduction_code.ir_reduce_func_idx, 0);
+      llvm::BasicBlock::Create(ctx, ".entry", reduction_code.ir_reduce_one_entry_idx, 0);
   cgen_state->ir_builder_.SetInsertPoint(bb_entry);
-  const auto arg_it = reduction_code.ir_reduce_func_idx->arg_begin();
+  const auto arg_it = reduction_code.ir_reduce_one_entry_idx->arg_begin();
   const auto this_buff = &*arg_it;
   const auto that_buff = &*(arg_it + 1);
   const auto that_entry_idx = &*(arg_it + 2);
@@ -807,8 +887,8 @@ void ResultSetStorage::reduceOneEntryBaselineIdxJIT(
   const auto that_row_ptr =
       cgen_state->ir_builder_.CreateGEP(that_buff, that_row_off_in_bytes, "that_row_ptr");
   const auto that_is_empty = cgen_state->ir_builder_.CreateCall(
-      reduction_code.ir_is_empty_func, that_row_ptr, "that_is_empty");
-  return_early(that_is_empty, reduction_code, reduction_code.ir_reduce_func_idx, 0);
+      reduction_code.ir_is_empty, that_row_ptr, "that_is_empty");
+  return_early(that_is_empty, reduction_code, reduction_code.ir_reduce_one_entry_idx, 0);
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   const auto pi64_type = llvm::Type::getInt64PtrTy(cgen_state->context_);
   const auto bool_type = llvm::Type::getInt8Ty(cgen_state->context_);
@@ -834,7 +914,7 @@ void ResultSetStorage::reduceOneEntryBaselineIdxJIT(
       cgen_state->ir_builder_.CreateLoad(this_is_empty_ptr, "this_is_empty");
   this_is_empty = cgen_state->ir_builder_.CreateTrunc(
       this_is_empty, get_int_type(1, ctx), "this_is_empty_bool");
-  return_early(this_is_empty, reduction_code, reduction_code.ir_reduce_func_idx, 0);
+  return_early(this_is_empty, reduction_code, reduction_code.ir_reduce_one_entry_idx, 0);
   const auto pi8_type = llvm::Type::getInt8PtrTy(cgen_state->context_);
   const auto key_qw_count = get_slot_off_quad(query_mem_desc_);
   const auto this_targets_ptr = cgen_state->ir_builder_.CreateBitCast(
@@ -843,17 +923,61 @@ void ResultSetStorage::reduceOneEntryBaselineIdxJIT(
   const auto key_byte_count_lv = cgen_state->llInt<int32_t>(key_byte_count);
   const auto that_targets_ptr = cgen_state->ir_builder_.CreateGEP(
       that_row_ptr, key_byte_count_lv, "that_targets_ptr");
-  cgen_state->ir_builder_.CreateCall(reduction_code.ir_reduce_func,
+  cgen_state->ir_builder_.CreateCall(reduction_code.ir_reduce_one_entry,
                                      {this_targets_ptr,
                                       that_targets_ptr,
                                       this_qmd_handle,
                                       that_qmd_handle,
                                       serialized_varlen_buffer_arg});
   cgen_state->ir_builder_.CreateRetVoid();
-  verify_function_ir(reduction_code.ir_reduce_func_idx);
+  verify_function_ir(reduction_code.ir_reduce_one_entry_idx);
 }
 
-void ResultSetStorage::reduceLoopJIT(const ReductionCode& reduction_code) const {
+namespace {
+
+llvm::BasicBlock* generate_loop_body(const ReductionCode& reduction_code,
+                                     llvm::Value* this_buff,
+                                     llvm::Value* that_buff,
+                                     llvm::Value* iterator,
+                                     llvm::Value* start_index,
+                                     llvm::Value* that_entry_count,
+                                     llvm::Value* this_qmd_handle,
+                                     llvm::Value* that_qmd_handle,
+                                     llvm::Value* serialized_varlen_buffer) {
+  auto cgen_state = reduction_code.cgen_state.get();
+  auto& ir_builder = cgen_state->ir_builder_;
+  auto& ctx = cgen_state->context_;
+  const auto loop_body_bb = llvm::BasicBlock::Create(
+      ctx, ".loop_body", ir_builder.GetInsertBlock()->getParent());
+  ir_builder.SetInsertPoint(loop_body_bb);
+  const auto loop_iter =
+      ir_builder.CreateTrunc(iterator, get_int_type(32, ctx), "relative_entry_idx");
+  const auto that_entry_idx =
+      ir_builder.CreateAdd(loop_iter, start_index, "that_entry_idx");
+  const auto watchdog_sample_seed =
+      ir_builder.CreateSExt(that_entry_idx, get_int_type(64, ctx));
+  const auto watchdog_triggered = cgen_state->emitExternalCall(
+      "check_watchdog_rt", get_int_type(8, ctx), {watchdog_sample_seed});
+  const auto watchdog_triggered_bool = cgen_state->ir_builder_.CreateICmpNE(
+      watchdog_triggered, cgen_state->llInt<int8_t>(0));
+  return_early(watchdog_triggered_bool,
+               reduction_code,
+               reduction_code.ir_reduce_loop,
+               WATCHDOG_ERROR);
+  ir_builder.CreateCall(reduction_code.ir_reduce_one_entry_idx,
+                        {this_buff,
+                         that_buff,
+                         that_entry_idx,
+                         that_entry_count,
+                         this_qmd_handle,
+                         that_qmd_handle,
+                         serialized_varlen_buffer});
+  return loop_body_bb;
+}
+
+}  // namespace
+
+void ResultSetReductionJIT::reduceLoop(const ReductionCode& reduction_code) const {
   const auto arg_it = reduction_code.ir_reduce_loop->arg_begin();
   const auto this_buff_arg = &*arg_it;
   const auto that_buff_arg = &*(arg_it + 1);
@@ -898,35 +1022,15 @@ void ResultSetStorage::reduceLoopJIT(const ReductionCode& reduction_code) const 
        this_qmd_handle_arg,
        that_qmd_handle_arg,
        serialized_varlen_buffer_arg](const std::vector<llvm::Value*>& iterators) {
-        auto cgen_state = reduction_code.cgen_state.get();
-        auto& ir_builder = cgen_state->ir_builder_;
-        auto& ctx = cgen_state->context_;
-        const auto loop_body_bb = llvm::BasicBlock::Create(
-            ctx, ".loop_body", ir_builder.GetInsertBlock()->getParent());
-        ir_builder.SetInsertPoint(loop_body_bb);
-        const auto loop_iter = ir_builder.CreateTrunc(
-            iterators.back(), get_int_type(32, ctx), "relative_entry_idx");
-        const auto that_entry_idx =
-            ir_builder.CreateAdd(loop_iter, start_index_arg, "that_entry_idx");
-        const auto watchdog_sample_seed =
-            ir_builder.CreateSExt(that_entry_idx, get_int_type(64, ctx));
-        const auto watchdog_triggered = cgen_state->emitExternalCall(
-            "check_watchdog_rt", get_int_type(8, ctx), {watchdog_sample_seed});
-        const auto watchdog_triggered_bool = cgen_state->ir_builder_.CreateICmpNE(
-            watchdog_triggered, cgen_state->llInt<int8_t>(0));
-        return_early(watchdog_triggered_bool,
-                     reduction_code,
-                     reduction_code.ir_reduce_loop,
-                     WATCHDOG_ERROR);
-        ir_builder.CreateCall(reduction_code.ir_reduce_func_idx,
-                              {this_buff_arg,
-                               that_buff_arg,
-                               that_entry_idx,
-                               that_entry_count_arg,
-                               this_qmd_handle_arg,
-                               that_qmd_handle_arg,
-                               serialized_varlen_buffer_arg});
-        return loop_body_bb;
+        return generate_loop_body(reduction_code,
+                                  this_buff_arg,
+                                  that_buff_arg,
+                                  iterators.back(),
+                                  start_index_arg,
+                                  that_entry_count_arg,
+                                  this_qmd_handle_arg,
+                                  that_qmd_handle_arg,
+                                  serialized_varlen_buffer_arg);
       },
       nullptr,
       bb_exit,
@@ -936,69 +1040,39 @@ void ResultSetStorage::reduceLoopJIT(const ReductionCode& reduction_code) const 
   verify_function_ir(reduction_code.ir_reduce_loop);
 }
 
-void ResultSetStorage::reduceOneSlotJIT(llvm::Value* this_ptr1,
-                                        llvm::Value* this_ptr2,
-                                        llvm::Value* that_ptr1,
-                                        llvm::Value* that_ptr2,
-                                        const TargetInfo& target_info,
-                                        const size_t target_logical_idx,
-                                        const size_t target_slot_idx,
-                                        const size_t init_agg_val_idx,
-                                        const ResultSetStorage& that,
-                                        const size_t first_slot_idx_for_target,
-                                        const ReductionCode& reduction_code) const {
+void ResultSetReductionJIT::reduceOneSlot(llvm::Value* this_ptr1,
+                                          llvm::Value* this_ptr2,
+                                          llvm::Value* that_ptr1,
+                                          llvm::Value* that_ptr2,
+                                          const TargetInfo& target_info,
+                                          const size_t target_logical_idx,
+                                          const size_t target_slot_idx,
+                                          const size_t init_agg_val_idx,
+                                          const size_t first_slot_idx_for_target,
+                                          const ReductionCode& reduction_code) const {
   if (query_mem_desc_.targetGroupbyIndicesSize() > 0) {
     if (query_mem_desc_.getTargetGroupbyIndex(target_logical_idx) >= 0) {
       return;
     }
   }
-  CHECK_LT(init_agg_val_idx, target_init_vals_.size());
   const bool float_argument_input = takes_float_argument(target_info);
   const auto chosen_bytes =
       get_width_for_slot(target_slot_idx, float_argument_input, query_mem_desc_);
+  CHECK_LT(init_agg_val_idx, target_init_vals_.size());
   auto init_val = target_init_vals_[init_agg_val_idx];
-  const auto cgen_state = reduction_code.cgen_state.get();
   if (target_info.is_agg && target_info.agg_kind != kSAMPLE) {
-    switch (target_info.agg_kind) {
-      case kCOUNT:
-      case kAPPROX_COUNT_DISTINCT: {
-        if (is_distinct_target(target_info)) {
-          CHECK_EQ(static_cast<size_t>(chosen_bytes), sizeof(int64_t));
-          reduceOneCountDistinctSlotJIT(
-              this_ptr1, that_ptr1, target_logical_idx, that, reduction_code);
-          break;
-        }
-        CHECK_EQ(int64_t(0), init_val);
-        emit_aggregate_one_count(this_ptr1, that_ptr1, chosen_bytes, cgen_state);
-        break;
-      }
-      case kAVG: {
-        // Ignore float argument compaction for count component for fear of its overflow
-        emit_aggregate_one_count(this_ptr2,
-                                 that_ptr2,
-                                 query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx),
-                                 cgen_state);
-      }
-      // fall thru
-      case kSUM: {
-        emit_aggregate_one_nullable_value(
-            "sum", this_ptr1, that_ptr1, init_val, chosen_bytes, target_info, cgen_state);
-        break;
-      }
-      case kMIN: {
-        emit_aggregate_one_nullable_value(
-            "min", this_ptr1, that_ptr1, init_val, chosen_bytes, target_info, cgen_state);
-        break;
-      }
-      case kMAX: {
-        emit_aggregate_one_nullable_value(
-            "max", this_ptr1, that_ptr1, init_val, chosen_bytes, target_info, cgen_state);
-        break;
-      }
-      default:
-        LOG(FATAL) << "Invalid aggregate type";
-    }
+    reduceOneAggregateSlot(this_ptr1,
+                           this_ptr2,
+                           that_ptr1,
+                           that_ptr2,
+                           target_info,
+                           target_logical_idx,
+                           target_slot_idx,
+                           init_val,
+                           chosen_bytes,
+                           reduction_code);
   } else {
+    const auto cgen_state = reduction_code.cgen_state.get();
     emit_write_projection(this_ptr1, that_ptr1, init_val, chosen_bytes, cgen_state);
     if (target_info.agg_kind == kSAMPLE && target_info.sql_type.is_varlen()) {
       CHECK(this_ptr2 && that_ptr2);
@@ -1010,7 +1084,7 @@ void ResultSetStorage::reduceOneSlotJIT(llvm::Value* this_ptr1,
         const auto& elem_ti = target_info.sql_type.get_elem_type();
         length_to_elems = target_info.sql_type.is_string() ? 1 : elem_ti.get_size();
       }
-      const auto arg_it = reduction_code.ir_reduce_func->arg_begin();
+      const auto arg_it = reduction_code.ir_reduce_one_entry->arg_begin();
       const auto serialized_varlen_buffer_arg = &*(arg_it + 4);
       cgen_state->emitExternalCall("serialized_varlen_buffer_sample",
                                    llvm::Type::getVoidTy(cgen_state->context_),
@@ -1025,17 +1099,69 @@ void ResultSetStorage::reduceOneSlotJIT(llvm::Value* this_ptr1,
   }
 }
 
-void ResultSetStorage::reduceOneCountDistinctSlotJIT(
+void ResultSetReductionJIT::reduceOneAggregateSlot(
+    llvm::Value* this_ptr1,
+    llvm::Value* this_ptr2,
+    llvm::Value* that_ptr1,
+    llvm::Value* that_ptr2,
+    const TargetInfo& target_info,
+    const size_t target_logical_idx,
+    const size_t target_slot_idx,
+    const int64_t init_val,
+    const int8_t chosen_bytes,
+    const ReductionCode& reduction_code) const {
+  const auto cgen_state = reduction_code.cgen_state.get();
+  switch (target_info.agg_kind) {
+    case kCOUNT:
+    case kAPPROX_COUNT_DISTINCT: {
+      if (is_distinct_target(target_info)) {
+        CHECK_EQ(static_cast<size_t>(chosen_bytes), sizeof(int64_t));
+        reduceOneCountDistinctSlot(
+            this_ptr1, that_ptr1, target_logical_idx, reduction_code);
+        break;
+      }
+      CHECK_EQ(int64_t(0), init_val);
+      emit_aggregate_one_count(this_ptr1, that_ptr1, chosen_bytes, cgen_state);
+      break;
+    }
+    case kAVG: {
+      // Ignore float argument compaction for count component for fear of its overflow
+      emit_aggregate_one_count(this_ptr2,
+                               that_ptr2,
+                               query_mem_desc_.getPaddedSlotWidthBytes(target_slot_idx),
+                               cgen_state);
+    }
+    // fall thru
+    case kSUM: {
+      emit_aggregate_one_nullable_value(
+          "sum", this_ptr1, that_ptr1, init_val, chosen_bytes, target_info, cgen_state);
+      break;
+    }
+    case kMIN: {
+      emit_aggregate_one_nullable_value(
+          "min", this_ptr1, that_ptr1, init_val, chosen_bytes, target_info, cgen_state);
+      break;
+    }
+    case kMAX: {
+      emit_aggregate_one_nullable_value(
+          "max", this_ptr1, that_ptr1, init_val, chosen_bytes, target_info, cgen_state);
+      break;
+    }
+    default:
+      LOG(FATAL) << "Invalid aggregate type";
+  }
+}
+
+void ResultSetReductionJIT::reduceOneCountDistinctSlot(
     llvm::Value* this_ptr1,
     llvm::Value* that_ptr1,
     const size_t target_logical_idx,
-    const ResultSetStorage& that,
     const ReductionCode& reduction_code) const {
   CHECK_LT(target_logical_idx, query_mem_desc_.getCountDistinctDescriptorsSize());
   const auto cgen_state = reduction_code.cgen_state.get();
   const auto old_set_handle = emit_load_i64(this_ptr1, cgen_state);
   const auto new_set_handle = emit_load_i64(that_ptr1, cgen_state);
-  const auto arg_it = reduction_code.ir_reduce_func->arg_begin();
+  const auto arg_it = reduction_code.ir_reduce_one_entry->arg_begin();
   const auto this_qmd_arg = &*(arg_it + 2);
   const auto that_qmd_arg = &*(arg_it + 3);
   cgen_state->emitExternalCall("count_distinct_set_union_jit_rt",
@@ -1047,13 +1173,13 @@ void ResultSetStorage::reduceOneCountDistinctSlotJIT(
                                 cgen_state->llInt<int64_t>(target_logical_idx)});
 }
 
-ReductionCode ResultSetStorage::finalizeReductionCode(
+ReductionCode ResultSetReductionJIT::finalizeReductionCode(
     ReductionCode reduction_code) const {
-  const auto key0 = serialize_llvm_object(reduction_code.ir_is_empty_func);
-  const auto key1 = serialize_llvm_object(reduction_code.ir_reduce_func);
-  const auto key2 = serialize_llvm_object(reduction_code.ir_reduce_func_idx);
+  const auto key0 = serialize_llvm_object(reduction_code.ir_is_empty);
+  const auto key1 = serialize_llvm_object(reduction_code.ir_reduce_one_entry);
+  const auto key2 = serialize_llvm_object(reduction_code.ir_reduce_one_entry_idx);
   CodeCacheKey key{key0, key1, key2};
-  const auto val_ptr = g_code_cache.get(key);
+  const auto val_ptr = s_code_cache.get(key);
   if (val_ptr) {
     return {
         nullptr,
@@ -1071,7 +1197,7 @@ ReductionCode ResultSetStorage::finalizeReductionCode(
   reduction_code.module.release();
   const bool use_interp = query_mem_desc_.getEntryCount() < INTERP_THRESHOLD;
   auto ee = use_interp
-                ? generate_native_reduction_code(reduction_code.ir_reduce_loop)
+                ? create_interpreter_engine(reduction_code.ir_reduce_loop)
                 : CodeGenerator::generateNativeCPUCode(
                       reduction_code.ir_reduce_loop, {reduction_code.ir_reduce_loop}, co);
   reduction_code.func_ptr =
@@ -1083,13 +1209,13 @@ ReductionCode ResultSetStorage::finalizeReductionCode(
     reduction_code.own_execution_engine = std::move(ee);
   } else {
     std::tuple<void*, ExecutionEngineWrapper> cache_val =
-        std::make_tuple(reinterpret_cast<voidI*>(reduction_code.func_ptr), std::move(ee));
+        std::make_tuple(reinterpret_cast<void*>(reduction_code.func_ptr), std::move(ee));
     std::vector<std::tuple<void*, ExecutionEngineWrapper>> cache_vals;
     cache_vals.emplace_back(std::move(cache_val));
     Executor::addCodeToCache({key},
                              std::move(cache_vals),
                              reduction_code.ir_reduce_loop->getParent(),
-                             g_code_cache);
+                             s_code_cache);
   }
   return std::move(reduction_code);
 }

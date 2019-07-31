@@ -25,6 +25,7 @@
 
 #include "../QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "../QueryEngine/ResultSet.h"
+#include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryEngine/RuntimeFunctions.h"
 #include "../StringDictionary/StringDictionary.h"
 #include "TestHelpers.h"
@@ -2438,7 +2439,9 @@ TEST(MoreReduce, MissingValues) {
     buff2[2 * 3 + 2] = 5;
   }
 #ifdef WITH_REDUCTION_JIT
-  const auto reduction_code = storage1->reduceOneEntryJIT(*storage2);
+  ResultSetReductionJIT reduction_jit(
+      rs1->getQueryMemDesc(), rs1->getTargetInfos(), rs1->getTargetInitVals());
+  const auto reduction_code = reduction_jit.codegen();
 #else
   ReductionCode reduction_code{};
 #endif  // WITH_REDUCTION_JIT
@@ -2495,7 +2498,9 @@ TEST(MoreReduce, MissingValuesKeyless) {
     buff2[2 * 2 + 1] = 5;
   }
 #ifdef WITH_REDUCTION_JIT
-  const auto reduction_code = storage1->reduceOneEntryJIT(*storage2);
+  ResultSetReductionJIT reduction_jit(
+      rs1->getQueryMemDesc(), rs1->getTargetInfos(), rs1->getTargetInitVals());
+  const auto reduction_code = reduction_jit.codegen();
 #else
   ReductionCode reduction_code{};
 #endif  // WITH_REDUCTION_JIT
@@ -2570,7 +2575,9 @@ TEST(MoreReduce, OffsetRewrite) {
 
   storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
 #ifdef WITH_REDUCTION_JIT
-  const auto reduction_code = storage1->reduceOneEntryJIT(*storage2);
+  ResultSetReductionJIT reduction_jit(
+      rs1->getQueryMemDesc(), rs1->getTargetInfos(), rs1->getTargetInitVals());
+  const auto reduction_code = reduction_jit.codegen();
 #else
   ReductionCode reduction_code{};
 #endif  // WITH_REDUCTION_JIT
@@ -2675,7 +2682,9 @@ TEST(MoreReduce, OffsetRewriteGeo) {
 
   storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
 #ifdef WITH_REDUCTION_JIT
-  const auto reduction_code = storage1->reduceOneEntryJIT(*storage2);
+  ResultSetReductionJIT reduction_jit(
+      rs1->getQueryMemDesc(), rs1->getTargetInfos(), rs1->getTargetInitVals());
+  const auto reduction_code = reduction_jit.codegen();
 #else
   ReductionCode reduction_code{};
 #endif  // WITH_REDUCTION_JIT
@@ -2776,7 +2785,9 @@ TEST(MoreReduce, OffsetRewriteGeoKeyless) {
 
   storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
 #ifdef WITH_REDUCTION_JIT
-  const auto reduction_code = storage1->reduceOneEntryJIT(*storage2);
+  ResultSetReductionJIT reduction_jit(
+      rs1->getQueryMemDesc(), rs1->getTargetInfos(), rs1->getTargetInitVals());
+  const auto reduction_code = reduction_jit.codegen();
 #else
   ReductionCode reduction_code{};
 #endif  // WITH_REDUCTION_JIT

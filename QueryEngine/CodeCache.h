@@ -16,11 +16,16 @@
 
 #pragma once
 
-#include "CgenState.h"
+#include "CompilationOptions.h"
+
+#include "../StringDictionary/LruCache.hpp"
 
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/IR/Module.h>
+#include <boost/functional/hash.hpp>
+
+#include <memory>
 
 class ExecutionEngineWrapper {
  public:
@@ -51,23 +56,11 @@ class ExecutionEngineWrapper {
   std::unique_ptr<llvm::JITEventListener> intel_jit_listener_;
 };
 
-struct ReductionCode {
-  using FuncPtr = int32_t (*)(int8_t*,
-                              const int8_t*,
-                              const int32_t,
-                              const int32_t,
-                              const int32_t,
-                              const void*,
-                              const void*,
-                              const void*);
+class GpuCompilationContext;
 
-  std::unique_ptr<CgenState> cgen_state;
-  llvm::ExecutionEngine* execution_engine;
-  ExecutionEngineWrapper own_execution_engine;
-  std::unique_ptr<llvm::Module> module;
-  llvm::Function* ir_reduce_func;
-  llvm::Function* ir_reduce_func_idx;
-  llvm::Function* ir_is_empty_func;
-  llvm::Function* ir_reduce_loop;
-  FuncPtr func_ptr;
-};
+using CodeCacheKey = std::vector<std::string>;
+using CodeCacheVal = std::vector<
+    std::tuple<void*, ExecutionEngineWrapper, std::unique_ptr<GpuCompilationContext>>>;
+using CodeCacheValWithModule = std::pair<CodeCacheVal, llvm::Module*>;
+using CodeCache =
+    LruCache<CodeCacheKey, CodeCacheValWithModule, boost::hash<CodeCacheKey>>;

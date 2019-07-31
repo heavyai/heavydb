@@ -1766,8 +1766,9 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
     }
     if (target_ti.is_geometry() &&
         !executor_->plan_state_->isLazyFetchColumn(target_expr)) {
-      auto generate_coord_lvs = [&](auto* selected_target_expr,
-                                    bool const fetch_columns) -> LLVMValueVector {
+      auto generate_coord_lvs =
+          [&](auto* selected_target_expr,
+              bool const fetch_columns) -> std::vector<llvm::Value*> {
         const auto target_lvs =
             code_generator.codegen(selected_target_expr, fetch_columns, co);
         CHECK_EQ(static_cast<size_t>(target_ti.get_physical_coord_cols()),

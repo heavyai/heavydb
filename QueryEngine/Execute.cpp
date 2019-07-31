@@ -34,6 +34,7 @@
 #include "OverlapsJoinHashTable.h"
 #include "QueryRewrite.h"
 #include "QueryTemplateGenerator.h"
+#include "ResultSetReductionJIT.h"
 #include "RuntimeFunctions.h"
 #include "SpeculativeTopN.h"
 
@@ -884,8 +885,11 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
   }
 
 #ifdef WITH_REDUCTION_JIT
-  const auto& this_storage = *(results_per_device[0].first->getStorage());
-  auto reduction_code = this_storage.reduceOneEntryJIT(this_storage);
+  const auto& this_result_set = results_per_device[0].first;
+  ResultSetReductionJIT reduction_jit(this_result_set->getQueryMemDesc(),
+                                      this_result_set->getTargetInfos(),
+                                      this_result_set->getTargetInitVals());
+  auto reduction_code = reduction_jit.codegen();
 #else
   ReductionCode reduction_code{};
 #endif  // WITH_REDUCTION_JIT

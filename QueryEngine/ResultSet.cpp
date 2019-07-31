@@ -393,6 +393,11 @@ const std::vector<TargetInfo>& ResultSet::getTargetInfos() const {
   return targets_;
 }
 
+const std::vector<int64_t>& ResultSet::getTargetInitVals() const {
+  CHECK(storage_);
+  return storage_->target_init_vals_;
+}
+
 int8_t* ResultSet::getDeviceEstimatorBuffer() const {
   CHECK(device_type_ == ExecutorDeviceType::GPU);
   return estimator_buffer_;

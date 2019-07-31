@@ -21,6 +21,7 @@
 #include "BufferCompaction.h"
 #include "CartesianProduct.h"
 #include "CgenState.h"
+#include "CodeCache.h"
 #include "DateTimeUtils.h"
 #include "Descriptors/QueryFragmentDescriptor.h"
 #include "GroupByAndAggregate.h"
@@ -46,12 +47,10 @@
 #include "../StringDictionary/StringDictionaryProxy.h"
 
 #include <llvm/IR/Function.h>
-#include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
 #include <llvm/Linker/Linker.h>
 #include <llvm/Transforms/Utils/ValueMapper.h>
 #include <rapidjson/document.h>
-#include <boost/functional/hash.hpp>
 
 #include <unistd.h>
 #include <algorithm>
@@ -324,17 +323,7 @@ class UpdateLogForFragment : public RowDataProvider {
 using PerFragmentCB =
     std::function<void(ResultSetPtr, const Fragmenter_Namespace::FragmentInfo&)>;
 
-using LLVMValueVector = std::vector<llvm::Value*>;
-
 class QueryCompilationDescriptor;
-
-using CodeCacheKey = std::vector<std::string>;
-typedef std::vector<
-    std::tuple<void*, ExecutionEngineWrapper, std::unique_ptr<GpuCompilationContext>>>
-    CodeCacheVal;
-typedef std::pair<CodeCacheVal, llvm::Module*> CodeCacheValWithModule;
-typedef LruCache<CodeCacheKey, CodeCacheValWithModule, boost::hash<CodeCacheKey>>
-    CodeCache;
 
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,

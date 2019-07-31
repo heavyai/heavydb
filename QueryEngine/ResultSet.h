@@ -27,12 +27,8 @@
 
 #include "../Chunk/Chunk.h"
 #include "CardinalityEstimator.h"
-#include "CgenState.h"
 #include "ResultSetBufferAccessors.h"
-#include "ResultSetReduction.h"
 #include "TargetValue.h"
-
-#include <llvm/IR/Value.h>
 
 #include <atomic>
 #include <functional>
@@ -79,6 +75,8 @@
  * probing is used instead, with a 50% fill rate.
  */
 
+struct ReductionCode;
+
 class ResultSetStorage {
  public:
   ResultSetStorage(const std::vector<TargetInfo>& targets,
@@ -121,43 +119,7 @@ class ResultSetStorage {
                               const std::vector<TargetInfo>& targets,
                               const std::vector<int64_t>& agg_init_vals);
 
-  ReductionCode reduceOneEntryJIT(const ResultSetStorage& that) const;
-
  private:
-  void isEmptyJIT(const ReductionCode& reduction_code) const;
-
-  void reduceOneEntryNoCollisionsJIT(const ResultSetStorage& that,
-                                     const ReductionCode& reduction_code) const;
-
-  void reduceOneEntryBaselineJIT(const ResultSetStorage& that,
-                                 const ReductionCode& reduction_code) const;
-
-  void reduceOneEntryNoCollisionsIdxJIT(const ReductionCode& reduction_code) const;
-
-  void reduceOneEntryBaselineIdxJIT(const ReductionCode& reduction_code) const;
-
-  void reduceLoopJIT(const ReductionCode& reduction_code) const;
-
-  void reduceOneSlotJIT(llvm::Value* this_ptr1,
-                        llvm::Value* this_ptr2,
-                        llvm::Value* that_ptr1,
-                        llvm::Value* that_ptr2,
-                        const TargetInfo& target_info,
-                        const size_t target_logical_idx,
-                        const size_t target_slot_idx,
-                        const size_t init_agg_val_idx,
-                        const ResultSetStorage& that,
-                        const size_t first_slot_idx_for_target,
-                        const ReductionCode& reduction_code) const;
-
-  void reduceOneCountDistinctSlotJIT(llvm::Value* this_ptr1,
-                                     llvm::Value* that_ptr1,
-                                     const size_t target_logical_idx,
-                                     const ResultSetStorage& that,
-                                     const ReductionCode& reduction_code) const;
-
-  ReductionCode finalizeReductionCode(ReductionCode reduction_code) const;
-
   void reduceEntriesNoCollisionsColWise(
       int8_t* this_buff,
       const int8_t* that_buff,
@@ -175,8 +137,7 @@ class ResultSetStorage {
       int8_t* this_buff,
       const int8_t* that_buff,
       const ResultSetStorage& that,
-      const std::vector<std::string>& serialized_varlen_buffer,
-      const ReductionCode& reduction_code) const;
+      const std::vector<std::string>& serialized_varlen_buffer) const;
 
   bool isEmptyEntry(const size_t entry_idx, const int8_t* buff) const;
   bool isEmptyEntry(const size_t entry_idx) const;
@@ -186,15 +147,13 @@ class ResultSetStorage {
                               const int8_t* that_buff,
                               const size_t i,
                               const size_t that_entry_count,
-                              const ResultSetStorage& that,
-                              const ReductionCode& reduction_code) const;
+                              const ResultSetStorage& that) const;
 
   void reduceOneEntrySlotsBaseline(int64_t* this_entry_slots,
                                    const int64_t* that_buff,
                                    const size_t that_entry_idx,
                                    const size_t that_entry_count,
-                                   const ResultSetStorage& that,
-                                   const ReductionCode& reduction_code) const;
+                                   const ResultSetStorage& that) const;
 
   void initializeBaselineValueSlots(int64_t* this_entry_slots) const;
 
@@ -453,6 +412,8 @@ class ResultSet {
   const QueryMemoryDescriptor& getQueryMemDesc() const;
 
   const std::vector<TargetInfo>& getTargetInfos() const;
+
+  const std::vector<int64_t>& getTargetInitVals() const;
 
   int8_t* getDeviceEstimatorBuffer() const;
 
