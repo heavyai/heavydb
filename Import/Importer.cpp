@@ -3127,25 +3127,29 @@ void Detector::import_local_parquet(const std::string& file_path) {
   const ColumnDescriptor cd;
   for (int g = 0; g < num_row_groups; ++g) {
     // data is columnwise
-    std::vector<std::shared_ptr<arrow::Array>> arrays;
+    std::vector<std::shared_ptr<arrow::ChunkedArray>> arrays;
     std::vector<VarValue (*)(const Array&, const int64_t)> getters;
     arrays.resize(num_columns);
     for (int c = 0; c < num_columns; ++c) {
       PARQUET_THROW_NOT_OK(reader->RowGroup(g)->Column(c)->Read(&arrays[c]));
-      getters.push_back(value_getter(*arrays[c], nullptr, nullptr));
+      for (auto chunk : arrays[c]->chunks()) {
+        getters.push_back(value_getter(*chunk, nullptr, nullptr));
+      }
     }
     for (int r = 0; r < num_rows; ++r) {
       for (int c = 0; c < num_columns; ++c) {
         std::vector<std::string> buffer;
-        DataBuffer<std::string> data(&cd, *arrays[c], buffer, nullptr);
-        if (c) {
-          raw_data += copy_params.delimiter;
-        }
-        if (!arrays[c]->IsNull(r)) {
-          raw_data += copy_params.quote;
-          raw_data += boost::replace_all_copy(
-              (data << getters[c](*arrays[c], r)).buffer.front(), "\"", "\"\"");
-          raw_data += copy_params.quote;
+        for (auto chunk : arrays[c]->chunks()) {
+          DataBuffer<std::string> data(&cd, *chunk, buffer, nullptr);
+          if (c) {
+            raw_data += copy_params.delimiter;
+          }
+          if (!chunk->IsNull(r)) {
+            raw_data += copy_params.quote;
+            raw_data += boost::replace_all_copy(
+                (data << getters[c](*chunk, r)).buffer.front(), "\"", "\"\"");
+            raw_data += copy_params.quote;
+          }
         }
       }
       raw_data += copy_params.line_delim;
@@ -3279,7 +3283,7 @@ void Importer::import_local_parquet(const std::string& file_path) {
       for (int logic_col_idx = 0; logic_col_idx < num_columns; ++logic_col_idx) {
         const auto physical_col_idx = get_physical_col_idx(logic_col_idx);
         const auto cd = cds[physical_col_idx];
-        std::shared_ptr<arrow::Array> array;
+        std::shared_ptr<arrow::ChunkedArray> array;
         PARQUET_THROW_NOT_OK(
             reader->RowGroup(row_group)->Column(logic_col_idx)->Read(&array));
         const size_t array_size = array->length();
@@ -3295,8 +3299,10 @@ void Importer::import_local_parquet(const std::string& file_path) {
             auto& import_buffer = import_buffers_vec[slice][physical_col_idx];
             import_buffer->import_buffers = &import_buffers_vec[slice];
             import_buffer->col_idx = physical_col_idx + 1;
-            import_buffer->add_arrow_values(
-                cd, *array, false, slice_range, &bad_rows_tracker);
+            for (auto chunk : array->chunks()) {
+              import_buffer->add_arrow_values(
+                  cd, *chunk, false, slice_range, &bad_rows_tracker);
+            }
           });
         }
         thread_controller.finish();
