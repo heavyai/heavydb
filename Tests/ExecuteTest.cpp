@@ -740,47 +740,47 @@ TEST(KeyForString, KeyForString) {
     EXPECT_NO_THROW(
         run_multiple_agg("insert into kfs values(null, null, null, '2', {'2','2'});",
                          ExecutorDeviceType::CPU));
-    ASSERT_EQ(3, v<int64_t>(run_simple_agg("select count() from kfs;", dt)));
+    ASSERT_EQ(3, v<int64_t>(run_simple_agg("select count(*) from kfs;", dt)));
     ASSERT_EQ(2,
               v<int64_t>(run_simple_agg(
-                  "select count() from kfs where key_for_string(ts) is not null;", dt)));
+                  "select count(*) from kfs where key_for_string(ts) is not null;", dt)));
     ASSERT_EQ(2,
               v<int64_t>(run_simple_agg(
-                  "select count() from kfs where key_for_string(ss) is not null;", dt)));
+                  "select count(*) from kfs where key_for_string(ss) is not null;", dt)));
     ASSERT_EQ(2,
               v<int64_t>(run_simple_agg(
-                  "select count() from kfs where key_for_string(ws) is not null;", dt)));
+                  "select count(*) from kfs where key_for_string(ws) is not null;", dt)));
     ASSERT_EQ(3,
               v<int64_t>(run_simple_agg(
-                  "select count() from kfs where key_for_string(ns) is not null;", dt)));
+                  "select count(*) from kfs where key_for_string(ns) is not null;", dt)));
     ASSERT_EQ(
         3,
         v<int64_t>(run_simple_agg(
-            "select count() from kfs where key_for_string(sa[1]) is not null;", dt)));
+            "select count(*) from kfs where key_for_string(sa[1]) is not null;", dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg(
-            "select count() from kfs where key_for_string(ts) = key_for_string(ss);",
+            "select count(*) from kfs where key_for_string(ts) = key_for_string(ss);",
             dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg(
-            "select count() from kfs where key_for_string(ss) = key_for_string(ws);",
+            "select count(*) from kfs where key_for_string(ss) = key_for_string(ws);",
             dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg(
-            "select count() from kfs where key_for_string(ws) = key_for_string(ts);",
+            "select count(*) from kfs where key_for_string(ws) = key_for_string(ts);",
             dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg(
-            "select count() from kfs where key_for_string(ws) = key_for_string(ns);",
+            "select count(*) from kfs where key_for_string(ws) = key_for_string(ns);",
             dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg(
-            "select count() from kfs where key_for_string(ws) = key_for_string(sa[1]);",
+            "select count(*) from kfs where key_for_string(ws) = key_for_string(sa[1]);",
             dt)));
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg("select min(key_for_string(ts)) from kfs;", dt)));
@@ -6017,7 +6017,7 @@ TEST(Alter, AfterAlterGeoColumnName) {
     run_ddl_statement("alter table alter_geo_column_test rename column abc to xyz;");
     auto& sqlite = cat.getSqliteConnector();
     sqlite.query_with_text_params(
-        "select count() from mapd_columns where tableid=? and columnid > ? and columnid "
+        "select count(*) from mapd_columns where tableid=? and columnid > ? and columnid "
         "<= ? and name like 'xyz_%';",
         std::vector<std::string>{
             std::to_string(td->tableId),

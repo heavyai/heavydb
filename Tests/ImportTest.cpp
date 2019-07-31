@@ -82,7 +82,7 @@ bool compare_agg(const int64_t cnt, const double avg) {
 
 #ifdef ENABLE_IMPORT_PARQUET
 bool import_test_parquet_with_null(const int64_t cnt) {
-  std::string query_str = "select count() from trips where rate_code_id is null;";
+  std::string query_str = "select count(*) from trips where rate_code_id is null;";
   auto rows = run_query(query_str);
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(1), crt_row.size());
@@ -251,7 +251,7 @@ bool import_test_local_parquet_with_geo_point(const string& prefix,
   run_ddl_statement("alter table trips add column pt_dropoff point;");
   EXPECT_TRUE(import_test_local_parquet(prefix, filename, cnt, avg));
   std::string query_str =
-      "select count() from trips where abs(dropoff_longitude-st_x(pt_dropoff))<0.01 and "
+      "select count(*) from trips where abs(dropoff_longitude-st_x(pt_dropoff))<0.01 and "
       "abs(dropoff_latitude-st_y(pt_dropoff))<0.01;";
   auto rows = run_query(query_str);
   auto crt_row = rows->getNextRow(true, true);

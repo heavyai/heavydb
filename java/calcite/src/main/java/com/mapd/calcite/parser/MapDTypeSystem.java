@@ -28,6 +28,12 @@ public class MapDTypeSystem extends RelDataTypeSystemImpl {
     return (typeName == SqlTypeName.TIMESTAMP) ? 9 : super.getMaxPrecision(typeName);
   }
 
+  @Override
+  public boolean isSchemaCaseSensitive() {
+    return false;
+  }
+
+  @Override
   public boolean shouldConvertRaggedUnionTypesToVarying() {
     // this makes sure that CHAR literals are translated into VARCHAR literals
     // mostly to avoid padding / trimming
