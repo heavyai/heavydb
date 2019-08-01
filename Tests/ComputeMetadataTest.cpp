@@ -473,6 +473,18 @@ void BODY_F(MetadataUpdate, EncodedStringNull) {
   run_op_per_fragment(td, check_fragment_metadata(8, 0, 1, true));
 }
 
+void BODY_F(MetadataUpdate, AlterAfterOptimize) {
+  const auto cat = QR::get()->getCatalog();
+  const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
+  run_op_per_fragment(td, check_fragment_metadata(1, 1, 2, true));
+  run_multiple_agg("DELETE FROM  " + g_table_name + " WHERE x IS NULL;",
+                   ExecutorDeviceType::CPU);
+  vacuum_and_recompute_metadata(td, *cat);
+  run_op_per_fragment(td, check_fragment_metadata(1, 1, 2, false));
+  EXPECT_NO_THROW(run_ddl_statement("ALTER TABLE " + g_table_name + " ADD (id3 int);"));
+}
+
+TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, AlterAfterOptimize)
 TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, InitialMetadata)
 TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, IntUpdate)
 TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, IntRemoveNull)
