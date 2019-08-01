@@ -588,8 +588,7 @@ void ResultSetStorage::reduceOneEntryNoCollisionsJIT(
   const auto that_row_ptr = &*(arg_it + 1);
   const auto that_is_empty = cgen_state->ir_builder_.CreateCall(
       reduction_code.ir_is_empty_func, that_row_ptr, "that_is_empty");
-  return_early(
-      that_is_empty, reduction_code, reduction_code.ir_reduce_func, WATCHDOG_ERROR);
+  return_early(that_is_empty, reduction_code, reduction_code.ir_reduce_func, 0);
 
   const auto key_bytes = get_key_bytes_rowwise(query_mem_desc_);
   if (key_bytes) {  // copy the key from right hand side
@@ -809,8 +808,7 @@ void ResultSetStorage::reduceOneEntryBaselineIdxJIT(
       cgen_state->ir_builder_.CreateGEP(that_buff, that_row_off_in_bytes, "that_row_ptr");
   const auto that_is_empty = cgen_state->ir_builder_.CreateCall(
       reduction_code.ir_is_empty_func, that_row_ptr, "that_is_empty");
-  return_early(
-      that_is_empty, reduction_code, reduction_code.ir_reduce_func_idx, WATCHDOG_ERROR);
+  return_early(that_is_empty, reduction_code, reduction_code.ir_reduce_func_idx, 0);
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   const auto pi64_type = llvm::Type::getInt64PtrTy(cgen_state->context_);
   const auto bool_type = llvm::Type::getInt8Ty(cgen_state->context_);
@@ -836,8 +834,7 @@ void ResultSetStorage::reduceOneEntryBaselineIdxJIT(
       cgen_state->ir_builder_.CreateLoad(this_is_empty_ptr, "this_is_empty");
   this_is_empty = cgen_state->ir_builder_.CreateTrunc(
       this_is_empty, get_int_type(1, ctx), "this_is_empty_bool");
-  return_early(
-      this_is_empty, reduction_code, reduction_code.ir_reduce_func_idx, WATCHDOG_ERROR);
+  return_early(this_is_empty, reduction_code, reduction_code.ir_reduce_func_idx, 0);
   const auto pi8_type = llvm::Type::getInt8PtrTy(cgen_state->context_);
   const auto key_qw_count = get_slot_off_quad(query_mem_desc_);
   const auto this_targets_ptr = cgen_state->ir_builder_.CreateBitCast(
@@ -1069,7 +1066,8 @@ ReductionCode ResultSetStorage::finalizeReductionCode(
         nullptr,
         reinterpret_cast<ReductionCode::FuncPtr>(std::get<0>(val_ptr->first.front()))};
   }
-  CompilationOptions co{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false};
+  CompilationOptions co{
+      ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
   reduction_code.module.release();
   const bool use_interp = query_mem_desc_.getEntryCount() < INTERP_THRESHOLD;
   auto ee = use_interp

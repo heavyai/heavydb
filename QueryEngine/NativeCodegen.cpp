@@ -243,6 +243,9 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
   llvm::TargetOptions to;
   to.EnableFastISel = true;
   eb.setTargetOptions(to);
+  if (co.opt_level_ == ExecutorOptLevel::ReductionJIT) {
+    eb.setOptLevel(llvm::CodeGenOpt::None);
+  }
 
   ExecutionEngineWrapper execution_engine(eb.create(), co);
   CHECK(execution_engine.get());
