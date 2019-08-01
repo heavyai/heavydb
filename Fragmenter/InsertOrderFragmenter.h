@@ -105,6 +105,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
    */
   inline std::string getFragmenterType() override { return fragmenterType_; }
   size_t getNumRows() override { return numTuples_; }
+  void setNumRows(const size_t numTuples) override { numTuples_ = numTuples; }
 
   static void updateColumn(const Catalog_Namespace::Catalog* catalog,
                            const std::string& tab_name,

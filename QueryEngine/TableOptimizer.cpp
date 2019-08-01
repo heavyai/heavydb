@@ -154,10 +154,15 @@ void TableOptimizer::recomputeMetadata() const {
 
       std::unordered_map</*fragment_id*/ int, ChunkStats> stats_map;
 
+      size_t total_num_tuples = 0;
       PerFragmentCB compute_deleted_callback =
-          [&stats_map, &tuple_count_map, cd](
+          [&stats_map, &tuple_count_map, &total_num_tuples, cd](
               ResultSetPtr results,
               const Fragmenter_Namespace::FragmentInfo& fragment_info) {
+            // count number of tuples in $deleted as total number of tuples in table.
+            if (cd->isDeletedCol) {
+              total_num_tuples += fragment_info.getPhysicalNumTuples();
+            }
             if (fragment_info.getPhysicalNumTuples() == 0) {
               // TODO(adb): Should not happen, but just to be safe...
               LOG(WARNING) << "Skipping completely empty fragment for column "
@@ -225,6 +230,7 @@ void TableOptimizer::recomputeMetadata() const {
       auto* fragmenter = td->fragmenter;
       CHECK(fragmenter);
       fragmenter->updateChunkStats(cd, stats_map);
+      fragmenter->setNumRows(total_num_tuples);
     }  // finished special handling deleted column;
 
     // TODO(adb): Support geo
