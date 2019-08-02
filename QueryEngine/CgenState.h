@@ -199,15 +199,27 @@ struct CgenState {
   }
   // look up a runtime function based on the name, return type and type of
   // the arguments and call it; x64 only, don't call from GPU codegen
-  llvm::Value* emitExternalCall(const std::string& fname,
-                                llvm::Type* ret_type,
-                                const std::vector<llvm::Value*> args) {
+  llvm::Value* emitExternalCall(
+      const std::string& fname,
+      llvm::Type* ret_type,
+      const std::vector<llvm::Value*> args,
+      const std::vector<llvm::Attribute::AttrKind>& fnattrs = {}) {
     std::vector<llvm::Type*> arg_types;
     for (const auto arg : args) {
       arg_types.push_back(arg->getType());
     }
     auto func_ty = llvm::FunctionType::get(ret_type, arg_types, false);
-    auto func_p = module_->getOrInsertFunction(fname, func_ty);
+    llvm::AttributeList attrs;
+    if (!fnattrs.empty()) {
+      std::vector<std::pair<unsigned, llvm::Attribute>> indexedAttrs;
+      indexedAttrs.reserve(fnattrs.size());
+      for (auto attr : fnattrs)
+        indexedAttrs.emplace_back(llvm::AttributeList::FunctionIndex,
+                                  llvm::Attribute::get(context_, attr));
+      attrs = llvm::AttributeList::get(context_,
+                                       {&indexedAttrs.front(), indexedAttrs.size()});
+    }
+    auto func_p = module_->getOrInsertFunction(fname, func_ty, attrs);
     CHECK(func_p);
     llvm::Value* result = ir_builder_.CreateCall(func_p, args);
     // check the assumed type

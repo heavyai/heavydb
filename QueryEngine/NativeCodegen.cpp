@@ -121,6 +121,7 @@ void optimize_ir(llvm::Function* query_func,
   pass_manager.add(llvm::createInstructionCombiningPass());
   pass_manager.add(llvm::createGlobalOptimizerPass());
 
+  pass_manager.add(llvm::createLICMPass());
   if (co.opt_level_ == ExecutorOptLevel::LoopStrengthReduction) {
     pass_manager.add(llvm::createLoopStrengthReducePass());
   }
