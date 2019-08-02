@@ -155,6 +155,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const bool legacy_syntax,
                          const int idle_session_duration,
                          const int max_session_duration,
+                         const bool enable_runtime_udf_registration,
                          const std::string& udf_filename)
     : leaf_aggregator_(db_leaves)
     , string_leaves_(string_leaves)
@@ -171,6 +172,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , super_user_rights_(false)
     , idle_session_duration_(idle_session_duration * 60)
     , max_session_duration_(max_session_duration * 60)
+    , runtime_udf_registration_enabled_(enable_runtime_udf_registration)
     , _was_geo_copy_from(false) {
   LOG(INFO) << "OmniSci Server " << MAPD_RELEASE;
   bool is_rendering_enabled = enable_rendering;
@@ -5625,13 +5627,16 @@ void MapDHandler::register_runtime_udf(
     const std::string& signatures,
     const std::map<std::string, std::string>& device_ir_map) {
   const auto session_info = get_session_copy(session);
-  /* TODO: check if an user has permission to register
-     UDFs. Currently, UDFs are registered globally, that means that
-     all users can use as well as overwrite UDFs that was created
-     possibly by anoher user.
-   */
 
-  LOG(INFO) << "register_runtime_udf:signatures:\n" << signatures << std::endl;
+  if (!runtime_udf_registration_enabled_) {
+    THROW_MAPD_EXCEPTION("Runtime UDF registration is disabled.");
+  }
+
+  // TODO: add UDF registration permission scheme. Currently, UDFs are
+  // registered globally, that means that all users can use as well as overwrite UDFs that
+  // was created possibly by anoher user.
+
+  VLOG(1) << "Registering runtime UDF with signatures:\n" << signatures;
   /* Changing a UDF implementation (but not the signature) requires
      cleaning code caches. Nuking executors does that but at the cost
      of loosing all of the caches. TODO: implement more refined code
@@ -5651,13 +5656,12 @@ void MapDHandler::register_runtime_udf(
     }
   }
 
-  /* Register UDFs in Calcite server */
-  if (calcite_) {
-    calcite_->setRuntimeUserDefinedFunction(signatures);
-    /* Update the extension function whitelist */
-    std::string whitelist = calcite_->getRuntimeUserDefinedFunctionWhitelist();
-    LOG(INFO) << "register_runtime_udf:whitelist:\n" << whitelist << std::endl;
-    ExtensionFunctionsWhitelist::clearRTUdfs();
-    ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
-  }
+  // Register UDFs with Calcite server
+  CHECK(calcite_);
+  calcite_->setRuntimeUserDefinedFunction(signatures);
+  /* Update the extension function whitelist */
+  std::string whitelist = calcite_->getRuntimeUserDefinedFunctionWhitelist();
+  VLOG(1) << "Registering runtime UDF with Calcite using whitelist:\n" << whitelist;
+  ExtensionFunctionsWhitelist::clearRTUdfs();
+  ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
 }

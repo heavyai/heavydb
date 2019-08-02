@@ -268,6 +268,8 @@ class MapDProgramOptions {
   size_t render_mem_bytes = 500000000;
   size_t render_poly_cache_bytes = 300000000;
 
+  bool enable_runtime_udf = false;
+
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
   unsigned dynamic_watchdog_time_limit = 10000;
@@ -514,6 +516,14 @@ void MapDProgramOptions::fillOptions() {
                               ->default_value(verbose_logging)
                               ->implicit_value(true),
                           "Write additional debug log messages to server logs.");
+  help_desc.add_options()(
+      "enable-runtime-udf",
+      po::value<bool>(&enable_runtime_udf)
+          ->default_value(enable_runtime_udf)
+          ->implicit_value(true),
+      "Enable runtime UDF registration by passing signatures and corresponding LLVM IR "
+      "to the `register_runtime_udf` endpoint. For use with the Python Remote Backend "
+      "Compiler server, packaged separately.");
   help_desc.add_options()("version,v", "Print Version Number.");
 
   help_desc.add_options()(
@@ -832,11 +842,15 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
     boost::algorithm::trim_if(udf_file_name, boost::is_any_of("\"'"));
 
     if (!boost::filesystem::exists(udf_file_name)) {
-      LOG(ERROR) << "User defined function file " << udf_file_name << " does not exist.";
+      LOG(ERROR) << " User defined function file " << udf_file_name << " does not exist.";
       return 1;
     }
 
-    LOG(INFO) << "User provided extension functions loaded from " << udf_file_name;
+    LOG(INFO) << " User provided extension functions loaded from " << udf_file_name;
+  }
+
+  if (enable_runtime_udf) {
+    LOG(INFO) << " Runtime user defined extension functions enabled globally.";
   }
 
   boost::algorithm::trim_if(mapd_parameters.ha_brokers, boost::is_any_of("\"'"));
@@ -998,6 +1012,7 @@ int main(int argc, char** argv) {
                                      prog_config_opts.enable_legacy_syntax,
                                      prog_config_opts.idle_session_duration,
                                      prog_config_opts.max_session_duration,
+                                     prog_config_opts.enable_runtime_udf,
                                      prog_config_opts.udf_file_name);
 
   mapd::shared_ptr<TServerSocket> serverSocket;

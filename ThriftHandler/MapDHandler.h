@@ -138,6 +138,7 @@ class MapDHandler : public MapDIf {
               const bool legacy_syntax,
               const int idle_session_duration,
               const int max_session_duration,
+              const bool enable_runtime_udf_registration,
               const std::string& udf_filename);
 
   ~MapDHandler() override;
@@ -676,6 +677,8 @@ class MapDHandler : public MapDIf {
                             // in "connect(..)" method
   const int idle_session_duration_;  // max duration of idle session
   const int max_session_duration_;   // max duration of session
+
+  const bool runtime_udf_registration_enabled_;
 
   bool _was_geo_copy_from;
   std::string _geo_copy_from_table;
