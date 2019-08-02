@@ -1367,19 +1367,16 @@ TEST_F(GeoGDALImportTest, Geodatabase_Simple) {
   check_geo_num_rows("omnisci_geo, ESTABLISHED", 87);
 }
 
-#ifdef __APPLE__
-TEST_F(GeoGDALImportTest, KML_Simple) {
-  LOG(INFO) << "Skipping GeoGDALImportTest.KML_Simple on Mac (GDAL implementation is "
-               "inadequate)";
-}
-#else
 TEST_F(GeoGDALImportTest, KML_Simple) {
   SKIP_ALL_ON_AGGREGATOR();
-  const auto file_path = boost::filesystem::path("KML/test.kml");
-  import_test_geofile_importer(file_path.string(), "geospatial", false);
-  check_geo_num_rows("omnisci_geo, FID", 10);
+  if (!Importer_NS::Importer::hasGDALLibKML()) {
+    LOG(ERROR) << "Test requires LibKML support in GDAL";
+  } else {
+    const auto file_path = boost::filesystem::path("KML/test.kml");
+    import_test_geofile_importer(file_path.string(), "geospatial", false);
+    check_geo_num_rows("omnisci_geo, FID", 10);
+  }
 }
-#endif
 
 #ifdef HAVE_AWS_S3
 // s3 compressed (non-parquet) test cases

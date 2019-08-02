@@ -3995,6 +3995,10 @@ void Importer::initGDAL() {
   }
 }
 
+bool Importer::hasGDALLibKML() {
+  return GetGDALDriverManager()->GetDriverByName("libkml") != nullptr;
+}
+
 /* static */
 void Importer::setGDALAuthorizationTokens(const CopyParams& copy_params) {
   // for now we only support S3

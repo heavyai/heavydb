@@ -883,6 +883,7 @@ class Importer : public DataStreamSink {
   ImportStatus importDelimited(const std::string& file_path,
                                const bool decompressed) override;
   ImportStatus importGDAL(std::map<std::string, std::string> colname_to_src);
+  static bool hasGDALLibKML();
   const CopyParams& get_copy_params() const { return copy_params; }
   const std::list<const ColumnDescriptor*>& get_column_descs() const {
     return loader->get_column_descs();
