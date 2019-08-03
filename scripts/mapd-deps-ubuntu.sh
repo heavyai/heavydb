@@ -76,6 +76,8 @@ sudo apt install -y \
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
 export PATH=$PREFIX/bin:$PATH
 
+install_ninja
+
 # llvm
 # (see common-functions.sh)
 install_llvm

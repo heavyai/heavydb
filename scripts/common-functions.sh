@@ -240,3 +240,12 @@ function install_go() {
     rm -rf $PREFIX/go || true
     mv go $PREFIX
 }
+
+NINJA_VERSION=1.10.0
+
+function install_ninja() {
+  download https://github.com/ninja-build/ninja/releases/download/v${NINJA_VERSION}/ninja-linux.zip
+  unzip -u ninja-linux.zip
+  mkdir -p $PREFIX/bin/
+  mv ninja $PREFIX/bin/
+}

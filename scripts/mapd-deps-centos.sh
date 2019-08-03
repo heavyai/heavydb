@@ -83,7 +83,10 @@ popd
 export CC=$PREFIX/bin/gcc
 export CXX=$PREFIX/bin/g++
 
+install_ninja
+
 download_make_install ftp://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz
+
 # http://zlib.net/zlib-1.2.8.tar.xz
 download_make_install ${HTTP_DEPS}/zlib-1.2.8.tar.xz
 
