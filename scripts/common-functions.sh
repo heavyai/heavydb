@@ -165,7 +165,7 @@ function install_llvm() {
     rm -rf build.llvm-$VERS
     mkdir build.llvm-$VERS
     pushd build.llvm-$VERS
-    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DLLVM_ENABLE_RTTI=on ../llvm-$VERS.src
+    cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$PREFIX -DLLVM_ENABLE_RTTI=on -DLLVM_USE_INTEL_JITEVENTS=on ../llvm-$VERS.src
     makej
     if [ ! -d "lib/python2.7" ]; then
         cp -R lib64/python2.7 lib/python2.7

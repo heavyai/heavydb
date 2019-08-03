@@ -139,6 +139,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const bool cpu_only,
                          const bool allow_multifrag,
                          const bool jit_debug,
+                         const bool intel_jit_profile,
                          const bool read_only,
                          const bool allow_loop_joins,
                          const bool enable_rendering,
@@ -163,6 +164,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , random_gen_(std::random_device{}())
     , session_id_dist_(0, INT32_MAX)
     , jit_debug_(jit_debug)
+    , intel_jit_profile_(intel_jit_profile)
     , allow_multifrag_(allow_multifrag)
     , read_only_(read_only)
     , allow_loop_joins_(allow_loop_joins)
@@ -4363,7 +4365,8 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                            ExecutorOptLevel::Default,
                            g_enable_dynamic_watchdog,
                            explain_optimized_ir ? ExecutorExplainType::Optimized
-                                                : ExecutorExplainType::Default};
+                                                : ExecutorExplainType::Default,
+                           intel_jit_profile_};
   ExecutionOptions eo = {g_enable_columnar_output,
                          allow_multifrag_,
                          just_explain,
@@ -4421,7 +4424,9 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
   CompilationOptions co = {session_info.get_executor_device_type(),
                            true,
                            ExecutorOptLevel::Default,
-                           g_enable_dynamic_watchdog};
+                           g_enable_dynamic_watchdog,
+                           ExecutorExplainType::Default,
+                           intel_jit_profile_};
   ExecutionOptions eo = {false,
                          allow_multifrag_,
                          false,

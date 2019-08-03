@@ -66,7 +66,9 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   CompilationOptions co_cpu{ExecutorDeviceType::CPU,
                             co.hoist_literals_,
                             co.opt_level_,
-                            co.with_dynamic_watchdog_};
+                            co.with_dynamic_watchdog_,
+                            co.explain_type_,
+                            co.register_intel_jit_listener_};
   if (render_info) {
     render_info->setForceNonInSituData();
   }

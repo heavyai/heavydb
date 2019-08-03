@@ -265,35 +265,25 @@ Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry_guess,
 
   switch (co.device_type_) {
     case ExecutorDeviceType::CPU: {
-      const CompilationOptions co_cpu{ExecutorDeviceType::CPU,
-                                      co.hoist_literals_,
-                                      co.opt_level_,
-                                      co.with_dynamic_watchdog_,
-                                      co.explain_type_};
       query_mem_desc = query_comp_desc->compile(max_groups_buffer_entry_guess,
                                                 crt_min_byte_width,
                                                 has_cardinality_estimation,
                                                 ra_exe_unit_,
                                                 query_infos_,
                                                 column_fetcher,
-                                                co_cpu,
+                                                co,
                                                 eo,
                                                 render_info_,
                                                 executor_);
     } break;
     case ExecutorDeviceType::GPU: {
-      const CompilationOptions co_gpu{ExecutorDeviceType::GPU,
-                                      co.hoist_literals_,
-                                      co.opt_level_,
-                                      co.with_dynamic_watchdog_,
-                                      co.explain_type_};
       query_mem_desc = query_comp_desc->compile(max_groups_buffer_entry_guess,
                                                 crt_min_byte_width,
                                                 has_cardinality_estimation,
                                                 ra_exe_unit_,
                                                 query_infos_,
                                                 column_fetcher,
-                                                co_gpu,
+                                                co,
                                                 eo,
                                                 render_info_,
                                                 executor_);

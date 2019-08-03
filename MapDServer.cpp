@@ -254,6 +254,7 @@ class MapDProgramOptions {
   bool flush_log = true;
   bool verbose_logging = false;
   bool jit_debug = false;
+  bool intel_jit_profile = false;
   bool allow_multifrag = true;
   bool read_only = false;
   bool allow_loop_joins = false;
@@ -578,6 +579,12 @@ void MapDProgramOptions::fillAdvancedOptions() {
       "Enable runtime debugger support for the JIT. Note that this flag is incompatible "
       "with the `ENABLE_JIT_DEBUG` build flag. The generated code can be found at "
       "`/tmp/mapdquery`.");
+  developer_desc.add_options()(
+      "intel-jit-profile",
+      po::value<bool>(&intel_jit_profile)
+          ->default_value(intel_jit_profile)
+          ->implicit_value(true),
+      "Enable runtime support for the JIT code profiling using Intel VTune.");
   developer_desc.add_options()(
       "skip-intermediate-count",
       po::value<bool>(&g_skip_intermediate_count)
@@ -996,6 +1003,7 @@ int main(int argc, char** argv) {
                                      prog_config_opts.cpu_only,
                                      prog_config_opts.allow_multifrag,
                                      prog_config_opts.jit_debug,
+                                     prog_config_opts.intel_jit_profile,
                                      prog_config_opts.read_only,
                                      prog_config_opts.allow_loop_joins,
                                      prog_config_opts.enable_rendering,

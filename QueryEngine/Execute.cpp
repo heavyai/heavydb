@@ -1162,7 +1162,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                       co.hoist_literals_,
                                       co.opt_level_,
                                       co.with_dynamic_watchdog_,
-                                      co.explain_type_},
+                                      co.explain_type_,
+                                      co.register_intel_jit_listener_},
                                      eo,
                                      column_fetcher,
                                      has_cardinality_estimation);
