@@ -1066,6 +1066,7 @@ ReductionCode ResultSetStorage::finalizeReductionCode(
         nullptr,
         nullptr,
         nullptr,
+        nullptr,
         reinterpret_cast<ReductionCode::FuncPtr>(std::get<0>(val_ptr->first.front()))};
   }
   CompilationOptions co{ExecutorDeviceType::CPU, false, ExecutorOptLevel::Default, false};
@@ -1080,7 +1081,9 @@ ReductionCode ResultSetStorage::finalizeReductionCode(
           : reinterpret_cast<ReductionCode::FuncPtr>(
                 ee->getPointerToFunction(reduction_code.ir_reduce_loop));
   reduction_code.execution_engine = ee.get();
-  if (!g_reduction_jit_interp) {
+  if (g_reduction_jit_interp) {
+    reduction_code.own_execution_engine = std::move(ee);
+  } else {
     std::tuple<void*, ExecutionEngineWrapper> cache_val =
         std::make_tuple(reinterpret_cast<voidI*>(reduction_code.func_ptr), std::move(ee));
     std::vector<std::tuple<void*, ExecutionEngineWrapper>> cache_vals;

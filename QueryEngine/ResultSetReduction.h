@@ -63,6 +63,7 @@ struct ReductionCode {
 
   std::unique_ptr<CgenState> cgen_state;
   llvm::ExecutionEngine* execution_engine;
+  ExecutionEngineWrapper own_execution_engine;
   std::unique_ptr<llvm::Module> module;
   llvm::Function* ir_reduce_func;
   llvm::Function* ir_reduce_func_idx;
