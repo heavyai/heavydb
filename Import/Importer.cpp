@@ -2948,7 +2948,7 @@ std::vector<EncodingType> Detector::find_best_encodings(
   std::vector<size_t> num_rows_per_col(num_cols, 1);
   std::vector<std::unordered_set<std::string>> count_set(num_cols);
   for (auto row = row_begin; row != row_end; row++) {
-    for (size_t col_idx = 0; col_idx < row->size(); col_idx++) {
+    for (size_t col_idx = 0; col_idx < row->size() && col_idx < num_cols; col_idx++) {
       if (IS_STRING(best_types[col_idx])) {
         count_set[col_idx].insert(row->at(col_idx));
         num_rows_per_col[col_idx]++;
