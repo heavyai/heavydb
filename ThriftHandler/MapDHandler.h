@@ -515,6 +515,8 @@ class MapDHandler : public MapDIf {
   // Returns empty std::shared_ptr if session.empty().
   std::shared_ptr<const Catalog_Namespace::SessionInfo> get_const_session_ptr(
       const TSessionId& session);
+  std::shared_ptr<Catalog_Namespace::SessionInfo> get_session_ptr(
+      const TSessionId& session_id);
   SessionMap::iterator get_session_it_unsafe(const TSessionId& session);
   static void value_to_thrift_column(const TargetValue& tv,
                                      const SQLTypeInfo& ti,
@@ -711,7 +713,6 @@ class MapDHandler : public MapDIf {
   friend class MapDRenderHandler;
   friend class MapDAggHandler;
   friend class MapDLeafHandler;
-  friend class LogSession;
 
   std::map<const std::string, const permissionFuncPtr> permissionFuncMap_ = {
       {"database"s, has_database_permission},
@@ -759,29 +760,20 @@ class MapDHandler : public MapDIf {
 //  * TSessionId string - will call get_const_session_ptr() to get shared_ptr.
 // All remaining optional parameters are name,value pairs that will be included in log.
 #define LOG_SESSION(session, ...) \
-  LogSession log_session(this, session, __FILE__, __LINE__, __func__, ##__VA_ARGS__)
+  LogSession log_session(*this, session, __FILE__, __LINE__, __func__, ##__VA_ARGS__)
 
 class LogSession : boost::noncopyable {
-  TSessionId const session_id_;
-  MapDHandler* handler_;
   std::string const file_;
   size_t const line_;
   char const* const func_;
   std::list<std::string> name_value_pairs_;
   std::chrono::steady_clock::time_point const start_;
-  std::shared_ptr<const Catalog_Namespace::SessionInfo> session_ptr_;
+  std::shared_ptr<Catalog_Namespace::SessionInfo> session_ptr_;
   static std::atomic<int64_t> s_match;
   int64_t const match_;  // Unique to each begin/end pair to match them together.
   template <typename... Pairs>
-  LogSession(TSessionId const& session_id,
-             MapDHandler* handler,
-             char const* file,
-             size_t line,
-             char const* func,
-             Pairs&&... pairs)
-      : session_id_(session_id)
-      , handler_(handler)
-      , file_(boost::filesystem::path(file).filename().string())
+  LogSession(char const* file, size_t line, char const* func, Pairs&&... pairs)
+      : file_(boost::filesystem::path(file).filename().string())
       , line_(line)
       , func_(func)
       , name_value_pairs_{to_string(std::forward<Pairs>(pairs))...}
@@ -791,39 +783,32 @@ class LogSession : boost::noncopyable {
                   "LogSession() requires an even number of name/value parameters.");
   }
   void stdlog(logger::Severity, char const* label);
+  void update_session_last_used_duration();
+  void update_session_in_use(const bool in_use);
 
  public:
   template <typename... Pairs>
-  LogSession(MapDHandler* handler,
-             SessionMap::mapped_type const& session_ptr,
+  LogSession(MapDHandler& mh,
+             SessionMap::mapped_type& session_ptr,
              char const* file,
              size_t line,
              char const* func,
              Pairs&&... pairs)
-      : LogSession(std::string(""),
-                   handler,
-                   file,
-                   line,
-                   func,
-                   std::forward<Pairs>(pairs)...) {
+      : LogSession(file, line, func, std::forward<Pairs>(pairs)...) {
     session_ptr_ = session_ptr;
+    update_session_in_use(true);
     stdlog(logger::Severity::DEBUG1, "stdlog_begin");
   }
   template <typename... Pairs>
-  LogSession(MapDHandler* handler,
+  LogSession(MapDHandler& mh,
              TSessionId const& session_id,
              char const* file,
              size_t line,
              char const* func,
              Pairs&&... pairs)
-      : LogSession(session_id, handler, file, line, func, std::forward<Pairs>(pairs)...) {
-    if (!session_id.empty()) {
-      try {
-        session_ptr_ = handler->get_session_copy_ptr(session_id);
-      } catch (...) {
-        session_ptr_.reset();
-      }
-    }
+      : LogSession(file, line, func, std::forward<Pairs>(pairs)...) {
+    session_ptr_ = mh.get_session_ptr(session_id);
+    update_session_in_use(true);
     stdlog(logger::Severity::DEBUG1, "stdlog_begin");
   }
   ~LogSession();
@@ -839,8 +824,7 @@ class LogSession : boost::noncopyable {
     using namespace std::chrono;
     return duration_cast<Units>(steady_clock::now() - start_).count();
   }
-  void set_session(SessionMap::mapped_type const& session_ptr);
-  void update_session_last_used_duration();
+  void set_session(SessionMap::mapped_type& session_ptr);
 };
 
 #endif /* MAPDHANDLER_H */

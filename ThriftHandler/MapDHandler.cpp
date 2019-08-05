@@ -359,7 +359,7 @@ void MapDHandler::connect_impl(TSessionId& session,
                         std::make_shared<Catalog_Namespace::SessionInfo>(
                             cat, user_meta, executor_device_type_, session));
   CHECK(emplace_retval.second);
-  SessionMap::mapped_type const session_ptr = emplace_retval.first->second;
+  SessionMap::mapped_type session_ptr = emplace_retval.first->second;
   log_session.set_session(session_ptr);
   if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time while
                               // doing warmup
@@ -4256,6 +4256,9 @@ void MapDHandler::get_heap_profile(std::string& profile, const TSessionId& sessi
 
 // NOTE: Only call check_session_exp_unsafe() when you hold a lock on sessions_mutex_.
 void MapDHandler::check_session_exp_unsafe(const SessionMap::iterator& session_it) {
+  if (session_it->second->is_session_in_use()) {
+    return;
+  }
   time_t last_used_time = session_it->second->get_last_used_time();
   time_t start_time = session_it->second->get_start_time();
   if ((time(0) - last_used_time) > idle_session_duration_) {
@@ -4305,6 +4308,26 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::get_session_copy_pt
   mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
   auto& session_info_ref = *get_session_it_unsafe(session)->second;
   return std::make_shared<Catalog_Namespace::SessionInfo>(session_info_ref);
+}
+
+std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::get_session_ptr(
+    const TSessionId& session_id) {
+  // Note(Wamsi): This method will give you a shared_ptr to master SessionInfo itself.
+  // Should be used only when you need to make updates to original SessionInfo object.
+  // Currently used by `update_session_last_used_duration` and `update_session_in_use`
+
+  // 1) `session_id` will be empty during intial connect. 2)`sessionmapd iterator` will be
+  // invalid during disconnect. SessionInfo will be erased from map by the time it reaches
+  // here. In both the above cases, we would return `nullptr` and can skip SessionInfo
+  // updates.
+  if (!session_id.empty()) {
+    try {
+      return get_session_it_unsafe(session_id)->second;
+    } catch (TMapDException&) {
+      return nullptr;
+    }
+  }
+  return nullptr;
 }
 
 void MapDHandler::check_table_load_privileges(
@@ -5616,19 +5639,19 @@ void LogSession::stdlog(logger::Severity severity, char const* label) {
   }
 }
 
-void LogSession::update_session_last_used_duration() {
-  // 1) `Session_id_` will be empty during intial connect. 2)`Session_it` will be invalid
-  // during disconnect. SessionInfo will be erased from map by the time it reaches here.
-  // In both the above cases, no update is necessary so we can skip.
-  if (session_id_.empty()) {
-    return;
+void LogSession::update_session_in_use(const bool in_use) {
+  if (session_ptr_) {
+    session_ptr_->update_session_in_use(in_use);
   }
-  CHECK(handler_);
-  try {
-    auto session_it = handler_->get_session_it_unsafe(session_id_, true);
-    session_it->second->update_last_used_time();
-  } catch (TMapDException&) {
-    return;
+}
+
+void LogSession::update_session_last_used_duration() {
+  if (session_ptr_) {
+    if (session_ptr_.use_count() < 3) {
+      // SessionInfo is being used in only one active operation
+      session_ptr_->update_session_in_use(false);
+    }
+    session_ptr_->update_last_used_time();
   }
 }
 
@@ -5637,7 +5660,7 @@ LogSession::~LogSession() {
   stdlog(logger::Severity::INFO, "stdlog");
 }
 
-void LogSession::set_session(SessionMap::mapped_type const& session_ptr) {
+void LogSession::set_session(SessionMap::mapped_type& session_ptr) {
   session_ptr_ = session_ptr;
 }
 
