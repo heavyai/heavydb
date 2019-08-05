@@ -32,15 +32,6 @@
 #include <numeric>
 
 extern bool g_bigint_count;
-namespace {
-inline bool consider_argument_logical_size(const TargetInfo& agg_info,
-                                           Analyzer::Expr* column_expr) {
-  const auto agg_expr = cast_to_agg_expr(column_expr);
-  return ((agg_expr && agg_expr->get_type_info().get_type() != kNULLT) &&
-          !agg_info.is_distinct && agg_info.agg_arg_type.get_type() != kNULLT &&
-          !agg_info.agg_arg_type.is_array() && !agg_info.agg_arg_type.is_varlen());
-}
-}  // namespace
 
 ColSlotContext::ColSlotContext(const std::vector<Analyzer::Expr*>& col_expr_list,
                                const std::vector<ssize_t>& col_exprs_to_not_project) {
@@ -81,10 +72,7 @@ ColSlotContext::ColSlotContext(const std::vector<Analyzer::Expr*>& col_expr_list
         continue;
       }
 
-      const auto col_expr_bitwidth =
-          consider_argument_logical_size(agg_info, col_expr)
-              ? std::max(get_bit_width(chosen_type), get_bit_width(agg_info.agg_arg_type))
-              : get_bit_width(chosen_type);
+      const auto col_expr_bitwidth = get_bit_width(chosen_type);
 
       CHECK_EQ(size_t(0), col_expr_bitwidth % 8);
       addSlotForColumn(static_cast<int8_t>(col_expr_bitwidth >> 3), col_expr_idx);

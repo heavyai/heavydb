@@ -955,9 +955,7 @@ bool QueryMemoryDescriptor::isLogicalSizedColumnsAllowed() const {
   // In distributed mode, result sets are serialized using rowwise iterators, so we use
   // consistent slot widths for now
   return output_columnar_ && !g_cluster &&
-         (query_desc_type_ == QueryDescriptionType::Projection ||
-          (query_desc_type_ == QueryDescriptionType::GroupByPerfectHash &&
-           getGroupbyColCount() == 1));
+         (query_desc_type_ == QueryDescriptionType::Projection);
 }
 
 size_t QueryMemoryDescriptor::getBufferColSlotCount() const {

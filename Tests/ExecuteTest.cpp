@@ -14486,6 +14486,18 @@ TEST(Select, Sample) {
     });
     {
       const auto rows = run_multiple_agg(
+          "SELECT x, SAMPLE(fixed_str), SUM(t) FROM test GROUP BY x ORDER BY x DESC;",
+          dt);
+      const auto first_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), first_row.size());
+      ASSERT_EQ(int64_t(8), v<int64_t>(first_row[0]));
+      const auto nullable_str = v<NullableString>(first_row[1]);
+      const auto str_ptr = boost::get<std::string>(&nullable_str);
+      ASSERT_TRUE(str_ptr);
+      ASSERT_EQ(int64_t(5010), v<int64_t>(first_row[2]));
+    }
+    {
+      const auto rows = run_multiple_agg(
           "SELECT z, COUNT(*), SAMPLE(f) FROM test GROUP BY z ORDER BY z;", dt);
       const auto crt_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(3), crt_row.size());
