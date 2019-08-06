@@ -88,7 +88,20 @@ inline llvm::Type* get_int_type(const int width, llvm::LLVMContext& context) {
     default:
       LOG(FATAL) << "Unsupported integer width: " << width;
   }
-  CHECK(false);
+  UNREACHABLE();
+  return nullptr;
+}
+
+inline llvm::Type* get_fp_type(const int width, llvm::LLVMContext& context) {
+  switch (width) {
+    case 64:
+      return llvm::Type::getDoubleTy(context);
+    case 32:
+      return llvm::Type::getFloatTy(context);
+    default:
+      LOG(FATAL) << "Unsupported floating point width: " << width;
+  }
+  UNREACHABLE();
   return nullptr;
 }
 

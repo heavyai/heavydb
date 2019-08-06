@@ -136,6 +136,7 @@ class AbstractFragmenter {
   virtual std::string getFragmenterType() = 0;
 
   virtual size_t getNumRows() = 0;
+  virtual void setNumRows(const size_t numTuples) = 0;
 
   virtual void updateColumn(const Catalog_Namespace::Catalog* catalog,
                             const TableDescriptor* td,

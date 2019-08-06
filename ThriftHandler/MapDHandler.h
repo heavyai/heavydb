@@ -122,6 +122,7 @@ class MapDHandler : public MapDIf {
               const bool cpu_only,
               const bool allow_multifrag,
               const bool jit_debug,
+              const bool intel_jit_profile,
               const bool read_only,
               const bool allow_loop_joins,
               const bool enable_rendering,
@@ -138,6 +139,7 @@ class MapDHandler : public MapDIf {
               const bool legacy_syntax,
               const int idle_session_duration,
               const int max_session_duration,
+              const bool enable_runtime_udf_registration,
               const std::string& udf_filename);
 
   ~MapDHandler() override;
@@ -438,8 +440,10 @@ class MapDHandler : public MapDIf {
       const std::string& signatures,
       const std::map<std::string, std::string>& device_ir_map) override;
 
-  void shutdown();
   // end of sync block for HAHandler and mapd.thrift
+
+  void shutdown();
+  void emergency_shutdown();
 
   TSessionId getInvalidSessionId() const;
 
@@ -457,6 +461,7 @@ class MapDHandler : public MapDIf {
   std::default_random_engine random_gen_;
   std::uniform_int_distribution<int64_t> session_id_dist_;
   const bool jit_debug_;
+  const bool intel_jit_profile_;
   bool allow_multifrag_;
   const bool read_only_;
   const bool allow_loop_joins_;
@@ -674,6 +679,8 @@ class MapDHandler : public MapDIf {
                             // in "connect(..)" method
   const int idle_session_duration_;  // max duration of idle session
   const int max_session_duration_;   // max duration of session
+
+  const bool runtime_udf_registration_enabled_;
 
   bool _was_geo_copy_from;
   std::string _geo_copy_from_table;

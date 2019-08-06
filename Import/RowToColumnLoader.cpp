@@ -27,8 +27,6 @@
 #include "Shared/Logger.h"
 
 using namespace ::apache::thrift;
-using namespace ::apache::thrift::protocol;
-using namespace ::apache::thrift::transport;
 
 SQLTypes get_sql_types(const TColumnType& ct) {
   switch (ct.col_type.type) {
@@ -339,25 +337,9 @@ RowToColumnLoader::~RowToColumnLoader() {
 }
 
 void RowToColumnLoader::createConnection(const ThriftClientConnection& con) {
-  mapd::shared_ptr<TProtocol> protocol;
-  mapd::shared_ptr<TTransport> socket;
-  if (con.conn_type_ == ThriftConnectionType::HTTP ||
-      con.conn_type_ == ThriftConnectionType::HTTPS) {
-    mytransport_ = openHttpClientTransport(con.server_host_,
-                                           con.port_,
-                                           con.ca_cert_name_,
-                                           con.conn_type_ == ThriftConnectionType::HTTPS,
-                                           con.skip_host_verify_);
-    protocol = mapd::shared_ptr<TProtocol>(new TJSONProtocol(mytransport_));
-  } else {
-    mytransport_ =
-        openBufferedClientTransport(con.server_host_, con.port_, con.ca_cert_name_);
-    protocol = mapd::shared_ptr<TProtocol>(new TBinaryProtocol(mytransport_));
-  }
-  client_.reset(new MapDClient(protocol));
+  client_.reset(new MapDClient(conn_details_.get_protocol()));
 
   try {
-    mytransport_->open();
     client_->connect(session_, user_name_, passwd_, db_name_);
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
@@ -369,7 +351,6 @@ void RowToColumnLoader::createConnection(const ThriftClientConnection& con) {
 void RowToColumnLoader::closeConnection() {
   try {
     client_->disconnect(session_);  // disconnect from omnisci_server
-    mytransport_->close();          // close transport
   } catch (TMapDException& e) {
     std::cerr << e.error_msg << std::endl;
   } catch (TException& te) {

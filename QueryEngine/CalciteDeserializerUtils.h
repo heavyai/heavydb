@@ -28,6 +28,9 @@ inline SQLOps to_sql_op(const std::string& op_str) {
   if (op_str == std::string(">")) {
     return kGT;
   }
+  if (op_str == std::string("IS NOT DISTINCT FROM")) {
+    return kBW_EQ;
+  }
   if (op_str == std::string(">=")) {
     return kGE;
   }

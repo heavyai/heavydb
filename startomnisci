@@ -25,20 +25,22 @@ fi
 
 echo "${0##*/} $$ running"
 
-if [ $(which setsid) != "" ]; then
+if hash setsid 2>/dev/null; then
     # creates a new process group (and a new session)
     # to see process groups (PGID's), try 'pstree -g' or something like:
     #     ps -u yourname -o pid,ppid,pgid,args | head -1 ; ps -u yourname -o pid,ppid,pgid,args | grep -E 'omnisci|calcite' | grep -v grep
-    if [ -v TTY ]; then
-      setsid -w $DIR/scripts/inneromnisci "$@" <$TTY &
+    if [ "$TTY" != "" ]; then
+      setsid $DIR/scripts/inneromnisci "$@" <$TTY &
     else
-      setsid -w $DIR/scripts/inneromnisci --non-interactive "$@" &
+      setsid $DIR/scripts/inneromnisci --non-interactive "$@" &
     fi
     SUBPID=$!
 else
     # setsid missing on macOS
     # this should still work but not quite as cleanly as with setsid
-    if [ -v TTY ]; then
+    PGID=$$
+    export PGID
+    if [ "$TTY" != "" ]; then
       $DIR/scripts/inneromnisci "$@" <$TTY &
     else
       $DIR/scripts/inneromnisci --non-interactive "$@" &

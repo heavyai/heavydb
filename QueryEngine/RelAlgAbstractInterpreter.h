@@ -19,6 +19,7 @@
 
 #include "../Catalog/Catalog.h"
 #include "../Shared/ConfigResolve.h"
+#include "../Shared/Rendering/RenderQueryOptions.h"
 #include "../Shared/sql_window_function_to_string.h"
 
 #include "TargetMetaInfo.h"
@@ -830,6 +831,9 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
   void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
                     std::shared_ptr<const RelAlgNode> input) override;
 
+  void appendInput(std::string new_field_name,
+                   std::unique_ptr<const RexScalar> new_input);
+
   std::string toString() const override {
     std::string result =
         "(RelProject<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">";
@@ -1384,7 +1388,8 @@ class RelAlgExecutor;
 std::shared_ptr<const RelAlgNode> deserialize_ra_dag(
     const std::string& query_ra,
     const Catalog_Namespace::Catalog& cat,
-    RelAlgExecutor* ra_executor);
+    RelAlgExecutor* ra_executor,
+    const RenderQueryOptions* render_opts = nullptr);
 
 std::string tree_string(const RelAlgNode*, const size_t indent = 0);
 

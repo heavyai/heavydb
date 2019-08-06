@@ -21,6 +21,7 @@
 #include "RelAlgExecutor.h"
 #include "RelAlgOptimizer.h"
 #include "RelLeftDeepInnerJoin.h"
+#include "Rendering/RenderRelAlgUtils.h"
 #include "RexVisitor.h"
 
 #include <rapidjson/stringbuffer.h>
@@ -97,6 +98,12 @@ void RelProject::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
   for (const auto& scalar_expr : scalar_exprs_) {
     rebind_inputs.visit(scalar_expr.get());
   }
+}
+
+void RelProject::appendInput(std::string new_field_name,
+                             std::unique_ptr<const RexScalar> new_input) {
+  fields_.emplace_back(std::move(new_field_name));
+  scalar_exprs_.emplace_back(std::move(new_input));
 }
 
 RANodeOutput get_node_output(const RelAlgNode* ra_node) {
@@ -1360,8 +1367,12 @@ class RelAlgAbstractInterpreter {
  public:
   RelAlgAbstractInterpreter(const rapidjson::Value& query_ast,
                             const Catalog_Namespace::Catalog& cat,
-                            RelAlgExecutor* ra_executor)
-      : query_ast_(query_ast), cat_(cat), ra_executor_(ra_executor) {}
+                            RelAlgExecutor* ra_executor,
+                            const RenderQueryOptions* render_opts)
+      : query_ast_(query_ast)
+      , cat_(cat)
+      , ra_executor_(ra_executor)
+      , render_opts_(render_opts) {}
 
   std::shared_ptr<const RelAlgNode> run() {
     const auto& rels = field(query_ast_, "rels");
@@ -1373,6 +1384,13 @@ class RelAlgAbstractInterpreter {
     }
     CHECK(!nodes_.empty());
     bind_inputs(nodes_);
+
+    if (render_opts_) {
+      // Alter the RA for render. Do this before any flattening/optimizations are done to
+      // the tree.
+      alterRAForRender(nodes_, *render_opts_);
+    }
+
     mark_nops(nodes_);
     simplify_sort(nodes_);
     sink_projected_boolean_expr_to_join(nodes_);
@@ -1620,12 +1638,14 @@ class RelAlgAbstractInterpreter {
   const Catalog_Namespace::Catalog& cat_;
   std::vector<std::shared_ptr<RelAlgNode>> nodes_;
   RelAlgExecutor* ra_executor_;
+  const RenderQueryOptions* render_opts_;
 };
 
 std::shared_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value& query_ast,
                                                const Catalog_Namespace::Catalog& cat,
-                                               RelAlgExecutor* ra_executor) {
-  RelAlgAbstractInterpreter interp(query_ast, cat, ra_executor);
+                                               RelAlgExecutor* ra_executor,
+                                               const RenderQueryOptions* render_opts) {
+  RelAlgAbstractInterpreter interp(query_ast, cat, ra_executor, render_opts);
   return interp.run();
 }
 
@@ -1637,7 +1657,7 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
   CHECK_GE(operands.Size(), unsigned(0));
   const auto& subquery_ast = field(expr, "subquery");
 
-  const auto ra = ra_interpret(subquery_ast, cat, ra_executor);
+  const auto ra = ra_interpret(subquery_ast, cat, ra_executor, nullptr);
   auto subquery = std::make_shared<RexSubQuery>(ra);
   ra_executor->registerSubquery(subquery);
   return subquery->deepCopy();
@@ -1649,13 +1669,14 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
 std::shared_ptr<const RelAlgNode> deserialize_ra_dag(
     const std::string& query_ra,
     const Catalog_Namespace::Catalog& cat,
-    RelAlgExecutor* ra_executor) {
+    RelAlgExecutor* ra_executor,
+    const RenderQueryOptions* render_opts) {
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
   CHECK(!query_ast.HasParseError());
   CHECK(query_ast.IsObject());
   RelAlgNode::resetRelAlgFirstId();
-  return ra_interpret(query_ast, cat, ra_executor);
+  return ra_interpret(query_ast, cat, ra_executor, render_opts);
 }
 
 // Prints the relational algebra as a tree; useful for debugging.

@@ -1571,10 +1571,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   auto actual_compact_sz = compact_sz;
   if (target_info.sql_type.get_type() == kFLOAT &&
       !query_mem_desc_.forceFourByteFloat()) {
-    // TODO(Saman): this condition should eventually just be didOutputColumnar(), remove
-    // others once we can
-    if (query_mem_desc_.didOutputColumnar() && !g_cluster &&
-        query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) {
+    if (query_mem_desc_.isLogicalSizedColumnsAllowed()) {
       actual_compact_sz = sizeof(float);
     } else {
       actual_compact_sz = sizeof(double);

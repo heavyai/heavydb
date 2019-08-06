@@ -55,6 +55,7 @@ extern bool g_enable_overlaps_hashjoin;
 extern double g_gpu_mem_limit_percent;
 
 extern bool g_enable_window_functions;
+extern bool g_enable_bump_allocator;
 
 extern size_t g_leaf_count;
 
@@ -205,7 +206,7 @@ class SQLiteComparator {
     const auto results =
         QR::get()->runSQL(query_string, device_type, g_hoist_literals, true);
     const auto arrow_mapd_results = result_set_arrow_loopback(nullptr, results);
-    compare_impl(arrow_mapd_results.get(), sqlite_query_string, device_type, false);
+    compare_impl(arrow_mapd_results.get(), sqlite_query_string, device_type, false, true);
   }
 
   void compare(const std::string& query_string,
@@ -227,7 +228,8 @@ class SQLiteComparator {
   void compare_impl(const MapDResults* mapd_results,
                     const std::string& sqlite_query_string,
                     const ExecutorDeviceType device_type,
-                    bool timestamp_approx) {
+                    const bool timestamp_approx,
+                    const bool is_arrow = false) {
     connector_.query(sqlite_query_string);
     ASSERT_EQ(connector_.getNumRows(), mapd_results->rowCount());
     const int num_rows{static_cast<int>(connector_.getNumRows())};
@@ -280,10 +282,15 @@ class SQLiteComparator {
             if (ref_is_null) {
               // CHECK(!mapd_str_notnull); // JUST TO DEBUG SOMETHING TO BE UNCOMENTED
             } else {
-              CHECK(mapd_str_notnull);
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
-              const auto mapd_val = *mapd_str_notnull;
-              ASSERT_EQ(ref_val, mapd_val);
+              if (mapd_str_notnull) {
+                const auto mapd_val = *mapd_str_notnull;
+                ASSERT_EQ(ref_val, mapd_val);
+              } else {
+                // not null but no data, so val is empty string
+                const auto mapd_val = "";
+                ASSERT_EQ(ref_val, mapd_val);
+              }
             }
             break;
           }
@@ -360,7 +367,11 @@ class SQLiteComparator {
                             dimen > 0 ? nsec : timegm(&tm_struct),
                             dimen > 0 ? 10 * pow(10, dimen) : 10);
               } else {
-                ASSERT_EQ(*mapd_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct));
+                if (is_arrow && mapd_type == kDATE) {
+                  ASSERT_EQ(*mapd_as_int_p, timegm(&tm_struct) * kMilliSecsPerSec);
+                } else {
+                  ASSERT_EQ(*mapd_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct));
+                }
               }
             }
             break;
@@ -593,6 +604,16 @@ TEST(Insert, NullArrayNullEmpty) {
         run_multiple_agg("INSERT INTO table_array_fixlen_text VALUES({NULL,NULL});", dt));
     EXPECT_NO_THROW(
         run_multiple_agg("INSERT INTO table_array_fixlen_text VALUES({'a','b'});", dt));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM table_array_fixlen_text WHERE strings[1] IS NOT NULL;",
+            dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT count(*) FROM table_array_fixlen_text WHERE strings[2] IS NULL;",
+            dt)));
 
     run_ddl_statement("DROP TABLE IF EXISTS table_array_with_nulls;");
     EXPECT_NO_THROW(run_ddl_statement(create_table_array_with_nulls));
@@ -612,17 +633,13 @@ TEST(Insert, NullArrayNullEmpty) {
         run_multiple_agg("INSERT INTO table_array_with_nulls "
                          "VALUES(4, {NULL,NULL}, {NULL,NULL});",
                          dt));
-    EXPECT_THROW(run_multiple_agg("INSERT INTO table_array_with_nulls "
-                                  "VALUES(5, NULL, NULL);",
-                                  dt),
-                 std::runtime_error);
     EXPECT_NO_THROW(
         run_multiple_agg("INSERT INTO table_array_with_nulls "
-                         "VALUES(5, NULL, {NULL,NULL});",
+                         "VALUES(5, NULL, NULL);",
                          dt));
     EXPECT_NO_THROW(
         run_multiple_agg("INSERT INTO table_array_with_nulls "
-                         "VALUES(6, {}, {NULL,NULL});",
+                         "VALUES(6, {}, NULL);",
                          dt));
     EXPECT_NO_THROW(
         run_multiple_agg("INSERT INTO table_array_with_nulls "
@@ -653,7 +670,7 @@ TEST(Insert, NullArrayNullEmpty) {
               v<int64_t>(run_simple_agg(
                   "SELECT count(*) FROM table_array_with_nulls WHERE sia IS NULL;", dt)));
     ASSERT_EQ(
-        7,  // TODO: switch back to 3 when NULL fixlen arrays are allowed
+        5,
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM table_array_with_nulls WHERE fa2 IS NOT NULL;", dt)));
     ASSERT_EQ(1,
@@ -723,47 +740,47 @@ TEST(KeyForString, KeyForString) {
     EXPECT_NO_THROW(
         run_multiple_agg("insert into kfs values(null, null, null, '2', {'2','2'});",
                          ExecutorDeviceType::CPU));
-    ASSERT_EQ(3, v<int64_t>(run_simple_agg("select count() from kfs;", dt)));
+    ASSERT_EQ(3, v<int64_t>(run_simple_agg("select count(*) from kfs;", dt)));
     ASSERT_EQ(2,
               v<int64_t>(run_simple_agg(
-                  "select count() from kfs where key_for_string(ts) is not null;", dt)));
+                  "select count(*) from kfs where key_for_string(ts) is not null;", dt)));
     ASSERT_EQ(2,
               v<int64_t>(run_simple_agg(
-                  "select count() from kfs where key_for_string(ss) is not null;", dt)));
+                  "select count(*) from kfs where key_for_string(ss) is not null;", dt)));
     ASSERT_EQ(2,
               v<int64_t>(run_simple_agg(
-                  "select count() from kfs where key_for_string(ws) is not null;", dt)));
+                  "select count(*) from kfs where key_for_string(ws) is not null;", dt)));
     ASSERT_EQ(3,
               v<int64_t>(run_simple_agg(
-                  "select count() from kfs where key_for_string(ns) is not null;", dt)));
+                  "select count(*) from kfs where key_for_string(ns) is not null;", dt)));
     ASSERT_EQ(
         3,
         v<int64_t>(run_simple_agg(
-            "select count() from kfs where key_for_string(sa[1]) is not null;", dt)));
+            "select count(*) from kfs where key_for_string(sa[1]) is not null;", dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg(
-            "select count() from kfs where key_for_string(ts) = key_for_string(ss);",
+            "select count(*) from kfs where key_for_string(ts) = key_for_string(ss);",
             dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg(
-            "select count() from kfs where key_for_string(ss) = key_for_string(ws);",
+            "select count(*) from kfs where key_for_string(ss) = key_for_string(ws);",
             dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg(
-            "select count() from kfs where key_for_string(ws) = key_for_string(ts);",
+            "select count(*) from kfs where key_for_string(ws) = key_for_string(ts);",
             dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg(
-            "select count() from kfs where key_for_string(ws) = key_for_string(ns);",
+            "select count(*) from kfs where key_for_string(ws) = key_for_string(ns);",
             dt)));
     ASSERT_EQ(
         2,
         v<int64_t>(run_simple_agg(
-            "select count() from kfs where key_for_string(ws) = key_for_string(sa[1]);",
+            "select count(*) from kfs where key_for_string(ws) = key_for_string(sa[1]);",
             dt)));
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg("select min(key_for_string(ts)) from kfs;", dt)));
@@ -1126,6 +1143,35 @@ TEST(Select, FilterAndSimpleAggregation) {
   }
 }
 
+TEST(Select, AggregateOnEmptyTable) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) from empty_test_table;", dt);
+    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d) from empty_test_table;", dt);
+    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d) from empty_test_table;", dt);
+    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) from empty_test_table;", dt);
+    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d) from "
+      "empty_test_table;",
+      dt);
+    // skipped fragment
+    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) from empty_test_table "
+      "where id > 5;",
+      dt);
+    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d) from empty_test_table where "
+      "id > 5;",
+      dt);
+    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d) from empty_test_table where "
+      "id > 5;",
+      dt);
+    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) from empty_test_table where "
+      "id > 5;",
+      dt);
+    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d) from "
+      "empty_test_table where id > 5;",
+      dt);
+  }
+}
+
 TEST(Select, LimitAndOffset) {
   CHECK(g_num_rows >= 4);
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -1369,6 +1415,30 @@ TEST(Select, FilterAndGroupBy) {
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT MIN(str) FROM test GROUP BY x;", dt),
                  std::runtime_error);
+  }
+}
+
+TEST(Select, GroupByBoundariesAndNull) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      std::string query(
+          "SELECT CAST(CASE WHEN x = 7 THEN 2147483647 ELSE null END AS INTEGER) AS "
+          "col0, COUNT(*) FROM test GROUP BY col0 ORDER BY col0 ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
+    {
+      std::string query(
+          "SELECT smallint_nulls, COUNT(*) FROM test GROUP BY smallint_nulls ORDER BY "
+          "smallint_nulls ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
+    {
+      std::string query(
+          "SELECT CAST(CASE WHEN x = 7 THEN 127 ELSE null END AS TINYINT) AS col0, "
+          "COUNT(*) FROM test GROUP BY col0 ORDER BY col0 ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
   }
 }
 
@@ -2426,6 +2496,7 @@ TEST(Select, StringsNoneEncoding) {
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_%%%';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE 'real_ba%';", dt);
     c("SELECT COUNT(*) FROM test WHERE real_str LIKE '%eal_bar';", dt);
+    c("SELECT * FROM test_lots_cols WHERE real_str LIKE '%' ORDER BY x0 ASC;", dt);
     c("SELECT * FROM test WHERE real_str LIKE '%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE real_str LIKE 'real_f%%' ORDER BY x ASC, y ASC;", dt);
     c("SELECT * FROM test WHERE real_str LIKE 'real_f%\%' ORDER BY x ASC, y ASC;", dt);
@@ -4839,16 +4910,18 @@ void import_gpu_sort_test() {
   const std::string drop_old_gpu_sort_test{"DROP TABLE IF EXISTS gpu_sort_test;"};
   run_ddl_statement(drop_old_gpu_sort_test);
   g_sqlite_comparator.query(drop_old_gpu_sort_test);
-  run_ddl_statement("CREATE TABLE gpu_sort_test(x int) WITH (fragment_size=2);");
-  g_sqlite_comparator.query("CREATE TABLE gpu_sort_test(x int);");
+  std::string create_query(
+      "CREATE TABLE gpu_sort_test (x bigint, y int, z smallint, t tinyint)");
+  run_ddl_statement(create_query + " WITH (fragment_size=2);");
+  g_sqlite_comparator.query(create_query + ";");
   TestHelpers::ValuesGenerator gen("gpu_sort_test");
   for (size_t i = 0; i < 4; ++i) {
-    const auto insert_query = gen(2);
+    const auto insert_query = gen(2, 2, 2, 2);
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
   for (size_t i = 0; i < 6; ++i) {
-    const auto insert_query = gen(16000);
+    const auto insert_query = gen(16000, 16000, 16000, 127);
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -5269,6 +5342,108 @@ void import_geospatial_join_test(const bool replicate_inner_table = false) {
   }
 }
 
+void import_logical_size_test() {
+  const std::string table_name("logical_size_test");
+  const std::string drop_old_logical_size_test{"DROP TABLE IF EXISTS " + table_name +
+                                               ";"};
+  run_ddl_statement(drop_old_logical_size_test);
+  g_sqlite_comparator.query(drop_old_logical_size_test);
+  std::string create_table_str("CREATE TABLE " + table_name + "(");
+  create_table_str += "big_int BIGINT NOT NULL, big_int_null BIGINT, ";
+  create_table_str += "id INT NOT NULL, id_null INT, ";
+  create_table_str += "small_int SMALLINT NOT NULL, small_int_null SMALLINT, ";
+  create_table_str += "tiny_int TINYINT NOT NULL, tiny_int_null TINYINT, ";
+  create_table_str += "float_not_null FLOAT NOT NULL, float_null FLOAT, ";
+  create_table_str += "double_not_null DOUBLE NOT NULL, double_null DOUBLE)";
+  run_ddl_statement(create_table_str + " with (fragment_size = 4);");
+  g_sqlite_comparator.query(create_table_str + ";");
+
+  auto query_maker = [&table_name](std::string str) {
+    return "INSERT INTO " + table_name + " VALUES (" + str + ");";
+  };
+
+  std::vector<std::string> insert_queries;
+  // fragment 0:
+  insert_queries.push_back(
+      query_maker("2002, -57, 7, 0, 73, 32767, 22, 127, 1.5, NULL, 11.5, -21.6"));
+  insert_queries.push_back(
+      query_maker("1001, 63, 6, NULL, 77, -32767, 21, NULL, 1.6, 1.1, 11.6, NULL"));
+  insert_queries.push_back(
+      query_maker("3003, 63, 5, 2, 79, NULL, 23, 125, 1.5, -1.3, 11.5, 22.3"));
+  insert_queries.push_back(
+      query_maker("3003, NULL, 4, 6, 78, 0, 20, 126, 1.7, -1.5, 11.7, 22.5"));
+  // fragment 1:
+  insert_queries.push_back(
+      query_maker("2002, NULL, 4, NULL, 75, -112, -13, -125, 2.5, -2.3, 22.5, -23.5"));
+  insert_queries.push_back(
+      query_maker("1001, -57, 6, 2, 77, NULL, -14, -126, 2.6, NULL, 22.6, 23.7"));
+  insert_queries.push_back(
+      query_maker("1001, 63, 7, 0, 78, -32767, -15, NULL, 2.7, 2.7, 22.7, NULL"));
+  insert_queries.push_back(
+      query_maker("1001, -57, 5, 6, 79, 32767, -12, -127, 2.6, -2.4, 22.6, -23.4"));
+  // fragment 2:
+  insert_queries.push_back(
+      query_maker("3003, 63, 5, 2, 79, -32767, 4, NULL, 3.6, 3.3, 32.6, -33.3"));
+  insert_queries.push_back(
+      query_maker("2002, -57, 7, 4, 76, 32767, 2, -1, 3.5, -3.7, 32.5, 33.7"));
+  insert_queries.push_back(
+      query_maker("3003, NULL, 4, NULL, 77, NULL, 3, -2, 3.7, NULL, 32.7, -33.5"));
+  insert_queries.push_back(
+      query_maker("1001, -57, 6, 0, 73, 2345, 1, -3, 3.4, 32.4, 32.5, NULL"));
+  // fragment 3:
+  insert_queries.push_back(
+      query_maker("1001, 63, 6, 4, 77, 0, 12, -3, 4.5, 4.3, 11.6, NULL"));
+  insert_queries.push_back(
+      query_maker("3003, -57, 4, 2, 78, 32767, 16, -1, 4.6, 4.1, 11.5, 22.3"));
+  insert_queries.push_back(
+      query_maker("2002, 63, 7, 6, 75, -32767, 13, -2, 4.7, -4.1, 22.7, -33.3"));
+  insert_queries.push_back(
+      query_maker("2002, NULL, 5, NULL, 76, NULL, 15, NULL, 4.4, NULL, 22.5, -23.4"));
+  for (auto insert_query : insert_queries) {
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+}
+
+void import_empty_table_test() {
+  const std::string drop_table{"DROP TABLE IF EXISTS empty_test_table;"};
+  run_ddl_statement(drop_table);
+  g_sqlite_comparator.query(drop_table);
+  std::string create_statement(
+      "CREATE TABLE empty_test_table (id int, x bigint, y int, z smallint, t tinyint, "
+      "f float, d double);");
+  run_ddl_statement(create_statement);
+  g_sqlite_comparator.query(create_statement);
+}
+
+void import_test_table_with_lots_of_columns() {
+  const size_t num_columns = 50;
+  const std::string table_name("test_lots_cols");
+  const std::string drop_table("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement(drop_table);
+  g_sqlite_comparator.query(drop_table);
+  std::string create_query("CREATE TABLE " + table_name + "(");
+  std::string insert_query1("INSERT INTO " + table_name + " VALUES (");
+  std::string insert_query2(insert_query1);
+
+  for (size_t i = 0; i < num_columns - 1; i++) {
+    create_query += ("x" + std::to_string(i) + " INTEGER, ");
+    insert_query1 += (std::to_string(i) + ", ");
+    insert_query2 += (std::to_string(10000 + i) + ", ");
+  }
+  create_query += "real_str TEXT";
+  insert_query1 += "'real_foo');";
+  insert_query2 += "'real_bar');";
+
+  run_ddl_statement(create_query + " ENCODING NONE) with (fragment_size = 2);");
+  g_sqlite_comparator.query(create_query + ");");
+
+  for (size_t i = 0; i < 10; i++) {
+    run_multiple_agg(i % 2 ? insert_query2 : insert_query1, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(i % 2 ? insert_query2 : insert_query1);
+  }
+}
+
 }  // namespace
 
 TEST(Select, ArrayUnnest) {
@@ -5626,9 +5801,13 @@ TEST(Select, OrRewrite) {
 TEST(Select, GpuSort) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT x, COUNT(*) AS n FROM gpu_sort_test GROUP BY x ORDER BY n DESC;", dt);
-    c("SELECT x, COUNT(*), COUNT(*) AS n FROM gpu_sort_test GROUP BY x ORDER BY n DESC;",
+    c("SELECT x, COUNT(*) AS val FROM gpu_sort_test GROUP BY x ORDER BY val DESC;", dt);
+    c("SELECT y, COUNT(*) AS val FROM gpu_sort_test GROUP BY y ORDER BY val DESC;", dt);
+    c("SELECT y, COUNT(*), COUNT(*) AS val FROM gpu_sort_test GROUP BY y ORDER BY val "
+      "DESC;",
       dt);
+    c("SELECT z, COUNT(*) AS val FROM gpu_sort_test GROUP BY z ORDER BY val DESC;", dt);
+    c("SELECT t, COUNT(*) AS val FROM gpu_sort_test GROUP BY t ORDER BY val DESC;", dt);
   }
 }
 
@@ -5838,7 +6017,7 @@ TEST(Alter, AfterAlterGeoColumnName) {
     run_ddl_statement("alter table alter_geo_column_test rename column abc to xyz;");
     auto& sqlite = cat.getSqliteConnector();
     sqlite.query_with_text_params(
-        "select count() from mapd_columns where tableid=? and columnid > ? and columnid "
+        "select count(*) from mapd_columns where tableid=? and columnid > ? and columnid "
         "<= ? and name like 'xyz_%';",
         std::vector<std::string>{
             std::to_string(td->tableId),
@@ -6082,6 +6261,14 @@ TEST(Select, Joins_Arrays) {
                                   "array_test.x = "
                                   "test_inner.x;",
                                   dt)));
+  }
+}
+
+TEST(Select, Joins_ShardedEmptyTable) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    SKIP_ON_AGGREGATOR(
+        c("select count(*) from emptytab a, emptytab2 b where a.x = b.x;", dt));
   }
 }
 
@@ -7364,6 +7551,34 @@ TEST(Select, RuntimeFunctions) {
         static_cast<float>(1171.11),
         v<float>(run_simple_agg(
             "SELECT TRUNCATE(CAST(1171.113 AS FLOAT),2) FROM test LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(static_cast<float>(11000000000000),
+                    v<float>(run_simple_agg(
+                        "SELECT FLOOR(f / 1e-13) FROM test WHERE f < 1.2 LIMIT 1;", dt)));
+    ASSERT_FLOAT_EQ(
+        static_cast<float>(11000000000000),
+        v<float>(run_simple_agg(
+            "SELECT FLOOR(CAST(f / 1e-13 AS FLOAT)) FROM test WHERE f < 1.2 LIMIT 1;",
+            dt)));
+    ASSERT_FLOAT_EQ(
+        std::numeric_limits<float>::min(),
+        v<float>(run_simple_agg(
+            "SELECT FLOOR(fn / 1e-13) FROM test WHERE fn IS NULL LIMIT 1;", dt)));
+    {
+      auto result = run_multiple_agg("SELECT fn, isnan(fn) FROM test;", dt);
+      ASSERT_EQ(result->rowCount(), size_t(2 * g_num_rows));
+      // Ensure the type for `isnan` is nullable
+      const auto func_ti = result->getColType(1);
+      ASSERT_FALSE(func_ti.get_notnull());
+      for (size_t i = 0; i < g_num_rows; i++) {
+        auto crt_row = result->getNextRow(false, false);
+        ASSERT_EQ(crt_row.size(), size_t(2));
+        if (std::numeric_limits<float>::min() == v<float>(crt_row[0])) {
+          ASSERT_EQ(std::numeric_limits<int8_t>::min(), v<int64_t>(crt_row[1]));
+        } else {
+          ASSERT_EQ(0, v<int64_t>(crt_row[1]));
+        }
+      }
+    }
   }
 }
 
@@ -7474,11 +7689,18 @@ TEST(Select, ArrowOutput) {
     c_arrow("SELECT x, y, z, t, f, d, str, ofd, ofq FROM test ORDER BY x ASC, y ASC;",
             dt);
     c_arrow("SELECT null_str, COUNT(*) FROM test GROUP BY null_str;", dt);
+    c_arrow("SELECT m,m_3,m_6,m_9 from test", dt);
+    c_arrow("SELECT o, o1, o2 from test", dt);
+    c_arrow("SELECT n from test", dt);
   }
 }
 
 TEST(Select, WatchdogTest) {
+  const auto watchdog_state = g_enable_watchdog;
   g_enable_watchdog = true;
+  ScopeGuard reset_Watchdog_state = [&watchdog_state] {
+    g_enable_watchdog = watchdog_state;
+  };
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT x, SUM(f) AS n FROM test GROUP BY x ORDER BY n DESC LIMIT 5;", dt);
@@ -12467,11 +12689,11 @@ TEST(Delete, Joins_ImplicitJoins) {
       "test_inner.x;",
       dt);
     c("SELECT bar.str FROM test, bar WHERE test.str = bar.str;", dt);
-    ASSERT_EQ(
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
         int64_t(3),
         v<int64_t>(run_simple_agg(
             "SELECT COUNT(*) FROM test, join_test WHERE test.rowid = join_test.rowid;",
-            dt)));
+            dt))));
     SKIP_ON_AGGREGATOR(
         ASSERT_EQ(7,
                   v<int64_t>(run_simple_agg("SELECT test.x FROM test, test_inner WHERE "
@@ -14876,6 +15098,122 @@ TEST(Select, EmptyString) {
   }
 }
 
+TEST(Select, LogicalSizedColumns) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // non-grouped aggregate:
+    c("SELECT MIN(tiny_int), MAX(tiny_int), MIN(tiny_int_null), MAX(tiny_int_null), "
+      "COUNT(tiny_int), SUM(tiny_int), AVG(tiny_int) FROM logical_size_test;",
+      dt);
+    // single-column perfect hash group by:
+    c("SELECT id, COUNT(tiny_int), COUNT(tiny_int_null), MAX(tiny_int), MIN(TINY_INT),"
+      "SUM(tiny_int), SUM(tiny_int_null), AVG(tiny_int), AVG(tiny_int_null) "
+      "FROM logical_size_test GROUP BY id ORDER BY id;",
+      dt);
+    c("SELECT id, COUNT(small_int_null), COUNT(small_int), SUM(small_int_null), "
+      "SUM(small_int), AVG(small_int_null), AVG(small_int) "
+      "FROM logical_size_test GROUP BY id ORDER BY id",
+      dt);
+    c("SELECT id, MAX(tiny_int), MAX(small_int_null), MAX(big_int), MAX(tiny_int_null),"
+      "MAX(id_null), MAX(small_int) FROM logical_size_test GROUP BY id ORDER BY id;",
+      dt);
+    c("SELECT id, MIN(tiny_int), MIN(small_int_null), MIN(big_int_null), "
+      "MIN(tiny_int_null),"
+      "MIN(big_int), MIN(small_int) FROM logical_size_test GROUP BY id ORDER BY id;",
+      dt);
+    // single-slot SAMPLE statement:
+    // 16-bit sample
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT id, SAMPLE(small_int), COUNT(*) FROM logical_size_test"
+          " WHERE tiny_int < 0 GROUP BY id ORDER BY id;",
+          dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), crt_row.size());
+      ASSERT_EQ(int64_t(4), v<int64_t>(crt_row[0]));
+      ASSERT_EQ(int64_t(75), v<int64_t>(crt_row[1]));
+      ASSERT_EQ(int64_t(1), v<int64_t>(crt_row[2]));
+    }
+    // 8-bit sample
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT id, SAMPLE(tiny_int), MAX(small_int_null) FROM logical_size_test "
+          " WHERE small_int < 76 GROUP BY id ORDER BY id;",
+          dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), crt_row.size());
+      ASSERT_EQ(int64_t(4), v<int64_t>(crt_row[0]));
+      ASSERT_EQ(int64_t(-13), v<int64_t>(crt_row[1]));
+      ASSERT_EQ(int64_t(-112), v<int64_t>(crt_row[2]));
+    }
+    // multi-slot SAMPLE statements:
+    // CAS on 16-bit
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT id, SAMPLE(small_int), SAMPLE(tiny_int), SAMPLE(tiny_int_null), "
+          "SAMPLE(small_int_null), SAMPLE(float_not_null) FROM logical_size_test"
+          " WHERE big_int < 3000 GROUP BY id ORDER BY id;",
+          dt);
+      const auto crt_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(6), crt_row.size());
+      ASSERT_EQ(int64_t(4), v<int64_t>(crt_row[0]));
+      ASSERT_EQ(int64_t(75), v<int64_t>(crt_row[1]));
+      ASSERT_EQ(int64_t(-13), v<int64_t>(crt_row[2]));
+      ASSERT_EQ(int64_t(-125), v<int64_t>(crt_row[3]));
+      ASSERT_EQ(int64_t(-112), v<int64_t>(crt_row[4]));
+      ASSERT_NEAR(float(2.5), v<float>(crt_row[5]), 0.01);
+    }
+    // CAS on 8-bit:
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT id, SAMPLE(tiny_int), SAMPLE(small_int) FROM logical_size_test"
+          " WHERE double_not_null < 20.0 GROUP BY id ORDER BY id;",
+          dt);
+      const auto first_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), first_row.size());
+      ASSERT_EQ(int64_t(4), v<int64_t>(first_row[0]));
+      ASSERT_TRUE(int64_t(20) == v<int64_t>(first_row[1]) ||
+                  int64_t(16) == v<int64_t>(first_row[1]));
+      ASSERT_EQ(int64_t(78), v<int64_t>(first_row[2]));
+      const auto second_row = rows->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), second_row.size());
+      ASSERT_EQ(int64_t(5), v<int64_t>(second_row[0]));
+      ASSERT_EQ(int64_t(23), v<int64_t>(second_row[1]));
+      ASSERT_EQ(int64_t(79), v<int64_t>(second_row[2]));
+    }
+  }
+}
+
+TEST(Select, GroupEmptyBlank) {
+  std::vector<std::string> insert_queries = {"INSERT INTO blank_test VALUES('',1);",
+                                             "INSERT INTO blank_test VALUES('a',2);"};
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    const std::string drop_old_test{"DROP TABLE IF EXISTS blank_test;"};
+    run_ddl_statement(drop_old_test);
+    g_sqlite_comparator.query(drop_old_test);
+    std::string columns_definition{"t1 TEXT NOT NULL, i1 INTEGER"};
+    const std::string create_test =
+        build_create_table_statement(columns_definition,
+                                     "blank_test",
+                                     {g_shard_count ? "i1" : "", g_shard_count},
+                                     {},
+                                     10,
+                                     true);
+    run_ddl_statement(create_test);
+    g_sqlite_comparator.query("CREATE TABLE blank_test (t1 TEXT NOT NULL, i1 INTEGER);");
+
+    for (auto insert_query : insert_queries) {
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+      g_sqlite_comparator.query(insert_query);
+    }
+
+    c("select t1 from blank_test group by t1 order by t1;", dt);
+  }
+}
+
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,
@@ -15137,7 +15475,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
                                      {g_shard_count ? "x" : "", g_shard_count},
                                      {},
                                      2,
-                                     with_delete_support);
+                                     with_delete_support,
+                                     g_aggregator);
     run_ddl_statement(create_vacuum_test_alt);
     g_sqlite_comparator.query("CREATE TABLE vacuum_test_alt(x int not null, y int );");
 
@@ -15758,6 +16097,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
     const std::string drop_old_empty{"DROP TABLE IF EXISTS emptytab;"};
     run_ddl_statement(drop_old_empty);
     g_sqlite_comparator.query(drop_old_empty);
+
     const std::string create_empty{
         "CREATE TABLE emptytab(x int not null, y int, t bigint not null, f float not "
         "null, d double not null, dd "
@@ -15766,6 +16106,18 @@ int create_and_populate_tables(bool with_delete_support = true) {
     g_sqlite_comparator.query(create_empty + ";");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'emptytab'";
+    return -EEXIST;
+  }
+  try {
+    const std::string drop_old_empty2{"DROP TABLE IF EXISTS emptytab2;"};
+    run_ddl_statement(drop_old_empty2);
+    g_sqlite_comparator.query(drop_old_empty2);
+
+    run_ddl_statement(
+        "CREATE TABLE emptytab2(x int, shard key (x)) WITH (shard_count=4);");
+    g_sqlite_comparator.query("CREATE TABLE emptytab2(x int);");
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'emptytab2'";
     return -EEXIST;
   }
   try {
@@ -15779,6 +16131,21 @@ int create_and_populate_tables(bool with_delete_support = true) {
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test_in_bitmap'";
     return -EEXIST;
+  }
+  try {
+    import_logical_size_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'logical_size_test'";
+  }
+  try {
+    import_empty_table_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'empty_table_test'";
+  }
+  try {
+    import_test_table_with_lots_of_columns();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'test_lots_cols'";
   }
   {
     std::string insert_query{"INSERT INTO test_in_bitmap VALUES('a');"};
@@ -15945,6 +16312,8 @@ void drop_tables() {
   g_sqlite_comparator.query(drop_subquery_test);
   const std::string drop_empty_test{"DROP TABLE emptytab;"};
   run_ddl_statement(drop_empty_test);
+  const std::string drop_empty_test2{"DROP TABLE emptytab2;"};
+  run_ddl_statement(drop_empty_test2);
   g_sqlite_comparator.query(drop_empty_test);
   run_ddl_statement("DROP TABLE text_group_by_test;");
   const std::string drop_join_test{"DROP TABLE join_test;"};
@@ -15972,6 +16341,15 @@ void drop_tables() {
   const std::string drop_test_in_bitmap{"DROP TABLE test_in_bitmap;"};
   g_sqlite_comparator.query(drop_test_in_bitmap);
   run_ddl_statement(drop_test_in_bitmap);
+  const std::string drop_logical_size_test{"DROP TABLE logical_size_test;"};
+  g_sqlite_comparator.query(drop_logical_size_test);
+  run_ddl_statement(drop_logical_size_test);
+  const std::string drop_empty_test_table{"DROP TABLE empty_test_table;"};
+  g_sqlite_comparator.query(drop_empty_test_table);
+  run_ddl_statement(drop_empty_test_table);
+  const std::string drop_test_lots_cols{"DROP TABLE test_lots_cols;"};
+  g_sqlite_comparator.query(drop_test_lots_cols);
+  run_ddl_statement(drop_test_lots_cols);
 
   if (!g_aggregator) {
     const std::string drop_ctas_test{"DROP TABLE ctas_test;"};
@@ -16034,6 +16412,11 @@ int main(int argc, char** argv) {
                          ->default_value(g_enable_columnar_output)
                          ->implicit_value(true),
                      "Enable/disable using columnar output format.");
+  desc.add_options()("enable-bump-allocator",
+                     po::value<bool>(&g_enable_bump_allocator)
+                         ->default_value(g_enable_bump_allocator)
+                         ->implicit_value(true),
+                     "Enable the bump allocator for projection queries on GPU.");
   desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
   desc.add_options()(
       "use-existing-data",

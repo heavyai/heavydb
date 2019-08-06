@@ -180,7 +180,7 @@ bool nullize_a_fixed_encoded_column(const std::string& table,
   update_common<int64_t>(
       table, column, cnt, 1, inline_int_null_value<T>(), SQLTypeInfo());
   std::string query_str =
-      "SELECT count() FROM " + table + " WHERE " + column + " IS NULL;";
+      "SELECT count(*) FROM " + table + " WHERE " + column + " IS NULL;";
   auto rows = run_query(query_str);
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(1), crt_row.size());
@@ -297,7 +297,7 @@ bool update_a_encoded_string_column(const std::string& table,
   update_common<const std::string>(table, column, cnt, step, val, SQLTypeInfo(), commit);
   // count updated string
   std::string query_str =
-      "SELECT count() FROM " + table + " WHERE " + column + " = '" + val + "';";
+      "SELECT count(*) FROM " + table + " WHERE " + column + " = '" + val + "';";
   auto rows = run_query(query_str);
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(1), crt_row.size());
@@ -317,7 +317,7 @@ bool update_a_boolean_column(const std::string& table,
       table, column, cnt, step, val ? "T" : "F", SQLTypeInfo(), commit);
   // count updated bools
   std::string query_str =
-      "SELECT count() FROM " + table + " WHERE " + (val ? "" : " NOT ") + column + ";";
+      "SELECT count(*) FROM " + table + " WHERE " + (val ? "" : " NOT ") + column + ";";
   auto rows = run_query(query_str);
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(1), crt_row.size());
@@ -414,7 +414,7 @@ bool check_row_count_with_string(const std::string& table,
                                  const int64_t cnt,
                                  const std::string& val) {
   std::string query_str =
-      "SELECT count() FROM " + table + " WHERE " + column + " = '" + val + "';";
+      "SELECT count(*) FROM " + table + " WHERE " + column + " = '" + val + "';";
   auto rows = run_query(query_str);
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(1), crt_row.size());

@@ -14,8 +14,8 @@
   <version>${omnisci.release.version}</version>
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <maven.compiler.source>1.6</maven.compiler.source>
-    <maven.compiler.target>1.6</maven.compiler.target>
+    <maven.compiler.source>1.8</maven.compiler.source>
+    <maven.compiler.target>1.8</maven.compiler.target>
     <thrift.version>0.9.3</thrift.version>
     <skipTests>true</skipTests>
     <omnisci.release.version>need-to-set-omnisci.release.version</omnisci.release.version>

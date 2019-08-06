@@ -121,6 +121,7 @@ void optimize_ir(llvm::Function* query_func,
   pass_manager.add(llvm::createInstructionCombiningPass());
   pass_manager.add(llvm::createGlobalOptimizerPass());
 
+  pass_manager.add(llvm::createLICMPass());
   if (co.opt_level_ == ExecutorOptLevel::LoopStrengthReduction) {
     pass_manager.add(llvm::createLoopStrengthReducePass());
   }
@@ -141,6 +142,31 @@ std::string serialize_llvm_object(const T* llvm_obj) {
 
 }  // namespace
 
+ExecutionEngineWrapper::ExecutionEngineWrapper() {}
+
+ExecutionEngineWrapper::ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine)
+    : execution_engine_(execution_engine) {}
+
+ExecutionEngineWrapper::ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine,
+                                               const CompilationOptions& co)
+    : execution_engine_(execution_engine) {
+  if (execution_engine_) {
+    if (co.register_intel_jit_listener_) {
+      intel_jit_listener_.reset(llvm::JITEventListener::createIntelJITEventListener());
+      CHECK(intel_jit_listener_);
+      execution_engine_->RegisterJITEventListener(intel_jit_listener_.get());
+      LOG(INFO) << "Registered IntelJITEventListener";
+    }
+  }
+}
+
+ExecutionEngineWrapper& ExecutionEngineWrapper::operator=(
+    llvm::ExecutionEngine* execution_engine) {
+  execution_engine_.reset(execution_engine);
+  intel_jit_listener_ = nullptr;
+  return *this;
+}
+
 std::vector<std::pair<void*, void*>> Executor::getCodeFromCache(const CodeCacheKey& key,
                                                                 const CodeCache& cache) {
   auto it = cache.find(key);
@@ -160,8 +186,23 @@ std::vector<std::pair<void*, void*>> Executor::getCodeFromCache(const CodeCacheK
 
 void Executor::addCodeToCache(
     const CodeCacheKey& key,
-    const std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>>&
-        native_code,
+    std::vector<std::tuple<void*, ExecutionEngineWrapper>> native_code,
+    llvm::Module* module,
+    CodeCache& cache) {
+  CHECK(!native_code.empty());
+  CodeCacheVal cache_val;
+  for (auto& native_func : native_code) {
+    cache_val.emplace_back(
+        std::get<0>(native_func), std::move(std::get<1>(native_func)), nullptr);
+  }
+  cache.put(key,
+            std::make_pair<decltype(cache_val), decltype(module)>(std::move(cache_val),
+                                                                  std::move(module)));
+}
+
+void Executor::addCodeToCache(
+    const CodeCacheKey& key,
+    const std::vector<std::tuple<void*, GpuCompilationContext*>>& native_code,
     llvm::Module* module,
     CodeCache& cache) {
   CHECK(!native_code.empty());
@@ -169,15 +210,15 @@ void Executor::addCodeToCache(
   for (const auto& native_func : native_code) {
     cache_val.emplace_back(
         std::get<0>(native_func),
-        std::unique_ptr<llvm::ExecutionEngine>(std::get<1>(native_func)),
-        std::unique_ptr<GpuCompilationContext>(std::get<2>(native_func)));
+        ExecutionEngineWrapper(),
+        std::unique_ptr<GpuCompilationContext>(std::get<1>(native_func)));
   }
   cache.put(key,
             std::make_pair<decltype(cache_val), decltype(module)>(std::move(cache_val),
                                                                   std::move(module)));
 }
 
-std::unique_ptr<llvm::ExecutionEngine> CodeGenerator::generateNativeCPUCode(
+ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     llvm::Function* func,
     const std::unordered_set<llvm::Function*>& live_funcs,
     const CompilationOptions& co) {
@@ -186,8 +227,6 @@ std::unique_ptr<llvm::ExecutionEngine> CodeGenerator::generateNativeCPUCode(
 #ifndef WITH_JIT_DEBUG
   optimize_ir(func, module, live_funcs, co);
 #endif  // WITH_JIT_DEBUG
-
-  llvm::ExecutionEngine* execution_engine{nullptr};
 
   auto init_err = llvm::InitializeNativeTarget();
   CHECK(!init_err);
@@ -204,12 +243,13 @@ std::unique_ptr<llvm::ExecutionEngine> CodeGenerator::generateNativeCPUCode(
   llvm::TargetOptions to;
   to.EnableFastISel = true;
   eb.setTargetOptions(to);
-  execution_engine = eb.create();
-  CHECK(execution_engine);
+
+  ExecutionEngineWrapper execution_engine(eb.create(), co);
+  CHECK(execution_engine.get());
 
   execution_engine->finalizeObject();
 
-  return std::unique_ptr<llvm::ExecutionEngine>(execution_engine);
+  return execution_engine;
 }
 
 std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
@@ -233,10 +273,9 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
   auto native_code = execution_engine->getPointerToFunction(multifrag_query_func);
   CHECK(native_code);
 
-  addCodeToCache(key,
-                 {{std::make_tuple(native_code, execution_engine.release(), nullptr)}},
-                 module,
-                 cpu_code_cache_);
+  std::vector<std::tuple<void*, ExecutionEngineWrapper>> cache;
+  cache.emplace_back(native_code, std::move(execution_engine));
+  addCodeToCache(key, std::move(cache), module, cpu_code_cache_);
 
   return {std::make_pair(native_code, nullptr)};
 }
@@ -283,7 +322,7 @@ std::string gen_translate_null_key_sigs() {
   for (const std::string key_type : {"int8_t", "int16_t", "int32_t", "int64_t"}) {
     const auto key_llvm_type = cpp_to_llvm_name(key_type);
     result += "declare i64 @translate_null_key_" + key_type + "(" + key_llvm_type + ", " +
-              key_llvm_type + ", " + key_llvm_type + ");\n";
+              key_llvm_type + ", i64);\n";
   }
   return result;
 }
@@ -303,7 +342,7 @@ declare i8 @thread_warp_idx(i8);
 declare i64* @init_shared_mem(i64*, i32);
 declare i64* @init_shared_mem_nop(i64*, i32);
 declare i64* @init_shared_mem_dynamic(i64*, i32);
-declare i64* @alloc_shared_mem_dynamic(); 
+declare i64* @alloc_shared_mem_dynamic();
 declare void @set_shared_mem_to_identity(i64*, i32, i64);
 declare void @write_back(i64*, i64*, i32);
 declare void @write_back_smem_nop(i64*, i64*, i32);
@@ -345,6 +384,10 @@ declare void @agg_max_shared(i64*, i64);
 declare void @agg_max_skip_val_shared(i64*, i64, i64);
 declare void @agg_max_int32_shared(i32*, i32);
 declare void @agg_max_int32_skip_val_shared(i32*, i32, i32);
+declare void @agg_max_int16_shared(i16*, i16);
+declare void @agg_max_int16_skip_val_shared(i16*, i16, i16);
+declare void @agg_max_int8_shared(i8*, i8);
+declare void @agg_max_int8_skip_val_shared(i8*, i8, i8);
 declare void @agg_max_double_shared(i64*, double);
 declare void @agg_max_double_skip_val_shared(i64*, double, double);
 declare void @agg_max_float_shared(i32*, float);
@@ -353,6 +396,10 @@ declare void @agg_min_shared(i64*, i64);
 declare void @agg_min_skip_val_shared(i64*, i64, i64);
 declare void @agg_min_int32_shared(i32*, i32);
 declare void @agg_min_int32_skip_val_shared(i32*, i32, i32);
+declare void @agg_min_int16_shared(i16*, i16);
+declare void @agg_min_int16_skip_val_shared(i16*, i16, i16);
+declare void @agg_min_int8_shared(i8*, i8);
+declare void @agg_min_int8_skip_val_shared(i8*, i8, i8);
 declare void @agg_min_double_shared(i64*, double);
 declare void @agg_min_double_skip_val_shared(i64*, double, double);
 declare void @agg_min_float_shared(i32*, float);
@@ -365,6 +412,9 @@ declare void @agg_id_double_shared(i64*, double);
 declare void @agg_id_double_shared_slow(i64*, double*);
 declare void @agg_id_float_shared(i32*, float);
 declare i1 @slotEmptyKeyCAS(i64*, i64, i64);
+declare i1 @slotEmptyKeyCAS_int32(i32*, i32, i32);
+declare i1 @slotEmptyKeyCAS_int16(i16*, i16, i16);
+declare i1 @slotEmptyKeyCAS_int8(i8*, i8, i8);
 declare i64 @ExtractFromTime(i32, i64);
 declare i64 @ExtractFromTimeNullable(i32, i64, i64);
 declare i64 @DateTruncate(i32, i64);
@@ -396,6 +446,18 @@ declare i32 @array_at_int32_t(i8*, i64, i32);
 declare i64 @array_at_int64_t(i8*, i64, i32);
 declare float @array_at_float(i8*, i64, i32);
 declare double @array_at_double(i8*, i64, i32);
+declare i8 @varlen_array_at_int8_t(i8*, i64, i32);
+declare i16 @varlen_array_at_int16_t(i8*, i64, i32);
+declare i32 @varlen_array_at_int32_t(i8*, i64, i32);
+declare i64 @varlen_array_at_int64_t(i8*, i64, i32);
+declare float @varlen_array_at_float(i8*, i64, i32);
+declare double @varlen_array_at_double(i8*, i64, i32);
+declare i8 @varlen_notnull_array_at_int8_t(i8*, i64, i32);
+declare i16 @varlen_notnull_array_at_int16_t(i8*, i64, i32);
+declare i32 @varlen_notnull_array_at_int32_t(i8*, i64, i32);
+declare i64 @varlen_notnull_array_at_int64_t(i8*, i64, i32);
+declare float @varlen_notnull_array_at_float(i8*, i64, i32);
+declare double @varlen_notnull_array_at_double(i8*, i64, i32);
 declare i8 @array_at_int8_t_checked(i8*, i64, i64, i8);
 declare i16 @array_at_int16_t_checked(i8*, i64, i64, i16);
 declare i32 @array_at_int32_t_checked(i8*, i64, i64, i32);
@@ -656,8 +718,7 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
   auto cuda_llir = cuda_rt_decls + extension_function_decls() + ss.str();
 
   std::vector<std::pair<void*, void*>> native_functions;
-  std::vector<std::tuple<void*, llvm::ExecutionEngine*, GpuCompilationContext*>>
-      cached_functions;
+  std::vector<std::tuple<void*, GpuCompilationContext*>> cached_functions;
 
   const auto ptx =
       generatePTX(cuda_llir, gpu_target.nvptx_target_machine, gpu_target.cgen_state);
@@ -684,7 +745,7 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
     CHECK(native_code);
     CHECK(native_module);
     native_functions.emplace_back(native_code, native_module);
-    cached_functions.emplace_back(native_code, nullptr, gpu_context);
+    cached_functions.emplace_back(native_code, gpu_context);
   }
 
   checkCudaErrors(cuLinkDestroy(link_state));
@@ -728,7 +789,6 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
                 "get_group_value_with_watchdog" ||
             get_gv_call.getCalledFunction()->getName() ==
                 "get_matching_group_value_perfect_hash" ||
-            get_gv_call.getCalledFunction()->getName() == "string_decode" ||
             get_gv_call.getCalledFunction()->getName() == "array_size" ||
             get_gv_call.getCalledFunction()->getName() == "linear_probabilistic_count") {
           mark_function_never_inline(cgen_state_->row_func_);
@@ -889,11 +949,13 @@ void set_row_func_argnames(llvm::Function* row_func,
   } else {
     arg_it->setName("group_by_buff");
     ++arg_it;
-    arg_it->setName("crt_match");
+    arg_it->setName("crt_matched");
     ++arg_it;
     arg_it->setName("total_matched");
     ++arg_it;
     arg_it->setName("old_total_matched");
+    ++arg_it;
+    arg_it->setName("max_matched");
     ++arg_it;
   }
 
@@ -944,6 +1006,8 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
     // total match count passed from the caller
     row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
     // old total match count returned to the caller
+    row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
+    // max matched (total number of slots in the output buffer)
     row_process_arg_types.push_back(llvm::Type::getInt32PtrTy(context));
   }
 

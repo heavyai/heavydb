@@ -20,6 +20,9 @@ import com.mapd.common.SockTransportProperties;
 import com.mapd.parser.server.ExtensionFunction;
 
 import org.apache.calcite.avatica.util.Casing;
+import org.apache.calcite.config.CalciteConnectionConfig;
+import org.apache.calcite.config.CalciteConnectionConfigImpl;
+import org.apache.calcite.plan.Context;
 import org.apache.calcite.plan.RelOptLattice;
 import org.apache.calcite.plan.RelOptMaterialization;
 import org.apache.calcite.plan.RelOptUtil;
@@ -70,6 +73,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 /**
@@ -110,6 +114,33 @@ public final class MapDParser {
     this.sock_transport_properties = skT;
   }
 
+  private static final Context MAPD_CONNECTION_CONTEXT = new Context() {
+    MapDRelDataTypeSystemImpl myTypeSystem = new MapDRelDataTypeSystemImpl();
+    CalciteConnectionConfig config = new CalciteConnectionConfigImpl(new Properties()) {
+      @SuppressWarnings("unchecked")
+      public <T extends Object> T typeSystem(
+              java.lang.Class<T> typeSystemClass, T defaultTypeSystem) {
+        return (T) myTypeSystem;
+      };
+
+      public boolean caseSensitive() {
+        return false;
+      };
+
+      public org.apache.calcite.sql.validate.SqlConformance conformance() {
+        return SqlConformanceEnum.LENIENT;
+      };
+    };
+
+    @Override
+    public <C> C unwrap(Class<C> aClass) {
+      if (aClass.isInstance(config)) {
+        return aClass.cast(config);
+      }
+      return null;
+    }
+  };
+
   private MapDPlanner getPlanner() {
     MapDSchema mapd =
             new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
@@ -132,6 +163,7 @@ public final class MapDParser {
                                     .withInSubQueryThreshold(Integer.MAX_VALUE)
                                     .build())
                     .typeSystem(createTypeSystem())
+                    .context(MAPD_CONNECTION_CONTEXT)
                     .build();
     return new MapDPlanner(config);
   }
@@ -484,7 +516,7 @@ public final class MapDParser {
     boolean biased;
     boolean sqrt;
     boolean flt;
-    if (proj_call.getOperator().isName("STDDEV_POP")) {
+    if (proj_call.getOperator().isName("STDDEV_POP", false)) {
       biased = true;
       sqrt = true;
       flt = false;
@@ -492,7 +524,7 @@ public final class MapDParser {
       biased = true;
       sqrt = true;
       flt = true;
-    } else if (proj_call.getOperator().isName("STDDEV_SAMP")
+    } else if (proj_call.getOperator().isName("STDDEV_SAMP", false)
             || proj_call.getOperator().getName().equalsIgnoreCase("STDDEV")) {
       biased = false;
       sqrt = true;
@@ -502,7 +534,7 @@ public final class MapDParser {
       biased = false;
       sqrt = true;
       flt = true;
-    } else if (proj_call.getOperator().isName("VAR_POP")) {
+    } else if (proj_call.getOperator().isName("VAR_POP", false)) {
       biased = true;
       sqrt = false;
       flt = false;
@@ -510,7 +542,7 @@ public final class MapDParser {
       biased = true;
       sqrt = false;
       flt = true;
-    } else if (proj_call.getOperator().isName("VAR_SAMP")
+    } else if (proj_call.getOperator().isName("VAR_SAMP", false)
             || proj_call.getOperator().getName().equalsIgnoreCase("VARIANCE")) {
       biased = false;
       sqrt = false;
@@ -622,10 +654,10 @@ public final class MapDParser {
     }
     boolean pop;
     boolean flt;
-    if (proj_call.getOperator().isName("COVAR_POP")) {
+    if (proj_call.getOperator().isName("COVAR_POP", false)) {
       pop = true;
       flt = false;
-    } else if (proj_call.getOperator().isName("COVAR_SAMP")) {
+    } else if (proj_call.getOperator().isName("COVAR_SAMP", false)) {
       pop = false;
       flt = false;
     } else if (proj_call.getOperator().getName().equalsIgnoreCase("COVAR_POP_FLOAT")) {
@@ -713,7 +745,7 @@ public final class MapDParser {
       return null;
     }
     boolean flt;
-    if (proj_call.getOperator().isName("CORR")
+    if (proj_call.getOperator().isName("CORR", false)
             || proj_call.getOperator().getName().equalsIgnoreCase("CORRELATION")) {
       // expand correlation coefficient
       flt = false;

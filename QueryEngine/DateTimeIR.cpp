@@ -91,8 +91,12 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::DateaddExpr* dateadd_expr,
     dateadd_args.push_back(cgen_state_->inlineIntNull(datetime_ti));
     dateadd_fname += "Nullable";
   }
-  return cgen_state_->emitExternalCall(
-      dateadd_fname, get_int_type(64, cgen_state_->context_), dateadd_args);
+  return cgen_state_->emitExternalCall(dateadd_fname,
+                                       get_int_type(64, cgen_state_->context_),
+                                       dateadd_args,
+                                       {llvm::Attribute::NoUnwind,
+                                        llvm::Attribute::ReadNone,
+                                        llvm::Attribute::Speculatable});
 }
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::DatediffExpr* datediff_expr,

@@ -1,4 +1,5 @@
 namespace java com.mapd.thrift.server
+namespace py omnisci.common
 
 enum TDeviceType {
   CPU,

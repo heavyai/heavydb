@@ -23,12 +23,15 @@ enum class ExecutorOptLevel { Default, LoopStrengthReduction };
 
 enum class ExecutorExplainType { Default, Optimized };
 
+enum class ExecutorDispatchMode { KernelPerFragment, MultifragmentKernel };
+
 struct CompilationOptions {
   ExecutorDeviceType device_type_;
   const bool hoist_literals_;
   const ExecutorOptLevel opt_level_;
   const bool with_dynamic_watchdog_;
   const ExecutorExplainType explain_type_{ExecutorExplainType::Default};
+  const bool register_intel_jit_listener_;
 };
 
 struct ExecutionOptions {

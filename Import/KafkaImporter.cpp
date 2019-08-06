@@ -41,7 +41,7 @@
 
 #include <boost/program_options.hpp>
 
-#include "rdkafkacpp.h"
+#include <librdkafka/rdkafkacpp.h>
 
 #define MAX_FIELD_LEN 20000
 

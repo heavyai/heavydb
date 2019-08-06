@@ -2,7 +2,7 @@ set(THRIFT_HANDLER_SOURCES MapDHandler.cpp TokenCompletionHints.cpp)
 set(THRIFT_HANDLER_LIBS mapd_thrift Shared ${CMAKE_DL_LIBS})
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
-  list(APPEND THRIFT_HANDLER_LIBS rdkafka++ StringDictionary)
+  list(APPEND THRIFT_HANDLER_LIBS ${RdKafka_LIBRARIES} StringDictionary)
   include_directories("${CMAKE_CURRENT_SOURCE_DIR}/ee")
   list(APPEND THRIFT_HANDLER_SOURCES ee/MapDRenderHandler.cpp ee/MapDDistributedHandler.cpp ee/HAHandler.cpp ee/KafkaMgr.cpp ee/DistributedValidate.cpp)
   if(ENABLE_RENDERING)

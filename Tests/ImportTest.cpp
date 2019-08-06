@@ -82,7 +82,7 @@ bool compare_agg(const int64_t cnt, const double avg) {
 
 #ifdef ENABLE_IMPORT_PARQUET
 bool import_test_parquet_with_null(const int64_t cnt) {
-  std::string query_str = "select count() from trips where rate_code_id is null;";
+  std::string query_str = "select count(*) from trips where rate_code_id is null;";
   auto rows = run_query(query_str);
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(1), crt_row.size());
@@ -251,7 +251,7 @@ bool import_test_local_parquet_with_geo_point(const string& prefix,
   run_ddl_statement("alter table trips add column pt_dropoff point;");
   EXPECT_TRUE(import_test_local_parquet(prefix, filename, cnt, avg));
   std::string query_str =
-      "select count() from trips where abs(dropoff_longitude-st_x(pt_dropoff))<0.01 and "
+      "select count(*) from trips where abs(dropoff_longitude-st_x(pt_dropoff))<0.01 and "
       "abs(dropoff_latitude-st_y(pt_dropoff))<0.01;";
   auto rows = run_query(query_str);
   auto crt_row = rows->getNextRow(true, true);
@@ -302,11 +302,11 @@ TEST(Detect, Numeric) {
 
 const char* create_table_mini_sort = R"(
   CREATE TABLE sortab(
-    i int, 
+    i int,
     f float,
-    ia int[2], 
-    pt point, 
-    sa text[], 
+    ia int[2],
+    pt point,
+    sa text[],
     s2 text encoding dict(16),
     dt date,
     d2 date ENCODING FIXED(16),
@@ -694,7 +694,19 @@ TEST_F(ImportTestDateArray, ImportMixedDateArrays) {
     }
     const auto date_arr2 = boost::get<ArrayTargetValue>(&crt_row[2]);
     CHECK(date_arr2);
-    // TODO: Check !date_arr2->is_initialized() too if NULL fixlen arrays are allowed
+    if (i == 9) {
+      // Fixlen array - not NULL, filled with NULLs
+      CHECK(date_arr2->is_initialized());
+      const auto& vec = date_arr2->get();
+      for (size_t k = 0; k < vec.size(); k++) {
+        const auto date = v<int64_t>(vec[k]);
+        const auto date_str = convert_date_to_string(static_cast<int64_t>(date));
+        ASSERT_EQ("NULL", date_str);
+      }
+    } else {
+      // NULL fixlen array
+      CHECK(!date_arr2->is_initialized());
+    }
   }
 }
 
@@ -1355,6 +1367,17 @@ TEST_F(GeoGDALImportTest, Geodatabase_Simple) {
   check_geo_num_rows("omnisci_geo, ESTABLISHED", 87);
 }
 
+TEST_F(GeoGDALImportTest, KML_Simple) {
+  SKIP_ALL_ON_AGGREGATOR();
+  if (!Importer_NS::Importer::hasGDALLibKML()) {
+    LOG(ERROR) << "Test requires LibKML support in GDAL";
+  } else {
+    const auto file_path = boost::filesystem::path("KML/test.kml");
+    import_test_geofile_importer(file_path.string(), "geospatial", false);
+    check_geo_num_rows("omnisci_geo, FID", 10);
+  }
+}
+
 #ifdef HAVE_AWS_S3
 // s3 compressed (non-parquet) test cases
 TEST_F(ImportTest, S3_One_csv_file) {
@@ -1427,7 +1450,7 @@ int main(int argc, char** argv) {
 
   desc.add_options()(
       "test-help",
-      "Print all ExecuteTest specific options (for gtest options use `--help`).");
+      "Print all ImportTest specific options (for gtest options use `--help`).");
 
   logger::LogOptions log_options(argv[0]);
   log_options.max_files_ = 0;  // stderr only by default
@@ -1438,7 +1461,7 @@ int main(int argc, char** argv) {
   po::notify(vm);
 
   if (vm.count("test-help")) {
-    std::cout << "Usage: ExecuteTest" << std::endl << std::endl;
+    std::cout << "Usage: ImportTest" << std::endl << std::endl;
     std::cout << desc << std::endl;
     return 0;
   }

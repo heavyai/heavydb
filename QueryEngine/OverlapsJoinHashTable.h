@@ -23,26 +23,25 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
  public:
   OverlapsJoinHashTable(const std::shared_ptr<Analyzer::BinOper> condition,
                         const std::vector<InputTableInfo>& query_infos,
-                        const RelAlgExecutionUnit& ra_exe_unit,
                         const Data_Namespace::MemoryLevel memory_level,
                         const size_t entry_count,
                         ColumnCacheMap& column_map,
-                        Executor* executor)
+                        Executor* executor,
+                        const std::vector<InnerOuter>& inner_outer_pairs)
       : BaselineJoinHashTable(condition,
                               query_infos,
-                              ra_exe_unit,
                               memory_level,
                               JoinHashTableInterface::HashType::OneToOne,
                               entry_count,
                               column_map,
-                              executor) {}
+                              executor,
+                              inner_outer_pairs) {}
 
   ~OverlapsJoinHashTable() override {}
 
   static std::shared_ptr<OverlapsJoinHashTable> getInstance(
       const std::shared_ptr<Analyzer::BinOper> condition,
       const std::vector<InputTableInfo>& query_infos,
-      const RelAlgExecutionUnit& ra_exe_unit,
       const Data_Namespace::MemoryLevel memory_level,
       const int device_count,
       ColumnCacheMap& column_map,
@@ -58,9 +57,26 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
     return 0;
   }
 
+  static auto yieldCacheInvalidator() -> std::function<void()> {
+    return []() -> void {
+      std::lock_guard<std::mutex> guard(auto_tuner_cache_mutex_);
+      auto_tuner_cache_.clear();
+    };
+  }
+
  protected:
   void reifyWithLayout(const int device_count,
                        const JoinHashTableInterface::HashType layout) override;
+
+  std::pair<size_t, size_t> calculateCounts(
+      size_t shard_count,
+      const Fragmenter_Namespace::TableInfo& query_info,
+      const int device_count,
+      std::vector<BaselineJoinHashTable::ColumnsForDevice>& columns_per_device);
+
+  size_t calculateHashTableSize(size_t number_of_dimensions,
+                                size_t emitted_keys_count,
+                                size_t entry_count) const;
 
   ColumnsForDevice fetchColumnsForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
@@ -88,13 +104,16 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
 
   llvm::Value* codegenKey(const CompilationOptions&) override;
 
+  static std::map<HashTableCacheKey, double> auto_tuner_cache_;
+  static std::mutex auto_tuner_cache_mutex_;
+
  private:
   void computeBucketSizes(std::vector<double>& bucket_sizes_for_dimension,
                           const JoinColumn& join_column,
-                          const std::vector<InnerOuter>& inner_outer_pairs,
-                          const size_t row_count);
+                          const std::vector<InnerOuter>& inner_outer_pairs);
 
   std::vector<double> bucket_sizes_for_dimension_;
+  double overlaps_hashjoin_bucket_threshold_;
 };
 
 #endif  // QUERYENGINE_OVERLAPSHASHTABLE_H

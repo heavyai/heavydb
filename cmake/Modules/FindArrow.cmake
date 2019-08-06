@@ -89,17 +89,5 @@ if(Arrow_USE_STATIC_LIBS)
   set(CMAKE_FIND_LIBRARY_SUFFIXES ${_CMAKE_FIND_LIBRARY_SUFFIXES})
 endif()
 
-try_compile(HAVE_ARROW_STATIC_RECORDBATCH_CTOR
-  ${CMAKE_CURRENT_BINARY_DIR}
-  ${CMAKE_SOURCE_DIR}/cmake/Modules/arrow_static_recordbatch.cpp
-  COMPILE_DEFINITIONS -I${Arrow_INCLUDE_DIRS} -std=c++14
-  LINK_LIBRARIES ${Arrow_LIBRARY})
-
-try_compile(HAVE_ARROW_APPENDVALUES
-  ${CMAKE_CURRENT_BINARY_DIR}
-  ${CMAKE_SOURCE_DIR}/cmake/Modules/arrow_appendvalues.cpp
-  COMPILE_DEFINITIONS -I${Arrow_INCLUDE_DIRS} -std=c++14
-  LINK_LIBRARIES ${Arrow_LIBRARY})
-
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(Arrow REQUIRED_VARS Arrow_LIBRARY)

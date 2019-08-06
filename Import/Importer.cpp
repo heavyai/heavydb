@@ -397,6 +397,47 @@ Datum NullDatum(SQLTypeInfo& ti) {
   return d;
 }
 
+Datum NullArrayDatum(SQLTypeInfo& ti) {
+  Datum d;
+  const auto type = ti.is_decimal() ? decimal_to_int_type(ti) : ti.get_type();
+  switch (type) {
+    case kBOOLEAN:
+      d.boolval = inline_fixed_encoding_null_array_val(ti);
+      break;
+    case kBIGINT:
+      d.bigintval = inline_fixed_encoding_null_array_val(ti);
+      break;
+    case kINT:
+      d.intval = inline_fixed_encoding_null_array_val(ti);
+      break;
+    case kSMALLINT:
+      d.smallintval = inline_fixed_encoding_null_array_val(ti);
+      break;
+    case kTINYINT:
+      d.tinyintval = inline_fixed_encoding_null_array_val(ti);
+      break;
+    case kFLOAT:
+      d.floatval = NULL_ARRAY_FLOAT;
+      break;
+    case kDOUBLE:
+      d.doubleval = NULL_ARRAY_DOUBLE;
+      break;
+    case kTIME:
+    case kTIMESTAMP:
+    case kDATE:
+      d.bigintval = inline_fixed_encoding_null_array_val(ti);
+      break;
+    case kPOINT:
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON:
+      throw std::runtime_error("Internal error: geometry type in NullArrayDatum.");
+    default:
+      throw std::runtime_error("Internal error: invalid type in NullArrayDatum.");
+  }
+  return d;
+}
+
 ArrayDatum StringToArray(const std::string& s,
                          const SQLTypeInfo& ti,
                          const CopyParams& copy_params) {
@@ -461,16 +502,25 @@ ArrayDatum NullArray(const SQLTypeInfo& ti) {
   }
 
   if (len > 0) {
-    // NULL fixlen array: fill with scalar NULL sentinels
+    // Compose a NULL fixlen array
     int8_t* buf = (int8_t*)checked_malloc(len);
-    Datum d = NullDatum(elem_ti);
-    for (int8_t* p = buf; (p - buf) < len;) {
-      p = appendDatum(p, d, elem_ti);
+    // First scalar is a NULL_ARRAY sentinel
+    Datum d = NullArrayDatum(elem_ti);
+    int8_t* p = appendDatum(buf, d, elem_ti);
+    // Rest is filled with normal NULL sentinels
+    Datum d0 = NullDatum(elem_ti);
+    while ((p - buf) < len) {
+      p = appendDatum(p, d0, elem_ti);
     }
+    CHECK((p - buf) == len);
     return ArrayDatum(len, buf, true);
   }
   // NULL varlen array
   return ArrayDatum(0, NULL, true);
+}
+
+ArrayDatum ImporterUtils::composeNullArray(const SQLTypeInfo& ti) {
+  return NullArray(ti);
 }
 
 void addBinaryStringArray(const TDatum& datum, std::vector<std::string>& string_vec) {
@@ -741,11 +791,6 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
         if (!is_null) {
           ArrayDatum d = StringToArray(val, ti, copy_params);
           if (d.is_null) {  // val could be "NULL"
-            if (ti.get_size() > 0) {
-              // TODO: remove once NULL fixlen arrays are allowed
-              throw std::runtime_error("Fixed length array column " + cd->columnName +
-                                       " currently cannot accept NULL arrays");
-            }
             addArray(NullArray(ti));
           } else {
             if (ti.get_size() > 0 && static_cast<size_t>(ti.get_size()) != d.length) {
@@ -755,11 +800,6 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
             addArray(d);
           }
         } else {
-          if (ti.get_size() > 0) {
-            // TODO: remove once NULL fixlen arrays are allowed
-            throw std::runtime_error("Fixed length array column " + cd->columnName +
-                                     " currently cannot accept NULL arrays");
-          }
           addArray(NullArray(ti));
         }
       }
@@ -1659,8 +1699,8 @@ void Importer::set_geo_physical_import_buffer_columnar(
       CHECK(false) << "Geometry import columnar: ring sizes column size mismatch";
     }
     // Create ring_sizes array value and add it to the physical column
+    auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     for (auto ring_sizes : ring_sizes_column) {
-      auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
       std::vector<TDatum> td_ring_sizes;
       for (auto ring_size : ring_sizes) {
         TDatum td_ring_size;
@@ -1681,8 +1721,8 @@ void Importer::set_geo_physical_import_buffer_columnar(
       CHECK(false) << "Geometry import columnar: poly rings column size mismatch";
     }
     // Create poly_rings array value and add it to the physical column
+    auto cd_poly_rings = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     for (auto poly_rings : poly_rings_column) {
-      auto cd_poly_rings = catalog.getMetadataForColumn(cd->tableId, ++columnId);
       std::vector<TDatum> td_poly_rings;
       for (auto num_rings : poly_rings) {
         TDatum td_num_rings;
@@ -1702,8 +1742,8 @@ void Importer::set_geo_physical_import_buffer_columnar(
     if (bounds_column.size() != coords_row_count) {
       CHECK(false) << "Geometry import columnar: bounds column size mismatch";
     }
+    auto cd_bounds = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     for (auto bounds : bounds_column) {
-      auto cd_bounds = catalog.getMetadataForColumn(cd->tableId, ++columnId);
       std::vector<TDatum> td_bounds_data;
       for (auto b : bounds) {
         TDatum td_double;
@@ -3087,25 +3127,29 @@ void Detector::import_local_parquet(const std::string& file_path) {
   const ColumnDescriptor cd;
   for (int g = 0; g < num_row_groups; ++g) {
     // data is columnwise
-    std::vector<std::shared_ptr<arrow::Array>> arrays;
+    std::vector<std::shared_ptr<arrow::ChunkedArray>> arrays;
     std::vector<VarValue (*)(const Array&, const int64_t)> getters;
     arrays.resize(num_columns);
     for (int c = 0; c < num_columns; ++c) {
       PARQUET_THROW_NOT_OK(reader->RowGroup(g)->Column(c)->Read(&arrays[c]));
-      getters.push_back(value_getter(*arrays[c], nullptr, nullptr));
+      for (auto chunk : arrays[c]->chunks()) {
+        getters.push_back(value_getter(*chunk, nullptr, nullptr));
+      }
     }
     for (int r = 0; r < num_rows; ++r) {
       for (int c = 0; c < num_columns; ++c) {
         std::vector<std::string> buffer;
-        DataBuffer<std::string> data(&cd, *arrays[c], buffer, nullptr);
-        if (c) {
-          raw_data += copy_params.delimiter;
-        }
-        if (!arrays[c]->IsNull(r)) {
-          raw_data += copy_params.quote;
-          raw_data += boost::replace_all_copy(
-              (data << getters[c](*arrays[c], r)).buffer.front(), "\"", "\"\"");
-          raw_data += copy_params.quote;
+        for (auto chunk : arrays[c]->chunks()) {
+          DataBuffer<std::string> data(&cd, *chunk, buffer, nullptr);
+          if (c) {
+            raw_data += copy_params.delimiter;
+          }
+          if (!chunk->IsNull(r)) {
+            raw_data += copy_params.quote;
+            raw_data += boost::replace_all_copy(
+                (data << getters[c](*chunk, r)).buffer.front(), "\"", "\"\"");
+            raw_data += copy_params.quote;
+          }
         }
       }
       raw_data += copy_params.line_delim;
@@ -3239,7 +3283,7 @@ void Importer::import_local_parquet(const std::string& file_path) {
       for (int logic_col_idx = 0; logic_col_idx < num_columns; ++logic_col_idx) {
         const auto physical_col_idx = get_physical_col_idx(logic_col_idx);
         const auto cd = cds[physical_col_idx];
-        std::shared_ptr<arrow::Array> array;
+        std::shared_ptr<arrow::ChunkedArray> array;
         PARQUET_THROW_NOT_OK(
             reader->RowGroup(row_group)->Column(logic_col_idx)->Read(&array));
         const size_t array_size = array->length();
@@ -3255,8 +3299,10 @@ void Importer::import_local_parquet(const std::string& file_path) {
             auto& import_buffer = import_buffers_vec[slice][physical_col_idx];
             import_buffer->import_buffers = &import_buffers_vec[slice];
             import_buffer->col_idx = physical_col_idx + 1;
-            import_buffer->add_arrow_values(
-                cd, *array, false, slice_range, &bad_rows_tracker);
+            for (auto chunk : array->chunks()) {
+              import_buffer->add_arrow_values(
+                  cd, *chunk, false, slice_range, &bad_rows_tracker);
+            }
           });
         }
         thread_controller.finish();
@@ -3947,6 +3993,10 @@ void Importer::initGDAL() {
     LOG(INFO) << "GDAL Initialized: " << GDALVersionInfo("--version");
     gdal_initialized = true;
   }
+}
+
+bool Importer::hasGDALLibKML() {
+  return GetGDALDriverManager()->GetDriverByName("libkml") != nullptr;
 }
 
 /* static */
@@ -4895,13 +4945,12 @@ void ImportDriver::importGeoTable(const std::string& file_path,
     copy_params.geo_coords_comp_param = 0;
   }
 
-  const auto cds =
-      Importer::gdalToColumnDescriptors(file_path, geo_column_name, copy_params);
+  auto cds = Importer::gdalToColumnDescriptors(file_path, geo_column_name, copy_params);
   std::map<std::string, std::string> colname_to_src;
-  for (auto cd : cds) {
+  for (auto& cd : cds) {
     const auto col_name_sanitized = ImportHelpers::sanitize_name(cd.columnName);
     const auto ret =
-        colname_to_src.insert(std::make_pair(cd.columnName, col_name_sanitized));
+        colname_to_src.insert(std::make_pair(col_name_sanitized, cd.columnName));
     CHECK(ret.second);
     cd.columnName = col_name_sanitized;
   }
@@ -4922,31 +4971,31 @@ void ImportDriver::importGeoTable(const std::string& file_path,
     std::string stmt{"CREATE TABLE " + table_name};
     std::vector<std::string> col_stmts;
 
-    for (auto col : cds) {
-      if (col.columnType.get_type() == SQLTypes::kINTERVAL_DAY_TIME ||
-          col.columnType.get_type() == SQLTypes::kINTERVAL_YEAR_MONTH) {
+    for (auto& cd : cds) {
+      if (cd.columnType.get_type() == SQLTypes::kINTERVAL_DAY_TIME ||
+          cd.columnType.get_type() == SQLTypes::kINTERVAL_YEAR_MONTH) {
         throw std::runtime_error(
             "Unsupported type: INTERVAL_DAY_TIME or INTERVAL_YEAR_MONTH for col " +
-            col.columnName + " (table: " + table_name + ")");
+            cd.columnName + " (table: " + table_name + ")");
       }
 
-      if (col.columnType.get_type() == SQLTypes::kDECIMAL) {
-        if (col.columnType.get_precision() == 0 && col.columnType.get_scale() == 0) {
-          col.columnType.set_precision(14);
-          col.columnType.set_scale(7);
+      if (cd.columnType.get_type() == SQLTypes::kDECIMAL) {
+        if (cd.columnType.get_precision() == 0 && cd.columnType.get_scale() == 0) {
+          cd.columnType.set_precision(14);
+          cd.columnType.set_scale(7);
         }
       }
 
       std::string col_stmt;
-      col_stmt.append(col.columnName + " " + col.columnType.get_type_name() + " ");
+      col_stmt.append(cd.columnName + " " + cd.columnType.get_type_name() + " ");
 
-      if (col.columnType.get_compression() != EncodingType::kENCODING_NONE) {
-        col_stmt.append("ENCODING " + col.columnType.get_compression_name() + " ");
+      if (cd.columnType.get_compression() != EncodingType::kENCODING_NONE) {
+        col_stmt.append("ENCODING " + cd.columnType.get_compression_name() + " ");
       } else {
-        if (col.columnType.is_string()) {
+        if (cd.columnType.is_string()) {
           col_stmt.append("ENCODING NONE");
-        } else if (col.columnType.is_geometry()) {
-          if (col.columnType.get_output_srid() == 4326) {
+        } else if (cd.columnType.is_geometry()) {
+          if (cd.columnType.get_output_srid() == 4326) {
             col_stmt.append("ENCODING NONE");
           }
         }

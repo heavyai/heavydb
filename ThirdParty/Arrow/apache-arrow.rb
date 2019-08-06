@@ -1,17 +1,14 @@
 class ApacheArrow < Formula
   desc "Columnar in-memory analytics layer designed to accelerate big data"
   homepage "https://arrow.apache.org/"
-  url "https://github.com/apache/arrow/archive/apache-arrow-0.11.1.tar.gz"
+  url "https://github.com/apache/arrow/archive/apache-arrow-0.13.0.tar.gz"
   head "https://github.com/apache/arrow.git"
-  sha256 "3219c4e87e7cf979017f0cc5bc5dd6a3611d0fc750e821911fab998599dc125b"
+  sha256 "380fcc51f0bf98e13148300c87833e734cbcd7b74dddc4bce93829e7f7e4208b"
 
   depends_on "cmake" => :build
   depends_on "boost"
-  depends_on "jemalloc"
   depends_on "python" => :optional
   depends_on "python@2" => :optional
-
-  # needs :cxx11
 
   def install
     ENV.cxx11
@@ -29,6 +26,7 @@ class ApacheArrow < Formula
       "-DARROW_WITH_ZSTD=OFF",
       "-DARROW_BOOST_USE_SHARED=ON",
       "-DARROW_PARQUET=ON",
+      "-DARROW_JEMALLOC=OFF",
       "-DTHRIFT_HOME=#{Formula["thrift"].opt_prefix}"
     ]
 

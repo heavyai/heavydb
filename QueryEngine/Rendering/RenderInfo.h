@@ -19,6 +19,7 @@
 
 #include <Analyzer/Analyzer.h>
 #include <Catalog/Catalog.h>
+#include <Shared/Rendering/RenderQueryOptions.h>
 #include "../Descriptors/RowSetMemoryOwner.h"
 #include "RenderAllocator.h"
 
@@ -42,6 +43,7 @@ class RenderInfo {
 
   RenderInfo(
       const std::shared_ptr<const ::QueryRenderer::RenderSession> in_render_session,
+      RenderQueryOptions in_render_query_opts,
       const bool force_non_in_situ_data = false);
 
   const Catalog_Namespace::SessionInfo& getSessionInfo() const;
@@ -61,9 +63,13 @@ class RenderInfo {
   void setQuerySsboLayout(
       const std::shared_ptr<QueryRenderer::QueryDataLayout>& ssbo_layout);
 
+  const RenderQueryOptions* getRenderQueryOptsPtr() const;
+  const RenderQueryOptions& getRenderQueryOpts() const;
+
   bool setInSituDataIfUnset(const bool is_in_situ_data);
 
-  void reset(const bool disallow_in_situ_only_if_final_ED_is_aggregate_in);
+  void reset(RenderQueryOptions in_query_opts,
+             const bool disallow_in_situ_only_if_final_ED_is_aggregate_in);
 
  private:
   enum class InSituState { UNSET, IS_IN_SITU, IS_NOT_IN_SITU };
@@ -83,6 +89,7 @@ class RenderInfo {
 
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_vbo_layout;
   std::shared_ptr<QueryRenderer::QueryDataLayout> query_ssbo_layout;
+  RenderQueryOptions render_query_opts_;
 };
 
 #endif  // QUERYENGINE_RENDERINFO_H

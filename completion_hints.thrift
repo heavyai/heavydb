@@ -1,4 +1,5 @@
 namespace java com.mapd.thrift.calciteserver
+namespace py omnisci.completion_hints
 
 enum TCompletionHintType {
   COLUMN,

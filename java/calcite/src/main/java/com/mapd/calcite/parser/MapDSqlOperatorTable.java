@@ -38,6 +38,7 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.util.ChainedSqlOperatorTable;
 import org.apache.calcite.sql.util.ListSqlOperatorTable;
 import org.apache.calcite.sql.util.ReflectiveSqlOperatorTable;
+import org.apache.calcite.sql.validate.SqlNameMatcher;
 
 import java.lang.reflect.Field;
 import java.util.HashSet;
@@ -50,13 +51,14 @@ class CaseInsensitiveListSqlOperatorTable extends ListSqlOperatorTable {
   public void lookupOperatorOverloads(SqlIdentifier opName,
           SqlFunctionCategory category,
           SqlSyntax syntax,
-          List<SqlOperator> operatorList) {
+          List<SqlOperator> operatorList,
+          SqlNameMatcher nameMatcher) {
     for (SqlOperator operator : this.getOperatorList()) {
       if (operator.getSyntax() != syntax) {
         continue;
       }
       if (!opName.isSimple()
-              || !operator.getName().equalsIgnoreCase(opName.getSimple())) {
+              || !nameMatcher.matches(operator.getName(), opName.getSimple())) {
         continue;
       }
       SqlFunctionCategory functionCategory;
@@ -82,22 +84,38 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   static {
     try {
       // some nasty bit to remove the std APPROX_COUNT_DISTINCT function definition
-
-      Field f = ReflectiveSqlOperatorTable.class.getDeclaredField("operators");
-      f.setAccessible(true);
-      Multimap operators = (Multimap) f.get(SqlStdOperatorTable.instance());
-      for (Iterator i = operators.entries().iterator(); i.hasNext();) {
-        Map.Entry entry = (Map.Entry) i.next();
-        if (entry.getValue() == SqlStdOperatorTable.APPROX_COUNT_DISTINCT) {
-          i.remove();
+      {
+        Field f = ReflectiveSqlOperatorTable.class.getDeclaredField(
+                "caseSensitiveOperators");
+        f.setAccessible(true);
+        Multimap operators = (Multimap) f.get(SqlStdOperatorTable.instance());
+        for (Iterator i = operators.entries().iterator(); i.hasNext();) {
+          Map.Entry entry = (Map.Entry) i.next();
+          if (entry.getValue() == SqlStdOperatorTable.APPROX_COUNT_DISTINCT) {
+            i.remove();
+          }
         }
       }
+
+      {
+        Field f = ReflectiveSqlOperatorTable.class.getDeclaredField(
+                "caseInsensitiveOperators");
+        f.setAccessible(true);
+        Multimap operators = (Multimap) f.get(SqlStdOperatorTable.instance());
+        for (Iterator i = operators.entries().iterator(); i.hasNext();) {
+          Map.Entry entry = (Map.Entry) i.next();
+          if (entry.getValue() == SqlStdOperatorTable.APPROX_COUNT_DISTINCT) {
+            i.remove();
+          }
+        }
+      }
+
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
 
     // register our approx count distinct against std table
-    SqlStdOperatorTable.instance().register(new ApproxCountDistinct());
+    //    SqlStdOperatorTable.instance().register(new ApproxCountDistinct());
   }
 
   /**

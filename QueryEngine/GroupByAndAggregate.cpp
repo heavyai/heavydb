@@ -103,6 +103,16 @@ bool has_count_distinct(const RelAlgExecutionUnit& ra_exe_unit) {
   return false;
 }
 
+bool is_column_range_too_big_for_perfect_hash(const ColRangeInfo& col_range_info,
+                                              const int64_t max_entry_count) {
+  try {
+    return static_cast<int64_t>(checked_int64_t(col_range_info.max) -
+                                checked_int64_t(col_range_info.min)) >= max_entry_count;
+  } catch (...) {
+    return true;
+  }
+}
+
 }  // namespace
 
 ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
@@ -168,7 +178,7 @@ ColRangeInfo GroupByAndAggregate::getColRangeInfo() {
   }
   if ((!ra_exe_unit_.groupby_exprs.front()->get_type_info().is_string() &&
        !expr_is_rowid(ra_exe_unit_.groupby_exprs.front().get(), *executor_->catalog_)) &&
-      col_range_info.max >= col_range_info.min + max_entry_count &&
+      is_column_range_too_big_for_perfect_hash(col_range_info, max_entry_count) &&
       !col_range_info.bucket) {
     return {QueryDescriptionType::GroupByBaselineHash,
             col_range_info.min,
@@ -263,18 +273,27 @@ int64_t GroupByAndAggregate::getShardedTopBucket(const ColRangeInfo& col_range_i
   if (shard_count) {
     CHECK(!col_range_info.bucket);
     /*
-      When a leaf node has less devices than shard count, the minimum distance between two
-      keys would be device_count because shards are stored consecutively across the
-      physical tables, i.e if a shard column has values 0 to 9, and 3 shards on each leaf,
-      then node 1 would have values: 0,1,2,6,7,8 and node 2 would have values: 3,4,5,9.
-      If each leaf node has only 1 device, in this case, all the keys from each node are
-      loaded on the device each.
+      when a node has fewer devices than shard count,
+      a) In a distributed setup, the minimum distance between two keys would be
+      device_count because shards are stored consecutively across the physical tables, i.e
+      if a shard column has values 0 to 9, and 3 shards on each leaf, then node 1 would
+      have values: 0,1,2,6,7,8 and node 2 would have values: 3,4,5,9. If each leaf node
+      has only 1 device, in this case, all the keys from each node are loaded on the
+      device each.
 
-      When a leaf node has device count equal to or more than shard count then
-      mininum distance is always atleast shard_count * no of leaf nodes.
+      b) In a single node setup, the distance would be minimum of device_count or
+      difference of device_count - shard_count. For example: If a single node server
+      running on 3 devices a shard column has values 0 to 9 in a table with 4 shards,
+      device to fragment keys mapping would be: device 1 - 4,8,3,7 device 2 - 1,5,9 device
+      3 - 2, 6 The bucket value would be 4(shards) - 3(devices) = 1 i.e. minimum of
+      device_count or difference.
+
+      When a node has device count equal to or more than shard count then the
+      minimum distance is always at least shard_count * no of leaf nodes.
     */
     if (device_count < shard_count) {
-      bucket = std::max(device_count, static_cast<size_t>(1));
+      bucket = g_leaf_count ? std::max(device_count, static_cast<size_t>(1))
+                            : std::min(device_count, shard_count - device_count);
     } else {
       bucket = shard_count * std::max(g_leaf_count, static_cast<size_t>(1));
     }
@@ -895,8 +914,8 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
     if (is_group_by) {
       if (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection &&
           !use_streaming_top_n(ra_exe_unit_, query_mem_desc.didOutputColumnar())) {
-        const auto crt_match = get_arg_by_name(ROW_FUNC, "crt_match");
-        LL_BUILDER.CreateStore(LL_INT(int32_t(1)), crt_match);
+        const auto crt_matched = get_arg_by_name(ROW_FUNC, "crt_matched");
+        LL_BUILDER.CreateStore(LL_INT(int32_t(1)), crt_matched);
         auto total_matched_ptr = get_arg_by_name(ROW_FUNC, "total_matched");
         llvm::Value* old_total_matched_val{nullptr};
         if (co.device_type_ == ExecutorDeviceType::GPU) {
@@ -1053,11 +1072,19 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
          null_key_lv,
          order_entry_lv});
   } else {
+    llvm::Value* output_buffer_entry_count_lv{nullptr};
+    if (ra_exe_unit_.use_bump_allocator) {
+      output_buffer_entry_count_lv =
+          LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "max_matched"));
+      CHECK(output_buffer_entry_count_lv);
+    }
     const auto group_expr_lv =
         LL_BUILDER.CreateLoad(get_arg_by_name(ROW_FUNC, "old_total_matched"));
     std::vector<llvm::Value*> args{
         groups_buffer,
-        LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount())),
+        output_buffer_entry_count_lv
+            ? output_buffer_entry_count_lv
+            : LL_INT(static_cast<int32_t>(query_mem_desc.getEntryCount())),
         group_expr_lv,
         code_generator.posArg(nullptr)};
     if (query_mem_desc.didOutputColumnar()) {
@@ -1129,11 +1156,12 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
   CHECK(query_mem_desc.getGroupbyColCount() == ra_exe_unit_.groupby_exprs.size());
   for (const auto group_expr : ra_exe_unit_.groupby_exprs) {
     const auto col_range_info = getExprRangeInfo(group_expr.get());
-    const auto translated_null_value =
+    const auto translated_null_value = static_cast<int64_t>(
         query_mem_desc.isSingleColumnGroupByWithPerfectHash()
-            ? query_mem_desc.getMaxVal() +
+            ? checked_int64_t(query_mem_desc.getMaxVal()) +
                   (query_mem_desc.getBucket() ? query_mem_desc.getBucket() : 1)
-            : col_range_info.max + (col_range_info.bucket ? col_range_info.bucket : 1);
+            : checked_int64_t(col_range_info.max) +
+                  (col_range_info.bucket ? col_range_info.bucket : 1));
 
     const bool col_has_nulls =
         query_mem_desc.getQueryDescriptionType() ==
@@ -1282,6 +1310,7 @@ GroupByAndAggregate::codegenMultiColumnBaselineHash(
   ++arg_it;                             // current match count
   ++arg_it;                             // total match count
   ++arg_it;                             // old match count
+  ++arg_it;                             // output buffer slots count
   ++arg_it;                             // aggregate init values
   CHECK(arg_it->getName() == "agg_init_val");
   if (group_key->getType() != llvm::Type::getInt64PtrTy(LL_CONTEXT)) {

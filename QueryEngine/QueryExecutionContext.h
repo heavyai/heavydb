@@ -39,7 +39,9 @@ class QueryExecutionContext : boost::noncopyable {
                         const QueryMemoryDescriptor&,
                         const Executor* executor,
                         const ExecutorDeviceType device_type,
+                        const ExecutorDispatchMode dispatch_mode,
                         const int device_id,
+                        const int64_t num_rows,
                         const std::vector<std::vector<const int8_t*>>& col_buffers,
                         const std::vector<std::vector<uint64_t>>& frag_offsets,
                         std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
@@ -50,8 +52,7 @@ class QueryExecutionContext : boost::noncopyable {
   ResultSetPtr getRowSet(const RelAlgExecutionUnit& ra_exe_unit,
                          const QueryMemoryDescriptor& query_mem_desc) const;
 
-  ResultSetPtr groupBufferToResults(const size_t i,
-                                    const std::vector<Analyzer::Expr*>& targets) const;
+  ResultSetPtr groupBufferToResults(const size_t i) const;
 
   std::vector<int64_t*> launchGpuCode(
       const RelAlgExecutionUnit& ra_exe_unit,
@@ -130,6 +131,7 @@ class QueryExecutionContext : boost::noncopyable {
   const QueryMemoryDescriptor query_mem_desc_;
   const Executor* executor_;
   const ExecutorDeviceType device_type_;
+  const ExecutorDispatchMode dispatch_mode_;
   std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner_;
   const bool output_columnar_;
   std::unique_ptr<QueryMemoryInitializer> query_buffers_;

@@ -1,0 +1,410 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+<Document id="root_doc">
+<Schema name="OGRGeoJSON" id="OGRGeoJSON">
+	<SimpleField name="FID" type="int"></SimpleField>
+	<SimpleField name="Sequence" type="int"></SimpleField>
+	<SimpleField name="StopId" type="int"></SimpleField>
+	<SimpleField name="StopAbbr" type="string"></SimpleField>
+	<SimpleField name="StopName" type="string"></SimpleField>
+	<SimpleField name="NodeAbbr" type="string"></SimpleField>
+	<SimpleField name="StreetNum" type="int"></SimpleField>
+	<SimpleField name="OnStreet" type="string"></SimpleField>
+	<SimpleField name="AtStreet" type="string"></SimpleField>
+	<SimpleField name="Unit" type="string"></SimpleField>
+	<SimpleField name="City" type="string"></SimpleField>
+	<SimpleField name="State" type="string"></SimpleField>
+	<SimpleField name="ZipCode" type="string"></SimpleField>
+	<SimpleField name="Lon" type="int"></SimpleField>
+	<SimpleField name="Lat" type="int"></SimpleField>
+	<SimpleField name="Bench" type="int"></SimpleField>
+	<SimpleField name="Shelter" type="int"></SimpleField>
+	<SimpleField name="Lighting" type="int"></SimpleField>
+	<SimpleField name="Garbage" type="int"></SimpleField>
+	<SimpleField name="Bicycle" type="int"></SimpleField>
+	<SimpleField name="GpsLon" type="int"></SimpleField>
+	<SimpleField name="GpsLat" type="int"></SimpleField>
+	<SimpleField name="DATAStop" type="int"></SimpleField>
+	<SimpleField name="CATStop" type="int"></SimpleField>
+	<SimpleField name="TTAStop" type="int"></SimpleField>
+	<SimpleField name="NodeId" type="int"></SimpleField>
+	<SimpleField name="NodeAbbr_1" type="string"></SimpleField>
+	<SimpleField name="NodeName" type="string"></SimpleField>
+	<SimpleField name="LineAbbr" type="string"></SimpleField>
+	<SimpleField name="LineName" type="string"></SimpleField>
+	<SimpleField name="LineType" type="string"></SimpleField>
+	<SimpleField name="tpField00" type="int"></SimpleField>
+</Schema>
+<Folder><name>OGRGeoJSON</name>
+  <Placemark>
+	<ExtendedData><SchemaData schemaUrl="#OGRGeoJSON">
+		<SimpleData name="FID">1</SimpleData>
+		<SimpleData name="Sequence">24</SimpleData>
+		<SimpleData name="StopId">11379</SimpleData>
+		<SimpleData name="StopAbbr">9810</SimpleData>
+		<SimpleData name="StopName">Pullen Rd at Cates Ave</SimpleData>
+		<SimpleData name="NodeAbbr"></SimpleData>
+		<SimpleData name="StreetNum">0</SimpleData>
+		<SimpleData name="OnStreet"></SimpleData>
+		<SimpleData name="AtStreet"></SimpleData>
+		<SimpleData name="Unit"></SimpleData>
+		<SimpleData name="City"></SimpleData>
+		<SimpleData name="State"></SimpleData>
+		<SimpleData name="ZipCode"></SimpleData>
+		<SimpleData name="Lon">-78666104</SimpleData>
+		<SimpleData name="Lat">35781636</SimpleData>
+		<SimpleData name="Bench">0</SimpleData>
+		<SimpleData name="Shelter">0</SimpleData>
+		<SimpleData name="Lighting">0</SimpleData>
+		<SimpleData name="Garbage">0</SimpleData>
+		<SimpleData name="Bicycle">0</SimpleData>
+		<SimpleData name="GpsLon">0</SimpleData>
+		<SimpleData name="GpsLat">0</SimpleData>
+		<SimpleData name="DATAStop">0</SimpleData>
+		<SimpleData name="CATStop">1</SimpleData>
+		<SimpleData name="TTAStop">0</SimpleData>
+		<SimpleData name="NodeId">0</SimpleData>
+		<SimpleData name="NodeAbbr_1"></SimpleData>
+		<SimpleData name="NodeName"></SimpleData>
+		<SimpleData name="LineAbbr">11L</SimpleData>
+		<SimpleData name="LineName">Buck Jones Connector</SimpleData>
+		<SimpleData name="LineType"></SimpleData>
+		<SimpleData name="tpField00">0</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>-78.666104,35.781636</coordinates></Point>
+  </Placemark>
+  <Placemark>
+	<ExtendedData><SchemaData schemaUrl="#OGRGeoJSON">
+		<SimpleData name="FID">2</SimpleData>
+		<SimpleData name="Sequence">7</SimpleData>
+		<SimpleData name="StopId">2009</SimpleData>
+		<SimpleData name="StopAbbr">1816</SimpleData>
+		<SimpleData name="StopName">North Ave at Wingate St (SBTS)</SimpleData>
+		<SimpleData name="NodeAbbr"></SimpleData>
+		<SimpleData name="StreetNum">0</SimpleData>
+		<SimpleData name="OnStreet">NULL</SimpleData>
+		<SimpleData name="AtStreet">NULL</SimpleData>
+		<SimpleData name="Unit">NULL</SimpleData>
+		<SimpleData name="City">Wake Forest</SimpleData>
+		<SimpleData name="State">NC</SimpleData>
+		<SimpleData name="ZipCode">27587</SimpleData>
+		<SimpleData name="Lon">-78512090</SimpleData>
+		<SimpleData name="Lat">35982030</SimpleData>
+		<SimpleData name="Bench">0</SimpleData>
+		<SimpleData name="Shelter">0</SimpleData>
+		<SimpleData name="Lighting">0</SimpleData>
+		<SimpleData name="Garbage">0</SimpleData>
+		<SimpleData name="Bicycle">0</SimpleData>
+		<SimpleData name="GpsLon">0</SimpleData>
+		<SimpleData name="GpsLat">0</SimpleData>
+		<SimpleData name="DATAStop">0</SimpleData>
+		<SimpleData name="CATStop">1</SimpleData>
+		<SimpleData name="TTAStop">0</SimpleData>
+		<SimpleData name="NodeId">0</SimpleData>
+		<SimpleData name="NodeAbbr_1"></SimpleData>
+		<SimpleData name="NodeName"></SimpleData>
+		<SimpleData name="LineAbbr">WFL</SimpleData>
+		<SimpleData name="LineName">Wake Forest Loop</SimpleData>
+		<SimpleData name="LineType"></SimpleData>
+		<SimpleData name="tpField00">0</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>-78.51209,35.98203</coordinates></Point>
+  </Placemark>
+  <Placemark>
+	<ExtendedData><SchemaData schemaUrl="#OGRGeoJSON">
+		<SimpleData name="FID">3</SimpleData>
+		<SimpleData name="Sequence">25</SimpleData>
+		<SimpleData name="StopId">11202</SimpleData>
+		<SimpleData name="StopAbbr">9613</SimpleData>
+		<SimpleData name="StopName">Dunn Ave at Jeter Dr</SimpleData>
+		<SimpleData name="NodeAbbr"></SimpleData>
+		<SimpleData name="StreetNum">0</SimpleData>
+		<SimpleData name="OnStreet"></SimpleData>
+		<SimpleData name="AtStreet"></SimpleData>
+		<SimpleData name="Unit"></SimpleData>
+		<SimpleData name="City">RALEIGH</SimpleData>
+		<SimpleData name="State"></SimpleData>
+		<SimpleData name="ZipCode">27607</SimpleData>
+		<SimpleData name="Lon">-78667850</SimpleData>
+		<SimpleData name="Lat">35783800</SimpleData>
+		<SimpleData name="Bench">1</SimpleData>
+		<SimpleData name="Shelter">0</SimpleData>
+		<SimpleData name="Lighting">0</SimpleData>
+		<SimpleData name="Garbage">0</SimpleData>
+		<SimpleData name="Bicycle">0</SimpleData>
+		<SimpleData name="GpsLon">0</SimpleData>
+		<SimpleData name="GpsLat">0</SimpleData>
+		<SimpleData name="DATAStop">0</SimpleData>
+		<SimpleData name="CATStop">1</SimpleData>
+		<SimpleData name="TTAStop">0</SimpleData>
+		<SimpleData name="NodeId">0</SimpleData>
+		<SimpleData name="NodeAbbr_1"></SimpleData>
+		<SimpleData name="NodeName"></SimpleData>
+		<SimpleData name="LineAbbr">11L</SimpleData>
+		<SimpleData name="LineName">Buck Jones Connector</SimpleData>
+		<SimpleData name="LineType"></SimpleData>
+		<SimpleData name="tpField00">0</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>-78.66785,35.7838</coordinates></Point>
+  </Placemark>
+  <Placemark>
+	<ExtendedData><SchemaData schemaUrl="#OGRGeoJSON">
+		<SimpleData name="FID">4</SimpleData>
+		<SimpleData name="Sequence">8</SimpleData>
+		<SimpleData name="StopId">11660</SimpleData>
+		<SimpleData name="StopAbbr">1910</SimpleData>
+		<SimpleData name="StopName">N Main St at W Oak Ave</SimpleData>
+		<SimpleData name="NodeAbbr"></SimpleData>
+		<SimpleData name="StreetNum">0</SimpleData>
+		<SimpleData name="OnStreet"></SimpleData>
+		<SimpleData name="AtStreet"></SimpleData>
+		<SimpleData name="Unit"></SimpleData>
+		<SimpleData name="City"></SimpleData>
+		<SimpleData name="State"></SimpleData>
+		<SimpleData name="ZipCode"></SimpleData>
+		<SimpleData name="Lon">-78505355</SimpleData>
+		<SimpleData name="Lat">35988820</SimpleData>
+		<SimpleData name="Bench">0</SimpleData>
+		<SimpleData name="Shelter">0</SimpleData>
+		<SimpleData name="Lighting">0</SimpleData>
+		<SimpleData name="Garbage">0</SimpleData>
+		<SimpleData name="Bicycle">0</SimpleData>
+		<SimpleData name="GpsLon">0</SimpleData>
+		<SimpleData name="GpsLat">0</SimpleData>
+		<SimpleData name="DATAStop">0</SimpleData>
+		<SimpleData name="CATStop">0</SimpleData>
+		<SimpleData name="TTAStop">0</SimpleData>
+		<SimpleData name="NodeId">0</SimpleData>
+		<SimpleData name="NodeAbbr_1"></SimpleData>
+		<SimpleData name="NodeName"></SimpleData>
+		<SimpleData name="LineAbbr">WFL</SimpleData>
+		<SimpleData name="LineName">Wake Forest Loop</SimpleData>
+		<SimpleData name="LineType"></SimpleData>
+		<SimpleData name="tpField00">0</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>-78.505355,35.98882</coordinates></Point>
+  </Placemark>
+  <Placemark>
+	<ExtendedData><SchemaData schemaUrl="#OGRGeoJSON">
+		<SimpleData name="FID">5</SimpleData>
+		<SimpleData name="Sequence">26</SimpleData>
+		<SimpleData name="StopId">10422</SimpleData>
+		<SimpleData name="StopAbbr">8525</SimpleData>
+		<SimpleData name="StopName">Morrill Dr at Cates Ave (Outbound)</SimpleData>
+		<SimpleData name="NodeAbbr">MRLCTS O</SimpleData>
+		<SimpleData name="StreetNum">0</SimpleData>
+		<SimpleData name="OnStreet">MORRILL DR</SimpleData>
+		<SimpleData name="AtStreet">PRIVATE RD</SimpleData>
+		<SimpleData name="Unit"></SimpleData>
+		<SimpleData name="City">RALEIGH</SimpleData>
+		<SimpleData name="State">NC</SimpleData>
+		<SimpleData name="ZipCode"></SimpleData>
+		<SimpleData name="Lon">-78671192</SimpleData>
+		<SimpleData name="Lat">35782617</SimpleData>
+		<SimpleData name="Bench">0</SimpleData>
+		<SimpleData name="Shelter">0</SimpleData>
+		<SimpleData name="Lighting">0</SimpleData>
+		<SimpleData name="Garbage">0</SimpleData>
+		<SimpleData name="Bicycle">0</SimpleData>
+		<SimpleData name="GpsLon">0</SimpleData>
+		<SimpleData name="GpsLat">0</SimpleData>
+		<SimpleData name="DATAStop">0</SimpleData>
+		<SimpleData name="CATStop">1</SimpleData>
+		<SimpleData name="TTAStop">0</SimpleData>
+		<SimpleData name="NodeId">290</SimpleData>
+		<SimpleData name="NodeAbbr_1"></SimpleData>
+		<SimpleData name="NodeName">Morrill Dr at Cates Ave OB</SimpleData>
+		<SimpleData name="LineAbbr">11L</SimpleData>
+		<SimpleData name="LineName">Buck Jones Connector</SimpleData>
+		<SimpleData name="LineType"></SimpleData>
+		<SimpleData name="tpField00">0</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>-78.671192,35.782617</coordinates></Point>
+  </Placemark>
+  <Placemark>
+	<ExtendedData><SchemaData schemaUrl="#OGRGeoJSON">
+		<SimpleData name="FID">6</SimpleData>
+		<SimpleData name="Sequence">9</SimpleData>
+		<SimpleData name="StopId">11661</SimpleData>
+		<SimpleData name="StopAbbr">1911</SimpleData>
+		<SimpleData name="StopName">N Wingate St at E Chesnut Ave</SimpleData>
+		<SimpleData name="NodeAbbr"></SimpleData>
+		<SimpleData name="StreetNum">0</SimpleData>
+		<SimpleData name="OnStreet"></SimpleData>
+		<SimpleData name="AtStreet"></SimpleData>
+		<SimpleData name="Unit"></SimpleData>
+		<SimpleData name="City"></SimpleData>
+		<SimpleData name="State"></SimpleData>
+		<SimpleData name="ZipCode"></SimpleData>
+		<SimpleData name="Lon">-78507382</SimpleData>
+		<SimpleData name="Lat">35990795</SimpleData>
+		<SimpleData name="Bench">0</SimpleData>
+		<SimpleData name="Shelter">0</SimpleData>
+		<SimpleData name="Lighting">0</SimpleData>
+		<SimpleData name="Garbage">0</SimpleData>
+		<SimpleData name="Bicycle">0</SimpleData>
+		<SimpleData name="GpsLon">0</SimpleData>
+		<SimpleData name="GpsLat">0</SimpleData>
+		<SimpleData name="DATAStop">0</SimpleData>
+		<SimpleData name="CATStop">0</SimpleData>
+		<SimpleData name="TTAStop">0</SimpleData>
+		<SimpleData name="NodeId">0</SimpleData>
+		<SimpleData name="NodeAbbr_1"></SimpleData>
+		<SimpleData name="NodeName"></SimpleData>
+		<SimpleData name="LineAbbr">WFL</SimpleData>
+		<SimpleData name="LineName">Wake Forest Loop</SimpleData>
+		<SimpleData name="LineType"></SimpleData>
+		<SimpleData name="tpField00">0</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>-78.507382,35.990795</coordinates></Point>
+  </Placemark>
+  <Placemark>
+	<ExtendedData><SchemaData schemaUrl="#OGRGeoJSON">
+		<SimpleData name="FID">7</SimpleData>
+		<SimpleData name="Sequence">1</SimpleData>
+		<SimpleData name="StopId">1945</SimpleData>
+		<SimpleData name="StopAbbr">8001</SimpleData>
+		<SimpleData name="StopName">GoRaleigh Station</SimpleData>
+		<SimpleData name="NodeAbbr">MSS</SimpleData>
+		<SimpleData name="StreetNum">0</SimpleData>
+		<SimpleData name="OnStreet">UNNAMED ST</SimpleData>
+		<SimpleData name="AtStreet"></SimpleData>
+		<SimpleData name="Unit"></SimpleData>
+		<SimpleData name="City">RALEIGH</SimpleData>
+		<SimpleData name="State">NC</SimpleData>
+		<SimpleData name="ZipCode">27601</SimpleData>
+		<SimpleData name="Lon">-78637102</SimpleData>
+		<SimpleData name="Lat">35777678</SimpleData>
+		<SimpleData name="Bench">1</SimpleData>
+		<SimpleData name="Shelter">1</SimpleData>
+		<SimpleData name="Lighting">1</SimpleData>
+		<SimpleData name="Garbage">1</SimpleData>
+		<SimpleData name="Bicycle">1</SimpleData>
+		<SimpleData name="GpsLon">0</SimpleData>
+		<SimpleData name="GpsLat">0</SimpleData>
+		<SimpleData name="DATAStop">0</SimpleData>
+		<SimpleData name="CATStop">1</SimpleData>
+		<SimpleData name="TTAStop">1</SimpleData>
+		<SimpleData name="NodeId">122</SimpleData>
+		<SimpleData name="NodeAbbr_1"></SimpleData>
+		<SimpleData name="NodeName">GORALEIGH STATION</SimpleData>
+		<SimpleData name="LineAbbr">12</SimpleData>
+		<SimpleData name="LineName">Method</SimpleData>
+		<SimpleData name="LineType">FX</SimpleData>
+		<SimpleData name="tpField00">0</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>-78.637102,35.777678</coordinates></Point>
+  </Placemark>
+  <Placemark>
+	<ExtendedData><SchemaData schemaUrl="#OGRGeoJSON">
+		<SimpleData name="FID">8</SimpleData>
+		<SimpleData name="Sequence">10</SimpleData>
+		<SimpleData name="StopId">2010</SimpleData>
+		<SimpleData name="StopAbbr">1817</SimpleData>
+		<SimpleData name="StopName">White St at Roosevelt Ave</SimpleData>
+		<SimpleData name="NodeAbbr">WHIRVLT</SimpleData>
+		<SimpleData name="StreetNum">0</SimpleData>
+		<SimpleData name="OnStreet">NULL</SimpleData>
+		<SimpleData name="AtStreet">NULL</SimpleData>
+		<SimpleData name="Unit">NULL</SimpleData>
+		<SimpleData name="City">Wake Forest</SimpleData>
+		<SimpleData name="State">NC</SimpleData>
+		<SimpleData name="ZipCode">27587</SimpleData>
+		<SimpleData name="Lon">-78509060</SimpleData>
+		<SimpleData name="Lat">35979790</SimpleData>
+		<SimpleData name="Bench">0</SimpleData>
+		<SimpleData name="Shelter">0</SimpleData>
+		<SimpleData name="Lighting">0</SimpleData>
+		<SimpleData name="Garbage">0</SimpleData>
+		<SimpleData name="Bicycle">0</SimpleData>
+		<SimpleData name="GpsLon">0</SimpleData>
+		<SimpleData name="GpsLat">0</SimpleData>
+		<SimpleData name="DATAStop">0</SimpleData>
+		<SimpleData name="CATStop">1</SimpleData>
+		<SimpleData name="TTAStop">0</SimpleData>
+		<SimpleData name="NodeId">425</SimpleData>
+		<SimpleData name="NodeAbbr_1"></SimpleData>
+		<SimpleData name="NodeName">White St at Roosevelt Ave</SimpleData>
+		<SimpleData name="LineAbbr">WFL</SimpleData>
+		<SimpleData name="LineName">Wake Forest Loop</SimpleData>
+		<SimpleData name="LineType"></SimpleData>
+		<SimpleData name="tpField00">0</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>-78.50906,35.97979</coordinates></Point>
+  </Placemark>
+  <Placemark>
+	<ExtendedData><SchemaData schemaUrl="#OGRGeoJSON">
+		<SimpleData name="FID">9</SimpleData>
+		<SimpleData name="Sequence">2</SimpleData>
+		<SimpleData name="StopId">1947</SimpleData>
+		<SimpleData name="StopAbbr">8002</SimpleData>
+		<SimpleData name="StopName">Wilmington St at Morgan St</SimpleData>
+		<SimpleData name="NodeAbbr"></SimpleData>
+		<SimpleData name="StreetNum">0</SimpleData>
+		<SimpleData name="OnStreet">S WILMINGTON ST</SimpleData>
+		<SimpleData name="AtStreet">S WEST ST</SimpleData>
+		<SimpleData name="Unit"></SimpleData>
+		<SimpleData name="City"></SimpleData>
+		<SimpleData name="State"></SimpleData>
+		<SimpleData name="ZipCode"></SimpleData>
+		<SimpleData name="Lon">-78638020</SimpleData>
+		<SimpleData name="Lat">35779931</SimpleData>
+		<SimpleData name="Bench">0</SimpleData>
+		<SimpleData name="Shelter">0</SimpleData>
+		<SimpleData name="Lighting">0</SimpleData>
+		<SimpleData name="Garbage">0</SimpleData>
+		<SimpleData name="Bicycle">0</SimpleData>
+		<SimpleData name="GpsLon">0</SimpleData>
+		<SimpleData name="GpsLat">0</SimpleData>
+		<SimpleData name="DATAStop">0</SimpleData>
+		<SimpleData name="CATStop">1</SimpleData>
+		<SimpleData name="TTAStop">0</SimpleData>
+		<SimpleData name="NodeId">0</SimpleData>
+		<SimpleData name="NodeAbbr_1"></SimpleData>
+		<SimpleData name="NodeName"></SimpleData>
+		<SimpleData name="LineAbbr">12</SimpleData>
+		<SimpleData name="LineName">Method</SimpleData>
+		<SimpleData name="LineType">FX</SimpleData>
+		<SimpleData name="tpField00">0</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>-78.63802,35.779931</coordinates></Point>
+  </Placemark>
+  <Placemark>
+	<ExtendedData><SchemaData schemaUrl="#OGRGeoJSON">
+		<SimpleData name="FID">10</SimpleData>
+		<SimpleData name="Sequence">11</SimpleData>
+		<SimpleData name="StopId">2011</SimpleData>
+		<SimpleData name="StopAbbr">1818</SimpleData>
+		<SimpleData name="StopName">Juniper Ave at White St</SimpleData>
+		<SimpleData name="NodeAbbr"></SimpleData>
+		<SimpleData name="StreetNum">0</SimpleData>
+		<SimpleData name="OnStreet">NULL</SimpleData>
+		<SimpleData name="AtStreet">NULL</SimpleData>
+		<SimpleData name="Unit">NULL</SimpleData>
+		<SimpleData name="City">Wake Forest</SimpleData>
+		<SimpleData name="State">NC</SimpleData>
+		<SimpleData name="ZipCode">27587</SimpleData>
+		<SimpleData name="Lon">-78505610</SimpleData>
+		<SimpleData name="Lat">35984490</SimpleData>
+		<SimpleData name="Bench">0</SimpleData>
+		<SimpleData name="Shelter">0</SimpleData>
+		<SimpleData name="Lighting">0</SimpleData>
+		<SimpleData name="Garbage">0</SimpleData>
+		<SimpleData name="Bicycle">0</SimpleData>
+		<SimpleData name="GpsLon">0</SimpleData>
+		<SimpleData name="GpsLat">0</SimpleData>
+		<SimpleData name="DATAStop">0</SimpleData>
+		<SimpleData name="CATStop">1</SimpleData>
+		<SimpleData name="TTAStop">0</SimpleData>
+		<SimpleData name="NodeId">0</SimpleData>
+		<SimpleData name="NodeAbbr_1"></SimpleData>
+		<SimpleData name="NodeName"></SimpleData>
+		<SimpleData name="LineAbbr">WFL</SimpleData>
+		<SimpleData name="LineName">Wake Forest Loop</SimpleData>
+		<SimpleData name="LineType"></SimpleData>
+		<SimpleData name="tpField00">0</SimpleData>
+	</SchemaData></ExtendedData>
+      <Point><coordinates>-78.50561,35.98449</coordinates></Point>
+  </Placemark>
+</Folder>
+</Document></kml>

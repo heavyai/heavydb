@@ -56,7 +56,11 @@ void copy_from_gpu(Data_Namespace::DataMgr* data_mgr,
                    const size_t num_bytes,
                    const int device_id);
 
-using GpuGroupByBuffers = std::pair<CUdeviceptr, CUdeviceptr>;
+struct GpuGroupByBuffers {
+  CUdeviceptr first;
+  CUdeviceptr second;
+  size_t entry_count;
+};
 
 class QueryMemoryDescriptor;
 class DeviceAllocator;
@@ -69,8 +73,11 @@ GpuGroupByBuffers create_dev_group_by_buffers(
     const unsigned block_size_x,
     const unsigned grid_size_x,
     const int device_id,
+    const ExecutorDispatchMode dispatch_mode,
+    const int64_t num_input_rows,
     const bool prepend_index_buffer,
     const bool always_init_group_by_on_host,
+    const bool use_bump_allocator,
     Allocator* insitu_allocator);
 
 void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,

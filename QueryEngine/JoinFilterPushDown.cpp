@@ -93,7 +93,6 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
                                   nullptr,
                                   {{}, SortAlgorithm::Default, 0, 0},
                                   0};
-  int32_t error_code{0};
   size_t one{1};
   ResultSetPtr filtered_result;
   const auto table_infos = get_table_infos(input_descs, executor_);
@@ -101,8 +100,7 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
   const size_t total_rows_upper_bound = table_infos.front().info.getNumTuplesUpperBound();
   try {
     ColumnCacheMap column_cache;
-    filtered_result = executor_->executeWorkUnit(&error_code,
-                                                 one,
+    filtered_result = executor_->executeWorkUnit(one,
                                                  true,
                                                  table_infos,
                                                  ra_exe_unit,
@@ -114,9 +112,6 @@ FilterSelectivity RelAlgExecutor::getFilterSelectivity(
                                                  false,
                                                  column_cache);
   } catch (...) {
-    return {false, 1.0, 0};
-  }
-  if (error_code) {
     return {false, 1.0, 0};
   }
   const auto count_row = filtered_result->getNextRow(false, false);

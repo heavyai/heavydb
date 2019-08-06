@@ -1,6 +1,6 @@
 # Build libglvnd for libGL, libEGL, libOpenGL
 # Not currently pulled in by nvidia-docker2
-FROM nvidia/cuda:9.0-devel-ubuntu16.04 AS glvnd
+FROM nvidia/cuda:10.0-devel-ubuntu16.04 AS glvnd
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         autoconf \
@@ -31,7 +31,7 @@ RUN tar xvf omnisci-latest-Linux-x86_64.tar.gz --strip-components=1 && \
     rm -rf omnisci-latest-Linux-x86_64.tar.gz
 
 # Build final stage
-FROM nvidia/cuda:9.0-runtime-ubuntu16.04
+FROM nvidia/cuda:10.0-runtime-ubuntu16.04
 LABEL maintainer "Andrew Seidl <andrew@omnisci.com>"
 
 ENV NVIDIA_DRIVER_CAPABILITIES compute,utility,graphics

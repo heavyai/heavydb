@@ -87,6 +87,9 @@ int32_t StringDictionaryProxy::getIdOfStringNoGeneration(const std::string& str)
 }
 
 std::string StringDictionaryProxy::getString(int32_t string_id) const {
+  if (inline_int_null_value<int32_t>() == string_id) {
+    return "";
+  }
   mapd_shared_lock<mapd_shared_mutex> read_lock(rw_mutex_);
   if (string_id >= 0) {
     return string_dict_->getString(string_id);

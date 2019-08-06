@@ -242,9 +242,6 @@ class SysCatalog : private CommonFileOperations {
     return sys_cat;
   }
 
-  static void clearCpuMemory();
-  static void clearGpuMemory();
-
   void populateRoleDbObjects(const std::vector<DBObject>& objects);
   std::string name() const { return OMNISCI_DEFAULT_DB; }
   void renameObjectsInDescriptorMap(DBObject& object,

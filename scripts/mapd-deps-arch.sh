@@ -23,6 +23,7 @@ yay -S \
     go \
     google-glog \
     jdk-openjdk \
+    librdkafka \
     llvm \
     lz4 \
     maven \

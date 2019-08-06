@@ -138,7 +138,7 @@ ScalarCodeGenerator::CompiledExpression ScalarCodeGenerator::compile(
 std::vector<void*> ScalarCodeGenerator::generateNativeCode(
     const CompiledExpression& compiled_expression,
     const CompilationOptions& co) {
-  CHECK(module_ && !execution_engine_) << "Invalid code generator state";
+  CHECK(module_ && !execution_engine_.get()) << "Invalid code generator state";
   module_.release();
   switch (co.device_type_) {
     case ExecutorDeviceType::CPU: {
@@ -188,7 +188,7 @@ std::vector<void*> ScalarCodeGenerator::generateNativeGPUCode(
   const auto gpu_code = CodeGenerator::generateNativeGPUCode(
       func, wrapper_func, {func, wrapper_func}, co, gpu_target);
   for (const auto& cached_function : gpu_code.cached_functions) {
-    gpu_compilation_contexts_.emplace_back(std::get<2>(cached_function));
+    gpu_compilation_contexts_.emplace_back(std::get<1>(cached_function));
   }
   std::vector<void*> native_function_pointers;
   for (const auto& cached_function : gpu_code.cached_functions) {

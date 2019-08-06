@@ -33,6 +33,7 @@
 #include "Shared/Logger.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/file_delete.h"
+#include "Shared/mapd_shared_mutex.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/scope.h"
 
@@ -58,11 +59,18 @@ unsigned send_timeout{300000};
 extern bool g_cache_string_hash;
 extern size_t g_leaf_count;
 extern bool g_skip_intermediate_count;
+extern bool g_enable_bump_allocator;
+extern size_t g_max_memory_allocation_size;
+extern size_t g_min_memory_allocation_size;
 
 bool g_enable_thrift_logs{false};
 
 std::atomic<bool> g_running{true};
 std::atomic<int> g_saw_signal{-1};
+
+mapd_shared_mutex g_thrift_mutex;
+TThreadedServer* g_thrift_http_server{nullptr};
+TThreadedServer* g_thrift_buf_server{nullptr};
 
 TableGenerations table_generations_from_thrift(
     const std::vector<TTableGeneration>& thrift_table_generations) {
@@ -80,10 +88,11 @@ mapd::shared_ptr<MapDHandler> g_warmup_handler =
     0;  // global "g_warmup_handler" needed to avoid circular dependency
         // between "MapDHandler" & function "run_warmup_queries"
 mapd::shared_ptr<MapDHandler> g_mapd_handler = 0;
+std::once_flag g_shutdown_once_flag;
 
 void shutdown_handler() {
   if (g_mapd_handler) {
-    g_mapd_handler->shutdown();
+    std::call_once(g_shutdown_once_flag, []() { g_mapd_handler->shutdown(); });
   }
 }
 
@@ -116,18 +125,25 @@ void omnisci_signal_handler(int signum) {
 
   // Tell heartbeat() to shutdown by unsetting the 'g_running' flag.
   // If 'g_running' is already false, this has no effect and the
-  // shutdown is already in progress. If a core dump is in progress,
-  // say if we CHECK'ed and Logger.cpp called abort(), this should be
-  // harmless because heartbeat() will notice and skip calling exit().
+  // shutdown is already in progress.
   g_running = false;
 
-  // Wait briefly to give heartbeat() a head start on the shutdown work.
-  sleep(2);
+  // Handle core dumps specially by pausing inside this signal handler
+  // because on some systems, some signals will execute their default
+  // action immediately when and if the signal handler returns.
+  // We would like to do some emergency cleanup before core dump.
+  if (signum == SIGQUIT || signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE) {
+    // Wait briefly to give heartbeat() a chance to flush the logs and
+    // do any other emergency shutdown tasks.
+    sleep(2);
 
-  // Trigger whatever default action this signal would have done,
-  // such as terminate the process or dump core.
-  register_signal_handler(signum, SIG_DFL);
-  kill(getpid(), signum);
+    // Explicitly trigger whatever default action this signal would
+    // have done, such as terminate the process or dump core.
+    // Signals are currently blocked so this new signal will be queued
+    // until this signal handler returns.
+    register_signal_handler(signum, SIG_DFL);
+    kill(getpid(), signum);
+  }
 }
 
 void register_signal_handlers() {
@@ -238,6 +254,7 @@ class MapDProgramOptions {
   bool flush_log = true;
   bool verbose_logging = false;
   bool jit_debug = false;
+  bool intel_jit_profile = false;
   bool allow_multifrag = true;
   bool read_only = false;
   bool allow_loop_joins = false;
@@ -251,6 +268,8 @@ class MapDProgramOptions {
   int render_oom_retry_threshold = 0;  // in milliseconds
   size_t render_mem_bytes = 500000000;
   size_t render_poly_cache_bytes = 300000000;
+
+  bool enable_runtime_udf = false;
 
   bool enable_watchdog = true;
   bool enable_dynamic_watchdog = false;
@@ -463,11 +482,10 @@ void MapDProgramOptions::fillOptions() {
       po::value<size_t>(&num_reader_threads)->default_value(num_reader_threads),
       "Number of reader threads to use.");
   help_desc.add_options()(
-      "overlaps-bucket-threshold",
-      po::value<double>(&g_overlaps_hashjoin_bucket_threshold)
-          ->default_value(g_overlaps_hashjoin_bucket_threshold),
-      "The minimum size of a bucket corresponding to a given inner table "
-      "range for the overlaps hash join.");
+      "overlaps-max-table-size-bytes",
+      po::value<size_t>(&g_overlaps_max_table_size_bytes)
+          ->default_value(g_overlaps_max_table_size_bytes),
+      "The maximum size in bytes of the hash table for an overlaps hash join.");
   help_desc.add_options()("port,p",
                           po::value<int>(&mapd_parameters.omnisci_server_port)
                               ->default_value(mapd_parameters.omnisci_server_port),
@@ -499,6 +517,14 @@ void MapDProgramOptions::fillOptions() {
                               ->default_value(verbose_logging)
                               ->implicit_value(true),
                           "Write additional debug log messages to server logs.");
+  help_desc.add_options()(
+      "enable-runtime-udf",
+      po::value<bool>(&enable_runtime_udf)
+          ->default_value(enable_runtime_udf)
+          ->implicit_value(true),
+      "Enable runtime UDF registration by passing signatures and corresponding LLVM IR "
+      "to the `register_runtime_udf` endpoint. For use with the Python Remote Backend "
+      "Compiler server, packaged separately.");
   help_desc.add_options()("version,v", "Print Version Number.");
 
   help_desc.add_options()(
@@ -506,6 +532,7 @@ void MapDProgramOptions::fillOptions() {
       po::value<bool>(&flush_log)->default_value(flush_log)->implicit_value(true),
       R"(DEPRECATED - Immediately flush logs to disk. Set to false if this is a performance bottleneck.)"
       " Replaced by log-auto-flush.");
+
   help_desc.add(log_options_.get_options());
 }
 
@@ -553,6 +580,12 @@ void MapDProgramOptions::fillAdvancedOptions() {
       "with the `ENABLE_JIT_DEBUG` build flag. The generated code can be found at "
       "`/tmp/mapdquery`.");
   developer_desc.add_options()(
+      "intel-jit-profile",
+      po::value<bool>(&intel_jit_profile)
+          ->default_value(intel_jit_profile)
+          ->implicit_value(true),
+      "Enable runtime support for the JIT code profiling using Intel VTune.");
+  developer_desc.add_options()(
       "skip-intermediate-count",
       po::value<bool>(&g_skip_intermediate_count)
           ->default_value(g_skip_intermediate_count)
@@ -565,6 +598,31 @@ void MapDProgramOptions::fillAdvancedOptions() {
           ->implicit_value(true),
       "Remove quals from the filtered count if they are covered by a "
       "join condition (currently only ST_Contains).");
+  developer_desc.add_options()(
+      "max-output-projection-allocation-bytes",
+      po::value<size_t>(&g_max_memory_allocation_size)
+          ->default_value(g_max_memory_allocation_size),
+      "Maximum allocation size for a fixed output buffer allocation for projection "
+      "queries with no pre-flight count. Default is the maximum slab size (sizes greater "
+      "than the maximum slab size have no affect). Requires bump allocator.");
+  developer_desc.add_options()(
+      "min-output-projection-allocation-bytes",
+      po::value<size_t>(&g_min_memory_allocation_size)
+          ->default_value(g_min_memory_allocation_size),
+      "Minimum allocation size for a fixed output buffer allocation for projection "
+      "queries with no pre-flight count. If an allocation of this size cannot be "
+      "obtained, the query will be retried with different execution parameters and/or on "
+      "CPU (if allow-cpu-retry is enabled). Requires bump allocator.");
+  developer_desc.add_options()(
+      "enable-bump-allocator",
+      po::value<bool>(&g_enable_bump_allocator)
+          ->default_value(g_enable_bump_allocator)
+          ->implicit_value(true),
+      "Enable the bump allocator for projection queries on GPU. The bump allocator will "
+      "allocate a fixed size buffer for each query, track the number of rows passing the "
+      "kernel during query execution, and copy back only the rows that passed the kernel "
+      "to CPU after execution. When disabled, pre-flight count queries are used to size "
+      "the output buffer for projection queries.");
   developer_desc.add_options()("ssl-cert",
                                po::value<std::string>(&mapd_parameters.ssl_cert_file)
                                    ->default_value(std::string("")),
@@ -583,6 +641,16 @@ void MapDProgramOptions::fillAdvancedOptions() {
                                po::value<std::string>(&mapd_parameters.ssl_trust_password)
                                    ->default_value(std::string("")),
                                "SSL java trust store password.");
+
+  developer_desc.add_options()("ssl-keystore",
+                               po::value<std::string>(&mapd_parameters.ssl_keystore)
+                                   ->default_value(std::string("")),
+                               "SSL server credentials as a java key store.");
+  developer_desc.add_options()(
+      "ssl-keystore-password",
+      po::value<std::string>(&mapd_parameters.ssl_keystore_password)
+          ->default_value(std::string("")),
+      "SSL server keystore password.");
   developer_desc.add_options()(
       "udf",
       po::value<std::string>(&udf_file_name),
@@ -609,7 +677,7 @@ bool trim_and_check_file_exists(std::string& filename, const std::string desc) {
   if (!filename.empty()) {
     boost::algorithm::trim_if(filename, boost::is_any_of("\"'"));
     if (!boost::filesystem::exists(filename)) {
-      LOG(ERROR) << desc << " " << filename << " does not exist.";
+      std::cerr << desc << " " << filename << " does not exist." << std::endl;
       return false;
     }
   }
@@ -648,6 +716,9 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
       return 1;
     }
     if (!trim_and_check_file_exists(mapd_parameters.ssl_trust_store, "ssl trust store")) {
+      return 1;
+    }
+    if (!trim_and_check_file_exists(mapd_parameters.ssl_keystore, "ssl key store")) {
       return 1;
     }
     if (!trim_and_check_file_exists(mapd_parameters.ssl_key_file, "ssl key file")) {
@@ -778,11 +849,15 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
     boost::algorithm::trim_if(udf_file_name, boost::is_any_of("\"'"));
 
     if (!boost::filesystem::exists(udf_file_name)) {
-      LOG(ERROR) << "User defined function file " << udf_file_name << " does not exist.";
+      LOG(ERROR) << " User defined function file " << udf_file_name << " does not exist.";
       return 1;
     }
 
-    LOG(INFO) << "User provided extension functions loaded from " << udf_file_name;
+    LOG(INFO) << " User provided extension functions loaded from " << udf_file_name;
+  }
+
+  if (enable_runtime_udf) {
+    LOG(INFO) << " Runtime user defined extension functions enabled globally.";
   }
 
   boost::algorithm::trim_if(mapd_parameters.ha_brokers, boost::is_any_of("\"'"));
@@ -845,7 +920,7 @@ void MapDProgramOptions::temporarily_support_deprecated_log_options_201904() {
 }
 
 void heartbeat() {
-  // Block signals for this heartbeat thread, only.
+  // Block all signals for this heartbeat thread, only.
   sigset_t set;
   sigfillset(&set);
   int result = pthread_sigmask(SIG_BLOCK, &set, NULL);
@@ -869,16 +944,27 @@ void heartbeat() {
 
   // if dumping core, try to do some quick stuff
   if (signum == SIGQUIT || signum == SIGABRT || signum == SIGSEGV || signum == SIGFPE) {
+    if (g_mapd_handler) {
+      std::call_once(g_shutdown_once_flag,
+                     []() { g_mapd_handler->emergency_shutdown(); });
+    }
     logger::shutdown();
-    shutdown_handler();
     return;
+    // core dump should begin soon after this, see omnisci_signal_handler()
   }
 
-  // do an orderly shutdown
-  if (signum <= 0 || signum == SIGTERM) {
-    exit(EXIT_SUCCESS);
-  } else {
-    exit(signum);
+  // trigger an orderly shutdown by telling Thrift to stop serving
+  {
+    mapd_shared_lock<mapd_shared_mutex> read_lock(g_thrift_mutex);
+    auto httpserv = g_thrift_http_server;
+    if (httpserv) {
+      httpserv->stop();
+    }
+    auto bufserv = g_thrift_buf_server;
+    if (bufserv) {
+      bufserv->stop();
+    }
+    // main() should return soon after this
   }
 }
 
@@ -892,16 +978,14 @@ int main(int argc, char** argv) {
   // try to enforce an orderly shutdown even after a signal
   register_signal_handlers();
 
-  // register shutdown procedures for when a CHECK or a LOG(FATAL) happens
-  logger::set_once_fatal_func(&shutdown_handler);
-
-  // register shutdown procedures for when a normal exit() shutdown happens
-  atexit(&shutdown_handler);
+  // register shutdown procedures for when a normal shutdown happens
+  // be aware that atexit() functions run in reverse order
   atexit(&logger::shutdown);
+  atexit(&shutdown_handler);
 
   // start background thread to clean up _DELETE_ME files
   const unsigned int wait_interval =
-      300;  // wait time in secs after looking for deleted file before looking again
+      3;  // wait time in secs after looking for deleted file before looking again
   std::thread file_delete_thread(file_delete,
                                  std::ref(g_running),
                                  wait_interval,
@@ -919,6 +1003,7 @@ int main(int argc, char** argv) {
                                      prog_config_opts.cpu_only,
                                      prog_config_opts.allow_multifrag,
                                      prog_config_opts.jit_debug,
+                                     prog_config_opts.intel_jit_profile,
                                      prog_config_opts.read_only,
                                      prog_config_opts.allow_loop_joins,
                                      prog_config_opts.enable_rendering,
@@ -935,9 +1020,11 @@ int main(int argc, char** argv) {
                                      prog_config_opts.enable_legacy_syntax,
                                      prog_config_opts.idle_session_duration,
                                      prog_config_opts.max_session_duration,
+                                     prog_config_opts.enable_runtime_udf,
                                      prog_config_opts.udf_file_name);
 
   mapd::shared_ptr<TServerSocket> serverSocket;
+  mapd::shared_ptr<TServerSocket> httpServerSocket;
   if (!prog_config_opts.mapd_parameters.ssl_cert_file.empty() &&
       !prog_config_opts.mapd_parameters.ssl_key_file.empty()) {
     mapd::shared_ptr<TSSLSocketFactory> sslSocketFactory;
@@ -951,6 +1038,8 @@ int main(int argc, char** argv) {
     sslSocketFactory->ciphers("ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
     serverSocket = mapd::shared_ptr<TServerSocket>(new TSSLServerSocket(
         prog_config_opts.mapd_parameters.omnisci_server_port, sslSocketFactory));
+    httpServerSocket = mapd::shared_ptr<TServerSocket>(
+        new TSSLServerSocket(prog_config_opts.http_port, sslSocketFactory));
     LOG(INFO) << " OmniSci server using encrypted connection. Cert file ["
               << prog_config_opts.mapd_parameters.ssl_cert_file << "], key file ["
               << prog_config_opts.mapd_parameters.ssl_key_file << "]";
@@ -958,7 +1047,14 @@ int main(int argc, char** argv) {
     LOG(INFO) << " OmniSci server using unencrypted connection";
     serverSocket = mapd::shared_ptr<TServerSocket>(
         new TServerSocket(prog_config_opts.mapd_parameters.omnisci_server_port));
+    httpServerSocket =
+        mapd::shared_ptr<TServerSocket>(new TServerSocket(prog_config_opts.http_port));
   }
+
+  ScopeGuard pointer_to_thrift_guard = [] {
+    mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
+    g_thrift_buf_server = g_thrift_http_server = nullptr;
+  };
 
   if (prog_config_opts.mapd_parameters.ha_group_id.empty()) {
     mapd::shared_ptr<TProcessor> processor(new MapDProcessor(g_mapd_handler));
@@ -970,14 +1066,21 @@ int main(int argc, char** argv) {
     mapd::shared_ptr<TServerTransport> bufServerTransport(serverSocket);
     TThreadedServer bufServer(
         processor, bufServerTransport, bufTransportFactory, bufProtocolFactory);
+    {
+      mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
+      g_thrift_buf_server = &bufServer;
+    }
 
-    mapd::shared_ptr<TServerTransport> httpServerTransport(
-        new TServerSocket(prog_config_opts.http_port));
+    mapd::shared_ptr<TServerTransport> httpServerTransport(httpServerSocket);
     mapd::shared_ptr<TTransportFactory> httpTransportFactory(
         new THttpServerTransportFactory());
     mapd::shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
     TThreadedServer httpServer(
         processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
+    {
+      mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
+      g_thrift_http_server = &httpServer;
+    }
 
     std::thread bufThread(start_server,
                           std::ref(bufServer),
@@ -995,13 +1098,14 @@ int main(int argc, char** argv) {
     LOG(FATAL) << "No High Availability module available, please contact OmniSci support";
   }
 
-  // There doesn't seem to be any documented way to make Thrift's
-  // TThreadedServer stop serving except to exit() from another thread.
-  UNREACHABLE() << "THRIFT LAYER EXITED";
-
   g_running = false;
   file_delete_thread.join();
   heartbeat_thread.join();
 
-  return 0;
+  int signum = g_saw_signal;
+  if (signum <= 0 || signum == SIGTERM) {
+    return 0;
+  } else {
+    return signum;
+  }
 };

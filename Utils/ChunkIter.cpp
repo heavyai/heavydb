@@ -228,7 +228,7 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it, int n, ArrayDatum* result, bool* is
     int8_t* current_pos = it->start_pos + n * it->skip_size;
     result->length = static_cast<size_t>(it->skip_size);
     result->pointer = current_pos;
-    result->is_null = false;  // TODO: add a check for a NULL fixlen array
+    result->is_null = it->type_info.is_null_fixlen_array(result->pointer, result->length);
   } else {
     int8_t* current_pos = it->start_pos + n * sizeof(ArrayOffsetT);
     int8_t* next_pos = current_pos + sizeof(ArrayOffsetT);
@@ -247,4 +247,51 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it, int n, ArrayDatum* result, bool* is
       result->is_null = false;
     }
   }
+}
+
+// @brief get nth varlen array element in Chunk.  Does not change ChunkIter state
+DEVICE void ChunkIter_get_nth_varlen(ChunkIter* it,
+                                     int n,
+                                     ArrayDatum* result,
+                                     bool* is_end) {
+  *is_end = (static_cast<size_t>(n) >= it->num_elems || n < 0);
+
+  if (!*is_end) {
+    int8_t* current_pos = it->start_pos + n * sizeof(ArrayOffsetT);
+    int8_t* next_pos = current_pos + sizeof(ArrayOffsetT);
+    ArrayOffsetT offset = *(ArrayOffsetT*)current_pos;
+    ArrayOffsetT next_offset = *(ArrayOffsetT*)next_pos;
+
+    if (next_offset >= 0) {
+      // Previous array may have been NULL, remove offset negativity
+      if (offset < 0) {
+        offset = -offset;
+      }
+      result->length = static_cast<size_t>(next_offset - offset);
+      result->pointer = it->second_buf + offset;
+      result->is_null = false;
+      return;
+    }
+  }
+  // Encoded NULL array or out of bounds
+  result->length = 0;
+  result->pointer = NULL;
+  result->is_null = true;
+}
+
+// @brief get nth varlen notnull array element in Chunk.  Does not change ChunkIter state
+DEVICE void ChunkIter_get_nth_varlen_notnull(ChunkIter* it,
+                                             int n,
+                                             ArrayDatum* result,
+                                             bool* is_end) {
+  *is_end = (static_cast<size_t>(n) >= it->num_elems || n < 0);
+
+  int8_t* current_pos = it->start_pos + n * sizeof(ArrayOffsetT);
+  int8_t* next_pos = current_pos + sizeof(ArrayOffsetT);
+  ArrayOffsetT offset = *(ArrayOffsetT*)current_pos;
+  ArrayOffsetT next_offset = *(ArrayOffsetT*)next_pos;
+
+  result->length = static_cast<size_t>(next_offset - offset);
+  result->pointer = it->second_buf + offset;
+  result->is_null = false;
 }

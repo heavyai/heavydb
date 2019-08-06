@@ -18,6 +18,7 @@
 #include "Descriptors/QueryCompilationDescriptor.h"
 #include "Descriptors/QueryFragmentDescriptor.h"
 #include "DynamicWatchdog.h"
+#include "ErrorHandling.h"
 #include "Execute.h"
 
 #include "DataMgr/BufferMgr/BufferMgr.h"
@@ -51,6 +52,14 @@ bool need_to_hold_chunk(const Chunk_NS::Chunk* chunk,
   return false;
 }
 
+inline bool query_has_inner_join(const RelAlgExecutionUnit& ra_exe_unit) {
+  return (std::count_if(ra_exe_unit.join_quals.begin(),
+                        ra_exe_unit.join_quals.end(),
+                        [](const auto& join_condition) {
+                          return join_condition.type == JoinType::INNER;
+                        }) > 0);
+}
+
 }  // namespace
 
 void Executor::ExecutionDispatch::runImpl(
@@ -61,6 +70,7 @@ void Executor::ExecutionDispatch::runImpl(
     const QueryCompilationDescriptor& query_comp_desc,
     const QueryMemoryDescriptor& query_mem_desc,
     const FragmentsList& frag_list,
+    const ExecutorDispatchMode kernel_dispatch_mode,
     const int64_t rowid_lookup_key) {
   const auto memory_level = chosen_device_type == ExecutorDeviceType::GPU
                                 ? Data_Namespace::GPU_LEVEL
@@ -106,9 +116,12 @@ void Executor::ExecutionDispatch::runImpl(
                 << std::to_string(cycle_budget) << " cycles";
     }
   } catch (const OutOfMemory&) {
-    std::lock_guard<std::mutex> lock(reduce_mutex_);
-    *error_code_ = memory_level == Data_Namespace::GPU_LEVEL ? ERR_OUT_OF_GPU_MEM
-                                                             : ERR_OUT_OF_CPU_MEM;
+    throw QueryExecutionError(
+        memory_level == Data_Namespace::GPU_LEVEL ? ERR_OUT_OF_GPU_MEM
+                                                  : ERR_OUT_OF_CPU_MEM,
+        QueryExecutionProperties{
+            query_mem_desc.getQueryDescriptionType(),
+            kernel_dispatch_mode == ExecutorDispatchMode::MultifragmentKernel});
     return;
   }
 
@@ -116,12 +129,37 @@ void Executor::ExecutionDispatch::runImpl(
   std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
   const bool do_render = render_info_ && render_info_->isPotentialInSituRender();
 
+  int64_t total_num_input_rows{-1};
+  if (kernel_dispatch_mode == ExecutorDispatchMode::KernelPerFragment &&
+      query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection) {
+    total_num_input_rows = 0;
+    std::for_each(fetch_result.num_rows.begin(),
+                  fetch_result.num_rows.end(),
+                  [&total_num_input_rows](const std::vector<int64_t>& frag_row_count) {
+                    total_num_input_rows = std::accumulate(frag_row_count.begin(),
+                                                           frag_row_count.end(),
+                                                           total_num_input_rows);
+                  });
+    // TODO(adb): we may want to take this early out for all queries, but we are most
+    // likely to see this query pattern on the kernel per fragment path (e.g. with HAVING
+    // 0=1)
+    if (total_num_input_rows == 0) {
+      return;
+    }
+
+    if (query_has_inner_join(ra_exe_unit_)) {
+      total_num_input_rows *= ra_exe_unit_.input_descs.size();
+    }
+  }
+
   try {
     query_exe_context_owned =
         query_mem_desc.getQueryExecutionContext(ra_exe_unit_,
                                                 executor_,
                                                 chosen_device_type,
+                                                kernel_dispatch_mode,
                                                 chosen_device_id,
+                                                total_num_input_rows,
                                                 fetch_result.col_buffers,
                                                 fetch_result.frag_offsets,
                                                 row_set_mem_owner_,
@@ -129,10 +167,7 @@ void Executor::ExecutionDispatch::runImpl(
                                                 query_mem_desc.sortOnGpu(),
                                                 do_render ? render_info_ : nullptr);
   } catch (const OutOfHostMemory& e) {
-    std::lock_guard<std::mutex> lock(reduce_mutex_);
-    LOG(ERROR) << e.what();
-    *error_code_ = ERR_OUT_OF_CPU_MEM;
-    return;
+    throw QueryExecutionError(ERR_OUT_OF_CPU_MEM);
   }
   QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
   CHECK(query_exe_context);
@@ -191,11 +226,11 @@ void Executor::ExecutionDispatch::runImpl(
     device_results->holdChunks(chunks_to_hold);
     device_results->holdChunkIterators(chunk_iterators_ptr);
   }
+  if (err) {
+    throw QueryExecutionError(err);
+  }
   {
     std::lock_guard<std::mutex> lock(reduce_mutex_);
-    if (err) {
-      *error_code_ = err;
-    }
     if (!needs_skip_result(device_results)) {
       all_fragment_results_.emplace_back(std::move(device_results), outer_tab_frag_ids);
     }
@@ -208,14 +243,12 @@ Executor::ExecutionDispatch::ExecutionDispatch(
     const std::vector<InputTableInfo>& query_infos,
     const Catalog_Namespace::Catalog& cat,
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-    int32_t* error_code,
     RenderInfo* render_info)
     : executor_(executor)
     , ra_exe_unit_(ra_exe_unit)
     , query_infos_(query_infos)
     , cat_(cat)
     , row_set_mem_owner_(row_set_mem_owner)
-    , error_code_(error_code)
     , render_info_(render_info) {
   all_fragment_results_.reserve(query_infos_.front().info.fragments.size());
 }
@@ -232,35 +265,25 @@ Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry_guess,
 
   switch (co.device_type_) {
     case ExecutorDeviceType::CPU: {
-      const CompilationOptions co_cpu{ExecutorDeviceType::CPU,
-                                      co.hoist_literals_,
-                                      co.opt_level_,
-                                      co.with_dynamic_watchdog_,
-                                      co.explain_type_};
       query_mem_desc = query_comp_desc->compile(max_groups_buffer_entry_guess,
                                                 crt_min_byte_width,
                                                 has_cardinality_estimation,
                                                 ra_exe_unit_,
                                                 query_infos_,
                                                 column_fetcher,
-                                                co_cpu,
+                                                co,
                                                 eo,
                                                 render_info_,
                                                 executor_);
     } break;
     case ExecutorDeviceType::GPU: {
-      const CompilationOptions co_gpu{ExecutorDeviceType::GPU,
-                                      co.hoist_literals_,
-                                      co.opt_level_,
-                                      co.with_dynamic_watchdog_,
-                                      co.explain_type_};
       query_mem_desc = query_comp_desc->compile(max_groups_buffer_entry_guess,
                                                 crt_min_byte_width,
                                                 has_cardinality_estimation,
                                                 ra_exe_unit_,
                                                 query_infos_,
                                                 column_fetcher,
-                                                co_gpu,
+                                                co,
                                                 eo,
                                                 render_info_,
                                                 executor_);
@@ -279,7 +302,8 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
                                       const QueryCompilationDescriptor& query_comp_desc,
                                       const QueryMemoryDescriptor& query_mem_desc,
                                       const FragmentsList& frag_list,
-                                      const int64_t rowid_lookup_key) noexcept {
+                                      const ExecutorDispatchMode kernel_dispatch_mode,
+                                      const int64_t rowid_lookup_key) {
   try {
     runImpl(chosen_device_type,
             chosen_device_id,
@@ -288,33 +312,29 @@ void Executor::ExecutionDispatch::run(const ExecutorDeviceType chosen_device_typ
             query_comp_desc,
             query_mem_desc,
             frag_list,
+            kernel_dispatch_mode,
             rowid_lookup_key);
   } catch (const std::bad_alloc& e) {
-    std::lock_guard<std::mutex> lock(reduce_mutex_);
-    LOG(ERROR) << e.what();
-    *error_code_ = ERR_OUT_OF_CPU_MEM;
+    throw QueryExecutionError(ERR_OUT_OF_CPU_MEM, e.what());
   } catch (const OutOfHostMemory& e) {
-    std::lock_guard<std::mutex> lock(reduce_mutex_);
-    LOG(ERROR) << e.what();
-    *error_code_ = ERR_OUT_OF_CPU_MEM;
+    throw QueryExecutionError(ERR_OUT_OF_CPU_MEM, e.what());
   } catch (const OutOfRenderMemory& e) {
-    std::lock_guard<std::mutex> lock(reduce_mutex_);
-    LOG(ERROR) << e.what();
-    *error_code_ = ERR_OUT_OF_RENDER_MEM;
+    throw QueryExecutionError(ERR_OUT_OF_RENDER_MEM, e.what());
   } catch (const OutOfMemory& e) {
-    std::lock_guard<std::mutex> lock(reduce_mutex_);
-    LOG(ERROR) << e.what();
-    *error_code_ = ERR_OUT_OF_GPU_MEM;
+    throw QueryExecutionError(
+        ERR_OUT_OF_GPU_MEM,
+        e.what(),
+        QueryExecutionProperties{
+            query_mem_desc.getQueryDescriptionType(),
+            kernel_dispatch_mode == ExecutorDispatchMode::MultifragmentKernel});
   } catch (const ColumnarConversionNotSupported& e) {
-    std::lock_guard<std::mutex> lock(reduce_mutex_);
-    *error_code_ = ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED;
-  } catch (const TooManyLiterals&) {
-    std::lock_guard<std::mutex> lock(reduce_mutex_);
-    *error_code_ = ERR_TOO_MANY_LITERALS;
+    throw QueryExecutionError(ERR_COLUMNAR_CONVERSION_NOT_SUPPORTED, e.what());
+  } catch (const TooManyLiterals& e) {
+    throw QueryExecutionError(ERR_TOO_MANY_LITERALS, e.what());
   } catch (const SringConstInResultSet& e) {
-    std::lock_guard<std::mutex> lock(reduce_mutex_);
-    *error_code_ = ERR_STRING_CONST_IN_RESULTSET;
-    LOG(INFO) << e.what();
+    throw QueryExecutionError(ERR_STRING_CONST_IN_RESULTSET, e.what());
+  } catch (const QueryExecutionError& e) {
+    throw e;
   }
 }
 

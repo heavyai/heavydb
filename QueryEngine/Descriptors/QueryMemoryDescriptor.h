@@ -126,7 +126,9 @@ class QueryMemoryDescriptor {
       const RelAlgExecutionUnit&,
       const Executor* executor,
       const ExecutorDeviceType device_type,
+      const ExecutorDispatchMode dispatch_mode,
       const int device_id,
+      const int64_t num_rows,
       const std::vector<std::vector<const int8_t*>>& col_buffers,
       const std::vector<std::vector<uint64_t>>& frag_offsets,
       std::shared_ptr<RowSetMemoryOwner>,
@@ -250,6 +252,8 @@ class QueryMemoryDescriptor {
   bool didOutputColumnar() const { return output_columnar_; }
   void setOutputColumnar(const bool val);
 
+  bool isLogicalSizedColumnsAllowed() const;
+
   bool mustUseBaselineSort() const { return must_use_baseline_sort_; }
 
   // TODO(adb): remove and store this info more naturally in another
@@ -266,6 +270,8 @@ class QueryMemoryDescriptor {
                             const unsigned thread_count,
                             const ExecutorDeviceType device_type) const;
   size_t getBufferSizeBytes(const ExecutorDeviceType device_type) const;
+  size_t getBufferSizeBytes(const ExecutorDeviceType device_type,
+                            const size_t override_entry_count) const;
 
   const ColSlotContext& getColSlotContext() const { return col_slot_context_; }
 

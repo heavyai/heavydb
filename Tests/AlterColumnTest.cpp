@@ -107,7 +107,7 @@ bool alter_common(const std::string& table,
     return r_cnt == 100;
   } else {
     std::string query_str =
-        "SELECT count() FROM " + table + " WHERE " + column +
+        "SELECT count(*) FROM " + table + " WHERE " + column +
         ("" == val || boost::iequals("NULL", val) ? " IS NULL" : (" = " + val));
     auto rows = run_query(query_str + ";");
     auto crt_row = rows->getNextRow(true, true);

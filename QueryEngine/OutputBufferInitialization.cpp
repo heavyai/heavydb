@@ -63,7 +63,9 @@ inline std::vector<int64_t> init_agg_val_vec(
     }
     CHECK_GT(query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx), 0);
     const bool float_argument_input = takes_float_argument(agg_info);
-    const auto chosen_bytes = query_mem_desc.getCompactByteWidth();
+    const auto chosen_bytes = query_mem_desc.isLogicalSizedColumnsAllowed()
+                                  ? query_mem_desc.getPaddedSlotWidthBytes(agg_col_idx)
+                                  : query_mem_desc.getCompactByteWidth();
     auto init_ti = get_compact_type(agg_info);
     if (!is_group_by) {
       init_ti.set_notnull(false);
@@ -177,6 +179,16 @@ int64_t get_agg_initial_val(const SQLAgg agg,
       return 0;
     case kMIN: {
       switch (byte_width) {
+        case 1: {
+          CHECK(!ti.is_fp());
+          return ti.get_notnull() ? std::numeric_limits<int8_t>::max()
+                                  : inline_int_null_val(ti);
+        }
+        case 2: {
+          CHECK(!ti.is_fp());
+          return ti.get_notnull() ? std::numeric_limits<int16_t>::max()
+                                  : inline_int_null_val(ti);
+        }
         case 4: {
           const float max_float = std::numeric_limits<float>::max();
           const float null_float =
@@ -206,6 +218,16 @@ int64_t get_agg_initial_val(const SQLAgg agg,
     case kSAMPLE:
     case kMAX: {
       switch (byte_width) {
+        case 1: {
+          CHECK(!ti.is_fp());
+          return ti.get_notnull() ? std::numeric_limits<int8_t>::min()
+                                  : inline_int_null_val(ti);
+        }
+        case 2: {
+          CHECK(!ti.is_fp());
+          return ti.get_notnull() ? std::numeric_limits<int16_t>::min()
+                                  : inline_int_null_val(ti);
+        }
         case 4: {
           const float min_float = -std::numeric_limits<float>::max();
           const float null_float =

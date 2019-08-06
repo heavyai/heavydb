@@ -383,13 +383,25 @@ extern "C" ALWAYS_INLINE int32_t agg_sum_int32(int32_t* agg, const int32_t val) 
   return old;
 }
 
-extern "C" ALWAYS_INLINE void agg_max_int32(int32_t* agg, const int32_t val) {
-  *agg = std::max(*agg, val);
-}
+#define DEF_AGG_MAX_INT(n)                                                              \
+  extern "C" ALWAYS_INLINE void agg_max_int##n(int##n##_t* agg, const int##n##_t val) { \
+    *agg = std::max(*agg, val);                                                         \
+  }
 
-extern "C" ALWAYS_INLINE void agg_min_int32(int32_t* agg, const int32_t val) {
-  *agg = std::min(*agg, val);
-}
+DEF_AGG_MAX_INT(32)
+DEF_AGG_MAX_INT(16)
+DEF_AGG_MAX_INT(8)
+#undef DEF_AGG_MAX_INT
+
+#define DEF_AGG_MIN_INT(n)                                                              \
+  extern "C" ALWAYS_INLINE void agg_min_int##n(int##n##_t* agg, const int##n##_t val) { \
+    *agg = std::min(*agg, val);                                                         \
+  }
+
+DEF_AGG_MIN_INT(32)
+DEF_AGG_MIN_INT(16)
+DEF_AGG_MIN_INT(8)
+#undef DEF_AGG_MIN_INT
 
 #define DEF_AGG_ID_INT(n)                                                              \
   extern "C" ALWAYS_INLINE void agg_id_int##n(int##n##_t* agg, const int##n##_t val) { \
@@ -476,6 +488,16 @@ DEF_SKIP_AGG(agg_min)
 #define DATA_T int32_t
 DEF_SKIP_AGG(agg_max_int32)
 DEF_SKIP_AGG(agg_min_int32)
+#undef DATA_T
+
+#define DATA_T int16_t
+DEF_SKIP_AGG(agg_max_int16)
+DEF_SKIP_AGG(agg_min_int16)
+#undef DATA_T
+
+#define DATA_T int8_t
+DEF_SKIP_AGG(agg_max_int8)
+DEF_SKIP_AGG(agg_min_int8)
 #undef DATA_T
 
 #undef DEF_SKIP_AGG_ADD
@@ -672,6 +694,22 @@ DEF_SHARED_AGG_RET_STUBS(agg_count)
 DEF_SHARED_AGG_STUBS(agg_max)
 DEF_SHARED_AGG_STUBS(agg_min)
 DEF_SHARED_AGG_STUBS(agg_id)
+
+extern "C" GPU_RT_STUB void agg_max_int16_skip_val_shared(int16_t* agg,
+                                                          const int16_t val,
+                                                          const int16_t skip_val) {}
+
+extern "C" GPU_RT_STUB void agg_max_int8_skip_val_shared(int8_t* agg,
+                                                         const int8_t val,
+                                                         const int8_t skip_val) {}
+
+extern "C" GPU_RT_STUB void agg_min_int16_skip_val_shared(int16_t* agg,
+                                                          const int16_t val,
+                                                          const int16_t skip_val) {}
+
+extern "C" GPU_RT_STUB void agg_min_int8_skip_val_shared(int8_t* agg,
+                                                         const int8_t val,
+                                                         const int8_t skip_val) {}
 
 extern "C" GPU_RT_STUB void agg_id_double_shared_slow(int64_t* agg, const double* val) {}
 

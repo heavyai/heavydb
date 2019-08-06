@@ -262,7 +262,7 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
       }
     }
 
-    return std::move(data);
+    return data;
   }
 
   void processArrayBuffer(

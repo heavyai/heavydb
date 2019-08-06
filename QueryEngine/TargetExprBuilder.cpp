@@ -323,6 +323,12 @@ void TargetExprCodegen::codegen(
             ? (agg_chosen_bytes == sizeof(int32_t) ? LL_INT(int32_t(0))
                                                    : LL_INT(int64_t(0)))
             : (is_simple_count && arg_expr && str_target_lv ? str_target_lv : target_lv)};
+    if (query_mem_desc.isLogicalSizedColumnsAllowed()) {
+      if (is_simple_count && arg_expr && str_target_lv) {
+        agg_args[1] =
+            agg_chosen_bytes == sizeof(int32_t) ? LL_INT(int32_t(0)) : LL_INT(int64_t(0));
+      }
+    }
     std::string agg_fname{agg_base_name};
     if (is_fp_arg) {
       if (!lazy_fetched) {
@@ -526,84 +532,205 @@ void TargetExprCodegenBuilder::codegen(
                                 diamond_codegen);
   }
   if (!sample_exprs_to_codegen.empty()) {
-    CHECK(co.device_type_ == ExecutorDeviceType::GPU);
+    codegenSampleExpressions(group_by_and_agg,
+                             executor,
+                             query_mem_desc,
+                             co,
+                             agg_out_ptr_w_idx,
+                             agg_out_vec,
+                             output_buffer_byte_stream,
+                             out_row_idx,
+                             diamond_codegen);
+  }
+}
 
-    if (sample_exprs_to_codegen.size() == 1 &&
-        !sample_exprs_to_codegen.front().target_info.sql_type.is_varlen()) {
-      // no need for the atomic if we only have one SAMPLE target
-      sample_exprs_to_codegen.front().codegen(group_by_and_agg,
-                                              executor,
-                                              query_mem_desc,
-                                              co,
-                                              agg_out_ptr_w_idx,
-                                              agg_out_vec,
-                                              output_buffer_byte_stream,
-                                              out_row_idx,
-                                              diamond_codegen);
-      return;
-    }
+void TargetExprCodegenBuilder::codegenSampleExpressions(
+    GroupByAndAggregate* group_by_and_agg,
+    Executor* executor,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const CompilationOptions& co,
+    const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+    const std::vector<llvm::Value*>& agg_out_vec,
+    llvm::Value* output_buffer_byte_stream,
+    llvm::Value* out_row_idx,
+    GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
+  CHECK(!sample_exprs_to_codegen.empty());
+  CHECK(co.device_type_ == ExecutorDeviceType::GPU);
+  if (sample_exprs_to_codegen.size() == 1 &&
+      !sample_exprs_to_codegen.front().target_info.sql_type.is_varlen()) {
+    codegenSingleSlotSampleExpression(group_by_and_agg,
+                                      executor,
+                                      query_mem_desc,
+                                      co,
+                                      agg_out_ptr_w_idx,
+                                      agg_out_vec,
+                                      output_buffer_byte_stream,
+                                      out_row_idx,
+                                      diamond_codegen);
+  } else {
+    codegenMultiSlotSampleExpressions(group_by_and_agg,
+                                      executor,
+                                      query_mem_desc,
+                                      co,
+                                      agg_out_ptr_w_idx,
+                                      agg_out_vec,
+                                      output_buffer_byte_stream,
+                                      out_row_idx,
+                                      diamond_codegen);
+  }
+}
 
-    const auto& first_sample_expr = sample_exprs_to_codegen.front();
-    auto target_lvs = group_by_and_agg->codegenAggArg(first_sample_expr.target_expr, co);
-    CHECK_GE(target_lvs.size(), size_t(1));
+void TargetExprCodegenBuilder::codegenSingleSlotSampleExpression(
+    GroupByAndAggregate* group_by_and_agg,
+    Executor* executor,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const CompilationOptions& co,
+    const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+    const std::vector<llvm::Value*>& agg_out_vec,
+    llvm::Value* output_buffer_byte_stream,
+    llvm::Value* out_row_idx,
+    GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
+  CHECK_EQ(size_t(1), sample_exprs_to_codegen.size());
+  CHECK(!sample_exprs_to_codegen.front().target_info.sql_type.is_varlen());
+  CHECK(co.device_type_ == ExecutorDeviceType::GPU);
+  // no need for the atomic if we only have one SAMPLE target
+  sample_exprs_to_codegen.front().codegen(group_by_and_agg,
+                                          executor,
+                                          query_mem_desc,
+                                          co,
+                                          agg_out_ptr_w_idx,
+                                          agg_out_vec,
+                                          output_buffer_byte_stream,
+                                          out_row_idx,
+                                          diamond_codegen);
+}
 
-    const auto init_val =
-        get_initial_agg_val(first_sample_expr.target_info, query_mem_desc);
+void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
+    GroupByAndAggregate* group_by_and_agg,
+    Executor* executor,
+    const QueryMemoryDescriptor& query_mem_desc,
+    const CompilationOptions& co,
+    const std::tuple<llvm::Value*, llvm::Value*>& agg_out_ptr_w_idx,
+    const std::vector<llvm::Value*>& agg_out_vec,
+    llvm::Value* output_buffer_byte_stream,
+    llvm::Value* out_row_idx,
+    GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
+  CHECK(sample_exprs_to_codegen.size() > 1 ||
+        sample_exprs_to_codegen.front().target_info.sql_type.is_varlen());
+  CHECK(co.device_type_ == ExecutorDeviceType::GPU);
+  const auto& first_sample_expr = sample_exprs_to_codegen.front();
+  auto target_lvs = group_by_and_agg->codegenAggArg(first_sample_expr.target_expr, co);
+  CHECK_GE(target_lvs.size(), size_t(1));
 
-    llvm::Value* agg_col_ptr{nullptr};
-    if (is_group_by) {
-      agg_col_ptr =
-          group_by_and_agg->codegenAggColumnPtr(output_buffer_byte_stream,
-                                                out_row_idx,
-                                                agg_out_ptr_w_idx,
-                                                query_mem_desc,
-                                                8,
-                                                first_sample_expr.base_slot_index,
-                                                first_sample_expr.target_idx);
-    } else {
-      CHECK_LT(static_cast<size_t>(first_sample_expr.base_slot_index),
-               agg_out_vec.size());
-      agg_col_ptr =
-          executor->castToIntPtrTyIn(agg_out_vec[first_sample_expr.base_slot_index], 64);
-    }
+  const auto init_val =
+      get_initial_agg_val(first_sample_expr.target_info, query_mem_desc);
 
-    llvm::Value* target_lv_i64{nullptr};
-    if (first_sample_expr.target_info.sql_type.is_varlen()) {
-      target_lv_i64 = LL_BUILDER.CreatePtrToInt(target_lvs.front(),
-                                                llvm::Type::getInt64Ty(LL_CONTEXT));
-    } else if (first_sample_expr.target_info.sql_type.is_fp()) {
-      // Initialization value for SAMPLE on a float column should be 0
-      CHECK_EQ(init_val, 0);
-      target_lv_i64 = executor->cgen_state_->ir_builder_.CreateFPToSI(
-          target_lvs.front(), llvm::Type::getInt64Ty(LL_CONTEXT));
-    } else if (first_sample_expr.target_info.sql_type.get_size() != 8) {
-      target_lv_i64 = executor->cgen_state_->ir_builder_.CreateCast(
-          llvm::Instruction::CastOps::SExt,
+  llvm::Value* agg_col_ptr{nullptr};
+  if (is_group_by) {
+    const auto agg_column_size_bytes =
+        query_mem_desc.isLogicalSizedColumnsAllowed() &&
+                !first_sample_expr.target_info.sql_type.is_varlen()
+            ? first_sample_expr.target_info.sql_type.get_size()
+            : sizeof(int64_t);
+    agg_col_ptr = group_by_and_agg->codegenAggColumnPtr(output_buffer_byte_stream,
+                                                        out_row_idx,
+                                                        agg_out_ptr_w_idx,
+                                                        query_mem_desc,
+                                                        agg_column_size_bytes,
+                                                        first_sample_expr.base_slot_index,
+                                                        first_sample_expr.target_idx);
+  } else {
+    CHECK_LT(static_cast<size_t>(first_sample_expr.base_slot_index), agg_out_vec.size());
+    agg_col_ptr =
+        executor->castToIntPtrTyIn(agg_out_vec[first_sample_expr.base_slot_index], 64);
+  }
+
+  auto sample_cas_lv = codegenSlotEmptyKey(agg_col_ptr, target_lvs, executor, init_val);
+
+  GroupByAndAggregate::DiamondCodegen sample_cfg(
+      sample_cas_lv, executor, false, "sample_valcheck", &diamond_codegen, false);
+
+  for (const auto& target_expr_codegen : sample_exprs_to_codegen) {
+    target_expr_codegen.codegen(group_by_and_agg,
+                                executor,
+                                query_mem_desc,
+                                co,
+                                agg_out_ptr_w_idx,
+                                agg_out_vec,
+                                output_buffer_byte_stream,
+                                out_row_idx,
+                                diamond_codegen,
+                                &sample_cfg);
+  }
+}
+
+llvm::Value* TargetExprCodegenBuilder::codegenSlotEmptyKey(
+    llvm::Value* agg_col_ptr,
+    std::vector<llvm::Value*>& target_lvs,
+    Executor* executor,
+    const int64_t init_val) const {
+  const auto& first_sample_expr = sample_exprs_to_codegen.front();
+  const auto first_sample_slot_bytes =
+      first_sample_expr.target_info.sql_type.is_varlen()
+          ? sizeof(int64_t)
+          : first_sample_expr.target_info.sql_type.get_size();
+  llvm::Value* target_lv_casted{nullptr};
+  // deciding whether proper casting is required for the first sample's slot:
+  if (first_sample_expr.target_info.sql_type.is_varlen()) {
+    target_lv_casted =
+        LL_BUILDER.CreatePtrToInt(target_lvs.front(), llvm::Type::getInt64Ty(LL_CONTEXT));
+  } else if (first_sample_expr.target_info.sql_type.is_fp()) {
+    // Initialization value for SAMPLE on a float column should be 0
+    CHECK_EQ(init_val, 0);
+    if (query_mem_desc.isLogicalSizedColumnsAllowed()) {
+      target_lv_casted = executor->cgen_state_->ir_builder_.CreateFPToSI(
           target_lvs.front(),
-          llvm::Type::getInt64Ty(LL_CONTEXT));
+          first_sample_slot_bytes == sizeof(float) ? llvm::Type::getInt32Ty(LL_CONTEXT)
+                                                   : llvm::Type::getInt64Ty(LL_CONTEXT));
     } else {
-      target_lv_i64 = target_lvs.front();
+      target_lv_casted = executor->cgen_state_->ir_builder_.CreateFPToSI(
+          target_lvs.front(), llvm::Type::getInt64Ty(LL_CONTEXT));
     }
+  } else if (first_sample_slot_bytes != sizeof(int64_t) &&
+             !query_mem_desc.isLogicalSizedColumnsAllowed()) {
+    target_lv_casted =
+        executor->cgen_state_->ir_builder_.CreateCast(llvm::Instruction::CastOps::SExt,
+                                                      target_lvs.front(),
+                                                      llvm::Type::getInt64Ty(LL_CONTEXT));
+  } else {
+    target_lv_casted = target_lvs.front();
+  }
 
-    auto sample_cas_lv = executor->cgen_state_->emitExternalCall(
-        "slotEmptyKeyCAS",
-        llvm::Type::getInt1Ty(executor->cgen_state_->context_),
-        {agg_col_ptr, target_lv_i64, LL_INT(init_val)});
-
-    GroupByAndAggregate::DiamondCodegen sample_cfg(
-        sample_cas_lv, executor, false, "sample_valcheck", &diamond_codegen, false);
-
-    for (const auto& target_expr_codegen : sample_exprs_to_codegen) {
-      target_expr_codegen.codegen(group_by_and_agg,
-                                  executor,
-                                  query_mem_desc,
-                                  co,
-                                  agg_out_ptr_w_idx,
-                                  agg_out_vec,
-                                  output_buffer_byte_stream,
-                                  out_row_idx,
-                                  diamond_codegen,
-                                  &sample_cfg);
+  std::string slot_empty_cas_func_name("slotEmptyKeyCAS");
+  llvm::Value* init_val_lv{LL_INT(init_val)};
+  if (query_mem_desc.isLogicalSizedColumnsAllowed() &&
+      !first_sample_expr.target_info.sql_type.is_varlen()) {
+    // add proper suffix to the function name:
+    switch (first_sample_slot_bytes) {
+      case 1:
+        slot_empty_cas_func_name += "_int8";
+        break;
+      case 2:
+        slot_empty_cas_func_name += "_int16";
+        break;
+      case 4:
+        slot_empty_cas_func_name += "_int32";
+        break;
+      case 8:
+        break;
+      default:
+        UNREACHABLE() << "Invalid slot size for slotEmptyKeyCAS function.";
+        break;
+    }
+    if (first_sample_slot_bytes != sizeof(int64_t)) {
+      init_val_lv = llvm::ConstantInt::get(
+          get_int_type(first_sample_slot_bytes * 8, LL_CONTEXT), init_val);
     }
   }
+
+  auto sample_cas_lv = executor->cgen_state_->emitExternalCall(
+      slot_empty_cas_func_name,
+      llvm::Type::getInt1Ty(executor->cgen_state_->context_),
+      {agg_col_ptr, target_lv_casted, init_val_lv});
+  return sample_cas_lv;
 }

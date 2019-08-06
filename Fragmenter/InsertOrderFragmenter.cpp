@@ -428,10 +428,13 @@ void InsertOrderFragmenter::replicateData(const InsertData& insertDataStruct) {
 }
 
 void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
-  // populate deleted system column of it exists, as it will not come from client
+  // populate deleted system column if it should exists, as it will not come from client
+  // Do not add this magical column in the replicate ALTER TABLE ADD route as
+  // it is not needed and will cause issues
   std::unique_ptr<int8_t[]> data_for_deleted_column;
   for (const auto& cit : columnMap_) {
-    if (cit.second.get_column_desc()->isDeletedCol) {
+    if (cit.second.get_column_desc()->isDeletedCol &&
+        insertDataStruct.replicate_count == 0) {
       data_for_deleted_column.reset(new int8_t[insertDataStruct.numRows]);
       memset(data_for_deleted_column.get(), 0, insertDataStruct.numRows);
       insertDataStruct.data.emplace_back(DataBlockPtr{data_for_deleted_column.get()});

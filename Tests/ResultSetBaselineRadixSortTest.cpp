@@ -35,7 +35,9 @@ extern std::unique_ptr<CudaMgr_Namespace::CudaMgr> g_cuda_mgr;
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <numeric>
+#include <random>
 
 namespace {
 
@@ -92,7 +94,9 @@ void fill_storage_buffer_baseline_sort_int(int8_t* buff,
   std::iota(values.begin(), values.end(), 1);
   const auto null_pattern = null_val_bit_pattern(target_infos.back().sql_type, false);
   values.push_back(null_pattern);
-  std::random_shuffle(values.begin(), values.end());
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(values.begin(), values.end(), g);
   CHECK_EQ(size_t(0), row_bytes % 8);
   const auto row_size_quad = row_bytes / 8;
   for (const auto val : values) {
@@ -136,7 +140,9 @@ void fill_storage_buffer_baseline_sort_fp(int8_t* buff,
   std::iota(values.begin(), values.end(), 1);
   const auto null_pattern = null_val_bit_pattern(target_infos.back().sql_type, false);
   values.push_back(null_pattern);
-  std::random_shuffle(values.begin(), values.end());
+  std::random_device rd;
+  std::mt19937 g(rd());
+  std::shuffle(values.begin(), values.end(), g);
   for (const auto val : values) {
     std::vector<int64_t> key(key_component_count, val);
     auto value_slots = get_group_value(i64_buff,

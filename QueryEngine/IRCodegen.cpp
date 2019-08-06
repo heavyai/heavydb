@@ -408,7 +408,6 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
       hash_table_or_error = buildHashTableForQualifier(
           qual_bin_oper,
           query_infos,
-          ra_exe_unit,
           co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                      : MemoryLevel::CPU_LEVEL,
           JoinHashTableInterface::HashType::OneToOne,
@@ -544,7 +543,13 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     cgen_state_->ir_builder_.CreateStore(
         cgen_state_->ir_builder_.CreateAdd(array_idx, cgen_state_->llInt(int32_t(1))),
         array_idx_ptr);
-    const auto array_at_fname = "array_at_" + numeric_type_name(elem_ti);
+    auto array_at_fname = "array_at_" + numeric_type_name(elem_ti);
+    if (array_ti.get_size() < 0) {
+      if (array_ti.get_notnull()) {
+        array_at_fname = "notnull_" + array_at_fname;
+      }
+      array_at_fname = "varlen_" + array_at_fname;
+    }
     const auto ar_ret_ty =
         elem_ti.is_fp()
             ? (elem_ti.get_type() == kDOUBLE
@@ -572,12 +577,13 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
     const auto& ti = group_by_col->get_type_info();
     const auto key_type = get_int_type(ti.get_logical_size() * 8, cgen_state_->context_);
     orig_group_key = group_key;
-    group_key = cgen_state_->emitCall(translator_func_name + numeric_type_name(ti),
-                                      {group_key,
-                                       static_cast<llvm::Value*>(llvm::ConstantInt::get(
-                                           key_type, inline_int_null_val(ti))),
-                                       static_cast<llvm::Value*>(llvm::ConstantInt::get(
-                                           key_type, translated_null_val))});
+    group_key = cgen_state_->emitCall(
+        translator_func_name + numeric_type_name(ti),
+        {group_key,
+         static_cast<llvm::Value*>(
+             llvm::ConstantInt::get(key_type, inline_int_null_val(ti))),
+         static_cast<llvm::Value*>(llvm::ConstantInt::get(
+             llvm::Type::getInt64Ty(cgen_state_->context_), translated_null_val))});
   }
   group_key = cgen_state_->ir_builder_.CreateBitCast(
       cgen_state_->castToTypeIn(group_key, col_width * 8),
