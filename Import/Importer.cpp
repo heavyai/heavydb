@@ -2380,20 +2380,24 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
     shard_column_input_buffer->addDictEncodedString(*payloads_ptr);
   }
 
-  int64_t rows_per_shard = (row_count + shard_count + 1) / shard_count;
-  int64_t rows_left = row_count;
-
-  for (size_t i = 0; i < row_count; ++i, rows_left -= rows_per_shard) {
-    const auto val = getReplicating() ? i : int_value_at(*shard_column_input_buffer, i);
-    const size_t shard = SHARD_FOR_KEY(val, shard_count);
+  // for each replicated (alter added) columns, number of rows in a shard is
+  // inferred from that of the sharding column, not simply evenly distributed.
+  const auto shard_tds = catalog_.getPhysicalTablesDescriptors(table_desc_);
+  // Here the loop count is overloaded. For normal imports, we loop thru all
+  // input values (rows), so the loop count is the number of input rows.
+  // For ALTER ADD COLUMN, we replicate one default value to existing rows in
+  // all shards, so the loop count is the number of shards.
+  const auto loop_count = getReplicating() ? table_desc_->nShards : row_count;
+  for (size_t i = 0; i < loop_count; ++i) {
+    const size_t shard =
+        getReplicating()
+            ? i
+            : SHARD_FOR_KEY(int_value_at(*shard_column_input_buffer, i), shard_count);
     auto& shard_output_buffers = all_shard_import_buffers[shard];
 
     // when replicate a column, populate 'rows' to all shards only once
-    if (getReplicating()) {
-      if (i >= shard_count) {
-        break;
-      }
-    }
+    // and its value is fetch from the first and the single row
+    const auto row_index = getReplicating() ? 0 : i;
 
     for (size_t col_idx = 0; col_idx < import_buffers.size(); ++col_idx) {
       const auto& input_buffer = import_buffers[col_idx];
@@ -2406,7 +2410,7 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
       if (getReplicating()) {
         if (input_buffer->get_replicate_count() > 0) {
           shard_output_buffers[col_idx]->set_replicate_count(
-              std::min<int64_t>(rows_left, rows_per_shard));
+              shard_tds[shard]->fragmenter->getNumRows());
         } else {
           continue;
         }
@@ -2414,55 +2418,64 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
 
       switch (type) {
         case kBOOLEAN:
-          shard_output_buffers[col_idx]->addBoolean(int_value_at(*input_buffer, i));
+          shard_output_buffers[col_idx]->addBoolean(
+              int_value_at(*input_buffer, row_index));
           break;
         case kTINYINT:
-          shard_output_buffers[col_idx]->addTinyint(int_value_at(*input_buffer, i));
+          shard_output_buffers[col_idx]->addTinyint(
+              int_value_at(*input_buffer, row_index));
           break;
         case kSMALLINT:
-          shard_output_buffers[col_idx]->addSmallint(int_value_at(*input_buffer, i));
+          shard_output_buffers[col_idx]->addSmallint(
+              int_value_at(*input_buffer, row_index));
           break;
         case kINT:
-          shard_output_buffers[col_idx]->addInt(int_value_at(*input_buffer, i));
+          shard_output_buffers[col_idx]->addInt(int_value_at(*input_buffer, row_index));
           break;
         case kBIGINT:
-          shard_output_buffers[col_idx]->addBigint(int_value_at(*input_buffer, i));
+          shard_output_buffers[col_idx]->addBigint(
+              int_value_at(*input_buffer, row_index));
           break;
         case kFLOAT:
-          shard_output_buffers[col_idx]->addFloat(float_value_at(*input_buffer, i));
+          shard_output_buffers[col_idx]->addFloat(
+              float_value_at(*input_buffer, row_index));
           break;
         case kDOUBLE:
-          shard_output_buffers[col_idx]->addDouble(double_value_at(*input_buffer, i));
+          shard_output_buffers[col_idx]->addDouble(
+              double_value_at(*input_buffer, row_index));
           break;
         case kTEXT:
         case kVARCHAR:
         case kCHAR: {
-          CHECK_LT(i, input_buffer->getStringBuffer()->size());
-          shard_output_buffers[col_idx]->addString((*input_buffer->getStringBuffer())[i]);
+          CHECK_LT(row_index, input_buffer->getStringBuffer()->size());
+          shard_output_buffers[col_idx]->addString(
+              (*input_buffer->getStringBuffer())[row_index]);
           break;
         }
         case kTIME:
         case kTIMESTAMP:
         case kDATE:
-          shard_output_buffers[col_idx]->addBigint(int_value_at(*input_buffer, i));
+          shard_output_buffers[col_idx]->addBigint(
+              int_value_at(*input_buffer, row_index));
           break;
         case kARRAY:
           if (IS_STRING(col_ti.get_subtype())) {
             CHECK(input_buffer->getStringArrayBuffer());
-            CHECK_LT(i, input_buffer->getStringArrayBuffer()->size());
-            const auto& input_arr = (*(input_buffer->getStringArrayBuffer()))[i];
+            CHECK_LT(row_index, input_buffer->getStringArrayBuffer()->size());
+            const auto& input_arr = (*(input_buffer->getStringArrayBuffer()))[row_index];
             shard_output_buffers[col_idx]->addStringArray(input_arr);
           } else {
-            shard_output_buffers[col_idx]->addArray((*input_buffer->getArrayBuffer())[i]);
+            shard_output_buffers[col_idx]->addArray(
+                (*input_buffer->getArrayBuffer())[row_index]);
           }
           break;
         case kPOINT:
         case kLINESTRING:
         case kPOLYGON:
         case kMULTIPOLYGON: {
-          CHECK_LT(i, input_buffer->getGeoStringBuffer()->size());
+          CHECK_LT(row_index, input_buffer->getGeoStringBuffer()->size());
           shard_output_buffers[col_idx]->addGeoString(
-              (*input_buffer->getGeoStringBuffer())[i]);
+              (*input_buffer->getGeoStringBuffer())[row_index]);
           break;
         }
         default:
@@ -2473,7 +2486,7 @@ void Loader::distributeToShards(std::vector<OneShardBuffers>& all_shard_import_b
     // when replicating a column, row count of a shard == replicate count of the column on
     // the shard
     if (getReplicating()) {
-      all_shard_row_counts[shard] = std::min<int64_t>(rows_left, rows_per_shard);
+      all_shard_row_counts[shard] = shard_tds[shard]->fragmenter->getNumRows();
     }
   }
 }

@@ -481,9 +481,50 @@ void BODY_F(MetadataUpdate, AlterAfterOptimize) {
                    ExecutorDeviceType::CPU);
   vacuum_and_recompute_metadata(td, *cat);
   run_op_per_fragment(td, check_fragment_metadata(1, 1, 2, false));
-  EXPECT_NO_THROW(run_ddl_statement("ALTER TABLE " + g_table_name + " ADD (id3 int);"));
+  // test ADD one column
+  EXPECT_NO_THROW(
+      run_ddl_statement("ALTER TABLE " + g_table_name + " ADD (c99 int default 99);"));
+  run_op_per_fragment(td, check_fragment_metadata(12, 99, 99, false));
+  // test ADD multiple columns
+  EXPECT_NO_THROW(run_ddl_statement("ALTER TABLE " + g_table_name +
+                                    " ADD (c88 int default 88, cnn int);"));
+  run_op_per_fragment(td, check_fragment_metadata(13, 88, 88, false));
+  run_op_per_fragment(td,
+                      check_fragment_metadata(14,
+                                              std::numeric_limits<int32_t>::max(),
+                                              std::numeric_limits<int32_t>::lowest(),
+                                              true));
 }
 
+void BODY_F(MetadataUpdate, AlterAfterEmptied) {
+  const auto cat = QR::get()->getCatalog();
+  const auto td = cat->getMetadataForTable(g_table_name, /*populateFragmenter=*/true);
+  run_multiple_agg("DELETE FROM  " + g_table_name + ";", ExecutorDeviceType::CPU);
+  vacuum_and_recompute_metadata(td, *cat);
+  run_op_per_fragment(td,
+                      check_fragment_metadata(1,
+                                              std::numeric_limits<int32_t>::max(),
+                                              std::numeric_limits<int32_t>::lowest(),
+                                              false));
+  // test ADD one column to make sure column is added even if no row exists
+  EXPECT_NO_THROW(
+      run_ddl_statement("ALTER TABLE " + g_table_name + " ADD (c99 int default 99);"));
+  run_op_per_fragment(td,
+                      check_fragment_metadata(12,
+                                              std::numeric_limits<int32_t>::max(),
+                                              std::numeric_limits<int32_t>::lowest(),
+                                              true));
+  // test ADD multiple columns
+  EXPECT_NO_THROW(run_ddl_statement("ALTER TABLE " + g_table_name +
+                                    " ADD (c88 int default 88, cnn int);"));
+  run_op_per_fragment(td, check_fragment_metadata(13, 88, 88, false));
+  run_op_per_fragment(td,
+                      check_fragment_metadata(14,
+                                              std::numeric_limits<int32_t>::max(),
+                                              std::numeric_limits<int32_t>::lowest(),
+                                              true));
+}
+TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, AlterAfterEmptied)
 TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, AlterAfterOptimize)
 TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, InitialMetadata)
 TEST_UNSHARDED_AND_SHARDED(MetadataUpdate, IntUpdate)

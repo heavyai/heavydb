@@ -3209,7 +3209,15 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                 return a->getColumnDesc()->columnId < b->getColumnDesc()->columnId;
               });
 
-    const auto nrows = td->fragmenter->getNumRows();
+    size_t nrows = td->fragmenter->getNumRows();
+    // if sharded, get total nrows from all sharded tables
+    if (td->nShards > 0) {
+      const auto physical_tds = catalog.getPhysicalTablesDescriptors(td);
+      nrows = 0;
+      std::for_each(physical_tds.begin(), physical_tds.end(), [&nrows](const auto& td) {
+        nrows += td->fragmenter->getNumRows();
+      });
+    }
     if (nrows > 0) {
       int skip_physical_cols = 0;
       for (const auto cit : cid_coldefs) {
