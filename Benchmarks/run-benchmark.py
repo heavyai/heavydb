@@ -903,8 +903,12 @@ if "mapd_db" in destinations:
             logging.exception("Error running table creation")
             exit(1)
     logging.info("Loading results into destination db")
-    dest_con.load_table(
-        dest_table, results_df, method="columnar", create=False
+    dest_con.load_table_columnar(
+        dest_table,
+        results_df,
+        preserve_index=False,
+        chunk_size_bytes=0,
+        col_names_from_schema=True,
     )
     dest_con.close()
 if "file_json" in destinations:
