@@ -630,7 +630,8 @@ llvm::Value* CodeGenerator::codegenBinOpWithOverflowCheck(
   // In case of null check we have to use NULL result on check fail
   if (null_check) {
     auto phi = cgen_state_->ir_builder_.CreatePHI(ret->getType(), 2);
-    phi->addIncoming(llvm::ConstantInt::get(ret->getType(), inline_int_null_val(ti)), null_check);
+    phi->addIncoming(llvm::ConstantInt::get(ret->getType(), inline_int_null_val(ti)),
+                     null_check);
     phi->addIncoming(ret, val_bb);
     ret = phi;
   }
