@@ -219,41 +219,15 @@ llvm::Value* CodeGenerator::codegenAdd(const Analyzer::BinOper* bin_oper,
       !checkExpressionRanges(bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
                              static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue());
-  llvm::BasicBlock* add_ok{nullptr};
-  llvm::BasicBlock* add_fail{nullptr};
+  llvm::Value* ret{nullptr};
   if (need_overflow_check) {
-    cgen_state_->needs_error_check_ = true;
-    add_ok =
-        llvm::BasicBlock::Create(cgen_state_->context_, "add_ok", cgen_state_->row_func_);
-    if (!null_check_suffix.empty()) {
-      codegenSkipOverflowCheckForNull(lhs_lv, rhs_lv, add_ok, ti);
-    }
-    add_fail = llvm::BasicBlock::Create(
-        cgen_state_->context_, "add_fail", cgen_state_->row_func_);
-    llvm::Value* detected{nullptr};
-    auto const_zero = llvm::ConstantInt::get(lhs_lv->getType(), 0, true);
-    auto overflow = cgen_state_->ir_builder_.CreateAnd(
-        cgen_state_->ir_builder_.CreateICmpSGT(lhs_lv, const_zero),
-        cgen_state_->ir_builder_.CreateICmpSGT(
-            rhs_lv, cgen_state_->ir_builder_.CreateSub(chosen_max, lhs_lv)));
-    auto underflow = cgen_state_->ir_builder_.CreateAnd(
-        cgen_state_->ir_builder_.CreateICmpSLT(lhs_lv, const_zero),
-        cgen_state_->ir_builder_.CreateICmpSLT(
-            rhs_lv, cgen_state_->ir_builder_.CreateSub(chosen_min, lhs_lv)));
-    detected = cgen_state_->ir_builder_.CreateOr(overflow, underflow);
-    cgen_state_->ir_builder_.CreateCondBr(detected, add_fail, add_ok);
-    cgen_state_->ir_builder_.SetInsertPoint(add_ok);
-  }
-  auto ret = null_check_suffix.empty()
-                 ? cgen_state_->ir_builder_.CreateAdd(lhs_lv, rhs_lv)
-                 : cgen_state_->emitCall(
-                       "add_" + null_typename + null_check_suffix,
-                       {lhs_lv, rhs_lv, cgen_state_->llInt(inline_int_null_val(ti))});
-  if (need_overflow_check) {
-    cgen_state_->ir_builder_.SetInsertPoint(add_fail);
-    cgen_state_->ir_builder_.CreateRet(
-        cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
-    cgen_state_->ir_builder_.SetInsertPoint(add_ok);
+    ret = codegenBinOpWithOverflowCheck(bin_oper, lhs_lv, rhs_lv, null_check_suffix, ti);
+  } else {
+    ret = null_check_suffix.empty()
+              ? cgen_state_->ir_builder_.CreateAdd(lhs_lv, rhs_lv)
+              : cgen_state_->emitCall(
+                    "add_" + null_typename + null_check_suffix,
+                    {lhs_lv, rhs_lv, cgen_state_->llInt(inline_int_null_val(ti))});
   }
   return ret;
 }
@@ -273,43 +247,15 @@ llvm::Value* CodeGenerator::codegenSub(const Analyzer::BinOper* bin_oper,
       !checkExpressionRanges(bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
                              static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue());
-  llvm::BasicBlock* sub_ok{nullptr};
-  llvm::BasicBlock* sub_fail{nullptr};
+  llvm::Value* ret;
   if (need_overflow_check) {
-    cgen_state_->needs_error_check_ = true;
-    sub_ok =
-        llvm::BasicBlock::Create(cgen_state_->context_, "sub_ok", cgen_state_->row_func_);
-    if (!null_check_suffix.empty()) {
-      codegenSkipOverflowCheckForNull(lhs_lv, rhs_lv, sub_ok, ti);
-    }
-    sub_fail = llvm::BasicBlock::Create(
-        cgen_state_->context_, "sub_fail", cgen_state_->row_func_);
-    llvm::Value* detected{nullptr};
-    auto const_zero = llvm::ConstantInt::get(lhs_lv->getType(), 0, true);
-    auto overflow = cgen_state_->ir_builder_.CreateAnd(
-        cgen_state_->ir_builder_.CreateICmpSLT(
-            rhs_lv, const_zero),  // sub going up, check the max
-        cgen_state_->ir_builder_.CreateICmpSGT(
-            lhs_lv, cgen_state_->ir_builder_.CreateAdd(chosen_max, rhs_lv)));
-    auto underflow = cgen_state_->ir_builder_.CreateAnd(
-        cgen_state_->ir_builder_.CreateICmpSGT(
-            rhs_lv, const_zero),  // sub going down, check the min
-        cgen_state_->ir_builder_.CreateICmpSLT(
-            lhs_lv, cgen_state_->ir_builder_.CreateAdd(chosen_min, rhs_lv)));
-    detected = cgen_state_->ir_builder_.CreateOr(overflow, underflow);
-    cgen_state_->ir_builder_.CreateCondBr(detected, sub_fail, sub_ok);
-    cgen_state_->ir_builder_.SetInsertPoint(sub_ok);
-  }
-  auto ret = null_check_suffix.empty()
-                 ? cgen_state_->ir_builder_.CreateSub(lhs_lv, rhs_lv)
-                 : cgen_state_->emitCall(
-                       "sub_" + null_typename + null_check_suffix,
-                       {lhs_lv, rhs_lv, cgen_state_->llInt(inline_int_null_val(ti))});
-  if (need_overflow_check) {
-    cgen_state_->ir_builder_.SetInsertPoint(sub_fail);
-    cgen_state_->ir_builder_.CreateRet(
-        cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
-    cgen_state_->ir_builder_.SetInsertPoint(sub_ok);
+    ret = codegenBinOpWithOverflowCheck(bin_oper, lhs_lv, rhs_lv, null_check_suffix, ti);
+  } else {
+    ret = null_check_suffix.empty()
+              ? cgen_state_->ir_builder_.CreateSub(lhs_lv, rhs_lv)
+              : cgen_state_->emitCall(
+                    "sub_" + null_typename + null_check_suffix,
+                    {lhs_lv, rhs_lv, cgen_state_->llInt(inline_int_null_val(ti))});
   }
   return ret;
 }
@@ -346,51 +292,17 @@ llvm::Value* CodeGenerator::codegenMul(const Analyzer::BinOper* bin_oper,
       !checkExpressionRanges(bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
                              static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue());
-  llvm::BasicBlock* mul_ok{nullptr};
-  llvm::BasicBlock* mul_fail{nullptr};
+  llvm::Value* ret{nullptr};
   if (need_overflow_check) {
-    cgen_state_->needs_error_check_ = true;
-    mul_ok =
-        llvm::BasicBlock::Create(cgen_state_->context_, "mul_ok", cgen_state_->row_func_);
-    if (!null_check_suffix.empty()) {
-      codegenSkipOverflowCheckForNull(lhs_lv, rhs_lv, mul_ok, ti);
-    }
-    mul_fail = llvm::BasicBlock::Create(
-        cgen_state_->context_, "mul_fail", cgen_state_->row_func_);
-    auto mul_check = llvm::BasicBlock::Create(
-        cgen_state_->context_, "mul_check", cgen_state_->row_func_);
-    auto const_zero = llvm::ConstantInt::get(rhs_lv->getType(), 0, true);
-    cgen_state_->ir_builder_.CreateCondBr(
-        cgen_state_->ir_builder_.CreateICmpEQ(rhs_lv, const_zero), mul_ok, mul_check);
-    cgen_state_->ir_builder_.SetInsertPoint(mul_check);
-    auto rhs_is_negative_lv = cgen_state_->ir_builder_.CreateICmpSLT(rhs_lv, const_zero);
-    auto positive_rhs_lv = cgen_state_->ir_builder_.CreateSelect(
-        rhs_is_negative_lv, cgen_state_->ir_builder_.CreateNeg(rhs_lv), rhs_lv);
-    auto adjusted_lhs_lv = cgen_state_->ir_builder_.CreateSelect(
-        rhs_is_negative_lv, cgen_state_->ir_builder_.CreateNeg(lhs_lv), lhs_lv);
-    auto detected = cgen_state_->ir_builder_.CreateOr(  // overflow
-        cgen_state_->ir_builder_.CreateICmpSGT(
-            adjusted_lhs_lv,
-            cgen_state_->ir_builder_.CreateSDiv(chosen_max, positive_rhs_lv)),
-        // underflow
-        cgen_state_->ir_builder_.CreateICmpSLT(
-            adjusted_lhs_lv,
-            cgen_state_->ir_builder_.CreateSDiv(chosen_min, positive_rhs_lv)));
-    cgen_state_->ir_builder_.CreateCondBr(detected, mul_fail, mul_ok);
-    cgen_state_->ir_builder_.SetInsertPoint(mul_ok);
+    ret = codegenBinOpWithOverflowCheck(bin_oper, lhs_lv, rhs_lv, null_check_suffix, ti);
+  } else {
+    ret = null_check_suffix.empty()
+              ? cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv)
+              : cgen_state_->emitCall(
+                    "mul_" + null_typename + null_check_suffix,
+                    {lhs_lv, rhs_lv, cgen_state_->llInt(inline_int_null_val(ti))});
   }
-  const auto ret =
-      null_check_suffix.empty()
-          ? cgen_state_->ir_builder_.CreateMul(lhs_lv, rhs_lv)
-          : cgen_state_->emitCall(
-                "mul_" + null_typename + null_check_suffix,
-                {lhs_lv, rhs_lv, cgen_state_->llInt(inline_int_null_val(ti))});
-  if (need_overflow_check) {
-    cgen_state_->ir_builder_.SetInsertPoint(mul_fail);
-    cgen_state_->ir_builder_.CreateRet(
-        cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
-    cgen_state_->ir_builder_.SetInsertPoint(mul_ok);
-  }
+
   return ret;
 }
 
@@ -658,5 +570,70 @@ llvm::Value* CodeGenerator::codegenUMinus(const Analyzer::UOper* uoper,
         cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
     cgen_state_->ir_builder_.SetInsertPoint(uminus_ok);
   }
+  return ret;
+}
+
+llvm::Value* CodeGenerator::codegenBinOpWithOverflowCheck(
+    const Analyzer::BinOper* bin_oper,
+    llvm::Value* lhs_lv,
+    llvm::Value* rhs_lv,
+    const std::string& null_check_suffix,
+    const SQLTypeInfo& ti) {
+  cgen_state_->needs_error_check_ = true;
+
+  std::string bb_prefix;
+  llvm::Intrinsic::ID fn_id;
+  switch (bin_oper->get_optype()) {
+    case kMINUS:
+      bb_prefix = "sub";
+      fn_id = llvm::Intrinsic::ssub_with_overflow;
+      break;
+    case kPLUS:
+      bb_prefix = "add";
+      fn_id = llvm::Intrinsic::sadd_with_overflow;
+      break;
+    case kMULTIPLY:
+      bb_prefix = "mul";
+      fn_id = llvm::Intrinsic::smul_with_overflow;
+      break;
+    default:
+      CHECK(false);
+  }
+
+  llvm::BasicBlock* check_ok = llvm::BasicBlock::Create(
+      cgen_state_->context_, bb_prefix + "_ok", cgen_state_->row_func_);
+  llvm::BasicBlock* check_fail = llvm::BasicBlock::Create(
+      cgen_state_->context_, bb_prefix + "_fail", cgen_state_->row_func_);
+  llvm::BasicBlock* null_check{nullptr};
+
+  if (!null_check_suffix.empty()) {
+    null_check = cgen_state_->ir_builder_.GetInsertBlock();
+    codegenSkipOverflowCheckForNull(lhs_lv, rhs_lv, check_ok, ti);
+  }
+
+  // Compute result and overflow flag
+  auto func =
+      llvm::Intrinsic::getDeclaration(cgen_state_->module_, fn_id, {lhs_lv->getType()});
+  auto ret_and_overflow = cgen_state_->ir_builder_.CreateCall(func, {lhs_lv, rhs_lv});
+  auto ret = cgen_state_->ir_builder_.CreateExtractValue(ret_and_overflow, {0});
+  auto overflow = cgen_state_->ir_builder_.CreateExtractValue(ret_and_overflow, {1});
+  auto val_bb = cgen_state_->ir_builder_.GetInsertBlock();
+
+  // Return error on overflow
+  cgen_state_->ir_builder_.CreateCondBr(overflow, check_fail, check_ok);
+  cgen_state_->ir_builder_.SetInsertPoint(check_fail);
+  cgen_state_->ir_builder_.CreateRet(
+      cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+
+  cgen_state_->ir_builder_.SetInsertPoint(check_ok);
+
+  // In case of null check we have to use NULL result on check fail
+  if (null_check) {
+    auto phi = cgen_state_->ir_builder_.CreatePHI(ret->getType(), 2);
+    phi->addIncoming(llvm::ConstantInt::get(ret->getType(), inline_int_null_val(ti)), null_check);
+    phi->addIncoming(ret, val_bb);
+    ret = phi;
+  }
+
   return ret;
 }

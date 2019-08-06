@@ -406,6 +406,12 @@ class CodeGenerator {
       const std::unordered_map<llvm::Value*, llvm::Value*>&,
       const CompilationOptions&);
 
+  llvm::Value* codegenBinOpWithOverflowCheck(const Analyzer::BinOper* bin_oper,
+                                             llvm::Value* lhs_lv,
+                                             llvm::Value* rhs_lv,
+                                             const std::string& null_check_suffix,
+                                             const SQLTypeInfo& ti);
+
   Executor* executor_;
 
  protected:
