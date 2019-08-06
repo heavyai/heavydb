@@ -645,7 +645,7 @@ func (fs ServeIndexOn404FileSystem) Open(name string) (http.File, error) {
 		}
 	}
 
-	if err != nil {
+	if err == nil {
 		if stat, statErr := file.Stat(); statErr != nil {
 			fs.Filename = stat.Name()
 		}
