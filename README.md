@@ -3,28 +3,28 @@ OmniSciDB (formerly MapD Core)
 
 OmniSciDB is an open source SQL-based, relational, columnar database engine. This project is specifically developed to harness the parallel processing power of graphics processing units (GPUs). OmniSciDB can query up to billions of rows in milliseconds, and benefits from the advantages that GPUs provide, such as parallelism or the ability to process in parallel, which can boost performance. OmniSciDB also uses multi-tiered memory caching, a Just-In-Time (JIT) query compilation framework and in-situ graphics rendering.
 
-To find out more, please check out the [OmniSci Website](https://www.omnisci.com) and the [OmniSciDB wiki](https://github.com/snowcrash007/omniscidb/wiki/).
+To find out more, please check out the [OmniSci Website](https://www.omnisci.com) and the [OmniSciDB wiki](https://github.com/omnisci/omniscidb/wiki/).
 
 # Quickstart
 
-- Install the dependencies mentioned in the [Dependencies](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Dependencies) page.
+- Install the dependencies mentioned in the [Dependencies](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Dependencies) page.
 - [Download and Install](#DownloadsandInstallationInstructions) the package.
 - Read up about [Usage and Configuration](#building)
-- Initialize servers [using a wrapper](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Documentation/_edit#starting-using-the-startomnisci-wrapper) or [manually](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Documentation/_edit#starting-manually)
+- Initialize servers [using a wrapper](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation/_edit#starting-using-the-startomnisci-wrapper) or [manually](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation/_edit#starting-manually)
 - [Load sample data.](#working-with-data) Sample sets can be found in the [Data Set Library](https://community.omnisci.com/browse/new-item2).
 - Perform a Sample Query
 
-For complete [download and installation instructions](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Documentation#downloads-and-installation-instructions), please visit the [Documentation](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Documentation) page.
+For complete [download and installation instructions](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#downloads-and-installation-instructions), please visit the [Documentation](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Documentation) page.
 
 ## Diving In
 
 - How-tos, code snippets and more on the [OmniSci Blog](https://www.omnisci.com/blog/)
-- [Tutorials & Demos](https://github.com/snowcrash007/omniscidb/wiki/Tutorials-&-Demos)
+- [Tutorials & Demos](https://github.com/omnisci/omniscidb/wiki/Tutorials-&-Demos)
 - Need a data set to practice with? Search the [Data Set Library](https://community.omnisci.com/browse/new-item2)
-- Video overview of the [Architecture](https://github.com/snowcrash007/omniscidb/wiki/Architecture#video-overview)
+- Video overview of the [Architecture](https://github.com/omnisci/omniscidb/wiki/Architecture#video-overview)
 
 ## Learn more
-| [OmniSciDB](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Overview) | [Documentation](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Documentation) | [Setup](https://github.com/snowcrash007/omniscidb/wiki/Setup) | [Community & Resources](https://github.com/snowcrash007/omniscidb/wiki/Community-&-Resources) |
+| [OmniSciDB](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Overview) | [Documentation](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation) | [Setup](https://github.com/omnisci/omniscidb/wiki/Setup) | [Community & Resources](https://github.com/omnisci/omniscidb/wiki/Community-&-Resources) |
 | -- | -- | --|--|
 | Overview of OmniSciDB| Developer Friendly Technical Documentation | Step-by-step getting started documentation | Important links, community resources and updates |
 
@@ -44,9 +44,9 @@ For complete [download and installation instructions](https://github.com/snowcra
 ***
 
 ## Partner Marketplaces
-Developers can also access OmniSciDB through the partner marketplaces. Easily find installation guides, videos, quickstarts and more important resources on how to set up OmniSciDB on public cloud providers such as [AWS](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Partners#aws), [Google Cloud Platform](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Partners#google-cloud-platform), [Azure](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Partners#azure), [Docker](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Partners#docker) and more on the [Partner](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Partners) page.
+Developers can also access OmniSciDB through the partner marketplaces. Easily find installation guides, videos, quickstarts and more important resources on how to set up OmniSciDB on public cloud providers such as [AWS](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Partners#aws), [Google Cloud Platform](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Partners#google-cloud-platform), [Azure](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Partners#azure), [Docker](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Partners#docker) and more on the [Partner](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Partners) page.
 
-Get more detailed download instructions, videos, resources and tutorials by visiting our [Downloads](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Downloads) page and [Documentation](https://github.com/snowcrash007/omniscidb/wiki/OmniSciDB-Documentation).
+Get more detailed download instructions, videos, resources and tutorials by visiting our [Downloads](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Downloads) page and [Documentation](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation).
 
 # Contributing
 Developers are encouraged to contribute to this Open Source project to expand and enhance OmniSciDB capabilities. Check out our Contributing page on the wiki! If you have questions and would like to connect with the maintainers of this open source project, please visit the official [online forum and community.](https://community.omnisci.com/home)
