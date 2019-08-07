@@ -233,7 +233,10 @@ class CodeGenerator {
       const bool fetch_column,
       const CompilationOptions& co);
 
-  llvm::Value* codegenIntArith(const Analyzer::BinOper*, llvm::Value*, llvm::Value*);
+  llvm::Value* codegenIntArith(const Analyzer::BinOper*,
+                               llvm::Value*,
+                               llvm::Value*,
+                               const CompilationOptions&);
 
   llvm::Value* codegenFpArith(const Analyzer::BinOper*, llvm::Value*, llvm::Value*);
 
@@ -265,14 +268,16 @@ class CodeGenerator {
                           llvm::Value*,
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
-                          const SQLTypeInfo&);
+                          const SQLTypeInfo&,
+                          const CompilationOptions&);
 
   llvm::Value* codegenSub(const Analyzer::BinOper*,
                           llvm::Value*,
                           llvm::Value*,
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
-                          const SQLTypeInfo&);
+                          const SQLTypeInfo&,
+                          const CompilationOptions&);
 
   void codegenSkipOverflowCheckForNull(llvm::Value* lhs_lv,
                                        llvm::Value* rhs_lv,
@@ -285,6 +290,7 @@ class CodeGenerator {
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
                           const SQLTypeInfo&,
+                          const CompilationOptions&,
                           bool downscale = true);
 
   llvm::Value* codegenDiv(llvm::Value*,
@@ -406,11 +412,14 @@ class CodeGenerator {
       const std::unordered_map<llvm::Value*, llvm::Value*>&,
       const CompilationOptions&);
 
-  llvm::Value* codegenBinOpWithOverflowCheck(const Analyzer::BinOper* bin_oper,
-                                             llvm::Value* lhs_lv,
-                                             llvm::Value* rhs_lv,
-                                             const std::string& null_check_suffix,
-                                             const SQLTypeInfo& ti);
+  llvm::Function* getArithWithOverflowFunction(const Analyzer::BinOper* bin_oper,
+                                               llvm::Type* type);
+
+  llvm::Value* codegenBinOpWithOverflowForCPU(const Analyzer::BinOper* bin_oper,
+                                              llvm::Value* lhs_lv,
+                                              llvm::Value* rhs_lv,
+                                              const std::string& null_check_suffix,
+                                              const SQLTypeInfo& ti);
 
   Executor* executor_;
 
