@@ -1629,7 +1629,6 @@ void Executor::dispatchFragments(
                                              rowid_lookup_key));
         };
     fragment_descriptor.assignFragsToMultiDispatch(multifrag_kernel_dispatch);
-
   } else {
     VLOG(1) << "Dispatching kernel per fragment";
     VLOG(1) << query_mem_desc.toString();

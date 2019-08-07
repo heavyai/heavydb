@@ -453,6 +453,9 @@ TPlanResult Calcite::processImpl(
   std::string catalog = cat.getCurrentDB().dbName;
 
   LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";
+  LOG(IR) << "SQL query\n" << sql_string << "\nEnd of SQL query";
+  LOG(PTX) << "SQL query\n" << sql_string << "\nEnd of SQL query";
+
   TPlanResult ret;
   if (server_available_) {
     try {

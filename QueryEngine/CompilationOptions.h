@@ -37,7 +37,7 @@ struct CompilationOptions {
 struct ExecutionOptions {
   const bool output_columnar_hint;
   const bool allow_multifrag;
-  const bool just_explain;
+  const bool just_explain;  // return the generated IR for the first step
   const bool allow_loop_joins;
   const bool with_watchdog;  // Per work unit, not global.
   const bool jit_debug;

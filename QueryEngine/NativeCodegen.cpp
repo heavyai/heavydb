@@ -726,6 +726,8 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
   const auto ptx =
       generatePTX(cuda_llir, gpu_target.nvptx_target_machine, gpu_target.cgen_state);
 
+  LOG(PTX) << "PTX for the GPU:\n" << ptx << "\nEnd of PTX";
+
   auto cubin_result = ptx_to_cubin(ptx, gpu_target.block_size, gpu_target.cuda_mgr);
   auto& option_keys = cubin_result.option_keys;
   auto& option_values = cubin_result.option_values;
@@ -1770,6 +1772,11 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
         serialize_llvm_object(query_func) + serialize_llvm_object(cgen_state_->row_func_);
   }
   verify_function_ir(cgen_state_->row_func_);
+
+  LOG(IR) << query_mem_desc->toString() << "\nGenerated IR\n"
+          << serialize_llvm_object(query_func)
+          << serialize_llvm_object(cgen_state_->row_func_) << "\nEnd of IR";
+
   return std::make_tuple(
       Executor::CompilationResult{
           co.device_type_ == ExecutorDeviceType::CPU
