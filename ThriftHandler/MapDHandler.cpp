@@ -4290,16 +4290,25 @@ SessionMap::iterator MapDHandler::get_session_it_unsafe(const TSessionId& sessio
   return session_it;
 }
 
-std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::get_session_copy_ptr(
+std::shared_ptr<const Catalog_Namespace::SessionInfo> MapDHandler::get_const_session_ptr(
     const TSessionId& session) {
+  if (session.empty()) {
+    return {};
+  }
   mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-  auto& session_info_ref = *get_session_it_unsafe(session)->second;
-  return std::make_shared<Catalog_Namespace::SessionInfo>(session_info_ref);
+  return get_session_it_unsafe(session)->second;
 }
 
 Catalog_Namespace::SessionInfo MapDHandler::get_session_copy(const TSessionId& session) {
   mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
   return *get_session_it_unsafe(session)->second;
+}
+
+std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::get_session_copy_ptr(
+    const TSessionId& session) {
+  mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
+  auto& session_info_ref = *get_session_it_unsafe(session)->second;
+  return std::make_shared<Catalog_Namespace::SessionInfo>(session_info_ref);
 }
 
 void MapDHandler::check_table_load_privileges(

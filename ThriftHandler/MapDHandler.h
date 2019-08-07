@@ -109,6 +109,9 @@ class MapDLeafHandler;
 
 enum GetTablesType { GET_PHYSICAL_TABLES_AND_VIEWS, GET_PHYSICAL_TABLES, GET_VIEWS };
 
+// Multiple concurrent requests for the same session can occur.  For that reason, each
+// request briefly takes a lock to make a copy of the appropriate SessionInfo object. Then
+// it releases the lock and uses the copy for the remainder of the request.
 using SessionMap = std::map<TSessionId, std::shared_ptr<Catalog_Namespace::SessionInfo>>;
 using permissionFuncPtr = bool (*)(const AccessPrivileges&, const TDBObjectPermissions&);
 using TableMap = std::map<std::string, bool>;
@@ -504,6 +507,14 @@ class MapDHandler : public MapDIf {
                               const bool get_physical);
   void check_read_only(const std::string& str);
   void check_session_exp_unsafe(const SessionMap::iterator& session_it);
+
+  // Use get_session_copy() or get_session_copy_ptr() instead of get_const_session_ptr()
+  // unless you know what you are doing. If you need to save a SessionInfo beyond the
+  // present Thrift call, then the safe way to do this is by saving the return value of
+  // get_const_session_ptr() as a std::weak_ptr.
+  // Returns empty std::shared_ptr if session.empty().
+  std::shared_ptr<const Catalog_Namespace::SessionInfo> get_const_session_ptr(
+      const TSessionId& session);
   SessionMap::iterator get_session_it_unsafe(const TSessionId& session);
   static void value_to_thrift_column(const TargetValue& tv,
                                      const SQLTypeInfo& ti,
@@ -696,6 +707,7 @@ class MapDHandler : public MapDIf {
                                  std::string base_path,
                                  std::string query_file_path);
 
+  friend class LogSession;
   friend class MapDRenderHandler;
   friend class MapDAggHandler;
   friend class MapDLeafHandler;
@@ -742,8 +754,8 @@ class MapDHandler : public MapDIf {
 //    with dur_ms = current age of LogSession object in milliseconds.
 // stdlog_begin is logged at DEBUG1 level, stdlog is logged at INFO level.
 // The only required parameter is session, which can be either:
-//  * std::shared_ptr<Catalog_Namespace::SessionInfo> - No locking is done.
-//  * TSessionId string - will call get_session_copy_ptr() to get shared_ptr.
+//  * std::shared_ptr<const Catalog_Namespace::SessionInfo> - No locking is done.
+//  * TSessionId string - will call get_const_session_ptr() to get shared_ptr.
 // All remaining optional parameters are name,value pairs that will be included in log.
 #define LOG_SESSION(session, ...) \
   LogSession log_session(*this, session, __FILE__, __LINE__, __func__, ##__VA_ARGS__)
@@ -754,7 +766,7 @@ class LogSession : boost::noncopyable {
   char const* const func_;
   std::list<std::string> name_value_pairs_;
   std::chrono::steady_clock::time_point const start_;
-  SessionMap::mapped_type session_ptr_;
+  std::shared_ptr<const Catalog_Namespace::SessionInfo> session_ptr_;
   static std::atomic<int64_t> s_match;
   int64_t const match_;  // Unique to each begin/end pair to match them together.
   template <typename... Pairs>
@@ -792,7 +804,7 @@ class LogSession : boost::noncopyable {
       : LogSession(file, line, func, std::forward<Pairs>(pairs)...) {
     if (!session_id.empty()) {
       try {
-        session_ptr_ = mh.get_session_copy_ptr(session_id);
+        session_ptr_ = mh.get_const_session_ptr(session_id);
       } catch (...) {
         session_ptr_.reset();
       }
