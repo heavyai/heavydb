@@ -10,7 +10,7 @@ To find out more, please check out the [OmniSci Website](https://www.omnisci.com
 - Install the dependencies mentioned in the [Dependencies](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Dependencies) page.
 - [Download and Install](#DownloadsandInstallationInstructions) the package.
 - Read up about [Usage and Configuration](#building)
-- Initialize servers [using a wrapper](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation/_edit#starting-using-the-startomnisci-wrapper) or [manually](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation/_edit#starting-manually)
+- Initialize servers [using a wrapper](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#starting-using-the-startomnisci-wrapper) or [manually](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#starting-manually)
 - [Load sample data.](#working-with-data) Sample sets can be found in the [Data Set Library](https://community.omnisci.com/browse/new-item2).
 - Perform a Sample Query
 
