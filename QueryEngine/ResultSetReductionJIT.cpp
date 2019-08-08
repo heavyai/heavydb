@@ -44,7 +44,7 @@ namespace {
 const int32_t WATCHDOG_ERROR{-1};
 // Use the LLVM interpreter, not the JIT, for a number of entries lower than the
 // threshold.
-const size_t INTERP_THRESHOLD{50};
+const size_t INTERP_THRESHOLD{0};
 
 // Make a shallow copy (just declarations) of the runtime module. Function definitions are
 // cloned only if they're used from the generated code.
@@ -574,6 +574,8 @@ ResultSetReductionJIT::ResultSetReductionJIT(const QueryMemoryDescriptor& query_
 //     reduce_func_idx(this_buff, that_buff, that_entry_index)
 
 ReductionCode ResultSetReductionJIT::codegen() const {
+  static std::mutex s_codegen_mutex;
+  std::lock_guard<std::mutex> s_codegen_guard(s_codegen_mutex);
   const auto hash_type = query_mem_desc_.getQueryDescriptionType();
   if (query_mem_desc_.didOutputColumnar() || !is_group_query(hash_type)) {
     return {};
