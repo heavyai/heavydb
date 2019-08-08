@@ -42,18 +42,9 @@
 #include <boost/config.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/log/common.hpp>
-#include <boost/log/expressions.hpp>
-#include <boost/log/sinks.hpp>
-#include <boost/log/sources/global_logger_storage.hpp>
-#include <boost/log/sources/logger.hpp>
-#include <boost/log/sources/severity_feature.hpp>
-#include <boost/log/support/date_time.hpp>
-#include <boost/log/utility/setup.hpp>
-#include <boost/phoenix.hpp>
 #include <boost/program_options.hpp>
 
-#include <atomic>
-#include <mutex>
+#include <memory>
 #include <set>
 
 #endif
@@ -106,18 +97,12 @@ static_assert(Severity::_NSEVERITIES == SeveritySymbols.size(),
 
 #ifndef __CUDACC__
 
-namespace attr = boost::log::attributes;
-namespace expr = boost::log::expressions;
-namespace keywords = boost::log::keywords;
-namespace sinks = boost::log::sinks;
-namespace sources = boost::log::sources;
-namespace po = boost::program_options;
 using Channels = std::set<Channel>;
 
 // Filled by boost::program_options
 class LogOptions {
   std::string base_path_{"."};  // ignored if log_dir_ is absolute.
-  po::options_description options_;
+  boost::program_options::options_description options_;
 
  public:
   // Initialize to default values
@@ -136,7 +121,7 @@ class LogOptions {
 
   LogOptions(char const* argv0);
   boost::filesystem::path full_log_dir() const;
-  po::options_description const& get_options() const;
+  boost::program_options::options_description const& get_options() const;
   void parse_command_line(int, char const* const*);
   void set_base_path(std::string const& base_path);
 };
@@ -163,45 +148,22 @@ using SeverityLogger = boost::log::sources::severity_logger_mt<Severity>;
 BOOST_LOG_GLOBAL_LOGGER(gSeverityLogger, SeverityLogger)
 
 // Lifetime of Logger is each call to LOG().
-template <typename TAG, TAG tag>
 class Logger {
+  bool const is_channel_;
+  int const enum_value_;
   // Pointers are used to minimize size of inline objects.
   std::unique_ptr<boost::log::record> record_;
   std::unique_ptr<boost::log::record_ostream> stream_;
 
-  inline auto makeUniqueRecord(Channel channel) {
-    return std::make_unique<boost::log::record>(
-        gChannelLogger::get().open_record(boost::log::keywords::channel = channel));
-  }
-  inline auto makeUniqueRecord(Severity severity) {
-    return std::make_unique<boost::log::record>(
-        gSeverityLogger::get().open_record(boost::log::keywords::severity = severity));
-  }
-  inline auto getLogger(Channel) { return gChannelLogger::get(); }
-  inline auto getLogger(Severity) { return gSeverityLogger::get(); }
-
  public:
-  Logger() : record_{makeUniqueRecord(tag)} {
-    if (*record_) {
-      stream_ = std::make_unique<boost::log::record_ostream>(*record_);
-    }
-  }
+  Logger(Channel);
+  Logger(Severity);
   Logger(Logger&&) = default;
-  ~Logger() {
-    if (stream_) {
-      getLogger(tag).push_record(boost::move(stream_->get_record()));
-    }
-  }
-  inline operator bool() const { return static_cast<bool>(stream_); }
+  ~Logger();
+  operator bool() const;
   // Must check operator bool() first before calling stream().
-  boost::log::record_ostream& stream(char const* file, int line) {
-    return *stream_ << boost::filesystem::path(file).filename().native() << ':' << line
-                    << ' ';
-  }
+  boost::log::record_ostream& stream(char const* file, int line);
 };
-
-template <>
-BOOST_NORETURN Logger<Severity, Severity::FATAL>::~Logger();
 
 inline bool fast_logging_check(Channel) {
   extern bool g_any_active_channels;
@@ -217,9 +179,9 @@ inline bool fast_logging_check(Severity severity) {
 // which are fortunately prevented by our clang-tidy requirements.
 // These can be changed to for/while loops with slight performance degradation.
 
-#define LOG(tag)                                                                      \
-  if (logger::fast_logging_check(logger::tag))                                        \
-    if (auto _omnisci_logger_ = logger::Logger<decltype(logger::tag), logger::tag>()) \
+#define LOG(tag)                                             \
+  if (logger::fast_logging_check(logger::tag))               \
+    if (auto _omnisci_logger_ = logger::Logger(logger::tag)) \
   _omnisci_logger_.stream(__FILE__, __LINE__)
 
 #define CHECK(condition)            \

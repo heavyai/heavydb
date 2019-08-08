@@ -20,12 +20,29 @@
 #include "StringTransform.h"
 
 #include <boost/algorithm/string.hpp>
+#include <boost/log/expressions.hpp>
+#include <boost/log/sinks.hpp>
+#include <boost/log/sources/global_logger_storage.hpp>
+#include <boost/log/sources/logger.hpp>
+#include <boost/log/sources/severity_feature.hpp>
+#include <boost/log/support/date_time.hpp>
+#include <boost/log/utility/setup.hpp>
+#include <boost/phoenix.hpp>
 
+#include <atomic>
 #include <cstdlib>
 #include <iostream>
+#include <mutex>
 #include <regex>
 
 namespace logger {
+
+namespace attr = boost::log::attributes;
+namespace expr = boost::log::expressions;
+namespace keywords = boost::log::keywords;
+namespace sinks = boost::log::sinks;
+namespace sources = boost::log::sources;
+namespace po = boost::program_options;
 
 BOOST_LOG_ATTRIBUTE_KEYWORD(process_id, "ProcessID", attr::current_process_id::value_type)
 BOOST_LOG_ATTRIBUTE_KEYWORD(channel, "Channel", Channel)
@@ -222,20 +239,6 @@ boost::shared_ptr<FILE_SINK> make_sink(LogOptions const& log_opts,
 std::atomic<FatalFunc> g_fatal_func{nullptr};
 std::once_flag g_fatal_func_flag;
 
-template <>
-BOOST_NORETURN Logger<Severity, Severity::FATAL>::~Logger() {
-  if (stream_) {
-    gSeverityLogger::get().push_record(
-        boost::move(stream_->get_record()));  // flushes stream first
-  }
-  if (FatalFunc fatal_func = g_fatal_func.load()) {
-    // set_once_fatal_func() prevents race condition.
-    // Exceptions thrown by (*fatal_func)() are propagated here.
-    std::call_once(g_fatal_func_flag, *fatal_func);
-  }
-  abort();  // SIGABRT will be caught by MapDServer.cpp's signal handler
-}
-
 using ClogSync = sinks::synchronous_sink<sinks::text_ostream_backend>;
 using FileSync = sinks::synchronous_sink<sinks::text_file_backend>;
 
@@ -336,6 +339,53 @@ std::istream& operator>>(std::istream& in, Severity& sev) {
 // Used by boost::program_options when stringifying enum Severity.
 std::ostream& operator<<(std::ostream& out, Severity const& sev) {
   return out << SeverityNames.at(sev);
+}
+
+Logger::Logger(Channel channel)
+    : is_channel_(true)
+    , enum_value_(channel)
+    , record_(std::make_unique<boost::log::record>(
+          gChannelLogger::get().open_record(boost::log::keywords::channel = channel))) {
+  if (*record_) {
+    stream_ = std::make_unique<boost::log::record_ostream>(*record_);
+  }
+}
+
+Logger::Logger(Severity severity)
+    : is_channel_(false)
+    , enum_value_(severity)
+    , record_(std::make_unique<boost::log::record>(gSeverityLogger::get().open_record(
+          boost::log::keywords::severity = severity))) {
+  if (*record_) {
+    stream_ = std::make_unique<boost::log::record_ostream>(*record_);
+  }
+}
+
+Logger::~Logger() {
+  if (stream_) {
+    if (is_channel_) {
+      gChannelLogger::get().push_record(boost::move(stream_->get_record()));
+    } else {
+      gSeverityLogger::get().push_record(boost::move(stream_->get_record()));
+    }
+  }
+  if (!is_channel_ && static_cast<Severity>(enum_value_) == Severity::FATAL) {
+    if (FatalFunc fatal_func = g_fatal_func.load()) {
+      // set_once_fatal_func() prevents race condition.
+      // Exceptions thrown by (*fatal_func)() are propagated here.
+      std::call_once(g_fatal_func_flag, *fatal_func);
+    }
+    abort();
+  }
+}
+
+Logger::operator bool() const {
+  return static_cast<bool>(stream_);
+}
+
+boost::log::record_ostream& Logger::stream(char const* file, int line) {
+  return *stream_ << boost::filesystem::path(file).filename().native() << ':' << line
+                  << ' ';
 }
 
 }  // namespace logger
