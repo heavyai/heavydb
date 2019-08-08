@@ -73,8 +73,7 @@ class SessionInfo {
       , session_id_(sid)
       , last_used_time_(time(0))
       , start_time_(time(0))
-      , public_session_id_(public_session_id())
-      , is_in_use_(false) {}
+      , public_session_id_(public_session_id()) {}
   SessionInfo(std::shared_ptr<Catalog> cat,
               const UserMetadata& user,
               const ExecutorDeviceType t,
@@ -86,8 +85,7 @@ class SessionInfo {
       , currentUser_(s.currentUser_)
       , executor_device_type_(static_cast<ExecutorDeviceType>(s.executor_device_type_))
       , session_id_(s.session_id_)
-      , public_session_id_(s.public_session_id_)
-      , is_in_use_(false) {}
+      , public_session_id_(s.public_session_id_) {}
   MapDHandler* get_mapdHandler() const { return mapdHandler_.get(); }
   Catalog& getCatalog() const { return *catalog_; }
   std::shared_ptr<Catalog> get_catalog_ptr() const { return catalog_; }
@@ -108,8 +106,6 @@ class SessionInfo {
   time_t get_start_time() const { return start_time_; }
   std::string const& get_public_session_id() const { return public_session_id_; }
   operator std::string() const { return public_session_id_; }
-  bool is_session_in_use() const { return is_in_use_; }
-  void update_session_in_use(const bool in_use) { is_in_use_ = in_use; };
 
  private:
   std::shared_ptr<MapDHandler> mapdHandler_;
@@ -121,7 +117,6 @@ class SessionInfo {
   std::atomic<time_t> start_time_;      // for invalidating session after tolerance period
   const std::string public_session_id_;
   std::string public_session_id() const;
-  std::atomic<bool> is_in_use_;  // for SessionInfo currently involved in execution
 };
 
 std::ostream& operator<<(std::ostream& os, const SessionInfo& session_info);

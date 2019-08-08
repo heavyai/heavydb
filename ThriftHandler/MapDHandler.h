@@ -784,7 +784,6 @@ class LogSession : boost::noncopyable {
   }
   void stdlog(logger::Severity, char const* label);
   void update_session_last_used_duration();
-  void update_session_in_use(const bool in_use);
 
  public:
   template <typename... Pairs>
@@ -796,7 +795,6 @@ class LogSession : boost::noncopyable {
              Pairs&&... pairs)
       : LogSession(file, line, func, std::forward<Pairs>(pairs)...) {
     session_ptr_ = session_ptr;
-    update_session_in_use(true);
     stdlog(logger::Severity::DEBUG1, "stdlog_begin");
   }
   template <typename... Pairs>
@@ -808,7 +806,6 @@ class LogSession : boost::noncopyable {
              Pairs&&... pairs)
       : LogSession(file, line, func, std::forward<Pairs>(pairs)...) {
     session_ptr_ = mh.get_session_ptr(session_id);
-    update_session_in_use(true);
     stdlog(logger::Severity::DEBUG1, "stdlog_begin");
   }
   ~LogSession();
