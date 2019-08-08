@@ -28,7 +28,6 @@
 #include "TestHelpers.h"
 
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000
-#include <cuda_runtime.h>
 #include <thrust/system_error.h>
 #endif
 

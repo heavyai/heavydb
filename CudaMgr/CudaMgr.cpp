@@ -15,7 +15,6 @@
  */
 
 #include "CudaMgr.h"
-#include <cuda_runtime.h>
 #include <algorithm>
 #include <cassert>
 #include <iostream>
@@ -136,7 +135,7 @@ void CudaMgr::unloadGpuModuleData(CUmodule* module, const int device_id) const {
 
 void CudaMgr::fillDeviceProperties() {
   device_properties_.resize(device_count_);
-  cudaDriverGetVersion(&gpu_driver_version_);
+  cuDriverGetVersion(&gpu_driver_version_);
   for (int device_num = 0; device_num < device_count_; ++device_num) {
     checkError(
         cuDeviceGet(&device_properties_[device_num].device, device_num + start_gpu_));

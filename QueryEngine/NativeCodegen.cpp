@@ -621,16 +621,23 @@ std::map<std::string, std::string> get_device_parameters() {
   }
 
 #ifdef HAVE_CUDA
-  int devCount;
-  cudaGetDeviceCount(&devCount);
-  if (devCount) {
-    cudaDeviceProp props;
-    cudaGetDeviceProperties(&props, 0);  // assuming homogeneous multi-GPU system
-    result.insert(std::make_pair("gpu_name", props.name));
-    result.insert(std::make_pair("gpu_count", std::to_string(devCount)));
-    result.insert(
-        std::make_pair("gpu_compute_capability",
-                       std::to_string(props.major) + "." + std::to_string(props.minor)));
+  int device_count = 0;
+  checkCudaErrors(cuDeviceGetCount(&device_count));
+  if (device_count) {
+    CUdevice device{};
+    char device_name[256];
+    int major = 0, minor = 0;
+    checkCudaErrors(cuDeviceGet(&device, 0));  // assuming homogeneous multi-GPU system
+    checkCudaErrors(cuDeviceGetName(device_name, 256, device));
+    checkCudaErrors(cuDeviceGetAttribute(
+        &major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, device));
+    checkCudaErrors(cuDeviceGetAttribute(
+        &minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, device));
+
+    result.insert(std::make_pair("gpu_name", device_name));
+    result.insert(std::make_pair("gpu_count", std::to_string(device_count)));
+    result.insert(std::make_pair("gpu_compute_capability",
+                                 std::to_string(major) + "." + std::to_string(minor)));
     result.insert(std::make_pair("gpu_triple", get_gpu_target_triple_string()));
     result.insert(std::make_pair("gpu_datalayout", get_gpu_data_layout()));
   }

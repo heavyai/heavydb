@@ -23,7 +23,6 @@
 #include <vector>
 #ifdef HAVE_CUDA
 #include <cuda.h>
-#include <cuda_runtime.h>
 #else
 #include "../Shared/nocuda.h"
 #endif  // HAVE_CUDA
