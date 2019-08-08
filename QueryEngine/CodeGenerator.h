@@ -412,9 +412,15 @@ class CodeGenerator {
       const std::unordered_map<llvm::Value*, llvm::Value*>&,
       const CompilationOptions&);
 
-  llvm::Function* getArithWithOverflowFunction(const Analyzer::BinOper* bin_oper,
-                                               llvm::Type* type);
+  // Return LLVM intrinsic providing fast arithmetic with overflow check
+  // for the given binary operation.
+  llvm::Function* getArithWithOverflowIntrinsic(const Analyzer::BinOper* bin_oper,
+                                                llvm::Type* type);
 
+  // Generate code for the given binary operation with overflow check.
+  // Signed integer add, sub and mul operations are supported. Overflow
+  // check is performed using LLVM arithmetic intrinsics which are not
+  // supported for GPU. Return the IR value which holds operation result.
   llvm::Value* codegenBinOpWithOverflowForCPU(const Analyzer::BinOper* bin_oper,
                                               llvm::Value* lhs_lv,
                                               llvm::Value* rhs_lv,

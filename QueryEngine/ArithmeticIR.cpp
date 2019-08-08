@@ -686,7 +686,7 @@ llvm::Value* CodeGenerator::codegenUMinus(const Analyzer::UOper* uoper,
   return ret;
 }
 
-llvm::Function* CodeGenerator::getArithWithOverflowFunction(
+llvm::Function* CodeGenerator::getArithWithOverflowIntrinsic(
     const Analyzer::BinOper* bin_oper,
     llvm::Type* type) {
   llvm::Intrinsic::ID fn_id{llvm::Intrinsic::not_intrinsic};
@@ -727,7 +727,7 @@ llvm::Value* CodeGenerator::codegenBinOpWithOverflowForCPU(
   }
 
   // Compute result and overflow flag
-  auto func = getArithWithOverflowFunction(bin_oper, lhs_lv->getType());
+  auto func = getArithWithOverflowIntrinsic(bin_oper, lhs_lv->getType());
   auto ret_and_overflow = cgen_state_->ir_builder_.CreateCall(func, {lhs_lv, rhs_lv});
   auto ret = cgen_state_->ir_builder_.CreateExtractValue(ret_and_overflow, {0});
   auto overflow = cgen_state_->ir_builder_.CreateExtractValue(ret_and_overflow, {1});
