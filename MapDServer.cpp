@@ -30,6 +30,7 @@
 
 #include "MapDRelease.h"
 
+#include "Archive/S3Archive.h"
 #include "Shared/Logger.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/file_delete.h"
@@ -982,6 +983,12 @@ int main(int argc, char** argv) {
   // be aware that atexit() functions run in reverse order
   atexit(&logger::shutdown);
   atexit(&shutdown_handler);
+
+#ifdef HAVE_AWS_S3
+  // hold a s3 archive here to survive from a segfault that happens on centos
+  // when s3 transactions and others openssl-ed sessions are interleaved...
+  auto s3_survivor = std::make_unique<S3Archive>("s3://omnisci/s3_survivor.txt", true);
+#endif
 
   // start background thread to clean up _DELETE_ME files
   const unsigned int wait_interval =

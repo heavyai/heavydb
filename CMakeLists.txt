@@ -328,6 +328,10 @@ add_subdirectory(ThirdParty/sqlite3)
 find_package(RdKafka REQUIRED)
 include_directories(${RdKafka_INCLUDE_DIRS})
 
+# libarchive
+find_package(LibArchive REQUIRED)
+include_directories(${LibArchive_INCLUDE_DIRS})
+
 # aws-sdk
 option(ENABLE_AWS_S3 "Enable AWS S3 support" ON)
 if(ENABLE_AWS_S3)

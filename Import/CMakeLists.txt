@@ -1,7 +1,3 @@
-find_package(LibArchive REQUIRED)
-
-include_directories(${LibArchive_INCLUDE_DIRS})
-
 if(ENABLE_AWS_S3)
   include_directories(${LibAwsS3_INCLUDE_DIRS})
   list(APPEND IMPORT_LIBRARIES "${LibAwsS3_LIBRARIES}")
