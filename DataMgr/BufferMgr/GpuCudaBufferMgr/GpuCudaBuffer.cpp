@@ -39,10 +39,6 @@ void GpuCudaBuffer::readData(int8_t* const dst,
     cudaMgr_->copyDeviceToHost(
         dst, mem_ + offset, numBytes, deviceId_);  // need to replace 0 with gpu num
   } else if (dstBufferType == GPU_LEVEL) {
-    //@todo fill this in
-    // CudaUtils::copyGpuToGpu(dst, mem_ + offset, numBytes, 1, dst->getDeviceId());
-    //@todo, populate device id
-    // CudaUtils::copyGpuToGpu(dst, mem_ + offset, numBytes, 1, 0);
     cudaMgr_->copyDeviceToDevice(dst, mem_ + offset, numBytes, dstDeviceId, deviceId_);
 
   } else {
@@ -65,8 +61,6 @@ void GpuCudaBuffer::writeData(int8_t* const src,
     // std::cout << "Writing to GPU from source GPU" << std::endl;
     assert(srcDeviceId >= 0);
     cudaMgr_->copyDeviceToDevice(mem_ + offset, src, numBytes, deviceId_, srcDeviceId);
-    // CudaUtils::copyGpuToGpu(mem_ + offset, src, numBytes, 1, deviceId_);
-    //@todo fill this in
   } else {
     LOG(FATAL) << "Unsupported buffer type";
   }
