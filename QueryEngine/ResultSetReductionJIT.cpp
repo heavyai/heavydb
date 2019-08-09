@@ -38,6 +38,8 @@ extern std::unique_ptr<llvm::Module> g_rt_module;
 
 CodeCache ResultSetReductionJIT::s_code_cache(10000);
 
+std::mutex ReductionCode::s_reduction_mutex;
+
 namespace {
 
 // Error code to be returned when the watchdog timer triggers during the reduction.
@@ -572,8 +574,7 @@ ResultSetReductionJIT::ResultSetReductionJIT(const QueryMemoryDescriptor& query_
 //     reduce_func_idx(this_buff, that_buff, that_entry_index)
 
 ReductionCode ResultSetReductionJIT::codegen() const {
-  static std::mutex s_codegen_mutex;
-  std::lock_guard<std::mutex> s_codegen_guard(s_codegen_mutex);
+  std::lock_guard<std::mutex> reduction_guard(ReductionCode::s_reduction_mutex);
   const auto hash_type = query_mem_desc_.getQueryDescriptionType();
   if (query_mem_desc_.didOutputColumnar() || !is_group_query(hash_type)) {
     return {};

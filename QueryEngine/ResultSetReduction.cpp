@@ -150,8 +150,7 @@ void run_reduction_code(const ReductionCode& reduction_code,
                                   that_qmd,
                                   serialized_varlen_buffer);
   } else {
-    static std::mutex s_interp_lock;
-    std::lock_guard<std::mutex> s_interp_guard(s_interp_lock);
+    std::lock_guard<std::mutex> reduction_guard(ReductionCode::s_reduction_mutex);
     auto start_entry_index_gv = llvm::GenericValue();
     start_entry_index_gv.IntVal = llvm::APInt(32, start_entry_index);
     auto end_entry_index_gv = llvm::GenericValue();
@@ -1195,7 +1194,7 @@ ResultSet* ResultSetManager::reduce(std::vector<ResultSet*>& result_sets) {
   ResultSetReductionJIT reduction_jit(result_rs->getQueryMemDesc(),
                                       result_rs->getTargetInfos(),
                                       result_rs->getTargetInitVals());
-  const auto reduction_code = reduction_jit.codegen();
+  auto reduction_code = reduction_jit.codegen();
 #else
   ReductionCode reduction_code{};
 #endif  // WITH_REDUCTION_JIT
