@@ -26,6 +26,7 @@
 #include "Shared/mapdpath.h"
 
 #include <llvm/Bitcode/BitcodeReader.h>
+#include <llvm/ExecutionEngine/Interpreter.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>
