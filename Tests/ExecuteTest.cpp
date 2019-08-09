@@ -1477,6 +1477,17 @@ TEST(Select, Arrays) {
     compare_array(run_simple_agg("SELECT arr6_bool FROM array_test WHERE x = 8;", dt),
                   std::vector<int64_t>({1, 0, 1, 0, 1, 0}));
 
+    SKIP_ON_AGGREGATOR(
+        compare_array(
+            run_simple_agg(
+                "SELECT ARRAY[1,2,3,5] from array_test WHERE x = 8 limit 8675309;", dt),
+            std::vector<int64_t>({1, 2, 3, 5})););
+    SKIP_ON_AGGREGATOR(compare_array(
+        run_simple_agg("SELECT ARRAY[2*arr3_i32[1],2*arr3_i32[2],2*arr3_i32[3]] FROM "
+                       "array_test a WHERE x = 8 limit 31337;",
+                       dt),
+        std::vector<int64_t>({40, 60, 80})));
+
     // Simple non-lazy projection
     compare_array(
         run_simple_agg("SELECT arr_i16 FROM array_test WHERE arr_i16[1] = 2;", dt),

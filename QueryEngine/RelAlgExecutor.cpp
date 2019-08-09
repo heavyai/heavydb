@@ -1300,9 +1300,6 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
   const auto work_unit = createCompoundWorkUnit(
       compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   CompilationOptions co_compound = co;
-  if (work_unit.exe_unit.query_features.isCPUOnlyExecutionRequired()) {
-    co_compound.device_type_ = ExecutorDeviceType::CPU;
-  }
   return executeWorkUnit(work_unit,
                          compound->getOutputMetainfo(),
                          compound->isAggregate(),
@@ -1350,9 +1347,6 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
   auto work_unit =
       createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   CompilationOptions co_project = co;
-  if (work_unit.exe_unit.query_features.isCPUOnlyExecutionRequired()) {
-    co_project.device_type_ = ExecutorDeviceType::CPU;
-  }
   if (project->isSimple()) {
     CHECK_EQ(size_t(1), project->inputCount());
     const auto input_ra = project->getInput(0);
@@ -1730,7 +1724,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
            source_exe_unit.target_exprs,
            nullptr,
            {sort_info.order_entries, sort_algorithm, limit, offset},
-           scan_total_limit},
+           scan_total_limit,
+           source_exe_unit.query_features},
           source,
           max_groups_buffer_entry_guess,
           std::move(source_work_unit.query_rewriter),
@@ -2561,8 +2556,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
                                         nullptr,
                                         sort_info,
                                         0,
-                                        false,
-                                        query_features};
+                                        query_features,
+                                        false};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta =
@@ -2637,8 +2632,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                         nullptr,
                                         sort_info,
                                         0,
-                                        false,
-                                        query_features};
+                                        query_features,
+                                        false};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(compound, rewritten_exe_unit.target_exprs);
@@ -2887,8 +2882,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
            nullptr,
            sort_info,
            0,
-           false,
-           query_features},
+           query_features,
+           false},
           aggregate,
           max_groups_buffer_entry_default_guess,
           nullptr};
@@ -2968,8 +2963,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
            nullptr,
            sort_info,
            0,
-           false,
-           query_features},
+           query_features,
+           false},
           project,
           max_groups_buffer_entry_default_guess,
           nullptr};
@@ -3035,8 +3030,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
                                         nullptr,
                                         sort_info,
                                         0,
-                                        false,
-                                        query_features};
+                                        query_features,
+                                        false};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(project, rewritten_exe_unit.target_exprs);

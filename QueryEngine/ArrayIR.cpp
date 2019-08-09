@@ -115,6 +115,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
   if (array_expr->isLocalAlloc()) {
     allocated_target_buffer = ir_builder.CreateAlloca(array_type);
   } else {
+    if (co.device_type_ == ExecutorDeviceType::GPU) {
+      throw QueryMustRunOnCpu();
+    }
+
     allocated_target_buffer =
         cgen_state_->emitExternalCall("allocate_varlen_buffer",
                                       llvm::Type::getInt8PtrTy(cgen_state_->context_),
