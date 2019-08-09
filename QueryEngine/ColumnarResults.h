@@ -57,6 +57,14 @@ class ColumnarResults {
     return target_types_[col_id];
   }
 
+  template <typename EntryT>
+  EntryT getEntryAt(const size_t row_idx, const size_t column_idx) const;
+
+  void setParallelConversion(const bool is_parallel) {
+    parallel_conversion_ = is_parallel;
+  }
+  bool isParallelConversion() const { return parallel_conversion_; }
+
  private:
   ColumnarResults(const size_t num_rows, const std::vector<SQLTypeInfo>& target_types)
       : num_rows_(num_rows), target_types_(target_types) {}
@@ -74,6 +82,7 @@ class ColumnarResults {
   std::vector<const int8_t*> column_buffers_;
   size_t num_rows_;
   const std::vector<SQLTypeInfo> target_types_;
+  bool parallel_conversion_;  // multi-threaded execution of columnar conversion
 };
 
 typedef std::

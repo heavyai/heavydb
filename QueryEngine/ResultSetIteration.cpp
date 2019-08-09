@@ -117,7 +117,7 @@ std::vector<TargetValue> ResultSet::getRowAt(
     const bool translate_strings,
     const bool decimal_to_double,
     const bool fixup_count_distinct_pointers,
-    const bool skip_non_lazy_columns /* = false*/) const {
+    const std::vector<bool>& targets_to_skip /* = {}*/) const {
   const auto storage_lookup_result =
       fixup_count_distinct_pointers
           ? StorageLookupResult{storage_.get(), global_entry_idx, 0}
@@ -147,9 +147,8 @@ std::vector<TargetValue> ResultSet::getRowAt(
   for (size_t target_idx = 0; target_idx < storage_->targets_.size(); ++target_idx) {
     const auto& agg_info = storage_->targets_[target_idx];
     if (query_mem_desc_.didOutputColumnar()) {
-      if (skip_non_lazy_columns) {
-        row.push_back(!lazy_fetch_info_.empty() &&
-                              lazy_fetch_info_[target_idx].is_lazily_fetched
+      if (!targets_to_skip.empty()) {
+        row.push_back(!targets_to_skip[target_idx]
                           ? getTargetValueFromBufferColwise(crt_col_ptr,
                                                             keys_ptr,
                                                             storage->query_mem_desc_,
@@ -256,13 +255,13 @@ std::vector<TargetValue> ResultSet::getRowAt(const size_t logical_index) const {
 
 std::vector<TargetValue> ResultSet::getRowAtNoTranslations(
     const size_t logical_index,
-    const bool skip_non_lazy_columns /* = false*/) const {
+    const std::vector<bool>& targets_to_skip /* = {}*/) const {
   if (logical_index >= entryCount()) {
     return {};
   }
   const auto entry_idx =
       permutation_.empty() ? logical_index : permutation_[logical_index];
-  return getRowAt(entry_idx, false, false, false, skip_non_lazy_columns);
+  return getRowAt(entry_idx, false, false, false, targets_to_skip);
 }
 
 bool ResultSet::isRowAtEmpty(const size_t logical_index) const {

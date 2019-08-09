@@ -48,7 +48,8 @@ ColumnarResults::ColumnarResults(
     , num_rows_(use_parallel_algorithms(rows) || rows.isFastColumnarConversionPossible()
                     ? rows.entryCount()
                     : rows.rowCount())
-    , target_types_(target_types) {
+    , target_types_(target_types)
+    , parallel_conversion_(use_parallel_algorithms(rows)) {
   column_buffers_.resize(num_columns);
   for (size_t i = 0; i < num_columns; ++i) {
     const bool is_varlen = target_types[i].is_array() ||
@@ -73,7 +74,7 @@ ColumnarResults::ColumnarResults(
   if (rows.isFastColumnarConversionPossible() && rows.entryCount() > 0) {
     materializeAllColumns(rows, num_columns);
   } else {
-    if (use_parallel_algorithms(rows)) {
+    if (isParallelConversion()) {
       const size_t worker_count = cpu_threads();
       std::vector<std::future<void>> conversion_threads;
       const auto entry_count = rows.entryCount();
@@ -123,7 +124,10 @@ ColumnarResults::ColumnarResults(
     const int8_t* one_col_buffer,
     const size_t num_rows,
     const SQLTypeInfo& target_type)
-    : column_buffers_(1), num_rows_(num_rows), target_types_{target_type} {
+    : column_buffers_(1)
+    , num_rows_(num_rows)
+    , target_types_{target_type}
+    , parallel_conversion_(false) {
   const bool is_varlen =
       target_type.is_array() ||
       (target_type.is_string() && target_type.get_compression() == kENCODING_NONE) ||
@@ -310,16 +314,16 @@ void ColumnarResults::materializeAllLazyColumns(
     const ResultSet& rows,
     const size_t num_columns) {
   CHECK(rows.isFastColumnarConversionPossible());
-  const auto do_work_just_lazy_columns =
-      [num_columns, this](const std::vector<TargetValue>& crt_row,
-                          const size_t row_idx,
-                          const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info) {
-        for (size_t i = 0; i < num_columns; ++i) {
-          if (!lazy_fetch_info.empty() && lazy_fetch_info[i].is_lazily_fetched) {
-            writeBackCell(crt_row[i], row_idx, i);
-          }
-        }
-      };
+  const auto do_work_just_lazy_columns = [num_columns, this](
+                                             const std::vector<TargetValue>& crt_row,
+                                             const size_t row_idx,
+                                             const std::vector<bool>& targets_to_skip) {
+    for (size_t i = 0; i < num_columns; ++i) {
+      if (!targets_to_skip.empty() && !targets_to_skip[i]) {
+        writeBackCell(crt_row[i], row_idx, i);
+      }
+    }
+  };
 
   const auto contains_lazy_fetched_column =
       [](const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info) {
@@ -337,6 +341,15 @@ void ColumnarResults::materializeAllLazyColumns(
     const size_t worker_count = use_parallel_algorithms(rows) ? cpu_threads() : 1;
     std::vector<std::future<void>> conversion_threads;
     const auto entry_count = rows.entryCount();
+    std::vector<bool> targets_to_skip;
+    if (skip_non_lazy_columns) {
+      CHECK_EQ(lazy_fetch_info.size(), size_t(num_columns));
+      targets_to_skip.reserve(num_columns);
+      for (size_t i = 0; i < num_columns; i++) {
+        // we process lazy columns (i.e., skip non-lazy columns)
+        targets_to_skip.push_back(lazy_fetch_info[i].is_lazily_fetched ? false : true);
+      }
+    }
     for (size_t i = 0,
                 start_entry = 0,
                 stride = (entry_count + worker_count - 1) / worker_count;
@@ -345,16 +358,15 @@ void ColumnarResults::materializeAllLazyColumns(
       const auto end_entry = std::min(start_entry + stride, entry_count);
       conversion_threads.push_back(std::async(
           std::launch::async,
-          [&rows, &do_work_just_lazy_columns, &lazy_fetch_info](
-              const size_t start, const size_t end, const bool skip_non_lazy_columns) {
+          [&rows, &do_work_just_lazy_columns, &targets_to_skip](const size_t start,
+                                                                const size_t end) {
             for (size_t i = start; i < end; ++i) {
-              const auto crt_row = rows.getRowAtNoTranslations(i, skip_non_lazy_columns);
-              do_work_just_lazy_columns(crt_row, i, lazy_fetch_info);
+              const auto crt_row = rows.getRowAtNoTranslations(i, targets_to_skip);
+              do_work_just_lazy_columns(crt_row, i, targets_to_skip);
             }
           },
           start_entry,
-          end_entry,
-          skip_non_lazy_columns));
+          end_entry));
     }
 
     for (auto& child : conversion_threads) {
@@ -364,4 +376,39 @@ void ColumnarResults::materializeAllLazyColumns(
       child.get();
     }
   }
+}
+
+/*
+ * These get functions are to be used for unit tests, and should not be used
+ * where performance matters.
+ */
+template <typename EntryT>
+EntryT ColumnarResults::getEntryAt(const size_t row_idx, const size_t column_idx) const {
+  CHECK_LT(column_idx, column_buffers_.size());
+  CHECK_LT(row_idx, num_rows_);
+  return reinterpret_cast<const EntryT*>(column_buffers_[column_idx])[row_idx];
+}
+template int64_t ColumnarResults::getEntryAt<int64_t>(const size_t row_idx,
+                                                      const size_t column_idx) const;
+template int32_t ColumnarResults::getEntryAt<int32_t>(const size_t row_idx,
+                                                      const size_t column_idx) const;
+template int16_t ColumnarResults::getEntryAt<int16_t>(const size_t row_idx,
+                                                      const size_t column_idx) const;
+template int8_t ColumnarResults::getEntryAt<int8_t>(const size_t row_idx,
+                                                    const size_t column_idx) const;
+
+template <>
+float ColumnarResults::getEntryAt<float>(const size_t row_idx,
+                                         const size_t column_idx) const {
+  CHECK_LT(column_idx, column_buffers_.size());
+  CHECK_LT(row_idx, num_rows_);
+  return reinterpret_cast<const float*>(column_buffers_[column_idx])[row_idx];
+}
+
+template <>
+double ColumnarResults::getEntryAt<double>(const size_t row_idx,
+                                           const size_t column_idx) const {
+  CHECK_LT(column_idx, column_buffers_.size());
+  CHECK_LT(row_idx, num_rows_);
+  return reinterpret_cast<const double*>(column_buffers_[column_idx])[row_idx];
 }

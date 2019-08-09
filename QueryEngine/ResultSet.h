@@ -381,7 +381,7 @@ class ResultSet {
 
   std::vector<TargetValue> getRowAtNoTranslations(
       const size_t index,
-      const bool skip_non_lazy_columns = false) const;
+      const std::vector<bool>& targets_to_skip = {}) const;
 
   bool isRowAtEmpty(const size_t index) const;
 
@@ -499,8 +499,7 @@ class ResultSet {
 
   /*
    * Determines if it is possible to directly form a ColumnarResults class from this
-   * result set, bypassing the default row-wise columnarization. It is currently only
-   * possible for columnar projections.
+   * result set, bypassing the default row-wise columnarization.
    *
    * NOTE: If there exists a permutation vector (i.e., ORDER BY), it becomes equivalent to
    * the row-wise columnarization.
@@ -534,7 +533,7 @@ class ResultSet {
                                     const bool translate_strings,
                                     const bool decimal_to_double,
                                     const bool fixup_count_distinct_pointers,
-                                    const bool skip_non_lazy_columns = false) const;
+                                    const std::vector<bool>& targets_to_skip = {}) const;
 
   size_t parallelRowCount() const;
 
