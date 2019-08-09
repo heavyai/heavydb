@@ -21,7 +21,6 @@
 #include "Execute.h"
 #include "IRCodegenUtils.h"
 #include "LLVMFunctionAttributesUtil.h"
-#include "LLVMGlobalContext.h"
 
 #include "Shared/likely.h"
 #include "Shared/mapdpath.h"
@@ -48,8 +47,7 @@ const size_t INTERP_THRESHOLD{0};
 
 // Make a shallow copy (just declarations) of the runtime module. Function definitions are
 // cloned only if they're used from the generated code.
-std::unique_ptr<llvm::Module> runtime_module_shallow_copy(llvm::LLVMContext& context,
-                                                          CgenState* cgen_state) {
+std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state) {
   return llvm::CloneModule(
 #if LLVM_VERSION_MAJOR >= 7
       *g_rt_module.get(),
@@ -384,7 +382,7 @@ ReductionCode setup_functions_ir(const QueryDescriptionType hash_type) {
   reduction_code.cgen_state.reset(new CgenState({}, false));
   auto cgen_state = reduction_code.cgen_state.get();
   auto& ctx = cgen_state->context_;
-  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(ctx, cgen_state));
+  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
   cgen_state->module_ = module.get();
   reduction_code.ir_is_empty = setup_is_empty_entry(cgen_state);
   reduction_code.ir_reduce_one_entry = setup_reduce_one_entry(cgen_state, hash_type);
