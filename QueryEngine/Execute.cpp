@@ -892,7 +892,7 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
   ResultSetReductionJIT reduction_jit(this_result_set->getQueryMemDesc(),
                                       this_result_set->getTargetInfos(),
                                       this_result_set->getTargetInitVals());
-  auto reduction_code = reduction_jit.codegen();
+  const auto reduction_code = reduction_jit.codegen();
 #else
   ReductionCode reduction_code{};
 #endif  // WITH_REDUCTION_JIT

@@ -577,7 +577,7 @@ ReductionCode ResultSetReductionJIT::codegen() const {
   if (query_mem_desc_.didOutputColumnar() || !is_group_query(hash_type)) {
     return {};
   }
-  ReductionCode reduction_code = setup_functions_ir(hash_type);
+  auto reduction_code = setup_functions_ir(hash_type);
   isEmpty(reduction_code);
   switch (query_mem_desc_.getQueryDescriptionType()) {
     case QueryDescriptionType::GroupByPerfectHash: {
