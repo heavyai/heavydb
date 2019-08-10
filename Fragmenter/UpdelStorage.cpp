@@ -562,7 +562,7 @@ void InsertOrderFragmenter::updateColumns(
   insertDataNoCheckpoint(insert_data);
 
   // update metdata
-  if (!deletedChunk->get_buffer()->hasEncoder) {
+  if (!deletedChunk->get_buffer()->has_encoder) {
     deletedChunk->init_encoder();
   }
   deletedChunk->get_buffer()->encoder->updateStats(static_cast<int64_t>(true), false);

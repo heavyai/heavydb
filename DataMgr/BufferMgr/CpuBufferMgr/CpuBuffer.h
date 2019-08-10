@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#ifndef CPUBUFFER_H
-#define CPUBUFFER_H
+#pragma once
 
-#include "../Buffer.h"
+#include "DataMgr/BufferMgr/Buffer.h"
 
 namespace CudaMgr_Namespace {
 class CudaMgr;
@@ -27,27 +26,26 @@ namespace Buffer_Namespace {
 class CpuBuffer : public Buffer {
  public:
   CpuBuffer(BufferMgr* bm,
-            BufferList::iterator segIt,
-            const int deviceId,
-            CudaMgr_Namespace::CudaMgr* cudaMgr,
-            const size_t pageSize = 512,
-            const size_t numBytes = 0);
+            BufferList::iterator segment_iter,
+            const int device_id,
+            CudaMgr_Namespace::CudaMgr* cuda_mgr,
+            const size_t page_size = 512,
+            const size_t num_bytes = 0);
 
   inline Data_Namespace::MemoryLevel getType() const override { return CPU_LEVEL; }
 
  private:
   void readData(int8_t* const dst,
-                const size_t numBytes,
+                const size_t num_bytes,
                 const size_t offset = 0,
-                const MemoryLevel dstMemoryLevel = CPU_LEVEL,
-                const int dstDeviceId = -1) override;
+                const MemoryLevel dst_memory_level = CPU_LEVEL,
+                const int dst_device_id = -1) override;
   void writeData(int8_t* const src,
-                 const size_t numBytes,
+                 const size_t num_bytes,
                  const size_t offset = 0,
-                 const MemoryLevel srcMemoryLevel = CPU_LEVEL,
-                 const int srcDeviceId = -1) override;
-  CudaMgr_Namespace::CudaMgr* cudaMgr_;
+                 const MemoryLevel src_memory_level = CPU_LEVEL,
+                 const int src_device_id = -1) override;
+
+  CudaMgr_Namespace::CudaMgr* cuda_mgr_;
 };
 }  // namespace Buffer_Namespace
-
-#endif  // CPUBUFFER_H

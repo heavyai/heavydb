@@ -23,8 +23,7 @@
  * data structures and types.
  */
 
-#ifndef DATAMGR_MEMORY_FILE_FILEMGR_H
-#define DATAMGR_MEMORY_FILE_FILEMGR_H
+#pragma once
 
 #include <future>
 #include <iostream>
@@ -33,12 +32,12 @@
 #include <set>
 #include <vector>
 
-#include "../AbstractBuffer.h"
-#include "../AbstractBufferMgr.h"
-#include "../Shared/mapd_shared_mutex.h"
-#include "FileBuffer.h"
-#include "FileInfo.h"
-#include "Page.h"
+#include "DataMgr/AbstractBuffer.h"
+#include "DataMgr/AbstractBufferMgr.h"
+#include "DataMgr/FileMgr/FileBuffer.h"
+#include "DataMgr/FileMgr/FileInfo.h"
+#include "DataMgr/FileMgr/Page.h"
+#include "Shared/mapd_shared_mutex.h"
 
 using namespace Data_Namespace;
 
@@ -141,7 +140,6 @@ class FileMgr : public AbstractBufferMgr {  // implements
   // Buffer API
   AbstractBuffer* alloc(const size_t numBytes) override;
   void free(AbstractBuffer* buffer) override;
-  // virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
   Page requestFreePage(size_t pagesize, const bool isMetadata);
 
   inline MgrType getMgrType() override { return FILE_MGR; };
@@ -292,5 +290,3 @@ class FileMgr : public AbstractBufferMgr {  // implements
 };
 
 }  // namespace File_Namespace
-
-#endif  // DATAMGR_MEMORY_FILE_FILEMGR_H

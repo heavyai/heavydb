@@ -221,12 +221,12 @@ Encoder* Encoder::Create(Data_Namespace::AbstractBuffer* buffer,
 Encoder::Encoder(Data_Namespace::AbstractBuffer* buffer)
     : num_elems_(0)
     , buffer_(buffer)
-    , decimal_overflow_validator_(buffer ? buffer->sqlType : SQLTypeInfo())
-    , date_days_overflow_validator_(buffer ? buffer->sqlType : SQLTypeInfo()){};
+    , decimal_overflow_validator_(buffer ? buffer->sql_type : SQLTypeInfo())
+    , date_days_overflow_validator_(buffer ? buffer->sql_type : SQLTypeInfo()){};
 
 void Encoder::getMetadata(ChunkMetadata& chunkMetadata) {
   // chunkMetadata = metadataTemplate_; // invoke copy constructor
-  chunkMetadata.sqlType = buffer_->sqlType;
+  chunkMetadata.sqlType = buffer_->sql_type;
   chunkMetadata.numBytes = buffer_->size();
   chunkMetadata.numElements = num_elems_;
 }

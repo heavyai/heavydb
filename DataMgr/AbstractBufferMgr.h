@@ -19,8 +19,7 @@
  * @author  Steven Stewart <steve@map-d.com>
  * @author  Todd Mostak <todd@map-d.com>
  */
-#ifndef ABSTRACTDATAMGR_H
-#define ABSTRACTDATAMGR_H
+#pragma once
 
 #include <boost/preprocessor.hpp>
 #include "../Shared/types.h"
@@ -62,7 +61,7 @@ namespace Data_Namespace {
 class AbstractBufferMgr {
  public:
   virtual ~AbstractBufferMgr() {}
-  AbstractBufferMgr(const int deviceId) : deviceId_(deviceId) {}
+  AbstractBufferMgr(const int deviceId) : device_id_(deviceId) {}
 
   // Chunk API
   virtual AbstractBuffer* createBuffer(const ChunkKey& key,
@@ -77,8 +76,6 @@ class AbstractBufferMgr {
   virtual void fetchBuffer(const ChunkKey& key,
                            AbstractBuffer* destBuffer,
                            const size_t numBytes = 0) = 0;
-  // virtual AbstractBuffer* putBuffer(const ChunkKey &key, AbstractBuffer *srcBuffer,
-  // const size_t numBytes = 0) = 0;
   virtual AbstractBuffer* putBuffer(const ChunkKey& key,
                                     AbstractBuffer* srcBuffer,
                                     const size_t numBytes = 0) = 0;
@@ -102,17 +99,14 @@ class AbstractBufferMgr {
   // Buffer API
   virtual AbstractBuffer* alloc(const size_t numBytes = 0) = 0;
   virtual void free(AbstractBuffer* buffer) = 0;
-  // virtual AbstractBuffer* putBuffer(AbstractBuffer *d) = 0;
   virtual MgrType getMgrType() = 0;
   virtual std::string getStringMgrType() = 0;
   virtual size_t getNumChunks() = 0;
-  inline int getDeviceId() { return deviceId_; }
+  inline int getDeviceId() { return device_id_; }
 
  protected:
   AbstractBufferMgr* parentMgr_;
-  int deviceId_;
+  int device_id_;
 };
 
 }  // namespace Data_Namespace
-
-#endif  // ABSTRACTDATAMGR_H

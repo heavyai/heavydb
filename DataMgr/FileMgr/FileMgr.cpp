@@ -20,22 +20,24 @@
  * @author      Todd Mostak <todd@map-d.com>
  */
 
-#include "FileMgr.h"
-#include <boost/filesystem.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/system/error_code.hpp>
-#include <string>
-#include "GlobalFileMgr.h"
-#include "Shared/File.h"
-#include "Shared/measure.h"
+#include "DataMgr/FileMgr/FileMgr.h"
 
 #include <fcntl.h>
 #include <unistd.h>
 #include <algorithm>
 #include <future>
+#include <string>
 #include <thread>
 #include <utility>
 #include <vector>
+
+#include <boost/filesystem.hpp>
+#include <boost/lexical_cast.hpp>
+#include <boost/system/error_code.hpp>
+
+#include "DataMgr/FileMgr/GlobalFileMgr.h"
+#include "Shared/File.h"
+#include "Shared/measure.h"
 
 #define EPOCH_FILENAME "epoch"
 #define DB_META_FILENAME "dbmeta"
@@ -582,7 +584,7 @@ void FileMgr::checkpoint() {
     }
     cout << "Is dirty: " << chunkIt->second->isDirty_ << endl;
     */
-    if (chunkIt->second->isDirty_) {
+    if (chunkIt->second->is_dirty_) {
       chunkIt->second->writeMetadata(epoch_);
       chunkIt->second->clearDirtyBits();
     }
@@ -794,10 +796,6 @@ void FileMgr::free(AbstractBuffer* buffer) {
   LOG(FATAL) << "Operation not supported";
 }
 
-// AbstractBuffer* FileMgr::putBuffer(AbstractBuffer *d) {
-//    throw std::runtime_error("Operation not supported");
-//}
-
 Page FileMgr::requestFreePage(size_t pageSize, const bool isMetadata) {
   std::lock_guard<std::mutex> lock(getPageMutex_);
 
@@ -933,7 +931,7 @@ void FileMgr::getChunkMetadataVec(
   mapd_unique_lock<mapd_shared_mutex> chunkIndexWriteLock(chunkIndexMutex_);
   chunkMetadataVec.reserve(chunkIndex_.size());
   for (auto chunkIt = chunkIndex_.begin(); chunkIt != chunkIndex_.end(); ++chunkIt) {
-    if (chunkIt->second->hasEncoder) {
+    if (chunkIt->second->has_encoder) {
       ChunkMetadata chunkMetadata;
       chunkIt->second->encoder->getMetadata(chunkMetadata);
       chunkMetadataVec.emplace_back(chunkIt->first, chunkMetadata);
@@ -962,7 +960,7 @@ void FileMgr::getChunkMetadataVecForKeyPrefix(
     }
     cout << endl;
     */
-    if (chunkIt->second->hasEncoder) {
+    if (chunkIt->second->has_encoder) {
       ChunkMetadata chunkMetadata;
       chunkIt->second->encoder->getMetadata(chunkMetadata);
       chunkMetadataVec.emplace_back(chunkIt->first, chunkMetadata);

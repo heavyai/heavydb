@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#ifndef GPUCUDABUFFERMGR_H
-#define GPUCUDABUFFERMGR_H
+#pragma once
 
-#include "../BufferMgr.h"
+#include "DataMgr/BufferMgr/BufferMgr.h"
 
 namespace CudaMgr_Namespace {
 class CudaMgr;
@@ -27,25 +26,23 @@ namespace Buffer_Namespace {
 
 class GpuCudaBufferMgr : public BufferMgr {
  public:
-  GpuCudaBufferMgr(const int deviceId,
-                   const size_t maxBufferSize,
-                   CudaMgr_Namespace::CudaMgr* cudaMgr,
-                   const size_t bufferAllocIncrement = 1073741824,
-                   const size_t pageSize = 512,
-                   AbstractBufferMgr* parentMgr = 0);
+  GpuCudaBufferMgr(const int device_id,
+                   const size_t max_buffer_size,
+                   CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                   const size_t buffer_alloc_increment = 1073741824,
+                   const size_t page_size = 512,
+                   AbstractBufferMgr* parent_mgr = 0);
   inline MgrType getMgrType() override { return GPU_MGR; }
   inline std::string getStringMgrType() override { return ToString(GPU_MGR); }
   ~GpuCudaBufferMgr() override;
 
  private:
-  void addSlab(const size_t slabSize) override;
+  void addSlab(const size_t slab_size) override;
   void freeAllMem() override;
-  void allocateBuffer(BufferList::iterator segIt,
-                      const size_t pageSize,
-                      const size_t initialSize) override;
-  CudaMgr_Namespace::CudaMgr* cudaMgr_;
+  void allocateBuffer(BufferList::iterator seg_it,
+                      const size_t page_size,
+                      const size_t initial_size) override;
+  CudaMgr_Namespace::CudaMgr* cuda_mgr_;
 };
 
 }  // namespace Buffer_Namespace
-
-#endif  // CPUBUFFERMGR_H

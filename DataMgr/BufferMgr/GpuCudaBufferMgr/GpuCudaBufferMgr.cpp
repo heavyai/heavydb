@@ -14,25 +14,26 @@
  * limitations under the License.
  */
 
-#include "GpuCudaBufferMgr.h"
-#include "../../../CudaMgr/CudaMgr.h"
-#include "GpuCudaBuffer.h"
+#include "DataMgr/BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
+
+#include "CudaMgr/CudaMgr.h"
+#include "DataMgr/BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.h"
 #include "Shared/Logger.h"
 
 namespace Buffer_Namespace {
 
-GpuCudaBufferMgr::GpuCudaBufferMgr(const int deviceId,
-                                   const size_t maxBufferSize,
-                                   CudaMgr_Namespace::CudaMgr* cudaMgr,
-                                   const size_t bufferAllocIncrement,
-                                   const size_t pageSize,
-                                   AbstractBufferMgr* parentMgr)
-    : BufferMgr(deviceId, maxBufferSize, bufferAllocIncrement, pageSize, parentMgr)
-    , cudaMgr_(cudaMgr) {}
+GpuCudaBufferMgr::GpuCudaBufferMgr(const int device_id,
+                                   const size_t max_buffer_size,
+                                   CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                                   const size_t buffer_alloc_increment,
+                                   const size_t page_size,
+                                   AbstractBufferMgr* parent_mgr)
+    : BufferMgr(device_id, max_buffer_size, buffer_alloc_increment, page_size, parent_mgr)
+    , cuda_mgr_(cuda_mgr) {}
 
 GpuCudaBufferMgr::~GpuCudaBufferMgr() {
   try {
-    cudaMgr_->synchronizeDevices();
+    cuda_mgr_->synchronizeDevices();
     freeAllMem();
 #ifdef HAVE_CUDA
   } catch (const CudaMgr_Namespace::CudaErrorException& e) {
@@ -46,36 +47,37 @@ GpuCudaBufferMgr::~GpuCudaBufferMgr() {
   }
 }
 
-void GpuCudaBufferMgr::addSlab(const size_t slabSize) {
+void GpuCudaBufferMgr::addSlab(const size_t slab_size) {
   slabs_.resize(slabs_.size() + 1);
   try {
-    slabs_.back() = cudaMgr_->allocateDeviceMem(slabSize, deviceId_);
+    slabs_.back() = cuda_mgr_->allocateDeviceMem(slab_size, device_id_);
   } catch (std::runtime_error& error) {
     slabs_.resize(slabs_.size() - 1);
-    throw FailedToCreateSlab(slabSize);
+    throw FailedToCreateSlab(slab_size);
   }
-  slabSegments_.resize(slabSegments_.size() + 1);
-  slabSegments_[slabSegments_.size() - 1].push_back(BufferSeg(0, slabSize / pageSize_));
+  slab_segments_.resize(slab_segments_.size() + 1);
+  slab_segments_[slab_segments_.size() - 1].push_back(
+      BufferSeg(0, slab_size / page_size_));
 }
 
 void GpuCudaBufferMgr::freeAllMem() {
-  for (auto bufIt = slabs_.begin(); bufIt != slabs_.end(); ++bufIt) {
-    cudaMgr_->freeDeviceMem(*bufIt);
+  for (auto buf_it = slabs_.begin(); buf_it != slabs_.end(); ++buf_it) {
+    cuda_mgr_->freeDeviceMem(*buf_it);
   }
 }
 
-void GpuCudaBufferMgr::allocateBuffer(BufferList::iterator segIt,
-                                      const size_t pageSize,
-                                      const size_t initialSize) {
+void GpuCudaBufferMgr::allocateBuffer(BufferList::iterator seg_it,
+                                      const size_t page_size,
+                                      const size_t initial_size) {
   new GpuCudaBuffer(this,
-                    segIt,
-                    deviceId_,
-                    cudaMgr_,
-                    pageSize,
-                    initialSize);  // this line is admittedly a bit weird
-                                   // but the segment iterator passed into
-                                   // buffer takes the address of the new
-                                   // Buffer in its buffer member
+                    seg_it,
+                    device_id_,
+                    cuda_mgr_,
+                    page_size,
+                    initial_size);  // this line is admittedly a bit weird
+                                    // but the segment iterator passed into
+                                    // buffer takes the address of the new
+                                    // Buffer in its buffer member
 }
 
 }  // namespace Buffer_Namespace

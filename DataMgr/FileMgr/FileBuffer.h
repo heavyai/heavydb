@@ -20,15 +20,15 @@
  * @author		Todd Mostak <todd@map-d.com>
  */
 
-#ifndef DATAMGR_MEMORY_FILE_FILEBUFFER_H
-#define DATAMGR_MEMORY_FILE_FILEBUFFER_H
+#pragma once
 
-#include "../AbstractBuffer.h"
-#include "Page.h"
-#include "Shared/Logger.h"
+#include "DataMgr/AbstractBuffer.h"
+#include "DataMgr/FileMgr/Page.h"
 
 #include <iostream>
 #include <stdexcept>
+
+#include "Shared/Logger.h"
 
 using namespace Data_Namespace;
 
@@ -146,7 +146,7 @@ class FileBuffer : public AbstractBuffer {
 
   /// Returns whether or not the FileBuffer has been modified since the last
   /// flush/checkpoint.
-  bool isDirty() const override { return isDirty_; }
+  bool isDirty() const override { return is_dirty_; }
 
  private:
   // FileBuffer(const FileBuffer&);      // private copy constructor
@@ -176,5 +176,3 @@ class FileBuffer : public AbstractBuffer {
 };
 
 }  // namespace File_Namespace
-
-#endif  // DATAMGR_MEMORY_FILE_FILEBUFFER_H

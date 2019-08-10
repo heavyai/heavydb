@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#ifndef BUFFERSEG_H
-#define BUFFERSEG_H
+#pragma once
 
 #include <list>
+
+#include "Shared/types.h"
 
 namespace Buffer_Namespace {
 
@@ -27,46 +28,45 @@ class Buffer;  // forward declaration
 enum MemStatus { FREE, USED };
 
 struct BufferSeg {
-  int startPage;
-  size_t numPages;
-  MemStatus memStatus;
+  int start_page;
+  size_t num_pages;
+  MemStatus mem_status;
   Buffer* buffer;
-  ChunkKey chunkKey;
-  unsigned int pinCount;
-  int slabNum;
-  unsigned int lastTouched;
+  ChunkKey chunk_key;
+  unsigned int pin_count;
+  int slab_num;
+  unsigned int last_touched;
 
-  BufferSeg() : memStatus(FREE), buffer(0), pinCount(0), slabNum(-1), lastTouched(0) {}
-  BufferSeg(const int startPage, const size_t numPages)
-      : startPage(startPage)
-      , numPages(numPages)
-      , memStatus(FREE)
+  BufferSeg()
+      : mem_status(FREE), buffer(0), pin_count(0), slab_num(-1), last_touched(0) {}
+  BufferSeg(const int start_page, const size_t num_pages)
+      : start_page(start_page)
+      , num_pages(num_pages)
+      , mem_status(FREE)
       , buffer(0)
-      , pinCount(0)
-      , slabNum(-1)
-      , lastTouched(0) {}
-  BufferSeg(const int startPage, const size_t numPages, const MemStatus memStatus)
-      : startPage(startPage)
-      , numPages(numPages)
-      , memStatus(memStatus)
+      , pin_count(0)
+      , slab_num(-1)
+      , last_touched(0) {}
+  BufferSeg(const int start_page, const size_t num_pages, const MemStatus mem_status)
+      : start_page(start_page)
+      , num_pages(num_pages)
+      , mem_status(mem_status)
       , buffer(0)
-      , pinCount(0)
-      , slabNum(-1)
-      , lastTouched(0) {}
-  BufferSeg(const int startPage,
-            const size_t numPages,
-            const MemStatus memStatus,
-            const int lastTouched)
-      : startPage(startPage)
-      , numPages(numPages)
-      , memStatus(memStatus)
+      , pin_count(0)
+      , slab_num(-1)
+      , last_touched(0) {}
+  BufferSeg(const int start_page,
+            const size_t num_pages,
+            const MemStatus mem_status,
+            const int last_touched)
+      : start_page(start_page)
+      , num_pages(num_pages)
+      , mem_status(mem_status)
       , buffer(0)
-      , pinCount(0)
-      , slabNum(-1)
-      , lastTouched(lastTouched) {}
+      , pin_count(0)
+      , slab_num(-1)
+      , last_touched(last_touched) {}
 };
 
 using BufferList = std::list<BufferSeg>;
 }  // namespace Buffer_Namespace
-
-#endif

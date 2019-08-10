@@ -20,12 +20,14 @@
  * @author      Todd Mostak <todd@map-d.com>
  */
 
-#include "FileBuffer.h"
+#include "DataMgr/FileMgr/FileBuffer.h"
+
 #include <future>
 #include <map>
 #include <thread>
-#include "../../Shared/File.h"
-#include "FileMgr.h"
+
+#include "DataMgr/FileMgr/FileMgr.h"
+#include "Shared/File.h"
 
 #define METADATA_PAGE_SIZE 4096
 
@@ -394,17 +396,17 @@ void FileBuffer::readMetadata(const Page& page) {
   fread((int8_t*)&(typeData[0]), sizeof(int), typeData.size(), f);
   int version = typeData[0];
   CHECK(version == METADATA_VERSION);  // add backward compatibility code here
-  hasEncoder = static_cast<bool>(typeData[1]);
-  if (hasEncoder) {
-    sqlType.set_type(static_cast<SQLTypes>(typeData[2]));
-    sqlType.set_subtype(static_cast<SQLTypes>(typeData[3]));
-    sqlType.set_dimension(typeData[4]);
-    sqlType.set_scale(typeData[5]);
-    sqlType.set_notnull(static_cast<bool>(typeData[6]));
-    sqlType.set_compression(static_cast<EncodingType>(typeData[7]));
-    sqlType.set_comp_param(typeData[8]);
-    sqlType.set_size(typeData[9]);
-    initEncoder(sqlType);
+  has_encoder = static_cast<bool>(typeData[1]);
+  if (has_encoder) {
+    sql_type.set_type(static_cast<SQLTypes>(typeData[2]));
+    sql_type.set_subtype(static_cast<SQLTypes>(typeData[3]));
+    sql_type.set_dimension(typeData[4]);
+    sql_type.set_scale(typeData[5]);
+    sql_type.set_notnull(static_cast<bool>(typeData[6]));
+    sql_type.set_compression(static_cast<EncodingType>(typeData[7]));
+    sql_type.set_comp_param(typeData[8]);
+    sql_type.set_size(typeData[9]);
+    initEncoder(sql_type);
     encoder->readMetadata(f);
   }
 }
@@ -421,19 +423,19 @@ void FileBuffer::writeMetadata(const int epoch) {
   vector<int> typeData(NUM_METADATA);  // assumes we will encode hasEncoder, bufferType,
                                        // encodingType, encodingBits all as int
   typeData[0] = METADATA_VERSION;
-  typeData[1] = static_cast<int>(hasEncoder);
-  if (hasEncoder) {
-    typeData[2] = static_cast<int>(sqlType.get_type());
-    typeData[3] = static_cast<int>(sqlType.get_subtype());
-    typeData[4] = sqlType.get_dimension();
-    typeData[5] = sqlType.get_scale();
-    typeData[6] = static_cast<int>(sqlType.get_notnull());
-    typeData[7] = static_cast<int>(sqlType.get_compression());
-    typeData[8] = sqlType.get_comp_param();
-    typeData[9] = sqlType.get_size();
+  typeData[1] = static_cast<int>(has_encoder);
+  if (has_encoder) {
+    typeData[2] = static_cast<int>(sql_type.get_type());
+    typeData[3] = static_cast<int>(sql_type.get_subtype());
+    typeData[4] = sql_type.get_dimension();
+    typeData[5] = sql_type.get_scale();
+    typeData[6] = static_cast<int>(sql_type.get_notnull());
+    typeData[7] = static_cast<int>(sql_type.get_compression());
+    typeData[8] = sql_type.get_comp_param();
+    typeData[9] = sql_type.get_size();
   }
   fwrite((int8_t*)&(typeData[0]), sizeof(int), typeData.size(), f);
-  if (hasEncoder) {  // redundant
+  if (has_encoder) {  // redundant
     encoder->writeMetadata(f);
   }
   metadataPages_.epochs.push_back(epoch);
@@ -442,13 +444,13 @@ void FileBuffer::writeMetadata(const int epoch) {
 
 /*
 void FileBuffer::checkpoint() {
-    if (isAppended_) {
+    if (is_appended_) {
         Page page = multiPages_[multiPages.size()-1].current();
         writeHeader(page,0,multiPages_[0].epochs.back());
     }
-    isDirty_ = false;
-    isUpdated_ = false;
-    isAppended_ = false;
+    is_dirty_ = false;
+    is_updated_ = false;
+    is_appended_ = false;
 }
 */
 
@@ -456,8 +458,8 @@ void FileBuffer::append(int8_t* src,
                         const size_t numBytes,
                         const MemoryLevel srcBufferType,
                         const int deviceId) {
-  isDirty_ = true;
-  isAppended_ = true;
+  is_dirty_ = true;
+  is_appended_ = true;
 
   size_t startPage = size_ / pageDataSize_;
   size_t startPageOffset = size_ % pageDataSize_;
@@ -505,16 +507,16 @@ void FileBuffer::write(int8_t* src,
   if (srcBufferType != CPU_LEVEL) {
     LOG(FATAL) << "Unsupported Buffer type";
   }
-  isDirty_ = true;
+  is_dirty_ = true;
   if (offset < size_) {
-    isUpdated_ = true;
+    is_updated_ = true;
   }
   bool tempIsAppended = false;
 
   if (offset + numBytes > size_) {
-    tempIsAppended = true;  // because isAppended_ could have already been true - to avoid
-                            // rewriting header
-    isAppended_ = true;
+    tempIsAppended = true;  // because is_appended_ could have already been true - to
+                            // avoid rewriting header
+    is_appended_ = true;
     size_ = offset + numBytes;
   }
 

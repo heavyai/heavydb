@@ -193,12 +193,12 @@ std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
       for (auto segIt : slab_segments[slabNum]) {
         MemoryData md;
         md.slabNum = slabNum;
-        md.startPage = segIt.startPage;
-        md.numPages = segIt.numPages;
-        md.touch = segIt.lastTouched;
-        md.isFree = segIt.memStatus;
+        md.startPage = segIt.start_page;
+        md.numPages = segIt.num_pages;
+        md.touch = segIt.last_touched;
+        md.isFree = segIt.mem_status;
         md.chunk_key.insert(
-            md.chunk_key.end(), segIt.chunkKey.begin(), segIt.chunkKey.end());
+            md.chunk_key.end(), segIt.chunk_key.begin(), segIt.chunk_key.end());
         mi.nodeMemoryData.push_back(md);
       }
     }
@@ -221,12 +221,12 @@ std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
         for (auto segIt : slab_segments[slabNum]) {
           MemoryData md;
           md.slabNum = slabNum;
-          md.startPage = segIt.startPage;
-          md.numPages = segIt.numPages;
-          md.touch = segIt.lastTouched;
+          md.startPage = segIt.start_page;
+          md.numPages = segIt.num_pages;
+          md.touch = segIt.last_touched;
           md.chunk_key.insert(
-              md.chunk_key.end(), segIt.chunkKey.begin(), segIt.chunkKey.end());
-          md.isFree = segIt.memStatus;
+              md.chunk_key.end(), segIt.chunk_key.begin(), segIt.chunk_key.end());
+          md.isFree = segIt.mem_status;
           mi.nodeMemoryData.push_back(md);
         }
       }

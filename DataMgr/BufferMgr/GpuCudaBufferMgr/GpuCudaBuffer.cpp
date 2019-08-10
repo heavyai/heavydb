@@ -14,32 +14,34 @@
  * limitations under the License.
  */
 
-#include "GpuCudaBuffer.h"
-#include "../../../CudaMgr/CudaMgr.h"
-#include "Shared/Logger.h"
+#include "DataMgr/BufferMgr/GpuCudaBufferMgr/GpuCudaBuffer.h"
 
 #include <cassert>
+
+#include "CudaMgr/CudaMgr.h"
+#include "Shared/Logger.h"
 
 namespace Buffer_Namespace {
 
 GpuCudaBuffer::GpuCudaBuffer(BufferMgr* bm,
-                             BufferList::iterator segIt,
-                             const int deviceId,
-                             CudaMgr_Namespace::CudaMgr* cudaMgr,
-                             const size_t pageSize,
-                             const size_t numBytes)
-    : Buffer(bm, segIt, deviceId, pageSize, numBytes), cudaMgr_(cudaMgr) {}
+                             BufferList::iterator seg_it,
+                             const int device_id,
+                             CudaMgr_Namespace::CudaMgr* cuda_mgr,
+                             const size_t page_size,
+                             const size_t num_bytes)
+    : Buffer(bm, seg_it, device_id, page_size, num_bytes), cuda_mgr_(cuda_mgr) {}
 
 void GpuCudaBuffer::readData(int8_t* const dst,
-                             const size_t numBytes,
+                             const size_t num_bytes,
                              const size_t offset,
-                             const MemoryLevel dstBufferType,
-                             const int dstDeviceId) {
-  if (dstBufferType == CPU_LEVEL) {
-    cudaMgr_->copyDeviceToHost(
-        dst, mem_ + offset, numBytes, deviceId_);  // need to replace 0 with gpu num
-  } else if (dstBufferType == GPU_LEVEL) {
-    cudaMgr_->copyDeviceToDevice(dst, mem_ + offset, numBytes, dstDeviceId, deviceId_);
+                             const MemoryLevel dst_buffer_type,
+                             const int dst_device_id) {
+  if (dst_buffer_type == CPU_LEVEL) {
+    cuda_mgr_->copyDeviceToHost(
+        dst, mem_ + offset, num_bytes, device_id_);  // need to replace 0 with gpu num
+  } else if (dst_buffer_type == GPU_LEVEL) {
+    cuda_mgr_->copyDeviceToDevice(
+        dst, mem_ + offset, num_bytes, dst_device_id, device_id_);
 
   } else {
     LOG(FATAL) << "Unsupported buffer type";
@@ -47,20 +49,21 @@ void GpuCudaBuffer::readData(int8_t* const dst,
 }
 
 void GpuCudaBuffer::writeData(int8_t* const src,
-                              const size_t numBytes,
+                              const size_t num_bytes,
                               const size_t offset,
-                              const MemoryLevel srcBufferType,
-                              const int srcDeviceId) {
-  if (srcBufferType == CPU_LEVEL) {
+                              const MemoryLevel src_buffer_type,
+                              const int src_device_id) {
+  if (src_buffer_type == CPU_LEVEL) {
     // std::cout << "Writing to GPU from source CPU" << std::endl;
 
-    cudaMgr_->copyHostToDevice(
-        mem_ + offset, src, numBytes, deviceId_);  // need to replace 0 with gpu num
+    cuda_mgr_->copyHostToDevice(
+        mem_ + offset, src, num_bytes, device_id_);  // need to replace 0 with gpu num
 
-  } else if (srcBufferType == GPU_LEVEL) {
+  } else if (src_buffer_type == GPU_LEVEL) {
     // std::cout << "Writing to GPU from source GPU" << std::endl;
-    assert(srcDeviceId >= 0);
-    cudaMgr_->copyDeviceToDevice(mem_ + offset, src, numBytes, deviceId_, srcDeviceId);
+    assert(src_device_id >= 0);
+    cuda_mgr_->copyDeviceToDevice(
+        mem_ + offset, src, num_bytes, device_id_, src_device_id);
   } else {
     LOG(FATAL) << "Unsupported buffer type";
   }

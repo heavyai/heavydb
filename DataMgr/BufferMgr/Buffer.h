@@ -19,16 +19,13 @@
  * @author		Steven Stewart <steve@map-d.com>
  * @author		Todd Mostak <todd@map-d.com>
  */
-#ifndef DATAMGR_MEMORY_BUFFER_BUFFER_H
-#define DATAMGR_MEMORY_BUFFER_BUFFER_H
-
-#include "../AbstractBuffer.h"
-#include "BufferSeg.h"
+#pragma once
 
 #include <iostream>
 #include <mutex>
-//#include <boost/thread/locks.hpp>
-//#include <boost/thread/mutex.hpp>
+
+#include "DataMgr/AbstractBuffer.h"
+#include "DataMgr/BufferMgr/BufferSeg.h"
 
 using namespace Data_Namespace;
 
@@ -66,10 +63,10 @@ class Buffer : public AbstractBuffer {
   */
 
   Buffer(BufferMgr* bm,
-         BufferList::iterator segIt,
-         const int deviceId,
-         const size_t pageSize = 512,
-         const size_t numBytes = 0);
+         BufferList::iterator seg_it,
+         const int device_id,
+         const size_t page_size = 512,
+         const size_t num_bytes = 0);
 
   /// Destructor
   ~Buffer() override;
@@ -84,30 +81,30 @@ class Buffer : public AbstractBuffer {
    * @param nbytes    The number of bytes being read (copied) into the destination (dst).
    */
   void read(int8_t* const dst,
-            const size_t numBytes,
+            const size_t num_bytes,
             const size_t offset = 0,
-            const MemoryLevel dstBufferType = CPU_LEVEL,
-            const int deviceId = -1) override;
+            const MemoryLevel dst_buffer_type = CPU_LEVEL,
+            const int device_id = -1) override;
 
-  void reserve(const size_t numBytes) override;
+  void reserve(const size_t num_bytes) override;
   /**
    * @brief Writes (copies) data from src into the buffer.
    * Writes (copies) nbytes of data into the buffer at the specified byte offset, from
    * the source (src) memory location.
    *
-   * @param src       The source address from where data is being copied to the buffer.
-   * @param offset    The byte offset into the buffer to where writing begins.
-   * @param nbytes    The number of bytes being written (copied) into the buffer.
+   * @param src        The source address from where data is being copied to the buffer.
+   * @param num_bytes  The number of bytes being written (copied) into the buffer.
+   * @param offset     The byte offset into the buffer to where writing begins.
    */
   void write(int8_t* src,
-             const size_t numBytes,
+             const size_t num_bytes,
              const size_t offset = 0,
-             const MemoryLevel srcBufferType = CPU_LEVEL,
-             const int deviceId = -1) override;
+             const MemoryLevel src_buffer_type = CPU_LEVEL,
+             const int device_id = -1) override;
 
   void append(int8_t* src,
-              const size_t numBytes,
-              const MemoryLevel srcBufferType = CPU_LEVEL,
+              const size_t num_bytes,
+              const MemoryLevel src_buffer_type = CPU_LEVEL,
               const int deviceId = -1) override;
 
   /**
@@ -119,30 +116,29 @@ class Buffer : public AbstractBuffer {
   inline size_t size() const override { return size_; }
 
   /// Returns the total number of bytes allocated for the buffer.
-  inline size_t reservedSize() const override { return pageSize_ * numPages_; }
-  /// Returns the number of pages in the buffer.
+  inline size_t reservedSize() const override { return page_size_ * num_pages_; }
 
-  inline size_t pageCount() const override { return numPages_; }
+  /// Returns the number of pages in the buffer.
+  inline size_t pageCount() const override { return num_pages_; }
 
   /// Returns the size in bytes of each page in the buffer.
-
-  inline size_t pageSize() const override { return pageSize_; }
+  inline size_t pageSize() const override { return page_size_; }
 
   /// Returns whether or not the buffer has been modified since the last flush/checkpoint.
-  inline bool isDirty() const override { return isDirty_; }
+  inline bool isDirty() const override { return is_dirty_; }
 
   inline int pin() override {
-    std::lock_guard<std::mutex> pinLock(pinMutex_);
-    return (++pinCount_);
+    std::lock_guard<std::mutex> pin_lock(pin_mutex_);
+    return (++pin_count_);
   }
 
   inline int unPin() override {
-    std::lock_guard<std::mutex> pinLock(pinMutex_);
-    return (--pinCount_);
+    std::lock_guard<std::mutex> pin_lock(pin_mutex_);
+    return (--pin_count_);
   }
   inline int getPinCount() override {
-    std::lock_guard<std::mutex> pinLock(pinMutex_);
-    return (pinCount_);
+    std::lock_guard<std::mutex> pin_lock(pin_mutex_);
+    return (pin_count_);
   }
 
  protected:
@@ -152,29 +148,24 @@ class Buffer : public AbstractBuffer {
   Buffer(const Buffer&);             // private copy constructor
   Buffer& operator=(const Buffer&);  // private overloaded assignment operator
   virtual void readData(int8_t* const dst,
-                        const size_t numBytes,
+                        const size_t num_bytes,
                         const size_t offset = 0,
-                        const MemoryLevel dstBufferType = CPU_LEVEL,
-                        const int dstDeviceId = -1) = 0;
+                        const MemoryLevel dst_buffer_type = CPU_LEVEL,
+                        const int dst_device_id = -1) = 0;
   virtual void writeData(int8_t* const src,
-                         const size_t numBytes,
+                         const size_t num_bytes,
                          const size_t offset = 0,
-                         const MemoryLevel srcBufferType = CPU_LEVEL,
-                         const int srcDeviceId = -1) = 0;
+                         const MemoryLevel src_buffer_type = CPU_LEVEL,
+                         const int src_device_id = -1) = 0;
 
   BufferMgr* bm_;
-  BufferList::iterator segIt_;
-  // size_t numBytes_;
-  size_t pageSize_;  /// the size of each page in the buffer
-  size_t numPages_;
+  BufferList::iterator seg_it_;
+  size_t page_size_;  /// the size of each page in the buffer
+  size_t num_pages_;
   int epoch_;  /// indicates when the buffer was last flushed
-  // std::vector<Page> pages_;   /// a vector of pages (page metadata) that compose the
-  // buffer
-  std::vector<bool> pageDirtyFlags_;
-  int pinCount_;
-  std::mutex pinMutex_;
+  std::vector<bool> page_dirty_flags_;
+  int pin_count_;
+  std::mutex pin_mutex_;
 };
 
 }  // namespace Buffer_Namespace
-
-#endif  // DATAMGR_MEMORY_BUFFER_BUFFER_H

@@ -22,26 +22,27 @@
  * This file includes the class specification for the buffer manager (BufferMgr), and
  * related data structures and types.
  */
-#ifndef DATAMGR_MEMORY_BUFFER_BUFFERMGR_H
-#define DATAMGR_MEMORY_BUFFER_BUFFERMGR_H
+#pragma once
 
 #define BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED 1
 
-#include <boost/stacktrace.hpp>
 #include <iostream>
 #include <list>
 #include <map>
 #include <mutex>
-#include "../../Shared/types.h"
-#include "../AbstractBuffer.h"
-#include "../AbstractBufferMgr.h"
-#include "BufferSeg.h"
+
+#include <boost/stacktrace.hpp>
+
+#include "DataMgr/AbstractBuffer.h"
+#include "DataMgr/AbstractBufferMgr.h"
+#include "DataMgr/BufferMgr/BufferSeg.h"
+#include "Shared/types.h"
 
 class OutOfMemory : public std::runtime_error {
  public:
-  OutOfMemory(size_t numBytes)
-      : std::runtime_error(parse_error_str("OutOfMemory", numBytes)) {
-    VLOG(1) << "Failed to allocate " << numBytes << " bytes";
+  OutOfMemory(size_t num_bytes)
+      : std::runtime_error(parse_error_str("OutOfMemory", num_bytes)) {
+    VLOG(1) << "Failed to allocate " << num_bytes << " bytes";
     VLOG(1) << boost::stacktrace::stacktrace();
   };
 
@@ -50,16 +51,16 @@ class OutOfMemory : public std::runtime_error {
     VLOG(1) << boost::stacktrace::stacktrace();
   };
 
-  OutOfMemory(const std::string& err, size_t numBytes)
-      : std::runtime_error(parse_error_str(err, numBytes)) {
-    VLOG(1) << "Failed to allocate " << numBytes << " bytes with condition " << err;
+  OutOfMemory(const std::string& err, size_t num_bytes)
+      : std::runtime_error(parse_error_str(err, num_bytes)) {
+    VLOG(1) << "Failed to allocate " << num_bytes << " bytes with condition " << err;
     VLOG(1) << boost::stacktrace::stacktrace();
   };
 
  private:
-  std::string parse_error_str(const std::string& err, const size_t numBytes = 0) {
-    if (numBytes) {
-      return err + ": Failed to allocate " + std::to_string(numBytes) + " bytes";
+  std::string parse_error_str(const std::string& err, const size_t num_bytes = 0) {
+    if (num_bytes) {
+      return err + ": Failed to allocate " + std::to_string(num_bytes) + " bytes";
     } else {
       return "Failed to allocate memory with condition " + err;
     }
@@ -68,18 +69,18 @@ class OutOfMemory : public std::runtime_error {
 
 class FailedToCreateFirstSlab : public OutOfMemory {
  public:
-  FailedToCreateFirstSlab(size_t numBytes)
-      : OutOfMemory("FailedToCreateFirstSlab", numBytes) {}
+  FailedToCreateFirstSlab(size_t num_bytes)
+      : OutOfMemory("FailedToCreateFirstSlab", num_bytes) {}
 };
 
 class FailedToCreateSlab : public OutOfMemory {
  public:
-  FailedToCreateSlab(size_t numBytes) : OutOfMemory("FailedToCreateSlab", numBytes) {}
+  FailedToCreateSlab(size_t num_bytes) : OutOfMemory("FailedToCreateSlab", num_bytes) {}
 };
 
 class TooBigForSlab : public OutOfMemory {
  public:
-  TooBigForSlab(size_t numBytes) : OutOfMemory("TooBigForSlab", numBytes) {}
+  TooBigForSlab(size_t num_bytes) : OutOfMemory("TooBigForSlab", num_bytes) {}
 };
 
 using namespace Data_Namespace;
@@ -97,13 +98,11 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
  public:
   /// Constructs a BufferMgr object that allocates memSize bytes.
-  //@todo change this to size_t
-  // explicit BufferMgr(const size_t bufferSize, const size_t pageSize);
-  BufferMgr(const int deviceId,
-            const size_t maxBufferSize,
-            const size_t maxSlabSize = 2147483648,
-            const size_t pageSize = 512,
-            AbstractBufferMgr* parentMgr = 0);
+  BufferMgr(const int device_id,
+            const size_t max_buffer_size,
+            const size_t max_slab_size = 2147483648,
+            const size_t page_size = 512,
+            AbstractBufferMgr* parent_mgr = 0);
 
   /// Destructor
   ~BufferMgr() override;
@@ -111,12 +110,12 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
   void clear();
 
-  std::string printSlab(size_t slabNum);
+  std::string printSlab(size_t slab_num);
   std::string printSlabs() override;
   void clearSlabs() override;
   std::string printMap();
   void printSegs();
-  std::string printSeg(BufferList::iterator& segIt);
+  std::string printSeg(BufferList::iterator& seg_it);
   std::string keyToString(const ChunkKey& key);
   size_t getInUseSize() override;
   size_t getMaxSize() override;
@@ -129,16 +128,16 @@ class BufferMgr : public AbstractBufferMgr {  // implements
 
   /// Creates a chunk with the specified key and page size.
   AbstractBuffer* createBuffer(const ChunkKey& key,
-                               const size_t pageSize = 0,
-                               const size_t initialSize = 0) override;
+                               const size_t page_size = 0,
+                               const size_t initial_size = 0) override;
 
   /// Deletes the chunk with the specified key
   void deleteBuffer(const ChunkKey& key, const bool purge = true) override;
-  void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
+  void deleteBuffersWithPrefix(const ChunkKey& key_prefix,
                                const bool purge = true) override;
 
   /// Returns the a pointer to the chunk with the specified key.
-  AbstractBuffer* getBuffer(const ChunkKey& key, const size_t numBytes = 0) override;
+  AbstractBuffer* getBuffer(const ChunkKey& key, const size_t num_bytes = 0) override;
 
   /**
    * @brief Puts the contents of d into the Buffer with ChunkKey key.
@@ -148,79 +147,72 @@ class BufferMgr : public AbstractBufferMgr {  // implements
    */
   bool isBufferOnDevice(const ChunkKey& key) override;
   void fetchBuffer(const ChunkKey& key,
-                   AbstractBuffer* destBuffer,
-                   const size_t numBytes = 0) override;
+                   AbstractBuffer* dest_buffer,
+                   const size_t num_bytes = 0) override;
   AbstractBuffer* putBuffer(const ChunkKey& key,
                             AbstractBuffer* d,
-                            const size_t numBytes = 0) override;
+                            const size_t num_bytes = 0) override;
   void checkpoint() override;
   void checkpoint(const int db_id, const int tb_id) override;
 
   // Buffer API
-  AbstractBuffer* alloc(const size_t numBytes = 0) override;
+  AbstractBuffer* alloc(const size_t num_bytes = 0) override;
   void free(AbstractBuffer* buffer) override;
-  // virtual AbstractBuffer* putBuffer(AbstractBuffer *d);
 
   /// Returns the total number of bytes allocated.
   size_t size();
   size_t getNumChunks() override;
 
-  BufferList::iterator reserveBuffer(BufferList::iterator& segIt, const size_t numBytes);
+  BufferList::iterator reserveBuffer(BufferList::iterator& seg_it,
+                                     const size_t num_bytes);
   void getChunkMetadataVec(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec) override;
+      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunk_metadata_vec) override;
   void getChunkMetadataVecForKeyPrefix(
-      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
-      const ChunkKey& keyPrefix) override;
+      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunk_metadata_vec,
+      const ChunkKey& key_prefix) override;
 
  protected:
   std::vector<int8_t*> slabs_;  /// vector of beginning memory addresses for each
                                 /// allocation of the buffer pool
-  std::vector<BufferList> slabSegments_;
-  size_t pageSize_;
+  std::vector<BufferList> slab_segments_;
+  size_t page_size_;
 
  private:
   BufferMgr(const BufferMgr&);             // private copy constructor
   BufferMgr& operator=(const BufferMgr&);  // private assignment
-  void removeSegment(BufferList::iterator& segIt);
-  BufferList::iterator findFreeBufferInSlab(const size_t slabNum,
-                                            const size_t numPagesRequested);
+  void removeSegment(BufferList::iterator& seg_it);
+  BufferList::iterator findFreeBufferInSlab(const size_t slab_num,
+                                            const size_t num_pages_requested);
   int getBufferId();
-  virtual void addSlab(const size_t slabSize) = 0;
+  virtual void addSlab(const size_t slab_size) = 0;
   virtual void freeAllMem() = 0;
-  virtual void allocateBuffer(BufferList::iterator segIt,
-                              const size_t pageSize,
-                              const size_t numBytes) = 0;
-  std::mutex chunkIndexMutex_;
-  std::mutex sizedSegsMutex_;
-  std::mutex unsizedSegsMutex_;
-  std::mutex bufferIdMutex_;
-  std::mutex globalMutex_;
+  virtual void allocateBuffer(BufferList::iterator seg_it,
+                              const size_t page_size,
+                              const size_t num_bytes) = 0;
+  std::mutex chunk_index_mutex_;
+  std::mutex sized_segs_mutex_;
+  std::mutex unsized_segs_mutex_;
+  std::mutex buffer_id_mutex_;
+  std::mutex global_mutex_;
 
-  std::map<ChunkKey, BufferList::iterator> chunkIndex_;
-  size_t maxBufferSize_;  /// max number of bytes allocated for the buffer pool
-  size_t maxNumPages_;
-  size_t numPagesAllocated_;
-  size_t maxNumPagesPerSlab_;
-  size_t currentMaxSlabPageSize_;
-  size_t maxSlabSize_;  /// size of the individual memory allocations that compose the
-                        /// buffer pool (up to maxBufferSize_)
-  bool allocationsCapped_;
-  AbstractBufferMgr* parentMgr_;
-  int maxBufferId_;
-  unsigned int bufferEpoch_;
-  // File_Namespace::FileMgr *fileMgr_;
+  std::map<ChunkKey, BufferList::iterator> chunk_index_;
+  size_t max_buffer_size_;  /// max number of bytes allocated for the buffer pool
+  size_t max_num_pages_;
+  size_t num_pages_allocated_;
+  size_t max_num_pages_per_slab_;
+  size_t current_max_slab_page_size_;
+  size_t max_slab_size_;  /// size of the individual memory allocations that compose the
+                          /// buffer pool (up to maxBufferSize_)
+  bool allocations_capped_;
+  AbstractBufferMgr* parent_mgr_;
+  int max_buffer_id_;
+  unsigned int buffer_epoch_;
 
-  /// Maps sizes of free memory areas to host buffer pool memory addresses
-  //@todo change this to multimap
-  // std::multimap<size_t, int8_t *> freeMem_;
-  BufferList unsizedSegs_;
-  // std::map<size_t, int8_t *> freeMem_;
+  BufferList unsized_segs_;
 
-  BufferList::iterator evict(BufferList::iterator& evictStart,
-                             const size_t numPagesRequested,
-                             const int slabNum);
-  BufferList::iterator findFreeBuffer(size_t numBytes);
-
+  BufferList::iterator evict(BufferList::iterator& evict_start,
+                             const size_t num_pages_requested,
+                             const int slab_num);
   /**
    * @brief Gets a buffer of required size and returns an iterator to it
    *
@@ -234,8 +226,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
    * USED if applicable
    *
    */
+  BufferList::iterator findFreeBuffer(size_t num_bytes);
 };
 
 }  // namespace Buffer_Namespace
-
-#endif  // DATAMGR_MEMORY_BUFFER_BUFFERMGR_H

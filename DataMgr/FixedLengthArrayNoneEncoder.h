@@ -153,10 +153,10 @@ class FixedLengthArrayNoneEncoder : public Encoder {
   size_t array_size;
 
   bool is_null(int8_t* array) {
-    if (buffer_->sqlType.get_notnull()) {
+    if (buffer_->sql_type.get_notnull()) {
       return false;
     }
-    switch (buffer_->sqlType.get_subtype()) {
+    switch (buffer_->sql_type.get_subtype()) {
       case kBOOLEAN: {
         const bool* bool_array = (bool*)array;
         return ((int8_t)bool_array[0] == NULL_ARRAY_BOOLEAN);
@@ -196,7 +196,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kCHAR:
       case kVARCHAR:
       case kTEXT: {
-        assert(buffer_->sqlType.get_compression() == kENCODING_DICT);
+        assert(buffer_->sql_type.get_compression() == kENCODING_DICT);
         const int32_t* int_array = (int32_t*)array;
         return (int_array[0] == NULL_ARRAY_INT);
       }
@@ -210,7 +210,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     if (array.is_null) {
       has_nulls = true;
     }
-    switch (buffer_->sqlType.get_subtype()) {
+    switch (buffer_->sql_type.get_subtype()) {
       case kBOOLEAN: {
         if (!initialized) {
           elem_min.boolval = true;
@@ -404,7 +404,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kCHAR:
       case kVARCHAR:
       case kTEXT: {
-        assert(buffer_->sqlType.get_compression() == kENCODING_DICT);
+        assert(buffer_->sql_type.get_compression() == kENCODING_DICT);
         if (!initialized) {
           elem_min.intval = 1;
           elem_max.intval = 0;
