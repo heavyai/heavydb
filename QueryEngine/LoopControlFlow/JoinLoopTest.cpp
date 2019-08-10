@@ -151,7 +151,7 @@ std::vector<JoinLoop> generate_descriptors(const unsigned mask,
           [i, cond_is_true](const std::vector<llvm::Value*>& v) {
             CHECK_EQ(i + 1, v.size());
             CHECK(!v.front());
-            JoinLoopDomain domain{0};
+            JoinLoopDomain domain{{0}};
             domain.slot_lookup_result = cond_is_true
                                             ? ll_int(int64_t(99), g_global_context)
                                             : ll_int(int64_t(-1), g_global_context);
@@ -170,7 +170,7 @@ std::vector<JoinLoop> generate_descriptors(const unsigned mask,
           [i, upper_bound](const std::vector<llvm::Value*>& v) {
             CHECK_EQ(i + 1, v.size());
             CHECK(!v.front());
-            JoinLoopDomain domain{0};
+            JoinLoopDomain domain{{0}};
             domain.upper_bound = ll_int<int64_t>(upper_bound, g_global_context);
             return domain;
           },

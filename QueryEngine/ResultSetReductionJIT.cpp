@@ -999,7 +999,7 @@ void ResultSetReductionJIT::reduceLoop(const ReductionCode& reduction_code) cons
       JoinLoopKind::UpperBound,
       JoinType::INNER,
       [upper_bound](const std::vector<llvm::Value*>& v) {
-        JoinLoopDomain domain{0};
+        JoinLoopDomain domain{{0}};
         domain.upper_bound = upper_bound;
         return domain;
       },
