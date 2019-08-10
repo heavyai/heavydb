@@ -598,6 +598,11 @@ ReductionCode ResultSetReductionJIT::codegen() const {
   return finalizeReductionCode(std::move(reduction_code));
 }
 
+void ResultSetReductionJIT::clearCache() {
+  s_code_cache.clear();
+  g_rt_module = nullptr;
+}
+
 void ResultSetReductionJIT::isEmpty(const ReductionCode& reduction_code) const {
   CHECK(is_group_query(query_mem_desc_.getQueryDescriptionType()));
   CHECK(!query_mem_desc_.didOutputColumnar());

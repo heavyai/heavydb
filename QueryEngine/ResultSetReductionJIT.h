@@ -58,6 +58,8 @@ class ResultSetReductionJIT {
   // Generate the code for the result set reduction loop.
   ReductionCode codegen() const;
 
+  static void clearCache();
+
  private:
   // Generate a function which checks whether a row is empty.
   void isEmpty(const ReductionCode& reduction_code) const;

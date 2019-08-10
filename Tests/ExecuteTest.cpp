@@ -21,6 +21,7 @@
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
 #include "../QueryEngine/Execute.h"
+#include "../QueryEngine/ResultSetReductionJIT.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/ConfigResolve.h"
 #include "../Shared/TimeGM.h"
@@ -16524,6 +16525,7 @@ int main(int argc, char** argv) {
     drop_tables();
     drop_views();
   }
+  ResultSetReductionJIT::clearCache();
   QR::reset();
   return err;
 }

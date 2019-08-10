@@ -2922,5 +2922,6 @@ int main(int argc, char** argv) {
   } catch (const std::exception& e) {
     LOG(ERROR) << e.what();
   }
+  ResultSetReductionJIT::clearCache();
   return err;
 }
