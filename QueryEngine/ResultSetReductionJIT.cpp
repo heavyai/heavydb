@@ -381,7 +381,6 @@ ReductionCode setup_functions_ir(const QueryDescriptionType hash_type) {
   ReductionCode reduction_code{};
   reduction_code.cgen_state.reset(new CgenState({}, false));
   auto cgen_state = reduction_code.cgen_state.get();
-  auto& ctx = cgen_state->context_;
   std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
   cgen_state->module_ = module.get();
   reduction_code.ir_is_empty = setup_is_empty_entry(cgen_state);
