@@ -388,7 +388,7 @@ ReductionCode setup_functions_ir(const QueryDescriptionType hash_type) {
   reduction_code.ir_reduce_one_entry_idx = setup_reduce_one_entry_idx(cgen_state);
   reduction_code.ir_reduce_loop = setup_reduce_loop(cgen_state);
   reduction_code.module = std::move(module);
-  return std::move(reduction_code);
+  return reduction_code;
 }
 
 // When the number of entries is below 'INTERP_THRESHOLD', run the generated function in
@@ -1212,5 +1212,5 @@ ReductionCode ResultSetReductionJIT::finalizeReductionCode(
                              reduction_code.ir_reduce_loop->getParent(),
                              s_code_cache);
   }
-  return std::move(reduction_code);
+  return reduction_code;
 }
