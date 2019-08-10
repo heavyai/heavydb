@@ -664,12 +664,8 @@ void ResultSetReductionJIT::reduceOneEntryNoCollisions(
 
   const auto key_bytes = get_key_bytes_rowwise(query_mem_desc_);
   if (key_bytes) {  // copy the key from right hand side
-    cgen_state->ir_builder_.CreateMemCpy(this_row_ptr,
-                                         0,
-                                         that_row_ptr,
-                                         0,
-                                         cgen_state->llInt<int32_t>(key_bytes),
-                                         "copy_rhs_key");
+    cgen_state->ir_builder_.CreateMemCpy(
+        this_row_ptr, 0, that_row_ptr, 0, cgen_state->llInt<int32_t>(key_bytes));
   }
 
   const auto key_bytes_with_padding = align_to_int64(key_bytes);
