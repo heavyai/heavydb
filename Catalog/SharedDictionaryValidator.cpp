@@ -163,16 +163,17 @@ void validate_shared_dictionary(
         catalog.getAllColumnMetadataForTable(foreign_td->tableId, false, false, false);
     const auto reference_cd_ptr =
         lookup_column(shared_dict_def->get_foreign_column(), reference_columns);
-    const auto reference_col_qualified_name =
-        reference_cd_ptr->columnName + "." + shared_dict_def->get_foreign_column();
     if (!reference_cd_ptr) {
-      throw std::runtime_error("Column " + reference_col_qualified_name +
-                               " doesn't exist");
+      throw std::runtime_error("Could not find referenced column " +
+                               shared_dict_def->get_foreign_column() + " in table " +
+                               foreign_td->tableName);
     }
     if (!reference_cd_ptr->columnType.is_string() ||
         reference_cd_ptr->columnType.get_compression() != kENCODING_DICT) {
-      throw std::runtime_error("Column " + reference_col_qualified_name +
-                               " must be a dictionary encoded string");
+      const auto reference_col_qualified_name =
+          reference_cd_ptr->columnName + "." + shared_dict_def->get_foreign_column();
+      throw std::runtime_error("Referenced column " + reference_col_qualified_name +
+                               " must be a dictionary encoded string column");
     }
   } else {
     // The dictionary is to be shared within table
