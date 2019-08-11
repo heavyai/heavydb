@@ -46,7 +46,7 @@ namespace {
 const int32_t WATCHDOG_ERROR{-1};
 // Use the LLVM interpreter, not the JIT, for a number of entries lower than the
 // threshold.
-const size_t INTERP_THRESHOLD{0};
+const size_t INTERP_THRESHOLD{50};
 
 // Make a shallow copy (just declarations) of the runtime module. Function definitions are
 // cloned only if they're used from the generated code.
