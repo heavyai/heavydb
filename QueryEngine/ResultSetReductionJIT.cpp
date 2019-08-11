@@ -945,7 +945,8 @@ llvm::BasicBlock* generate_loop_body(const ReductionCode& reduction_code,
                                      llvm::Value* that_entry_count,
                                      llvm::Value* this_qmd_handle,
                                      llvm::Value* that_qmd_handle,
-                                     llvm::Value* serialized_varlen_buffer) {
+                                     llvm::Value* serialized_varlen_buffer,
+                                     bool emit_watchdog_check) {
   auto cgen_state = reduction_code.cgen_state.get();
   auto& ir_builder = cgen_state->ir_builder_;
   auto& ctx = cgen_state->context_;
@@ -956,16 +957,18 @@ llvm::BasicBlock* generate_loop_body(const ReductionCode& reduction_code,
       ir_builder.CreateTrunc(iterator, get_int_type(32, ctx), "relative_entry_idx");
   const auto that_entry_idx =
       ir_builder.CreateAdd(loop_iter, start_index, "that_entry_idx");
-  const auto watchdog_sample_seed =
-      ir_builder.CreateSExt(that_entry_idx, get_int_type(64, ctx));
-  const auto watchdog_triggered = cgen_state->emitExternalCall(
-      "check_watchdog_rt", get_int_type(8, ctx), {watchdog_sample_seed});
-  const auto watchdog_triggered_bool = cgen_state->ir_builder_.CreateICmpNE(
-      watchdog_triggered, cgen_state->llInt<int8_t>(0));
-  return_early(watchdog_triggered_bool,
-               reduction_code,
-               reduction_code.ir_reduce_loop,
-               WATCHDOG_ERROR);
+  if (emit_watchdog_check) {
+    const auto watchdog_sample_seed =
+        ir_builder.CreateSExt(that_entry_idx, get_int_type(64, ctx));
+    const auto watchdog_triggered = cgen_state->emitExternalCall(
+        "check_watchdog_rt", get_int_type(8, ctx), {watchdog_sample_seed});
+    const auto watchdog_triggered_bool = cgen_state->ir_builder_.CreateICmpNE(
+        watchdog_triggered, cgen_state->llInt<int8_t>(0));
+    return_early(watchdog_triggered_bool,
+                 reduction_code,
+                 reduction_code.ir_reduce_loop,
+                 WATCHDOG_ERROR);
+  }
   ir_builder.CreateCall(reduction_code.ir_reduce_one_entry_idx,
                         {this_buff,
                          that_buff,
@@ -1016,7 +1019,8 @@ void ResultSetReductionJIT::reduceLoop(const ReductionCode& reduction_code) cons
       "reduction_loop");
   const auto bb_loop_body = JoinLoop::codegen(
       {join_loop},
-      [&reduction_code,
+      [this,
+       &reduction_code,
        this_buff_arg,
        that_buff_arg,
        start_index_arg,
@@ -1032,7 +1036,8 @@ void ResultSetReductionJIT::reduceLoop(const ReductionCode& reduction_code) cons
                                   that_entry_count_arg,
                                   this_qmd_handle_arg,
                                   that_qmd_handle_arg,
-                                  serialized_varlen_buffer_arg);
+                                  serialized_varlen_buffer_arg,
+                                  !useInterpreter(reduction_code.cgen_state.get()));
       },
       nullptr,
       bb_exit,
@@ -1197,7 +1202,7 @@ ReductionCode ResultSetReductionJIT::finalizeReductionCode(
   CompilationOptions co{
       ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
   reduction_code.module.release();
-  const bool use_interp = query_mem_desc_.getEntryCount() < INTERP_THRESHOLD;
+  const bool use_interp = useInterpreter(reduction_code.cgen_state.get());
   auto ee = use_interp
                 ? create_interpreter_engine(reduction_code.ir_reduce_loop)
                 : CodeGenerator::generateNativeCPUCode(
@@ -1220,4 +1225,14 @@ ReductionCode ResultSetReductionJIT::finalizeReductionCode(
                              s_code_cache);
   }
   return reduction_code;
+}
+
+bool ResultSetReductionJIT::useInterpreter(const CgenState* cgen_state) const {
+  // The LLVM interpreter uses llvm::Function* pointers as keys in a cache to quickly
+  // resolve binding to external functions. That works if the functions are kept around
+  // for the entire lifetime of the process. Unfortunately, that is incompatible with our
+  // need to free functions and modules, because the pointers could be recycled and lead
+  // to false hits in that cache.
+  return query_mem_desc_.getEntryCount() < INTERP_THRESHOLD &&
+         !cgen_state->has_external_calls_;
 }

@@ -133,6 +133,9 @@ class ResultSetReductionJIT {
 
   ReductionCode finalizeReductionCode(ReductionCode reduction_code) const;
 
+  // Returns true iff we will (should and is possible to) use the LLVM interpreter.
+  bool useInterpreter(const CgenState* cgen_state) const;
+
   const QueryMemoryDescriptor query_mem_desc_;
   const std::vector<TargetInfo> targets_;
   const std::vector<int64_t> target_init_vals_;
