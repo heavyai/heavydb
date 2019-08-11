@@ -95,198 +95,205 @@ int64_t parse_numeric(const std::string& s, SQLTypeInfo& ti) {
  */
 Datum StringToDatum(const std::string& s, SQLTypeInfo& ti) {
   Datum d;
-  switch (ti.get_type()) {
-    case kARRAY:
-      break;
-    case kBOOLEAN:
-      if (s == "t" || s == "T" || s == "1" || to_upper(s) == "TRUE") {
-        d.boolval = true;
-      } else if (s == "f" || s == "F" || s == "0" || to_upper(s) == "FALSE") {
-        d.boolval = false;
-      } else {
-        throw std::runtime_error("Invalid string for boolean " + s);
-      }
-      break;
-    case kNUMERIC:
-    case kDECIMAL:
-      d.bigintval = parse_numeric(s, ti);
-      break;
-    case kBIGINT:
-      d.bigintval = std::stoll(s);
-      break;
-    case kINT:
-      d.intval = std::stoi(s);
-      break;
-    case kSMALLINT:
-      d.smallintval = std::stoi(s);
-      break;
-    case kTINYINT:
-      d.tinyintval = std::stoi(s);
-      break;
-    case kFLOAT:
-      d.floatval = std::stof(s);
-      break;
-    case kDOUBLE:
-      d.doubleval = std::stod(s);
-      break;
-    case kTIME: {
-      // @TODO handle fractional seconds
-      std::tm tm_struct = {0};
-      if (!strptime(s.c_str(), "%T %z", &tm_struct) &&
-          !strptime(s.c_str(), "%T", &tm_struct) &&
-          !strptime(s.c_str(), "%H%M%S", &tm_struct) &&
-          !strptime(s.c_str(), "%R", &tm_struct)) {
-        throw std::runtime_error("Invalid time string " + s);
-      }
-      tm_struct.tm_mday = 1;
-      tm_struct.tm_mon = 0;
-      tm_struct.tm_year = 70;
-      tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff =
-          0;
-      d.bigintval = static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_struct));
-      break;
-    }
-    case kTIMESTAMP: {
-      std::tm tm_struct = {0};
-      // not sure in advance if it is used so need to zero before processing
-      tm_struct.tm_gmtoff = 0;
-      char* tp;
-      // try ISO8601 date first
-      tp = strptime(s.c_str(), "%Y-%m-%d", &tm_struct);
-      if (!tp) {
-        tp = strptime(s.c_str(), "%m/%d/%Y", &tm_struct);  // accept American date
-      }
-      if (!tp) {
-        tp = strptime(s.c_str(), "%d-%b-%y", &tm_struct);  // accept 03-Sep-15
-      }
-      if (!tp) {
-        tp = strptime(s.c_str(), "%d/%b/%Y", &tm_struct);  // accept 03/Sep/2015
-      }
-      if (!tp) {
-        try {
-          d.bigintval = static_cast<int64_t>(std::stoll(s));
-          break;
-        } catch (const std::invalid_argument& ia) {
-          throw std::runtime_error("Invalid timestamp string " + s);
+  try {
+    switch (ti.get_type()) {
+      case kARRAY:
+        break;
+      case kBOOLEAN:
+        if (s == "t" || s == "T" || s == "1" || to_upper(s) == "TRUE") {
+          d.boolval = true;
+        } else if (s == "f" || s == "F" || s == "0" || to_upper(s) == "FALSE") {
+          d.boolval = false;
+        } else {
+          throw std::runtime_error("Invalid string for boolean " + s);
         }
-      }
-      if (*tp == 'T' || *tp == ' ' || *tp == ':') {
-        tp++;
-      } else {
-        throw std::runtime_error("Invalid timestamp break string " + s);
-      }
-      // now parse the time
-      char* p = strptime(tp, "%T %z", &tm_struct);
-      if (!p) {
-        p = strptime(tp, "%T", &tm_struct);
-      }
-      if (!p) {
-        p = strptime(tp, "%H%M%S", &tm_struct);
-      }
-      if (!p) {
-        p = strptime(tp, "%R", &tm_struct);
-      }
-      if (!p) {
-        // check for weird customer format
-        // remove decimal seconds from string if there is a period followed by a number
-        char* startptr = nullptr;
-        char* endptr;
-        // find last decimal in string
-        int loop = strlen(tp);
-        while (loop > 0) {
-          if (tp[loop] == '.') {
-            // found last period
-            startptr = &tp[loop];
-            break;
-          }
-          loop--;
+        break;
+      case kNUMERIC:
+      case kDECIMAL:
+        d.bigintval = parse_numeric(s, ti);
+        break;
+      case kBIGINT:
+        d.bigintval = std::stoll(s);
+        break;
+      case kINT:
+        d.intval = std::stoi(s);
+        break;
+      case kSMALLINT:
+        d.smallintval = std::stoi(s);
+        break;
+      case kTINYINT:
+        d.tinyintval = std::stoi(s);
+        break;
+      case kFLOAT:
+        d.floatval = std::stof(s);
+        break;
+      case kDOUBLE:
+        d.doubleval = std::stod(s);
+        break;
+      case kTIME: {
+        // @TODO handle fractional seconds
+        std::tm tm_struct = {0};
+        if (!strptime(s.c_str(), "%T %z", &tm_struct) &&
+            !strptime(s.c_str(), "%T", &tm_struct) &&
+            !strptime(s.c_str(), "%H%M%S", &tm_struct) &&
+            !strptime(s.c_str(), "%R", &tm_struct)) {
+          throw std::runtime_error("Invalid time string " + s);
         }
-        if (startptr) {
-          // look for space
-          endptr = strchr(startptr, ' ');
-          if (endptr) {
-            // ok we found a start and and end
-            // remove the decimal portion
-            // will need to capture this for later
-            memmove(startptr, endptr, strlen(endptr) + 1);
-          }
-        }
-        p = strptime(
-            tp, "%I . %M . %S %p", &tm_struct);  // customers weird '.' separated date
-      }
-      if (!p) {
-        throw std::runtime_error("Invalid timestamp time string " + s);
-      }
-      tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
-      // handle fractional seconds
-      if (ti.get_dimension() > 0) {  // check for precision
-        time_t fsc;
-        if (*p == '.') {
-          p++;
-          uint64_t frac_num = 0;
-          int ntotal = 0;
-          sscanf(p, "%" SCNu64 "%n", &frac_num, &ntotal);
-          fsc = TimeGM::instance().parse_fractional_seconds(frac_num, ntotal, ti);
-        } else if (*p == '\0') {
-          fsc = 0;
-        } else {  // check for misleading/unclear syntax
-          throw std::runtime_error("Unclear syntax for leading fractional seconds: " +
-                                   std::string(p));
-        }
-        d.bigintval =
-            static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_struct, fsc, ti));
-      } else {  // default timestamp(0) precision
+        tm_struct.tm_mday = 1;
+        tm_struct.tm_mon = 0;
+        tm_struct.tm_year = 70;
+        tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff =
+            0;
         d.bigintval = static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_struct));
-        if (*p == '.') {
-          p++;
-        }
-      }
-      if (*p != '\0') {
-        uint32_t hour = 0;
-        sscanf(tp, "%u", &hour);
-        d.bigintval = static_cast<int64_t>(TimeGM::instance().parse_meridians(
-            static_cast<time_t>(d.bigintval), p, hour, ti));
         break;
       }
-      break;
-    }
-    case kDATE: {
-      std::tm tm_struct = {0};
-      // not sure in advance if it is used so need to zero before processing
-      tm_struct.tm_gmtoff = 0;
-      char* tp;
-      // try ISO8601 date first
-      tp = strptime(s.c_str(), "%Y-%m-%d", &tm_struct);
-      if (!tp) {
-        tp = strptime(s.c_str(), "%m/%d/%Y", &tm_struct);  // accept American date
-      }
-      if (!tp) {
-        tp = strptime(s.c_str(), "%d-%b-%y", &tm_struct);  // accept 03-Sep-15
-      }
-      if (!tp) {
-        tp = strptime(s.c_str(), "%d/%b/%Y", &tm_struct);  // accept 03/Sep/2015
-      }
-      if (!tp) {
-        try {
-          d.bigintval = static_cast<int64_t>(std::stoll(s));
-          break;
-        } catch (const std::invalid_argument& ia) {
-          throw std::runtime_error("Invalid date string " + s);
+      case kTIMESTAMP: {
+        std::tm tm_struct = {0};
+        // not sure in advance if it is used so need to zero before processing
+        tm_struct.tm_gmtoff = 0;
+        char* tp;
+        // try ISO8601 date first
+        tp = strptime(s.c_str(), "%Y-%m-%d", &tm_struct);
+        if (!tp) {
+          tp = strptime(s.c_str(), "%m/%d/%Y", &tm_struct);  // accept American date
         }
+        if (!tp) {
+          tp = strptime(s.c_str(), "%d-%b-%y", &tm_struct);  // accept 03-Sep-15
+        }
+        if (!tp) {
+          tp = strptime(s.c_str(), "%d/%b/%Y", &tm_struct);  // accept 03/Sep/2015
+        }
+        if (!tp) {
+          try {
+            d.bigintval = static_cast<int64_t>(std::stoll(s));
+            break;
+          } catch (const std::invalid_argument& ia) {
+            throw std::runtime_error("Invalid timestamp string " + s);
+          }
+        }
+        if (*tp == 'T' || *tp == ' ' || *tp == ':') {
+          tp++;
+        } else {
+          throw std::runtime_error("Invalid timestamp break string " + s);
+        }
+        // now parse the time
+        char* p = strptime(tp, "%T %z", &tm_struct);
+        if (!p) {
+          p = strptime(tp, "%T", &tm_struct);
+        }
+        if (!p) {
+          p = strptime(tp, "%H%M%S", &tm_struct);
+        }
+        if (!p) {
+          p = strptime(tp, "%R", &tm_struct);
+        }
+        if (!p) {
+          // check for weird customer format
+          // remove decimal seconds from string if there is a period followed by a number
+          char* startptr = nullptr;
+          char* endptr;
+          // find last decimal in string
+          int loop = strlen(tp);
+          while (loop > 0) {
+            if (tp[loop] == '.') {
+              // found last period
+              startptr = &tp[loop];
+              break;
+            }
+            loop--;
+          }
+          if (startptr) {
+            // look for space
+            endptr = strchr(startptr, ' ');
+            if (endptr) {
+              // ok we found a start and and end
+              // remove the decimal portion
+              // will need to capture this for later
+              memmove(startptr, endptr, strlen(endptr) + 1);
+            }
+          }
+          p = strptime(
+              tp, "%I . %M . %S %p", &tm_struct);  // customers weird '.' separated date
+        }
+        if (!p) {
+          throw std::runtime_error("Invalid timestamp time string " + s);
+        }
+        tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = 0;
+        // handle fractional seconds
+        if (ti.get_dimension() > 0) {  // check for precision
+          time_t fsc;
+          if (*p == '.') {
+            p++;
+            uint64_t frac_num = 0;
+            int ntotal = 0;
+            sscanf(p, "%" SCNu64 "%n", &frac_num, &ntotal);
+            fsc = TimeGM::instance().parse_fractional_seconds(frac_num, ntotal, ti);
+          } else if (*p == '\0') {
+            fsc = 0;
+          } else {  // check for misleading/unclear syntax
+            throw std::runtime_error("Unclear syntax for leading fractional seconds: " +
+                                     std::string(p));
+          }
+          d.bigintval =
+              static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_struct, fsc, ti));
+        } else {  // default timestamp(0) precision
+          d.bigintval = static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_struct));
+          if (*p == '.') {
+            p++;
+          }
+        }
+        if (*p != '\0') {
+          uint32_t hour = 0;
+          sscanf(tp, "%u", &hour);
+          d.bigintval = static_cast<int64_t>(TimeGM::instance().parse_meridians(
+              static_cast<time_t>(d.bigintval), p, hour, ti));
+          break;
+        }
+        break;
       }
-      tm_struct.tm_sec = tm_struct.tm_min = tm_struct.tm_hour = 0;
-      tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff =
-          0;
-      d.bigintval = static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_struct));
-      break;
+      case kDATE: {
+        std::tm tm_struct = {0};
+        // not sure in advance if it is used so need to zero before processing
+        tm_struct.tm_gmtoff = 0;
+        char* tp;
+        // try ISO8601 date first
+        tp = strptime(s.c_str(), "%Y-%m-%d", &tm_struct);
+        if (!tp) {
+          tp = strptime(s.c_str(), "%m/%d/%Y", &tm_struct);  // accept American date
+        }
+        if (!tp) {
+          tp = strptime(s.c_str(), "%d-%b-%y", &tm_struct);  // accept 03-Sep-15
+        }
+        if (!tp) {
+          tp = strptime(s.c_str(), "%d/%b/%Y", &tm_struct);  // accept 03/Sep/2015
+        }
+        if (!tp) {
+          try {
+            d.bigintval = static_cast<int64_t>(std::stoll(s));
+            break;
+          } catch (const std::invalid_argument& ia) {
+            throw std::runtime_error("Invalid date string " + s);
+          }
+        }
+        tm_struct.tm_sec = tm_struct.tm_min = tm_struct.tm_hour = 0;
+        tm_struct.tm_wday = tm_struct.tm_yday = tm_struct.tm_isdst = tm_struct.tm_gmtoff =
+            0;
+        d.bigintval = static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_struct));
+        break;
+      }
+      case kPOINT:
+      case kLINESTRING:
+      case kPOLYGON:
+      case kMULTIPOLYGON:
+        throw std::runtime_error("Internal error: geometry type in StringToDatum.");
+      default:
+        throw std::runtime_error("Internal error: invalid type in StringToDatum.");
     }
-    case kPOINT:
-    case kLINESTRING:
-    case kPOLYGON:
-    case kMULTIPOLYGON:
-      throw std::runtime_error("Internal error: geometry type in StringToDatum.");
-    default:
-      throw std::runtime_error("Internal error: invalid type in StringToDatum.");
+  } catch (const std::invalid_argument&) {
+    throw std::runtime_error("Invalid conversion from string to " + ti.get_type_name());
+  } catch (const std::out_of_range&) {
+    throw std::runtime_error("Got out of range error during conversion from string to " +
+                             ti.get_type_name());
   }
   return d;
 }
