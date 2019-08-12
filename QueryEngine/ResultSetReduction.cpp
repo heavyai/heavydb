@@ -150,7 +150,6 @@ void run_reduction_code(const ReductionCode& reduction_code,
                                   that_qmd,
                                   serialized_varlen_buffer);
   } else {
-    std::lock_guard<std::mutex> reduction_guard(ReductionCode::s_reduction_mutex);
     auto start_entry_index_gv = llvm::GenericValue();
     start_entry_index_gv.IntVal = llvm::APInt(32, start_entry_index);
     auto end_entry_index_gv = llvm::GenericValue();

@@ -1188,7 +1188,8 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
 
 }  // namespace
 
-std::unique_ptr<llvm::Module> g_rt_module(read_template_module(getGlobalLLVMContext()));
+thread_local std::unique_ptr<llvm::Module> g_rt_module(
+    read_template_module(getGlobalLLVMContext()));
 
 bool is_udf_module_present(bool cpu_only) {
   return (cpu_only || udf_gpu_module != nullptr) && (udf_cpu_module != nullptr);

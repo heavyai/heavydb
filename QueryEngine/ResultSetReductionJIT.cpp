@@ -34,11 +34,9 @@
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 
-extern std::unique_ptr<llvm::Module> g_rt_module;
+extern thread_local std::unique_ptr<llvm::Module> g_rt_module;
 
-CodeCache ResultSetReductionJIT::s_code_cache(10000);
-
-std::mutex ReductionCode::s_reduction_mutex;
+thread_local CodeCache ResultSetReductionJIT::s_code_cache(10000);
 
 namespace {
 
@@ -574,7 +572,6 @@ ResultSetReductionJIT::ResultSetReductionJIT(const QueryMemoryDescriptor& query_
 //     reduce_func_idx(this_buff, that_buff, that_entry_index)
 
 ReductionCode ResultSetReductionJIT::codegen() const {
-  std::lock_guard<std::mutex> reduction_guard(ReductionCode::s_reduction_mutex);
   const auto hash_type = query_mem_desc_.getQueryDescriptionType();
   if (query_mem_desc_.didOutputColumnar() || !is_group_query(hash_type)) {
     return {};

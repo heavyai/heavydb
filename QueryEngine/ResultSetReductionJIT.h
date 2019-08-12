@@ -27,19 +27,6 @@
 #include <llvm/IR/Value.h>
 
 struct ReductionCode {
-  ReductionCode(ReductionCode&&) = default;
-
-  ~ReductionCode() {
-    // We only need to worry about races for the interpreter, which owns the execution
-    // engine and has a null native function pointer.
-    if (own_execution_engine.get() && !func_ptr) {
-      std::lock_guard<std::mutex> reduction_guard(ReductionCode::s_reduction_mutex);
-      cgen_state = nullptr;
-      module = nullptr;
-      own_execution_engine = ExecutionEngineWrapper();
-    }
-  }
-
   // Function which reduces 'that_buff' into 'this_buff', for rows between
   // [start_entry_index, end_entry_index).
   using FuncPtr = int32_t (*)(int8_t* this_buff,
@@ -60,8 +47,6 @@ struct ReductionCode {
   llvm::Function* ir_reduce_one_entry_idx;
   llvm::Function* ir_reduce_loop;
   FuncPtr func_ptr;
-
-  static std::mutex s_reduction_mutex;
 };
 
 class ResultSetReductionJIT {
@@ -139,5 +124,5 @@ class ResultSetReductionJIT {
   const QueryMemoryDescriptor query_mem_desc_;
   const std::vector<TargetInfo> targets_;
   const std::vector<int64_t> target_init_vals_;
-  static CodeCache s_code_cache;
+  static thread_local CodeCache s_code_cache;
 };
