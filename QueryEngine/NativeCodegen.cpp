@@ -1172,12 +1172,7 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
                                                         : "agg_count");
         break;
       case kSAMPLE: {
-        if ((agg_type_info.is_string() &&
-             agg_type_info.get_compression() == kENCODING_NONE) ||
-            agg_type_info.is_array()) {
-          throw std::runtime_error(
-              "SAMPLE on none encoded strings or arrays not supported yet");
-        }
+        // Note that varlen SAMPLE arguments are handled separately above
         result.emplace_back(agg_type_info.is_fp() ? "agg_id_double" : "agg_id");
         break;
       }
