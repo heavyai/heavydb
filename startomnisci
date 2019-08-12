@@ -18,9 +18,12 @@ function get_script_location()    # https://stackoverflow.com/a/246128
 DIR=$(get_script_location)
 
 if [[ -t 0 || -p /dev/stdin ]]; then    # http://tldp.org/LDP/abs/html/intandnonint.html
-    TTY=$(tty)
+    TTY=$(tty || true)
 else
     unset TTY
+fi
+if [[ "$TTY" = "not a tty" ]]; then    # work around old versions of Docker
+  unset TTY
 fi
 
 echo "${0##*/} $$ running"
