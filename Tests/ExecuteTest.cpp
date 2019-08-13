@@ -7954,7 +7954,6 @@ TEST(Select, TimestampPrecisionMeridiesEncoding) {
 
 TEST(Select, DateTimeZones) {
   static const std::map<std::string, std::vector<int64_t>> gmt_epochs_ = {
-      {"Tokelau", {1541332800, 1541289600, 3600}},
       {"NZ", {1541336400, 1541289600, 7200}},
       {"AEST", {1541343600, 1541289600, 18000}},
       {"IST", {1541359800, 1541289600, 5400}},
@@ -7971,10 +7970,6 @@ TEST(Select, DateTimeZones) {
     run_ddl_statement("DROP table if exists Fekir;");
     EXPECT_NO_THROW(run_ddl_statement(
         "create table Fekir(tz TEXT, ts TIMESTAMP, dt DATE, ti TIME);"));
-    EXPECT_NO_THROW(
-        run_multiple_agg("INSERT INTO Fekir VALUES('Tokelau', '2018-11-05 01:00:00 "
-                         "+1300', '2018-11-05 +1300', '14:00:00 +1300');",
-                         dt));
     EXPECT_NO_THROW(
         run_multiple_agg("INSERT INTO Fekir VALUES('NZ', '2018-11-05 01:00:00 +1200', "
                          "'2018-11-05 +1200', '14:00:00 +1200');",

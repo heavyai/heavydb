@@ -161,7 +161,6 @@ enum EncodingType {
   (((T) == kINT) || ((T) == kSMALLINT) || ((T) == kDOUBLE) || ((T) == kFLOAT) || \
    ((T) == kBIGINT) || ((T) == kNUMERIC) || ((T) == kDECIMAL) || ((T) == kTINYINT))
 #define IS_STRING(T) (((T) == kTEXT) || ((T) == kVARCHAR) || ((T) == kCHAR))
-#define IS_TIME(T) (((T) == kTIME) || ((T) == kTIMESTAMP) || ((T) == kDATE))
 #define IS_GEO(T) \
   (((T) == kPOINT) || ((T) == kLINESTRING) || ((T) == kPOLYGON) || ((T) == kMULTIPOLYGON))
 #define IS_INTERVAL(T) ((T) == kINTERVAL_DAY_TIME || (T) == kINTERVAL_YEAR_MONTH)
@@ -187,6 +186,11 @@ enum EncodingType {
 #define TRANSIENT_DICT_ID 0
 #define TRANSIENT_DICT(ID) (-(ID))
 #define REGULAR_DICT(TRANSIENTID) (-(TRANSIENTID))
+
+template <typename T>
+constexpr auto is_datetime(T sql_type) {
+  return sql_type == kTIME || sql_type == kTIMESTAMP || sql_type == kDATE;
+}
 
 template <typename CORE_TYPE>
 class ExecutorTypePackaging {
@@ -449,7 +453,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
   inline bool is_decimal() const { return type == kDECIMAL || type == kNUMERIC; }
   inline bool is_fp() const { return type == kFLOAT || type == kDOUBLE; }
   inline bool is_number() const { return IS_NUMBER(type); }
-  inline bool is_time() const { return IS_TIME(type); }
+  inline bool is_time() const { return is_datetime(type); }
   inline bool is_boolean() const { return type == kBOOLEAN; }
   inline bool is_array() const { return type == kARRAY; }
   inline bool is_varlen_array() const { return type == kARRAY && size <= 0; }

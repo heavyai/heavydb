@@ -55,11 +55,11 @@ class TimeGM {
   virtual ~TimeGM(){};
 };
 
-template <SQLTypes TYPE>
+template <SQLTypes SQL_TYPE>
 class DateTimeStringValidate {
  public:
   constexpr int64_t operator()(const std::string& datetime_str, const int32_t dimen) {
-    static_assert(TYPE == kDATE || TYPE == kTIME || TYPE == kTIMESTAMP);
+    static_assert(is_datetime(SQL_TYPE));
     str_ = datetime_str;
     dimen_ = dimen;
     return parseDateTimeString();
@@ -68,7 +68,7 @@ class DateTimeStringValidate {
  private:
   constexpr int64_t parseDateTimeString() {
     char* tp = nullptr;
-    if constexpr (TYPE == kTIME) {
+    if constexpr (SQL_TYPE == kTIME) {
       tm_.tm_hour = tm_.tm_min = tm_.tm_sec = -1;
       parseTimePart<const char*>(str_.c_str(), tp);
       tm_.tm_mday = 1;
@@ -76,13 +76,14 @@ class DateTimeStringValidate {
       tm_.tm_year = 70;
       return static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_));
     }
-    parseDatePart(str_, tp);
+    detectFormatFromString(
+        str_.c_str(), tp, "%Y-%m-%d", "%m/%d/%Y", "%d-%b-%y", "%d/%b/%Y");
     if (!tp) {
       return getEpochValue();
     }
     char* p = nullptr;
     parseTimePart<char*&>(tp, p);
-    if constexpr (TYPE == kDATE) {
+    if constexpr (SQL_TYPE == kDATE) {
       return static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_));
     }
     // handle fractional seconds
@@ -107,36 +108,25 @@ class DateTimeStringValidate {
 
   template <typename T>
   constexpr void parseTimePart(T s, char*& p) {
-    if constexpr (TYPE == kDATE) {
+    if constexpr (SQL_TYPE == kDATE) {
       if (*s == 'T' || *s == ' ') {
         ++s;
       }
-      p = strptime(s, "%z", &tm_);
+      detectFormatFromString(s, p, "%z");
       return;
-    } else if constexpr (TYPE == kTIMESTAMP) {
+    } else if constexpr (SQL_TYPE == kTIME) {
+      detectFormatFromString(s, p, "%T %z", "%T", "%H%M%S", "%R");
+      if (tm_.tm_hour == -1 || tm_.tm_min == -1 || tm_.tm_sec == -1) {
+        throw std::runtime_error("Invalid TIME string " + str_);
+      }
+      return;
+    } else {
       if (*s == 'T' || *s == ' ' || *s == ':') {
         ++s;
       } else {
         throw std::runtime_error("Invalid TIMESTAMP break string " + std::string(s));
       }
-    }
-    p = strptime(s, "%T %z", &tm_);
-    if (!p) {
-      p = strptime(s, "%T", &tm_);
-    }
-    if (!p) {
-      p = strptime(s, "%H%M%S", &tm_);
-    }
-    if (!p) {
-      p = strptime(s, "%R", &tm_);
-    }
-    if constexpr (TYPE == kTIME) {
-      if (tm_.tm_hour == -1 && tm_.tm_min == -1 && tm_.tm_sec == -1) {
-        throw std::runtime_error("Invalid TIME string " + str_);
-      }
-      return;
-    }
-    if constexpr (TYPE == kTIMESTAMP) {
+      detectFormatFromString(s, p, "%T %z", "%T", "%H%M%S", "%R");
       if (!p) {
         // check for weird customer format and remove decimal seconds from string if there
         // is a period followed by a number
@@ -161,25 +151,12 @@ class DateTimeStringValidate {
             memmove(startptr, endptr, strlen(endptr) + 1);
           }
         }
-        p = strptime(s, "%I . %M . %S %p", &tm_);  // customers weird '.' separated date
+        detectFormatFromString(
+            s, p, "%T %z", "%I . %M . %S %p");  // customers weird '.' separated date
       }
       if (!p) {
         throw std::runtime_error("Invalid TIMESTAMP time string " + std::string(s));
       }
-    }
-  }
-
-  constexpr void parseDatePart(const std::string& s, char*& p) {
-    // try ISO8601 date first
-    p = strptime(s.c_str(), "%Y-%m-%d", &tm_);
-    if (!p) {
-      p = strptime(s.c_str(), "%m/%d/%Y", &tm_);  // accept American date
-    }
-    if (!p) {
-      p = strptime(s.c_str(), "%d-%b-%y", &tm_);  // accept 03-Sep-15
-    }
-    if (!p) {
-      p = strptime(s.c_str(), "%d/%b/%Y", &tm_);  // accept 03/Sep/2015
     }
   }
 
@@ -206,6 +183,13 @@ class DateTimeStringValidate {
     } catch (const std::invalid_argument& ia) {
       throw std::runtime_error("Invalid DATE/TIMESTAMP string " + str_);
     }
+  }
+
+  template <typename EVAL_STRING, typename TARGET_CHAR, typename... EVAL_FORMATS>
+  inline void detectFormatFromString(EVAL_STRING s,
+                                     TARGET_CHAR& p,
+                                     EVAL_FORMATS... eval_formats) {
+    ((p = strptime(s, eval_formats, &tm_)) || ...);
   }
 
   std::string str_;

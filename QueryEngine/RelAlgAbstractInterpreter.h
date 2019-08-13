@@ -80,7 +80,7 @@ class RexLiteral : public RexScalar {
       , type_scale_(type_scale)
       , type_precision_(type_precision) {
     CHECK(type == kDECIMAL || type == kINTERVAL_DAY_TIME ||
-          type == kINTERVAL_YEAR_MONTH || IS_TIME(type));
+          type == kINTERVAL_YEAR_MONTH || is_datetime(type));
   }
 
   RexLiteral(const double val,
