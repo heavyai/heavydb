@@ -7952,6 +7952,73 @@ TEST(Select, TimestampPrecisionMeridiesEncoding) {
   }
 }
 
+TEST(Select, DateTimeZones) {
+  static const std::map<std::string, std::vector<int64_t>> gmt_epochs_ = {
+      {"Tokelau", {1541332800, 1541289600, 3600}},
+      {"NZ", {1541336400, 1541289600, 7200}},
+      {"AEST", {1541343600, 1541289600, 18000}},
+      {"IST", {1541359800, 1541289600, 5400}},
+      {"Baker Island", {1541422800, 1541376000, 46800}},
+      {"GMT", {1541379600, 1541376000, 3600}},
+      {"EST", {1541397600, 1541376000, 21600}},
+      {"PST", {1541408400, 1541376000, 32400}},
+      {"American Samoa", {1541419200, 1541376000, 43200}}};
+
+  static const std::vector<std::string> cols_ = {"ts", "dt", "ti"};
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    run_ddl_statement("DROP table if exists Fekir;");
+    EXPECT_NO_THROW(run_ddl_statement(
+        "create table Fekir(tz TEXT, ts TIMESTAMP, dt DATE, ti TIME);"));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO Fekir VALUES('Tokelau', '2018-11-05 01:00:00 "
+                         "+1300', '2018-11-05 +1300', '14:00:00 +1300');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO Fekir VALUES('NZ', '2018-11-05 01:00:00 +1200', "
+                         "'2018-11-05 +1200', '14:00:00 +1200');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO Fekir VALUES('AEST', '2018-11-05 01:00:00 +1000', "
+                         "'2018-11-05 +1000', '15:00:00 +1000');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO Fekir VALUES('IST', '2018-11-05 01:00:00 +0530', "
+                         "'2018-11-05 +0530', '7:00:00 +0530');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO Fekir VALUES('GMT', '2018-11-05 01:00:00 +0000', "
+                         "'2018-11-05 +0000', '01:00:00 +0000');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO Fekir VALUES('EST', '2018-11-05 01:00:00 -0500', "
+                         "'2018-11-05 -0500', '01:00:00 -0500');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO Fekir VALUES('PST', '2018-11-05 01:00:00 -0800', "
+                         "'2018-11-05 -0800', '01:00:00 -0800');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO Fekir VALUES('American Samoa', '2018-11-05 "
+                         "01:00:00 -1100', '2018-11-05 -1100', '01:00:00 -1100');",
+                         dt));
+    EXPECT_NO_THROW(
+        run_multiple_agg("INSERT INTO Fekir VALUES('Baker Island', '2018-11-05 01:00:00 "
+                         "-1200', '2018-11-05 -1200', '01:00:00 -1200');",
+                         dt));
+
+    for (const auto& elem : gmt_epochs_) {
+      for (size_t i = 0; i < elem.second.size(); ++i) {
+        ASSERT_EQ(elem.second[i],
+                  v<int64_t>(run_simple_agg(
+                      "SELECT " + cols_[i] + " FROM Fekir where tz='" + elem.first + "';",
+                      dt)));
+      }
+    }
+  }
+}
+
 TEST(Select, TimestampPrecision) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
