@@ -170,26 +170,26 @@ class RexLiteral : public RexScalar {
     switch (literal_.which()) {
       case 0: {
         int64_t val = getVal<int64_t>();
-        return boost::make_unique<RexLiteral>(
+        return std::make_unique<RexLiteral>(
             val, type_, target_type_, scale_, precision_, type_scale_, type_precision_);
       }
       case 1: {
         double val = getVal<double>();
-        return boost::make_unique<RexLiteral>(
+        return std::make_unique<RexLiteral>(
             val, type_, target_type_, scale_, precision_, type_scale_, type_precision_);
       }
       case 2: {
         auto val = getVal<std::string>();
-        return boost::make_unique<RexLiteral>(
+        return std::make_unique<RexLiteral>(
             val, type_, target_type_, scale_, precision_, type_scale_, type_precision_);
       }
       case 3: {
         bool val = getVal<bool>();
-        return boost::make_unique<RexLiteral>(
+        return std::make_unique<RexLiteral>(
             val, type_, target_type_, scale_, precision_, type_scale_, type_precision_);
       }
       case 4: {
-        return boost::make_unique<RexLiteral>(target_type_);
+        return std::make_unique<RexLiteral>(target_type_);
       }
       default:
         CHECK(false);
@@ -328,7 +328,7 @@ class RexInput : public RexAbstractInput {
   }
 
   std::unique_ptr<RexInput> deepCopy() const {
-    return boost::make_unique<RexInput>(node_, getIndex());
+    return std::make_unique<RexInput>(node_, getIndex());
   }
 
  private:
@@ -561,7 +561,7 @@ class RexRef : public RexScalar {
     return "(RexRef " + std::to_string(index_) + ")";
   }
 
-  std::unique_ptr<RexRef> deepCopy() const { return boost::make_unique<RexRef>(index_); }
+  std::unique_ptr<RexRef> deepCopy() const { return std::make_unique<RexRef>(index_); }
 
  private:
   const size_t index_;
@@ -595,7 +595,7 @@ class RexAgg : public Rex {
   const SQLTypeInfo& getType() const { return type_; }
 
   std::unique_ptr<RexAgg> deepCopy() const {
-    return boost::make_unique<RexAgg>(agg_, distinct_, type_, operands_);
+    return std::make_unique<RexAgg>(agg_, distinct_, type_, operands_);
   }
 
  private:
@@ -855,7 +855,7 @@ class RelProject : public RelAlgNode, public ModifyManipulationTarget {
 
   void injectOffsetInFragmentExpr() const {
     RexFunctionOperator::ConstRexScalarPtrVector transient_vector;
-    scalar_exprs_.emplace_back(boost::make_unique<RexFunctionOperator const>(
+    scalar_exprs_.emplace_back(std::make_unique<RexFunctionOperator const>(
         std::string("OFFSET_IN_FRAGMENT"), transient_vector, SQLTypeInfo(kINT, false)));
     fields_.emplace_back("EXPR$DELETE_OFFSET_IN_FRAGMENT");
   }

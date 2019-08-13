@@ -184,7 +184,7 @@ class RexDeepCopyVisitor : public RexVisitorBase<std::unique_ptr<const RexScalar
                                  visit(rex_case->getThen(i)));
     }
     auto new_else = visit(rex_case->getElse());
-    return boost::make_unique<RexCase>(new_pair_list, new_else);
+    return std::make_unique<RexCase>(new_pair_list, new_else);
   }
 
  private:
@@ -200,13 +200,13 @@ class RexInputRenumber : public RexDeepCopyVisitor {
     auto renum_it = old_to_new_idx_.find(input->getIndex());
     if (bAllowMissing) {
       if (renum_it != old_to_new_idx_.end()) {
-        return boost::make_unique<RexInput>(input->getSourceNode(), renum_it->second);
+        return std::make_unique<RexInput>(input->getSourceNode(), renum_it->second);
       } else {
         return input->deepCopy();
       }
     } else {
       CHECK(renum_it != old_to_new_idx_.end());
-      return boost::make_unique<RexInput>(input->getSourceNode(), renum_it->second);
+      return std::make_unique<RexInput>(input->getSourceNode(), renum_it->second);
     }
   }
 
