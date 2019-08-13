@@ -187,7 +187,7 @@ bool approx_eq(const double v, const double target, const double eps = 0.01) {
 }
 
 int parse_fractional_seconds(uint sfrac, int ntotal, SQLTypeInfo& ti) {
-  return TimeGM::instance().parse_fractional_seconds(sfrac, ntotal, ti);
+  return TimeGM::instance().parse_fractional_seconds(sfrac, ntotal, ti.get_dimension());
 }
 
 class SQLiteComparator {

@@ -50,9 +50,8 @@ int TimeGM::leap_days(int y1, int y2) {
 }
 
 time_t TimeGM::parse_fractional_seconds(uint64_t sfrac,
-                                        const int ntotal,
-                                        const SQLTypeInfo& ti) {
-  int dimen = ti.get_dimension();
+                                        const int32_t ntotal,
+                                        const int32_t dimen) {
   int nfrac = log10(sfrac) + 1;
   if (ntotal - nfrac > dimen) {
     return 0;
@@ -67,8 +66,8 @@ time_t TimeGM::parse_fractional_seconds(uint64_t sfrac,
 
 time_t TimeGM::parse_meridians(const time_t& timeval,
                                const char* p,
-                               const uint32_t& hour,
-                               const SQLTypeInfo& ti) {
+                               const uint32_t hour,
+                               const int32_t dimen) {
   char meridies[20];
   if (sscanf(p, "%*d %s", meridies) != 1) {
     if (sscanf(p, "%s", meridies) != 1) {
@@ -79,13 +78,11 @@ time_t TimeGM::parse_meridians(const time_t& timeval,
       boost::iequals(std::string(meridies), "p.m.") ||
       boost::iequals(std::string(meridies), "p.m")) {
     return hour == 12 ? timeval
-                      : timeval + kSecsPerHalfDay *
-                                      static_cast<int64_t>(pow(10, ti.get_dimension()));
+                      : timeval + kSecsPerHalfDay * static_cast<int64_t>(pow(10, dimen));
   } else if (boost::iequals(std::string(meridies), "am") ||
              boost::iequals(std::string(meridies), "a.m.") ||
              boost::iequals(std::string(meridies), "a.m")) {
-    return hour == 12 ? timeval - kSecsPerHalfDay *
-                                      static_cast<int64_t>(pow(10, ti.get_dimension()))
+    return hour == 12 ? timeval - kSecsPerHalfDay * static_cast<int64_t>(pow(10, dimen))
                       : timeval;
   } else {
     return timeval;
