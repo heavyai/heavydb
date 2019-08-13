@@ -84,9 +84,10 @@ void BufferMgr::clear() {
   std::lock_guard<std::mutex> sized_segs_lock(sized_segs_mutex_);
   std::lock_guard<std::mutex> chunk_index_lock(chunk_index_mutex_);
   std::lock_guard<std::mutex> unsized_segs_lock(unsized_segs_mutex_);
-  for (auto buf_it = chunk_index_.begin(); buf_it != chunk_index_.end(); ++buf_it) {
-    delete buf_it->second->buffer;
+  for (auto& buf : chunk_index_) {
+    delete buf.second->buffer;
   }
+
   chunk_index_.clear();
   slabs_.clear();
   slab_segments_.clear();
@@ -126,8 +127,8 @@ AbstractBuffer* BufferMgr::createBuffer(const ChunkKey& chunk_key,
     auto buffer_it = chunk_index_.find(chunk_key);
     CHECK(buffer_it != chunk_index_.end());
     buffer_it->second->buffer =
-        0;  // constructor failed for the buffer object so make sure to mark it zero so
-            // deleteBuffer doesn't try to delete it
+        nullptr;  // constructor failed for the buffer object so make sure to mark it null
+                  // so deleteBuffer doesn't try to delete it
     deleteBuffer(chunk_key);
     throw;
   }
@@ -256,9 +257,8 @@ BufferList::iterator BufferMgr::findFreeBufferInSlab(const size_t slab_num,
       return buffer_it;
     }
   }
-  // If here then we did not find a free buffer of
-  // sufficient size in
-  // this slab, return the end iterator
+  // If here then we did not find a free buffer of sufficient size in this slab,
+  // return the end iterator
   return slab_segments_[slab_num].end();
 }
 
@@ -415,27 +415,24 @@ std::string BufferMgr::printSlab(size_t slab_num) {
   std::ostringstream tss;
   // size_t lastEnd = 0;
   tss << "Slab St.Page   Pages  Touch" << std::endl;
-  for (auto seg_it = slab_segments_[slab_num].begin();
-       seg_it != slab_segments_[slab_num].end();
-       ++seg_it) {
+  for (auto segment : slab_segments_[slab_num]) {
     tss << setfill(' ') << setw(4) << slab_num;
-    // tss << " BSN: " << setfill(' ') << setw(2) << seg_it->slab_num;
-    tss << setfill(' ') << setw(8) << seg_it->start_page;
-    tss << setfill(' ') << setw(8) << seg_it->num_pages;
-    // tss << " GAP: " << setfill(' ') << setw(7) << seg_it->start_page - lastEnd;
-    // lastEnd = seg_it->start_page + seg_it->num_pages;
-    tss << setfill(' ') << setw(7) << seg_it->last_touched;
-    // tss << " PC: " << setfill(' ') << setw(2) << seg_it->buffer->getPinCount();
-    if (seg_it->mem_status == FREE) {
+    // tss << " BSN: " << setfill(' ') << setw(2) << segment.slab_num;
+    tss << setfill(' ') << setw(8) << segment.start_page;
+    tss << setfill(' ') << setw(8) << segment.num_pages;
+    // tss << " GAP: " << setfill(' ') << setw(7) << segment.start_page - lastEnd;
+    // lastEnd = segment.start_page + segment.num_pages;
+    tss << setfill(' ') << setw(7) << segment.last_touched;
+    // tss << " PC: " << setfill(' ') << setw(2) << segment.buffer->getPinCount();
+    if (segment.mem_status == FREE) {
       tss << " FREE"
           << " ";
     } else {
-      tss << " PC: " << setfill(' ') << setw(2) << seg_it->buffer->getPinCount();
+      tss << " PC: " << setfill(' ') << setw(2) << segment.buffer->getPinCount();
       tss << " USED - Chunk: ";
 
-      for (auto vec_it = seg_it->chunk_key.begin(); vec_it != seg_it->chunk_key.end();
-           ++vec_it) {
-        tss << *vec_it << ",";
+      for (auto&& key_elem : segment.chunk_key) {
+        tss << key_elem << ",";
       }
     }
     tss << std::endl;
@@ -458,15 +455,12 @@ std::string BufferMgr::printSlabs() {
 
 void BufferMgr::clearSlabs() {
   bool pinned_exists = false;
-  size_t num_slabs = slab_segments_.size();
-  for (size_t slab_num = 0; slab_num != num_slabs; ++slab_num) {
-    for (auto seg_it = slab_segments_[slab_num].begin();
-         seg_it != slab_segments_[slab_num].end();
-         ++seg_it) {
-      if (seg_it->mem_status == FREE) {
+  for (auto& segment_list : slab_segments_) {
+    for (auto& segment : segment_list) {
+      if (segment.mem_status == FREE) {
         // no need to free
-      } else if (seg_it->buffer->getPinCount() < 1) {
-        deleteBuffer(seg_it->chunk_key, true);
+      } else if (segment.buffer->getPinCount() < 1) {
+        deleteBuffer(segment.chunk_key, true);
       } else {
         pinned_exists = true;
       }
@@ -502,13 +496,10 @@ size_t BufferMgr::getPageSize() {
 // return the size of the chunks in use in bytes
 size_t BufferMgr::getInUseSize() {
   size_t in_use = 0;
-  size_t num_slabs = slab_segments_.size();
-  for (size_t slab_num = 0; slab_num != num_slabs; ++slab_num) {
-    for (auto seg_it = slab_segments_[slab_num].begin();
-         seg_it != slab_segments_[slab_num].end();
-         ++seg_it) {
-      if (seg_it->mem_status != FREE) {
-        in_use += seg_it->num_pages * page_size_;
+  for (auto& segment_list : slab_segments_) {
+    for (auto& segment : segment_list) {
+      if (segment.mem_status != FREE) {
+        in_use += segment.num_pages * page_size_;
       }
     }
   }
@@ -669,12 +660,12 @@ void BufferMgr::checkpoint() {
   std::lock_guard<std::mutex> lock(global_mutex_);  // granular lock
   std::lock_guard<std::mutex> chunkIndexLock(chunk_index_mutex_);
 
-  for (auto buffer_it = chunk_index_.begin(); buffer_it != chunk_index_.end();
-       ++buffer_it) {
+  for (auto& chunk_itr : chunk_index_) {
     // checks that buffer is actual chunk (not just buffer) and is dirty
-    if (buffer_it->second->chunk_key[0] != -1 && buffer_it->second->buffer->is_dirty_) {
-      parent_mgr_->putBuffer(buffer_it->second->chunk_key, buffer_it->second->buffer);
-      buffer_it->second->buffer->clearDirtyBits();
+    auto& buffer_itr = chunk_itr.second;
+    if (buffer_itr->chunk_key[0] != -1 && buffer_itr->buffer->is_dirty_) {
+      parent_mgr_->putBuffer(buffer_itr->chunk_key, buffer_itr->buffer);
+      buffer_itr->buffer->clearDirtyBits();
     }
   }
 }
@@ -716,9 +707,9 @@ AbstractBuffer* BufferMgr::getBuffer(const ChunkKey& key, const size_t num_bytes
   std::unique_lock<std::mutex> sized_segs_lock(sized_segs_mutex_);
   std::unique_lock<std::mutex> chunk_index_lock(chunk_index_mutex_);
   auto buffer_it = chunk_index_.find(key);
-  bool foundBuffer = buffer_it != chunk_index_.end();
+  bool found_buffer = buffer_it != chunk_index_.end();
   chunk_index_lock.unlock();
-  if (foundBuffer) {
+  if (found_buffer) {
     CHECK(buffer_it->second->buffer);
     buffer_it->second->buffer->pin();
     sized_segs_lock.unlock();
