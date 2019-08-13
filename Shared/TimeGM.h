@@ -32,7 +32,7 @@
 class TimeGM {
  public:
   time_t my_timegm(const struct tm* tm);
-  time_t my_timegm(const struct tm* tm, const time_t& fsc, const SQLTypeInfo& ti);
+  time_t my_timegm(const struct tm* tm, const time_t fsc, const int32_t dimen);
   time_t my_timegm_days(const struct tm* tm);
   time_t parse_fractional_seconds(uint64_t sfrac,
                                   const int32_t ntotal,
@@ -89,9 +89,7 @@ class DateTimeStringValidate {
     int64_t timeval = 0;
     if (dimen_ > 0) {
       const int64_t frac = parseFractionalSeconds(p);
-      timeval = (static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_)) *
-                 static_cast<int64_t>(pow(10, dimen_))) +
-                frac;
+      timeval = static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_, frac, dimen_));
     } else {
       timeval = static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_));
       if (*p == '.') {

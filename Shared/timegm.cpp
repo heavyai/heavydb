@@ -121,10 +121,10 @@ time_t TimeGM::my_timegm(const struct tm* tm) {
   return seconds;
 }
 
-time_t TimeGM::my_timegm(const struct tm* tm, const time_t& fsc, const SQLTypeInfo& ti) {
+time_t TimeGM::my_timegm(const struct tm* tm, const time_t fsc, const int32_t dimen) {
   time_t sec;
 
-  sec = my_timegm(tm) * static_cast<int64_t>(pow(10, ti.get_dimension()));
+  sec = my_timegm(tm) * static_cast<int64_t>(pow(10, dimen));
   sec += fsc;
 
   return sec;
