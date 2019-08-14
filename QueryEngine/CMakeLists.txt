@@ -89,6 +89,7 @@ set(query_engine_source_files
     RuntimeFunctions.bc
     DynamicWatchdog.cpp
     ScalarCodeGenerator.cpp
+    SerializeToSql.cpp
     SpeculativeTopN.cpp
     StreamingTopN.cpp
     StringDictionaryGenerations.cpp
