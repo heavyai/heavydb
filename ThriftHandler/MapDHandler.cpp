@@ -1603,16 +1603,6 @@ TColumnType MapDHandler::populateThriftColumnType(const Catalog* cat,
   return col_type;
 }
 
-// DEPRECATED(2017-04-17) - use get_table_details()
-void MapDHandler::get_table_descriptor(TTableDescriptor& _return,
-                                       const TSessionId& session,
-                                       const std::string& table_name) {
-  LOG_SESSION(session, "table_name", table_name);
-  THROW_MAPD_EXCEPTION(
-      "get_table_descriptor is deprecated, please use 'row_desc' from "
-      "'get_table_details'.");
-}
-
 void MapDHandler::get_internal_table_details(TTableDetails& _return,
                                              const TSessionId& session,
                                              const std::string& table_name) {
@@ -1701,24 +1691,6 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
                  ? TPartitionDetail::REPLICATED
                  : (td->partitions == "SHARDED" ? TPartitionDetail::SHARDED
                                                 : TPartitionDetail::OTHER));
-}
-
-// DEPRECATED(2017-04-17) - use get_table_details()
-void MapDHandler::get_row_descriptor(TRowDescriptor& _return,
-                                     const TSessionId& session,
-                                     const std::string& table_name) {
-  LOG_SESSION(session, "table_name", table_name);
-  THROW_MAPD_EXCEPTION(
-      "get_row_descriptor is deprecated, please use 'row_desc' from "
-      "'get_table_details'.");
-}
-
-// DEPRECATED(2019-04-01) - use get_dashboard()
-void MapDHandler::get_frontend_view(TFrontendView& _return,
-                                    const TSessionId& session,
-                                    const std::string& view_name) {
-  LOG_SESSION(session);
-  THROW_MAPD_EXCEPTION("'get_frontend_view' is deprecated, please use 'get_dashboard'.");
 }
 
 void MapDHandler::get_link_view(TFrontendView& _return,
@@ -2018,14 +1990,6 @@ void MapDHandler::get_databases(std::vector<TDBInfo>& dbinfos,
     dbinfo.db_owner = std::move(db.dbOwnerName);
     dbinfos.push_back(std::move(dbinfo));
   }
-}
-
-// DEPRECATED(2019-04-01) - use get_dashboards()
-void MapDHandler::get_frontend_views(std::vector<TFrontendView>& view_names,
-                                     const TSessionId& session) {
-  LOG_SESSION(session);
-  THROW_MAPD_EXCEPTION(
-      "'get_frontend_views' is deprecated, please use 'get_dashboards'.");
 }
 
 void MapDHandler::set_execution_mode(const TSessionId& session,
@@ -3347,25 +3311,6 @@ void MapDHandler::get_dashboard_grantees(
     grantee.permissions = perm;
     dashboard_grantees.push_back(grantee);
   }
-}
-
-// DEPRECATED(2019-04-01) - use create_dashboard()
-void MapDHandler::create_frontend_view(const TSessionId& session,
-                                       const std::string& view_name,
-                                       const std::string& view_state,
-                                       const std::string& image_hash,
-                                       const std::string& view_metadata) {
-  LOG_SESSION(session);
-  THROW_MAPD_EXCEPTION(
-      "'create_frontend_view' is deprecated, please use 'create_dashboard'.");
-}
-
-// DEPRECATED(2019-04-01) - use delete_dashboard()
-void MapDHandler::delete_frontend_view(const TSessionId& session,
-                                       const std::string& view_name) {
-  LOG_SESSION(session);
-  THROW_MAPD_EXCEPTION(
-      "'delete_frontend_view' is deprecated, please use 'delete_dashboard'.");
 }
 
 void MapDHandler::create_link(std::string& _return,

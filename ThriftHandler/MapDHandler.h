@@ -254,19 +254,6 @@ class MapDHandler : public MapDIf {
       const bool column_format,
       const int32_t pixel_radius,
       const std::string& nonce) override;
-  // Immerse
-  void get_frontend_view(TFrontendView& _return,
-                         const TSessionId& session,
-                         const std::string& view_name) override;
-  void get_frontend_views(std::vector<TFrontendView>& _return,
-                          const TSessionId& session) override;
-  void create_frontend_view(const TSessionId& session,
-                            const std::string& view_name,
-                            const std::string& view_state,
-                            const std::string& image_hash,
-                            const std::string& view_metadata) override;
-  void delete_frontend_view(const TSessionId& session,
-                            const std::string& view_name) override;
 
   // dashboards
   void get_dashboard(TDashboard& _return,
@@ -392,13 +379,6 @@ class MapDHandler : public MapDIf {
   void checkpoint(const TSessionId& session,
                   const int32_t db_id,
                   const int32_t table_id) override;
-  // deprecated
-  void get_table_descriptor(TTableDescriptor& _return,
-                            const TSessionId& session,
-                            const std::string& table_name) override;
-  void get_row_descriptor(TRowDescriptor& _return,
-                          const TSessionId& session,
-                          const std::string& table_name) override;
   // DB Object Privileges
   void get_roles(std::vector<std::string>& _return, const TSessionId& session) override;
   bool has_object_privilege(const TSessionId& sessionId,

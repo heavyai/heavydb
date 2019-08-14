@@ -515,12 +515,7 @@ service MapD {
   void set_execution_mode(1: TSessionId session, 2: TExecuteMode mode) throws (1: TMapDException e)
   TRenderResult render_vega(1: TSessionId session, 2: i64 widget_id, 3: string vega_json, 4: i32 compression_level, 5: string nonce) throws (1: TMapDException e)
   TPixelTableRowResult get_result_row_for_pixel(1: TSessionId session, 2: i64 widget_id, 3: TPixel pixel, 4: map<string, list<string>> table_col_names, 5: bool column_format, 6: i32 pixelRadius, 7: string nonce) throws (1: TMapDException e)
-  # Immerse
-  TFrontendView get_frontend_view(1: TSessionId session, 2: string view_name) throws (1: TMapDException e)
-  list<TFrontendView> get_frontend_views(1: TSessionId session) throws (1: TMapDException e)
-  void create_frontend_view(1: TSessionId session, 2: string view_name, 3: string view_state, 4: string image_hash, 5: string view_metadata) throws (1: TMapDException e)
-  void delete_frontend_view(1: TSessionId session, 2: string view_name) throws (1: TMapDException e)
-  #dashboard will deprecate frontendview name over time
+  # dashboards
   TDashboard get_dashboard(1: TSessionId session, 2: i32 dashboard_id) throws (1: TMapDException e)
   list<TDashboard> get_dashboards(1: TSessionId session) throws (1: TMapDException e)
   i32 create_dashboard(1: TSessionId session, 2: string dashboard_name, 3: string dashboard_state, 4: string image_hash, 5: string dashboard_metadata) throws (1: TMapDException e)
@@ -554,9 +549,6 @@ service MapD {
   TRenderStepResult execute_next_render_step(1: TPendingRenderQuery pending_render, 2: TRenderAggDataMap merged_data) throws (1: TMapDException e)
   void insert_data(1: TSessionId session, 2: TInsertData insert_data) throws (1: TMapDException e)
   void checkpoint(1: TSessionId session, 2: i32 db_id, 3: i32 table_id) throws (1: TMapDException e)
-  # deprecated
-  TTableDescriptor get_table_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
-  TRowDescriptor get_row_descriptor(1: TSessionId session, 2: string table_name) throws (1: TMapDException e)
   # object privileges
   list<string> get_roles(1: TSessionId session) throws (1: TMapDException e)
   list<TDBObject> get_db_objects_for_grantee(1: TSessionId session 2: string roleName) throws (1: TMapDException e)
