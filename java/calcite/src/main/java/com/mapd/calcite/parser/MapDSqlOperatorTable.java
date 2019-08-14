@@ -91,7 +91,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         Multimap operators = (Multimap) f.get(SqlStdOperatorTable.instance());
         for (Iterator i = operators.entries().iterator(); i.hasNext();) {
           Map.Entry entry = (Map.Entry) i.next();
-          if (entry.getValue() == SqlStdOperatorTable.APPROX_COUNT_DISTINCT) {
+          if (entry.getValue() == SqlStdOperatorTable.APPROX_COUNT_DISTINCT
+                  || entry.getValue() == SqlStdOperatorTable.AVG) {
             i.remove();
           }
         }
@@ -104,7 +105,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         Multimap operators = (Multimap) f.get(SqlStdOperatorTable.instance());
         for (Iterator i = operators.entries().iterator(); i.hasNext();) {
           Map.Entry entry = (Map.Entry) i.next();
-          if (entry.getValue() == SqlStdOperatorTable.APPROX_COUNT_DISTINCT) {
+          if (entry.getValue() == SqlStdOperatorTable.APPROX_COUNT_DISTINCT
+                  || entry.getValue() == SqlStdOperatorTable.AVG) {
             i.remove();
           }
         }
@@ -199,6 +201,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     opTab.addOperator(new CastToGeography());
     opTab.addOperator(new OffsetInFragment());
     opTab.addOperator(new ApproxCountDistinct());
+    opTab.addOperator(new MapDAvg());
     opTab.addOperator(new Sample());
     opTab.addOperator(new LastSample());
     // MapD_Geo* are deprecated in place of the OmniSci_Geo_ varietals
@@ -1344,6 +1347,24 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
       return typeFactory.createSqlType(SqlTypeName.BIGINT);
+    }
+  }
+
+  static class MapDAvg extends SqlAggFunction {
+    MapDAvg() {
+      super("AVG",
+              null,
+              SqlKind.OTHER_FUNCTION,
+              null,
+              null,
+              OperandTypes.family(SqlTypeFamily.NUMERIC),
+              SqlFunctionCategory.SYSTEM);
+    }
+
+    @Override
+    public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
+      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+      return typeFactory.createSqlType(SqlTypeName.DOUBLE);
     }
   }
 

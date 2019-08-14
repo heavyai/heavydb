@@ -1091,9 +1091,9 @@ TEST(Select, FilterAndSimpleAggregation) {
     ASSERT_NEAR(static_cast<double>(0.125),
                 v<double>(run_simple_agg("SELECT COVAR_POP(x, y) FROM test;", dt)),
                 static_cast<double>(0.001));
-    ASSERT_NEAR(static_cast<double>(0.125),
-                v<double>(run_simple_agg("SELECT COVAR_POP_FLOAT(x, y) FROM test;", dt)),
-                static_cast<double>(0.001));
+    ASSERT_NEAR(static_cast<float>(0.125),
+                v<float>(run_simple_agg("SELECT COVAR_POP_FLOAT(x, y) FROM test;", dt)),
+                static_cast<float>(0.001));
     ASSERT_NEAR(
         static_cast<double>(0.125),  // covar_pop expansion
         v<double>(run_simple_agg("SELECT avg(x * y) - avg(x) * avg(y) FROM test;", dt)),
@@ -1112,16 +1112,15 @@ TEST(Select, FilterAndSimpleAggregation) {
     ASSERT_NEAR(static_cast<double>(0.58),
                 v<double>(run_simple_agg("SELECT CORRELATION(x, y) FROM test;", dt)),
                 static_cast<double>(0.01));
-    ASSERT_NEAR(
-        static_cast<double>(0.58),
-        v<double>(run_simple_agg("SELECT CORRELATION_FLOAT(x, y) FROM test;", dt)),
-        static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<float>(0.58),
+                v<float>(run_simple_agg("SELECT CORRELATION_FLOAT(x, y) FROM test;", dt)),
+                static_cast<float>(0.01));
     ASSERT_NEAR(static_cast<double>(0.58),
                 v<double>(run_simple_agg("SELECT CORR(x, y) FROM test;", dt)),
                 static_cast<double>(0.01));
-    ASSERT_NEAR(static_cast<double>(0.58),
-                v<double>(run_simple_agg("SELECT CORR_FLOAT(x, y) FROM test;", dt)),
-                static_cast<double>(0.01));
+    ASSERT_NEAR(static_cast<float>(0.58),
+                v<float>(run_simple_agg("SELECT CORR_FLOAT(x, y) FROM test;", dt)),
+                static_cast<float>(0.01));
     ASSERT_NEAR(static_cast<double>(0.33),
                 v<double>(run_simple_agg("SELECT POWER(CORR(x, y), 2) FROM test;", dt)),
                 static_cast<double>(0.01));
