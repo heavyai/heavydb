@@ -12,7 +12,7 @@ set(shared_source_files
 )
 
 add_library(Shared ${shared_source_files})
-target_link_libraries(Shared ${Boost_LIBRARIES})
+target_link_libraries(Shared ${Boost_LIBRARIES} ${GDAL_LIBRARIES})
 
 # Required by ThriftClient.cpp
 add_definitions("-DTHRIFT_PACKAGE_VERSION=\"${Thrift_VERSION}\"")
