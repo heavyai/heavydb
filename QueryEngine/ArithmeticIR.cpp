@@ -61,7 +61,7 @@ llvm::Value* CodeGenerator::codegenArith(const Analyzer::BinOper* bin_oper,
     CHECK_EQ(lhs_type.get_type(), rhs_type.get_type());
   }
   if (lhs_type.is_integer() || lhs_type.is_decimal() || lhs_type.is_timeinterval()) {
-    return codegenIntArith(bin_oper, lhs_lv, rhs_lv);
+    return codegenIntArith(bin_oper, lhs_lv, rhs_lv, co);
   }
   if (lhs_type.is_fp()) {
     return codegenFpArith(bin_oper, lhs_lv, rhs_lv);
@@ -73,7 +73,8 @@ llvm::Value* CodeGenerator::codegenArith(const Analyzer::BinOper* bin_oper,
 // Handle integer or integer-like (decimal, time, date) operand types.
 llvm::Value* CodeGenerator::codegenIntArith(const Analyzer::BinOper* bin_oper,
                                             llvm::Value* lhs_lv,
-                                            llvm::Value* rhs_lv) {
+                                            llvm::Value* rhs_lv,
+                                            const CompilationOptions& co) {
   const auto lhs = bin_oper->get_left_operand();
   const auto rhs = bin_oper->get_right_operand();
   const auto& lhs_type = lhs->get_type_info();
@@ -88,21 +89,24 @@ llvm::Value* CodeGenerator::codegenIntArith(const Analyzer::BinOper* bin_oper,
                         rhs_lv,
                         null_check_suffix.empty() ? "" : int_typename,
                         null_check_suffix,
-                        oper_type);
+                        oper_type,
+                        co);
     case kPLUS:
       return codegenAdd(bin_oper,
                         lhs_lv,
                         rhs_lv,
                         null_check_suffix.empty() ? "" : int_typename,
                         null_check_suffix,
-                        oper_type);
+                        oper_type,
+                        co);
     case kMULTIPLY:
       return codegenMul(bin_oper,
                         lhs_lv,
                         rhs_lv,
                         null_check_suffix.empty() ? "" : int_typename,
                         null_check_suffix,
-                        oper_type);
+                        oper_type,
+                        co);
     case kDIVIDE:
       return codegenDiv(lhs_lv,
                         rhs_lv,
@@ -209,7 +213,8 @@ llvm::Value* CodeGenerator::codegenAdd(const Analyzer::BinOper* bin_oper,
                                        llvm::Value* rhs_lv,
                                        const std::string& null_typename,
                                        const std::string& null_check_suffix,
-                                       const SQLTypeInfo& ti) {
+                                       const SQLTypeInfo& ti,
+                                       const CompilationOptions& co) {
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
   llvm::Value* chosen_max{nullptr};
@@ -219,6 +224,12 @@ llvm::Value* CodeGenerator::codegenAdd(const Analyzer::BinOper* bin_oper,
       !checkExpressionRanges(bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
                              static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue());
+
+  if (need_overflow_check && co.device_type_ == ExecutorDeviceType::CPU) {
+    return codegenBinOpWithOverflowForCPU(
+        bin_oper, lhs_lv, rhs_lv, null_check_suffix, ti);
+  }
+
   llvm::BasicBlock* add_ok{nullptr};
   llvm::BasicBlock* add_fail{nullptr};
   if (need_overflow_check) {
@@ -263,7 +274,8 @@ llvm::Value* CodeGenerator::codegenSub(const Analyzer::BinOper* bin_oper,
                                        llvm::Value* rhs_lv,
                                        const std::string& null_typename,
                                        const std::string& null_check_suffix,
-                                       const SQLTypeInfo& ti) {
+                                       const SQLTypeInfo& ti,
+                                       const CompilationOptions& co) {
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
   llvm::Value* chosen_max{nullptr};
@@ -273,6 +285,12 @@ llvm::Value* CodeGenerator::codegenSub(const Analyzer::BinOper* bin_oper,
       !checkExpressionRanges(bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
                              static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue());
+
+  if (need_overflow_check && co.device_type_ == ExecutorDeviceType::CPU) {
+    return codegenBinOpWithOverflowForCPU(
+        bin_oper, lhs_lv, rhs_lv, null_check_suffix, ti);
+  }
+
   llvm::BasicBlock* sub_ok{nullptr};
   llvm::BasicBlock* sub_fail{nullptr};
   if (need_overflow_check) {
@@ -336,6 +354,7 @@ llvm::Value* CodeGenerator::codegenMul(const Analyzer::BinOper* bin_oper,
                                        const std::string& null_typename,
                                        const std::string& null_check_suffix,
                                        const SQLTypeInfo& ti,
+                                       const CompilationOptions& co,
                                        bool downscale) {
   CHECK_EQ(lhs_lv->getType(), rhs_lv->getType());
   CHECK(ti.is_integer() || ti.is_decimal() || ti.is_timeinterval());
@@ -346,6 +365,12 @@ llvm::Value* CodeGenerator::codegenMul(const Analyzer::BinOper* bin_oper,
       !checkExpressionRanges(bin_oper,
                              static_cast<llvm::ConstantInt*>(chosen_min)->getSExtValue(),
                              static_cast<llvm::ConstantInt*>(chosen_max)->getSExtValue());
+
+  if (need_overflow_check && co.device_type_ == ExecutorDeviceType::CPU) {
+    return codegenBinOpWithOverflowForCPU(
+        bin_oper, lhs_lv, rhs_lv, null_check_suffix, ti);
+  }
+
   llvm::BasicBlock* mul_ok{nullptr};
   llvm::BasicBlock* mul_fail{nullptr};
   if (need_overflow_check) {
@@ -658,5 +683,72 @@ llvm::Value* CodeGenerator::codegenUMinus(const Analyzer::UOper* uoper,
         cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
     cgen_state_->ir_builder_.SetInsertPoint(uminus_ok);
   }
+  return ret;
+}
+
+llvm::Function* CodeGenerator::getArithWithOverflowIntrinsic(
+    const Analyzer::BinOper* bin_oper,
+    llvm::Type* type) {
+  llvm::Intrinsic::ID fn_id{llvm::Intrinsic::not_intrinsic};
+  switch (bin_oper->get_optype()) {
+    case kMINUS:
+      fn_id = llvm::Intrinsic::ssub_with_overflow;
+      break;
+    case kPLUS:
+      fn_id = llvm::Intrinsic::sadd_with_overflow;
+      break;
+    case kMULTIPLY:
+      fn_id = llvm::Intrinsic::smul_with_overflow;
+      break;
+    default:
+      LOG(FATAL) << "unexpected arith with overflow optype: " << bin_oper->toString();
+  }
+
+  return llvm::Intrinsic::getDeclaration(cgen_state_->module_, fn_id, type);
+}
+
+llvm::Value* CodeGenerator::codegenBinOpWithOverflowForCPU(
+    const Analyzer::BinOper* bin_oper,
+    llvm::Value* lhs_lv,
+    llvm::Value* rhs_lv,
+    const std::string& null_check_suffix,
+    const SQLTypeInfo& ti) {
+  cgen_state_->needs_error_check_ = true;
+
+  llvm::BasicBlock* check_ok =
+      llvm::BasicBlock::Create(cgen_state_->context_, "ovf_ok", cgen_state_->row_func_);
+  llvm::BasicBlock* check_fail = llvm::BasicBlock::Create(
+      cgen_state_->context_, "ovf_detected", cgen_state_->row_func_);
+  llvm::BasicBlock* null_check{nullptr};
+
+  if (!null_check_suffix.empty()) {
+    null_check = cgen_state_->ir_builder_.GetInsertBlock();
+    codegenSkipOverflowCheckForNull(lhs_lv, rhs_lv, check_ok, ti);
+  }
+
+  // Compute result and overflow flag
+  auto func = getArithWithOverflowIntrinsic(bin_oper, lhs_lv->getType());
+  auto ret_and_overflow = cgen_state_->ir_builder_.CreateCall(func, {lhs_lv, rhs_lv});
+  auto ret = cgen_state_->ir_builder_.CreateExtractValue(ret_and_overflow, {0});
+  auto overflow = cgen_state_->ir_builder_.CreateExtractValue(ret_and_overflow, {1});
+  auto val_bb = cgen_state_->ir_builder_.GetInsertBlock();
+
+  // Return error on overflow
+  cgen_state_->ir_builder_.CreateCondBr(overflow, check_fail, check_ok);
+  cgen_state_->ir_builder_.SetInsertPoint(check_fail);
+  cgen_state_->ir_builder_.CreateRet(
+      cgen_state_->llInt(Executor::ERR_OVERFLOW_OR_UNDERFLOW));
+
+  cgen_state_->ir_builder_.SetInsertPoint(check_ok);
+
+  // In case of null check we have to use NULL result on check fail
+  if (null_check) {
+    auto phi = cgen_state_->ir_builder_.CreatePHI(ret->getType(), 2);
+    phi->addIncoming(llvm::ConstantInt::get(ret->getType(), inline_int_null_val(ti)),
+                     null_check);
+    phi->addIncoming(ret, val_bb);
+    ret = phi;
+  }
+
   return ret;
 }

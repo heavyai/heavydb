@@ -233,7 +233,10 @@ class CodeGenerator {
       const bool fetch_column,
       const CompilationOptions& co);
 
-  llvm::Value* codegenIntArith(const Analyzer::BinOper*, llvm::Value*, llvm::Value*);
+  llvm::Value* codegenIntArith(const Analyzer::BinOper*,
+                               llvm::Value*,
+                               llvm::Value*,
+                               const CompilationOptions&);
 
   llvm::Value* codegenFpArith(const Analyzer::BinOper*, llvm::Value*, llvm::Value*);
 
@@ -265,14 +268,16 @@ class CodeGenerator {
                           llvm::Value*,
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
-                          const SQLTypeInfo&);
+                          const SQLTypeInfo&,
+                          const CompilationOptions&);
 
   llvm::Value* codegenSub(const Analyzer::BinOper*,
                           llvm::Value*,
                           llvm::Value*,
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
-                          const SQLTypeInfo&);
+                          const SQLTypeInfo&,
+                          const CompilationOptions&);
 
   void codegenSkipOverflowCheckForNull(llvm::Value* lhs_lv,
                                        llvm::Value* rhs_lv,
@@ -285,6 +290,7 @@ class CodeGenerator {
                           const std::string& null_typename,
                           const std::string& null_check_suffix,
                           const SQLTypeInfo&,
+                          const CompilationOptions&,
                           bool downscale = true);
 
   llvm::Value* codegenDiv(llvm::Value*,
@@ -405,6 +411,21 @@ class CodeGenerator {
       const std::vector<llvm::Value*>&,
       const std::unordered_map<llvm::Value*, llvm::Value*>&,
       const CompilationOptions&);
+
+  // Return LLVM intrinsic providing fast arithmetic with overflow check
+  // for the given binary operation.
+  llvm::Function* getArithWithOverflowIntrinsic(const Analyzer::BinOper* bin_oper,
+                                                llvm::Type* type);
+
+  // Generate code for the given binary operation with overflow check.
+  // Signed integer add, sub and mul operations are supported. Overflow
+  // check is performed using LLVM arithmetic intrinsics which are not
+  // supported for GPU. Return the IR value which holds operation result.
+  llvm::Value* codegenBinOpWithOverflowForCPU(const Analyzer::BinOper* bin_oper,
+                                              llvm::Value* lhs_lv,
+                                              llvm::Value* rhs_lv,
+                                              const std::string& null_check_suffix,
+                                              const SQLTypeInfo& ti);
 
   Executor* executor_;
 
