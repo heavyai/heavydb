@@ -247,6 +247,9 @@ StandardCommand(Help, {
                "roles and users.\n";
   std::cout << "\\detect {parquet} <file_name|s3_details> Reads a sample of the "
                "specified file and returns a CREATE TABLE statement\n";
+  std::cout << "\\clear_cpu Releases CPU memory held by OmniSci server Data Manager\n";
+  std::cout << "\\clear_gpu Releases GPU memory held by OmniSci server Data Manager\n";
+
   std::cout << "\\q Quit.\n";
   std::cout.flush();
 });
