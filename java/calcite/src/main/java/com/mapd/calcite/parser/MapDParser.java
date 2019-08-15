@@ -30,6 +30,7 @@ import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
+import org.apache.calcite.rel.RelShuttleImpl;
 import org.apache.calcite.rel.core.RelFactories;
 import org.apache.calcite.rel.metadata.DefaultRelMetadataProvider;
 import org.apache.calcite.rel.rules.FilterMergeRule;
@@ -38,12 +39,17 @@ import org.apache.calcite.rel.rules.JoinProjectTransposeRule;
 import org.apache.calcite.rel.rules.ProjectMergeRule;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.rel.type.RelDataTypeSystem;
+import org.apache.calcite.rex.RexBuilder;
+import org.apache.calcite.rex.RexCall;
+import org.apache.calcite.rex.RexNode;
+import org.apache.calcite.rex.RexShuttle;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlAsOperator;
 import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.SqlIdentifier;
+import org.apache.calcite.sql.SqlKind;
 import org.apache.calcite.sql.SqlLiteral;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlNodeList;
@@ -263,6 +269,7 @@ public final class MapDParser {
 
     planner.setFilterPushDownInfo(parserOptions.getFilterPushDownInfo());
     RelRoot relR = planner.rel(validateR);
+    relR = replaceIsTrue(planner.getTypeFactory(), relR);
     planner.close();
 
     if (!parserOptions.isViewOptimizeEnabled()) {
@@ -318,6 +325,50 @@ public final class MapDParser {
       RelRoot optRel = RelRoot.of(newRel, relR.kind);
       return optRel;
     }
+  }
+
+  private RelRoot replaceIsTrue(final RelDataTypeFactory typeFactory, RelRoot root) {
+    final RexShuttle callShuttle = new RexShuttle() {
+      RexBuilder builder = new RexBuilder(typeFactory);
+
+      public RexNode visitCall(RexCall call) {
+        call = (RexCall) super.visitCall(call);
+        if (call.getKind() == SqlKind.IS_TRUE) {
+          return builder.makeCall(SqlStdOperatorTable.AND,
+                  builder.makeCall(
+                          SqlStdOperatorTable.IS_NOT_NULL, call.getOperands().get(0)),
+                  call.getOperands().get(0));
+        } else if (call.getKind() == SqlKind.IS_NOT_TRUE) {
+          return builder.makeCall(SqlStdOperatorTable.OR,
+                  builder.makeCall(
+                          SqlStdOperatorTable.IS_NULL, call.getOperands().get(0)),
+                  builder.makeCall(SqlStdOperatorTable.NOT, call.getOperands().get(0)));
+        } else if (call.getKind() == SqlKind.IS_FALSE) {
+          return builder.makeCall(SqlStdOperatorTable.AND,
+                  builder.makeCall(
+                          SqlStdOperatorTable.IS_NOT_NULL, call.getOperands().get(0)),
+                  builder.makeCall(SqlStdOperatorTable.NOT, call.getOperands().get(0)));
+        } else if (call.getKind() == SqlKind.IS_NOT_FALSE) {
+          return builder.makeCall(SqlStdOperatorTable.OR,
+                  builder.makeCall(
+                          SqlStdOperatorTable.IS_NULL, call.getOperands().get(0)),
+                  call.getOperands().get(0));
+        }
+
+        return call;
+      }
+    };
+
+    RelNode node = root.rel.accept(new RelShuttleImpl() {
+      @Override
+      protected RelNode visitChild(RelNode parent, int i, RelNode child) {
+        RelNode node = super.visitChild(parent, i, child);
+        return node.accept(callShuttle);
+      }
+    });
+
+    return new RelRoot(
+            node, root.validatedRowType, root.kind, root.fields, root.collation);
   }
 
   private static SqlNode getUnaliasedExpression(final SqlNode node) {
