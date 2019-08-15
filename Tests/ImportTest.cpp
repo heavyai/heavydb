@@ -908,6 +908,14 @@ TEST_F(ImportTest, S3_All_parquet_file) {
 TEST_F(ImportTest, S3_All_parquet_file_drop) {
   EXPECT_TRUE(import_test_s3_parquet("trip+1.parquet", "", 1200, 1.0));
 }
+TEST_F(ImportTest, S3_Null_Prefix) {
+  EXPECT_THROW(run_ddl_statement("copy trips from 's3://omnisci_ficticiousbucket/';"),
+               std::runtime_error);
+}
+TEST_F(ImportTest, S3_Wildcard_Prefix) {
+  EXPECT_THROW(run_ddl_statement("copy trips from 's3://omnisci_ficticiousbucket/*';"),
+               std::runtime_error);
+}
 #endif  // HAVE_AWS_S3
 #endif  // ENABLE_IMPORT_PARQUET
 
@@ -1426,13 +1434,14 @@ TEST_F(ImportTest, S3_GCS_One_gz_file) {
 }
 
 TEST_F(ImportTest, S3_GCS_One_geo_file) {
-  EXPECT_TRUE(import_test_common_geo(
-      "COPY geo FROM "
-      "'s3://omnisci-importtest-data/geo-data/S_USA.Experimental_Area_Locations.gdb.zip' "
-      "WITH (geo='true', s3_endpoint='storage.googleapis.com');",
-      "geo",
-      87,
-      1.0));
+  EXPECT_TRUE(
+      import_test_common_geo("COPY geo FROM "
+                             "'s3://omnisci-importtest-data/geo-data/"
+                             "S_USA.Experimental_Area_Locations.gdb.zip' "
+                             "WITH (geo='true', s3_endpoint='storage.googleapis.com');",
+                             "geo",
+                             87,
+                             1.0));
 }
 #endif  // HAVE_AWS_S3
 }  // namespace

@@ -3668,6 +3668,7 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
         // when import is aborted because too many data errors or because end of a
         // detection, any exception thrown by s3 sdk or libarchive is okay and should be
         // suppressed.
+        mapd_shared_lock<mapd_shared_mutex> read_lock(status_mutex);
         if (import_status.load_truncated) {
           break;
         }
@@ -3919,6 +3920,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
   // must set import_status.load_truncated before closing this end of pipe
   // otherwise, the thread on the other end would throw an unwanted 'write()'
   // exception
+  mapd_lock_guard<mapd_shared_mutex> write_lock(status_mutex);
   import_status.load_truncated = load_truncated;
 
   fclose(p_file);

@@ -135,8 +135,15 @@ void S3Archive::init_for_read() {
         // could be the object is there but we do not have listObject Privilege
         // We can treat it as a specific object, so should try to parse it and pass to
         // getObject as a singleton
+        // Null prefix in urls such like 's3://bucket/' should be ignored.
         if (objkeys.empty()) {
-          objkeys.push_back(prefix_name);
+          if (!prefix_name.empty()) {
+            objkeys.push_back(prefix_name);
+          } else {
+            throw std::runtime_error("failed to list objects of s3 url '" + url + "': " +
+                                     list_objects_outcome.GetError().GetExceptionName() +
+                                     ": " + list_objects_outcome.GetError().GetMessage());
+          }
         }
       }
       // continue to read next 1000 files
@@ -170,9 +177,9 @@ const std::string S3Archive::land(const std::string& objkey,
   boost::filesystem::remove(file_path);
 
   auto ext = strrchr(objkey.c_str(), '.');
-  auto use_pipe = (0 == ext || 0 != strcmp(ext, ".7z"));
+  auto use_pipe = (nullptr == ext || 0 != strcmp(ext, ".7z"));
 #ifdef ENABLE_IMPORT_PARQUET
-  use_pipe = use_pipe && (0 != strcmp(ext, ".parquet"));
+  use_pipe = use_pipe && (nullptr == ext || 0 != strcmp(ext, ".parquet"));
 #endif
   if (use_pipe) {
     if (mkfifo(file_path.c_str(), 0660) < 0) {
