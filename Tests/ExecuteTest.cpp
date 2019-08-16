@@ -15228,6 +15228,36 @@ TEST(Select, EmptyString) {
   }
 }
 
+TEST(Select, MultiStepColumnarization) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT id, SUM(big_int) / SUM(float_not_null), MAX(small_int) / MAX(tiny_int), "
+      "MIN(tiny_int) + MIN(small_int) FROM logical_size_test GROUP BY id ORDER BY id;",
+      dt);
+    c("SELECT id, AVG(small_int) + MIN(big_int) + MAX(tiny_int) + SUM(double_not_null) "
+      "/ SUM(float_not_null) FROM logical_size_test GROUP BY id ORDER BY id;",
+      dt);
+    {
+      std::string query(
+          "SELECT fixed_str, COUNT(CAST(y AS double)) + SUM(x) FROM test GROUP BY "
+          "fixed_str ORDER BY fixed_str ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
+    {
+      const auto result = run_multiple_agg(
+          "SELECT id, SAMPLE(small_int), SUM(big_int) / COUNT(tiny_int) FROM "
+          "logical_size_test GROUP BY id ORDER BY id LIMIT 1 OFFSET 1;",
+          dt);
+      const auto first_row = result->getNextRow(true, true);
+      ASSERT_EQ(size_t(3), first_row.size());
+      ASSERT_EQ(int64_t(5), v<int64_t>(first_row[0]));
+      ASSERT_TRUE((int64_t(79) == v<int64_t>(first_row[1])) ||
+                  ((int64_t(76) == v<int64_t>(first_row[1]))));
+      ASSERT_EQ(int64_t(2252), v<int64_t>(first_row[2]));
+    }
+  }
+}
+
 TEST(Select, LogicalSizedColumns) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

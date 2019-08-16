@@ -873,3 +873,31 @@ bool can_use_parallel_algorithms(const ResultSet& rows) {
 bool use_parallel_algorithms(const ResultSet& rows) {
   return can_use_parallel_algorithms(rows) && rows.entryCount() >= 20000;
 }
+
+// returns a bitmap (and total number) of all single slot targets
+std::tuple<std::vector<bool>, size_t> ResultSet::getSingleSlotTargetBitmap() const {
+  std::vector<bool> target_bitmap(targets_.size(), true);
+  size_t num_single_slot_targets = 0;
+  for (size_t target_idx = 0; target_idx < targets_.size(); target_idx++) {
+    const auto& sql_type = targets_[target_idx].sql_type;
+    if (targets_[target_idx].is_agg && targets_[target_idx].agg_kind == kAVG) {
+      target_bitmap[target_idx] = false;
+    } else if (sql_type.is_varlen()) {
+      target_bitmap[target_idx] = false;
+    } else {
+      num_single_slot_targets++;
+    }
+  }
+  return std::make_tuple(std::move(target_bitmap), num_single_slot_targets);
+}
+
+// returns the starting slot index for all targets in the result set
+std::vector<size_t> ResultSet::getSlotIndicesForTargetIndices() const {
+  std::vector<size_t> slot_indices(targets_.size(), 0);
+  size_t slot_index = 0;
+  for (size_t target_idx = 0; target_idx < targets_.size(); target_idx++) {
+    slot_indices[target_idx] = slot_index;
+    slot_index = advance_slot(slot_index, targets_[target_idx], false);
+  }
+  return slot_indices;
+}

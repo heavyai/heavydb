@@ -504,10 +504,29 @@ class ResultSet {
    * NOTE: If there exists a permutation vector (i.e., ORDER BY), it becomes equivalent to
    * the row-wise columnarization.
    */
-  bool isFastColumnarConversionPossible() const {
+  bool isDirectColumnarConversionPossible() const {
     return query_mem_desc_.didOutputColumnar() && permutation_.empty() &&
-           query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection;
+           (query_mem_desc_.getQueryDescriptionType() ==
+                QueryDescriptionType::Projection ||
+            (query_mem_desc_.getQueryDescriptionType() ==
+                 QueryDescriptionType::GroupByPerfectHash &&
+             query_mem_desc_.getGroupbyColCount() == 1));
   }
+
+  bool didOutputColumnar() const { return this->query_mem_desc_.didOutputColumnar(); }
+
+  QueryDescriptionType getQueryDescriptionType() const {
+    return query_mem_desc_.getQueryDescriptionType();
+  }
+
+  const int8_t getPaddedSlotWidthBytes(const size_t slot_idx) const {
+    return query_mem_desc_.getPaddedSlotWidthBytes(slot_idx);
+  }
+
+  // returns a bitmap of all single-slot targets, as well as its count
+  std::tuple<std::vector<bool>, size_t> getSingleSlotTargetBitmap() const;
+
+  std::vector<size_t> getSlotIndicesForTargetIndices() const;
 
   const std::vector<ColumnLazyFetchInfo>& getLazyFetchInfo() const {
     return lazy_fetch_info_;
@@ -534,6 +553,10 @@ class ResultSet {
                                     const bool decimal_to_double,
                                     const bool fixup_count_distinct_pointers,
                                     const std::vector<bool>& targets_to_skip = {}) const;
+
+  // just for columnar outputs, and direct columnarization use at the moment
+  template <typename ENTRY_TYPE>
+  ENTRY_TYPE getEntryAt(const size_t row_idx, const size_t column_idx) const;
 
   size_t parallelRowCount() const;
 
@@ -819,6 +842,7 @@ class ResultSet {
 
   friend class ResultSetManager;
   friend class ResultSetRowIterator;
+  friend class ColumnarResults;
 };
 
 ResultSetRowIterator::value_type ResultSetRowIterator::operator*() const {

@@ -1105,7 +1105,7 @@ const std::vector<const int8_t*>& ResultSet::getColumnFrag(const size_t storage_
 void ResultSet::copyColumnIntoBuffer(const size_t column_idx,
                                      int8_t* output_buffer,
                                      const size_t output_buffer_size) const {
-  CHECK(isFastColumnarConversionPossible());
+  CHECK(isDirectColumnarConversionPossible());
   CHECK_LT(column_idx, query_mem_desc_.getSlotCount());
   CHECK(output_buffer_size > 0);
   CHECK(output_buffer);
@@ -1138,6 +1138,28 @@ void ResultSet::copyColumnIntoBuffer(const size_t column_idx,
     out_buff_offset += crt_buffer_size;
   }
 }
+
+/**
+ * For direct columnar conversion only
+ */
+template <typename ENTRY_TYPE>
+ENTRY_TYPE ResultSet::getEntryAt(const size_t row_idx, const size_t column_idx) const {
+  const size_t column_offset = storage_->query_mem_desc_.getColOffInBytes(column_idx);
+  const int8_t* storage_buffer = storage_->getUnderlyingBuffer() + column_offset;
+  return reinterpret_cast<const ENTRY_TYPE*>(storage_buffer)[row_idx];
+}
+template int64_t ResultSet::getEntryAt<int64_t>(const size_t row_idx,
+                                                const size_t column_idx) const;
+template int32_t ResultSet::getEntryAt<int32_t>(const size_t row_idx,
+                                                const size_t column_idx) const;
+template int16_t ResultSet::getEntryAt<int16_t>(const size_t row_idx,
+                                                const size_t column_idx) const;
+template int8_t ResultSet::getEntryAt<int8_t>(const size_t row_idx,
+                                              const size_t column_idx) const;
+template float ResultSet::getEntryAt<float>(const size_t row_idx,
+                                            const size_t column_idx) const;
+template double ResultSet::getEntryAt<double>(const size_t row_idx,
+                                              const size_t column_idx) const;
 
 // Interprets ptr1, ptr2 as the ptr and len pair used for variable length data.
 TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
