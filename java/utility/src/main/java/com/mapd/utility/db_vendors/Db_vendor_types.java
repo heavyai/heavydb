@@ -42,7 +42,7 @@ class PostGis_types extends com.mapd.utility.db_vendors.Db_vendor_types {
       put("lseg", "linestring");
       put("linestring", "linestring");
       put("polygon", "polygon");
-      put("multipolygon", "multipolyon");
+      put("multipolygon", "multipolygon");
     }
   };
   private String wkt_point(PGpoint point) {
