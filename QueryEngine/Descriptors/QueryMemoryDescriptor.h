@@ -318,7 +318,10 @@ class QueryMemoryDescriptor {
   QueryDescriptionType query_desc_type_;
   bool keyless_hash_;
   bool interleaved_bins_on_gpu_;
-  int32_t idx_target_as_key_;
+  int32_t idx_target_as_key_;  // If keyless_hash_ enabled, then represents what target
+                               // expression should be used to identify the key (e.g., in
+                               // locating empty entries). Currently only valid with
+                               // keyless_hash_ and single-column GroupByPerfectHash
   std::vector<int8_t> group_col_widths_;
   int8_t group_col_compact_width_;  // compact width for all group
                                     // cols if able to be consistent

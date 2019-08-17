@@ -1126,7 +1126,11 @@ std::string QueryMemoryDescriptor::toString() const {
   str += "Query Memory Descriptor State\n";
   str += "\tQuery Type: " + queryDescTypeToString(query_desc_type_) + "\n";
   str += "\tAllow Multifrag: " + boolToString(allow_multifrag_) + "\n";
-  str += "\tKeyless Hash: " + boolToString(keyless_hash_) + "\n";
+  str +=
+      "\tKeyless Hash: " + boolToString(keyless_hash_) +
+      (keyless_hash_ ? ", target index for key: " + std::to_string(getTargetIdxForKey())
+                     : "") +
+      "\n";
   str += "\tInterleaved Bins on GPU: " + boolToString(interleaved_bins_on_gpu_) + "\n";
   str += "\tBlocks Share Memory: " + boolToString(blocksShareMemory()) + "\n";
   str += "\tThreads Share Memory: " + boolToString(threadsShareMemory()) + "\n";

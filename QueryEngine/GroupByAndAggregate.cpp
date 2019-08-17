@@ -585,6 +585,16 @@ CountDistinctDescriptors GroupByAndAggregate::initCountDistinctDescriptors() {
   return count_distinct_descriptors;
 }
 
+/**
+ * This function goes through all target expressions and answers two questions:
+ * 1. Is it possible to have keyless hash?
+ * 2. If yes to 1, then what aggregate expression should be considered to represent the
+ * key's presence, if needed (e.g., in detecting empty entries in the result set).
+ *
+ * NOTE: Keyless hash is only valid with single-column group by at the moment.
+ *
+ * TODO(Saman): remove the shared memory discussion out of this function.
+ */
 KeylessInfo GroupByAndAggregate::getKeylessInfo(
     const std::vector<Analyzer::Expr*>& target_expr_list,
     const bool is_group_by) const {
@@ -712,6 +722,11 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
           }
           auto expr_range_info =
               getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
+          // NULL sentinel and init value for kMAX are identical, which results in
+          // ambiguity in detecting empty keys in presence of nulls.
+          if (expr_range_info.hasNulls()) {
+            break;
+          }
           auto init_min = get_agg_initial_val(agg_info.agg_kind,
                                               chosen_type,
                                               is_group_by || float_argument_input,

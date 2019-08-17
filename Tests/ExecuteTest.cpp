@@ -15281,6 +15281,9 @@ TEST(Select, LogicalSizedColumns) {
       "MIN(tiny_int_null),"
       "MIN(big_int), MIN(small_int) FROM logical_size_test GROUP BY id ORDER BY id;",
       dt);
+    c("SELECT id, MAX(big_int_null), COUNT(small_int_null), COUNT(tiny_int) FROM "
+      "logical_size_test GROUP BY id ORDER BY id;",
+      dt);
     // single-slot SAMPLE statement:
     // 16-bit sample
     {
