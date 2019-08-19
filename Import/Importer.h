@@ -32,6 +32,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/noncopyable.hpp>
 #include <boost/tokenizer.hpp>
+#include <boost/utility/string_view.hpp>
 #include <condition_variable>
 #include <cstdio>
 #include <cstdlib>
@@ -582,7 +583,7 @@ class TypedImportBuffer : boost::noncopyable {
                           BadRowsTracker* bad_rows_tracker);
 
   void add_value(const ColumnDescriptor* cd,
-                 const std::string& val,
+                 const boost::string_view& val,
                  const bool is_null,
                  const CopyParams& copy_params,
                  const int64_t replicate_count = 0);
@@ -811,7 +812,7 @@ class Detector : public DataStreamSink {
 
 class ImporterUtils {
  public:
-  static bool parseStringArray(const std::string& s,
+  static bool parseStringArray(const boost::string_view& s,
                                const CopyParams& copy_params,
                                std::vector<std::string>& string_vec) {
     if (s == copy_params.null_str || s == "NULL" || s.size() < 1 || s.empty()) {
@@ -821,7 +822,7 @@ class ImporterUtils {
       return true;
     }
     if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
-      throw std::runtime_error("Malformed Array :" + s);
+      throw std::runtime_error("Malformed Array :" + s.to_string());
     }
     size_t last = 1;
     for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos;
@@ -834,7 +835,7 @@ class ImporterUtils {
                                    std::to_string(StringDictionary::MAX_STRLEN));
         }
 
-        string_vec.push_back(s.substr(last, i - last));
+        string_vec.push_back(s.substr(last, i - last).to_string());
       }
       last = i + 1;
     }
@@ -846,7 +847,7 @@ class ImporterUtils {
             std::to_string(StringDictionary::MAX_STRLEN));
       }
 
-      string_vec.push_back(s.substr(last, s.size() - 1 - last));
+      string_vec.push_back(s.substr(last, s.size() - 1 - last).to_string());
     }
     return false;
   }

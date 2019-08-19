@@ -821,7 +821,7 @@ using SQLTypeInfo =
 SQLTypes decimal_to_int_type(const SQLTypeInfo&);
 
 #ifndef __CUDACC__
-Datum StringToDatum(const std::string& s, SQLTypeInfo& ti);
+
 std::string DatumToString(Datum d, const SQLTypeInfo& ti);
 bool DatumEqual(const Datum, const Datum, const SQLTypeInfo& ti);
 int64_t convert_decimal_value_to_scale(const int64_t decimal_value,

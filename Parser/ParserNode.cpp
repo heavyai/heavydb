@@ -54,6 +54,7 @@
 #include "../Shared/mapd_glob.h"
 #include "../Shared/measure.h"
 #include "../Shared/shard_key.h"
+#include "../Shared/StringToDatum.h"
 #include "LockMgr/LockMgr.h"
 #include "LockMgr/TableLockMgr.h"
 #include "ReservedKeywords.h"

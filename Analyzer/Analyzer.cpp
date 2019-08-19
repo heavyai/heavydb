@@ -29,6 +29,7 @@
 #include "../Shared/sql_type_to_string.h"
 #include "../Shared/sql_window_function_to_string.h"
 #include "../Shared/sqltypes.h"
+#include "../Shared/StringToDatum.h"
 #include "RangeTableEntry.h"
 
 #include <algorithm>

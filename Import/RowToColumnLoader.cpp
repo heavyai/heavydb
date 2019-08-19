@@ -25,6 +25,7 @@
 
 #include "RowToColumnLoader.h"
 #include "Shared/Logger.h"
+#include "../Shared/StringToDatum.h"
 
 using namespace ::apache::thrift;
 

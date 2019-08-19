@@ -29,6 +29,7 @@
 #include "Shared/SqlTypesLayout.h"
 #include "Shared/ThreadController.h"
 #include "Shared/sqltypes.h"
+#include "../Shared/StringToDatum.h"
 
 using namespace arrow;
 
