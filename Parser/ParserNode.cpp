@@ -2209,6 +2209,9 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       get_table_definitions(td, p, columns);
     }
   }
+  if (td.shardedColumnId && !td.nShards) {
+    throw std::runtime_error("SHARD_COUNT needs to be specified with SHARD_KEY.");
+  }
   td.keyMetainfo = serialize_key_metainfo(shard_key_def, shared_dict_defs);
   catalog.createShardedTable(td, columns, shared_dict_defs);
   // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o

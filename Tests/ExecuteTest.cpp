@@ -494,9 +494,10 @@ void validate_storage_options(
     const std::pair<std::string, std::vector<std::string>> values) {
   auto validate = [&type_meta](const std::string& add_column, const std::string& val) {
     ASSERT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS chelsea_storage;"));
-    const std::string query =
-        "CREATE TABLE chelsea_storage(id TEXT ENCODING DICT(32), val INT " + add_column +
-        ") WITH (" + type_meta.first + "=" + val + ");";
+    std::string query =
+        "CREATE TABLE chelsea_storage(id TEXT ENCODING DICT(32), val INT " + add_column;
+    query +=
+        type_meta.first.empty() ? ");" : ") WITH (" + type_meta.first + "=" + val + ");";
     ASSERT_EQ(true, validate_statement_syntax(query));
     if (type_meta.second) {
       ASSERT_THROW(run_ddl_statement(query), std::runtime_error);
@@ -532,6 +533,7 @@ TEST(Create, StorageOptions) {
              {"", {"2097152", "4194304", "10485760", "2147483648"}}},
             {{"partitions"s, true}, {"", {"'No'", "'null'", "'-1'"}}},
             {{"partitions"s, false}, {"", {"'SHARDED'", "'REPLICATED'"}}},
+            {{""s, true}, {", SHARD KEY(id)", {"2"}}},
             {{"shard_count"s, true}, {"", {std::to_string(shard_count)}}},
             {{"shard_count"s, false}, {", SHARD KEY(id)", {std::to_string(shard_count)}}},
             {{"vacuum"s, true}, {"", {"'-1'", "'0'", "'null'"}}},
