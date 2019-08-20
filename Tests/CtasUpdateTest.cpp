@@ -641,14 +641,14 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& sql,
 }  // namespace
 
 TEST(Ctas, SyntaxCheck) {
-  std::string ddl = "DROP TABLE IF EXISTS CTAS_SOURCE;";
-  run_ddl_statement(ddl);
-  ddl = "DROP TABLE IF EXISTS CTAS_TARGET;";
-  run_ddl_statement(ddl);
+  run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE_WITH;");
+  run_ddl_statement("DROP TABLE IF EXISTS CTAS_TARGET;");
 
   run_ddl_statement("CREATE TABLE CTAS_SOURCE (id int);");
+  run_ddl_statement("CREATE TABLE CTAS_SOURCE_WITH (id int);");
 
-  ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
+  std::string ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
   run_ddl_statement(ddl);
   EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
   ddl = "DROP TABLE CTAS_TARGET;";
@@ -667,6 +667,14 @@ TEST(Ctas, SyntaxCheck) {
   run_ddl_statement(ddl);
 
   ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE WITH( MAX_CHUNK_SIZE=3 );";
+  run_ddl_statement(ddl);
+  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
+  ddl = "DROP TABLE CTAS_TARGET;";
+  run_ddl_statement(ddl);
+
+  ddl =
+      "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE_WITH WITH( MAX_CHUNK_SIZE=3 "
+      ");";
   run_ddl_statement(ddl);
   EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
   ddl = "DROP TABLE CTAS_TARGET;";
