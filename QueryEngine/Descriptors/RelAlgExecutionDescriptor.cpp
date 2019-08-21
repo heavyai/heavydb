@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2019 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,8 +15,75 @@
  */
 
 #include "RelAlgExecutionDescriptor.h"
+
 #include <boost/graph/adjacency_list.hpp>
 #include <boost/graph/topological_sort.hpp>
+
+#include "QueryEngine/RelAlgAbstractInterpreter.h"
+
+ExecutionResult::ExecutionResult(const std::shared_ptr<ResultSet>& rows,
+                                 const std::vector<TargetMetaInfo>& targets_meta)
+    : result_(rows), targets_meta_(targets_meta), filter_push_down_enabled_(false) {}
+
+ExecutionResult::ExecutionResult(ResultSetPtr&& result,
+                                 const std::vector<TargetMetaInfo>& targets_meta)
+    : targets_meta_(targets_meta), filter_push_down_enabled_(false) {
+  result_ = std::move(result);
+}
+
+ExecutionResult::ExecutionResult(const ExecutionResult& that)
+    : targets_meta_(that.targets_meta_)
+    , pushed_down_filter_info_(that.pushed_down_filter_info_)
+    , filter_push_down_enabled_(that.filter_push_down_enabled_) {
+  if (!pushed_down_filter_info_.empty() ||
+      (filter_push_down_enabled_ && pushed_down_filter_info_.empty())) {
+    return;
+  }
+  result_ = that.result_;
+}
+
+ExecutionResult::ExecutionResult(ExecutionResult&& that)
+    : targets_meta_(std::move(that.targets_meta_))
+    , pushed_down_filter_info_(std::move(that.pushed_down_filter_info_))
+    , filter_push_down_enabled_(std::move(that.filter_push_down_enabled_)) {
+  if (!pushed_down_filter_info_.empty() ||
+      (filter_push_down_enabled_ && pushed_down_filter_info_.empty())) {
+    return;
+  }
+  result_ = std::move(that.result_);
+}
+
+ExecutionResult::ExecutionResult(
+    const std::vector<PushedDownFilterInfo>& pushed_down_filter_info,
+    bool filter_push_down_enabled)
+    : pushed_down_filter_info_(pushed_down_filter_info)
+    , filter_push_down_enabled_(filter_push_down_enabled) {}
+
+ExecutionResult& ExecutionResult::operator=(const ExecutionResult& that) {
+  if (!that.pushed_down_filter_info_.empty() ||
+      (that.filter_push_down_enabled_ && that.pushed_down_filter_info_.empty())) {
+    pushed_down_filter_info_ = that.pushed_down_filter_info_;
+    filter_push_down_enabled_ = that.filter_push_down_enabled_;
+    return *this;
+  }
+  result_ = that.result_;
+  targets_meta_ = that.targets_meta_;
+  return *this;
+}
+
+const std::vector<PushedDownFilterInfo>& ExecutionResult::getPushedDownFilterInfo()
+    const {
+  return pushed_down_filter_info_;
+}
+
+void RaExecutionDesc::setResult(const ExecutionResult& result) {
+  result_ = result;
+  body_->setContextData(this);
+}
+
+const RelAlgNode* RaExecutionDesc::getBody() const {
+  return body_;
+}
 
 namespace {
 

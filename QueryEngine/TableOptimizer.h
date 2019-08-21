@@ -16,10 +16,9 @@
 
 #pragma once
 
-#include "Execute.h"
+#include "Catalog/Catalog.h"
 
-#include <Shared/measure.h>
-#include "Shared/Logger.h"
+class Executor;
 
 /**
  * @brief Driver for running cleanup processes on a table.
@@ -33,10 +32,7 @@ class TableOptimizer {
  public:
   TableOptimizer(const TableDescriptor* td,
                  Executor* executor,
-                 const Catalog_Namespace::Catalog& cat)
-      : td_(td), executor_(executor), cat_(cat) {
-    CHECK(td);
-  }
+                 const Catalog_Namespace::Catalog& cat);
 
   /**
    * @brief Recomputes per-chunk metadata for each fragment in the table.

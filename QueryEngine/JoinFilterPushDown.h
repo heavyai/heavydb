@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 MapD Technologies, Inc.
+ * Copyright 2019 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_JOINFILTERPUSHDOWN_H
-#define QUERYENGINE_JOINFILTERPUSHDOWN_H
-
-#include "Execute.h"
-#include "RangeTableIndexVisitor.h"
+#pragma once
 
 #include <cstddef>
 #include <numeric>
+
+#include "QueryEngine/InputMetadata.h"
+#include "QueryEngine/RangeTableIndexVisitor.h"
 
 extern bool g_enable_filter_push_down;
 extern float g_filter_push_down_low_frac;
@@ -82,5 +81,3 @@ std::vector<PushedDownFilterInfo> find_push_down_filters(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<size_t>& input_permutation,
     const std::vector<size_t>& left_deep_join_input_sizes);
-
-#endif  // QUERYENGINE_JOINFILTERPUSHDOWN_H

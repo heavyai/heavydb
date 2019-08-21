@@ -16,9 +16,17 @@
 
 #include "TableOptimizer.h"
 
-#include <Analyzer/Analyzer.h>
-#include <Shared/scope.h>
+#include "Analyzer/Analyzer.h"
+#include "QueryEngine/Execute.h"
+#include "Shared/Logger.h"
+#include "Shared/scope.h"
 
+TableOptimizer::TableOptimizer(const TableDescriptor* td,
+                               Executor* executor,
+                               const Catalog_Namespace::Catalog& cat)
+    : td_(td), executor_(executor), cat_(cat) {
+  CHECK(td);
+}
 namespace {
 
 template <typename T>

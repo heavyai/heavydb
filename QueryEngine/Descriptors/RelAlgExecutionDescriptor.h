@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2019 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,64 +14,28 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_RELALGEXECUTIONDESCRIPTOR_H
-#define QUERYENGINE_RELALGEXECUTIONDESCRIPTOR_H
+#pragma once
 
 #include "../GroupByAndAggregate.h"
 #include "../JoinFilterPushDown.h"
-#include "../RelAlgAbstractInterpreter.h"
 
 class ResultSet;
 
 class ExecutionResult {
  public:
   ExecutionResult(const std::shared_ptr<ResultSet>& rows,
-                  const std::vector<TargetMetaInfo>& targets_meta)
-      : result_(rows), targets_meta_(targets_meta), filter_push_down_enabled_(false) {}
+                  const std::vector<TargetMetaInfo>& targets_meta);
 
-  ExecutionResult(ResultSetPtr&& result, const std::vector<TargetMetaInfo>& targets_meta)
-      : targets_meta_(targets_meta), filter_push_down_enabled_(false) {
-    result_ = std::move(result);
-  }
+  ExecutionResult(ResultSetPtr&& result, const std::vector<TargetMetaInfo>& targets_meta);
 
-  ExecutionResult(const ExecutionResult& that)
-      : targets_meta_(that.targets_meta_)
-      , pushed_down_filter_info_(that.pushed_down_filter_info_)
-      , filter_push_down_enabled_(that.filter_push_down_enabled_) {
-    if (!pushed_down_filter_info_.empty() ||
-        (filter_push_down_enabled_ && pushed_down_filter_info_.empty())) {
-      return;
-    }
-    result_ = that.result_;
-  }
+  ExecutionResult(const ExecutionResult& that);
 
-  ExecutionResult(ExecutionResult&& that)
-      : targets_meta_(std::move(that.targets_meta_))
-      , pushed_down_filter_info_(std::move(that.pushed_down_filter_info_))
-      , filter_push_down_enabled_(std::move(that.filter_push_down_enabled_)) {
-    if (!pushed_down_filter_info_.empty() ||
-        (filter_push_down_enabled_ && pushed_down_filter_info_.empty())) {
-      return;
-    }
-    result_ = std::move(that.result_);
-  }
+  ExecutionResult(ExecutionResult&& that);
 
   ExecutionResult(const std::vector<PushedDownFilterInfo>& pushed_down_filter_info,
-                  bool filter_push_down_enabled)
-      : pushed_down_filter_info_(pushed_down_filter_info)
-      , filter_push_down_enabled_(filter_push_down_enabled) {}
+                  bool filter_push_down_enabled);
 
-  ExecutionResult& operator=(const ExecutionResult& that) {
-    if (!that.pushed_down_filter_info_.empty() ||
-        (that.filter_push_down_enabled_ && that.pushed_down_filter_info_.empty())) {
-      pushed_down_filter_info_ = that.pushed_down_filter_info_;
-      filter_push_down_enabled_ = that.filter_push_down_enabled_;
-      return *this;
-    }
-    result_ = that.result_;
-    targets_meta_ = that.targets_meta_;
-    return *this;
-  }
+  ExecutionResult& operator=(const ExecutionResult& that);
 
   const std::shared_ptr<ResultSet>& getRows() const { return result_; }
 
@@ -81,9 +45,7 @@ class ExecutionResult {
 
   const std::vector<TargetMetaInfo>& getTargetsMeta() const { return targets_meta_; }
 
-  const std::vector<PushedDownFilterInfo>& getPushedDownFilterInfo() const {
-    return pushed_down_filter_info_;
-  }
+  const std::vector<PushedDownFilterInfo>& getPushedDownFilterInfo() const;
 
   const bool isFilterPushDownEnabled() const { return filter_push_down_enabled_; }
 
@@ -101,6 +63,8 @@ class ExecutionResult {
   bool filter_push_down_enabled_;
 };
 
+class RelAlgNode;
+
 class RaExecutionDesc {
  public:
   RaExecutionDesc(const RelAlgNode* body)
@@ -114,12 +78,9 @@ class RaExecutionDesc {
 
   const ExecutionResult& getResult() const { return result_; }
 
-  void setResult(const ExecutionResult& result) {
-    result_ = result;
-    body_->setContextData(this);
-  }
+  void setResult(const ExecutionResult& result);
 
-  const RelAlgNode* getBody() const { return body_; }
+  const RelAlgNode* getBody() const;
 
  private:
   const RelAlgNode* body_;
@@ -129,5 +90,3 @@ class RaExecutionDesc {
 std::vector<RaExecutionDesc> get_execution_descriptors(const RelAlgNode*);
 std::vector<RaExecutionDesc> get_execution_descriptors(
     const std::vector<const RelAlgNode*>&);
-
-#endif  // QUERYENGINE_RELALGEXECUTIONDESCRIPTOR_H
