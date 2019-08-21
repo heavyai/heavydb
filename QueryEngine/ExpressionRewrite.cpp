@@ -546,7 +546,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
     }
 
     if (optype == kAND && lhs_type == rhs_type && lhs_type == kBOOLEAN) {
-      if (const_rhs) {
+      if (const_rhs && !const_rhs->get_is_null()) {
         auto rhs_datum = const_rhs->get_constval();
         if (rhs_datum.boolval == false) {
           Datum d;
@@ -557,7 +557,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
         // lhs && true --> lhs
         return lhs;
       }
-      if (const_lhs) {
+      if (const_lhs && !const_lhs->get_is_null()) {
         auto lhs_datum = const_lhs->get_constval();
         if (lhs_datum.boolval == false) {
           Datum d;
@@ -570,7 +570,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
       }
     }
     if (optype == kOR && lhs_type == rhs_type && lhs_type == kBOOLEAN) {
-      if (const_rhs) {
+      if (const_rhs && !const_rhs->get_is_null()) {
         auto rhs_datum = const_rhs->get_constval();
         if (rhs_datum.boolval == true) {
           Datum d;
@@ -581,7 +581,7 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
         // lhs || false --> lhs
         return lhs;
       }
-      if (const_lhs) {
+      if (const_lhs && !const_lhs->get_is_null()) {
         auto lhs_datum = const_lhs->get_constval();
         if (lhs_datum.boolval == true) {
           Datum d;

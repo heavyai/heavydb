@@ -826,48 +826,80 @@ TEST(KeyForString, KeyForString) {
   }
 }
 
-TEST(Select, IsTrue) {
+TEST(Select, NullWithAndOr) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
     run_ddl_statement("DROP TABLE IF EXISTS table_bool_test;");
-    g_sqlite_comparator.query("DROP TABLE IF EXISTS table_bool_test;");
-
     run_ddl_statement("CREATE TABLE table_bool_test (id INT, val BOOLEAN);");
-    g_sqlite_comparator.query("CREATE TABLE table_bool_test (id INT, val BOOLEAN);");
 
-    run_multiple_agg("INSERT INTO table_bool_test VALUES(1, NULL);", dt);
-    g_sqlite_comparator.query("INSERT INTO table_bool_test VALUES(1, NULL);");
-    run_multiple_agg("INSERT INTO table_bool_test VALUES(2, 'true');", dt);
-    g_sqlite_comparator.query("INSERT INTO table_bool_test VALUES(2, 'true');");
-    run_multiple_agg("INSERT INTO table_bool_test VALUES(3, 'false');", dt);
-    g_sqlite_comparator.query("INSERT INTO table_bool_test VALUES(3, 'false');");
+    run_multiple_agg("INSERT INTO table_bool_test VALUES(1, 'true');", dt);
+    run_multiple_agg("INSERT INTO table_bool_test VALUES(2, 'false');", dt);
+    run_multiple_agg("INSERT INTO table_bool_test VALUES(3, null);", dt);
 
-    // the case statement is due to return type mismatch with sqllite
-    c("select id, (case when (val is true) then 't' else 'f' end) from "
-      "table_bool_test "
-      "order by id;",
-      "select id, (case when (val is 'true') then 't' else 'f' end) from "
-      "table_bool_test "
-      "order by id;",
-      dt);
-    c("select id, (case when (val is not true) then 't' else 'f' end) from "
-      "table_bool_test order by id;",
-      "select id, (case when (val is not 'true') then 't' else 'f' end) from "
-      "table_bool_test order by id;",
-      dt);
-    c("select id, (case when (val is false) then 't' else 'f' end) from "
-      "table_bool_test "
-      "order by id;",
-      "select id, (case when (val is 'false') then 't' else 'f' end) from "
-      "table_bool_test "
-      "order by id;",
-      dt);
-    c("select id, (case when (val is not false) then 't' else 'f' end) from "
-      "table_bool_test order by id;",
-      "select id, (case when (val is not 'false') then 't' else 'f' end) from "
-      "table_bool_test order by id;",
-      dt);
+    auto BOOLEAN_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kBOOLEAN, false));
+
+    ASSERT_EQ(
+        BOOLEAN_NULL_SENTINEL,
+        v<int64_t>(run_simple_agg(
+            "SELECT CAST(NULL AS BOOLEAN) AND val from table_bool_test WHERE id = 1;",
+            dt)));
+    ASSERT_EQ(
+        0,
+        v<int64_t>(run_simple_agg(
+            "SELECT CAST(NULL AS BOOLEAN) AND val from table_bool_test WHERE id = 2;",
+            dt)));
+    ASSERT_EQ(
+        BOOLEAN_NULL_SENTINEL,
+        v<int64_t>(run_simple_agg(
+            "SELECT CAST(NULL AS BOOLEAN) AND val from table_bool_test WHERE id = 3;",
+            dt)));
+    ASSERT_EQ(
+        BOOLEAN_NULL_SENTINEL,
+        v<int64_t>(run_simple_agg(
+            "SELECT val AND CAST(NULL AS BOOLEAN) from table_bool_test WHERE id = 1;",
+            dt)));
+    ASSERT_EQ(
+        0,
+        v<int64_t>(run_simple_agg(
+            "SELECT val AND CAST(NULL AS BOOLEAN) from table_bool_test WHERE id = 2;",
+            dt)));
+    ASSERT_EQ(
+        BOOLEAN_NULL_SENTINEL,
+        v<int64_t>(run_simple_agg(
+            "SELECT val AND CAST(NULL AS BOOLEAN) from table_bool_test WHERE id = 3;",
+            dt)));
+
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT CAST(NULL AS BOOLEAN) OR val from table_bool_test WHERE id = 1;",
+            dt)));
+    ASSERT_EQ(
+        BOOLEAN_NULL_SENTINEL,
+        v<int64_t>(run_simple_agg(
+            "SELECT CAST(NULL AS BOOLEAN) OR val from table_bool_test WHERE id = 2;",
+            dt)));
+    ASSERT_EQ(
+        BOOLEAN_NULL_SENTINEL,
+        v<int64_t>(run_simple_agg(
+            "SELECT CAST(NULL AS BOOLEAN) OR val from table_bool_test WHERE id = 3;",
+            dt)));
+    ASSERT_EQ(
+        1,
+        v<int64_t>(run_simple_agg(
+            "SELECT val OR CAST(NULL AS BOOLEAN) from table_bool_test WHERE id = 1;",
+            dt)));
+    ASSERT_EQ(
+        BOOLEAN_NULL_SENTINEL,
+        v<int64_t>(run_simple_agg(
+            "SELECT val OR CAST(NULL AS BOOLEAN) from table_bool_test WHERE id = 2;",
+            dt)));
+    ASSERT_EQ(
+        BOOLEAN_NULL_SENTINEL,
+        v<int64_t>(run_simple_agg(
+            "SELECT val OR CAST(NULL AS BOOLEAN) from table_bool_test WHERE id = 3;",
+            dt)));
   }
 }
 
