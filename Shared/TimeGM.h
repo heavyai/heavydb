@@ -131,7 +131,7 @@ class DateTimeStringValidate {
         // check for weird customer format and remove decimal seconds from string if there
         // is a period followed by a number
         char* startptr = nullptr;
-        char* endptr;
+        char* endptr = nullptr;
         // find last decimal in string
         int loop = strlen(s);
         while (loop > 0) {

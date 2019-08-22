@@ -632,10 +632,10 @@ void ColumnarResults::compactAndCopyEntriesPHWithTargetSkipping(
                               &num_columns,
                               &targets_to_skip,
                               &slot_idx_per_target_idx,
-                              &write_functions,
-                              &read_functions](const size_t start_index,
-                                               const size_t end_index,
-                                               const size_t thread_idx) {
+                              &write_functions = write_functions,
+                              &read_functions = read_functions](const size_t start_index,
+                                                                const size_t end_index,
+                                                                const size_t thread_idx) {
     const size_t total_non_empty = non_empty_per_thread[thread_idx];
     size_t non_empty_idx = 0;
     size_t local_idx = 0;
@@ -721,10 +721,10 @@ void ColumnarResults::compactAndCopyEntriesPHWithoutTargetSkipping(
                               &non_empty_per_thread,
                               &num_columns,
                               &slot_idx_per_target_idx,
-                              &write_functions,
-                              &read_functions](const size_t start_index,
-                                               const size_t end_index,
-                                               const size_t thread_idx) {
+                              &write_functions = write_functions,
+                              &read_functions = read_functions](const size_t start_index,
+                                                                const size_t end_index,
+                                                                const size_t thread_idx) {
     const size_t total_non_empty = non_empty_per_thread[thread_idx];
 
     for (size_t column_idx = 0; column_idx < num_columns; column_idx++) {
