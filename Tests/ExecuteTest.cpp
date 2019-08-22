@@ -6162,6 +6162,11 @@ TEST(Select, Empty) {
     c("SELECT APPROX_COUNT_DISTINCT(x * 1000000) FROM emptytab;",
       "SELECT COUNT(DISTINCT x * 1000000) FROM emptytab;",
       dt);
+
+    // Empty subquery results
+    c("SELECT x, SUM(y) FROM emptytab WHERE x IN (SELECT x FROM emptytab GROUP "
+      "BY x HAVING SUM(f) > 1.0) GROUP BY x ORDER BY x ASC;",
+      dt);
   }
 }
 
