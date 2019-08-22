@@ -173,6 +173,21 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
     }
     return codegen(hash_join_lhs.get(), fetch_column, co);
   }
+
+  if (!plan_state_->isLazyFetchColumn(col_var)) {
+    InputColDescriptor col{
+        col_var->get_column_id(), col_var->get_table_id(), col_var->get_rte_idx()};
+    if (cgen_state_->hashed_cols_.count(col)) {
+      auto val = codegenFixedLengthColVar(col_var,
+                                          cgen_state_->hashed_cols_.at(col),
+                                          ll_int((int64_t)0, cgen_state_->context_));
+      auto it_ok = cgen_state_->fetch_cache_.insert(
+          std::make_pair(local_col_id, std::vector<llvm::Value*>{val}));
+      CHECK(it_ok.second);
+      return {it_ok.first->second};
+    }
+  }
+
   auto pos_arg = posArg(col_var);
   if (window_func_context) {
     pos_arg = codegenWindowPosition(window_func_context, pos_arg);

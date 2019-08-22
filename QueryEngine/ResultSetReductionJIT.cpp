@@ -1016,6 +1016,7 @@ void ResultSetReductionJIT::reduceLoop(const ReductionCode& reduction_code) cons
       nullptr,
       nullptr,
       nullptr,
+      nullptr,
       "reduction_loop");
   const auto bb_loop_body = JoinLoop::codegen(
       {join_loop},

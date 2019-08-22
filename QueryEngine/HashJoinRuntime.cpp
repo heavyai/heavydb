@@ -89,17 +89,21 @@ inline int64_t translate_str_id_to_outer_dict(const int64_t elem,
 
 DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
                                         const int32_t hash_entry_count,
+                                        const int32_t hash_entry_size,
                                         const int32_t invalid_slot_val,
                                         const int32_t cpu_thread_idx,
                                         const int32_t cpu_thread_count) {
 #ifdef __CUDACC__
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t end = hash_entry_count;
   int32_t step = blockDim.x * gridDim.x;
+  CHECK_EQ(1, hash_entry_size);
 #else
-  int32_t start = cpu_thread_idx;
-  int32_t step = cpu_thread_count;
+  int32_t start = cpu_thread_idx * hash_entry_size;
+  int32_t step = cpu_thread_count * hash_entry_size;
+  int32_t end = hash_entry_count * hash_entry_size;
 #endif
-  for (int32_t i = start; i < hash_entry_count; i += step) {
+  for (int32_t i = start; i < end; i += step) {
     groups_buffer[i] = invalid_slot_val;
   }
 }
@@ -110,11 +114,31 @@ DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
 #define mapd_cas(address, compare, val) __sync_val_compare_and_swap(address, compare, val)
 #endif
 
+DEVICE void store_payload(int32_t* hash_entry,
+                          const PayloadColumn* payload,
+                          const size_t payload_count,
+                          size_t pos) {
+  for (size_t p = 0; p < payload_count; ++p) {
+    // TODO: noinline version doesn't seem good to be used here
+    int64_t val =
+        fixed_width_int_decode_noinline(payload[p].col_buff, payload[p].elem_sz, pos);
+    int32_t* pos = hash_entry + payload[p].payload_offs;
+    if (payload[p].payload_size == 1)
+      *pos = (int32_t)val;
+    else if (payload[p].payload_size == 2)
+      *(int64_t*)pos = val;
+    else
+      CHECK(false);
+  }
+}
+
 template <typename SLOT_SELECTOR>
 DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
                                      const int32_t invalid_slot_val,
                                      const JoinColumn join_column,
                                      const JoinColumnTypeInfo type_info,
+                                     const PayloadColumn* payload,
+                                     const size_t payload_count,
                                      const void* sd_inner_proxy,
                                      const void* sd_outer_proxy,
                                      const int32_t cpu_thread_idx,
@@ -153,27 +177,33 @@ DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
     if (mapd_cas(entry_ptr, invalid_slot_val, i) != invalid_slot_val) {
       return -1;
     }
+    store_payload(entry_ptr, payload, payload_count, i);
   }
   return 0;
 };
 
 DEVICE int SUFFIX(fill_hash_join_buff_bucketized)(int32_t* buff,
+                                                  const size_t entry_size,
                                                   const int32_t invalid_slot_val,
                                                   const JoinColumn join_column,
                                                   const JoinColumnTypeInfo type_info,
+                                                  const PayloadColumn* payload,
+                                                  const size_t payload_count,
                                                   const void* sd_inner_proxy,
                                                   const void* sd_outer_proxy,
                                                   const int32_t cpu_thread_idx,
                                                   const int32_t cpu_thread_count,
                                                   const int64_t bucket_normalization) {
   auto slot_selector = [&](auto elem) {
-    return SUFFIX(get_bucketized_hash_slot)(
-        buff, elem, type_info.min_val, bucket_normalization);
+    return SUFFIX(get_bucketized_hash_slot_payload)(
+        buff, elem, type_info.min_val, entry_size, bucket_normalization);
   };
   return fill_hash_join_buff_impl(buff,
                                   invalid_slot_val,
                                   join_column,
                                   type_info,
+                                  payload,
+                                  payload_count,
                                   sd_inner_proxy,
                                   sd_outer_proxy,
                                   cpu_thread_idx,
@@ -196,6 +226,8 @@ DEVICE int SUFFIX(fill_hash_join_buff)(int32_t* buff,
                                   invalid_slot_val,
                                   join_column,
                                   type_info,
+                                  nullptr,
+                                  0,
                                   sd_inner_proxy,
                                   sd_outer_proxy,
                                   cpu_thread_idx,
@@ -746,20 +778,23 @@ GLOBAL void SUFFIX(count_matches_baseline)(int32_t* count_buff,
 }
 
 template <typename SLOT_SELECTOR>
-DEVICE void fill_row_ids_impl(int32_t* buff,
-                              const int32_t hash_entry_count,
-                              const int32_t invalid_slot_val,
-                              const JoinColumn join_column,
-                              const JoinColumnTypeInfo type_info
+DEVICE void fill_row_payload_impl(int32_t* buff,
+                                  const int32_t hash_entry_count,
+                                  const int32_t hash_entry_size,
+                                  const int32_t invalid_slot_val,
+                                  const JoinColumn join_column,
+                                  const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
-                              ,
-                              const void* sd_inner_proxy,
-                              const void* sd_outer_proxy,
-                              const int32_t cpu_thread_idx,
-                              const int32_t cpu_thread_count
+                                  ,
+                                  const PayloadColumn* payload,
+                                  const size_t payload_count,
+                                  const void* sd_inner_proxy,
+                                  const void* sd_outer_proxy,
+                                  const int32_t cpu_thread_idx,
+                                  const int32_t cpu_thread_count
 #endif
-                              ,
-                              SLOT_SELECTOR slot_selector) {
+                                  ,
+                                  SLOT_SELECTOR slot_selector) {
   int32_t* pos_buff = buff;
   int32_t* count_buff = buff + hash_entry_count;
   int32_t* id_buff = count_buff + hash_entry_count;
@@ -799,75 +834,88 @@ DEVICE void fill_row_ids_impl(int32_t* buff,
 #endif
     const auto bin_idx = pos_ptr - pos_buff;
     const auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
-    id_buff[id_buff_idx] = static_cast<int32_t>(i);
+    id_buff[id_buff_idx * hash_entry_size] = static_cast<int32_t>(i);
+    store_payload(id_buff + id_buff_idx * hash_entry_size, payload, payload_count, i);
   }
 }
 
-GLOBAL void SUFFIX(fill_row_ids)(int32_t* buff,
-                                 const int32_t hash_entry_count,
-                                 const int32_t invalid_slot_val,
-                                 const JoinColumn join_column,
-                                 const JoinColumnTypeInfo type_info
+GLOBAL void SUFFIX(fill_row_payload)(int32_t* buff,
+                                     const int32_t hash_entry_count,
+                                     const int32_t hash_entry_size,
+                                     const int32_t invalid_slot_val,
+                                     const JoinColumn join_column,
+                                     const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
-                                 ,
-                                 const void* sd_inner_proxy,
-                                 const void* sd_outer_proxy,
-                                 const int32_t cpu_thread_idx,
-                                 const int32_t cpu_thread_count
+                                     ,
+                                     const PayloadColumn* payload,
+                                     const size_t payload_count,
+                                     const void* sd_inner_proxy,
+                                     const void* sd_outer_proxy,
+                                     const int32_t cpu_thread_idx,
+                                     const int32_t cpu_thread_count
 #endif
 ) {
   auto slot_sel = [&type_info](auto pos_buff, auto elem) {
     return SUFFIX(get_hash_slot)(pos_buff, elem, type_info.min_val);
   };
 
-  fill_row_ids_impl(buff,
-                    hash_entry_count,
-                    invalid_slot_val,
-                    join_column,
-                    type_info
+  fill_row_payload_impl(buff,
+                        hash_entry_count,
+                        hash_entry_size,
+                        invalid_slot_val,
+                        join_column,
+                        type_info
 #ifndef __CUDACC__
-                    ,
-                    sd_inner_proxy,
-                    sd_outer_proxy,
-                    cpu_thread_idx,
-                    cpu_thread_count
+                        ,
+                        payload,
+                        payload_count,
+                        sd_inner_proxy,
+                        sd_outer_proxy,
+                        cpu_thread_idx,
+                        cpu_thread_count
 #endif
-                    ,
-                    slot_sel);
+                        ,
+                        slot_sel);
 }
 
-GLOBAL void SUFFIX(fill_row_ids_bucketized)(int32_t* buff,
-                                            const int32_t hash_entry_count,
-                                            const int32_t invalid_slot_val,
-                                            const JoinColumn join_column,
-                                            const JoinColumnTypeInfo type_info
+GLOBAL void SUFFIX(fill_row_payload_bucketized)(int32_t* buff,
+                                                const int32_t hash_entry_count,
+                                                const int32_t hash_entry_size,
+                                                const int32_t invalid_slot_val,
+                                                const JoinColumn join_column,
+                                                const JoinColumnTypeInfo type_info
 #ifndef __CUDACC__
-                                            ,
-                                            const void* sd_inner_proxy,
-                                            const void* sd_outer_proxy,
-                                            const int32_t cpu_thread_idx,
-                                            const int32_t cpu_thread_count
+                                                ,
+                                                const PayloadColumn* payload,
+                                                const size_t payload_count,
+                                                const void* sd_inner_proxy,
+                                                const void* sd_outer_proxy,
+                                                const int32_t cpu_thread_idx,
+                                                const int32_t cpu_thread_count
 #endif
-                                            ,
-                                            const int64_t bucket_normalization) {
+                                                ,
+                                                const int64_t bucket_normalization) {
   auto slot_sel = [&type_info, bucket_normalization](auto pos_buff, auto elem) {
     return SUFFIX(get_bucketized_hash_slot)(
         pos_buff, elem, type_info.min_val, bucket_normalization);
   };
-  fill_row_ids_impl(buff,
-                    hash_entry_count,
-                    invalid_slot_val,
-                    join_column,
-                    type_info
+  fill_row_payload_impl(buff,
+                        hash_entry_count,
+                        hash_entry_size,
+                        invalid_slot_val,
+                        join_column,
+                        type_info
 #ifndef __CUDACC__
-                    ,
-                    sd_inner_proxy,
-                    sd_outer_proxy,
-                    cpu_thread_idx,
-                    cpu_thread_count
+                        ,
+                        payload,
+                        payload_count,
+                        sd_inner_proxy,
+                        sd_outer_proxy,
+                        cpu_thread_idx,
+                        cpu_thread_count
 #endif
-                    ,
-                    slot_sel);
+                        ,
+                        slot_sel);
 }
 
 template <typename SLOT_SELECTOR>
@@ -953,20 +1001,23 @@ GLOBAL void SUFFIX(fill_row_ids_sharded)(int32_t* buff,
                                          shard_info.device_count);
   };
 
-  fill_row_ids_impl(buff,
-                    hash_entry_count,
-                    invalid_slot_val,
-                    join_column,
-                    type_info
+  fill_row_payload_impl(buff,
+                        hash_entry_count,
+                        1,
+                        invalid_slot_val,
+                        join_column,
+                        type_info
 #ifndef __CUDACC__
-                    ,
-                    sd_inner_proxy,
-                    sd_outer_proxy,
-                    cpu_thread_idx,
-                    cpu_thread_count
+                        ,
+                        nullptr,
+                        0,
+                        sd_inner_proxy,
+                        sd_outer_proxy,
+                        cpu_thread_idx,
+                        cpu_thread_count
 #endif
-                    ,
-                    slot_sel);
+                        ,
+                        slot_sel);
 }
 
 GLOBAL void SUFFIX(fill_row_ids_sharded_bucketized)(int32_t* buff,
@@ -995,20 +1046,23 @@ GLOBAL void SUFFIX(fill_row_ids_sharded_bucketized)(int32_t* buff,
                                                     bucket_normalization);
   };
 
-  fill_row_ids_impl(buff,
-                    hash_entry_count,
-                    invalid_slot_val,
-                    join_column,
-                    type_info
+  fill_row_payload_impl(buff,
+                        hash_entry_count,
+                        1,
+                        invalid_slot_val,
+                        join_column,
+                        type_info
 #ifndef __CUDACC__
-                    ,
-                    sd_inner_proxy,
-                    sd_outer_proxy,
-                    cpu_thread_idx,
-                    cpu_thread_count
+                        ,
+                        nullptr,
+                        0,
+                        sd_inner_proxy,
+                        sd_outer_proxy,
+                        cpu_thread_idx,
+                        cpu_thread_count
 #endif
-                    ,
-                    slot_sel);
+                        ,
+                        slot_sel);
 }
 
 template <typename T, typename KEY_HANDLER>
@@ -1249,9 +1303,12 @@ void inclusive_scan(InputIterator first,
 template <typename COUNT_MATCHES_LAUNCH_FUNCTOR, typename FILL_ROW_IDS_LAUNCH_FUNCTOR>
 void fill_one_to_many_hash_table_impl(int32_t* buff,
                                       const int32_t hash_entry_count,
+                                      const int32_t hash_entry_size,
                                       const int32_t invalid_slot_val,
                                       const JoinColumn& join_column,
                                       const JoinColumnTypeInfo& type_info,
+                                      const PayloadColumn* payload,
+                                      const size_t payload_count,
                                       const void* sd_inner_proxy,
                                       const void* sd_outer_proxy,
                                       const unsigned cpu_thread_count,
@@ -1310,10 +1367,13 @@ void fill_one_to_many_hash_table_impl(int32_t* buff,
 }
 
 void fill_one_to_many_hash_table(int32_t* buff,
+                                 const int32_t hash_entry_size,
                                  const HashEntryInfo hash_entry_info,
                                  const int32_t invalid_slot_val,
                                  const JoinColumn& join_column,
                                  const JoinColumnTypeInfo& type_info,
+                                 const PayloadColumn* payload,
+                                 const size_t payload_count,
                                  const void* sd_inner_proxy,
                                  const void* sd_outer_proxy,
                                  const unsigned cpu_thread_count) {
@@ -1335,19 +1395,25 @@ void fill_one_to_many_hash_table(int32_t* buff,
      cpu_thread_count);
   };
   auto launch_fill_row_ids = [hash_entry_count = hash_entry_info.hash_entry_count,
+                              hash_entry_size,
                               buff,
                               invalid_slot_val,
                               &join_column,
                               &type_info,
+                              payload,
+                              payload_count,
                               sd_inner_proxy,
                               sd_outer_proxy](auto cpu_thread_idx,
                                               auto cpu_thread_count) {
-    SUFFIX(fill_row_ids)
+    SUFFIX(fill_row_payload)
     (buff,
      hash_entry_count,
+     hash_entry_size,
      invalid_slot_val,
      join_column,
      type_info,
+     payload,
+     payload_count,
      sd_inner_proxy,
      sd_outer_proxy,
      cpu_thread_idx,
@@ -1356,9 +1422,12 @@ void fill_one_to_many_hash_table(int32_t* buff,
 
   fill_one_to_many_hash_table_impl(buff,
                                    hash_entry_info.hash_entry_count,
+                                   hash_entry_size,
                                    invalid_slot_val,
                                    join_column,
                                    type_info,
+                                   payload,
+                                   payload_count,
                                    sd_inner_proxy,
                                    sd_outer_proxy,
                                    cpu_thread_count,
@@ -1367,10 +1436,13 @@ void fill_one_to_many_hash_table(int32_t* buff,
 }
 
 void fill_one_to_many_hash_table_bucketized(int32_t* buff,
+                                            const int32_t hash_entry_size,
                                             const HashEntryInfo hash_entry_info,
                                             const int32_t invalid_slot_val,
                                             const JoinColumn& join_column,
                                             const JoinColumnTypeInfo& type_info,
+                                            const PayloadColumn* payload,
+                                            const size_t payload_count,
                                             const void* sd_inner_proxy,
                                             const void* sd_outer_proxy,
                                             const unsigned cpu_thread_count) {
@@ -1397,19 +1469,25 @@ void fill_one_to_many_hash_table_bucketized(int32_t* buff,
   };
   auto launch_fill_row_ids = [bucket_normalization,
                               hash_entry_count,
+                              hash_entry_size,
                               buff,
                               invalid_slot_val,
                               &join_column,
                               &type_info,
+                              payload,
+                              payload_count,
                               sd_inner_proxy,
                               sd_outer_proxy](auto cpu_thread_idx,
                                               auto cpu_thread_count) {
-    SUFFIX(fill_row_ids_bucketized)
+    SUFFIX(fill_row_payload_bucketized)
     (buff,
      hash_entry_count,
+     hash_entry_size,
      invalid_slot_val,
      join_column,
      type_info,
+     payload,
+     payload_count,
      sd_inner_proxy,
      sd_outer_proxy,
      cpu_thread_idx,
@@ -1419,9 +1497,12 @@ void fill_one_to_many_hash_table_bucketized(int32_t* buff,
 
   fill_one_to_many_hash_table_impl(buff,
                                    hash_entry_count,
+                                   hash_entry_size,
                                    invalid_slot_val,
                                    join_column,
                                    type_info,
+                                   payload,
+                                   payload_count,
                                    sd_inner_proxy,
                                    sd_outer_proxy,
                                    cpu_thread_count,

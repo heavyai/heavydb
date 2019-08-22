@@ -142,6 +142,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const bool intel_jit_profile,
                          const bool read_only,
                          const bool allow_loop_joins,
+                         const bool join_hash_row_payload,
                          const bool enable_rendering,
                          const bool enable_spirv,
                          const bool enable_auto_clear_render_mem,
@@ -168,6 +169,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , allow_multifrag_(allow_multifrag)
     , read_only_(read_only)
     , allow_loop_joins_(allow_loop_joins)
+    , join_hash_row_payload_(join_hash_row_payload)
     , authMetadata_(authMetadata)
     , mapd_parameters_(mapd_parameters)
     , legacy_syntax_(legacy_syntax)
@@ -4359,7 +4361,8 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                          g_dynamic_watchdog_time_limit,
                          find_push_down_candidates,
                          just_calcite_explain,
-                         mapd_parameters_.gpu_input_mem_limit};
+                         mapd_parameters_.gpu_input_mem_limit,
+                         join_hash_row_payload_};
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
@@ -4419,7 +4422,8 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                          g_dynamic_watchdog_time_limit,
                          false,
                          false,
-                         mapd_parameters_.gpu_input_mem_limit};
+                         mapd_parameters_.gpu_input_mem_limit,
+                         join_hash_row_payload_};
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",

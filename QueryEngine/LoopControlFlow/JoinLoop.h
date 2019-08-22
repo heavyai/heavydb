@@ -38,6 +38,7 @@ enum class JoinLoopKind {
 // 2. For one-to-one joins, at most one value: `slot_lookup_result` if valid (greater than
 // or equal to zero).
 // 3. For one-to-many joins, the `element_count` values in `values_buffer`.
+// 4. Payload entry size (number of int32_t elements in payload).
 struct JoinLoopDomain {
   union {
     llvm::Value* upper_bound;         // for UpperBound
@@ -45,6 +46,7 @@ struct JoinLoopDomain {
     llvm::Value* slot_lookup_result;  // for Singleton
   };
   llvm::Value* values_buffer;  // used for Set
+  size_t entry_size = 1;
 };
 
 // Any join is logically a loop. Hash joins just limit the domain of iteration,
@@ -55,6 +57,7 @@ class JoinLoop {
   JoinLoop(const JoinLoopKind,
            const JoinType,
            const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)>&,
+           const std::function<void(const std::vector<llvm::Value*>&)>&,
            const std::function<llvm::Value*(const std::vector<llvm::Value*>&)>&,
            const std::function<void(llvm::Value*)>&,
            const std::function<llvm::Value*(const std::vector<llvm::Value*>& prev_iters,
@@ -86,6 +89,9 @@ class JoinLoop {
   // domain of iteration.
   const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)>
       iteration_domain_codegen_;
+  // Callback provided from the executor which generates iterators for all
+  // columns stored in join hash table as a payload.
+  const std::function<void(const std::vector<llvm::Value*>&)> payload_iterators_codegen_;
   // Callback provided from the executor which generates true iff the outer condition
   // evaluates to true.
   const std::function<llvm::Value*(const std::vector<llvm::Value*>&)>

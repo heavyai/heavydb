@@ -536,7 +536,7 @@ int OverlapsJoinHashTable::initHashTableOnCpu(
   }
   auto one_to_many_buff =
       reinterpret_cast<int32_t*>(&(*cpu_hash_table_buff_)[0] + entry_count_ * entry_size);
-  init_hash_join_buff(one_to_many_buff, entry_count_, -1, 0, 1);
+  init_hash_join_buff(one_to_many_buff, entry_count_, 1, -1, 0, 1);
   switch (key_component_width) {
     case 4: {
       const auto composite_key_dict =

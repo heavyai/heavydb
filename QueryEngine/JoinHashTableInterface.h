@@ -19,6 +19,7 @@
 #include <llvm/IR/Value.h>
 #include <cstdint>
 #include "CompilationOptions.h"
+#include "Descriptors/InputDescriptors.h"
 
 class TooManyHashEntries : public std::runtime_error {
  public:
@@ -56,6 +57,8 @@ struct HashJoinMatchingSet {
 };
 
 using InnerOuter = std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>;
+using InputColDescriptors = std::list<std::shared_ptr<const InputColDescriptor>>;
+using InputColDescriptorsByScanIdx = std::unordered_map<int, InputColDescriptors>;
 
 class JoinHashTableInterface {
  public:
@@ -75,11 +78,34 @@ class JoinHashTableInterface {
 
   virtual HashType getHashType() const noexcept = 0;
 
+  enum class PayloadType { RowId, RowIdAndRow, Row };
+
+  virtual PayloadType getPayloadType() const noexcept { return PayloadType::RowId; }
+
+  virtual size_t getPayloadSize() const noexcept { return 1; }
+
+  virtual const InputColDescriptors& getPayloadColumns() const noexcept {
+    return EMPTY_PAYLOAD;
+  }
+
+  virtual size_t getPayloadColumnOffset(const InputColDescriptor& col) const noexcept {
+    CHECK(false);
+    return 0;
+  }
+
+  virtual llvm::Value* getPayloadColumnPtr(const InputColDescriptor& col) const noexcept {
+    CHECK(false);
+    return nullptr;
+  }
+
   virtual size_t offsetBufferOff() const noexcept = 0;
 
   virtual size_t countBufferOff() const noexcept = 0;
 
   virtual size_t payloadBufferOff() const noexcept = 0;
+
+ private:
+  static const InputColDescriptors EMPTY_PAYLOAD;
 };
 
 #endif  // QUERYENGINE_JOINHASHTABLEINTERFACE_H
