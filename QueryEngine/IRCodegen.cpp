@@ -223,6 +223,18 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
     ColumnCacheMap& column_cache) {
   INJECT_TIMER(buildJoinLoops);
   std::vector<JoinLoop> join_loops;
+  InputColDescriptorsByScanIdx payload_cols;
+  auto& cat = *getCatalog();
+  if (eo.join_hash_row_payload && co.device_type_ == ExecutorDeviceType::CPU) {
+    for (auto& col : ra_exe_unit.input_col_descs) {
+      auto* desc = get_column_descriptor_maybe(*col, cat);
+      if (desc && !desc->isSystemCol && !desc->isVirtualCol && !desc->isDeletedCol &&
+          !desc->columnType.get_physical_cols() && !desc->columnType.is_varlen() &&
+          (desc->columnType.get_size() <= 8)) {
+        payload_cols[col->getScanDesc().getNestLevel()].push_back(col);
+      }
+    }
+  }
   for (size_t level_idx = 0, current_hash_table_idx = 0;
        level_idx < ra_exe_unit.join_quals.size();
        ++level_idx) {
@@ -231,6 +243,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
     const auto current_level_hash_table =
         buildCurrentLevelHashTable(current_level_join_conditions,
                                    ra_exe_unit,
+                                   payload_cols,
                                    co,
                                    query_infos,
                                    column_cache,
@@ -254,7 +267,12 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
               JoinLoopDomain domain{{0}};
               domain.slot_lookup_result =
                   current_level_hash_table->codegenSlot(co, current_hash_table_idx);
+              domain.entry_size = current_level_hash_table->getPayloadSize();
               return domain;
+            },
+            [this,
+             current_level_hash_table](const std::vector<llvm::Value*>& prev_iters) {
+              addPayloadColumnIterators(*current_level_hash_table);
             },
             nullptr,
             current_level_join_conditions.type == JoinType::LEFT
@@ -273,7 +291,12 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                   co, current_hash_table_idx);
               domain.values_buffer = matching_set.elements;
               domain.element_count = matching_set.count;
+              domain.entry_size = current_level_hash_table->getPayloadSize();
               return domain;
+            },
+            [this,
+             current_level_hash_table](const std::vector<llvm::Value*>& prev_iters) {
+              codegenPayloadColumnIterators(prev_iters, *current_level_hash_table);
             },
             nullptr,
             current_level_join_conditions.type == JoinType::LEFT
@@ -323,6 +346,7 @@ std::vector<JoinLoop> Executor::buildJoinLoops(
                                                                      "num_rows_per_scan");
             return domain;
           },
+          nullptr,
           current_level_join_conditions.type == JoinType::LEFT
               ? std::function<llvm::Value*(const std::vector<llvm::Value*>&)>(
                     outer_join_condition_cb)
@@ -396,6 +420,7 @@ Executor::buildIsDeletedCb(const RelAlgExecutionUnit& ra_exe_unit,
 std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
     const JoinCondition& current_level_join_conditions,
     RelAlgExecutionUnit& ra_exe_unit,
+    InputColDescriptorsByScanIdx& payload_cols,
     const CompilationOptions& co,
     const std::vector<InputTableInfo>& query_infos,
     ColumnCacheMap& column_cache,
@@ -423,7 +448,8 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
           co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
                                                      : MemoryLevel::CPU_LEVEL,
           JoinHashTableInterface::HashType::OneToOne,
-          column_cache);
+          column_cache,
+          payload_cols);
       current_level_hash_table = hash_table_or_error.hash_table;
     }
     if (hash_table_or_error.hash_table) {
@@ -454,6 +480,33 @@ llvm::Value* Executor::addJoinLoopIterator(const std::vector<llvm::Value*>& prev
       cgen_state_->scan_idx_to_hash_pos_.emplace(level_idx, matching_row_index);
   CHECK(it_ok.second);
   return matching_row_index;
+}
+
+void Executor::addPayloadColumnIterators(const JoinHashTableInterface& hash_table) {
+  if (hash_table.getPayloadType() != JoinHashTableInterface::PayloadType::RowId) {
+    for (auto& col : hash_table.getPayloadColumns()) {
+      auto ptr = hash_table.getPayloadColumnPtr(*col);
+      CHECK(ptr);
+      cgen_state_->hashed_cols_[*col] = ptr;
+    }
+  }
+}
+
+void Executor::codegenPayloadColumnIterators(const std::vector<llvm::Value*>& prev_iters,
+                                             const JoinHashTableInterface& hash_table) {
+  if (hash_table.getPayloadType() == JoinHashTableInterface::PayloadType::RowId) {
+    return;
+  }
+
+  CHECK(!prev_iters.empty());
+  auto payload_ptr = prev_iters.back();
+  auto ptr_ty = cgen_state_->ir_builder_.getInt8PtrTy();
+  for (auto& col : hash_table.getPayloadColumns()) {
+    auto offs = ll_int(hash_table.getPayloadColumnOffset(*col), cgen_state_->context_);
+    auto val_ptr = cgen_state_->ir_builder_.CreateGEP(payload_ptr, {offs});
+    val_ptr = cgen_state_->ir_builder_.CreateBitCast(val_ptr, ptr_ty);
+    cgen_state_->hashed_cols_[*col] = val_ptr;
+  }
 }
 
 void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,

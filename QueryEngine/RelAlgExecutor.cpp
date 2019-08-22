@@ -330,7 +330,8 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       eo.dynamic_watchdog_time_limit,
       eo.find_push_down_candidates,
       eo.just_calcite_explain,
-      eo.gpu_input_mem_limit_percent};
+      eo.gpu_input_mem_limit_percent,
+      eo.join_hash_row_payload};
 
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
@@ -1492,12 +1493,14 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
   const auto memory_level = co.device_type_ == ExecutorDeviceType::GPU
                                 ? MemoryLevel::GPU_LEVEL
                                 : MemoryLevel::CPU_LEVEL;
+  InputColDescriptorsByScanIdx dummy;
   const auto join_table_or_err =
       executor_->buildHashTableForQualifier(partition_key_cond,
                                             query_infos,
                                             memory_level,
                                             JoinHashTableInterface::HashType::OneToMany,
-                                            column_cache_map);
+                                            column_cache_map,
+                                            dummy);
   if (!join_table_or_err.fail_reason.empty()) {
     throw std::runtime_error(join_table_or_err.fail_reason);
   }
@@ -2182,7 +2185,8 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
                                    eo.dynamic_watchdog_time_limit,
                                    false,
                                    false,
-                                   eo.gpu_input_mem_limit_percent};
+                                   eo.gpu_input_mem_limit_percent,
+                                   eo.join_hash_row_payload};
 
   if (was_multifrag_kernel_launch) {
     try {

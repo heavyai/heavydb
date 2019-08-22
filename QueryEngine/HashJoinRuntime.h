@@ -54,6 +54,7 @@ const size_t g_maximum_conditions_to_coalesce{8};
 
 void init_hash_join_buff(int32_t* buff,
                          const int32_t entry_count,
+                         const int32_t entry_size,
                          const int32_t invalid_slot_val,
                          const int32_t cpu_thread_idx,
                          const int32_t cpu_thread_count);
@@ -113,6 +114,13 @@ struct JoinColumnTypeInfo {
   const ColumnType column_type;
 };
 
+struct PayloadColumn {
+  const int8_t* col_buff;
+  const size_t elem_sz;
+  const size_t payload_offs;
+  const size_t payload_size;
+};
+
 inline ColumnType get_join_column_type_kind(const SQLTypeInfo& ti) {
   if (ti.is_date_in_days()) {
     return SmallDate;
@@ -127,9 +135,12 @@ struct JoinBucketInfo {
 };
 
 int fill_hash_join_buff_bucketized(int32_t* buff,
+                                   const size_t entry_size,
                                    const int32_t invalid_slot_val,
                                    const JoinColumn join_column,
                                    const JoinColumnTypeInfo type_info,
+                                   const PayloadColumn* payload,
+                                   const size_t payload_count,
                                    const void* sd_inner,
                                    const void* sd_outer,
                                    const int32_t cpu_thread_idx,
@@ -188,19 +199,25 @@ void fill_hash_join_buff_on_device_sharded_bucketized(int32_t* buff,
                                                       const int64_t bucket_normalization);
 
 void fill_one_to_many_hash_table(int32_t* buff,
+                                 const int32_t hash_entry_size,
                                  const HashEntryInfo hash_entry_info,
                                  const int32_t invalid_slot_val,
                                  const JoinColumn& join_column,
                                  const JoinColumnTypeInfo& type_info,
+                                 const PayloadColumn* payload,
+                                 const size_t payload_count,
                                  const void* sd_inner_proxy,
                                  const void* sd_outer_proxy,
                                  const unsigned cpu_thread_count);
 
 void fill_one_to_many_hash_table_bucketized(int32_t* buff,
+                                            const int32_t hash_entry_size,
                                             const HashEntryInfo hash_entry_info,
                                             const int32_t invalid_slot_val,
                                             const JoinColumn& join_column,
                                             const JoinColumnTypeInfo& type_info,
+                                            const PayloadColumn* payload,
+                                            const size_t payload_count,
                                             const void* sd_inner_proxy,
                                             const void* sd_outer_proxy,
                                             const unsigned cpu_thread_count);
