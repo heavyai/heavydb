@@ -9,6 +9,7 @@ add_executable(ExecuteTest ExecuteTest.cpp ClusterTester.cpp)
 add_executable(RunQueryLoop RunQueryLoop.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)
+add_executable(StringFunctionsTest StringFunctionsTest.cpp)
 add_executable(PlanTest PlanTest.cpp)
 add_executable(ProfileTest ProfileTest.cpp)
 add_executable(ExperimentalTest ExperimentalTest.cpp)
@@ -76,6 +77,7 @@ target_link_libraries(ResultSetBaselineRadixSortTest gtest QueryEngine ${MAPD_RE
 target_link_libraries(UtilTest Utils gtest Shared ${Boost_LIBRARIES})
 target_link_libraries(StringDictionaryTest StringDictionary gtest Shared ${Boost_LIBRARIES})
 target_link_libraries(StringTransformTest Shared gtest ${Boost_LIBRARIES})
+target_link_libraries(StringFunctionsTest gtest QueryRunner ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift Shared ${Boost_LIBRARIES})
 set(EXECUTE_TEST_LIBS gtest QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${Boost_LIBRARIES})
 list(APPEND EXECUTE_TEST_LIBS Calcite)
@@ -125,6 +127,7 @@ add_test(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest ${TEST_AR
 add_test(RunQueryLoop RunQueryLoop ${TEST_ARGS})
 add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
 add_test(StringTransformTest StringTransformTest ${TEST_ARGS})
+add_test(StringFunctionsTest StringFunctionsTest ${TEST_ARGS})
 add_test(StorageTest StorageTest ${TEST_ARGS})
 add_test(ComputeMetadataTest ComputeMetadataTest ${TEST_ARGS})
 add_test(BumpAllocatorTest BumpAllocatorTest ${TEST_ARGS})
@@ -209,7 +212,7 @@ add_custom_target(all_tests
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS ${SANITY_TESTS} ProfileTest UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StoragePerfTest
+    DEPENDS ${SANITY_TESTS} ProfileTest UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StringFunctionsTest StoragePerfTest
     USES_TERMINAL)
 
 add_custom_target(storage_perf_tests

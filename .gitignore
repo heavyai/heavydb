@@ -73,3 +73,7 @@ java/thrift/src/
 *.project
 
 ThirdParty/
+
+# IntelliJ/CLion settings files
+.idea
+*.iml

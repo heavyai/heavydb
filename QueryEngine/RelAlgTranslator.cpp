@@ -36,6 +36,8 @@
 
 extern bool g_enable_watchdog;
 
+bool g_enable_experimental_string_functions = false;
+
 namespace {
 
 SQLTypeInfo build_type_info(const SQLTypes sql_type,
@@ -1168,6 +1170,20 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateKeyForString(
   return makeExpr<Analyzer::KeyForStringExpr>(args[0]);
 }
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLower(
+    const RexFunctionOperator* rex_function) const {
+  const auto& args = translateFunctionArgs(rex_function);
+  CHECK_EQ(size_t(1), args.size());
+
+  if (const auto expr = dynamic_cast<Analyzer::Expr*>(args[0].get());
+      expr && expr->get_type_info().is_string() && !expr->get_type_info().is_varlen()) {
+    return makeExpr<Analyzer::LowerExpr>(args[0]);
+  }
+
+  throw std::runtime_error(rex_function->getName() +
+                           " expects a dictionary encoded text column.");
+}
+
 Analyzer::ExpressionPtr RelAlgTranslator::translateCardinality(
     const RexFunctionOperator* rex_function) const {
   const auto ret_ti = rex_function->getType();
@@ -1364,6 +1380,10 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   }
   if (rex_function->getName() == std::string("KEY_FOR_STRING")) {
     return translateKeyForString(rex_function);
+  }
+  if (g_enable_experimental_string_functions &&
+      rex_function->getName() == std::string("LOWER")) {
+    return translateLower(rex_function);
   }
   if (rex_function->getName() == std::string("CARDINALITY") ||
       rex_function->getName() == std::string("ARRAY_LENGTH")) {

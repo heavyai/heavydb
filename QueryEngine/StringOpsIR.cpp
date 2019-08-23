@@ -20,6 +20,8 @@
 #include "../Shared/sqldefs.h"
 #include "Parser/ParserNode.h"
 
+#include <boost/locale/conversion.hpp>
+
 extern "C" uint64_t string_decode(int8_t* chunk_iter_, int64_t pos) {
   auto chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
   VarlenDatum vd;
@@ -51,6 +53,13 @@ extern "C" int32_t string_compress(const int64_t ptr_and_len,
   auto string_dict_proxy =
       reinterpret_cast<const StringDictionaryProxy*>(string_dict_handle);
   return string_dict_proxy->getIdOfString(raw_str);
+}
+
+extern "C" int32_t lower_encoded(int32_t string_id, int64_t string_dict_proxy_address) {
+  StringDictionaryProxy* string_dict_proxy =
+      reinterpret_cast<StringDictionaryProxy*>(string_dict_proxy_address);
+  auto str = string_dict_proxy->getString(string_id);
+  return string_dict_proxy->getOrAddTransient(boost::locale::to_lower(str));
 }
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::CharLengthExpr* expr,
@@ -89,6 +98,27 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::KeyForStringExpr* expr,
   auto str_lv = codegen(expr->get_arg(), true, co);
   CHECK_EQ(size_t(1), str_lv.size());
   return cgen_state_->emitCall("key_for_string_encoded", str_lv);
+}
+
+llvm::Value* CodeGenerator::codegen(const Analyzer::LowerExpr* expr,
+                                    const CompilationOptions& co) {
+  if (co.device_type_ == ExecutorDeviceType::GPU) {
+    throw QueryMustRunOnCpu();
+  }
+
+  auto str_id_lv = codegen(expr->get_arg(), true, co);
+  CHECK_EQ(size_t(1), str_id_lv.size());
+
+  const auto string_dictionary_proxy = executor()->getStringDictionaryProxy(
+      expr->get_type_info().get_comp_param(), executor()->getRowSetMemoryOwner(), true);
+  CHECK(string_dictionary_proxy);
+
+  std::vector<llvm::Value*> args{
+      str_id_lv[0],
+      cgen_state_->llInt(reinterpret_cast<int64_t>(string_dictionary_proxy))};
+
+  return cgen_state_->emitExternalCall(
+      "lower_encoded", get_int_type(32, cgen_state_->context_), args);
 }
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::LikeExpr* expr,

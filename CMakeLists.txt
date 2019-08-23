@@ -181,7 +181,7 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 if(APPLE OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
     AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 3.6 OR CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL 3.6))
     OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 4.9))
-  find_package( Boost COMPONENTS log log_setup filesystem program_options regex system thread timer REQUIRED )
+  find_package( Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale REQUIRED )
 else()
   message(FATAL_ERROR, "GCC v4.9 or clang v3.6 (or newer) is required")
 endif()

@@ -40,6 +40,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/locale/generator.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/program_options.hpp>
 #include <csignal>
@@ -69,6 +70,7 @@ extern bool g_skip_intermediate_count;
 extern bool g_enable_bump_allocator;
 extern size_t g_max_memory_allocation_size;
 extern size_t g_min_memory_allocation_size;
+extern bool g_enable_experimental_string_functions;
 
 bool g_enable_thrift_logs{false};
 
@@ -558,6 +560,11 @@ void MapDProgramOptions::fillOptions() {
       "to the `register_runtime_udf` endpoint. For use with the Python Remote Backend "
       "Compiler server, packaged separately.");
   help_desc.add_options()("version,v", "Print Version Number.");
+  help_desc.add_options()("enable-experimental-string-functions",
+                          po::value<bool>(&g_enable_experimental_string_functions)
+                              ->default_value(g_enable_experimental_string_functions)
+                              ->implicit_value(true),
+                          "Enable experimental string functions.");
 
   help_desc.add(log_options_.get_options());
 }
@@ -1093,6 +1100,13 @@ int startMapdServer(MapDProgramOptions& prog_config_opts) {
 
   if (!g_enable_thrift_logs) {
     apache::thrift::GlobalOutput.setOutputFunction([](const char* msg) {});
+  }
+
+  if (g_enable_experimental_string_functions) {
+    // Use the locale setting of the server by default. The generate parameter can be
+    // updated appropriately if a locale override option is ever supported.
+    boost::locale::generator generator;
+    std::locale::global(generator.generate(""));
   }
 
   g_mapd_handler =

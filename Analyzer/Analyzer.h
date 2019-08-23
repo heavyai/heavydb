@@ -731,6 +731,60 @@ class KeyForStringExpr : public Expr {
   std::shared_ptr<Analyzer::Expr> arg;
 };
 
+/**
+ * @brief Expression class for the LOWER (lowercase) string function.
+ * The "arg" constructor parameter must be an expression that resolves to a string
+ * datatype (e.g. TEXT).
+ */
+class LowerExpr : public Expr {
+ public:
+  LowerExpr(std::shared_ptr<Analyzer::Expr> arg) : Expr(arg->get_type_info()), arg(arg) {}
+
+  const Expr* get_arg() const { return arg.get(); }
+
+  void collect_rte_idx(std::set<int>& rte_idx_set) const override {
+    arg->collect_rte_idx(rte_idx_set);
+  }
+
+  void collect_column_var(
+      std::set<const ColumnVar*, bool (*)(const ColumnVar*, const ColumnVar*)>&
+          colvar_set,
+      bool include_agg) const override {
+    arg->collect_column_var(colvar_set, include_agg);
+  }
+
+  std::shared_ptr<Analyzer::Expr> rewrite_with_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    return makeExpr<LowerExpr>(arg->rewrite_with_targetlist(tlist));
+  }
+
+  std::shared_ptr<Analyzer::Expr> rewrite_with_child_targetlist(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    return makeExpr<LowerExpr>(arg->rewrite_with_child_targetlist(tlist));
+  }
+
+  std::shared_ptr<Analyzer::Expr> rewrite_agg_to_var(
+      const std::vector<std::shared_ptr<TargetEntry>>& tlist) const override {
+    return makeExpr<LowerExpr>(arg->rewrite_agg_to_var(tlist));
+  }
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  void group_predicates(std::list<const Expr*>& scan_predicates,
+                        std::list<const Expr*>& join_predicates,
+                        std::list<const Expr*>& const_predicates) const override;
+
+  bool operator==(const Expr& rhs) const override;
+
+  std::string toString() const override;
+
+  void find_expr(bool (*f)(const Expr*),
+                 std::list<const Expr*>& expr_list) const override;
+
+ private:
+  std::shared_ptr<Analyzer::Expr> arg;
+};
+
 /*
  * @type CardinalityExpr
  * @brief expression for the CARDINALITY expression.
