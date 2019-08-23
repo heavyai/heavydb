@@ -931,6 +931,11 @@ public class SQLImporter {
         col.data.str_col.clear();
         break;
 
+      // Handle WKT for geo columns
+      case java.sql.Types.OTHER:
+        col.data.str_col.clear();
+        break;
+
       default:
         throw new AssertionError("Column type " + md.getColumnType(i) + " not Supported");
     }
