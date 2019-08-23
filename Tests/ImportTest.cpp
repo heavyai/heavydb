@@ -170,6 +170,20 @@ bool import_test_local(const string& filename, const int64_t cnt, const double a
       avg);
 }
 
+bool import_test_line_endings_in_quotes_local(const string& filename, const int64_t cnt) {
+  string query_str =
+      "COPY random_strings_with_line_endings FROM '../../Tests/Import/datafiles/" +
+      filename +
+      "' WITH (header='false', quoted='true', max_reject=1, buffer_size=1048576);";
+  run_ddl_statement(query_str);
+  std::string select_query_str = "SELECT COUNT(*) FROM random_strings_with_line_endings;";
+  auto rows = run_query(select_query_str);
+  auto crt_row = rows->getNextRow(true, true);
+  CHECK_EQ(size_t(1), crt_row.size());
+  auto r_cnt = v<int64_t>(crt_row[0]);
+  return r_cnt == cnt;
+}
+
 bool import_test_local_geo(const string& filename,
                            const string& other_options,
                            const int64_t cnt,
@@ -838,15 +852,25 @@ const char* create_table_trips = R"(
     ) WITH (FRAGMENT_SIZE=75000000);
   )";
 
+const char* create_table_random_strings_with_line_endings = R"(
+    CREATE TABLE random_strings_with_line_endings (
+      random_string TEXT
+    ) WITH (FRAGMENT_SIZE=75000000);
+  )";
+
 class ImportTest : public ::testing::Test {
  protected:
   void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
     ASSERT_NO_THROW(run_ddl_statement(create_table_trips););
+    ASSERT_NO_THROW(
+        run_ddl_statement("drop table if exists random_strings_with_line_endings;"););
+    ASSERT_NO_THROW(run_ddl_statement(create_table_random_strings_with_line_endings););
   }
 
   void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table trips;"););
+    ASSERT_NO_THROW(run_ddl_statement("drop table random_strings_with_line_endings;"););
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geo;"););
   }
 };
@@ -921,6 +945,11 @@ TEST_F(ImportTest, S3_Wildcard_Prefix) {
 
 TEST_F(ImportTest, One_csv_file) {
   EXPECT_TRUE(import_test_local("trip_data_9.csv", 100, 1.0));
+}
+
+TEST_F(ImportTest, random_strings_with_line_endings) {
+  EXPECT_TRUE(import_test_line_endings_in_quotes_local(
+      "random_strings_with_line_endings.7z", 19261));
 }
 
 TEST_F(ImportTest, One_csv_file_no_newline) {

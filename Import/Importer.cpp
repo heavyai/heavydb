@@ -296,13 +296,14 @@ static const char* get_row(const char* buf,
         field = p + 1;
         has_escape = false;
         strip_quotes = false;
-      }
-      if (is_eol(*p, line_endings) &&
-          ((!in_quote && !in_array) || copy_params.threads != 1)) {
-        while (p + 1 < buf_end && is_eol(*(p + 1), line_endings)) {
-          p++;
+
+        if (is_eol(*p, line_endings)) {
+          // We are at the end of the row. Skip the line endings now.
+          while (p + 1 < buf_end && is_eol(*(p + 1), line_endings)) {
+            p++;
+          }
+          break;
         }
-        break;
       }
     }
   }
@@ -2266,21 +2267,70 @@ static ImportStatus import_thread_shapefile(
   return import_status;
 }
 
-static size_t find_end(const char* buffer, size_t size, const CopyParams& copy_params) {
-  int i;
-  // @TODO(wei) line_delim is in quotes note supported
-  for (i = size - 1; i >= 0 && buffer[i] != copy_params.line_delim; i--) {
-    ;
+/**
+ * @brief Finds the closest possible row ending to the end of the given buffer.
+ *
+ * @param buffer               Given buffer which has the rows in csv format. (NOT OWN)
+ * @param size                 Size of the buffer.
+ * @param copy_params          Copy params for the table.
+ * @param num_rows_this_buffer Number of rows until the closest possible row ending.
+ *
+ * @return The position of the closest possible row ending to the end of the given
+ * buffer.
+ */
+static size_t find_end(const char* buffer,
+                       size_t size,
+                       const CopyParams& copy_params,
+                       unsigned int& num_rows_this_buffer) {
+  size_t last_line_delim_pos;
+  if (copy_params.quoted) {
+    const char* current = buffer;
+    last_line_delim_pos = 0;
+    bool in_quote = false;
+
+    while (current < buffer + size) {
+      while (in_quote && current < buffer + size) {
+        // We are in a quoted field. We have to find the ending quote.
+        if ((*current == copy_params.escape) && (current < buffer + size - 1) &&
+            (*(current + 1) == copy_params.quote)) {
+          ++current;
+        } else if (*current == copy_params.quote) {
+          in_quote = false;
+        }
+        ++current;
+      }
+
+      // We are outside of quotes. We have to find the last possible line delimiter.
+      while (!in_quote && current < buffer + size) {
+        if (*current == copy_params.line_delim) {
+          last_line_delim_pos = current - buffer;
+          ++num_rows_this_buffer;
+        } else if (*current == copy_params.quote) {
+          in_quote = true;
+        }
+        ++current;
+      }
+    }
+  } else {
+    const char* current = buffer;
+    while (current < buffer + size - 1) {
+      if (*current == copy_params.line_delim) {
+        last_line_delim_pos = current - buffer;
+        ++num_rows_this_buffer;
+      }
+      ++current;
+    }
   }
 
-  if (i < 0) {
-    int slen = size < 50 ? size : 50;
+  if (last_line_delim_pos <= 0) {
+    size_t slen = size < 50 ? size : 50;
     std::string showMsgStr(buffer, buffer + slen);
     LOG(ERROR) << "No line delimiter in block. Block was of size " << size
                << " bytes, first few characters " << showMsgStr;
     return size;
   }
-  return i + 1;
+
+  return last_line_delim_pos + 1;
 }
 
 bool Loader::loadNoCheckpoint(
@@ -3773,39 +3823,20 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     for (size_t i = 0; i < max_threads; i++) {
       stack_thread_ids.push(i);
     }
-
+    // added for true row index on error
     size_t first_row_index_this_buffer = 0;
 
     while (size > 0) {
+      unsigned int num_rows_this_buffer = 0;
       CHECK(scratch_buffer);
-      if (eof_reached) {
-        end_pos = size;
-      } else {
-        end_pos = find_end(scratch_buffer.get(), size, copy_params);
-      }
+      end_pos = find_end(scratch_buffer.get(), size, copy_params, num_rows_this_buffer);
+
       // unput residual
       int nresidual = size - end_pos;
       std::unique_ptr<char[]> unbuf;
       if (nresidual > 0) {
         unbuf = std::make_unique<char[]>(nresidual);
         memcpy(unbuf.get(), scratch_buffer.get() + end_pos, nresidual);
-      }
-
-      // added for true row index on error
-      unsigned int num_rows_this_buffer = 0;
-      {
-        // we could multi-thread this, but not worth it
-        // additional cost here is ~1.4ms per chunk and
-        // probably free because this thread will spend
-        // most of its time waiting for the child threads
-        char* p = scratch_buffer.get() + begin_pos;
-        char* pend = scratch_buffer.get() + end_pos;
-        char d = copy_params.line_delim;
-        while (p < pend) {
-          if (*p++ == d) {
-            num_rows_this_buffer++;
-          }
-        }
       }
 
       // get a thread_id not in use
@@ -3834,9 +3865,6 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
                                1,
                                copy_params.buffer_size - nresidual,
                                p_file);
-      if (size < copy_params.buffer_size && feof(p_file)) {
-        eof_reached = true;
-      }
 
       begin_pos = 0;
 
