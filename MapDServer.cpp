@@ -271,7 +271,6 @@ class MapDProgramOptions {
 
   MapDParameters mapd_parameters;
   bool enable_rendering = false;
-  bool enable_spirv = false;
   bool enable_auto_clear_render_mem = false;
   int render_oom_retry_threshold = 0;  // in milliseconds
   size_t render_mem_bytes = 500000000;
@@ -1107,7 +1106,6 @@ int startMapdServer(MapDProgramOptions& prog_config_opts) {
                                      prog_config_opts.read_only,
                                      prog_config_opts.allow_loop_joins,
                                      prog_config_opts.enable_rendering,
-                                     prog_config_opts.enable_spirv,
                                      prog_config_opts.enable_auto_clear_render_mem,
                                      prog_config_opts.render_oom_retry_threshold,
                                      prog_config_opts.render_mem_bytes,
