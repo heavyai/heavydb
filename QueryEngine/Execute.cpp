@@ -1489,6 +1489,85 @@ ResultSetPtr Executor::collectAllDeviceResults(
       ra_exe_unit, result_per_device, row_set_mem_owner, query_mem_desc);
 }
 
+namespace {
+/**
+ * This functions uses the permutation indices in "top_permutation", and permutes
+ * all group columns (if any) and aggregate columns into the output storage. In columnar
+ * layout, since different columns are not consecutive in the memory, different columns
+ * are copied back into the output storage separetely and through different memcpy
+ * operations.
+ *
+ * output_row_index contains the current index of the output storage (input storage will
+ * be appended to it), and the final output row index is returned.
+ */
+size_t permute_storage_columnar(const ResultSetStorage* input_storage,
+                                const QueryMemoryDescriptor& input_query_mem_desc,
+                                const ResultSetStorage* output_storage,
+                                size_t output_row_index,
+                                const QueryMemoryDescriptor& output_query_mem_desc,
+                                const std::vector<uint32_t>& top_permutation) {
+  const auto output_buffer = output_storage->getUnderlyingBuffer();
+  const auto input_buffer = input_storage->getUnderlyingBuffer();
+  for (const auto sorted_idx : top_permutation) {
+    // permuting all group-columns in this result set into the final buffer:
+    for (size_t group_idx = 0; group_idx < input_query_mem_desc.getKeyCount();
+         group_idx++) {
+      const auto input_column_ptr =
+          input_buffer + input_query_mem_desc.getPrependedGroupColOffInBytes(group_idx) +
+          sorted_idx * input_query_mem_desc.groupColWidth(group_idx);
+      const auto output_column_ptr =
+          output_buffer +
+          output_query_mem_desc.getPrependedGroupColOffInBytes(group_idx) +
+          output_row_index * output_query_mem_desc.groupColWidth(group_idx);
+      memcpy(output_column_ptr,
+             input_column_ptr,
+             output_query_mem_desc.groupColWidth(group_idx));
+    }
+    // permuting all agg-columns in this result set into the final buffer:
+    for (size_t slot_idx = 0; slot_idx < input_query_mem_desc.getSlotCount();
+         slot_idx++) {
+      const auto input_column_ptr =
+          input_buffer + input_query_mem_desc.getColOffInBytes(slot_idx) +
+          sorted_idx * input_query_mem_desc.getPaddedSlotWidthBytes(slot_idx);
+      const auto output_column_ptr =
+          output_buffer + output_query_mem_desc.getColOffInBytes(slot_idx) +
+          output_row_index * output_query_mem_desc.getPaddedSlotWidthBytes(slot_idx);
+      memcpy(output_column_ptr,
+             input_column_ptr,
+             output_query_mem_desc.getPaddedSlotWidthBytes(slot_idx));
+    }
+    ++output_row_index;
+  }
+  return output_row_index;
+}
+
+/**
+ * This functions uses the permutation indices in "top_permutation", and permutes
+ * all group columns (if any) and aggregate columns into the output storage. In row-wise,
+ * since different columns are consecutive within the memory, it suffices to perform a
+ * single memcpy operation and copy the whole row.
+ *
+ * output_row_index contains the current index of the output storage (input storage will
+ * be appended to it), and the final output row index is returned.
+ */
+size_t permute_storage_row_wise(const ResultSetStorage* input_storage,
+                                const ResultSetStorage* output_storage,
+                                size_t output_row_index,
+                                const QueryMemoryDescriptor& output_query_mem_desc,
+                                const std::vector<uint32_t>& top_permutation) {
+  const auto output_buffer = output_storage->getUnderlyingBuffer();
+  const auto input_buffer = input_storage->getUnderlyingBuffer();
+  for (const auto sorted_idx : top_permutation) {
+    const auto row_ptr = input_buffer + sorted_idx * output_query_mem_desc.getRowSize();
+    memcpy(output_buffer + output_row_index * output_query_mem_desc.getRowSize(),
+           row_ptr,
+           output_query_mem_desc.getRowSize());
+    ++output_row_index;
+  }
+  return output_row_index;
+}
+}  // namespace
+
 // Collect top results from each device, stitch them together and sort. Partial
 // results from each device are guaranteed to be disjunct because we only go on
 // this path when one of the columns involved is a shard key.
@@ -1499,7 +1578,6 @@ ResultSetPtr Executor::collectAllDeviceShardedTopResults(
   const auto first_result_set = result_per_device.front().first;
   CHECK(first_result_set);
   auto top_query_mem_desc = first_result_set->getQueryMemDesc();
-  CHECK(!top_query_mem_desc.didOutputColumnar());
   CHECK(!top_query_mem_desc.hasInterleavedBinsOnGpu());
   const auto top_n = ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
   top_query_mem_desc.setEntryCount(0);
@@ -1516,21 +1594,25 @@ ResultSetPtr Executor::collectAllDeviceShardedTopResults(
                                                     first_result_set->getRowSetMemOwner(),
                                                     this);
   auto top_storage = top_result_set->allocateStorage();
-  const auto top_result_set_buffer = top_storage->getUnderlyingBuffer();
   size_t top_output_row_idx{0};
   for (auto& result : result_per_device) {
     const auto result_set = result.first;
     CHECK(result_set);
     const auto& top_permutation = result_set->getPermutationBuffer();
     CHECK_LE(top_permutation.size(), top_n);
-    const auto result_set_buffer = result_set->getStorage()->getUnderlyingBuffer();
-    for (const auto sorted_idx : top_permutation) {
-      const auto row_ptr =
-          result_set_buffer + sorted_idx * top_query_mem_desc.getRowSize();
-      memcpy(top_result_set_buffer + top_output_row_idx * top_query_mem_desc.getRowSize(),
-             row_ptr,
-             top_query_mem_desc.getRowSize());
-      ++top_output_row_idx;
+    if (top_query_mem_desc.didOutputColumnar()) {
+      top_output_row_idx = permute_storage_columnar(result_set->getStorage(),
+                                                    result_set->getQueryMemDesc(),
+                                                    top_storage,
+                                                    top_output_row_idx,
+                                                    top_query_mem_desc,
+                                                    top_permutation);
+    } else {
+      top_output_row_idx = permute_storage_row_wise(result_set->getStorage(),
+                                                    top_storage,
+                                                    top_output_row_idx,
+                                                    top_query_mem_desc,
+                                                    top_permutation);
     }
   }
   CHECK_EQ(top_output_row_idx, top_query_mem_desc.getEntryCount());

@@ -6591,11 +6591,6 @@ TEST(Select, AggregationOnAsymmetricShards) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    if (g_enable_columnar_output) {
-      // TODO(wamsi): enable tests when columnar output is fixed
-      return;
-    }
-
     static const std::vector<std::pair<std::string, std::string>> params = {
         {"shard1", "2"},
         {"shard2", "4"},
