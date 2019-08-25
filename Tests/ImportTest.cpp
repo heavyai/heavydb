@@ -184,6 +184,13 @@ bool import_test_line_endings_in_quotes_local(const string& filename, const int6
   return r_cnt == cnt;
 }
 
+void import_test_with_quoted_fields(const std::string& filename,
+                                    const std::string& quoted) {
+  string query_str = "COPY with_quoted_fields FROM '../../Tests/Import/datafiles/" +
+                     filename + "' WITH (header='true', quoted='" + quoted + "');";
+  run_ddl_statement(query_str);
+}
+
 bool import_test_local_geo(const string& filename,
                            const string& other_options,
                            const int64_t cnt,
@@ -858,6 +865,17 @@ const char* create_table_random_strings_with_line_endings = R"(
     ) WITH (FRAGMENT_SIZE=75000000);
   )";
 
+const char* create_table_with_quoted_fields = R"(
+    CREATE TABLE with_quoted_fields (
+      id        INTEGER,
+      dt1       DATE ENCODING DAYS(32),
+      str1      TEXT,
+      bool1     BOOLEAN,
+      smallint1 SMALLINT,
+      ts0       TIMESTAMP
+    ) WITH (FRAGMENT_SIZE=75000000);
+  )";
+
 class ImportTest : public ::testing::Test {
  protected:
   void SetUp() override {
@@ -866,11 +884,14 @@ class ImportTest : public ::testing::Test {
     ASSERT_NO_THROW(
         run_ddl_statement("drop table if exists random_strings_with_line_endings;"););
     ASSERT_NO_THROW(run_ddl_statement(create_table_random_strings_with_line_endings););
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists with_quoted_fields;"););
+    ASSERT_NO_THROW(run_ddl_statement(create_table_with_quoted_fields););
   }
 
   void TearDown() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table trips;"););
     ASSERT_NO_THROW(run_ddl_statement("drop table random_strings_with_line_endings;"););
+    ASSERT_NO_THROW(run_ddl_statement("drop table with_quoted_fields;"););
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geo;"););
   }
 };
@@ -950,6 +971,16 @@ TEST_F(ImportTest, One_csv_file) {
 TEST_F(ImportTest, random_strings_with_line_endings) {
   EXPECT_TRUE(import_test_line_endings_in_quotes_local(
       "random_strings_with_line_endings.7z", 19261));
+}
+
+// TODO: expose and validate rows imported/rejected count
+TEST_F(ImportTest, with_quoted_fields) {
+  for (auto quoted : {"false", "true"}) {
+    EXPECT_NO_THROW(
+        import_test_with_quoted_fields("with_quoted_fields_doublequotes.csv", quoted));
+    EXPECT_NO_THROW(
+        import_test_with_quoted_fields("with_quoted_fields_noquotes.csv", quoted));
+  }
 }
 
 TEST_F(ImportTest, One_csv_file_no_newline) {

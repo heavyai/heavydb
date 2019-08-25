@@ -2282,7 +2282,7 @@ static size_t find_end(const char* buffer,
                        size_t size,
                        const CopyParams& copy_params,
                        unsigned int& num_rows_this_buffer) {
-  size_t last_line_delim_pos;
+  size_t last_line_delim_pos = 0;
   if (copy_params.quoted) {
     const char* current = buffer;
     last_line_delim_pos = 0;
@@ -2313,7 +2313,7 @@ static size_t find_end(const char* buffer,
     }
   } else {
     const char* current = buffer;
-    while (current < buffer + size - 1) {
+    while (current < buffer + size) {
       if (*current == copy_params.line_delim) {
         last_line_delim_pos = current - buffer;
         ++num_rows_this_buffer;
@@ -3791,7 +3791,6 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
   auto scratch_buffer = std::make_unique<char[]>(alloc_size);
   size_t current_pos = 0;
   size_t end_pos;
-  bool eof_reached = false;
   size_t begin_pos = 0;
 
   (void)fseek(p_file, current_pos, SEEK_SET);
