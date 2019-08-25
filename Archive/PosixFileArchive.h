@@ -21,11 +21,12 @@
 
 #include "Archive.h"
 
+// archive read buffer size, configurable for unit test.
+extern size_t g_archive_read_buf_size;
+
 // this is the archive class for files hosted locally or remotely with
 // POSIX compliant file name. !! 7z files work only with this class !!
 class PosixFileArchive : public Archive {
-  const size_t buf_size = (1 << 20);
-
  public:
   PosixFileArchive(const std::string url, const bool plain_text)
       : Archive(url, plain_text) {
@@ -38,7 +39,7 @@ class PosixFileArchive : public Archive {
     }
 
     if (this->plain_text) {
-      buf = new char[buf_size];
+      buf = new char[g_archive_read_buf_size];
     }
 
     init_for_read();
@@ -79,7 +80,7 @@ class PosixFileArchive : public Archive {
   bool read_data_block(const void** buff, size_t* size, int64_t* offset) override {
     if (plain_text) {
       size_t nread;
-      if (0 >= (nread = fread(buf, 1, buf_size, fp))) {
+      if (0 >= (nread = fread(buf, 1, g_archive_read_buf_size, fp))) {
         return false;
       }
       *buff = buf;

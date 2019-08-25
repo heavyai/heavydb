@@ -16,8 +16,6 @@
 
 #include "TestHelpers.h"
 
-#include "../Import/Importer.h"
-
 #include <algorithm>
 #include <limits>
 #include <string>
@@ -26,11 +24,14 @@
 
 #include <boost/algorithm/string.hpp>
 #include <boost/program_options.hpp>
+#include "../Archive/PosixFileArchive.h"
 #include "../Catalog/Catalog.h"
+#include "../Import/Importer.h"
 #include "../Parser/parser.h"
 #include "../QueryEngine/ResultSet.h"
 #include "../QueryRunner/QueryRunner.h"
 #include "../Shared/geo_types.h"
+#include "../Shared/scope.h"
 #include "boost/filesystem.hpp"
 
 #ifndef BASE_PATH
@@ -319,6 +320,36 @@ TEST(Detect, Numeric) {
   // d(kDOUBLE, "1.2345678901");
   // d(kDOUBLE, "1.23456789012345678901234567890");
   d(kTEXT, "1.22.22");
+}
+
+const char* create_table_trips_to_skip_header = R"(
+    CREATE TABLE trips (
+      trip_distance DECIMAL(14,2),
+      random_string TEXT
+    );
+  )";
+
+class ImportTestSkipHeader : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
+    ASSERT_NO_THROW(run_ddl_statement(create_table_trips_to_skip_header););
+  }
+
+  void TearDown() override { ASSERT_NO_THROW(run_ddl_statement("drop table trips;");); }
+};
+
+TEST_F(ImportTestSkipHeader, Skip_Header) {
+  // save existing size and restore it after test so that changing it to a tiny size
+  // of 10 below for this test won't affect performance of other tests.
+  const auto archive_read_buf_size_state = g_archive_read_buf_size;
+  // 10 makes sure that the first block returned by PosixFileArchive::read_data_block
+  // does not contain the first line delimiter
+  g_archive_read_buf_size = 10;
+  ScopeGuard reset_archive_read_buf_size = [&archive_read_buf_size_state] {
+    g_archive_read_buf_size = archive_read_buf_size_state;
+  };
+  EXPECT_TRUE(import_test_local("skip_header.txt", 1, 1.0));
 }
 
 const char* create_table_mini_sort = R"(

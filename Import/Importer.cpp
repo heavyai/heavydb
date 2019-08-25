@@ -71,6 +71,8 @@
 #include "../Archive/S3Archive.h"
 #include "ArrowImporter.h"
 
+size_t g_archive_read_buf_size = 1 << 20;
+
 inline auto get_filesize(const std::string& file_path) {
   boost::filesystem::path boost_file_path{file_path};
   boost::system::error_code ec;
@@ -3641,9 +3643,10 @@ void DataStreamSink::import_compressed(std::vector<std::string>& file_paths) {
               }
               if (size2 <= 0) {
                 LOG(WARNING) << "No line delimiter in block." << std::endl;
+              } else {
+                just_saw_archive_header = false;
+                first_text_header_skipped = true;
               }
-              just_saw_archive_header = false;
-              first_text_header_skipped = true;
             }
             // In very rare occasions the write pipe somehow operates in a mode similar to
             // non-blocking while pipe(fds) should behave like pipe2(fds, 0) which means
