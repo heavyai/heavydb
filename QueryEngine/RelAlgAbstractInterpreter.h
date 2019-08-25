@@ -1364,8 +1364,14 @@ class RelLogicalValues : public RelAlgNode {
   const std::vector<TargetMetaInfo> getTupleType() const { return tuple_type_; }
 
   std::string toString() const override {
-    // TODO
-    return "(RelLogicalValues)";
+    std::string ret =
+        "(RelLogicalValues<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">";
+    for (const auto& target_meta_info : tuple_type_) {
+      ret += " (" + target_meta_info.get_resname() + " " +
+             target_meta_info.get_type_info().get_type_name() + ")";
+    }
+    ret += " )";
+    return ret;
   }
 
   size_t size() const override { return tuple_type_.size(); }
