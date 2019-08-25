@@ -543,7 +543,7 @@ service MapD {
   # distributed
   TTableMeta check_table_consistency(1: TSessionId session, 2: i32 table_id) throws (1: TMapDException e)
   TPendingQuery start_query(1: TSessionId session, 2: string query_ra, 3: bool just_explain) throws (1: TMapDException e)
-  TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e)
+  TStepResult execute_query_step(1: TPendingQuery pending_query) throws (1: TMapDException e)
   void broadcast_serialized_rows(1: serialized_result_set.TSerializedRows serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e)
   TPendingRenderQuery start_render_query(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx, 4: string vega_json) throws (1: TMapDException e)
   TRenderStepResult execute_next_render_step(1: TPendingRenderQuery pending_render, 2: TRenderAggDataMap merged_data) throws (1: TMapDException e)

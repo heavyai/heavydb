@@ -66,7 +66,7 @@ class MapDLeafHandler {
     CHECK(false);
   }
 
-  void execute_first_step(TStepResult& _return, const TPendingQuery& pending_query) {
+  void execute_query_step(TStepResult& _return, const TPendingQuery& pending_query) {
     CHECK(false);
   }
 

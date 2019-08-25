@@ -360,7 +360,7 @@ class MapDHandler : public MapDIf {
                    const TSessionId& session,
                    const std::string& query_ra,
                    const bool just_explain) override;
-  void execute_first_step(TStepResult& _return,
+  void execute_query_step(TStepResult& _return,
                           const TPendingQuery& pending_query) override;
   void broadcast_serialized_rows(const TSerializedRows& serialized_rows,
                                  const TRowDescriptor& row_desc,
