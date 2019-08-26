@@ -252,7 +252,6 @@ class MapDProgramOptions {
   std::string cluster_file = {"cluster.conf"};
   std::string license_path = {""};
   bool cpu_only = false;
-  bool flush_log = true;
   bool verbose_logging = false;
   bool jit_debug = false;
   bool intel_jit_profile = false;
@@ -304,9 +303,6 @@ class MapDProgramOptions {
  private:
   void fillOptions();
   void fillAdvancedOptions();
-  [[deprecated(
-      "Glog was replaced by boost.log. See source comments for more info.")]] void
-  temporarily_support_deprecated_log_options_201904();
 
   po::options_description help_desc;
   po::options_description developer_desc;
@@ -527,12 +523,6 @@ void MapDProgramOptions::fillOptions() {
       "to the `register_runtime_udf` endpoint. For use with the Python Remote Backend "
       "Compiler server, packaged separately.");
   help_desc.add_options()("version,v", "Print Version Number.");
-
-  help_desc.add_options()(
-      "flush-log",
-      po::value<bool>(&flush_log)->default_value(flush_log)->implicit_value(true),
-      R"(DEPRECATED - Immediately flush logs to disk. Set to false if this is a performance bottleneck.)"
-      " Replaced by log-auto-flush.");
 
   help_desc.add(log_options_.get_options());
 }
@@ -800,7 +790,6 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
     return 1;
   }
 
-  temporarily_support_deprecated_log_options_201904();
   if (verbose_logging && logger::Severity::DEBUG1 < log_options_.severity_) {
     log_options_.severity_ = logger::Severity::DEBUG1;
   }
@@ -907,17 +896,6 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
   boost::algorithm::trim_if(authMetadata.restUrl, boost::is_any_of("\"'"));
 
   return boost::none;
-}
-
-// Deprecation plan.
-// Once users have updated their options to not use flush_log:
-//  - Delete this function.
-//  - Delete MapDProgramOptions::flush_log and all references to it.
-//    (Replaced by LogOptions::auto_flush_.)
-void MapDProgramOptions::temporarily_support_deprecated_log_options_201904() {
-  if (!flush_log) {
-    log_options_.auto_flush_ = false;
-  }
 }
 
 void heartbeat() {
