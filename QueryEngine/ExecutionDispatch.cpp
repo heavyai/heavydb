@@ -20,6 +20,8 @@
 #include "DynamicWatchdog.h"
 #include "ErrorHandling.h"
 #include "Execute.h"
+#include "ExternalExecutor.h"
+#include "SerializeToSql.h"
 
 #include "DataMgr/BufferMgr/BufferMgr.h"
 
@@ -125,6 +127,30 @@ void Executor::ExecutionDispatch::runImpl(
     return;
   }
 
+  if (eo.executor_type == ExecutorType::Extern) {
+    if (ra_exe_unit_.input_descs.size() > 1) {
+      throw std::runtime_error("Joins not supported through external execution");
+    }
+    const auto query = serialize_to_sql(&ra_exe_unit_, executor_->getCatalog());
+    GroupByAndAggregate group_by_and_aggregate(executor_,
+                                               ExecutorDeviceType::CPU,
+                                               ra_exe_unit_,
+                                               query_infos_,
+                                               executor_->row_set_mem_owner_);
+    const auto query_mem_desc =
+        group_by_and_aggregate.initQueryMemoryDescriptor(false, 0, 8, nullptr, false);
+    auto device_results = run_query_external(
+        query,
+        fetch_result,
+        executor_->plan_state_.get(),
+        ExternalQueryOutputSpec{
+            *query_mem_desc,
+            target_exprs_to_infos(ra_exe_unit_.target_exprs, *query_mem_desc),
+            executor_});
+    std::lock_guard<std::mutex> lock(reduce_mutex_);
+    all_fragment_results_.emplace_back(std::move(device_results), outer_tab_frag_ids);
+    return;
+  }
   const CompilationResult& compilation_result = query_comp_desc.getCompilationResult();
   std::unique_ptr<QueryExecutionContext> query_exe_context_owned;
   const bool do_render = render_info_ && render_info_->isPotentialInSituRender();
@@ -152,22 +178,24 @@ void Executor::ExecutionDispatch::runImpl(
     }
   }
 
-  try {
-    query_exe_context_owned =
-        query_mem_desc.getQueryExecutionContext(ra_exe_unit_,
-                                                executor_,
-                                                chosen_device_type,
-                                                kernel_dispatch_mode,
-                                                chosen_device_id,
-                                                total_num_input_rows,
-                                                fetch_result.col_buffers,
-                                                fetch_result.frag_offsets,
-                                                row_set_mem_owner_,
-                                                compilation_result.output_columnar,
-                                                query_mem_desc.sortOnGpu(),
-                                                do_render ? render_info_ : nullptr);
-  } catch (const OutOfHostMemory& e) {
-    throw QueryExecutionError(ERR_OUT_OF_CPU_MEM);
+  if (eo.executor_type == ExecutorType::Native) {
+    try {
+      query_exe_context_owned =
+          query_mem_desc.getQueryExecutionContext(ra_exe_unit_,
+                                                  executor_,
+                                                  chosen_device_type,
+                                                  kernel_dispatch_mode,
+                                                  chosen_device_id,
+                                                  total_num_input_rows,
+                                                  fetch_result.col_buffers,
+                                                  fetch_result.frag_offsets,
+                                                  row_set_mem_owner_,
+                                                  compilation_result.output_columnar,
+                                                  query_mem_desc.sortOnGpu(),
+                                                  do_render ? render_info_ : nullptr);
+    } catch (const OutOfHostMemory& e) {
+      throw QueryExecutionError(ERR_OUT_OF_CPU_MEM);
+    }
   }
   QueryExecutionContext* query_exe_context{query_exe_context_owned.get()};
   CHECK(query_exe_context);

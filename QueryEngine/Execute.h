@@ -326,6 +326,12 @@ using LLVMValueVector = std::vector<llvm::Value*>;
 
 class QueryCompilationDescriptor;
 
+struct FetchResult {
+  std::vector<std::vector<const int8_t*>> col_buffers;
+  std::vector<std::vector<int64_t>> num_rows;
+  std::vector<std::vector<uint64_t>> frag_offsets;
+};
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -464,12 +470,6 @@ class Executor {
     }
     return false;
   }
-
-  struct FetchResult {
-    std::vector<std::vector<const int8_t*>> col_buffers;
-    std::vector<std::vector<int64_t>> num_rows;
-    std::vector<std::vector<uint64_t>> frag_offsets;
-  };
 
   bool needFetchAllFragments(const InputColDescriptor& col_desc,
                              const RelAlgExecutionUnit& ra_exe_unit,

@@ -17,6 +17,7 @@
 #include "../Parser/ParserNode.h"
 #include "CodeGenerator.h"
 #include "Execute.h"
+#include "ExternalExecutor.h"
 #include "MaxwellCodegenPatch.h"
 #include "RelAlgTranslator.h"
 
@@ -135,7 +136,7 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
     return {posArg(nullptr)};
   }
   if (dynamic_cast<const Analyzer::WindowFunction*>(expr)) {
-    throw std::runtime_error("Window expression not supported in this context");
+    throw NativeExecutionError("Window expression not supported in this context");
   }
   abort();
 }

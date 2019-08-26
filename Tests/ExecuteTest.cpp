@@ -57,6 +57,7 @@ extern double g_gpu_mem_limit_percent;
 
 extern bool g_enable_window_functions;
 extern bool g_enable_bump_allocator;
+extern bool g_enable_interop;
 
 extern size_t g_leaf_count;
 
@@ -16470,6 +16471,49 @@ TEST(TemporaryTables, Unsupported) {
                           "DICTIONARY(str) REFERENCES test(null_str));"));
   }
 }
+
+TEST(Select, Interop) {
+  SKIP_ALL_ON_AGGREGATOR();
+  g_enable_interop = true;
+  ScopeGuard interop_guard = [] { g_enable_interop = false; };
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT 'dict_' || str c1, 'fake_' || substring(real_str, 6) c2, x + 56 c3, f c4, "
+      "-d c5, smallint_nulls c6 FROM test WHERE ('fake_' || substring(real_str, 6)) LIKE "
+      "'%_ba%' ORDER BY c1 ASC, c2 ASC, c3 ASC, c4 ASC, c5 ASC, c6 ASC;",
+      "SELECT 'dict_' || str c1, 'fake_' || substr(real_str, 6) c2, x + 56 c3, f c4, -d "
+      "c5, smallint_nulls c6 FROM test WHERE ('fake_' || substr(real_str, 6)) LIKE "
+      "'%_ba%' ORDER BY c1 ASC, c2 ASC, c3 ASC, c4 ASC, c5 ASC, c6 ASC;",
+      dt);
+    c("SELECT 'dict_' || str c1, 'fake_' || substring(real_str, 6) c2, x + 56 c3, f c4, "
+      "-d c5, smallint_nulls c6 FROM test ORDER BY c1 ASC, c2 ASC, c3 ASC, c4 ASC, c5 "
+      "ASC, c6 ASC;",
+      "SELECT 'dict_' || str c1, 'fake_' || substr(real_str, 6) c2, x + 56 c3, f c4, -d "
+      "c5, smallint_nulls c6 FROM test ORDER BY c1 ASC, c2 ASC, c3 ASC, c4 ASC, c5 ASC, "
+      "c6 ASC;",
+      dt);
+    c("SELECT str || '_dict' AS c1, COUNT(*) c2 FROM test GROUP BY str ORDER BY c1 ASC, "
+      "c2 ASC;",
+      dt);
+    c("SELECT str || '_dict' AS c1, COUNT(*) c2 FROM test WHERE x <> 8 GROUP BY str "
+      "ORDER BY c1 ASC, c2 ASC;",
+      dt);
+    {
+      std::string part1 =
+          "SELECT x, y, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC) - 1 r1, RANK() "
+          "OVER (PARTITION BY y ORDER BY x ASC) r2, DENSE_RANK() OVER (PARTITION BY y "
+          "ORDER BY x DESC) r3 FROM test_window_func ORDER BY x ASC";
+      std::string part2 = ", y ASC, r1 ASC, r2 ASC, r3 ASC;";
+      c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+    }
+    c("SELECT CAST(('fake_' || SUBSTRING(real_str, 6)) LIKE '%_ba%' AS INT) b from test "
+      "ORDER BY b;",
+      "SELECT ('fake_' || SUBSTR(real_str, 6)) LIKE '%_ba%' b from test ORDER BY b;",
+      dt);
+  }
+  g_enable_interop = false;
+}
+
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,
@@ -17801,6 +17845,7 @@ int main(int argc, char** argv) {
   }
 
   g_enable_window_functions = true;
+  g_enable_interop = false;
 
   QR::init(BASE_PATH);
   if (vm.count("with-sharding")) {

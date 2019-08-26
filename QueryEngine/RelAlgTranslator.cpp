@@ -1563,6 +1563,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   }
 
   auto arg_expr_list = translateFunctionArgs(rex_function);
+  if (rex_function->getName() == std::string("||") ||
+      rex_function->getName() == std::string("SUBSTRING")) {
+    SQLTypeInfo ret_ti(kTEXT, false);
+    return makeExpr<Analyzer::FunctionOper>(
+        ret_ti, rex_function->getName(), arg_expr_list);
+  }
   // Reset possibly wrong return type of rex_function to the return
   // type of the optimal valid implementation. The return type can be
   // wrong in the case of multiple implementations of UDF functions

@@ -43,6 +43,7 @@ set(query_engine_source_files
     ExtensionFunctionsWhitelist.cpp
     ExtensionFunctions.ast
     ExtensionsIR.cpp
+    ExternalExecutor.cpp
     FromTableReordering.cpp
     GeoIR.cpp
     GpuInterrupt.cpp
@@ -213,7 +214,13 @@ endif()
 
 set(ARROW_LIBS ${Arrow_LIBRARIES})
 
-target_link_libraries(QueryEngine Planner StringDictionary Utils ${ARROW_LIBS}
+target_link_libraries(
+  QueryEngine
+  Planner
+  StringDictionary
+  Utils
+  sqlite3
+  ${ARROW_LIBS}
   clangFrontend
   clangSerialization
   clangDriver

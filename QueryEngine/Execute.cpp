@@ -1189,25 +1189,35 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     ColumnFetcher column_fetcher(this, column_cache);
     std::unique_ptr<QueryCompilationDescriptor> query_comp_desc_owned;
     std::unique_ptr<QueryMemoryDescriptor> query_mem_desc_owned;
-    try {
-      INJECT_TIMER(execution_dispatch_comp);
-      std::tie(query_comp_desc_owned, query_mem_desc_owned) =
-          execution_dispatch.compile(max_groups_buffer_entry_guess,
-                                     crt_min_byte_width,
-                                     {device_type,
-                                      co.hoist_literals_,
-                                      co.opt_level_,
-                                      co.with_dynamic_watchdog_,
-                                      co.explain_type_,
-                                      co.register_intel_jit_listener_},
-                                     eo,
-                                     column_fetcher,
-                                     has_cardinality_estimation);
-      CHECK(query_comp_desc_owned);
-      crt_min_byte_width = query_comp_desc_owned->getMinByteWidth();
-    } catch (CompilationRetryNoCompaction&) {
-      crt_min_byte_width = MAX_BYTE_WIDTH_SUPPORTED;
-      continue;
+    if (eo.executor_type == ExecutorType::Native) {
+      try {
+        INJECT_TIMER(execution_dispatch_comp);
+        std::tie(query_comp_desc_owned, query_mem_desc_owned) =
+            execution_dispatch.compile(max_groups_buffer_entry_guess,
+                                       crt_min_byte_width,
+                                       {device_type,
+                                        co.hoist_literals_,
+                                        co.opt_level_,
+                                        co.with_dynamic_watchdog_,
+                                        co.explain_type_,
+                                        co.register_intel_jit_listener_},
+                                       eo,
+                                       column_fetcher,
+                                       has_cardinality_estimation);
+        CHECK(query_comp_desc_owned);
+        crt_min_byte_width = query_comp_desc_owned->getMinByteWidth();
+      } catch (CompilationRetryNoCompaction&) {
+        crt_min_byte_width = MAX_BYTE_WIDTH_SUPPORTED;
+        continue;
+      }
+    } else {
+      plan_state_.reset(new PlanState(false, this));
+      plan_state_->allocateLocalColumnIds(ra_exe_unit.input_col_descs);
+      CHECK(!query_comp_desc_owned);
+      query_comp_desc_owned.reset(new QueryCompilationDescriptor());
+      CHECK(!query_mem_desc_owned);
+      query_mem_desc_owned.reset(
+          new QueryMemoryDescriptor(this, 0, QueryDescriptionType::Projection, false));
     }
     if (eo.just_explain) {
       return executeExplain(*query_comp_desc_owned);
@@ -2021,7 +2031,7 @@ bool Executor::needFetchAllFragments(const InputColDescriptor& inner_col_desc,
   return fragments.size() > 1;
 }
 
-Executor::FetchResult Executor::fetchChunks(
+FetchResult Executor::fetchChunks(
     const ColumnFetcher& column_fetcher,
     const RelAlgExecutionUnit& ra_exe_unit,
     const int device_id,

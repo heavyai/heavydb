@@ -41,8 +41,12 @@ SqliteConnector::SqliteConnector(const string& dbName, const string& dir)
   }
 }
 
+SqliteConnector::SqliteConnector(sqlite3* db) : db_(db) {}
+
 SqliteConnector::~SqliteConnector() {
-  sqlite3_close(db_);
+  if (!dbName_.empty()) {
+    sqlite3_close(db_);
+  }
 }
 
 void SqliteConnector::throwError() {

@@ -15,6 +15,8 @@
  */
 
 #include "ExtensionFunctionsBinding.h"
+#include "ExternalExecutor.h"
+
 #include <algorithm>
 
 // A rather crude function binding logic based on the types of the arguments.
@@ -352,8 +354,8 @@ ExtensionFunction bind_function(std::string name,
     }
     auto sarg_types = ExtensionFunctionsWhitelist::toString(arg_types);
     if (!ext_funcs.size()) {
-      throw std::runtime_error("Function " + name + "(" + sarg_types +
-                               ") not supported.");
+      throw NativeExecutionError("Function " + name + "(" + sarg_types +
+                                 ") not supported.");
     }
     auto choices = ExtensionFunctionsWhitelist::toString(ext_funcs, "    ");
     throw std::runtime_error(
