@@ -481,6 +481,9 @@ set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner CsvImp
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND MAPD_LIBRARIES Distributed)
+  if(ENABLE_DISTRIBUTED_5_0)
+    list(APPEND MAPD_LIBRARIES StringDictionaryThread)
+  endif()
 endif()
 
 list(APPEND MAPD_LIBRARIES Calcite)

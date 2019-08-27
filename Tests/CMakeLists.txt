@@ -5,7 +5,7 @@ set(TEST_BASE_PATH "./tmp")
 add_definitions("-DBASE_PATH=\"${TEST_BASE_PATH}\"")
 
 add_executable(CodeGeneratorTest CodeGeneratorTest.cpp)
-add_executable(ExecuteTest ExecuteTest.cpp)
+add_executable(ExecuteTest ExecuteTest.cpp ClusterTester.cpp)
 add_executable(RunQueryLoop RunQueryLoop.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)

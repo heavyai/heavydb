@@ -5598,8 +5598,8 @@ void MapDHandler::register_runtime_udf(
   }
 
   // TODO: add UDF registration permission scheme. Currently, UDFs are
-  // registered globally, that means that all users can use as well as overwrite UDFs that
-  // was created possibly by anoher user.
+  // registered globally, that means that all users can use as well as overwrite UDFs
+  // that was created possibly by anoher user.
 
   VLOG(1) << "Registering runtime UDF with signatures:\n" << signatures;
   /* Changing a UDF implementation (but not the signature) requires

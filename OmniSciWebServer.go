@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
@@ -34,6 +35,9 @@ import (
 	"github.com/rs/cors"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
+	"github.com/xeipuuv/gojsonschema"
+	"go.etcd.io/etcd/client"
+	"go.etcd.io/etcd/pkg/types"
 	graceful "gopkg.in/tylerb/graceful.v1"
 )
 
@@ -109,6 +113,358 @@ const (
 	samlErrorPage = "/saml-error.html"
 )
 
+type stringDictionary struct {
+	NodeID   string `json:"nodeId"`
+	Path     string `json:"data"`
+	Port     int    `json:"port"`
+	HostName string `json:"hostname"`
+}
+
+type leaf struct {
+	NodeID           string `json:"nodeId"`
+	Path             string `json:"data"`
+	Port             int    `json:"port"`
+	StringDictionary string `json:"stringDictionary"`
+	HostName         string `json:"hostname"`
+}
+
+type aggregator struct {
+	NodeID           string   `json:"nodeId"`
+	Path             string   `json:"data"`
+	Port             int      `json:"port"`
+	StringDictionary string   `json:"stringDictionary"`
+	Leaves           []string `json:"leaves"`
+	HostName         string   `json:"hostname"`
+	LeafConnTimeout  int      `json:"leaf_conn_timeout"`
+	LeafRecvTimeout  int      `json:"leaf_recv_timeout"`
+	LeafSendTimeout  int      `json:"leaf_send_timeout"`
+}
+
+type cluster struct {
+	HostNames        []string          `json:"hostnames"`
+	StringDictionary *stringDictionary `json:"stringDictionary"`
+	Leaves           []leaf            `json:"leaves"`
+	Aggregator       *aggregator       `json:"aggregator"`
+}
+
+// Keep this in synch with the duplicate in
+// LeafHostInfo.cpp
+const (
+	clusterSchema = "{" +
+		"    \"$id\": \"https://example.com/arrays.schema.json\"," +
+		"    \"$schema\": \"http://json-schema.org/draft-07/schema#\"," +
+		"    \"description\": \"The json schema for the cluster file\"," +
+		"    \"type\": \"object\"," +
+		"    \"additionalProperties\": false," +
+		"    \"properties\": {" +
+		"        \"hostnames\": {" +
+		"            \"type\": \"array\"," +
+		"            \"items\": {" +
+		"                \"type\": \"string\"" +
+		"            }" +
+		"        }," +
+		"        \"dynamic\": {" +
+		"            \"type\": \"boolean\"" +
+		"        }," +
+		"        \"aggregator\": {" +
+		"            \"type\": \"object\"," +
+		"            \"$ref\": \"#/definitions/aggregator\"" +
+		"        }," +
+		"        \"stringDictionary\": {" +
+		"            \"type\": \"object\"," +
+		"            \"$ref\": \"#/definitions/stringDictionary\"" +
+		"        }," +
+		"        \"leaves\": {" +
+		"            \"type\": \"array\"," +
+		"            \"items\": {" +
+		"                \"$ref\": \"#/definitions/leaf\"" +
+		"            }," +
+		"            \"description\": \"The leaves on this host\"" +
+		"        }" +
+		"    }," +
+		"    \"definitions\": {" +
+		"        \"stringDictionary\": {" +
+		"            \"type\": \"object\"," +
+		"            \"required\": [" +
+		"                \"data\"," +
+		"                \"port\"" +
+		"            ]," +
+		"            \"additionalProperties\": false," +
+		"            \"properties\": {" +
+		"                \"nodeId\": {" +
+		"                    \"type\": \"string\"," +
+		"                    \"description\": \"The nodeId on the cluster\"" +
+		"                }," +
+		"                \"data\": {" +
+		"                    \"type\": \"string\"," +
+		"                    \"description\": \"Base path for storage\"" +
+		"                }," +
+		"                \"port\": {" +
+		"                    \"type\": \"integer\"," +
+		"                    \"description\": \"Port number to bind to\"" +
+		"                }," +
+		"                \"hostname\": {" +
+		"                    \"type\": \"string\"," +
+		"                    \"description\": \"The host name where this node will run\"" +
+		"                }," +
+
+		"                \"ssl_cert_file\": {" +
+		"                    \"type\": \"string\"," +
+		"                    \"description\": \"The ssl certificate file location\"" +
+		"                }," +
+		"                \"ssl_key_file\": {" +
+		"                    \"type\": \"string\"," +
+		"                    \"description\": \"The ssl key file location\"" +
+		"                }," +
+		"                \"cache-string-hash\": {" +
+		"                    \"type\": \"boolean\"," +
+		"                    \"description\": \"Enable cache to store hashes in string dictionary server\"" +
+		"                }" +
+		"            }" +
+		"        }," +
+		"        \"leaf\": {" +
+		"            \"type\": \"object\"," +
+		"            \"required\": [" +
+		"                \"data\"," +
+		"                \"port\"" +
+		"            ]," +
+		"            \"additionalProperties\": false," +
+		"            \"properties\": {" +
+		"                \"nodeId\": {" +
+		"                    \"type\": \"string\"," +
+		"                    \"description\": \"The nodeId on the cluster\"" +
+		"                }," +
+		"                \"data\": {" +
+		"                    \"type\": \"string\"," +
+		"                    \"description\": \"Base path for storage\"" +
+		"                }," +
+		"                \"port\": {" +
+		"                    \"type\": \"integer\"," +
+		"                    \"description\": \"Port number to bind to\"" +
+		"                }," +
+		"                \"hostname\": {" +
+		"                    \"type\": \"string\"," +
+		"                    \"description\": \"The host name where this node will run\"" +
+		"                }" +
+		"            }" +
+		"        }," +
+		"        \"aggregator\": {" +
+		"            \"type\": \"object\"," +
+		"            \"required\": [" +
+		"                \"data\"," +
+		"                \"port\"" +
+		"            ]," +
+		"            \"additionalProperties\": false," +
+		"            \"properties\": {" +
+		"                \"nodeId\": {" +
+		"                    \"type\": \"string\"," +
+		"                    \"description\": \"The nodeId on the cluster\"" +
+		"                }," +
+		"                \"port\": {" +
+		"                    \"type\": \"integer\"," +
+		"                    \"description\": \"Port number to bind to\"" +
+		"                }," +
+		"                \"data\": {" +
+		"                    \"type\": \"string\"," +
+		"                    \"description\": \"Base path for storage\"" +
+		"                }," +
+		"                \"hostname\": {" +
+		"                    \"type\": \"string\"," +
+		"                    \"description\": \"The host name where this node will run\"" +
+		"                }," +
+		"                \"leaf_conn_timeout\": {" +
+		"                    \"type\": \"integer\"," +
+		"                    \"description\": \"Leaf connect timeout, in milliseconds.\"" +
+		"                }," +
+		"                \"leaf_recv_timeout\": {" +
+		"                    \"type\": \"integer\"," +
+		"                    \"description\": \"Leaf receive timeout, in milliseconds.\"" +
+		"                }," +
+		"                \"leaf_send_timeout\": {" +
+		"                    \"type\": \"integer\"," +
+		"                    \"description\": \"Leaf send timeout, in milliseconds.\"" +
+		"                }" +
+		"            }" +
+		"        }" +
+		"    }" +
+		"}" +
+		""
+)
+
+// TODO etcd.go ends up using -2 from the base port
+// Make this really independent of that code
+func (that *cluster) getEndpointURL(nextHostName *int, nodeHostname string, port int) string {
+	var hostname string
+	if nodeHostname != "" {
+		hostname = nodeHostname
+	} else {
+		hostname = that.HostNames[*nextHostName]
+		*nextHostName = ((*nextHostName) + 1) % len(that.HostNames)
+	}
+	// FIXME this will break if encryption is enabled
+	var returns = "http://" + hostname + ":" + strconv.Itoa(port-2)
+	return returns
+}
+
+// Preserve the same order as in Etcd::create_initial_urlmap in Cluster.cpp
+func (that *cluster) getEndpoints() []string {
+	var returns []string
+	nextHostName := 0
+
+	// Preserve the same order as in LeafHostInfo::parseClusterConfigNew
+	sd := that.StringDictionary
+	var endURLStr = that.getEndpointURL(&nextHostName, sd.HostName, sd.Port)
+	returns = append(returns, endURLStr)
+	for _, item := range that.Leaves {
+		var endURLStr = that.getEndpointURL(&nextHostName, item.HostName, item.Port)
+		returns = append(returns, endURLStr)
+	}
+	agg := that.Aggregator
+	endURLStr = that.getEndpointURL(&nextHostName, agg.HostName, agg.Port)
+	returns = append(returns, endURLStr)
+
+	return returns
+}
+
+// TODO Pull the schema into the sources by hardcoding it before the release
+func getCluster(clusterFile string) *cluster {
+	// schemaLoader := gojsonschema.NewReferenceLoader("file://./cluster.conf.schema.json")
+	schemaLoader := gojsonschema.NewStringLoader(clusterSchema)
+	documentLoader := gojsonschema.NewReferenceLoader("file://" + clusterFile)
+
+	result, err := gojsonschema.Validate(schemaLoader, documentLoader)
+	if err != nil {
+		panic(err.Error())
+	}
+
+	var clusterConf = cluster{}
+
+	if result.Valid() {
+		// Now it is validated parse it
+		jsonBytes, err := ioutil.ReadFile(clusterFile)
+
+		if nil == err {
+			err = json.Unmarshal(jsonBytes, &clusterConf)
+		}
+	} else {
+		fmt.Printf("The document is not valid. see errors :\n")
+		for _, desc := range result.Errors() {
+			log.Printf("- %s\n", desc)
+		}
+	}
+	return &clusterConf
+}
+
+func getEndpoints(initialPeerUrlsmap string) []string {
+	urlMap, _ := types.NewURLsMap(initialPeerUrlsmap)
+	returns := []string{}
+
+	for _, v := range urlMap {
+		//		fmt.Printf("key[%s] value[%s]\n", k, v)
+		var url = v[0]
+		urlStr := url.String()
+		returns = append(returns, urlStr)
+	}
+
+	return returns
+}
+
+func getClient(endPoints []string) (*client.Client, error) {
+	cfg := client.Config{
+		Endpoints:               endPoints,
+		Transport:               client.DefaultTransport,
+		HeaderTimeoutPerRequest: time.Second,
+	}
+	var c client.Client
+	c, err := client.New(cfg)
+	return &c, err
+}
+
+func handleCluster(clusterFile string) {
+	var cluster = getCluster(clusterFile)
+	var endPoints = cluster.getEndpoints()
+
+	c, err := getClient(endPoints)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go notifyOnLeader(c, cluster)
+}
+
+func isAggregator(leader *client.Member, clust *cluster) bool {
+	returns := false
+
+	if clust.Aggregator != nil && clust.Aggregator.NodeID == leader.Name {
+		returns = true
+	}
+
+	return returns
+}
+
+func setPort(in *url.URL, portNum int) {
+	host, port, _ := net.SplitHostPort(in.Host)
+	port = strconv.Itoa(portNum)
+	in.Host = host + ":" + port
+}
+
+func getBackendURL(leader *client.Member) (*url.URL, error) {
+	// TODO MapDServer.cpp ends up using +1 from the base port
+	// Make this really independent of that code
+	var returns *url.URL
+	var err error
+
+	if len(leader.PeerURLs) > 0 {
+
+		backendURLStr := leader.PeerURLs[0]
+		var backendURL *url.URL
+		backendURL, err = url.Parse(backendURLStr)
+		host, port, err := net.SplitHostPort(backendURL.Host)
+		var sPort = ""
+		if "" != port && nil == err {
+			var iport, _ = strconv.Atoi(port)
+			iport = iport + 4
+			sPort = ":" + strconv.Itoa(iport)
+		}
+		scheme := "http"
+		if viper.IsSet("ssl-cert") && viper.IsSet("ssl-private-key") {
+			scheme = "https"
+			http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		}
+		backendURL.Scheme = scheme
+		backendURL.Host = host + sPort
+		returns = backendURL
+	}
+
+	return returns, err
+}
+
+func notifyOnLeader(cl *client.Client, clust *cluster) {
+	for {
+		members := client.NewMembersAPI(*cl)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		leader, _ := members.Leader(ctx)
+		cancel()
+
+		if nil != leader {
+			if isAggregator(leader, clust) {
+				var err error
+				leaderBackendURL, err := getBackendURL(leader)
+				if nil == err && leaderBackendURL.String() != backendURL.String() {
+					var msg = "Aggregator is changed to " + leader.Name + " at " + leaderBackendURL.String()
+					fmt.Println(msg)
+					log.Info(msg)
+
+					backendURL = leaderBackendURL
+				}
+			}
+		}
+
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
 func getLogName(lvl string) string {
 	n := filepath.Base(os.Args[0])
 	h, _ := os.Hostname()
@@ -125,6 +481,7 @@ func init() {
 	pflag.IntP("port", "p", 6273, "frontend server port")
 	pflag.IntP("http-to-https-redirect-port", "", 6280, "frontend server port for http redirect, when https enabled")
 	pflag.StringP("backend-url", "b", "", "url to http-port on omnisci_server [http://localhost:6278]")
+	pflag.StringP("cluster_topology", "", "", "The cluster configuration file")
 	pflag.StringSliceP("reverse-proxy", "", nil, "additional endpoints to act as reverse proxies, format '/endpoint/:http://target.example.com'")
 	pflag.StringP("frontend", "f", "frontend", "path to frontend directory")
 	pflag.StringP("jupyter-url", "", "", "url for jupyter integration")
@@ -191,6 +548,8 @@ func init() {
 	viper.BindPFlag("verbose", pflag.CommandLine.Lookup("verbose"))
 	viper.BindPFlag("version", pflag.CommandLine.Lookup("version"))
 
+	viper.BindPFlag("cluster_topology", pflag.CommandLine.Lookup("cluster_topology"))
+
 	viper.SetDefault("http-port", 6278)
 
 	viper.SetEnvPrefix("MAPD")
@@ -243,6 +602,11 @@ func init() {
 			http.DefaultTransport.(*http.Transport).TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 		}
 		backendURLStr = s + "://localhost:" + strconv.Itoa(viper.GetInt("http-port"))
+	}
+
+	var cluster = viper.GetString("cluster_topology")
+	if cluster != "" {
+		handleCluster(cluster)
 	}
 
 	backendURL, err = url.Parse(backendURLStr)
@@ -421,11 +785,6 @@ func recordTimingDuration(name string, then time.Time) {
 type ResponseMultiWriter struct {
 	io.Writer
 	http.ResponseWriter
-}
-
-func (w *ResponseMultiWriter) writeHeader(c int) {
-	w.ResponseWriter.Header().Del("Content-Length")
-	w.ResponseWriter.WriteHeader(c)
 }
 
 func (w *ResponseMultiWriter) Write(b []byte) (int, error) {
@@ -1183,7 +1542,6 @@ func serversHandler(rw http.ResponseWriter, r *http.Request) {
 		s.Username = "admin"
 		s.Password = "HyperInteractive"
 		s.Database = "omnisci"
-
 		h, p, _ := net.SplitHostPort(r.Host)
 		s.Port, _ = net.LookupPort("tcp", p)
 		s.Host = h

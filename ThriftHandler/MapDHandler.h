@@ -472,6 +472,7 @@ class MapDHandler : public MapDIf {
                     Catalog_Namespace::UserMetadata& user_meta,
                     std::shared_ptr<Catalog_Namespace::Catalog> cat,
                     LogSession&);
+
   void disconnect_impl(const SessionMap::iterator& session_it);
   void check_table_load_privileges(const TSessionId& session,
                                    const std::string& table_name);
@@ -656,9 +657,10 @@ class MapDHandler : public MapDIf {
   static bool has_view_permission(const AccessPrivileges& privs,
                                   const TDBObjectPermissions& permissions);
 
-  // For the provided upper case column names `uc_column_names`, return the tables
-  // from `table_names` which contain at least one of them. Used to rank the TABLE
-  // auto-completion hints by the columns specified in the projection.
+  // For the provided upper case column names `uc_column_names`, return
+  // the tables from `table_names` which contain at least one of them.
+  // Used to rank the TABLE auto-completion hints by the columns
+  // specified in the projection.
   std::unordered_set<std::string> get_uc_compatible_table_names_by_column(
       const std::unordered_set<std::string>& uc_column_names,
       const std::vector<std::string>& table_names,
@@ -666,8 +668,9 @@ class MapDHandler : public MapDIf {
 
   SessionMap sessions_;
 
-  bool super_user_rights_;  // default is "false"; setting to "true" ignores passwd checks
-                            // in "connect(..)" method
+  bool super_user_rights_;           // default is "false"; setting to "true"
+                                     // ignores passwd checks in "connect(..)"
+                                     // method
   const int idle_session_duration_;  // max duration of idle session
   const int max_session_duration_;   // max duration of session
 

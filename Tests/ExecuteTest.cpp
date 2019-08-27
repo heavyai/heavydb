@@ -27,6 +27,7 @@
 #include "../Shared/TimeGM.h"
 #include "../Shared/scope.h"
 #include "../SqliteConnector/SqliteConnector.h"
+#include "ClusterTester.h"
 #include "DistributedLoader.h"
 
 #include <gtest/gtest.h>
@@ -34,7 +35,6 @@
 #include <boost/any.hpp>
 #include <boost/program_options.hpp>
 #include <cmath>
-#include <sstream>
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -511,6 +511,25 @@ void validate_storage_options(
 }
 
 }  // namespace
+
+TEST(Distributed50, FailOver) {
+  run_ddl_statement("DROP TABLE IF EXISTS dist5;");
+  run_ddl_statement(
+      "create table dist5 (col1 TEXT ENCODING DICT) with (partitions='replicated');");
+
+  auto dt = ExecutorDeviceType::CPU;
+
+  EXPECT_NO_THROW(run_multiple_agg("insert into dist5 values('t1');", dt));
+  ASSERT_EQ(1, v<int64_t>(run_simple_agg("SELECT count(*) FROM dist5;", dt)));
+
+  EXPECT_NO_THROW(run_multiple_agg("insert into dist5 values('t2');", dt));
+  ASSERT_EQ(2, v<int64_t>(run_simple_agg("SELECT count(*) FROM dist5;", dt)));
+
+  EXPECT_NO_THROW(run_multiple_agg("insert into dist5 values('t3');", dt));
+  ASSERT_EQ(3, v<int64_t>(run_simple_agg("SELECT count(*) FROM dist5;", dt)));
+
+  run_ddl_statement("DROP TABLE IF EXISTS dist5;");
+}
 
 TEST(Create, StorageOptions) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
@@ -5366,7 +5385,7 @@ void import_geospatial_test() {
         gp900913 GEOMETRY(POINT,900913),
         gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE,
         gpoly4326 GEOMETRY(POLYGON,4326)
-      ) WITH (fragment_size=2); 
+      ) WITH (fragment_size=2);
   )";
   run_ddl_statement(create_ddl);
   TestHelpers::ValuesGenerator gen("geospatial_test");
@@ -15541,7 +15560,8 @@ int create_and_populate_window_func_table() {
     run_ddl_statement(drop_test_table);
     g_sqlite_comparator.query(drop_test_table);
     const std::string create_test_table{
-        "CREATE TABLE test_window_func(x INTEGER, y TEXT, t INTEGER, d DATE, f FLOAT, dd "
+        "CREATE TABLE test_window_func(x INTEGER, y TEXT, t INTEGER, d DATE, f FLOAT, "
+        "dd "
         "DOUBLE);"};
     run_ddl_statement(create_test_table);
     g_sqlite_comparator.query(create_test_table);
@@ -15663,7 +15683,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{
-        "x int not null, y int, xx smallint, str text encoding dict, dt DATE, dt32 DATE "
+        "x int not null, y int, xx smallint, str text encoding dict, dt DATE, dt32 "
+        "DATE "
         "ENCODING FIXED(32), dt16 DATE ENCODING FIXED(16), ts TIMESTAMP"};
     const auto create_test_inner =
         build_create_table_statement(columns_definition,
@@ -15675,7 +15696,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
                                      g_aggregator);
     run_ddl_statement(create_test_inner);
     g_sqlite_comparator.query(
-        "CREATE TABLE test_inner(x int not null, y int, xx smallint, str text, dt DATE, "
+        "CREATE TABLE test_inner(x int not null, y int, xx smallint, str text, dt "
+        "DATE, "
         "dt32 DATE, dt16 DATE, ts DATETIME);");
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'test_inner'";
@@ -15947,10 +15969,12 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, "
         "'foo', null, 'foo', null, "
         "'real_foo', 'foo',"
-        "'2014-12-13 22:23:15', '2014-12-13 22:23:15.323', '1999-07-11 14:02:53.874533', "
+        "'2014-12-13 22:23:15', '2014-12-13 22:23:15.323', '1999-07-11 "
+        "14:02:53.874533', "
         "'2006-04-26 "
         "03:49:04.607435125', "
-        "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', "
+        "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, "
+        "'fish', "
         "null, "
         "2147483647, -2147483648, null, -1, 32767);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
@@ -15960,7 +15984,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
     const std::string insert_query{
         "INSERT INTO test VALUES(8, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
         "-2002.4, 'bar', null, 'bar', null, "
-        "'real_bar', NULL, '2014-12-13 22:23:15', '2014-12-13 22:23:15.323', '2014-12-13 "
+        "'real_bar', NULL, '2014-12-13 22:23:15', '2014-12-13 22:23:15.323', "
+        "'2014-12-13 "
         "22:23:15.874533', "
         "'2014-12-13 22:23:15.607435763', '15:13:14', NULL, NULL, NULL, NULL, 222.2, "
         "222.2, "
@@ -16009,7 +16034,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         g_aggregator);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
-        "CREATE TABLE test_empty(x int not null, y int, z smallint, t bigint, b boolean, "
+        "CREATE TABLE test_empty(x int not null, y int, z smallint, t bigint, b "
+        "boolean, "
         "f "
         "float, ff float, fn float, d "
         "double, dn double, str varchar(10), null_str text, fixed_str text, "
@@ -16067,7 +16093,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
   }
   {
     const std::string insert_query{
-        "INSERT INTO test_one_row VALUES(8, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
+        "INSERT INTO test_one_row VALUES(8, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, "
+        "2.4, "
         "-2002.4, 'bar', null, 'bar', null, "
         "'real_bar', NULL, '2014-12-13 22:23:15', "
         "'15:13:14', NULL, NULL, NULL, NULL, 222.2, 222.2, "
@@ -16113,7 +16140,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "text encoding none, m "
         "timestamp(0), n time(0), o date, o1 date encoding fixed(16), "
         "o2 date encoding fixed(32), fx int encoding fixed(16), dd decimal(10, 2), "
-        "dd_notnull decimal(10, 2) not null, ss text encoding dict, u int, ofd int, ufd "
+        "dd_notnull decimal(10, 2) not null, ss text encoding dict, u int, ofd int, "
+        "ufd "
         "int not null, ofq bigint, ufq "
         "bigint not null"};
     const std::string create_test =
@@ -16131,7 +16159,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "text, null_str text,"
         "fixed_str text, real_str text, m timestamp(0), n time(0), o date, o1 date, "
         "o2 date, fx int, dd decimal(10, 2), "
-        "dd_notnull decimal(10, 2) not null, ss text, u int, ofd int, ufd int not null, "
+        "dd_notnull decimal(10, 2) not null, ss text, u int, ofd int, ufd int not "
+        "null, "
         "ofq bigint, ufq bigint not "
         "null);");
   } catch (...) {
@@ -16145,7 +16174,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "'foo', null, 'foo', 'real_foo', "
         "'2014-12-13 "
         "22:23:15', "
-        "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, 'fish', "
+        "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 9, 111.1, 111.1, "
+        "'fish', "
         "null, "
         "2147483647, -2147483648, null, -1);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
@@ -16172,7 +16202,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
         "'real_baz', "
         "'2014-12-13 "
         "22:23:15', "
-        "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 11, 333.3, 333.3, 'boat', "
+        "'15:13:14', '1999-09-09', '1999-09-09', '1999-09-09', 11, 333.3, 333.3, "
+        "'boat', "
         "null, 1, -1, "
         "1, -9223372036854775808);"};
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
@@ -16205,7 +16236,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
     const std::string drop_old_array_test{"DROP TABLE IF EXISTS array_test_inner;"};
     run_ddl_statement(drop_old_array_test);
     const std::string create_array_test{
-        "CREATE TABLE array_test_inner(x int, arr_i16 smallint[], arr_i32 int[], arr_i64 "
+        "CREATE TABLE array_test_inner(x int, arr_i16 smallint[], arr_i32 int[], "
+        "arr_i64 "
         "bigint[], arr_str text[] "
         "encoding "
         "dict, "
@@ -16221,8 +16253,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
   if (!g_aggregator) {
     try {
       size_t num_shards = choose_shard_count();
-      // check if the oversubscriptions to GPU for multiple Shard is correctly functional
-      // or not.
+      // check if the oversubscriptions to GPU for multiple Shard is correctly
+      // functional or not.
       const size_t num_oversubscription = 10;
 
       ShardInfo shard_info{(num_shards) ? "i" : "", num_shards};
@@ -16455,7 +16487,8 @@ int create_and_populate_tables(bool with_delete_support = true) {
 
 int create_views() {
   const std::string create_view_test{
-      "CREATE VIEW view_test AS SELECT test.*, test_inner.* FROM test, test_inner WHERE "
+      "CREATE VIEW view_test AS SELECT test.*, test_inner.* FROM test, test_inner "
+      "WHERE "
       "test.str = test_inner.str;"};
   const std::string drop_old_view{"DROP VIEW IF EXISTS view_test;"};
   const std::string create_join_view_test{
@@ -16516,7 +16549,8 @@ int create_as_select_empty() {
     run_ddl_statement(drop_ctas_test);
     g_sqlite_comparator.query(drop_ctas_test);
     const std::string create_ctas_test{
-        "CREATE TABLE empty_ctas_test AS SELECT x, f, d, str, fixed_str FROM test WHERE "
+        "CREATE TABLE empty_ctas_test AS SELECT x, f, d, str, fixed_str FROM test "
+        "WHERE "
         "x > 8;"};
     run_ddl_statement(create_ctas_test);
     g_sqlite_comparator.query(create_ctas_test);
@@ -16653,6 +16687,8 @@ void drop_views() {
 }  // namespace
 
 int main(int argc, char** argv) {
+  std::cout << "Starting ExecuteTest" << std::endl;
+
   testing::InitGoogleTest(&argc, argv);
   namespace po = boost::program_options;
 
@@ -16690,9 +16726,9 @@ int main(int argc, char** argv) {
                          ->implicit_value(true),
                      "Enable the bump allocator for projection queries on GPU.");
   desc.add_options()("keep-data", "Don't drop tables at the end of the tests");
-  desc.add_options()(
-      "use-existing-data",
-      "Don't create and drop tables and only run select tests (it implies --keep-data).");
+  desc.add_options()("use-existing-data",
+                     "Don't create and drop tables and only run select tests (it "
+                     "implies --keep-data).");
   desc.add_options()("dump-ir",
                      po::value<std::string>(),
                      "Dump IR for all executed queries to file. Currently only supports "
