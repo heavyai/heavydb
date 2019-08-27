@@ -1026,9 +1026,14 @@ struct GeoTargetValueBuilder {
 
     switch (return_type) {
       case ResultSet::GeoReturnType::GeoTargetValue: {
-        if (ad_arr[0]->is_null) {
-          return ArrayTargetValue(boost::optional<std::vector<ScalarTargetValue>>{});
-        }
+        // Removing errant NULL check: default ChunkIter accessor may mistake POINT coords
+        // fixlen array for a NULL, plus it is not needed currently - there is no NULL geo
+        // in existing tables, all NULL/empty geo is currently discarded on import.
+        // TODO: add custom ChunkIter accessor able to properly recognize NULL coords
+        // TODO: once NULL geo support is in, resurrect coords NULL check under !notnull
+        // if (!geo_ti.get_notnull() && ad_arr[0]->is_null) {
+        //   return GeoTargetValue();
+        // }
         return GeoReturnTypeTraits<ResultSet::GeoReturnType::GeoTargetValue,
                                    GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,
                                                                                   ad_arr);
@@ -1040,9 +1045,10 @@ struct GeoTargetValueBuilder {
       }
       case ResultSet::GeoReturnType::GeoTargetValuePtr:
       case ResultSet::GeoReturnType::GeoTargetValueGpuPtr: {
-        if (ad_arr[0]->is_null) {
-          return GeoTargetValuePtr();
-        }
+        // See the comment above.
+        // if (!geo_ti.get_notnull() && ad_arr[0]->is_null) {
+        //   return GeoTargetValuePtr();
+        // }
         return GeoReturnTypeTraits<ResultSet::GeoReturnType::GeoTargetValuePtr,
                                    GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,
                                                                                   ad_arr);
