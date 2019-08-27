@@ -375,9 +375,14 @@ llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
   }
   const auto& ti = operand->get_type_info();
   CHECK(ti.is_integer() || ti.is_boolean() || ti.is_decimal() || ti.is_time() ||
-        ti.is_string() || ti.is_fp() || ti.is_array());
+        ti.is_string() || ti.is_fp() || ti.is_array() || ti.is_geometry());
   // if the type is inferred as non null, short-circuit to false
-  if (ti.get_notnull() && !ti.is_array()) {
+  if (ti.get_notnull()) {
+    return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
+  }
+  // There is currently no NULL geo in existing tables, short-circuit to false
+  // TODO: update for NULL geo support, codegen geo_is_null call
+  if (ti.is_geometry()) {
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
   }
   const auto operand_lv = codegen(operand, true, co).front();

@@ -12922,6 +12922,12 @@ TEST(Select, Deleted) {
 TEST(Select, GeoSpatial_Basics) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM geospatial_test where p IS NOT NULL;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM geospatial_test where poly IS NULL;", dt)));
     ASSERT_EQ(
         static_cast<int64_t>(g_num_rows),
         v<int64_t>(run_simple_agg(
