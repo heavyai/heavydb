@@ -26,7 +26,6 @@
 #include "Shared/mapdpath.h"
 
 #include <llvm/Bitcode/BitcodeReader.h>
-#include <llvm/ExecutionEngine/Interpreter.h>
 #include <llvm/IR/Function.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Verifier.h>
@@ -44,7 +43,7 @@ namespace {
 const int32_t WATCHDOG_ERROR{-1};
 // Use the LLVM interpreter, not the JIT, for a number of entries lower than the
 // threshold.
-const size_t INTERP_THRESHOLD{50};
+const size_t INTERP_THRESHOLD{0};
 
 // Make a shallow copy (just declarations) of the runtime module. Function definitions are
 // cloned only if they're used from the generated code.
