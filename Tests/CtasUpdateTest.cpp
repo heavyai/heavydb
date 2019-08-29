@@ -37,6 +37,8 @@
 
 using QR = QueryRunner::QueryRunner;
 
+using namespace TestHelpers;
+
 class TestColumnDescriptor {
  public:
   virtual std::string get_column_definition() = 0;
@@ -715,6 +717,57 @@ TEST(Ctas, LiteralStringTest) {
   check(1, "aa");
   check(2, "bb");
   check(3, "bb");
+}
+
+TEST(Ctas, GeoTest) {
+  std::string ddl = "DROP TABLE IF EXISTS CTAS_SOURCE;";
+  run_ddl_statement(ddl);
+  ddl = "DROP TABLE IF EXISTS CTAS_TARGET;";
+  run_ddl_statement(ddl);
+
+  run_ddl_statement(
+      "CREATE TABLE CTAS_SOURCE ("
+      "pu GEOMETRY(POINT, 4326) ENCODING NONE, "
+      "pc GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32), "
+      "lc GEOMETRY(LINESTRING, 4326), "
+      "poly GEOMETRY(POLYGON), "
+      "mpoly GEOMETRY(MULTIPOLYGON, 4326)"
+      ");");
+
+  run_multiple_agg(
+      "INSERT INTO CTAS_SOURCE VALUES("
+      "'POINT (-118.480499954187 34.2662998541567)', "
+      "'POINT (-118.480499954187 34.2662998541567)', "
+      "'LINESTRING (-118.480499954187 34.2662998541567, "
+      "             -117.480499954187 35.2662998541567)', "
+      "'POLYGON ((-118.480499954187 34.2662998541567, "
+      "           -117.480499954187 35.2662998541567, "
+      "           -110.480499954187 45.2662998541567))', "
+      "'MULTIPOLYGON (((-118.480499954187 34.2662998541567, "
+      "                 -117.480499954187 35.2662998541567, "
+      "                 -110.480499954187 45.2662998541567)))' "
+      "); ",
+      ExecutorDeviceType::CPU);
+
+  ddl = "CREATE TABLE CTAS_TARGET AS select * FROM CTAS_SOURCE;";
+  run_ddl_statement(ddl);
+
+  const auto rows =
+      run_multiple_agg("SELECT * FROM CTAS_TARGET;", ExecutorDeviceType::CPU);
+  rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+  const auto row = rows->getNextRow(false, false);
+  CHECK_EQ(row.size(), size_t(5));
+  compare_geo_target(row[0], GeoPointTargetValue({-118.480499954187, 34.2662998541567}));
+  compare_geo_target(
+      row[1], GeoPointTargetValue({-118.480499954187, 34.2662998541567}), 0.01);
+  compare_geo_target(row[3],
+                     GeoPolyTargetValue({-118.480499954187,
+                                         34.2662998541567,
+                                         -117.480499954187,
+                                         35.2662998541567,
+                                         -110.480499954187,
+                                         45.2662998541567},
+                                        {3}));
 }
 
 TEST_P(Ctas, CreateTableAsSelect) {
