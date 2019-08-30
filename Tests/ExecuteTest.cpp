@@ -8005,6 +8005,7 @@ TEST(Select, TimestampPrecisionMeridiesEncoding) {
   }
 }
 
+#ifndef __APPLE__
 TEST(Select, DateTimeZones) {
   static const std::map<std::string, std::vector<int64_t>> gmt_epochs_ = {
       {"NZ", {1541336400, 1541289600, 7200}},
@@ -8066,6 +8067,7 @@ TEST(Select, DateTimeZones) {
     }
   }
 }
+#endif
 
 TEST(Select, TimestampPrecision) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
