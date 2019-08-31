@@ -158,7 +158,7 @@ void run_reduction_code(const ReductionCode& reduction_code,
     auto that_entry_count_gv = llvm::GenericValue();
     that_entry_count_gv.IntVal = llvm::APInt(32, that_entry_count);
     const auto ret = reduction_code.execution_engine->runFunction(
-        reduction_code.ir_reduce_loop,
+        reduction_code.llvm_reduce_loop,
         {llvm::GenericValue(this_buff),
          llvm::GenericValue(const_cast<int8_t*>(that_buff)),
          start_entry_index_gv,

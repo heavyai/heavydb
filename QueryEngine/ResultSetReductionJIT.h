@@ -18,6 +18,7 @@
 
 #include "CgenState.h"
 #include "CodeCache.h"
+#include "ResultSetReductionOps.h"
 
 #include "Descriptors/QueryMemoryDescriptor.h"
 #include "Shared/TargetInfo.h"
@@ -51,15 +52,16 @@ struct ReductionCode {
                               const void* that_qmd,
                               const void* serialized_varlen_buffer);
 
-  std::unique_ptr<CgenState> cgen_state;
+  FuncPtr func_ptr;
   llvm::ExecutionEngine* execution_engine;
+  llvm::Function* llvm_reduce_loop;
+  std::unique_ptr<CgenState> cgen_state;
   ExecutionEngineWrapper own_execution_engine;
   std::unique_ptr<llvm::Module> module;
-  llvm::Function* ir_is_empty;
-  llvm::Function* ir_reduce_one_entry;
-  llvm::Function* ir_reduce_one_entry_idx;
-  llvm::Function* ir_reduce_loop;
-  FuncPtr func_ptr;
+  std::unique_ptr<Function> ir_is_empty;
+  std::unique_ptr<Function> ir_reduce_one_entry;
+  std::unique_ptr<Function> ir_reduce_one_entry_idx;
+  std::unique_ptr<Function> ir_reduce_loop;
 
   static std::mutex s_reduction_mutex;
 };
@@ -84,9 +86,9 @@ class ResultSetReductionJIT {
   void reduceOneEntryNoCollisions(const ReductionCode& reduction_code) const;
 
   // Used to implement 'reduceOneEntryNoCollisions'.
-  void reduceOneEntryTargetsNoCollisions(const ReductionCode& reduction_code,
-                                         llvm::Value* this_targets_start_ptr,
-                                         llvm::Value* that_targets_start_ptr) const;
+  void reduceOneEntryTargetsNoCollisions(Function* ir_reduce_one_entry,
+                                         Value* this_targets_start_ptr,
+                                         Value* that_targets_start_ptr) const;
 
   // Same as above, for the baseline layout.
   void reduceOneEntryBaseline(const ReductionCode& reduction_code) const;
@@ -102,39 +104,43 @@ class ResultSetReductionJIT {
   void reduceLoop(const ReductionCode& reduction_code) const;
 
   // Generate reduction code for a single slot.
-  void reduceOneSlot(llvm::Value* this_ptr1,
-                     llvm::Value* this_ptr2,
-                     llvm::Value* that_ptr1,
-                     llvm::Value* that_ptr2,
+  void reduceOneSlot(Value* this_ptr1,
+                     Value* this_ptr2,
+                     Value* that_ptr1,
+                     Value* that_ptr2,
                      const TargetInfo& target_info,
                      const size_t target_logical_idx,
                      const size_t target_slot_idx,
                      const size_t init_agg_val_idx,
                      const size_t first_slot_idx_for_target,
-                     const ReductionCode& reduction_code) const;
+                     Function* ir_reduce_one_entry) const;
 
   // Generate reduction code for a single aggregate (with the exception of sample) slot.
-  void reduceOneAggregateSlot(llvm::Value* this_ptr1,
-                              llvm::Value* this_ptr2,
-                              llvm::Value* that_ptr1,
-                              llvm::Value* that_ptr2,
+  void reduceOneAggregateSlot(Value* this_ptr1,
+                              Value* this_ptr2,
+                              Value* that_ptr1,
+                              Value* that_ptr2,
                               const TargetInfo& target_info,
                               const size_t target_logical_idx,
                               const size_t target_slot_idx,
                               const int64_t init_val,
                               const int8_t chosen_bytes,
-                              const ReductionCode& reduction_code) const;
+                              Function* ir_reduce_one_entry) const;
 
   // Generate reduction code for a count distinct slot.
-  void reduceOneCountDistinctSlot(llvm::Value* this_ptr1,
-                                  llvm::Value* that_ptr1,
+  void reduceOneCountDistinctSlot(Value* this_ptr1,
+                                  Value* that_ptr1,
                                   const size_t target_logical_idx,
-                                  const ReductionCode& reduction_code) const;
+                                  Function* ir_reduce_one_entry) const;
 
-  ReductionCode finalizeReductionCode(ReductionCode reduction_code) const;
+  ReductionCode finalizeReductionCode(
+      ReductionCode reduction_code,
+      const llvm::Function* ir_is_empty,
+      const llvm::Function* ir_reduce_one_entry,
+      const llvm::Function* ir_reduce_one_entry_idx) const;
 
   // Returns true iff we will (should and is possible to) use the LLVM interpreter.
-  bool useInterpreter(const CgenState* cgen_state) const;
+  bool useInterpreter(const ReductionCode& reduction_code) const;
 
   const QueryMemoryDescriptor query_mem_desc_;
   const std::vector<TargetInfo> targets_;

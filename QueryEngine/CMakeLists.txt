@@ -78,6 +78,7 @@ set(query_engine_source_files
     ResultSet.cpp
     ResultSetIteration.cpp
     ResultSetReduction.cpp
+    ResultSetReductionCodegen.cpp
     ResultSetReductionJIT.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LoopControlFlow/JoinLoop.cpp
     ResultSetSort.cpp
