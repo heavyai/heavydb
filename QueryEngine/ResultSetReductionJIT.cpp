@@ -48,26 +48,6 @@ const int32_t WATCHDOG_ERROR{-1};
 // threshold.
 const size_t INTERP_THRESHOLD{0};
 
-// Make a shallow copy (just declarations) of the runtime module. Function definitions are
-// cloned only if they're used from the generated code.
-std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state) {
-  return llvm::CloneModule(
-#if LLVM_VERSION_MAJOR >= 7
-      *g_rt_module.get(),
-#else
-      g_rt_module.get(),
-#endif
-      cgen_state->vmap_,
-      [](const llvm::GlobalValue* gv) {
-        auto func = llvm::dyn_cast<llvm::Function>(gv);
-        if (!func) {
-          return true;
-        }
-        return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
-                func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage);
-      });
-}
-
 // Load the value stored at 'ptr' interpreted as 'ptr_type'.
 Value* emit_load(Value* ptr, Type ptr_type, Function* function) {
   return function->add<Load>(
@@ -1191,4 +1171,22 @@ bool ResultSetReductionJIT::useInterpreter(const ReductionCode& reduction_code) 
         return dynamic_cast<const ExternalCall*>(instr.get());
       });
   return query_mem_desc_.getEntryCount() < INTERP_THRESHOLD && it_external == body.end();
+}
+
+std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state) {
+  return llvm::CloneModule(
+#if LLVM_VERSION_MAJOR >= 7
+      *g_rt_module.get(),
+#else
+      g_rt_module.get(),
+#endif
+      cgen_state->vmap_,
+      [](const llvm::GlobalValue* gv) {
+        auto func = llvm::dyn_cast<llvm::Function>(gv);
+        if (!func) {
+          return true;
+        }
+        return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
+                func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage);
+      });
 }

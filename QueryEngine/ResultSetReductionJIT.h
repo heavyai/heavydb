@@ -147,3 +147,7 @@ class ResultSetReductionJIT {
   const std::vector<int64_t> target_init_vals_;
   static CodeCache s_code_cache;
 };
+
+// Make a shallow copy (just declarations) of the runtime module. Function definitions are
+// cloned only if they're used from the generated code.
+std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state);

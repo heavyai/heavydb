@@ -22,6 +22,8 @@
 #include <string>
 #include <vector>
 
+extern thread_local size_t g_value_id;
+
 // A collection of operators heavily inspired from LLVM IR which are both easy to
 // translated to LLVM IR and interpreted, for small result sets, to avoid compilation
 // overhead. In order to keep things simple, there is no general-purpose control flow.
@@ -94,9 +96,12 @@ inline Type pointer_type(const Type pointee) {
 
 class Value {
  public:
-  Value(const Type type, const std::string& label) : type_(type), label_(label) {}
+  Value(const Type type, const std::string& label)
+      : type_(type), label_(label), id_(g_value_id++) {}
 
   Type type() const { return type_; }
+
+  size_t id() const { return id_; }
 
   const std::string& label() const { return label_; }
 
@@ -106,6 +111,9 @@ class Value {
   const Type type_;
   // The label of the value, useful for debugging the generated LLVM IR.
   const std::string label_;
+  // An unique id, starting from 0, relative to the function. Used by the interpreter to
+  // implement a dense map of evaluated values.
+  const size_t id_;
 };
 
 class Constant : public Value {
@@ -138,11 +146,14 @@ class Argument : public Value {
   Argument(const Type type, const std::string& label) : Value(type, label) {}
 };
 
+class ReductionInterpreterImpl;
+
 class Instruction : public Value {
  public:
   Instruction(const Type type, const std::string& label) : Value(type, label) {}
 
-  virtual ~Instruction() = default;
+  // Run the instruction in the given interpreter.
+  virtual void run(ReductionInterpreterImpl* interpreter) = 0;
 };
 
 // A function, defined by its signature and instructions, which it owns.
@@ -161,6 +172,7 @@ class Function {
       , arg_types_(arg_types)
       , ret_type_(ret_type)
       , always_inline_(always_inline) {
+    g_value_id = 0;
     for (const auto& named_arg : arg_types_) {
       arguments_.emplace_back(new Argument(named_arg.type, named_arg.name));
     }
@@ -211,6 +223,8 @@ class GetElementPtr : public Instruction {
 
   const Value* index() const { return index_; }
 
+  void run(ReductionInterpreterImpl* interpreter) override;
+
  private:
   const Value* base_;
   const Value* index_;
@@ -222,6 +236,8 @@ class Load : public Instruction {
       : Instruction(pointee_type(source->type()), label), source_(source) {}
 
   const Value* source() const { return source_; }
+
+  void run(ReductionInterpreterImpl* interpreter) override;
 
  private:
   const Value* source_;
@@ -245,6 +261,8 @@ class ICmp : public Instruction {
   const Value* lhs() const { return lhs_; }
 
   const Value* rhs() const { return rhs_; }
+
+  void run(ReductionInterpreterImpl* interpreter) override;
 
  private:
   const Predicate predicate_;
@@ -271,6 +289,8 @@ class BinaryOperator : public Instruction {
 
   const Value* rhs() const { return rhs_; }
 
+  void run(ReductionInterpreterImpl* interpreter) override;
+
  private:
   const BinaryOp op_;
   const Value* lhs_;
@@ -292,6 +312,8 @@ class Cast : public Instruction {
 
   const Value* source() const { return source_; }
 
+  void run(ReductionInterpreterImpl* interpreter) override;
+
  private:
   const CastOp op_;
   const Value* source_;
@@ -305,6 +327,8 @@ class Ret : public Instruction {
 
   const Value* value() const { return value_; }
 
+  void run(ReductionInterpreterImpl* interpreter) override;
+
  private:
   const Value* value_;
 };
@@ -316,7 +340,10 @@ class Call : public Instruction {
   Call(const Function* callee,
        const std::vector<const Value*>& arguments,
        const std::string& label)
-      : Instruction(callee->ret_type(), label), callee_(callee), arguments_(arguments) {}
+      : Instruction(callee->ret_type(), label)
+      , callee_(callee)
+      , arguments_(arguments)
+      , cached_callee_(nullptr) {}
 
   Call(const std::string& callee_name,
        const std::vector<const Value*>& arguments,
@@ -324,7 +351,10 @@ class Call : public Instruction {
       : Instruction(Type::Void, label)
       , callee_name_(callee_name)
       , callee_(nullptr)
-      , arguments_(arguments) {}
+      , arguments_(arguments)
+      , cached_callee_(nullptr) {}
+
+  bool external() const { return false; }
 
   const std::string& callee_name() const { return callee_name_; }
 
@@ -332,10 +362,18 @@ class Call : public Instruction {
 
   const std::vector<const Value*>& arguments() const { return arguments_; }
 
+  void run(ReductionInterpreterImpl* interpreter) override;
+
+  void* cached_callee() const { return cached_callee_; }
+
+  void set_cached_callee(void* cached_callee) const { cached_callee_ = cached_callee; }
+
  private:
   const std::string callee_name_;
   const Function* callee_;
   const std::vector<const Value*> arguments_;
+  // For performance reasons, the pointer of the native function is stored in this field.
+  mutable void* cached_callee_;
 };
 
 // An external runtime function, with C binding.
@@ -348,16 +386,26 @@ class ExternalCall : public Instruction {
       : Instruction(ret_type, label)
       , callee_name_(callee_name)
       , ret_type_(ret_type)
-      , arguments_(arguments) {}
+      , arguments_(arguments)
+      , cached_callee_(nullptr) {}
+
+  bool external() const { return true; }
 
   const std::string& callee_name() const { return callee_name_; }
 
   const std::vector<const Value*>& arguments() const { return arguments_; }
 
+  void run(ReductionInterpreterImpl* interpreter) override;
+
+  void* cached_callee() const { return cached_callee_; }
+
+  void set_cached_callee(void* cached_callee) const { cached_callee_ = cached_callee; }
+
  private:
   const std::string callee_name_;
   const Type ret_type_;
   const std::vector<const Value*> arguments_;
+  mutable void* cached_callee_;
 };
 
 class Alloca : public Instruction {
@@ -366,6 +414,8 @@ class Alloca : public Instruction {
       : Instruction(pointer_type(element_type), label), array_size_(array_size) {}
 
   const Value* array_size() const { return array_size_; }
+
+  void run(ReductionInterpreterImpl* interpreter) override;
 
  private:
   const Value* array_size_;
@@ -381,6 +431,8 @@ class MemCpy : public Instruction {
   const Value* source() const { return source_; }
 
   const Value* size() const { return size_; }
+
+  void run(ReductionInterpreterImpl* interpreter) override;
 
  private:
   const Value* dest_;
@@ -398,6 +450,8 @@ class ReturnEarly : public Instruction {
   const Value* cond() const { return cond_; }
 
   int error_code() const { return error_code_; }
+
+  void run(ReductionInterpreterImpl* interpreter) override;
 
  private:
   const Value* cond_;
@@ -422,6 +476,8 @@ class For : public Instruction {
   const Value* end() const { return end_; }
 
   const Value* iter() const { return &iter_; }
+
+  void run(ReductionInterpreterImpl* interpreter) override;
 
   template <typename Tp, typename... Args>
   Value* add(Args&&... args) {
