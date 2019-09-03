@@ -19,6 +19,7 @@
 
 #include "../QueryEngine/CompilationOptions.h"
 #include "LeafAggregator.h"
+#include "ThriftHandler/QueryState.h"
 
 #include <Catalog/SysCatalog.h>
 #include <Catalog/TableDescriptor.h>
@@ -43,6 +44,8 @@ class RootPlan;
 namespace Parser {
 class CopyTableStmt;
 }
+
+using query_state::QueryStateProxy;
 
 namespace Importer_NS {
 class Loader;
@@ -121,7 +124,9 @@ class QueryRunner {
 
   static void reset() { qr_instance_.reset(nullptr); }
 
-  Catalog_Namespace::SessionInfo* getSession() const { return session_info_.get(); }
+  std::shared_ptr<Catalog_Namespace::SessionInfo> getSession() const {
+    return session_info_;
+  }
   std::shared_ptr<Catalog_Namespace::Catalog> getCatalog() const;
   std::shared_ptr<Calcite> getCalcite() const;
 
@@ -154,6 +159,13 @@ class QueryRunner {
 
   QueryRunner(std::unique_ptr<Catalog_Namespace::SessionInfo> session);
 
+  static query_state::QueryStates query_states_;
+
+  template <typename... Ts>
+  static std::shared_ptr<query_state::QueryState> create_query_state(Ts&&... args) {
+    return query_states_.create(std::forward<Ts>(args)...);
+  }
+
  protected:
   QueryRunner(const char* db_path,
               const std::string& user,
@@ -169,19 +181,16 @@ class QueryRunner {
               const bool create_db);
 
   Planner::RootPlan* parsePlanLegacy(const std::string& query_str);
-  Planner::RootPlan* parsePlanCalcite(const std::string& query_str);
-  Planner::RootPlan* parsePlan(const std::string& query_str);
+  Planner::RootPlan* parsePlanCalcite(QueryStateProxy);
+  Planner::RootPlan* parsePlan(QueryStateProxy);
 
   static std::unique_ptr<QueryRunner> qr_instance_;
 
-  std::unique_ptr<Catalog_Namespace::SessionInfo> session_info_;
+  std::shared_ptr<Catalog_Namespace::SessionInfo> session_info_;
 
  private:
   std::unique_ptr<IRFileWriter> ir_file_writer_;
 };
-
-Catalog_Namespace::UserMetadata get_user_metadata(
-    const Catalog_Namespace::SessionInfo* session);
 
 }  // namespace QueryRunner
 

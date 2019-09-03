@@ -45,27 +45,29 @@ Planner::RootPlan* QueryRunner::parsePlanLegacy(const std::string& query_str) {
   return optimizer.optimize();
 }
 
-Planner::RootPlan* QueryRunner::parsePlanCalcite(const std::string& query_str) {
-  ParserWrapper pw{query_str};
+Planner::RootPlan* QueryRunner::parsePlanCalcite(QueryStateProxy query_state_proxy) {
+  auto const& query_state = query_state_proxy.getQueryState();
+  ParserWrapper pw{query_state.get_query_str()};
   if (pw.isOtherExplain() || pw.is_ddl || pw.is_update_dml) {
-    return parsePlanLegacy(query_str);
+    return parsePlanLegacy(query_state.get_query_str());
   }
 
-  const auto& cat = session_info_->getCatalog();
+  const auto& cat = query_state.getConstSessionInfo()->getCatalog();
   auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra =
-      calcite_mgr->process(*session_info_,
-                           pg_shim(query_str),
-                           {},
-                           true,
-                           false,
-                           false)
+      calcite_mgr
+          ->process(query_state_proxy,
+                    pg_shim(query_state.get_query_str()),
+                    {},
+                    true,
+                    false,
+                    false)
           .plan_result;  //  if we want to be able to check plans we may want to calc this
   return translate_query(query_ra, cat);
 }
 
-Planner::RootPlan* QueryRunner::parsePlan(const std::string& query_str) {
-  return parsePlanCalcite(query_str);
+Planner::RootPlan* QueryRunner::parsePlan(QueryStateProxy query_state_proxy) {
+  return parsePlanCalcite(query_state_proxy);
 }
 
 }  // namespace QueryRunner

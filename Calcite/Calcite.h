@@ -24,16 +24,13 @@
 #ifndef CALCITE_H
 #define CALCITE_H
 
-#include <mutex>
-#include <string>
-#include <thread>
-#include <vector>
-#include "Shared/MapDParameters.h"
-#include "Shared/ThriftClient.h"
 #include "Shared/mapd_shared_ptr.h"
-#include "rapidjson/document.h"
 
 #include <thrift/transport/TTransport.h>
+
+#include <mutex>
+#include <string>
+#include <vector>
 
 using namespace apache::thrift::transport;
 
@@ -43,12 +40,20 @@ namespace Catalog_Namespace {
 class SessionInfo;
 }
 
+namespace query_state {
+class QueryStateProxy;
+}
+
+struct MapDParameters;
+
+class ThriftClientConnection;
+
 // Forward declares for Thrift-generated classes
 class TFilterPushDownInfo;
 class TPlanResult;
 class TCompletionHint;
 
-class Calcite {
+class Calcite final {
  public:
   Calcite(const int mapd_port,
           const int port,
@@ -66,8 +71,9 @@ class Calcite {
           const std::string& data_dir,
           const std::string& session_prefix,
           const std::string& udf_filename = "");
-  TPlanResult process(const Catalog_Namespace::SessionInfo& session_info,
-                      const std::string sql_string,
+  // sql_string may differ from what is in query_state due to legacy_syntax option.
+  TPlanResult process(query_state::QueryStateProxy,
+                      std::string sql_string,
                       const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                       const bool legacy_syntax,
                       const bool is_explain,
@@ -81,10 +87,10 @@ class Calcite {
   std::string getUserDefinedFunctionWhitelist();
   void updateMetadata(std::string catalog, std::string table);
   void close_calcite_server(bool log = true);
-  virtual ~Calcite();
+  ~Calcite();
   std::string getRuntimeUserDefinedFunctionWhitelist();
   void setRuntimeUserDefinedFunction(std::string udf_string);
-  std::string& get_session_prefix() { return session_prefix_; }
+  std::string const& get_session_prefix() const { return session_prefix_; }
 
  private:
   void init(const int mapd_port,
@@ -97,8 +103,8 @@ class Calcite {
                  const std::string& data_dir,
                  const size_t calcite_max_mem,
                  const std::string& udf_filename);
-  TPlanResult processImpl(const Catalog_Namespace::SessionInfo& session_info,
-                          const std::string sql_string,
+  TPlanResult processImpl(query_state::QueryStateProxy,
+                          std::string sql_string,
                           const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                           const bool legacy_syntax,
                           const bool is_explain,
@@ -108,7 +114,6 @@ class Calcite {
   std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
   getClient(int port);
 
-  std::thread calcite_server_thread_;
   int ping();
 
   mapd::shared_ptr<ThriftClientConnection> connMgr_;
@@ -120,7 +125,7 @@ class Calcite {
   std::string ssl_keystore_;
   std::string ssl_keystore_password_;
   std::string ssl_cert_file_;
-  std::string session_prefix_;
+  std::string const session_prefix_;
   std::once_flag shutdown_once_flag_;
 };
 

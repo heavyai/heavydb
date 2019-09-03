@@ -61,6 +61,8 @@ const int OMNISCI_ROOT_USER_ID = 0;
 const std::string OMNISCI_ROOT_USER_ID_STR = "0";
 const std::string OMNISCI_ROOT_PASSWD_DEFAULT = "HyperInteractive";
 
+class Calcite;
+
 namespace Catalog_Namespace {
 
 /*

@@ -148,10 +148,9 @@ void import_test_geofile_importer(const std::string& file_str,
                                   const std::string& table_name,
                                   const bool compression,
                                   const bool create_table = true) {
-  Importer_NS::ImportDriver import_driver(
-      QR::get()->getCatalog(),
-      QueryRunner::get_user_metadata(QR::get()->getSession()),
-      ExecutorDeviceType::CPU);
+  Importer_NS::ImportDriver import_driver(QR::get()->getCatalog(),
+                                          QR::get()->getSession()->get_currentUser(),
+                                          ExecutorDeviceType::CPU);
 
   auto file_path = boost::filesystem::path("../../Tests/Import/datafiles/" + file_str);
 

@@ -17,6 +17,7 @@
 #include "LockMgr.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "QueryEngine/JsonAccessors.h"
+#include "QueryRunner/QueryRunner.h"
 #include "gen-cpp/CalciteServer.h"
 
 namespace Lock_Namespace {
@@ -73,11 +74,13 @@ ChunkKey getTableChunkKey(const Catalog_Namespace::Catalog& cat,
   }
 }
 
-std::string parse_to_ra(const Catalog_Namespace::Catalog& cat,
-                        const std::string& query_str,
-                        const Catalog_Namespace::SessionInfo& session_info) {
+std::string parse_to_ra(query_state::QueryStateProxy query_state_proxy,
+                        const std::string& query_str) {
+  auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
+  auto const& cat = session->getCatalog();
   return cat.getCalciteMgr()
-      ->process(session_info, query_str, {}, true, false, false)
+      ->process(query_state_proxy, query_str, {}, true, false, false)
       .plan_result;
 }
+
 }  // namespace Lock_Namespace

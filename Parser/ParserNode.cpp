@@ -23,20 +23,6 @@
  **/
 
 #include "ParserNode.h"
-#include <rapidjson/document.h>
-#include <rapidjson/stringbuffer.h>
-#include <rapidjson/writer.h>
-#include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/function.hpp>
-#include <cassert>
-#include <cmath>
-#include <limits>
-#include <random>
-#include <stdexcept>
-#include <type_traits>
-#include <typeinfo>
 
 #include "../Analyzer/RangeTableEntry.h"
 #include "../Catalog/Catalog.h"
@@ -59,6 +45,23 @@
 #include "ReservedKeywords.h"
 #include "gen-cpp/CalciteServer.h"
 #include "parser.h"
+
+#include <boost/algorithm/string.hpp>
+#include <boost/core/null_deleter.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/function.hpp>
+
+#include <rapidjson/document.h>
+#include <rapidjson/stringbuffer.h>
+#include <rapidjson/writer.h>
+
+#include <cassert>
+#include <cmath>
+#include <limits>
+#include <random>
+#include <stdexcept>
+#include <type_traits>
+#include <typeinfo>
 
 size_t g_leaf_count{0};
 bool g_use_date_in_days_default_encoding{true};
@@ -2220,16 +2223,17 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       session.get_currentUser(), td.tableName, TableDBObjectType, catalog);
 }
 
-std::shared_ptr<ResultSet> getResultSet(const Catalog_Namespace::SessionInfo& session,
+std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                                         const std::string select_stmt,
                                         std::vector<TargetMetaInfo>& targets,
                                         bool validate_only = false) {
-  auto& catalog = session.getCatalog();
+  auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
+  auto& catalog = session->getCatalog();
 
   auto executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
 
 #ifdef HAVE_CUDA
-  const auto device_type = session.get_executor_device_type();
+  const auto device_type = session->get_executor_device_type();
 #else
   const auto device_type = ExecutorDeviceType::CPU;
 #endif  // HAVE_CUDA
@@ -2238,7 +2242,8 @@ std::shared_ptr<ResultSet> getResultSet(const Catalog_Namespace::SessionInfo& se
   // TODO MAT this should actually get the global or the session parameter for
   // view optimization
   const auto query_ra =
-      calcite_mgr->process(session, pg_shim(select_stmt), {}, true, false, false)
+      calcite_mgr
+          ->process(query_state_proxy, pg_shim(select_stmt), {}, true, false, false)
           .plan_result;
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
@@ -2270,27 +2275,34 @@ std::shared_ptr<ResultSet> getResultSet(const Catalog_Namespace::SessionInfo& se
 }
 
 AggregatedResult InsertIntoTableAsSelectStmt::LocalConnector::query(
-    const Catalog_Namespace::SessionInfo& session,
+    QueryStateProxy query_state_proxy,
     std::string& sql_query_string,
     bool validate_only) {
-  auto& catalog = session.getCatalog();
+  auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   std::string pg_shimmed_select_query = pg_shim(sql_query_string);
-  const auto query_ra = parse_to_ra(catalog, pg_shimmed_select_query, session);
+  const auto query_ra = parse_to_ra(query_state_proxy, pg_shimmed_select_query);
 
   // Note that the below command should *only* get read locks on the source table for
   // InsertIntoAsSelect. Write locks will be taken on the target table in
   // InsertOrderFragmenter::deleteFragments. This potentially leaves a small window where
   // the target table is not locked, and should be investigated.
   std::vector<TableLock> table_locks;
-  TableLockMgr::getTableLocks(session.getCatalog(), query_ra, table_locks);
+  TableLockMgr::getTableLocks(session->getCatalog(), query_ra, table_locks);
 
   std::vector<TargetMetaInfo> target_metainfos;
 
   auto result_rows =
-      getResultSet(session, sql_query_string, target_metainfos, validate_only);
+      getResultSet(query_state_proxy, sql_query_string, target_metainfos, validate_only);
   AggregatedResult res = {result_rows, target_metainfos};
   return res;
 }
+
+AggregatedResult InsertIntoTableAsSelectStmt::LocalConnector::query(
+    QueryStateProxy query_state_proxy,
+    std::string& sql_query_string) {
+  return query(query_state_proxy, sql_query_string, false);
+}
+
 void InsertIntoTableAsSelectStmt::LocalConnector::insertDataToLeaf(
     const Catalog_Namespace::SessionInfo& session,
     const size_t leaf_idx,
@@ -2364,10 +2376,10 @@ InsertIntoTableAsSelectStmt::LocalConnector::getColumnDescriptors(
   return column_descriptors;
 }
 
-void InsertIntoTableAsSelectStmt::populateData(
-    const Catalog_Namespace::SessionInfo& session,
-    bool is_temporary,
-    bool validate_table) {
+void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy,
+                                               bool is_temporary,
+                                               bool validate_table) {
+  auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   LocalConnector local_connector;
 
   bool populate_table = false;
@@ -2381,7 +2393,7 @@ void InsertIntoTableAsSelectStmt::populateData(
     }
   }
 
-  auto& catalog = session.getCatalog();
+  auto& catalog = session->getCatalog();
   auto get_target_column_descriptors = [this, &catalog](const TableDescriptor* td) {
     std::vector<const ColumnDescriptor*> target_column_descriptors;
     if (column_list_.empty()) {
@@ -2412,15 +2424,15 @@ void InsertIntoTableAsSelectStmt::populateData(
       throw std::runtime_error("Insert to views is not supported yet.");
     }
 
-    if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
-                                         AccessPrivileges::INSERT_INTO_TABLE,
-                                         table_name_)) {
+    if (!session->checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                          AccessPrivileges::INSERT_INTO_TABLE,
+                                          table_name_)) {
       throw std::runtime_error("User has no insert privileges on " + table_name_ + ".");
     }
 
     // only validate the select query so we get the target types
     // correctly, but do not populate the result set
-    auto result = local_connector.query(session, select_query_, true);
+    auto result = local_connector.query(query_state_proxy, select_query_, true);
     auto source_column_descriptors = local_connector.getColumnDescriptors(result, false);
 
     std::vector<const ColumnDescriptor*> target_column_descriptors =
@@ -2516,7 +2528,7 @@ void InsertIntoTableAsSelectStmt::populateData(
 
   const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
   Fragmenter_Namespace::InsertDataLoader insertDataLoader(*leafs_connector_);
-  AggregatedResult res = leafs_connector_->query(session, select_query_);
+  AggregatedResult res = leafs_connector_->query(query_state_proxy, select_query_);
   auto target_column_descriptors = get_target_column_descriptors(created_td);
   auto result_rows = res.rs;
   result_rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
@@ -2661,16 +2673,16 @@ void InsertIntoTableAsSelectStmt::populateData(
         value_converters[col_idx]->addDataBlocksToInsertData(insert_data);
       }
 
-      insertDataLoader.insertData(session, insert_data);
+      insertDataLoader.insertData(*session, insert_data);
     } catch (...) {
       try {
         if (created_td->nShards) {
           const auto shard_tables = catalog.getPhysicalTablesDescriptors(created_td);
           for (const auto ptd : shard_tables) {
-            leafs_connector_->rollback(session, ptd->tableId);
+            leafs_connector_->rollback(*session, ptd->tableId);
           }
         }
-        leafs_connector_->rollback(session, created_td->tableId);
+        leafs_connector_->rollback(*session, created_td->tableId);
       } catch (...) {
         // eat it
       }
@@ -2684,14 +2696,29 @@ void InsertIntoTableAsSelectStmt::populateData(
     if (created_td->nShards) {
       const auto shard_tables = catalog.getPhysicalTablesDescriptors(created_td);
       for (const auto ptd : shard_tables) {
-        leafs_connector_->checkpoint(session, ptd->tableId);
+        leafs_connector_->checkpoint(*session, ptd->tableId);
       }
     }
-    leafs_connector_->checkpoint(session, created_td->tableId);
+    leafs_connector_->checkpoint(*session, created_td->tableId);
   }
 }
 
+void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto session_copy = session;
+  auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
+      &session_copy, boost::null_deleter());
+  auto query_state = query_state::QueryState::create(session_ptr, select_query_);
+  auto stdlog = STDLOG(query_state);
+  populateData(query_state->createQueryStateProxy(), false, true);
+}
+
 void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto session_copy = session;
+  auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
+      &session_copy, boost::null_deleter());
+  auto query_state = query_state::QueryState::create(session_ptr, select_query_);
+  auto stdlog = STDLOG(query_state);
+
   LocalConnector local_connector;
   auto& catalog = session.getCatalog();
   bool create_table = nullptr == leafs_connector_;
@@ -2711,7 +2738,8 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
     // only validate the select query so we get the target types
     // correctly, but do not populate the result set
-    auto result = local_connector.query(session, select_query_, true);
+    auto result =
+        local_connector.query(query_state->createQueryStateProxy(), select_query_, true);
     const auto column_descriptors_for_create =
         local_connector.getColumnDescriptors(result, true);
 
@@ -2747,7 +2775,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   }
 
   try {
-    populateData(session, is_temporary_, false);
+    populateData(query_state->createQueryStateProxy(), is_temporary_, false);
   } catch (...) {
     if (!g_cluster) {
       const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
@@ -4059,6 +4087,11 @@ void RevokeRoleStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 using dbl = std::numeric_limits<double>;
 
 void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto session_copy = session;
+  auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
+      &session_copy, boost::null_deleter());
+  auto query_state = query_state::QueryState::create(session_ptr, *select_stmt);
+  auto stdlog = STDLOG(query_state);
   if (SysCatalog::instance().isAggregator()) {
     // allow copy to statement for stand alone leafs
     throw std::runtime_error("Distributed export not supported yet");
@@ -4158,7 +4191,8 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
   }
   std::vector<TargetMetaInfo> targets;
-  const auto results = getResultSet(session, *select_stmt, targets);
+  const auto results =
+      getResultSet(query_state->createQueryStateProxy(), *select_stmt, targets);
   TargetMetaInfo* td = targets.data();
 
   std::ofstream outfile;
@@ -4322,6 +4356,11 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto session_copy = session;
+  auto session_ptr = std::shared_ptr<Catalog_Namespace::SessionInfo>(
+      &session_copy, boost::null_deleter());
+  auto query_state = query_state::QueryState::create(session_ptr, select_query_);
+  auto stdlog = STDLOG(query_state);
   auto& catalog = session.getCatalog();
 
   if (catalog.getMetadataForTable(view_name_) != nullptr) {
@@ -4340,7 +4379,8 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   const auto query_after_shim = pg_shim(select_query_);
 
   // this now also ensures that access permissions are checked
-  catalog.getCalciteMgr()->process(session, query_after_shim, {}, true, false, false);
+  catalog.getCalciteMgr()->process(
+      query_state->createQueryStateProxy(), query_after_shim, {}, true, false, false);
   TableDescriptor td;
   td.tableName = view_name_;
   td.userId = session.get_currentUser().userId;

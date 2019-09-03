@@ -18,20 +18,18 @@
 
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
+#include "DistributedLoader.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/parser.h"
 #include "QueryEngine/CalciteAdapter.h"
+#include "QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "QueryEngine/RelAlgExecutor.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/Logger.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/StringTransform.h"
 #include "bcrypt.h"
 #include "gen-cpp/CalciteServer.h"
-
-#include "QueryEngine/ExtensionFunctionsWhitelist.h"
-#include "QueryEngine/RelAlgExecutor.h"
-
-#include "DistributedLoader.h"
 
 #include <boost/filesystem/operations.hpp>
 #include <csignal>
@@ -79,6 +77,8 @@ void register_signal_handler() {
 namespace QueryRunner {
 
 std::unique_ptr<QueryRunner> QueryRunner::qr_instance_ = nullptr;
+
+query_state::QueryStates QueryRunner::query_states_;
 
 QueryRunner* QueryRunner::init(const char* db_path,
                                const std::string& user,
@@ -217,6 +217,9 @@ void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
   // Then remove spaces
   boost::algorithm::trim_left(stmt_str);
 
+  auto query_state = create_query_state(session_info_, stmt_str);
+  auto stdlog = STDLOG(query_state);
+
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
@@ -261,10 +264,14 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
     return execution_result.getRows();
   }
 
+  auto query_state = create_query_state(session_info_, query_str);
+  auto stdlog = STDLOG(query_state);
+
   const auto& cat = session_info_->getCatalog();
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
 
-  auto plan = std::unique_ptr<Planner::RootPlan>(parsePlan(query_str));
+  auto plan =
+      std::unique_ptr<Planner::RootPlan>(parsePlan(query_state->createQueryStateProxy()));
 
 #ifdef HAVE_CUDA
   return executor->execute(plan.get(),
@@ -331,14 +338,14 @@ std::unique_ptr<Importer_NS::Loader> QueryRunner::getLoader(
 namespace {
 
 ExecutionResult run_select_query_with_filter_push_down(
-    const std::string& query_str,
-    const std::unique_ptr<Catalog_Namespace::SessionInfo>& session,
+    QueryStateProxy query_state_proxy,
     const ExecutorDeviceType device_type,
     const bool hoist_literals,
     const bool allow_loop_joins,
     const bool just_explain,
     const bool with_filter_push_down) {
-  const auto& cat = session->getCatalog();
+  auto const& query_state = query_state_proxy.getQueryState();
+  const auto& cat = query_state.getConstSessionInfo()->getCatalog();
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
@@ -355,9 +362,14 @@ ExecutionResult run_select_query_with_filter_push_down(
                          false,
                          g_gpu_mem_limit_percent};
   auto calcite_mgr = cat.getCalciteMgr();
-  const auto query_ra =
-      calcite_mgr->process(*session, pg_shim(query_str), {}, true, false, false)
-          .plan_result;
+  const auto query_ra = calcite_mgr
+                            ->process(query_state_proxy,
+                                      pg_shim(query_state.get_query_str()),
+                                      {},
+                                      true,
+                                      false,
+                                      false)
+                            .plan_result;
   RelAlgExecutor ra_executor(executor.get(), cat);
 
   auto result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
@@ -371,11 +383,14 @@ ExecutionResult run_select_query_with_filter_push_down(
       filter_push_down_info_for_request.input_next = req.input_next;
       filter_push_down_info.push_back(filter_push_down_info_for_request);
     }
-    const auto new_query_ra =
-        calcite_mgr
-            ->process(
-                *session, pg_shim(query_str), filter_push_down_info, true, false, false)
-            .plan_result;
+    const auto new_query_ra = calcite_mgr
+                                  ->process(query_state_proxy,
+                                            pg_shim(query_state.get_query_str()),
+                                            filter_push_down_info,
+                                            true,
+                                            false,
+                                            false)
+                                  .plan_result;
     const ExecutionOptions eo_modified{eo.output_columnar_hint,
                                        eo.allow_multifrag,
                                        eo.just_explain,
@@ -403,9 +418,10 @@ ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
                                             const bool just_explain) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
+  auto query_state = create_query_state(session_info_, query_str);
+  auto stdlog = STDLOG(query_state);
   if (g_enable_filter_push_down) {
-    return run_select_query_with_filter_push_down(query_str,
-                                                  session_info_,
+    return run_select_query_with_filter_push_down(query_state->createQueryStateProxy(),
                                                   device_type,
                                                   hoist_literals,
                                                   allow_loop_joins,
@@ -430,16 +446,16 @@ ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
                          false,
                          g_gpu_mem_limit_percent};
   auto calcite_mgr = cat.getCalciteMgr();
-  const auto query_ra =
-      calcite_mgr->process(*session_info_, pg_shim(query_str), {}, true, false, false)
-          .plan_result;
+  const auto query_ra = calcite_mgr
+                            ->process(query_state->createQueryStateProxy(),
+                                      pg_shim(query_str),
+                                      {},
+                                      true,
+                                      false,
+                                      false)
+                            .plan_result;
   RelAlgExecutor ra_executor(executor.get(), cat);
   return ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
-}
-
-Catalog_Namespace::UserMetadata get_user_metadata(
-    const Catalog_Namespace::SessionInfo* session) {
-  return session->get_currentUser();
 }
 
 }  // namespace QueryRunner

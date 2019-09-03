@@ -78,7 +78,7 @@ namespace Catalog_Namespace {
  * current database and the current user.
  */
 
-class Catalog {
+class Catalog final {
  public:
   /**
    * @brief Constructor - takes basePath to already extant
@@ -101,7 +101,7 @@ class Catalog {
    * which were allocated on the heap and writes
    * Catalog to Sqlite
    */
-  virtual ~Catalog();
+  ~Catalog();
 
   static void expandGeoColumn(const ColumnDescriptor& cd,
                               std::list<ColumnDescriptor>& columns);

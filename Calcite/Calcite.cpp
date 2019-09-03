@@ -22,25 +22,26 @@
  */
 
 #include "Calcite.h"
-#include <thread>
-#include <utility>
 #include "Catalog/Catalog.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/Logger.h"
+#include "Shared/MapDParameters.h"
 #include "Shared/ThriftClient.h"
+#include "Shared/fixautotools.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/mapdpath.h"
 #include "Shared/measure.h"
-
-#include "Shared/fixautotools.h"
+#include "ThriftHandler/QueryState.h"
 
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TTransportUtils.h>
 
-#include "Shared/fixautotools.h"
-
 #include "gen-cpp/CalciteServer.h"
+
+#include "rapidjson/document.h"
+
+#include <utility>
 
 using namespace rapidjson;
 using namespace apache::thrift;
@@ -363,14 +364,14 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
 }
 
 TPlanResult Calcite::process(
-    const Catalog_Namespace::SessionInfo& session_info,
-    const std::string sql_string,
+    query_state::QueryStateProxy query_state_proxy,
+    std::string sql_string,
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
     const bool is_explain,
     const bool is_view_optimize) {
-  TPlanResult result = processImpl(session_info,
-                                   sql_string,
+  TPlanResult result = processImpl(query_state_proxy,
+                                   std::move(sql_string),
                                    filter_push_down_info,
                                    legacy_syntax,
                                    is_explain,
@@ -380,19 +381,20 @@ TPlanResult Calcite::process(
 
   if (!is_explain) {
     // check the individual tables
-    checkPermissionForTables(session_info,
+    auto const session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
+    checkPermissionForTables(*session_ptr,
                              result.primary_accessed_objects.tables_selected_from,
                              AccessPrivileges::SELECT_FROM_TABLE,
                              AccessPrivileges::SELECT_FROM_VIEW);
-    checkPermissionForTables(session_info,
+    checkPermissionForTables(*session_ptr,
                              result.primary_accessed_objects.tables_inserted_into,
                              AccessPrivileges::INSERT_INTO_TABLE,
                              NOOP);
-    checkPermissionForTables(session_info,
+    checkPermissionForTables(*session_ptr,
                              result.primary_accessed_objects.tables_updated_in,
                              AccessPrivileges::UPDATE_IN_TABLE,
                              NOOP);
-    checkPermissionForTables(session_info,
+    checkPermissionForTables(*session_ptr,
                              result.primary_accessed_objects.tables_deleted_from,
                              AccessPrivileges::DELETE_FROM_TABLE,
                              NOOP);
@@ -437,15 +439,17 @@ std::vector<std::string> Calcite::get_db_objects(const std::string ra) {
 }
 
 TPlanResult Calcite::processImpl(
-    const Catalog_Namespace::SessionInfo& session_info,
+    query_state::QueryStateProxy query_state_proxy,
     const std::string sql_string,
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
     const bool is_explain,
     const bool is_view_optimize) {
-  auto& cat = session_info.getCatalog();
-  std::string user = session_info.get_currentUser().userName;
-  std::string session = session_info.get_session_id();
+  query_state::Timer timer = query_state_proxy.createTimer(__func__);
+  auto const session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
+  auto& cat = session_ptr->getCatalog();
+  std::string user = session_ptr->get_currentUser().userName;
+  std::string session = session_ptr->get_session_id();
   if (!session_prefix_.empty()) {
     // preprend session prefix, if present
     session = session_prefix_ + "/" + session;

@@ -477,7 +477,7 @@ if(ENABLE_ODBC)
   add_subdirectory(ODBC)
 endif()
 
-set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner CsvImport QueryRunner QueryEngine LockMgr DataMgr Fragmenter Chunk)
+set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner CsvImport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter Chunk)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND MAPD_LIBRARIES Distributed)

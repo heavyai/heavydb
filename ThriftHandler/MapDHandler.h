@@ -55,6 +55,7 @@
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/TableGenerations.h"
+#include "QueryState.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/GenericTypeUtilities.h"
 #include "Shared/Logger.h"
@@ -102,7 +103,6 @@
 
 using namespace std::string_literals;
 
-class LogSession;
 class MapDRenderHandler;
 class MapDAggHandler;
 class MapDLeafHandler;
@@ -116,6 +116,7 @@ using SessionMap = std::map<TSessionId, std::shared_ptr<Catalog_Namespace::Sessi
 using permissionFuncPtr = bool (*)(const AccessPrivileges&, const TDBObjectPermissions&);
 using TableMap = std::map<std::string, bool>;
 using OptionalTableMap = boost::optional<TableMap&>;
+using query_state::QueryStateProxy;
 
 class MapDHandler : public MapDIf {
  public:
@@ -462,6 +463,11 @@ class MapDHandler : public MapDIf {
   std::shared_ptr<Calcite> calcite_;
   const bool legacy_syntax_;
 
+  template <typename... ARGS>
+  std::shared_ptr<query_state::QueryState> create_query_state(ARGS&&... args) {
+    return query_states_.create(std::forward<ARGS>(args)...);
+  }
+
   // Exactly one immutable SessionInfo copy should be taken by a typical request.
   Catalog_Namespace::SessionInfo get_session_copy(const TSessionId& session);
   std::shared_ptr<Catalog_Namespace::SessionInfo> get_session_copy_ptr(
@@ -473,17 +479,17 @@ class MapDHandler : public MapDIf {
                     const std::string& dbname,
                     Catalog_Namespace::UserMetadata& user_meta,
                     std::shared_ptr<Catalog_Namespace::Catalog> cat,
-                    LogSession&);
-
+                    query_state::StdLog&);
   void disconnect_impl(const SessionMap::iterator& session_it);
   void check_table_load_privileges(const TSessionId& session,
                                    const std::string& table_name);
   void check_table_load_privileges(const Catalog_Namespace::SessionInfo& session_info,
                                    const std::string& table_name);
   void get_tables_impl(std::vector<std::string>& table_names,
-                       const TSessionId& session,
+                       query_state::StdLog& stdlog,
                        const GetTablesType get_tables_type);
   void get_table_details_impl(TTableDetails& _return,
+                              query_state::StdLog&,
                               const TSessionId& session,
                               const std::string& table_name,
                               const bool get_system,
@@ -507,16 +513,15 @@ class MapDHandler : public MapDIf {
   static TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti);
   static std::string apply_copy_to_shim(const std::string& query_str);
 
-  std::string parse_to_ra(const std::string& query_str,
+  std::string parse_to_ra(QueryStateProxy,
+                          const std::string& query_str,
                           const std::vector<TFilterPushDownInfo>& filter_push_down_info,
-                          const Catalog_Namespace::SessionInfo& session_info,
                           OptionalTableMap tableNames,
                           const MapDParameters mapd_parameters,
                           RenderInfo* render_info = nullptr);
 
   void sql_execute_impl(TQueryResult& _return,
-                        const Catalog_Namespace::SessionInfo& session_info,
-                        const std::string& query_str,
+                        QueryStateProxy,
                         const bool column_format,
                         const std::string& nonce,
                         const ExecutorDeviceType executor_device_type,
@@ -531,14 +536,13 @@ class MapDHandler : public MapDIf {
       Parser::CopyTableStmt*,
       const Catalog_Namespace::SessionInfo& session_info);
 
-  void validate_rel_alg(TTableDescriptor& _return,
-                        const std::string& query_str,
-                        const Catalog_Namespace::SessionInfo& session_info);
+  void validate_rel_alg(TTableDescriptor& _return, QueryStateProxy);
+
   std::vector<PushedDownFilterInfo> execute_rel_alg(
       TQueryResult& _return,
+      QueryStateProxy,
       const std::string& query_ra,
       const bool column_format,
-      const Catalog_Namespace::SessionInfo& session_info,
       const ExecutorDeviceType executor_device_type,
       const int32_t first_n,
       const int32_t at_most_n,
@@ -550,15 +554,14 @@ class MapDHandler : public MapDIf {
 
   void execute_rel_alg_with_filter_push_down(
       TQueryResult& _return,
+      QueryStateProxy,
       std::string& query_ra,
       const bool column_format,
-      const Catalog_Namespace::SessionInfo& session_info,
       const ExecutorDeviceType executor_device_type,
       const int32_t first_n,
       const int32_t at_most_n,
       const bool just_explain,
       const bool just_calcite_explain,
-      const std::string& query_str,
       const std::vector<PushedDownFilterInfo> filter_push_down_requests);
 
   void execute_rel_alg_df(TDataFrame& _return,
@@ -598,6 +601,7 @@ class MapDHandler : public MapDIf {
 
   template <class R>
   void convert_rows(TQueryResult& _return,
+                    QueryStateProxy query_state_proxy,
                     const std::vector<TargetMetaInfo>& targets,
                     const R& results,
                     const bool column_format,
@@ -610,6 +614,7 @@ class MapDHandler : public MapDIf {
                             const std::string label) const;
 
   void execute_root_plan(TQueryResult& _return,
+                         QueryStateProxy query_state_proxy,
                          const Planner::RootPlan* root_plan,
                          const bool column_format,
                          const Catalog_Namespace::SessionInfo& session_info,
@@ -668,6 +673,7 @@ class MapDHandler : public MapDIf {
       const std::vector<std::string>& table_names,
       const TSessionId& session);
 
+  query_state::QueryStates query_states_;
   SessionMap sessions_;
 
   bool super_user_rights_;           // default is "false"; setting to "true"
@@ -692,7 +698,6 @@ class MapDHandler : public MapDIf {
                                  std::string base_path,
                                  std::string query_file_path);
 
-  friend class LogSession;
   friend class MapDRenderHandler;
   friend class MapDAggHandler;
   friend class MapDLeafHandler;
@@ -730,81 +735,6 @@ class MapDHandler : public MapDIf {
       }
     }
   }
-};
-
-// Log Format:
-// YYYY-MM-DDTHH:MM::SS.FFFFFF [pid] [file]:[line] [label] [func] [match] [dur_ms]
-//    [dbname] [user] [pubsessid] {[names]} {[values]}
-// Call at both beginning(label="stdlog_begin") and end(label="stdlog") of Thrift call,
-//    with dur_ms = current age of LogSession object in milliseconds.
-// stdlog_begin is logged at DEBUG1 level, stdlog is logged at INFO level.
-// The only required parameter is session, which can be either:
-//  * std::shared_ptr<const Catalog_Namespace::SessionInfo> - No locking is done.
-//  * TSessionId string - will call get_const_session_ptr() to get shared_ptr.
-// All remaining optional parameters are name,value pairs that will be included in log.
-#define LOG_SESSION(session, ...) \
-  LogSession log_session(*this, session, __FILE__, __LINE__, __func__, ##__VA_ARGS__)
-
-class LogSession : boost::noncopyable {
-  std::string const file_;
-  size_t const line_;
-  char const* const func_;
-  std::list<std::string> name_value_pairs_;
-  std::chrono::steady_clock::time_point const start_;
-  std::shared_ptr<Catalog_Namespace::SessionInfo> session_ptr_;
-  static std::atomic<int64_t> s_match;
-  int64_t const match_;  // Unique to each begin/end pair to match them together.
-  template <typename... Pairs>
-  LogSession(char const* file, size_t line, char const* func, Pairs&&... pairs)
-      : file_(boost::filesystem::path(file).filename().string())
-      , line_(line)
-      , func_(func)
-      , name_value_pairs_{to_string(std::forward<Pairs>(pairs))...}
-      , start_(std::chrono::steady_clock::now())
-      , match_(s_match++) {
-    static_assert(sizeof...(Pairs) % 2 == 0,
-                  "LogSession() requires an even number of name/value parameters.");
-  }
-  void stdlog(logger::Severity, char const* label);
-  void update_session_last_used_duration();
-
- public:
-  template <typename... Pairs>
-  LogSession(MapDHandler& mh,
-             SessionMap::mapped_type& session_ptr,
-             char const* file,
-             size_t line,
-             char const* func,
-             Pairs&&... pairs)
-      : LogSession(file, line, func, std::forward<Pairs>(pairs)...) {
-    session_ptr_ = session_ptr;
-    stdlog(logger::Severity::DEBUG1, "stdlog_begin");
-  }
-  template <typename... Pairs>
-  LogSession(MapDHandler& mh,
-             TSessionId const& session_id,
-             char const* file,
-             size_t line,
-             char const* func,
-             Pairs&&... pairs)
-      : LogSession(file, line, func, std::forward<Pairs>(pairs)...) {
-    session_ptr_ = mh.get_session_ptr(session_id);
-    stdlog(logger::Severity::DEBUG1, "stdlog_begin");
-  }
-  ~LogSession();
-  template <typename... Pairs>
-  void append_name_value_pairs(Pairs&&... pairs) {
-    static_assert(sizeof...(Pairs) % 2 == 0,
-                  "append_name_value_pairs() requires an even number of parameters.");
-    name_value_pairs_.splice(name_value_pairs_.cend(),
-                             {to_string(std::forward<Pairs>(pairs))...});
-  }
-  template <typename Units = std::chrono::milliseconds>
-  typename Units::rep duration() const {
-    using namespace std::chrono;
-    return duration_cast<Units>(steady_clock::now() - start_).count();
-  }
-  void set_session(SessionMap::mapped_type& session_ptr);
 };
 
 #endif /* MAPDHANDLER_H */

@@ -14,6 +14,7 @@
 #include "Shared/MapDParameters.h"
 #include "Shared/scope.h"
 #include "TestHelpers.h"
+#include "ThriftHandler/QueryState.h"
 #include "gen-cpp/CalciteServer.h"
 
 #ifndef BASE_PATH
@@ -1007,9 +1008,14 @@ TEST_F(ViewObject, GroupRoleFooGetsGrants) {
 }
 
 TEST_F(ViewObject, CalciteViewResolution) {
-  const auto session = QR::get()->getSession();
-  TPlanResult result =
-      ::g_calcite->process(*session, "select * from bill_table", {}, true, false, false);
+  auto query_state1 =
+      QR::create_query_state(QR::get()->getSession(), "select * from bill_table");
+  TPlanResult result = ::g_calcite->process(query_state1->createQueryStateProxy(),
+                                            query_state1->get_query_str(),
+                                            {},
+                                            true,
+                                            false,
+                                            false);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -1021,8 +1027,14 @@ TEST_F(ViewObject, CalciteViewResolution) {
   EXPECT_EQ(result.resolved_accessed_objects.tables_deleted_from.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
 
-  result =
-      ::g_calcite->process(*session, "select * from bill_view", {}, true, false, false);
+  auto query_state2 =
+      QR::create_query_state(QR::get()->getSession(), "select * from bill_view");
+  result = ::g_calcite->process(query_state2->createQueryStateProxy(),
+                                query_state2->get_query_str(),
+                                {},
+                                true,
+                                false,
+                                false);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -1034,8 +1046,14 @@ TEST_F(ViewObject, CalciteViewResolution) {
   EXPECT_EQ(result.resolved_accessed_objects.tables_deleted_from.size(), (size_t)0);
   EXPECT_EQ(result.resolved_accessed_objects.tables_selected_from[0], "bill_table");
 
-  result = ::g_calcite->process(
-      *session, "select * from bill_view_outer", {}, true, false, false);
+  auto query_state3 =
+      QR::create_query_state(QR::get()->getSession(), "select * from bill_view_outer");
+  result = ::g_calcite->process(query_state3->createQueryStateProxy(),
+                                query_state3->get_query_str(),
+                                {},
+                                true,
+                                false,
+                                false);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
