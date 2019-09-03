@@ -153,6 +153,9 @@ class MapDHandler : public MapDIf {
   //         Please keep in same order for easy check and cut and paste
   // Important ****
 
+  void krb5_connect(TKrb5Session& session,
+                    const std::string& token,
+                    const std::string& dbname) override;
   // connection, admin
   void connect(TSessionId& session,
                const std::string& username,

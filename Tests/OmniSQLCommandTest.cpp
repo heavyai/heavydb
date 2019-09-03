@@ -25,6 +25,7 @@ struct CoreMockTransport {
 // clang-format off
 class CoreMockClient {
  public:
+  MockMethod(krb5_connect)
   MockMethod(connect)
   MockMethod(disconnect)
   MockMethod(switch_database)

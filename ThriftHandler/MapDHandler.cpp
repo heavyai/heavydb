@@ -313,6 +313,11 @@ void MapDHandler::internal_connect(TSessionId& session,
   }
   connect_impl(session, std::string(""), dbname2, user_meta, cat, log_session);
 }
+void MapDHandler::krb5_connect(TKrb5Session& session,
+                               const std::string& inputToken,
+                               const std::string& dbname) {
+  THROW_MAPD_EXCEPTION("Unauthrorized Access. Kerberos login not supported");
+}
 
 void MapDHandler::connect(TSessionId& session,
                           const std::string& username,

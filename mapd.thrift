@@ -93,7 +93,13 @@ struct TStringRow {
 typedef list<TColumnType> TRowDescriptor
 typedef map<string, TColumnType> TTableDescriptor
 typedef string TSessionId
+typedef string TKrb5Token
 typedef i64 TQueryId
+
+struct TKrb5Session {
+  1: TSessionId sessionId
+  2: TKrb5Token krbToken
+}
 
 enum TMergeType {
   UNION,
@@ -479,6 +485,7 @@ struct TGeoFileLayerInfo {
 service MapD {
   # connection, admin
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e)
+  TKrb5Session krb5_connect(1: string inputToken, 2: string dbname) throws (1: TMapDException e)
   void disconnect(1: TSessionId session) throws (1: TMapDException e)
   void switch_database(1: TSessionId session, 2: string dbname) throws(1: TMapDException e)
   TServerStatus get_server_status(1: TSessionId session) throws (1: TMapDException e)

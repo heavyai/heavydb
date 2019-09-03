@@ -20,3 +20,6 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
 endif()
 
 target_link_libraries(Catalog SqliteConnector StringDictionary Fragmenter QueryEngine ${AUTH_LIBRARIES} Calcite bcrypt)
+if(ENABLE_KRB5)
+  target_link_libraries(Catalog krb5_gss)
+endif()

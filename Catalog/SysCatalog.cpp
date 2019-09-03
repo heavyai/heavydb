@@ -1133,6 +1133,7 @@ bool SysCatalog::checkPasswordForUserImpl(const std::string& passwd,
 }
 
 bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
+  LOG(INFO) << "getMetadataForUser " << name;
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
       "SELECT userid, name, passwd_hash, issuper, default_db FROM mapd_users WHERE name "

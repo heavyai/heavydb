@@ -341,7 +341,6 @@ class SysCatalog : private CommonFileOperations {
   std::shared_ptr<Calcite> calciteMgr_;
   std::vector<LeafHostInfo> string_dict_hosts_;
   bool aggregator_;
-
   auto yieldTransactionStreamer();
 
  public:
