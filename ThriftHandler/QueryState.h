@@ -294,9 +294,7 @@ class StdLog : public StdLogData {
     log(logger::Severity::DEBUG1, "stdlog_begin");
   }
   StdLog(StdLog const&) = delete;
-  StdLog& operator=(StdLog const&) = delete;
   StdLog(StdLog&&) = default;
-  StdLog& operator=(StdLog&&) = default;
   ~StdLog();
   template <typename... Pairs>
   void appendNameValuePairs(Pairs&&... pairs) {
