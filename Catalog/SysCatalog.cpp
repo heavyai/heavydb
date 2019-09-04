@@ -1147,7 +1147,6 @@ bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
   user.userName = sqliteConnector_->getData<string>(0, 1);
   user.passwd_hash = sqliteConnector_->getData<string>(0, 2);
   user.isSuper = sqliteConnector_->getData<bool>(0, 3);
-  user.isReallySuper = user.isSuper;
   user.defaultDbId =
       sqliteConnector_->isNull(0, 4) ? -1 : sqliteConnector_->getData<int>(0, 4);
   return true;
@@ -1167,7 +1166,6 @@ bool SysCatalog::getMetadataForUserById(const int32_t idIn, UserMetadata& user) 
   user.userName = sqliteConnector_->getData<string>(0, 1);
   user.passwd_hash = sqliteConnector_->getData<string>(0, 2);
   user.isSuper = sqliteConnector_->getData<bool>(0, 3);
-  user.isReallySuper = user.isSuper;
   user.defaultDbId =
       sqliteConnector_->isNull(0, 4) ? -1 : sqliteConnector_->getData<int>(0, 4);
   return true;

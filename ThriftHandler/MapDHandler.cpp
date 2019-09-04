@@ -1329,16 +1329,15 @@ bool MapDHandler::has_object_privilege(const TSessionId& sessionId,
   auto session_ptr = stdlog.getConstSessionInfo();
   auto const& cat = session_ptr->getCatalog();
   auto const& current_user = session_ptr->get_currentUser();
-  if (!current_user.isSuper && !current_user.isReallySuper &&
-      !SysCatalog::instance().isRoleGrantedToGrantee(
-          current_user.userName, granteeName, false)) {
+  if (!current_user.isSuper && !SysCatalog::instance().isRoleGrantedToGrantee(
+                                   current_user.userName, granteeName, false)) {
     THROW_MAPD_EXCEPTION(
         "Users except superusers can only check privileges for self or roles granted to "
         "them.")
   }
   Catalog_Namespace::UserMetadata user_meta;
   if (SysCatalog::instance().getMetadataForUser(granteeName, user_meta) &&
-      (user_meta.isSuper || user_meta.isReallySuper)) {
+      user_meta.isSuper) {
     return true;
   }
   Grantee* grnt = SysCatalog::instance().getGrantee(granteeName);
@@ -4259,7 +4258,6 @@ SessionMap::iterator MapDHandler::get_session_it_unsafe(const TSessionId& sessio
   } else {
     session_it = get_session_from_map(session, sessions_);
     check_session_exp_unsafe(session_it);
-    session_it->second->reset_superuser();
   }
   return session_it;
 }
