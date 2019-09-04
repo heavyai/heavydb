@@ -6194,10 +6194,9 @@ TEST(Select, Subqueries) {
     c("SELECT str, SUM(y) AS n FROM test WHERE x > (SELECT COUNT(*) FROM test) - 14 "
       "GROUP BY str ORDER BY str ASC;",
       dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) AS inner_x WHERE test.x "
-          "= inner_x.x;",
-          dt));
+    c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) AS inner_x WHERE test.x = "
+      "inner_x.x;",
+      dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test WHERE y > 42);", dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test GROUP BY x ORDER BY "
       "COUNT(*) DESC LIMIT 1);",
@@ -7226,12 +7225,11 @@ TEST(Select, Joins_CoalesceColumns) {
 TEST(Select, Joins_ComplexQueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    SKIP_ON_AGGREGATOR(
-        c("SELECT COUNT(*) FROM test a JOIN (SELECT * FROM test WHERE y < 43) b ON a.x = "
-          "b.x "
-          "JOIN join_test c ON a.x = c.x "
-          "WHERE a.fixed_str = 'foo';",
-          dt));
+    c("SELECT COUNT(*) FROM test a JOIN (SELECT * FROM test WHERE y < 43) b ON a.x = "
+      "b.x "
+      "JOIN join_test c ON a.x = c.x "
+      "WHERE a.fixed_str = 'foo';",
+      dt);
     c("SELECT * FROM (SELECT a.y, b.str FROM test a JOIN join_test b ON a.x = b.x) ORDER "
       "BY y, str;",
       dt);
@@ -7251,12 +7249,11 @@ TEST(Select, Joins_ComplexQueries) {
       "c on "
       "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
       dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR "
-          "false;",
-          "SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR "
-          "0;",
-          dt));
+    c("SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR "
+      "false;",
+      "SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR "
+      "0;",
+      dt);
   }
 }
 
@@ -12890,8 +12887,8 @@ TEST(Create, Delete) {
     ASSERT_EQ(int64_t(3),
               v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM vacuum_test;", dt)));
     run_multiple_agg("insert into vacuum_test values(3, '3');", dt);
-    SKIP_ON_AGGREGATOR(run_multiple_agg("insert into vacuum_test values(4, '4');", dt));
-    SKIP_ON_AGGREGATOR(run_multiple_agg("delete from vacuum_test where i1 = 4;", dt));
+    run_multiple_agg("insert into vacuum_test values(4, '4');", dt);
+    run_multiple_agg("delete from vacuum_test where i1 = 4;", dt);
     ASSERT_EQ(int64_t(6),
               v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM vacuum_test;", dt)));
     run_ddl_statement("drop table vacuum_test;");
@@ -14637,7 +14634,7 @@ TEST(Select, Sample) {
       ASSERT_TRUE(valid_row_ids.find(val) != valid_row_ids.end())
           << "Last sample rowid value " << val << " is invalid";
     };
-    SKIP_ON_AGGREGATOR({
+    {
       const auto rows = run_multiple_agg(
           "SELECT AVG(d), AVG(f), str, SAMPLE(rowid) FROM test WHERE d > 2.4 GROUP "
           "BY str;",
@@ -14653,15 +14650,15 @@ TEST(Select, Sample) {
       ASSERT_TRUE(str_ptr);
       ASSERT_EQ("baz", boost::get<std::string>(*str_ptr));
       const auto rowid = v<int64_t>(crt_row[3]);
-      check_sample_rowid(rowid);
-    });
-    SKIP_ON_AGGREGATOR({
+      SKIP_ON_AGGREGATOR(check_sample_rowid(rowid));
+    };
+    {
       const auto rows = run_multiple_agg("SELECT SAMPLE(str) FROM test WHERE x > 8;", dt);
       const auto crt_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(1), crt_row.size());
       const auto nullable_str = v<NullableString>(crt_row[0]);
       ASSERT_FALSE(boost::get<void*>(nullable_str));
-    });
+    };
     {
       const auto rows = run_multiple_agg(
           "SELECT x, SAMPLE(fixed_str), SUM(t) FROM test GROUP BY x ORDER BY x DESC;",
