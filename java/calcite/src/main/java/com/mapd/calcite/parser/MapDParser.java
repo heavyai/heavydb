@@ -43,6 +43,7 @@ import org.apache.calcite.rex.RexBuilder;
 import org.apache.calcite.rex.RexCall;
 import org.apache.calcite.rex.RexNode;
 import org.apache.calcite.rex.RexShuttle;
+import org.apache.calcite.runtime.CalciteException;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.sql.SqlAsOperator;
 import org.apache.calcite.sql.SqlBasicCall;
@@ -57,6 +58,7 @@ import org.apache.calcite.sql.SqlNumericLiteral;
 import org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.calcite.sql.SqlOrderBy;
 import org.apache.calcite.sql.SqlSelect;
+import org.apache.calcite.sql.SqlUpdate;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
@@ -76,11 +78,13 @@ import org.apache.calcite.util.ConversionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.function.BiPredicate;
 
 /**
  *
@@ -88,6 +92,9 @@ import java.util.Set;
  */
 public final class MapDParser {
   public static final ThreadLocal<MapDParser> CURRENT_PARSER = new ThreadLocal<>();
+  private static final EnumSet<SqlKind> SCALAR = EnumSet.of(SqlKind.SCALAR_QUERY);
+  private static final EnumSet<SqlKind> UPDATE_OR_DELETE =
+          EnumSet.of(SqlKind.UPDATE, SqlKind.DELETE);
 
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDParser.class);
 
@@ -148,9 +155,65 @@ public final class MapDParser {
   };
 
   private MapDPlanner getPlanner() {
-    MapDSchema mapd =
+    return getPlanner(true);
+  }
+
+  private MapDPlanner getPlanner(final boolean allowSubQueryExpansion) {
+    final MapDSchema mapd =
             new MapDSchema(dataDir, this, mapdPort, mapdUser, sock_transport_properties);
     final SchemaPlus rootSchema = Frameworks.createRootSchema(true);
+
+    BiPredicate<SqlNode, SqlNode> expandPredicate = new BiPredicate<SqlNode, SqlNode>() {
+      @Override
+      public boolean test(SqlNode root, SqlNode expression) {
+        if (!allowSubQueryExpansion) {
+          return false;
+        }
+
+        // special handling of sub-queries
+        if (expression.isA(SCALAR)) {
+          // only expand if it is correlated.
+
+          try {
+            MapDParser parser =
+                    new MapDParser(dataDir, extSigs, mapdPort, sock_transport_properties);
+            MapDParserOptions options = new MapDParserOptions();
+            parser.setUser(mapdUser);
+            parser.getRelAlgebra(expression.toSqlString(SqlDialect.CALCITE).getSql(),
+                    options,
+                    mapdUser);
+          } catch (Exception e) {
+            // if we are not able to parse, then force
+            // expansion
+            SqlSelect select = null;
+            if (expression instanceof SqlCall) {
+              SqlCall call = (SqlCall) expression;
+              if (call.getOperator().equals(SqlStdOperatorTable.SCALAR_QUERY)) {
+                expression = call.getOperandList().get(0);
+              }
+            }
+
+            if (expression instanceof SqlSelect) {
+              select = (SqlSelect) expression;
+            }
+
+            if (null != select) {
+              if (null != select.getFetch() || null != select.getOffset()
+                      || (null != select.getOrderList()
+                              && select.getOrderList().size() != 0)) {
+                throw new CalciteException(
+                        "Correlated sub-queries with ordering not supported.", null);
+              }
+            }
+            return true;
+          }
+        }
+
+        // per default we do not want to expand
+        return false;
+      }
+    };
+
     final FrameworkConfig config =
             Frameworks.newConfigBuilder()
                     .defaultSchema(rootSchema.add(mapdUser.getDB(), mapd))
@@ -163,8 +226,8 @@ public final class MapDParser {
                     .sqlToRelConverterConfig(
                             SqlToRelConverter
                                     .configBuilder()
-                                    // disable sub-query expansion (in-lining)
-                                    .withExpand(false)
+                                    // enable sub-query expansion (de-correlation)
+                                    .withExpandPredicate(expandPredicate)
                                     // allow as many as possible IN operator values
                                     .withInSubQueryThreshold(Integer.MAX_VALUE)
                                     .build())
@@ -224,15 +287,22 @@ public final class MapDParser {
 
   RelRoot queryToSqlNode(final String sql, final MapDParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
-    MapDPlanner planner = getPlanner();
+    boolean allowCorrelatedSubQueryExpansion = true;
+    MapDPlanner planner = getPlanner(allowCorrelatedSubQueryExpansion);
 
     SqlNode node = processSQL(sql, parserOptions.isLegacySyntax(), planner);
+
+    if (node.isA(UPDATE_OR_DELETE)) {
+      allowCorrelatedSubQueryExpansion = false;
+      planner = getPlanner(allowCorrelatedSubQueryExpansion);
+      node = processSQL(sql, parserOptions.isLegacySyntax(), planner);
+    }
 
     if (parserOptions.isLegacySyntax()) {
       // close original planner
       planner.close();
       // create a new one
-      planner = getPlanner();
+      planner = getPlanner(allowCorrelatedSubQueryExpansion);
       node = processSQL(node.toSqlString(SqlDialect.CALCITE).toString(), false, planner);
     }
 
@@ -261,7 +331,7 @@ public final class MapDParser {
       // trick planner back into correct state for validate
       planner.close();
       // create a new one
-      planner = getPlanner();
+      planner = getPlanner(allowCorrelatedSubQueryExpansion);
       processSQL(validateR.toSqlString(SqlDialect.CALCITE).toString(), false, planner);
       // now validate the new modified SqlNode;
       validateR = planner.validate(validateR);

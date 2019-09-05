@@ -57,6 +57,7 @@ add_executable(OmniSQLUtilitiesTest OmniSQLUtilitiesTest.cpp)
 add_executable(DBObjectPrivilegesTest DBObjectPrivilegesTest.cpp)
 add_executable(GeoTypesTest Shared/GeoTypesTest.cpp)
 add_executable(CtasUpdateTest CtasUpdateTest.cpp)
+add_executable(CorrelatedSubqueryTest CorrelatedSubqueryTest.cpp)
 add_executable(CtasIntegrationTest CtasIntegrationTest.cpp)
 add_executable(DateTimeUtilsTest Shared/DateTimeUtilsTest.cpp)
 add_executable(UpdateMetadataTest UpdateMetadataTest.cpp)
@@ -99,6 +100,7 @@ target_link_libraries(ExperimentalTest gtest Shared)
 target_link_libraries(DBObjectPrivilegesTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(GeoTypesTest gtest Shared ${GDAL_LIBRARIES} ${GDALExtra_LIBRARIES} ${LibAwsS3_SUPPORT_LIBRARIES} ${CMAKE_DL_LIBS})
 target_link_libraries(CtasUpdateTest gtest ${EXECUTE_TEST_LIBS})
+target_link_libraries(CorrelatedSubqueryTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CtasIntegrationTest gtest Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS})
 target_link_libraries(DateTimeUtilsTest gtest Shared ${LLVM_LINKER_FLAGS})
 target_link_libraries(CalciteOptimizeTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
@@ -134,6 +136,7 @@ add_test(OmniSQLUtilitiesTest OmniSQLUtilitiesTest ${TEST_ARGS})
 add_test(DBObjectPrivilegesTest DBObjectPrivilegesTest ${TEST_ARGS})
 add_test(GeoTypesTest GeoTypesTest ${TEST_ARGS})
 add_test(CtasUpdateTest CtasUpdateTest ${TEST_ARGS})
+add_test(CorrelatedSubqueryTest CorrelatedSubqueryTest ${TEST_ARGS})
 add_test(DateTimeUtilsTest DateTimeUtilsTest ${TEST_ARGS})
 add_test(UpdateMetadataTest UpdateMetadataTest ${TEST_ARGS})
 add_test(CalciteOptimizeTest CalciteOptimizeTest ${TEST_ARGS})
@@ -175,6 +178,7 @@ set(SANITY_TESTS
   DBObjectPrivilegesTest
   GeoTypesTest
   CtasUpdateTest
+  CorrelatedSubqueryTest
   DateTimeUtilsTest
   UpdateMetadataTest
   CalciteOptimizeTest
