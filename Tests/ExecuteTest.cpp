@@ -480,6 +480,13 @@ void c_arrow(const std::string& query_string, const ExecutorDeviceType device_ty
     EXP;                        \
   }
 
+#define THROW_ON_AGGREGATOR(EXP) \
+  if (!g_aggregator) {           \
+    EXP;                         \
+  } else {                       \
+    EXPECT_ANY_THROW(EXP);       \
+  }
+
 bool validate_statement_syntax(const std::string& stmt) {
   SQLParser parser;
   list<std::unique_ptr<Parser::Stmt>> parse_trees;
@@ -6814,7 +6821,7 @@ TEST(Select, Joins_Negative_ShardKey) {
 }
 
 TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
-  auto save_watchdog = g_enable_watchdog;
+  const auto save_watchdog = g_enable_watchdog;
   g_enable_watchdog = false;
   ScopeGuard reset_watchdog_state = [&save_watchdog] {
     g_enable_watchdog = save_watchdog;
@@ -6935,9 +6942,10 @@ TEST(Select, Joins_InnerJoin_Filters) {
 }
 
 TEST(Select, Joins_LeftOuterJoin) {
-  SKIP_ALL_ON_AGGREGATOR();
-  auto save_watchdog = g_enable_watchdog;
-  g_enable_watchdog = false;
+  const auto save_watchdog = g_enable_watchdog;
+  ScopeGuard reset_watchdog_state = [&save_watchdog] {
+    g_enable_watchdog = save_watchdog;
+  };
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -6952,21 +6960,26 @@ TEST(Select, Joins_LeftOuterJoin) {
       "test_inner.x GROUP BY key1 HAVING "
       "key1 IS NOT NULL;",
       dt);
-    c("SELECT COUNT(*) FROM test_inner a LEFT JOIN test b ON a.x = b.x;", dt);
-    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, "
-      "b.str;",
-      dt);
-    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, "
-      "b.str;",
-      dt);
-    c("SELECT COUNT(*) FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x;", dt);
+    THROW_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test_inner a LEFT JOIN test b ON a.x = b.x;", dt));
+    THROW_ON_AGGREGATOR(c(
+        "SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, "
+        "b.str;",
+        dt));
+    THROW_ON_AGGREGATOR(c(
+        "SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, "
+        "b.str;",
+        dt));
+    THROW_ON_AGGREGATOR(c(
+        "SELECT COUNT(*) FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x;", dt));
     c("SELECT COUNT(*) FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str;",
       dt);
     c("SELECT COUNT(*) FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str;",
       dt);
-    c("SELECT a.x, b.str FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x ORDER "
-      "BY a.x, b.str IS NULL, b.str;",
-      dt);
+    THROW_ON_AGGREGATOR(c(
+        "SELECT a.x, b.str FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x ORDER "
+        "BY a.x, b.str IS NULL, b.str;",
+        dt));
     c("SELECT a.x, b.str FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str "
       "ORDER BY a.x, b.str IS NULL, "
       "b.str;",
@@ -6975,12 +6988,14 @@ TEST(Select, Joins_LeftOuterJoin) {
       "ORDER BY a.x, b.str IS NULL, "
       "b.str;",
       dt);
-    c("SELECT COUNT(*) FROM test_inner_x a LEFT JOIN test_x b ON a.x = b.x;", dt);
+    THROW_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test_inner_x a LEFT JOIN test_x b ON a.x = b.x;", dt));
     c("SELECT COUNT(*) FROM test a LEFT JOIN join_test b ON a.str = b.dup_str;", dt);
     c("SELECT COUNT(*) FROM test a LEFT JOIN join_test b ON a.str = b.dup_str;", dt);
-    c("SELECT a.x, b.str FROM test_inner_x a LEFT JOIN test_x b ON a.x = b.x ORDER BY "
-      "a.x, b.str IS NULL, b.str;",
-      dt);
+    THROW_ON_AGGREGATOR(c(
+        "SELECT a.x, b.str FROM test_inner_x a LEFT JOIN test_x b ON a.x = b.x ORDER BY "
+        "a.x, b.str IS NULL, b.str;",
+        dt));
     c("SELECT a.x, b.str FROM test a LEFT JOIN join_test b ON a.str = b.dup_str ORDER BY "
       "a.x, b.str IS NULL, b.str;",
       dt);
@@ -7013,17 +7028,20 @@ TEST(Select, Joins_LeftOuterJoin) {
     c("SELECT a.x FROM test a LEFT OUTER JOIN test_inner b ON TRUE ORDER BY a.x ASC;",
       "SELECT a.x FROM test a LEFT OUTER JOIN test_inner b ON 1 ORDER BY a.x ASC;",
       dt);
-    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON "
-      "test.x > test_inner.x LEFT "
-      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
-      "hash_join_test.x ORDER BY "
-      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
-      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON "
-      "test.x > test_inner.x LEFT "
-      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
-      "hash_join_test.x ORDER BY "
-      "test_inner.y ASC, hash_join_test.x ASC;",
-      dt);
+    THROW_ON_AGGREGATOR(
+        c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN "
+          "test_inner ON "
+          "test.x > test_inner.x LEFT "
+          "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
+          "hash_join_test.x ORDER BY "
+          "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+          "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN "
+          "test_inner ON "
+          "test.x > test_inner.x LEFT "
+          "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
+          "hash_join_test.x ORDER BY "
+          "test_inner.y ASC, hash_join_test.x ASC;",
+          dt));
     c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON "
       "test.x = test_inner.x LEFT "
       "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, "
@@ -7035,17 +7053,20 @@ TEST(Select, Joins_LeftOuterJoin) {
       "hash_join_test.x ORDER BY "
       "test_inner.y ASC, hash_join_test.x ASC;",
       dt);
-    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON "
-      "test.x > test_inner.x INNER "
-      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
-      "hash_join_test.x ORDER BY "
-      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
-      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON "
-      "test.x > test_inner.x INNER "
-      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
-      "hash_join_test.x ORDER BY "
-      "test_inner.y ASC, hash_join_test.x ASC;",
-      dt);
+    THROW_ON_AGGREGATOR(
+        c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN "
+          "test_inner ON "
+          "test.x > test_inner.x INNER "
+          "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
+          "hash_join_test.x ORDER BY "
+          "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+          "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN "
+          "test_inner ON "
+          "test.x > test_inner.x INNER "
+          "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
+          "hash_join_test.x ORDER BY "
+          "test_inner.y ASC, hash_join_test.x ASC;",
+          dt));
     c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON "
       "test.x = test_inner.x INNER "
       "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, "
@@ -7057,17 +7078,18 @@ TEST(Select, Joins_LeftOuterJoin) {
       "hash_join_test.x ORDER BY "
       "test_inner.y ASC, hash_join_test.x ASC;",
       dt);
-    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner "
-      "ON test.x > test_inner.x LEFT "
-      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
-      "hash_join_test.x ORDER BY "
-      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
-      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner "
-      "ON test.x > test_inner.x LEFT "
-      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
-      "hash_join_test.x ORDER BY "
-      "test_inner.y ASC, hash_join_test.x ASC;",
-      dt);
+    THROW_ON_AGGREGATOR(c(
+        "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner "
+        "ON test.x > test_inner.x LEFT "
+        "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
+        "hash_join_test.x ORDER BY "
+        "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+        "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner "
+        "ON test.x > test_inner.x LEFT "
+        "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
+        "hash_join_test.x ORDER BY "
+        "test_inner.y ASC, hash_join_test.x ASC;",
+        dt));
     c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner "
       "ON test.x = test_inner.x LEFT "
       "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, "
@@ -7083,7 +7105,6 @@ TEST(Select, Joins_LeftOuterJoin) {
       "test.x = test_inner.x;",
       dt);
   }
-  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Select, Joins_LeftJoin_Filters) {
