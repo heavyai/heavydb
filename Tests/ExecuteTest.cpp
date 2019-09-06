@@ -7108,8 +7108,6 @@ TEST(Select, Joins_LeftOuterJoin) {
 }
 
 TEST(Select, Joins_LeftJoin_Filters) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = "
@@ -7140,13 +7138,18 @@ TEST(Select, Joins_LeftJoin_Filters) {
       "ON a.x = b.x ORDER BY a.x, "
       "b.str;",
       dt);
-    c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7;", dt);
-    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7 "
-      "ORDER BY a.x, b.str;",
-      dt);
-    c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x WHERE a.x = 7;",
-      dt);
-    c("SELECT a.x FROM join_test a LEFT JOIN test b ON a.x = b.x WHERE a.x = 7;", dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7;",
+          dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7 "
+          "ORDER BY a.x, b.str;",
+          dt));
+    THROW_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x WHERE a.x = 7;",
+          dt));
+    THROW_ON_AGGREGATOR(c(
+        "SELECT a.x FROM join_test a LEFT JOIN test b ON a.x = b.x WHERE a.x = 7;", dt));
   }
 }
 
@@ -7354,22 +7357,25 @@ TEST(Select, Joins_TimeAndDate) {
 }
 
 TEST(Select, Joins_OneOuterExpression) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x - 1 = test_inner.x;", dt);
-    c("SELECT COUNT(*) FROM test_inner, test WHERE test.x - 1 = test_inner.x;", dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test_inner, test WHERE test.x - 1 = test_inner.x;", dt));
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 0 = test_inner.x;", dt);
-    c("SELECT COUNT(*) FROM test_inner, test WHERE test.x + 0 = test_inner.x;", dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test_inner, test WHERE test.x + 0 = test_inner.x;", dt));
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 1 = test_inner.x;", dt);
-    c("SELECT COUNT(*) FROM test_inner, test WHERE test.x + 1 = test_inner.x;", dt);
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o;",
-      "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;",
-      dt);
-    c("SELECT COUNT(*) FROM test b, test a WHERE a.o + INTERVAL '0' DAY = b.o;",
-      "SELECT COUNT(*) FROM test b, test a WHERE a.o = b.o;",
-      dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test_inner, test WHERE test.x + 1 = test_inner.x;", dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o;",
+          "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;",
+          dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test b, test a WHERE a.o + INTERVAL '0' DAY = b.o;",
+          "SELECT COUNT(*) FROM test b, test a WHERE a.o = b.o;",
+          dt));
   }
 }
 
@@ -7521,8 +7527,6 @@ TEST_F(JoinTest, EmptyJoinTables) {
 }
 
 TEST(Select, Joins_MultipleOuterExpressions) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x - 1 = test_inner.x AND "
@@ -7542,14 +7546,18 @@ TEST(Select, Joins_MultipleOuterExpressions) {
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 0 = test_inner.x AND "
       "test_inner.str = test.str;",
       dt);
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o AND a.str "
-      "= b.str;",
-      "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.str = b.str;",
-      dt);
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o AND a.x = "
-      "b.x;",
-      "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.x = b.x;",
-      dt);
+    THROW_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o AND "
+          "a.str "
+          "= b.str;",
+          "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.str = b.str;",
+          dt));
+    THROW_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o AND "
+          "a.x = "
+          "b.x;",
+          "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.x = b.x;",
+          dt));
   }
 }
 
