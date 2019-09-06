@@ -6639,7 +6639,6 @@ TEST(Select, AggregationOnAsymmetricShards) {
 }
 
 TEST(Select, Joins_InnerJoin_Sharded) {
-  SKIP_ALL_ON_AGGREGATOR();
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -6667,60 +6666,79 @@ TEST(Select, Joins_InnerJoin_Sharded) {
       "and st2.s <> 'foo' ORDER BY st1.i;",
       dt);
 
-    // Non-sharded inner join (single frag)
-    c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;", dt);
-    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;", dt);
-    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > -1 "
-      "ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 "
-      "ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.j, st1.s, st2.j, st2.s FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE "
-      "st2.j > 0 ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j "
-      "= st2.j WHERE st2.i > 0 ORDER "
-      "BY st1.i;",
-      dt);
-    c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j "
-      "= st2.j WHERE st2.j > 0 ORDER "
-      "BY st1.i;",
-      dt);
-    c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE "
-      "st2.j > 0 ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE "
-      "st2.j > 0 and st1.s <> 'foo' "
-      "and st2.s <> 'foo' ORDER BY st1.i;",
-      dt);
-    // Non-sharded inner join (multi frag)
-    c("SELECT st1.i, st3.i FROM st1 INNER JOIN st3 ON st1.j = st3.j ORDER BY st1.i;", dt);
-    c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j ORDER BY st1.i;", dt);
-    c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE st3.j > -1 "
-      "ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE st3.j > 0 "
-      "ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.j, st1.s, st3.j, st3.s FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE "
-      "st3.j > 0 ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.i, st1.j, st1.s, st3.i, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j "
-      "= st3.j WHERE st3.i > 0 ORDER "
-      "BY st1.i;",
-      dt);
-    c("SELECT st1.i, st1.j, st1.s, st3.i, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j "
-      "= st3.j WHERE st3.j > 0 ORDER "
-      "BY st1.i;",
-      dt);
-    c("SELECT st1.j, st1.s, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE "
-      "st3.j > 0 ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.j, st1.s, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE "
-      "st3.j > 0 and st1.s <> 'foo' "
-      "and st3.s <> 'foo' ORDER BY st1.i;",
-      dt);
+    SKIP_ON_AGGREGATOR({
+      // Non-sharded inner join (single frag)
+      c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > -1 "
+        "ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 "
+        "ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st1.s, st2.j, st2.s FROM st1 INNER JOIN st2 ON st1.j = st2.j "
+        "WHERE "
+        "st2.j > 0 ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON "
+        "st1.j "
+        "= st2.j WHERE st2.i > 0 ORDER "
+        "BY st1.i;",
+        dt);
+      c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON "
+        "st1.j "
+        "= st2.j WHERE st2.j > 0 ORDER "
+        "BY st1.i;",
+        dt);
+      c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j "
+        "WHERE "
+        "st2.j > 0 ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j "
+        "WHERE "
+        "st2.j > 0 and st1.s <> 'foo' "
+        "and st2.s <> 'foo' ORDER BY st1.i;",
+        dt);
+    });
+
+    SKIP_ON_AGGREGATOR({
+      // Non-sharded inner join (multi frag)
+      c("SELECT st1.i, st3.i FROM st1 INNER JOIN st3 ON st1.j = st3.j ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE st3.j > -1 "
+        "ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE st3.j > 0 "
+        "ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st1.s, st3.j, st3.s FROM st1 INNER JOIN st3 ON st1.j = st3.j "
+        "WHERE "
+        "st3.j > 0 ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.i, st1.j, st1.s, st3.i, st3.s, st3.j FROM st1 INNER JOIN st3 ON "
+        "st1.j "
+        "= st3.j WHERE st3.i > 0 ORDER "
+        "BY st1.i;",
+        dt);
+      c("SELECT st1.i, st1.j, st1.s, st3.i, st3.s, st3.j FROM st1 INNER JOIN st3 ON "
+        "st1.j "
+        "= st3.j WHERE st3.j > 0 ORDER "
+        "BY st1.i;",
+        dt);
+      c("SELECT st1.j, st1.s, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j "
+        "WHERE "
+        "st3.j > 0 ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st1.s, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j "
+        "WHERE "
+        "st3.j > 0 and st1.s <> 'foo' "
+        "and st3.s <> 'foo' ORDER BY st1.i;",
+        dt);
+    });
   }
 }
 
@@ -16319,31 +16337,30 @@ int create_and_populate_tables(bool with_delete_support = true) {
     return -EEXIST;
   }
   import_array_test("array_test_inner");
-  if (!g_aggregator) {
-    try {
-      size_t num_shards = choose_shard_count();
-      // check if the oversubscriptions to GPU for multiple Shard is correctly
-      // functional or not.
-      const size_t num_oversubscription = 10;
+  try {
+    size_t num_shards = choose_shard_count();
+    // check if the oversubscriptions to GPU for multiple Shard is correctly
+    // functional or not.
+    const size_t single_node_shard_multiplier = 10;
 
-      ShardInfo shard_info{(num_shards) ? "i" : "", num_shards};
-      size_t fragment_size = 2;
-      bool delete_support = false;
+    ShardInfo shard_info{(num_shards) ? "i" : "", num_shards};
+    size_t fragment_size = 2;
+    bool delete_support = false;
 
-      create_sharded_join_table("st1",
-                                fragment_size,
-                                num_oversubscription * num_shards,
-                                shard_info,
-                                delete_support);
-      create_sharded_join_table(
-          "st2", fragment_size, num_shards * fragment_size, shard_info, delete_support);
-      create_sharded_join_table(
-          "st3", fragment_size, 8 * num_shards, shard_info, delete_support);
+    create_sharded_join_table(
+        "st1",
+        fragment_size,
+        g_aggregator ? num_shards : single_node_shard_multiplier * num_shards,
+        shard_info,
+        delete_support);
+    create_sharded_join_table(
+        "st2", fragment_size, num_shards * fragment_size, shard_info, delete_support);
+    create_sharded_join_table(
+        "st3", fragment_size, 8 * num_shards, shard_info, delete_support);
 
-    } catch (...) {
-      LOG(ERROR) << "Failed to (re-)create table 'array_test_inner'";
-      return -EEXIST;
-    }
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'array_test_inner'";
+    return -EEXIST;
   }
   try {
     const std::string drop_old_unnest_join_test{"DROP TABLE IF EXISTS unnest_join_test;"};
