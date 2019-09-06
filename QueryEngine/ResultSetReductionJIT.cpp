@@ -16,6 +16,7 @@
 
 #include "ResultSetReductionJIT.h"
 #include "ResultSetReductionCodegen.h"
+#include "ResultSetReductionInterpreterStubs.h"
 
 #include "CodeGenerator.h"
 #include "DynamicWatchdog.h"
@@ -44,9 +45,8 @@ namespace {
 
 // Error code to be returned when the watchdog timer triggers during the reduction.
 const int32_t WATCHDOG_ERROR{-1};
-// Use the LLVM interpreter, not the JIT, for a number of entries lower than the
-// threshold.
-const size_t INTERP_THRESHOLD{0};
+// Use the interpreter, not the JIT, for a number of entries lower than the threshold.
+const size_t INTERP_THRESHOLD{25};
 
 // Load the value stored at 'ptr' interpreted as 'ptr_type'.
 Value* emit_load(Value* ptr, Type ptr_type, Function* function) {
@@ -349,24 +349,6 @@ ReductionCode setup_functions_ir(const QueryDescriptionType hash_type) {
   return reduction_code;
 }
 
-// When the number of entries is below 'INTERP_THRESHOLD', run the generated function in
-// its IR form, without compiling to native code.
-ExecutionEngineWrapper create_interpreter_engine(llvm::Function* func) {
-  auto module = func->getParent();
-
-  llvm::ExecutionEngine* execution_engine{nullptr};
-
-  std::string err_str;
-  std::unique_ptr<llvm::Module> owner(module);
-  llvm::EngineBuilder eb(std::move(owner));
-  eb.setErrorStr(&err_str);
-  eb.setEngineKind(llvm::EngineKind::Interpreter);
-  execution_engine = eb.create();
-  CHECK(execution_engine);
-
-  return ExecutionEngineWrapper(execution_engine);
-}
-
 bool is_group_query(const QueryDescriptionType hash_type) {
   return hash_type == QueryDescriptionType::GroupByBaselineHash ||
          hash_type == QueryDescriptionType::GroupByPerfectHash;
@@ -529,6 +511,10 @@ ReductionCode ResultSetReductionJIT::codegen() const {
     }
   }
   reduceLoop(reduction_code);
+  // For small result sets, avoid native code generation and use the interpreter instead.
+  if (query_mem_desc_.getEntryCount() < INTERP_THRESHOLD) {
+    return reduction_code;
+  }
   std::lock_guard<std::mutex> reduction_guard(ReductionCode::s_reduction_mutex);
   reduction_code.cgen_state.reset(new CgenState({}, false));
   auto cgen_state = reduction_code.cgen_state.get();
@@ -564,6 +550,9 @@ ReductionCode ResultSetReductionJIT::codegen() const {
 }
 
 void ResultSetReductionJIT::clearCache() {
+  // Clear stub cache to avoid crash caused by non-deterministic static destructor order
+  // of LLVM context and the cache.
+  StubGenerator::clearCache();
   s_code_cache.clear();
   g_rt_module = nullptr;
 }
@@ -900,25 +889,22 @@ void generate_loop_body(For* for_loop,
                         Value* that_entry_count,
                         Value* this_qmd_handle,
                         Value* that_qmd_handle,
-                        Value* serialized_varlen_buffer,
-                        bool emit_watchdog_check) {
+                        Value* serialized_varlen_buffer) {
   const auto that_entry_idx = for_loop->add<BinaryOperator>(
       BinaryOperator::BinaryOp::Add, for_loop->iter(), start_index, "that_entry_idx");
-  if (emit_watchdog_check) {
-    const auto watchdog_sample_seed =
-        for_loop->add<Cast>(Cast::CastOp::SExt, that_entry_idx, Type::Int64, "");
-    const auto watchdog_triggered =
-        for_loop->add<ExternalCall>("check_watchdog_rt",
-                                    Type::Int8,
-                                    std::vector<const Value*>{watchdog_sample_seed},
-                                    "");
-    const auto watchdog_triggered_bool =
-        for_loop->add<ICmp>(ICmp::Predicate::NE,
-                            watchdog_triggered,
-                            ir_reduce_loop->addConstant<ConstantInt>(0, Type::Int8),
-                            "");
-    for_loop->add<ReturnEarly>(watchdog_triggered_bool, WATCHDOG_ERROR, "");
-  }
+  const auto watchdog_sample_seed =
+      for_loop->add<Cast>(Cast::CastOp::SExt, that_entry_idx, Type::Int64, "");
+  const auto watchdog_triggered =
+      for_loop->add<ExternalCall>("check_watchdog_rt",
+                                  Type::Int8,
+                                  std::vector<const Value*>{watchdog_sample_seed},
+                                  "");
+  const auto watchdog_triggered_bool =
+      for_loop->add<ICmp>(ICmp::Predicate::NE,
+                          watchdog_triggered,
+                          ir_reduce_loop->addConstant<ConstantInt>(0, Type::Int8),
+                          "");
+  for_loop->add<ReturnEarly>(watchdog_triggered_bool, WATCHDOG_ERROR, "");
   for_loop->add<Call>(ir_reduce_one_entry_idx,
                       std::vector<const Value*>{this_buff,
                                                 that_buff,
@@ -953,8 +939,7 @@ void ResultSetReductionJIT::reduceLoop(const ReductionCode& reduction_code) cons
                      that_entry_count_arg,
                      this_qmd_handle_arg,
                      that_qmd_handle_arg,
-                     serialized_varlen_buffer_arg,
-                     !useInterpreter(reduction_code));
+                     serialized_varlen_buffer_arg);
   ir_reduce_loop->add<Ret>(ir_reduce_loop->addConstant<ConstantInt>(0, Type::Int32));
 }
 
@@ -1120,8 +1105,6 @@ ReductionCode ResultSetReductionJIT::finalizeReductionCode(
   const auto val_ptr = s_code_cache.get(key);
   if (val_ptr) {
     return {reinterpret_cast<ReductionCode::FuncPtr>(std::get<0>(val_ptr->first.front())),
-            std::get<1>(val_ptr->first.front()).get(),
-            reduction_code.llvm_reduce_loop,
             nullptr,
             nullptr,
             nullptr,
@@ -1133,44 +1116,19 @@ ReductionCode ResultSetReductionJIT::finalizeReductionCode(
   CompilationOptions co{
       ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
   reduction_code.module.release();
-  const bool use_interp = useInterpreter(reduction_code);
-  auto ee =
-      use_interp
-          ? create_interpreter_engine(reduction_code.llvm_reduce_loop)
-          : CodeGenerator::generateNativeCPUCode(
-                reduction_code.llvm_reduce_loop, {reduction_code.llvm_reduce_loop}, co);
-  reduction_code.func_ptr =
-      use_interp ? nullptr
-                 : reinterpret_cast<ReductionCode::FuncPtr>(
-                       ee->getPointerToFunction(reduction_code.llvm_reduce_loop));
-  reduction_code.execution_engine = ee.get();
-  if (use_interp) {
-    reduction_code.own_execution_engine = std::move(ee);
-  } else {
-    auto cache_val =
-        std::make_tuple(reinterpret_cast<void*>(reduction_code.func_ptr), std::move(ee));
-    std::vector<std::tuple<void*, ExecutionEngineWrapper>> cache_vals;
-    cache_vals.emplace_back(std::move(cache_val));
-    Executor::addCodeToCache({key},
-                             std::move(cache_vals),
-                             reduction_code.llvm_reduce_loop->getParent(),
-                             s_code_cache);
-  }
+  auto ee = CodeGenerator::generateNativeCPUCode(
+      reduction_code.llvm_reduce_loop, {reduction_code.llvm_reduce_loop}, co);
+  reduction_code.func_ptr = reinterpret_cast<ReductionCode::FuncPtr>(
+      ee->getPointerToFunction(reduction_code.llvm_reduce_loop));
+  auto cache_val =
+      std::make_tuple(reinterpret_cast<void*>(reduction_code.func_ptr), std::move(ee));
+  std::vector<std::tuple<void*, ExecutionEngineWrapper>> cache_vals;
+  cache_vals.emplace_back(std::move(cache_val));
+  Executor::addCodeToCache({key},
+                           std::move(cache_vals),
+                           reduction_code.llvm_reduce_loop->getParent(),
+                           s_code_cache);
   return reduction_code;
-}
-
-bool ResultSetReductionJIT::useInterpreter(const ReductionCode& reduction_code) const {
-  // The LLVM interpreter uses llvm::Function* pointers as keys in a cache to quickly
-  // resolve binding to external functions. That works if the functions are kept around
-  // for the entire lifetime of the process. Unfortunately, that is incompatible with our
-  // need to free functions and modules, because the pointers could be recycled and lead
-  // to false hits in that cache.
-  const auto& body = reduction_code.ir_reduce_one_entry->body();
-  const auto it_external = std::find_if(
-      body.begin(), body.end(), [](const std::unique_ptr<Instruction>& instr) {
-        return dynamic_cast<const ExternalCall*>(instr.get());
-      });
-  return query_mem_desc_.getEntryCount() < INTERP_THRESHOLD && it_external == body.end();
 }
 
 std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state) {

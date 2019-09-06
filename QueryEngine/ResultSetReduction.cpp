@@ -24,6 +24,7 @@
 
 #include "DynamicWatchdog.h"
 #include "ResultSet.h"
+#include "ResultSetReductionInterpreter.h"
 #include "ResultSetReductionJIT.h"
 #include "RuntimeFunctions.h"
 #include "Shared/SqlTypesLayout.h"
@@ -150,24 +151,17 @@ void run_reduction_code(const ReductionCode& reduction_code,
                                   that_qmd,
                                   serialized_varlen_buffer);
   } else {
-    std::lock_guard<std::mutex> reduction_guard(ReductionCode::s_reduction_mutex);
-    auto start_entry_index_gv = llvm::GenericValue();
-    start_entry_index_gv.IntVal = llvm::APInt(32, start_entry_index);
-    auto end_entry_index_gv = llvm::GenericValue();
-    end_entry_index_gv.IntVal = llvm::APInt(32, end_entry_index);
-    auto that_entry_count_gv = llvm::GenericValue();
-    that_entry_count_gv.IntVal = llvm::APInt(32, that_entry_count);
-    const auto ret = reduction_code.execution_engine->runFunction(
-        reduction_code.llvm_reduce_loop,
-        {llvm::GenericValue(this_buff),
-         llvm::GenericValue(const_cast<int8_t*>(that_buff)),
-         start_entry_index_gv,
-         end_entry_index_gv,
-         that_entry_count_gv,
-         llvm::GenericValue(const_cast<void*>(this_qmd)),
-         llvm::GenericValue(const_cast<void*>(that_qmd)),
-         llvm::GenericValue(const_cast<void*>(serialized_varlen_buffer))});
-    err = ret.IntVal.getSExtValue();
+    auto ret = ReductionInterpreter::run(
+        reduction_code.ir_reduce_loop.get(),
+        {ReductionInterpreter::EvalValue{.ptr = this_buff},
+         ReductionInterpreter::EvalValue{.ptr = that_buff},
+         ReductionInterpreter::EvalValue{.int_val = start_entry_index},
+         ReductionInterpreter::EvalValue{.int_val = end_entry_index},
+         ReductionInterpreter::EvalValue{.int_val = that_entry_count},
+         ReductionInterpreter::EvalValue{.ptr = this_qmd},
+         ReductionInterpreter::EvalValue{.ptr = that_qmd},
+         ReductionInterpreter::EvalValue{.ptr = serialized_varlen_buffer}});
+    err = ret.int_val;
   }
   if (err) {
     throw std::runtime_error(
@@ -248,7 +242,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
              that_entry_count,
              &reduction_code,
              &that] {
-              if (reduction_code.execution_engine) {
+              if (reduction_code.ir_reduce_loop) {
                 run_reduction_code(reduction_code,
                                    this_buff,
                                    that_buff,
@@ -273,7 +267,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
         reduction_thread.get();
       }
     } else {
-      if (reduction_code.execution_engine) {
+      if (reduction_code.ir_reduce_loop) {
         run_reduction_code(reduction_code,
                            this_buff,
                            that_buff,
@@ -327,7 +321,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
              &reduction_code,
              &that,
              &serialized_varlen_buffer] {
-              if (reduction_code.execution_engine) {
+              if (reduction_code.ir_reduce_loop) {
                 run_reduction_code(reduction_code,
                                    this_buff,
                                    that_buff,
@@ -361,7 +355,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                                        query_mem_desc_.getEntryCount(),
                                        serialized_varlen_buffer);
     } else {
-      if (reduction_code.execution_engine) {
+      if (reduction_code.ir_reduce_loop) {
         run_reduction_code(reduction_code,
                            this_buff,
                            that_buff,

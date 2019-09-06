@@ -28,19 +28,6 @@
 #include <llvm/IR/Value.h>
 
 struct ReductionCode {
-  ReductionCode(ReductionCode&&) = default;
-
-  ~ReductionCode() {
-    // We only need to worry about races for the interpreter, which owns the execution
-    // engine and has a null native function pointer.
-    if (own_execution_engine.get() && !func_ptr) {
-      std::lock_guard<std::mutex> reduction_guard(ReductionCode::s_reduction_mutex);
-      cgen_state = nullptr;
-      module = nullptr;
-      own_execution_engine = ExecutionEngineWrapper();
-    }
-  }
-
   // Function which reduces 'that_buff' into 'this_buff', for rows between
   // [start_entry_index, end_entry_index).
   using FuncPtr = int32_t (*)(int8_t* this_buff,
@@ -53,10 +40,8 @@ struct ReductionCode {
                               const void* serialized_varlen_buffer);
 
   FuncPtr func_ptr;
-  llvm::ExecutionEngine* execution_engine;
   llvm::Function* llvm_reduce_loop;
   std::unique_ptr<CgenState> cgen_state;
-  ExecutionEngineWrapper own_execution_engine;
   std::unique_ptr<llvm::Module> module;
   std::unique_ptr<Function> ir_is_empty;
   std::unique_ptr<Function> ir_reduce_one_entry;
@@ -138,9 +123,6 @@ class ResultSetReductionJIT {
       const llvm::Function* ir_is_empty,
       const llvm::Function* ir_reduce_one_entry,
       const llvm::Function* ir_reduce_one_entry_idx) const;
-
-  // Returns true iff we will (should and is possible to) use the LLVM interpreter.
-  bool useInterpreter(const ReductionCode& reduction_code) const;
 
   const QueryMemoryDescriptor query_mem_desc_;
   const std::vector<TargetInfo> targets_;
