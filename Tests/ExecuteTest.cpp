@@ -6814,10 +6814,11 @@ TEST(Select, Joins_Negative_ShardKey) {
 }
 
 TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   auto save_watchdog = g_enable_watchdog;
   g_enable_watchdog = false;
+  ScopeGuard reset_watchdog_state = [&save_watchdog] {
+    g_enable_watchdog = save_watchdog;
+  };
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -6877,16 +6878,17 @@ TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
       "hash_join_test c ON a.x = c.x JOIN "
       "join_test d ON a.x > d.x;",
       dt);
-    c("SELECT a.x, b.str, c.str, d.y FROM hash_join_test a JOIN test b ON a.x = b.x JOIN "
-      "join_test c ON b.x = c.x JOIN "
-      "test_inner d ON b.x = d.x ORDER BY a.x, b.str;",
-      dt);
-    c("SELECT a.f, b.y, c.x from test AS a JOIN join_test AS b ON 40*a.f-1 = b.y JOIN "
-      "test_inner AS c ON b.x = c.x;",
-      dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT a.x, b.str, c.str, d.y FROM hash_join_test a JOIN test b ON a.x = b.x "
+          "JOIN "
+          "join_test c ON b.x = c.x JOIN "
+          "test_inner d ON b.x = d.x ORDER BY a.x, b.str;",
+          dt));
+    SKIP_ON_AGGREGATOR(c(
+        "SELECT a.f, b.y, c.x from test AS a JOIN join_test AS b ON 40*a.f-1 = b.y JOIN "
+        "test_inner AS c ON b.x = c.x;",
+        dt));
   }
-
-  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Select, Joins_InnerJoin_Filters) {
