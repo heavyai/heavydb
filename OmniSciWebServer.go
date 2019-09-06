@@ -928,8 +928,8 @@ func samlPostHandler(rw http.ResponseWriter, r *http.Request) {
 		var sessionToken string
 		// Some IdPs add new lines to the base64 SAMLResponse so we must replace those. 
 		replacer := strings.NewReplacer("\n", "", "\r", "")
-        b64ResponseXML := r.FormValue("SAMLResponse")
-        b64CleanedXML := replacer.Replace(b64ResponseXML)
+		b64ResponseXML := r.FormValue("SAMLResponse")
+		b64CleanedXML := replacer.Replace(b64ResponseXML)
 
 		// This is what a Thrift connect call to OmniSciDB looks like. Here, the username and database
 		// name are left blank, per SAML login conventions. Hand-crafting Thrift messages like this
