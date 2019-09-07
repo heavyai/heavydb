@@ -738,6 +738,9 @@ class MapDHandler : public MapDIf {
       }
     }
   }
+
+  std::shared_ptr<Catalog_Namespace::SessionInfo> create_in_memory_calcite_session(
+      const std::string& session_id);
 };
 
 #endif /* MAPDHANDLER_H */

@@ -219,10 +219,10 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     }
   }
 
-  std::string calcite_session_prefix = "calcite-" + generate_random_string(64);
+  std::string calcite_session_id = generate_random_string(64);
 
   calcite_ = std::make_shared<Calcite>(
-      mapd_parameters, base_data_path_, calcite_session_prefix, udf_ast_filename);
+      mapd_parameters, base_data_path_, calcite_session_id, udf_ast_filename);
 
   ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
   if (!udf_filename.empty()) {
@@ -275,6 +275,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       LOG(ERROR) << "Distributed leaf support disabled: " << e.what();
     }
   }
+  calcite_->setCalciteSessionPtr(create_in_memory_calcite_session(calcite_session_id));
 }
 
 MapDHandler::~MapDHandler() {}
@@ -283,6 +284,22 @@ void MapDHandler::check_read_only(const std::string& str) {
   if (MapDHandler::read_only_) {
     THROW_MAPD_EXCEPTION(str + " disabled: server running in read-only mode.");
   }
+}
+
+std::shared_ptr<Catalog_Namespace::SessionInfo>
+MapDHandler::create_in_memory_calcite_session(const std::string& session_id) {
+  // We would create an in memory session for calcite with super user privileges which
+  // would be used for getting all tables metadata when a user runs the query. The
+  // session would be under the name of a proxy user/password which would only persist
+  // till server's lifetime(in memory).
+  Catalog_Namespace::UserMetadata user_meta(
+      -1, CALCITE_USER_NAME, CALCITE_USER_PASSWORD, true, -1);
+  const auto emplace_ret =
+      sessions_.emplace(session_id,
+                        std::make_shared<Catalog_Namespace::SessionInfo>(
+                            user_meta, executor_device_type_, session_id));
+  CHECK(emplace_ret.second);
+  return emplace_ret.first->second;
 }
 
 // internal connection for connections with no password
@@ -4269,17 +4286,8 @@ void MapDHandler::check_session_exp_unsafe(const SessionMap::iterator& session_i
 
 // NOTE: Only call get_session_it_unsafe() while holding a lock on sessions_mutex_.
 SessionMap::iterator MapDHandler::get_session_it_unsafe(const TSessionId& session) {
-  SessionMap::iterator session_it;
-  const auto calcite_session_prefix = calcite_->get_session_prefix();
-  const auto prefix_length = calcite_session_prefix.size();
-  if (prefix_length && 0 == session.compare(0, prefix_length, calcite_session_prefix)) {
-    session_it = get_session_from_map(session.substr(prefix_length + 1), sessions_);
-    check_session_exp_unsafe(session_it);
-    session_it->second->make_superuser();
-  } else {
-    session_it = get_session_from_map(session, sessions_);
-    check_session_exp_unsafe(session_it);
-  }
+  SessionMap::iterator session_it = get_session_from_map(session, sessions_);
+  check_session_exp_unsafe(session_it);
   return session_it;
 }
 
