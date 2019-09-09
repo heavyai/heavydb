@@ -843,3 +843,11 @@ set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${MAPD_EDITION_LOWER}-${CPACK
 set(CPACK_GENERATOR "STGZ")
 
 include(CPack)
+
+add_custom_target(sphinx
+  COMMAND python3 -m venv sphinx-env
+  COMMAND . sphinx-env/bin/activate
+  COMMAND pip install -r requirements.txt
+  COMMAND make html
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/docs
+  )
