@@ -716,31 +716,31 @@ class MapDHandler : public MapDIf {
   template <typename STMT_TYPE>
   void invalidate_sessions(std::string& name, STMT_TYPE* stmt) {
     using namespace Parser;
-
-    auto is_match = [&name](const std::string& session_name) {
-      return boost::iequals(name, session_name);
+    auto is_match = [&](auto session_it) {
+      if (isInMemoryCalciteSession(session_it->second->get_currentUser())) {
+        return false;
+      } else if (ShouldInvalidateSessionsByDB<STMT_TYPE>()) {
+        return boost::iequals(name,
+                              session_it->second->getCatalog().getCurrentDB().dbName);
+      } else if (ShouldInvalidateSessionsByUser<STMT_TYPE>()) {
+        return boost::iequals(name, session_it->second->get_currentUser().userName);
+      }
+      return false;
     };
-    if (ShouldInvalidateSessionsByDB<STMT_TYPE>()) {
+    auto check_and_remove_sessions = [&]() {
       for (auto it = sessions_.begin(); it != sessions_.end();) {
-        if (is_match(it->second.get()->getCatalog().getCurrentDB().dbName)) {
+        if (is_match(it)) {
           it = sessions_.erase(it);
         } else {
           ++it;
         }
       }
-    } else if (ShouldInvalidateSessionsByUser<STMT_TYPE>()) {
-      for (auto it = sessions_.begin(); it != sessions_.end();) {
-        if (is_match(it->second.get()->get_currentUser().userName)) {
-          it = sessions_.erase(it);
-        } else {
-          ++it;
-        }
-      }
-    }
+    };
+    check_and_remove_sessions();
   }
 
-  std::shared_ptr<Catalog_Namespace::SessionInfo> create_in_memory_calcite_session(
-      const std::string& session_id);
+  std::shared_ptr<Catalog_Namespace::SessionInfo> createInMemoryCalciteSession();
+  bool isInMemoryCalciteSession(const Catalog_Namespace::UserMetadata user_meta);
 };
 
 #endif /* MAPDHANDLER_H */

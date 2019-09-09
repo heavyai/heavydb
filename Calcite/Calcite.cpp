@@ -36,6 +36,7 @@
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TTransportUtils.h>
+#include <type_traits>
 
 #include "gen-cpp/CalciteServer.h"
 
@@ -191,11 +192,11 @@ Calcite::getClient(int port) {
   return std::make_pair(client, transport);
 }
 
+template <>
 void Calcite::checkAndSetCatalog(
-    std::shared_ptr<Catalog_Namespace::Catalog> catalog_ptr) {
-  if (calcite_session_ptr_) {
-    calcite_session_ptr_->set_catalog_ptr(catalog_ptr);
-  }
+    const std::shared_ptr<Catalog_Namespace::Catalog>& catalog_ptr) {
+  CHECK(calcite_session_ptr_);
+  calcite_session_ptr_->set_catalog_ptr(catalog_ptr);
 }
 
 void Calcite::runServer(const int mapd_port,
@@ -275,9 +276,8 @@ Calcite::Calcite(const int mapd_port,
                  const int calcite_port,
                  const std::string& data_dir,
                  const size_t calcite_max_mem,
-                 const std::string& session_id,
                  const std::string& udf_filename)
-    : server_available_(false), session_id_(session_id) {
+    : server_available_(false) {
   init(mapd_port, calcite_port, data_dir, calcite_max_mem, udf_filename);
 }
 
@@ -305,15 +305,13 @@ void Calcite::init(const int mapd_port,
 
 Calcite::Calcite(const MapDParameters& mapd_parameter,
                  const std::string& data_dir,
-                 const std::string& session_id,
                  const std::string& udf_filename)
     : ssl_trust_store_(mapd_parameter.ssl_trust_store)
     , ssl_trust_password_(mapd_parameter.ssl_trust_password)
     , ssl_key_file_(mapd_parameter.ssl_key_file)
     , ssl_keystore_(mapd_parameter.ssl_keystore)
     , ssl_keystore_password_(mapd_parameter.ssl_keystore_password)
-    , ssl_cert_file_(mapd_parameter.ssl_cert_file)
-    , session_id_(session_id) {
+    , ssl_cert_file_(mapd_parameter.ssl_cert_file) {
   init(mapd_parameter.omnisci_server_port,
        mapd_parameter.calcite_port,
        data_dir,
@@ -454,16 +452,11 @@ TPlanResult Calcite::processImpl(
     const bool is_view_optimize) {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
   const auto session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
-  checkAndSetCatalog(session_ptr->get_catalog_ptr());
-  const auto& cat = session_ptr->getCatalog();
-  const std::string user = calcite_session_ptr_
-                               ? calcite_session_ptr_->get_currentUser().userName
-                               : session_ptr->get_currentUser().userName;
+  const auto& catalog_ptr = session_ptr->get_catalog_ptr();
+  checkAndSetCatalog(catalog_ptr);
+  const auto& cat = calcite_session_ptr_->getCatalog();
+  const std::string user = calcite_session_ptr_->get_currentUser().userName;
   const std::string catalog = cat.getCurrentDB().dbName;
-  const std::string session_id = calcite_session_ptr_
-                                     ? calcite_session_ptr_->get_session_id()
-                                     : session_ptr->get_session_id();
-
   LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";
   LOG(IR) << "SQL query\n" << sql_string << "\nEnd of SQL query";
   LOG(PTX) << "SQL query\n" << sql_string << "\nEnd of SQL query";
@@ -475,7 +468,7 @@ TPlanResult Calcite::processImpl(
         auto clientP = getClient(remote_calcite_port_);
         clientP.first->process(ret,
                                user,
-                               session_id,
+                               calcite_session_ptr_->get_session_id(),
                                catalog,
                                sql_string,
                                filter_push_down_info,

@@ -34,14 +34,13 @@
 
 using namespace apache::thrift::transport;
 
-const std::string CALCITE_USER_NAME = "calcite";
-const std::string CALCITE_USER_PASSWORD = "HyperInteractive";
+constexpr char const* CALCITE_USER_NAME = "calcite";
+constexpr char const* CALCITE_USER_PASSWORD = "HyperInteractive";
 
 class CalciteServerClient;
 
 namespace Catalog_Namespace {
 class SessionInfo;
-class Catalog;
 }  // namespace Catalog_Namespace
 
 namespace query_state {
@@ -63,17 +62,9 @@ class Calcite final {
           const int port,
           const std::string& data_dir,
           const size_t calcite_max_mem,
-          const std::string& udf_filename = "")
-      : Calcite(mapd_port, port, data_dir, calcite_max_mem, "", udf_filename){};
-  Calcite(const int mapd_port,
-          const int port,
-          const std::string& data_dir,
-          const size_t calcite_max_mem,
-          const std::string& session_id,
           const std::string& udf_filename = "");
   Calcite(const MapDParameters& mapd_parameter,
           const std::string& data_dir,
-          const std::string& session_id,
           const std::string& udf_filename = "");
   // sql_string may differ from what is in query_state due to legacy_syntax option.
   TPlanResult process(query_state::QueryStateProxy,
@@ -94,7 +85,6 @@ class Calcite final {
   ~Calcite();
   std::string getRuntimeUserDefinedFunctionWhitelist();
   void setRuntimeUserDefinedFunction(std::string udf_string);
-  std::string const& get_session_id() const { return session_id_; }
   void setCalciteSessionPtr(
       const std::shared_ptr<Catalog_Namespace::SessionInfo>& session_ptr) {
     calcite_session_ptr_ = session_ptr;
@@ -121,7 +111,8 @@ class Calcite final {
   void inner_close_calcite_server(bool log);
   std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
   getClient(int port);
-  void checkAndSetCatalog(std::shared_ptr<Catalog_Namespace::Catalog> catalog_ptr);
+  template <typename T>
+  void checkAndSetCatalog(const T& catalog_ptr);
 
   int ping();
 
@@ -134,9 +125,8 @@ class Calcite final {
   std::string ssl_keystore_;
   std::string ssl_keystore_password_;
   std::string ssl_cert_file_;
-  std::string const session_id_;
   std::once_flag shutdown_once_flag_;
-  std::shared_ptr<Catalog_Namespace::SessionInfo> calcite_session_ptr_ = nullptr;
+  std::shared_ptr<Catalog_Namespace::SessionInfo> calcite_session_ptr_;
 };
 
 #endif /* CALCITE_H */

@@ -219,10 +219,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     }
   }
 
-  std::string calcite_session_id = generate_random_string(64);
-
-  calcite_ = std::make_shared<Calcite>(
-      mapd_parameters, base_data_path_, calcite_session_id, udf_ast_filename);
+  calcite_ =
+      std::make_shared<Calcite>(mapd_parameters, base_data_path_, udf_ast_filename);
 
   ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
   if (!udf_filename.empty()) {
@@ -275,7 +273,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       LOG(ERROR) << "Distributed leaf support disabled: " << e.what();
     }
   }
-  calcite_->setCalciteSessionPtr(create_in_memory_calcite_session(calcite_session_id));
+  calcite_->setCalciteSessionPtr(createInMemoryCalciteSession());
 }
 
 MapDHandler::~MapDHandler() {}
@@ -287,19 +285,26 @@ void MapDHandler::check_read_only(const std::string& str) {
 }
 
 std::shared_ptr<Catalog_Namespace::SessionInfo>
-MapDHandler::create_in_memory_calcite_session(const std::string& session_id) {
+MapDHandler::createInMemoryCalciteSession() {
   // We would create an in memory session for calcite with super user privileges which
   // would be used for getting all tables metadata when a user runs the query. The
   // session would be under the name of a proxy user/password which would only persist
   // till server's lifetime(in memory).
+  const std::string& session_id = generate_random_string(64);
   Catalog_Namespace::UserMetadata user_meta(
       -1, CALCITE_USER_NAME, CALCITE_USER_PASSWORD, true, -1);
   const auto emplace_ret =
       sessions_.emplace(session_id,
                         std::make_shared<Catalog_Namespace::SessionInfo>(
-                            user_meta, executor_device_type_, session_id));
+                            nullptr, user_meta, executor_device_type_, session_id));
   CHECK(emplace_ret.second);
   return emplace_ret.first->second;
+}
+
+bool MapDHandler::isInMemoryCalciteSession(
+    const Catalog_Namespace::UserMetadata user_meta) {
+  return user_meta.userName == CALCITE_USER_NAME && user_meta.userId == -1 &&
+         user_meta.defaultDbId == -1 && user_meta.isSuper.load();
 }
 
 // internal connection for connections with no password
@@ -4266,7 +4271,8 @@ void MapDHandler::get_heap_profile(std::string& profile, const TSessionId& sessi
 
 // NOTE: Only call check_session_exp_unsafe() when you hold a lock on sessions_mutex_.
 void MapDHandler::check_session_exp_unsafe(const SessionMap::iterator& session_it) {
-  if (session_it->second.use_count() > 2) {
+  if (session_it->second.use_count() > 2 ||
+      isInMemoryCalciteSession(session_it->second->get_currentUser())) {
     // SessionInfo is being used in more than one active operation. Original copy + one
     // stored in StdLog. Skip the checks.
     return;
@@ -4286,7 +4292,7 @@ void MapDHandler::check_session_exp_unsafe(const SessionMap::iterator& session_i
 
 // NOTE: Only call get_session_it_unsafe() while holding a lock on sessions_mutex_.
 SessionMap::iterator MapDHandler::get_session_it_unsafe(const TSessionId& session) {
-  SessionMap::iterator session_it = get_session_from_map(session, sessions_);
+  auto session_it = get_session_from_map(session, sessions_);
   check_session_exp_unsafe(session_it);
   return session_it;
 }

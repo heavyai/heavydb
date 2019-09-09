@@ -42,6 +42,8 @@ extern bool g_enable_filter_push_down;
 
 double g_gpu_mem_limit_percent{0.9};
 
+constexpr char const* CALCITE_SESSION_ID = "calcite_session";
+
 using namespace Catalog_Namespace;
 namespace {
 
@@ -50,6 +52,7 @@ std::shared_ptr<Calcite> g_calcite = nullptr;
 void calcite_shutdown_handler() {
   if (g_calcite) {
     g_calcite->close_calcite_server();
+    g_calcite.reset();
   }
 }
 
@@ -131,7 +134,7 @@ QueryRunner::QueryRunner(const char* db_path,
 
   register_signal_handler();
   logger::set_once_fatal_func(&calcite_shutdown_handler);
-  g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024, "", udf_filename);
+  g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024, udf_filename);
   ExtensionFunctionsWhitelist::add(g_calcite->getExtensionFunctionWhitelist());
   if (!udf_filename.empty()) {
     ExtensionFunctionsWhitelist::addUdfs(g_calcite->getUserDefinedFunctionWhitelist());
@@ -177,6 +180,9 @@ QueryRunner::QueryRunner(const char* db_path,
   Catalog_Namespace::Catalog::set(cat->getCurrentDB().dbName, cat);
   session_info_ = std::make_unique<Catalog_Namespace::SessionInfo>(
       cat, user, ExecutorDeviceType::GPU, "");
+  const UserMetadata proxy_user(-1, CALCITE_USER_NAME, CALCITE_USER_PASSWORD, true, -1);
+  g_calcite->setCalciteSessionPtr(std::make_shared<SessionInfo>(
+      cat, proxy_user, ExecutorDeviceType::GPU, CALCITE_SESSION_ID));
 }
 
 QueryRunner::QueryRunner(std::unique_ptr<Catalog_Namespace::SessionInfo> session)
@@ -456,6 +462,11 @@ ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
                             .plan_result;
   RelAlgExecutor ra_executor(executor.get(), cat);
   return ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
+}
+
+void QueryRunner::reset() {
+  qr_instance_.reset(nullptr);
+  calcite_shutdown_handler();
 }
 
 }  // namespace QueryRunner

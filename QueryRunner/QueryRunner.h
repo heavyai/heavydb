@@ -122,7 +122,7 @@ class QueryRunner {
     return qr_instance_.get();
   }
 
-  static void reset() { qr_instance_.reset(nullptr); }
+  static void reset();
 
   std::shared_ptr<Catalog_Namespace::SessionInfo> getSession() const {
     return session_info_;
