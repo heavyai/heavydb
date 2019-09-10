@@ -1628,7 +1628,7 @@ void SysCatalog::grantRole_unsafe(const std::string& roleName,
     sys_sqlite_lock sqlite_lock(this);
     sqliteConnector_->query_with_text_params(
         "INSERT INTO mapd_roles(roleName, userName) VALUES (?, ?)",
-        std::vector<std::string>{roleName, granteeName});
+        std::vector<std::string>{rl->getName(), grantee->getName()});
   }
 }
 
@@ -1659,7 +1659,7 @@ void SysCatalog::revokeRole_unsafe(const std::string& roleName,
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_params(
       "DELETE FROM mapd_roles WHERE roleName = ? AND userName = ?",
-      std::vector<std::string>{roleName, granteeName});
+      std::vector<std::string>{rl->getName(), grantee->getName()});
 }
 
 // Update or add element in ObjectRoleDescriptorMap
@@ -2151,12 +2151,12 @@ void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
   if (user_rl) {
     current_roles = user_rl->getRoles();
   }
+  std::for_each(current_roles.begin(), current_roles.end(), to_upper);
+  std::for_each(roles.begin(), roles.end(), to_upper);
   // first remove obsolete ones
   for (auto& current_role_name : current_roles) {
-    if (current_role_name != user_name) {
-      if (std::find(roles.begin(), roles.end(), current_role_name) == roles.end()) {
-        revokeRole(current_role_name, user_name);
-      }
+    if (std::find(roles.begin(), roles.end(), current_role_name) == roles.end()) {
+      revokeRole(current_role_name, user_name);
     }
   }
   // now re-add them
