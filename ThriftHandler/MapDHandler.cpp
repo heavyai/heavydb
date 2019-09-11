@@ -47,6 +47,7 @@
 #include "QueryEngine/RelAlgExecutor.h"
 
 #include "Catalog/Catalog.h"
+#include "DataMgr/ForeignStorage/ArrowCsvForeignStorage.h"
 #include "DataMgr/ForeignStorage/DummyForeignStorage.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
@@ -179,8 +180,10 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , _was_geo_copy_from(false) {
   LOG(INFO) << "OmniSci Server " << MAPD_RELEASE;
   // Register foreign storage interfaces here
+  // ForeignStorageInterface::registerPersistentStorageInterface(
+  // new DummyPersistentForeignStorage());
   ForeignStorageInterface::registerPersistentStorageInterface(
-      new DummyPersistentForeignStorage());
+      new ArrowCsvForeignStorage());
   bool is_rendering_enabled = enable_rendering;
   if (cpu_only) {
     is_rendering_enabled = false;
