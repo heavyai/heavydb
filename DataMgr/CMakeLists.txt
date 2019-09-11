@@ -8,6 +8,7 @@ set(datamgr_source_files
     FileMgr/FileMgr.cpp
     FileMgr/FileBuffer.cpp
     FileMgr/FileInfo.cpp
+    ForeignStorage/ArrowCsvForeignStorage.cpp
     ForeignStorage/DummyForeignStorage.cpp
     ForeignStorage/ForeignStorageInterface.cpp
     BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.cpp
