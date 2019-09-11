@@ -2063,6 +2063,13 @@ decltype(auto) get_property_value(const NameValueAssign* p,
   return op(val);
 }
 
+decltype(auto) get_storage_type(TableDescriptor& td,
+                                const NameValueAssign* p,
+                                const std::list<ColumnDescriptor>& columns) {
+  return get_property_value<StringLiteral>(
+      p, [&td](const auto val) { td.storageType = to_upper(val); });
+}
+
 decltype(auto) get_frag_size_def(TableDescriptor& td,
                                  const NameValueAssign* p,
                                  const std::list<ColumnDescriptor>& columns) {
@@ -2151,7 +2158,8 @@ static const std::map<const std::string, const TableDefFuncPtr> tableDefFuncMap 
     {"partitions"s, get_partions_def},
     {"shard_count"s, get_shard_count_def},
     {"vacuum"s, get_vacuum_def},
-    {"sort_column"s, get_sort_column_def}};
+    {"sort_column"s, get_sort_column_def},
+    {"storage_type"s, get_storage_type}};
 
 void get_table_definitions(TableDescriptor& td,
                            const std::unique_ptr<NameValueAssign>& p,
@@ -2229,9 +2237,6 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
     td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
   } else {
     td.persistenceLevel = Data_Namespace::MemoryLevel::DISK_LEVEL;
-  }
-  if (storage_type_) {
-    td.storageType = to_upper(*storage_type_);
   }
   if (!storage_options_.empty()) {
     for (auto& p : storage_options_) {
