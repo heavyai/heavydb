@@ -75,8 +75,9 @@ namespace {
 
 template <typename T>
 void unpack_geo_vector(std::vector<T>& output, const int8_t* input_ptr, const size_t sz) {
+  if (sz == 0)
+    return;
   auto elems = reinterpret_cast<const T*>(input_ptr);
-  CHECK(elems);
   CHECK_EQ(size_t(0), sz % sizeof(T));
   const size_t num_elems = sz / sizeof(T);
   output.resize(num_elems);
@@ -89,6 +90,8 @@ template <typename T>
 void decompress_geo_coords_geoint32(std::vector<T>& dec,
                                     const int8_t* enc,
                                     const size_t sz) {
+  if (sz == 0)
+    return;
   const auto compressed_coords = reinterpret_cast<const int32_t*>(enc);
   const auto num_coords = sz / sizeof(int32_t);
   dec.resize(num_coords);
@@ -120,6 +123,22 @@ std::shared_ptr<std::vector<double>> decompress_coords<double>(const SQLTypeInfo
   return decompressed_coords_ptr;
 }
 
+bool is_null_point(const SQLTypeInfo& geo_ti,
+                   const int8_t* coords,
+                   const size_t coords_sz) {
+  if (geo_ti.get_type() == kPOINT && !geo_ti.get_notnull()) {
+    if (geo_ti.get_compression() == kENCODING_GEOINT) {
+      if (geo_ti.get_comp_param() == 32) {
+        return Geo_namespace::is_null_point_longitude_geoint32(*((int32_t*)coords));
+      }
+    } else {
+      CHECK_EQ(geo_ti.get_compression(), kENCODING_NONE);
+      return *((double*)coords) == NULL_ARRAY_DOUBLE;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 // Point
@@ -127,16 +146,12 @@ template <>
 struct GeoTargetValueSerializer<kPOINT> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 1>& vals) {
-    // Removing errant NULL check: default ChunkIter accessor may mistake POINT coords
-    // fixlen array for a NULL, plus it is not needed currently - there is no NULL geo
-    // in existing tables, all NULL/empty geo is currently discarded on import.
-    // TODO: add custom ChunkIter accessor able to properly recognize NULL coords
-    // TODO: once NULL geo support is in, resurrect coords NULL check under !notnull
-    // if (!geo_ti.get_notnull() && vals[0]->is_null) {
-    //   return GeoTargetValue();
-    // }
-    return GeoPointTargetValue(
-        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length));
+    if (!geo_ti.get_notnull() && vals[0]->is_null) {
+      // Alternatively, could decompress vals[0] and check for NULL array sentinel
+      return GeoTargetValue(boost::optional<GeoPointTargetValue>{});
+    }
+    return GeoTargetValue(boost::optional<GeoPointTargetValue>{
+        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length)});
   }
 };
 
@@ -144,11 +159,10 @@ template <>
 struct GeoWktSerializer<kPOINT> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 1>& vals) {
-    // TODO: Check geo nullness first
-    // if (!geo_ti.get_notnull() && vals[0]->is_null) {
-    //   // TODO: What WKT should NULL serialize to? NULL? POINT EMPTY?
-    //   return NullableString("NULL");
-    // }
+    if (!geo_ti.get_notnull() && vals[0]->is_null) {
+      // May need to generate "POINT EMPTY" instead of NULL
+      return NullableString("NULL");
+    }
     Geo_namespace::GeoPoint point(
         *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length));
     return NullableString(point.getWktString());
@@ -159,11 +173,9 @@ template <>
 struct GeoTargetValuePtrSerializer<kPOINT> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 1>& vals) {
-    // TODO: add custom ChunkIter accessor able to properly recognize NULL coords
-    // TODO: once NULL geo support is in, add coords NULL check under !notnull
-    // if (!geo_ti.get_notnull() && vals[0]->is_null) {
-    //   return GeoTargetValuePtr();
-    // }
+    if (!geo_ti.get_notnull() && vals[0]->is_null) {
+      return GeoTargetValuePtr();
+    }
     return GeoPointTargetValuePtr({std::move(vals[0])});
   }
 };
@@ -173,14 +185,11 @@ template <>
 struct GeoTargetValueSerializer<kLINESTRING> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 1>& vals) {
-    // Removing errant NULL check: not needed currently - there is no NULL geo
-    // in existing tables, all NULL/empty geo is currently discarded on import.
-    // TODO: once NULL geo support is in, resurrect coords NULL check under !notnull
-    // if (!geo_ti.get_notnull() && vals[0]->is_null) {
-    //   return GeoTargetValue();
-    // }
-    return GeoLineStringTargetValue(
-        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length));
+    if (!geo_ti.get_notnull() && vals[0]->is_null) {
+      return GeoTargetValue(boost::optional<GeoLineStringTargetValue>{});
+    }
+    return GeoTargetValue(boost::optional<GeoLineStringTargetValue>{
+        *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length)});
   }
 };
 
@@ -188,11 +197,10 @@ template <>
 struct GeoWktSerializer<kLINESTRING> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 1>& vals) {
-    // TODO: Check geo nullness first
-    // if (!geo_ti.get_notnull() && vals[0]->is_null) {
-    //   // TODO: What WKT should NULL serialize to? NULL? LINESTRING EMPTY?
-    //   return NullableString("NULL");
-    // }
+    if (!geo_ti.get_notnull() && vals[0]->is_null) {
+      // May need to generate "LINESTRING EMPTY" instead of NULL
+      return NullableString("NULL");
+    }
     Geo_namespace::GeoLineString linestring(
         *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length));
     return NullableString(linestring.getWktString());
@@ -203,10 +211,9 @@ template <>
 struct GeoTargetValuePtrSerializer<kLINESTRING> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 1>& vals) {
-    // TODO: once NULL geo support is in, add coords NULL check under !notnull
-    // if (!geo_ti.get_notnull() && vals[0]->is_null) {
-    //   return GeoTargetValuePtr();
-    // }
+    if (!geo_ti.get_notnull() && vals[0]->is_null) {
+      return GeoTargetValuePtr();
+    }
     return GeoLineStringTargetValuePtr({std::move(vals[0])});
   }
 };
@@ -216,15 +223,15 @@ template <>
 struct GeoTargetValueSerializer<kPOLYGON> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 2>& vals) {
-    // TODO: once NULL geo support is in, add coords NULL check under !notnull
-    // if (!geo_ti.get_notnull() && (vals[0]->is_null || vals[1]->is_null)) {
-    //   return GeoTargetValue();
-    // }
+    if (!geo_ti.get_notnull() && (vals[0]->is_null || vals[1]->is_null)) {
+      return GeoTargetValue(boost::optional<GeoPolyTargetValue>{});
+    }
     std::vector<int32_t> ring_sizes_vec;
     unpack_geo_vector(ring_sizes_vec, vals[1]->pointer, vals[1]->length);
-    return GeoPolyTargetValue(
+    auto gtv = GeoPolyTargetValue(
         *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length),
         ring_sizes_vec);
+    return GeoTargetValue(gtv);
   }
 };
 
@@ -232,11 +239,10 @@ template <>
 struct GeoWktSerializer<kPOLYGON> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 2>& vals) {
-    // TODO: Check geo nullness first
-    // if (!geo_ti.get_notnull() && (vals[0]->is_null || vals[1]->is_null)) {
-    //   // TODO: What WKT should NULL serialize to? NULL? POLYGON EMPTY?
-    //   return NullableString("NULL");
-    // }
+    if (!geo_ti.get_notnull() && (vals[0]->is_null || vals[1]->is_null)) {
+      // May need to generate "POLYGON EMPTY" instead of NULL
+      return NullableString("NULL");
+    }
     std::vector<int32_t> ring_sizes_vec;
     unpack_geo_vector(ring_sizes_vec, vals[1]->pointer, vals[1]->length);
     Geo_namespace::GeoPolygon poly(
@@ -250,10 +256,9 @@ template <>
 struct GeoTargetValuePtrSerializer<kPOLYGON> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 2>& vals) {
-    // TODO: once NULL geo support is in, add coords NULL check under !notnull
-    // if (!geo_ti.get_notnull() && (vals[0]->is_null || vals[1]->is_null)) {
-    //   return GeoTargetValuePtr();
-    // }
+    if (!geo_ti.get_notnull() && (vals[0]->is_null || vals[1]->is_null)) {
+      return GeoTargetValuePtr();
+    }
     return GeoPolyTargetValuePtr({std::move(vals[0]), std::move(vals[1])});
   }
 };
@@ -263,19 +268,19 @@ template <>
 struct GeoTargetValueSerializer<kMULTIPOLYGON> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 3>& vals) {
-    // TODO: once NULL geo support is in, resurrect coords NULL check under !notnull
-    // if (!geo_ti.get_notnull() &&
-    //     (vals[0]->is_null || vals[1]->is_null || vals[2]->is_null)) {
-    //   return GeoTargetValue();
-    // }
+    if (!geo_ti.get_notnull() &&
+        (vals[0]->is_null || vals[1]->is_null || vals[2]->is_null)) {
+      return GeoTargetValue(boost::optional<GeoMultiPolyTargetValue>{});
+    }
     std::vector<int32_t> ring_sizes_vec;
     unpack_geo_vector(ring_sizes_vec, vals[1]->pointer, vals[1]->length);
     std::vector<int32_t> poly_rings_vec;
     unpack_geo_vector(poly_rings_vec, vals[2]->pointer, vals[2]->length);
-    return GeoMultiPolyTargetValue(
+    auto gtv = GeoMultiPolyTargetValue(
         *decompress_coords<double>(geo_ti, vals[0]->pointer, vals[0]->length),
         ring_sizes_vec,
         poly_rings_vec);
+    return GeoTargetValue(gtv);
   }
 };
 
@@ -283,12 +288,11 @@ template <>
 struct GeoWktSerializer<kMULTIPOLYGON> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 3>& vals) {
-    // TODO: Check geo nullness first
-    // if (!geo_ti.get_notnull() &&
-    //     (vals[0]->is_null || vals[1]->is_null) || vals[2]->is_null) {
-    //   // TODO: What WKT should NULL serialize to? NULL? MULTIPOLYGON EMPTY?
-    //   return NullableString("NULL");
-    // }
+    if (!geo_ti.get_notnull() &&
+        (vals[0]->is_null || vals[1]->is_null || vals[2]->is_null)) {
+      // May need to generate "MULTIPOLYGON EMPTY" instead of NULL
+      return NullableString("NULL");
+    }
     std::vector<int32_t> ring_sizes_vec;
     unpack_geo_vector(ring_sizes_vec, vals[1]->pointer, vals[1]->length);
     std::vector<int32_t> poly_rings_vec;
@@ -305,11 +309,10 @@ template <>
 struct GeoTargetValuePtrSerializer<kMULTIPOLYGON> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 3>& vals) {
-    // TODO: once NULL geo support is in, add coords NULL check under !notnull
-    // if (!geo_ti.get_notnull() &&
-    //     (vals[0]->is_null || vals[1]->is_null || vals[2]->is_null)) {
-    //   return GeoTargetValuePtr();
-    // }
+    if (!geo_ti.get_notnull() &&
+        (vals[0]->is_null || vals[1]->is_null || vals[2]->is_null)) {
+      return GeoTargetValuePtr();
+    }
     return GeoMultiPolyTargetValuePtr(
         {std::move(vals[0]), std::move(vals[1]), std::move(vals[2])});
   }
