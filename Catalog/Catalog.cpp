@@ -997,8 +997,11 @@ void Catalog::buildMaps() {
     tableDescriptorMapById_[td->tableId] = td;
     td->storageType = sqliteConnector_.getData<string>(r, 17);
     if (!td->storageType.empty()) {
-      ForeignStorageInterface::registerTable(
-          getCurrentDB().dbId, td->tableId, td->storageType);
+      // TODO: re-enable for persistent foreign storage, drop the table from the catalog /
+      // maps for transient foreign storage
+      /** ForeignStorageInterface::registerTable(
+       *   getCurrentDB().dbId, td->tableId, td->storageType);
+       */
     }
   }
   string columnQuery(
