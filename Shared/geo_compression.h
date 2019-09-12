@@ -40,6 +40,16 @@ DEVICE inline double decompress_lattitude_coord_geoint32(const int32_t compresse
          4.1909515877212172e-08;  // // (90.0 / 2147483647.0)
 }
 
+DEVICE inline bool is_null_point_longitude_geoint32(const int32_t compressed) {
+  // check compressed null point longitude: -2,147,483,648  --->  NULL
+  return (*reinterpret_cast<const uint32_t*>(&compressed) == 0x80000000U);
+}
+
+DEVICE inline bool is_null_point_lattitude_geoint32(const int32_t compressed) {
+  // check compressed null point latitude: -2,147,483,648  --->  NULL
+  return (*reinterpret_cast<const uint32_t*>(&compressed) == 0x80000000U);
+}
+
 DEVICE inline uint64_t compress_longitude_coord_geoint32(const double coord) {
   // compress longitude: -180..180  --->  -2,147,483,647..2,147,483,647
   int32_t compressed_coord = static_cast<int32_t>(coord * (2147483647.0 / 180.0));
@@ -50,6 +60,16 @@ DEVICE inline uint64_t compress_lattitude_coord_geoint32(const double coord) {
   // compress latitude: -90..90  --->  -2,147,483,647..2,147,483,647
   int32_t compressed_coord = static_cast<int32_t>(coord * (2147483647.0 / 90.0));
   return static_cast<uint64_t>(*reinterpret_cast<uint32_t*>(&compressed_coord));
+}
+
+DEVICE constexpr uint64_t compress_null_point_longitude_geoint32() {
+  // compress null point longitude: NULL  --->  -2,147,483,648
+  return 0x0000000080000000ULL;
+}
+
+DEVICE constexpr uint64_t compress_null_point_lattitude_geoint32() {
+  // compress null point latitude: NULL  --->  -2,147,483,648
+  return 0x0000000080000000ULL;
 }
 
 };  // namespace Geo_namespace

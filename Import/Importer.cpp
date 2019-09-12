@@ -1419,37 +1419,57 @@ uint64_t compress_coord(double coord, const SQLTypeInfo& ti, bool x) {
   return *reinterpret_cast<uint64_t*>(may_alias_ptr(&coord));
 }
 
+uint64_t compress_null_point(const SQLTypeInfo& ti, bool x) {
+  if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
+    return x ? Geo_namespace::compress_null_point_longitude_geoint32()
+             : Geo_namespace::compress_null_point_lattitude_geoint32();
+  }
+  double n = x ? NULL_ARRAY_DOUBLE : NULL_DOUBLE;
+  return *reinterpret_cast<uint64_t*>(&n);
+}
+
+// Compress non-NULL geo coords; and also NULL POINT coords (special case)
 std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti) {
+  CHECK(!coords.empty()) << "Coord compression received no data";
+  bool is_null_point = false;
+  if (!ti.get_notnull()) {
+    is_null_point = (ti.get_type() == kPOINT && coords[0] == NULL_ARRAY_DOUBLE);
+  }
   std::vector<uint8_t> compressed_coords;
   bool x = true;
+  bool is_geoint32 =
+      (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32);
+  size_t coord_data_size = (is_geoint32) ? (ti.get_comp_param() / 8) : sizeof(double);
   for (auto coord : coords) {
-    auto coord_data_ptr = reinterpret_cast<uint64_t*>(&coord);
-    uint64_t coord_data = *coord_data_ptr;
-    size_t coord_data_size = sizeof(double);
-
-    if (ti.get_output_srid() == 4326) {
-      if (x) {
-        if (coord < -180.0 || coord > 180.0) {
-          throw std::runtime_error("WGS84 longitude " + std::to_string(coord) +
-                                   " is out of bounds");
-        }
-      } else {
-        if (coord < -90.0 || coord > 90.0) {
-          throw std::runtime_error("WGS84 latitude " + std::to_string(coord) +
-                                   " is out of bounds");
+    uint64_t coord_data;
+    if (is_null_point) {
+      coord_data = compress_null_point(ti, x);
+    } else {
+      if (ti.get_output_srid() == 4326) {
+        if (x) {
+          if (coord < -180.0 || coord > 180.0) {
+            throw std::runtime_error("WGS84 longitude " + std::to_string(coord) +
+                                     " is out of bounds");
+          }
+        } else {
+          if (coord < -90.0 || coord > 90.0) {
+            throw std::runtime_error("WGS84 latitude " + std::to_string(coord) +
+                                     " is out of bounds");
+          }
         }
       }
-      if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
+      if (is_geoint32) {
         coord_data = compress_coord(coord, ti, x);
-        coord_data_size = ti.get_comp_param() / 8;
+      } else {
+        auto coord_data_ptr = reinterpret_cast<uint64_t*>(&coord);
+        coord_data = *coord_data_ptr;
       }
-      x = !x;
     }
-
     for (size_t i = 0; i < coord_data_size; i++) {
       compressed_coords.push_back(coord_data & 0xFF);
       coord_data >>= 8;
     }
+    x = !x;
   }
   return compressed_coords;
 }
@@ -1469,30 +1489,50 @@ void Importer::set_geo_physical_import_buffer(
   const auto col_type = col_ti.get_type();
   auto columnId = cd->columnId;
   auto cd_coords = catalog.getMetadataForColumn(cd->tableId, ++columnId);
+  bool is_null_geo = false;
+  bool is_null_point = false;
+  if (!col_ti.get_notnull()) {
+    // Check for NULL geo
+    is_null_point =
+        (col_type == kPOINT && (coords.empty() || coords[0] == NULL_ARRAY_DOUBLE));
+    is_null_geo = (coords.empty() || is_null_point);
+  }
   std::vector<TDatum> td_coords_data;
-  std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
-  for (auto cc : compressed_coords) {
-    TDatum td_byte;
-    td_byte.val.int_val = cc;
-    td_coords_data.push_back(td_byte);
+  // Get the raw data representing [optionally compressed] non-NULL geo's coords.
+  // One exception - NULL POINT geo: coords need to be processed to encode nullness
+  // in a fixlen array, compressed and uncompressed.
+  if (is_null_point || !is_null_geo) {
+    if (is_null_point) {
+      coords.clear();
+      coords.push_back(NULL_ARRAY_DOUBLE);
+      coords.push_back(NULL_DOUBLE);
+    }
+    std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
+    for (auto cc : compressed_coords) {
+      TDatum td_byte;
+      td_byte.val.int_val = cc;
+      td_coords_data.push_back(td_byte);
+    }
   }
   TDatum tdd_coords;
   tdd_coords.val.arr_val = td_coords_data;
-  tdd_coords.is_null = false;
+  tdd_coords.is_null = is_null_geo;
   import_buffers[col_idx++]->add_value(cd_coords, tdd_coords, false, replicate_count);
 
   if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
     // Create ring_sizes array value and add it to the physical column
     auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     std::vector<TDatum> td_ring_sizes;
-    for (auto ring_size : ring_sizes) {
-      TDatum td_ring_size;
-      td_ring_size.val.int_val = ring_size;
-      td_ring_sizes.push_back(td_ring_size);
+    if (!is_null_geo) {
+      for (auto ring_size : ring_sizes) {
+        TDatum td_ring_size;
+        td_ring_size.val.int_val = ring_size;
+        td_ring_sizes.push_back(td_ring_size);
+      }
     }
     TDatum tdd_ring_sizes;
     tdd_ring_sizes.val.arr_val = td_ring_sizes;
-    tdd_ring_sizes.is_null = false;
+    tdd_ring_sizes.is_null = is_null_geo;
     import_buffers[col_idx++]->add_value(
         cd_ring_sizes, tdd_ring_sizes, false, replicate_count);
   }
@@ -1501,14 +1541,16 @@ void Importer::set_geo_physical_import_buffer(
     // Create poly_rings array value and add it to the physical column
     auto cd_poly_rings = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     std::vector<TDatum> td_poly_rings;
-    for (auto num_rings : poly_rings) {
-      TDatum td_num_rings;
-      td_num_rings.val.int_val = num_rings;
-      td_poly_rings.push_back(td_num_rings);
+    if (!is_null_geo) {
+      for (auto num_rings : poly_rings) {
+        TDatum td_num_rings;
+        td_num_rings.val.int_val = num_rings;
+        td_poly_rings.push_back(td_num_rings);
+      }
     }
     TDatum tdd_poly_rings;
     tdd_poly_rings.val.arr_val = td_poly_rings;
-    tdd_poly_rings.is_null = false;
+    tdd_poly_rings.is_null = is_null_geo;
     import_buffers[col_idx++]->add_value(
         cd_poly_rings, tdd_poly_rings, false, replicate_count);
   }
@@ -1516,14 +1558,16 @@ void Importer::set_geo_physical_import_buffer(
   if (col_type == kLINESTRING || col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
     auto cd_bounds = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     std::vector<TDatum> td_bounds_data;
-    for (auto b : bounds) {
-      TDatum td_double;
-      td_double.val.real_val = b;
-      td_bounds_data.push_back(td_double);
+    if (!is_null_geo) {
+      for (auto b : bounds) {
+        TDatum td_double;
+        td_double.val.real_val = b;
+        td_bounds_data.push_back(td_double);
+      }
     }
     TDatum tdd_bounds;
     tdd_bounds.val.arr_val = td_bounds_data;
-    tdd_bounds.is_null = false;
+    tdd_bounds.is_null = is_null_geo;
     import_buffers[col_idx++]->add_value(cd_bounds, tdd_bounds, false, replicate_count);
   }
 
@@ -1532,7 +1576,7 @@ void Importer::set_geo_physical_import_buffer(
     auto cd_render_group = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     TDatum td_render_group;
     td_render_group.val.int_val = render_group;
-    td_render_group.is_null = false;
+    td_render_group.is_null = is_null_geo;
     import_buffers[col_idx++]->add_value(
         cd_render_group, td_render_group, false, replicate_count);
   }
@@ -1861,22 +1905,25 @@ static ImportStatus import_thread_delimited(
           for (auto cd_it = col_descs.begin(); cd_it != col_descs.end(); cd_it++) {
             auto cd = *cd_it;
             const auto& col_ti = cd->columnType;
+
+            bool is_null =
+                (row[import_idx] == copy_params.null_str || row[import_idx] == "NULL");
+            // Note: default copy_params.null_str is "\N", but everyone uses "NULL".
+            // So initially nullness may be missed and not passed to add_value,
+            // which then might also check and still decide it's actually a NULL, e.g.
+            // if kINT doesn't start with a digit or a '-' then it's considered NULL.
+            // So "NULL" is not recognized as NULL but then it's not recognized as
+            // a valid kINT, so it's a NULL after all.
+            // Checking for "NULL" here too, as a widely accepted notation for NULL.
+
+            // Treating empty as NULL
+            if (!cd->columnType.is_string() && row[import_idx].empty()) {
+              is_null = true;
+            }
+
             if (col_ti.get_physical_cols() == 0) {
               // not geo
 
-              // store the string (possibly null)
-              bool is_null =
-                  (row[import_idx] == copy_params.null_str || row[import_idx] == "NULL");
-              // Note: default copy_params.null_str is "\N", but everyone uses "NULL".
-              // So initially nullness may be missed and not passed to add_value,
-              // which then might also check and still decide it's actually a NULL,
-              // e.g. if kINT doesn't start with a digit or a '-' then it's considered
-              // NULL. So "NULL" is not recognized as NULL but then it's not
-              // recognized as a valid kINT, so it's a NULL after all. Checking for
-              // "NULL" here too, as a widely accepted notation for NULL.
-              if (!cd->columnType.is_string() && row[import_idx].empty()) {
-                is_null = true;
-              }
               import_buffers[col_idx]->add_value(
                   cd, row[import_idx], is_null, copy_params);
 
@@ -1906,7 +1953,7 @@ static ImportStatus import_thread_delimited(
               std::vector<int> poly_rings;
               int render_group = 0;
 
-              if (col_type == kPOINT && wkt.size() > 0 &&
+              if (!is_null && col_type == kPOINT && wkt.size() > 0 &&
                   (wkt[0] == '.' || isdigit(wkt[0]) || wkt[0] == '-')) {
                 // Invalid WKT, looks more like a scalar.
                 // Try custom POINT import: from two separate scalars rather than WKT
@@ -1935,49 +1982,59 @@ static ImportStatus import_thread_delimited(
                 }
               } else {
                 // import it
-                SQLTypeInfo import_ti;
-                if (import_geometry) {
-                  // geometry already exploded
-                  if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
-                          import_geometry,
-                          import_ti,
-                          coords,
-                          bounds,
-                          ring_sizes,
-                          poly_rings,
-                          PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
-                    std::string msg =
-                        "Failed to extract valid geometry from exploded row " +
-                        std::to_string(first_row_index_this_buffer + row_index_plus_one) +
-                        " for column " + cd->columnName;
-                    throw std::runtime_error(msg);
+                SQLTypeInfo import_ti{col_ti};
+                if (is_null) {
+                  throw std::runtime_error("TODO: Imported NULL geometry for column " +
+                                           cd->columnName);
+                  if (col_type == kPOINT) {
+                    coords.push_back(NULL_ARRAY_DOUBLE);
+                    coords.push_back(NULL_DOUBLE);
                   }
                 } else {
-                  // extract geometry directly from WKT
-                  if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
-                          wkt,
-                          import_ti,
-                          coords,
-                          bounds,
-                          ring_sizes,
-                          poly_rings,
-                          PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
-                    std::string msg =
-                        "Failed to extract valid geometry from row " +
-                        std::to_string(first_row_index_this_buffer + row_index_plus_one) +
-                        " for column " + cd->columnName;
-                    throw std::runtime_error(msg);
+                  if (import_geometry) {
+                    // geometry already exploded
+                    if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+                            import_geometry,
+                            import_ti,
+                            coords,
+                            bounds,
+                            ring_sizes,
+                            poly_rings,
+                            PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
+                      std::string msg =
+                          "Failed to extract valid geometry from exploded row " +
+                          std::to_string(first_row_index_this_buffer +
+                                         row_index_plus_one) +
+                          " for column " + cd->columnName;
+                      throw std::runtime_error(msg);
+                    }
+                  } else {
+                    // extract geometry directly from WKT
+                    if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+                            wkt,
+                            import_ti,
+                            coords,
+                            bounds,
+                            ring_sizes,
+                            poly_rings,
+                            PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
+                      std::string msg = "Failed to extract valid geometry from row " +
+                                        std::to_string(first_row_index_this_buffer +
+                                                       row_index_plus_one) +
+                                        " for column " + cd->columnName;
+                      throw std::runtime_error(msg);
+                    }
                   }
-                }
 
-                // validate types
-                if (col_type != import_ti.get_type()) {
-                  if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
-                      !(import_ti.get_type() == SQLTypes::kPOLYGON &&
-                        col_type == SQLTypes::kMULTIPOLYGON)) {
-                    throw std::runtime_error(
-                        "Imported geometry doesn't match the type of column " +
-                        cd->columnName);
+                  // validate types
+                  if (col_type != import_ti.get_type()) {
+                    if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
+                        !(import_ti.get_type() == SQLTypes::kPOLYGON &&
+                          col_type == SQLTypes::kMULTIPOLYGON)) {
+                      throw std::runtime_error(
+                          "Imported geometry doesn't match the type of column " +
+                          cd->columnName);
+                    }
                   }
                 }
 

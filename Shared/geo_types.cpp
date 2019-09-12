@@ -464,6 +464,12 @@ bool GeoTypesFactory::getGeoColumns(const std::string& wkt,
                                     std::vector<int>& poly_rings,
                                     const bool promote_poly_to_mpoly) {
   try {
+    if (wkt.empty() || wkt == "NULL") {
+      getNullGeoColumns(
+          ti, coords, bounds, ring_sizes, poly_rings, promote_poly_to_mpoly);
+      return true;
+    }
+
     const auto geospatial_base = GeoTypesFactory::createGeoType(wkt);
 
     int srid = 0;
@@ -614,6 +620,35 @@ void GeoTypesFactory::getGeoColumnsImpl(const std::unique_ptr<GeoBase>& geospati
     }
     default:
       throw std::runtime_error("Unrecognized geospatial type");
+  }
+}
+
+void GeoTypesFactory::getNullGeoColumns(SQLTypeInfo& ti,
+                                        std::vector<double>& coords,
+                                        std::vector<double>& bounds,
+                                        std::vector<int>& ring_sizes,
+                                        std::vector<int>& poly_rings,
+                                        const bool promote_poly_to_mpoly) {
+  auto t = ti.get_type();
+  switch (t) {
+    case kPOINT: {
+      // NULL fixlen coords array
+      coords.push_back(NULL_ARRAY_DOUBLE);
+      coords.push_back(NULL_DOUBLE);
+    } break;
+    case kLINESTRING:
+    case kPOLYGON:
+    case kMULTIPOLYGON: {
+      // Leaving coords array empty
+      // NULL fixlen bounds array
+      bounds.push_back(NULL_ARRAY_DOUBLE);
+      bounds.push_back(NULL_DOUBLE);
+      bounds.push_back(NULL_DOUBLE);
+      bounds.push_back(NULL_DOUBLE);
+      // Leaving ring_sizes and poly_rings arrays empty
+    } break;
+    default:
+      throw std::runtime_error("Unsupported NULL geo");
   }
 }
 
