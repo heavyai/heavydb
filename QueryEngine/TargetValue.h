@@ -155,10 +155,10 @@ struct GeoMultiPolyTargetValuePtr {
 using NullableString = boost::variant<std::string, void*>;
 using ScalarTargetValue = boost::variant<int64_t, double, float, NullableString>;
 using ArrayTargetValue = boost::optional<std::vector<ScalarTargetValue>>;
-using GeoTargetValue = boost::variant<GeoPointTargetValue,
-                                      GeoLineStringTargetValue,
-                                      GeoPolyTargetValue,
-                                      GeoMultiPolyTargetValue>;
+using GeoTargetValue = boost::optional<boost::variant<GeoPointTargetValue,
+                                                      GeoLineStringTargetValue,
+                                                      GeoPolyTargetValue,
+                                                      GeoMultiPolyTargetValue>>;
 using GeoTargetValuePtr = boost::variant<GeoPointTargetValuePtr,
                                          GeoLineStringTargetValuePtr,
                                          GeoPolyTargetValuePtr,

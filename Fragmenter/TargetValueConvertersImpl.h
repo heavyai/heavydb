@@ -609,6 +609,7 @@ struct GeoPointValueConverter : public TargetValueConverter {
     signed_compressed_coords_data_ = std::make_unique<std::vector<ArrayDatum>>(num_rows);
   }
 
+  boost_variant_accessor<GeoTargetValue> GEO_VALUE_ACCESSOR;
   boost_variant_accessor<GeoPointTargetValue> GEO_POINT_VALUE_ACCESSOR;
 
   inline ArrayDatum toCompressedCoords(
@@ -628,12 +629,23 @@ struct GeoPointValueConverter : public TargetValueConverter {
   }
 
   void convertToColumnarFormat(size_t row, const TargetValue* value) override {
-    auto geoValue = checked_get<GeoTargetValue>(row, value, GEO_TARGET_VALUE_ACCESSOR);
-    auto geoPoint =
-        checked_get<GeoPointTargetValue>(row, geoValue, GEO_POINT_VALUE_ACCESSOR);
-
-    (*column_data_)[row] = "";
-    (*signed_compressed_coords_data_)[row] = toCompressedCoords(geoPoint->coords);
+    const auto geoValue = checked_get<GeoTargetValue>(row, value, GEO_VALUE_ACCESSOR);
+    CHECK(geoValue);
+    if (geoValue->is_initialized()) {
+      const auto geo = geoValue->get();
+      const auto geoPoint =
+          checked_get<GeoPointTargetValue>(row, &geo, GEO_POINT_VALUE_ACCESSOR);
+      CHECK(geoPoint);
+      (*column_data_)[row] = "";
+      (*signed_compressed_coords_data_)[row] = toCompressedCoords(geoPoint->coords);
+    } else {
+      // NULL point
+      (*column_data_)[row] = "";
+      auto coords = std::make_shared<std::vector<double>>(NULL_ARRAY_DOUBLE, NULL_DOUBLE);
+      auto coords_datum = toCompressedCoords(coords);
+      coords_datum.is_null = true;
+      (*signed_compressed_coords_data_)[row] = coords_datum;
+    }
   }
 
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
@@ -717,14 +729,28 @@ struct GeoLinestringValueConverter : public GeoPointValueConverter {
   boost_variant_accessor<GeoLineStringTargetValue> GEO_LINESTRING_VALUE_ACCESSOR;
 
   void convertToColumnarFormat(size_t row, const TargetValue* value) override {
-    auto geoValue = checked_get<GeoTargetValue>(row, value, GEO_TARGET_VALUE_ACCESSOR);
-    auto geoLinestring = checked_get<GeoLineStringTargetValue>(
-        row, geoValue, GEO_LINESTRING_VALUE_ACCESSOR);
+    const auto geoValue =
+        checked_get<GeoTargetValue>(row, value, GEO_TARGET_VALUE_ACCESSOR);
+    CHECK(geoValue);
+    if (geoValue->is_initialized()) {
+      const auto geo = geoValue->get();
+      const auto geoLinestring =
+          checked_get<GeoLineStringTargetValue>(row, &geo, GEO_LINESTRING_VALUE_ACCESSOR);
 
-    (*column_data_)[row] = "";
-    (*signed_compressed_coords_data_)[row] = toCompressedCoords(geoLinestring->coords);
-    auto bounds = compute_bounds_of_coords(geoLinestring->coords);
-    (*bounds_data_)[row] = to_array_datum(bounds);
+      (*column_data_)[row] = "";
+      (*signed_compressed_coords_data_)[row] = toCompressedCoords(geoLinestring->coords);
+      auto bounds = compute_bounds_of_coords(geoLinestring->coords);
+      (*bounds_data_)[row] = to_array_datum(bounds);
+    } else {
+      // NULL Linestring
+      (*column_data_)[row] = "";
+      (*signed_compressed_coords_data_)[row] = ArrayDatum(0, nullptr, true);
+      std::vector<double> bounds = {
+          NULL_ARRAY_DOUBLE, NULL_DOUBLE, NULL_DOUBLE, NULL_DOUBLE};
+      auto bounds_datum = to_array_datum(bounds);
+      bounds_datum.is_null = true;
+      (*bounds_data_)[row] = bounds_datum;
+    }
   }
 
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
@@ -780,17 +806,33 @@ struct GeoPolygonValueConverter : public GeoPointValueConverter {
   boost_variant_accessor<GeoPolyTargetValue> GEO_POLY_VALUE_ACCESSOR;
 
   void convertToColumnarFormat(size_t row, const TargetValue* value) override {
-    auto geoValue = checked_get<GeoTargetValue>(row, value, GEO_TARGET_VALUE_ACCESSOR);
-    auto geoPoly =
-        checked_get<GeoPolyTargetValue>(row, geoValue, GEO_POLY_VALUE_ACCESSOR);
+    const auto geoValue =
+        checked_get<GeoTargetValue>(row, value, GEO_TARGET_VALUE_ACCESSOR);
+    CHECK(geoValue);
+    if (geoValue->is_initialized()) {
+      const auto geo = geoValue->get();
+      const auto geoPoly =
+          checked_get<GeoPolyTargetValue>(row, &geo, GEO_POLY_VALUE_ACCESSOR);
 
-    (*column_data_)[row] = "";
-    (*signed_compressed_coords_data_)[row] = toCompressedCoords(geoPoly->coords);
-    (*ring_sizes_data_)[row] = to_array_datum(geoPoly->ring_sizes);
-    auto bounds = compute_bounds_of_coords(geoPoly->coords);
-    (*bounds_data_)[row] = to_array_datum(bounds);
-    render_group_data_[row] =
-        render_group_analyzer_.insertBoundsAndReturnRenderGroup(bounds);
+      (*column_data_)[row] = "";
+      (*signed_compressed_coords_data_)[row] = toCompressedCoords(geoPoly->coords);
+      (*ring_sizes_data_)[row] = to_array_datum(geoPoly->ring_sizes);
+      auto bounds = compute_bounds_of_coords(geoPoly->coords);
+      (*bounds_data_)[row] = to_array_datum(bounds);
+      render_group_data_[row] =
+          render_group_analyzer_.insertBoundsAndReturnRenderGroup(bounds);
+    } else {
+      // NULL Polygon
+      (*column_data_)[row] = "";
+      (*signed_compressed_coords_data_)[row] = ArrayDatum(0, nullptr, true);
+      (*ring_sizes_data_)[row] = ArrayDatum(0, nullptr, true);
+      std::vector<double> bounds = {
+          NULL_ARRAY_DOUBLE, NULL_DOUBLE, NULL_DOUBLE, NULL_DOUBLE};
+      auto bounds_datum = to_array_datum(bounds);
+      bounds_datum.is_null = true;
+      (*bounds_data_)[row] = bounds_datum;
+      render_group_data_[row] = NULL_INT;
+    }
   }
 
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
@@ -860,18 +902,35 @@ struct GeoMultiPolygonValueConverter : public GeoPointValueConverter {
   boost_variant_accessor<GeoMultiPolyTargetValue> GEO_MULTI_POLY_VALUE_ACCESSOR;
 
   void convertToColumnarFormat(size_t row, const TargetValue* value) override {
-    auto geoValue = checked_get<GeoTargetValue>(row, value, GEO_TARGET_VALUE_ACCESSOR);
-    auto geoMultiPoly = checked_get<GeoMultiPolyTargetValue>(
-        row, geoValue, GEO_MULTI_POLY_VALUE_ACCESSOR);
+    const auto geoValue =
+        checked_get<GeoTargetValue>(row, value, GEO_TARGET_VALUE_ACCESSOR);
+    CHECK(geoValue);
+    if (geoValue->is_initialized()) {
+      const auto geo = geoValue->get();
+      const auto geoMultiPoly =
+          checked_get<GeoMultiPolyTargetValue>(row, &geo, GEO_MULTI_POLY_VALUE_ACCESSOR);
 
-    (*column_data_)[row] = "";
-    (*signed_compressed_coords_data_)[row] = toCompressedCoords(geoMultiPoly->coords);
-    (*ring_sizes_data_)[row] = to_array_datum(geoMultiPoly->ring_sizes);
-    (*poly_rings_data_)[row] = to_array_datum(geoMultiPoly->poly_rings);
-    auto bounds = compute_bounds_of_coords(geoMultiPoly->coords);
-    (*bounds_data_)[row] = to_array_datum(bounds);
-    render_group_data_[row] =
-        render_group_analyzer_.insertBoundsAndReturnRenderGroup(bounds);
+      (*column_data_)[row] = "";
+      (*signed_compressed_coords_data_)[row] = toCompressedCoords(geoMultiPoly->coords);
+      (*ring_sizes_data_)[row] = to_array_datum(geoMultiPoly->ring_sizes);
+      (*poly_rings_data_)[row] = to_array_datum(geoMultiPoly->poly_rings);
+      auto bounds = compute_bounds_of_coords(geoMultiPoly->coords);
+      (*bounds_data_)[row] = to_array_datum(bounds);
+      render_group_data_[row] =
+          render_group_analyzer_.insertBoundsAndReturnRenderGroup(bounds);
+    } else {
+      // NULL MultiPolygon
+      (*column_data_)[row] = "";
+      (*signed_compressed_coords_data_)[row] = ArrayDatum(0, nullptr, true);
+      (*ring_sizes_data_)[row] = ArrayDatum(0, nullptr, true);
+      (*poly_rings_data_)[row] = ArrayDatum(0, nullptr, true);
+      std::vector<double> bounds = {
+          NULL_ARRAY_DOUBLE, NULL_DOUBLE, NULL_DOUBLE, NULL_DOUBLE};
+      auto bounds_datum = to_array_datum(bounds);
+      bounds_datum.is_null = true;
+      (*bounds_data_)[row] = bounds_datum;
+      render_group_data_[row] = NULL_INT;
+    }
   }
 
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {
