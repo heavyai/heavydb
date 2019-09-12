@@ -119,9 +119,8 @@ template <class T>
 T g(const TargetValue& r) {
   auto geo_r = boost::get<GeoTargetValue>(&r);
   CHECK(geo_r);
-  auto p = boost::get<T>(geo_r);
-  CHECK(p);
-  return *p;
+  CHECK(geo_r->is_initialized());
+  return boost::get<T>(geo_r->get());
 }
 
 template <class T>
