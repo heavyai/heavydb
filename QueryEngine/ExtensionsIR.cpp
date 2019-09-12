@@ -181,7 +181,8 @@ bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_ope
       // TODO: Make this a property of the FunctionOper following `RETURN NULL ON NULL`
       // semantics.
       return false;
-    } else if (!arg_ti.get_notnull() && !arg_ti.is_array() && !arg_ti.is_geometry()) {
+    } else if (!arg_ti.get_notnull() && !arg_ti.is_array()) {
+      // Nullable geometry args will trigger a null check
       return true;
     } else {
       continue;
@@ -285,7 +286,13 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
   if (!ret_ti.is_array()) {
     const auto extension_ret_ti = get_sql_type_from_llvm_type(ret_ty);
     if (bbs.args_null_bb &&
-        extension_ret_ti.get_type() != function_oper->get_type_info().get_type()) {
+        extension_ret_ti.get_type() != function_oper->get_type_info().get_type() &&
+        // Skip i1-->i8 casts for ST_ functions.
+        // function_oper ret type is i1, extension ret type is 'upgraded' to i8
+        // during type deserialization to 'handle' NULL returns, hence i1-->i8.
+        // ST_ functions can't return NULLs, we just need to check arg nullness
+        // and if any args are NULL then ST_ function is not called
+        function_oper->getName().substr(0, 3) != std::string("ST_")) {
       ext_call_nullcheck = codegenCast(ext_call_nullcheck,
                                        extension_ret_ti,
                                        function_oper->get_type_info(),
@@ -486,7 +493,17 @@ llvm::Value* CodeGenerator::codegenFunctionOperNullArg(
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
-    if (arg_ti.get_notnull() || arg_ti.is_array() || arg_ti.is_geometry()) {
+    if (arg_ti.get_notnull()) {
+      continue;
+    }
+    if (arg_ti.is_array() || arg_ti.is_geometry()) {
+      // POINT [un]compressed coord check requires custom checker and chunk iterator
+      // Non-POINT NULL geographies will have a normally encoded null coord array
+      auto fname =
+          (arg_ti.get_type() == kPOINT) ? "point_coord_array_is_null" : "array_is_null";
+      auto is_null_lv = cgen_state_->emitExternalCall(
+          fname, get_int_type(1, cgen_state_->context_), {orig_arg_lvs[i], posArg(arg)});
+      one_arg_null = cgen_state_->ir_builder_.CreateOr(one_arg_null, is_null_lv);
       continue;
     }
     CHECK(arg_ti.is_number());
