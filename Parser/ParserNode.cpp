@@ -1725,20 +1725,23 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
     const auto& col_ti = cd->columnType;
     if (col_ti.get_physical_cols() > 0) {
       CHECK(cd->columnType.is_geometry());
-      std::string* wkt{nullptr};
-      auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
-      if (c) {
-        wkt = c->get_constval().stringval;
-      } else {
+      // auto c = std::dynamic_pointer_cast<const Analyzer::Constant>(e);
+      auto c = dynamic_cast<const Analyzer::Constant*>(e.get());
+      if (!c) {
         auto uoper = std::dynamic_pointer_cast<Analyzer::UOper>(e);
         if (uoper && uoper->get_optype() == kCAST) {
-          auto c = dynamic_cast<const Analyzer::Constant*>(uoper->get_operand());
-          if (c) {
-            wkt = c->get_constval().stringval;
-          }
+          c = dynamic_cast<const Analyzer::Constant*>(uoper->get_operand());
         }
       }
-      if (!wkt) {
+      bool is_null = false;
+      std::string* wkt{nullptr};
+      if (c) {
+        is_null = c->get_is_null();
+        if (!is_null) {
+          wkt = c->get_constval().stringval;
+        }
+      }
+      if (!is_null && !wkt) {
         throw std::runtime_error("Expecting a WKT string for column " + cd->columnName);
       }
       std::vector<double> coords;
@@ -1747,20 +1750,33 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
       std::vector<int> poly_rings;
       int render_group =
           0;  // @TODO simon.eves where to get render_group from in this context?!
-      SQLTypeInfo import_ti;
-      if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
-              *wkt, import_ti, coords, bounds, ring_sizes, poly_rings)) {
-        throw std::runtime_error("Cannot read geometry to insert into column " +
-                                 cd->columnName);
-      }
-      if (cd->columnType.get_type() != import_ti.get_type()) {
-        // allow POLYGON to be inserted into MULTIPOLYGON column
-        if (!(import_ti.get_type() == SQLTypes::kPOLYGON &&
-              cd->columnType.get_type() == SQLTypes::kMULTIPOLYGON)) {
-          throw std::runtime_error("Imported geometry doesn't match the type of column " +
+      SQLTypeInfo import_ti{cd->columnType};
+      if (!is_null) {
+        if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+                *wkt, import_ti, coords, bounds, ring_sizes, poly_rings)) {
+          throw std::runtime_error("Cannot read geometry to insert into column " +
                                    cd->columnName);
         }
+        if (cd->columnType.get_type() != import_ti.get_type()) {
+          // allow POLYGON to be inserted into MULTIPOLYGON column
+          if (!(import_ti.get_type() == SQLTypes::kPOLYGON &&
+                cd->columnType.get_type() == SQLTypes::kMULTIPOLYGON)) {
+            throw std::runtime_error(
+                "Imported geometry doesn't match the type of column " + cd->columnName);
+          }
+        }
+      } else {
+        // Special case for NULL POINT, push NULL representation to coords
+        if (cd->columnType.get_type() == kPOINT) {
+          if (!coords.empty()) {
+            throw std::runtime_error("NULL POINT with unexpected coordinates in column " +
+                                     cd->columnName);
+          }
+          coords.push_back(NULL_ARRAY_DOUBLE);
+          coords.push_back(NULL_DOUBLE);
+        }
       }
+
       // TODO: check if import SRID matches columns SRID, may need to transform before
       // inserting
 
@@ -1771,17 +1787,19 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
       CHECK(cd_coords);
       CHECK_EQ(cd_coords->columnType.get_type(), kARRAY);
       CHECK_EQ(cd_coords->columnType.get_subtype(), kTINYINT);
-      auto compressed_coords = Importer_NS::compress_coords(coords, col_ti);
       std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-      for (auto cc : compressed_coords) {
-        Datum d;
-        d.tinyintval = cc;
-        auto e = makeExpr<Analyzer::Constant>(kTINYINT, false, d);
-        value_exprs.push_back(e);
+      if (!is_null || cd->columnType.get_type() == kPOINT) {
+        auto compressed_coords = Importer_NS::compress_coords(coords, col_ti);
+        for (auto cc : compressed_coords) {
+          Datum d;
+          d.tinyintval = cc;
+          auto e = makeExpr<Analyzer::Constant>(kTINYINT, false, d);
+          value_exprs.push_back(e);
+        }
       }
       tlist.emplace_back(new Analyzer::TargetEntry(
           "",
-          makeExpr<Analyzer::Constant>(cd_coords->columnType, false, value_exprs),
+          makeExpr<Analyzer::Constant>(cd_coords->columnType, is_null, value_exprs),
           false));
       ++it;
       nextColumnOffset++;
@@ -1795,15 +1813,17 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
         CHECK_EQ(cd_ring_sizes->columnType.get_type(), kARRAY);
         CHECK_EQ(cd_ring_sizes->columnType.get_subtype(), kINT);
         std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-        for (auto c : ring_sizes) {
-          Datum d;
-          d.intval = c;
-          auto e = makeExpr<Analyzer::Constant>(kINT, false, d);
-          value_exprs.push_back(e);
+        if (!is_null) {
+          for (auto c : ring_sizes) {
+            Datum d;
+            d.intval = c;
+            auto e = makeExpr<Analyzer::Constant>(kINT, false, d);
+            value_exprs.push_back(e);
+          }
         }
         tlist.emplace_back(new Analyzer::TargetEntry(
             "",
-            makeExpr<Analyzer::Constant>(cd_ring_sizes->columnType, false, value_exprs),
+            makeExpr<Analyzer::Constant>(cd_ring_sizes->columnType, is_null, value_exprs),
             false));
         ++it;
         nextColumnOffset++;
@@ -1816,15 +1836,18 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
           CHECK_EQ(cd_poly_rings->columnType.get_type(), kARRAY);
           CHECK_EQ(cd_poly_rings->columnType.get_subtype(), kINT);
           std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-          for (auto c : poly_rings) {
-            Datum d;
-            d.intval = c;
-            auto e = makeExpr<Analyzer::Constant>(kINT, false, d);
-            value_exprs.push_back(e);
+          if (!is_null) {
+            for (auto c : poly_rings) {
+              Datum d;
+              d.intval = c;
+              auto e = makeExpr<Analyzer::Constant>(kINT, false, d);
+              value_exprs.push_back(e);
+            }
           }
           tlist.emplace_back(new Analyzer::TargetEntry(
               "",
-              makeExpr<Analyzer::Constant>(cd_poly_rings->columnType, false, value_exprs),
+              makeExpr<Analyzer::Constant>(
+                  cd_poly_rings->columnType, is_null, value_exprs),
               false));
           ++it;
           nextColumnOffset++;
@@ -1840,15 +1863,17 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
         CHECK_EQ(cd_bounds->columnType.get_type(), kARRAY);
         CHECK_EQ(cd_bounds->columnType.get_subtype(), kDOUBLE);
         std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
-        for (auto b : bounds) {
-          Datum d;
-          d.doubleval = b;
-          auto e = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
-          value_exprs.push_back(e);
+        if (!is_null) {
+          for (auto b : bounds) {
+            Datum d;
+            d.doubleval = b;
+            auto e = makeExpr<Analyzer::Constant>(kDOUBLE, false, d);
+            value_exprs.push_back(e);
+          }
         }
         tlist.emplace_back(new Analyzer::TargetEntry(
             "",
-            makeExpr<Analyzer::Constant>(cd_bounds->columnType, false, value_exprs),
+            makeExpr<Analyzer::Constant>(cd_bounds->columnType, is_null, value_exprs),
             false));
         ++it;
         nextColumnOffset++;
@@ -1865,7 +1890,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
         d.intval = render_group;
         tlist.emplace_back(new Analyzer::TargetEntry(
             "",
-            makeExpr<Analyzer::Constant>(cd_render_group->columnType, false, d),
+            makeExpr<Analyzer::Constant>(cd_render_group->columnType, is_null, d),
             false));
         ++it;
         nextColumnOffset++;

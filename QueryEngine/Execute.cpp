@@ -2775,7 +2775,9 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
         const auto is_null = col_cv->get_is_null();
         const auto size = cd->columnType.get_size();
         const SQLTypeInfo elem_ti = cd->columnType.get_elem_type();
-        if (is_null) {
+        // POINT coords: [un]compressed coords always need to be encoded, even if NULL
+        const auto is_point_coords = (cd->isGeoPhyCol && elem_ti.get_type() == kTINYINT);
+        if (is_null && !is_point_coords) {
           if (size > 0) {
             // NULL fixlen array: NULL_ARRAY sentinel followed by NULL sentinels
             if (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT) {
