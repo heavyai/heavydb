@@ -58,5 +58,8 @@ DEVICE void ChunkIter_get_nth_varlen_notnull(ChunkIter* it,
                                              int nth,
                                              ArrayDatum* vd,
                                              bool* is_end);
-
+DEVICE void ChunkIter_get_nth_point_coords(ChunkIter* it,
+                                           int nth,
+                                           ArrayDatum* vd,
+                                           bool* is_end);
 #endif  // _CHUNK_ITER_H_

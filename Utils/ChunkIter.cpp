@@ -300,3 +300,32 @@ DEVICE void ChunkIter_get_nth_varlen_notnull(ChunkIter* it,
   result->pointer = it->second_buf + offset;
   result->is_null = false;
 }
+
+// @brief get nth point coord array in Chunk.  Does not change ChunkIter state
+// Custom iterator for point coord arrays:
+// int8_t[16] representing uncompressed double[2] coords
+// int8_t[8] representing 32-bit compressed int32_t[2] coords
+DEVICE void ChunkIter_get_nth_point_coords(ChunkIter* it,
+                                           int n,
+                                           ArrayDatum* result,
+                                           bool* is_end) {
+  if (static_cast<size_t>(n) >= it->num_elems || n < 0) {
+    *is_end = true;
+    result->length = 0;
+    result->pointer = NULL;
+    result->is_null = true;
+    return;
+  }
+  *is_end = false;
+
+  assert(it->skip_size > 0);
+  int8_t* current_pos = it->start_pos + n * it->skip_size;
+  result->length = static_cast<size_t>(it->skip_size);
+  result->pointer = current_pos;
+  bool is_null = false;
+  if (!it->type_info.get_notnull()) {
+    // Nulls can only be recognized when iterating over a !notnull-typed chunk
+    is_null = it->type_info.is_null_point_coord_array(result->pointer, result->length);
+  }
+  result->is_null = is_null;
+}

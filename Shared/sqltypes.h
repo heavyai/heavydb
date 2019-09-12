@@ -186,6 +186,8 @@ enum EncodingType {
 #define NULL_ARRAY_FLOAT (FLT_MIN * 2.0)
 #define NULL_ARRAY_DOUBLE (DBL_MIN * 2.0)
 
+#define NULL_ARRAY_COMPRESSED_32 0x80000000U
+
 #define TRANSIENT_DICT_ID 0
 #define TRANSIENT_DICT(ID) (-(ID))
 #define REGULAR_DICT(TRANSIENTID) (-(TRANSIENTID))
@@ -652,6 +654,19 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
           return *(int64_t*)val == NULL_ARRAY_BIGINT;
         default:
           return false;
+      }
+    }
+    return false;
+  }
+  HOST DEVICE inline bool is_null_point_coord_array(const int8_t* val,
+                                                    int array_size) const {
+    if (type == kARRAY && subtype == kTINYINT && val && array_size > 0 &&
+        array_size == size) {
+      if (array_size == 2 * sizeof(double)) {
+        return *(double*)val == NULL_ARRAY_DOUBLE;
+      }
+      if (array_size == 2 * sizeof(int32_t)) {
+        return *(uint32_t*)val == NULL_ARRAY_COMPRESSED_32;
       }
     }
     return false;
