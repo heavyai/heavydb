@@ -58,6 +58,15 @@ extern "C" DEVICE bool array_is_null(int8_t* chunk_iter_, const uint64_t row_pos
   return ad.is_null;
 }
 
+extern "C" DEVICE bool point_coord_array_is_null(int8_t* chunk_iter_,
+                                                 const uint64_t row_pos) {
+  ChunkIter* chunk_iter = reinterpret_cast<ChunkIter*>(chunk_iter_);
+  ArrayDatum ad;
+  bool is_end;
+  ChunkIter_get_nth_point_coords(chunk_iter, row_pos, &ad, &is_end);
+  return ad.is_null;
+}
+
 #define ARRAY_AT(type)                                                        \
   extern "C" DEVICE type array_at_##type(                                     \
       int8_t* chunk_iter_, const uint64_t row_pos, const uint32_t elem_idx) { \

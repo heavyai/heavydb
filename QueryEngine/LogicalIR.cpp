@@ -380,16 +380,15 @@ llvm::Value* CodeGenerator::codegenIsNull(const Analyzer::UOper* uoper,
   if (ti.get_notnull()) {
     return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
   }
-  // There is currently no NULL geo in existing tables, short-circuit to false
-  // TODO: update for NULL geo support, codegen geo_is_null call
-  if (ti.is_geometry()) {
-    return llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 0);
-  }
   const auto operand_lv = codegen(operand, true, co).front();
-  if (ti.is_array()) {
-    return cgen_state_->emitExternalCall("array_is_null",
-                                         get_int_type(1, cgen_state_->context_),
-                                         {operand_lv, posArg(operand)});
+  // NULL-check array or geo's coords array
+  if (ti.is_array() || ti.is_geometry()) {
+    // POINT [un]compressed coord check requires custom checker and chunk iterator
+    // Non-POINT NULL geographies will have a normally encoded null coord array
+    auto fname =
+        (ti.get_type() == kPOINT) ? "point_coord_array_is_null" : "array_is_null";
+    return cgen_state_->emitExternalCall(
+        fname, get_int_type(1, cgen_state_->context_), {operand_lv, posArg(operand)});
   }
   return codegenIsNullNumber(operand_lv, ti);
 }

@@ -479,6 +479,7 @@ declare i32 @array_size(i8*, i64, i32);
 declare i32 @array_size_nullable(i8*, i64, i32, i32);
 declare i32 @fast_fixlen_array_size(i8*, i32);
 declare i1 @array_is_null(i8*, i64);
+declare i1 @point_coord_array_is_null(i8*, i64);
 declare i8* @array_buff(i8*, i64);
 declare i8* @fast_fixlen_array_buff(i8*, i64);
 declare i8 @array_at_int8_t(i8*, i64, i32);
