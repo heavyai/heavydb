@@ -414,6 +414,100 @@ TEST(UserRoles, RoleHierarchies) {
   run_ddl_statement("DROP TABLE hr_tbl1;");
 }
 
+TEST(Roles, RecursiveRoleCheckTest) {
+  // create roles
+  run_ddl_statement("CREATE ROLE regista;");
+  run_ddl_statement("CREATE ROLE makelele;");
+  run_ddl_statement("CREATE ROLE raumdeuter;");
+  run_ddl_statement("CREATE ROLE cdm;");
+  run_ddl_statement("CREATE ROLE shadow_cm;");
+  run_ddl_statement("CREATE ROLE ngolo_kante;");
+  run_ddl_statement("CREATE ROLE thomas_muller;");
+  run_ddl_statement("CREATE ROLE jorginho;");
+  run_ddl_statement("CREATE ROLE bhagwan;");
+  run_ddl_statement("CREATE ROLE messi;");
+
+  // Grant roles
+  EXPECT_NO_THROW(run_ddl_statement("GRANT cdm TO regista;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT cdm TO makelele;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT shadow_cm TO raumdeuter;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT regista to jorginho;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT makelele to ngolo_kante;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT raumdeuter to thomas_muller;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT makelele to ngolo_kante;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT makelele to bhagwan;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT regista to bhagwan;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT raumdeuter to bhagwan;"));
+  EXPECT_NO_THROW(run_ddl_statement("GRANT bhagwan to messi;"));
+
+  auto check_jorginho = [&]() {
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("jorginho", "regista", true), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("jorginho", "makelele", false), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("jorginho", "raumdeuter", false), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("jorginho", "cdm", true), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("jorginho", "cdm", false), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("jorginho", "shadow_cm", false), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("jorginho", "bhagwan", false), false);
+  };
+
+  auto check_kante = [&]() {
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("ngolo_kante", "regista", false), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("ngolo_kante", "makelele", true), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("ngolo_kante", "raumdeuter", false), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("ngolo_kante", "cdm", true), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("ngolo_kante", "cdm", false), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("ngolo_kante", "shadow_cm", false), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("ngolo_kante", "bhagwan", false), false);
+  };
+
+  auto check_muller = [&]() {
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("thomas_muller", "regista", false), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("thomas_muller", "makelele", false), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("thomas_muller", "raumdeuter", true), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("thomas_muller", "cdm", false), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("thomas_muller", "shadow_cm", true), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("thomas_muller", "shadow_cm", false), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("thomas_muller", "bhagwan", false), false);
+  };
+
+  auto check_messi = [&]() {
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("messi", "regista", false), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("messi", "makelele", false), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("messi", "raumdeuter", false), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("messi", "regista", true), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("messi", "makelele", true), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("messi", "raumdeuter", true), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("messi", "cdm", false), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("messi", "cdm", true), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("messi", "shadow_cm", true), false);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("messi", "shadow_cm", false), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("messi", "bhagwan", false), true);
+    EXPECT_EQ(sys_cat.isRoleGrantedToGrantee("messi", "bhagwan", true), true);
+  };
+
+  auto drop_roles = [&]() {
+    run_ddl_statement("DROP ROLE regista;");
+    run_ddl_statement("DROP ROLE makelele;");
+    run_ddl_statement("DROP ROLE raumdeuter;");
+    run_ddl_statement("DROP ROLE cdm;");
+    run_ddl_statement("DROP ROLE shadow_cm;");
+    run_ddl_statement("DROP ROLE ngolo_kante;");
+    run_ddl_statement("DROP ROLE thomas_muller;");
+    run_ddl_statement("DROP ROLE jorginho;");
+    run_ddl_statement("DROP ROLE bhagwan;");
+    run_ddl_statement("DROP ROLE messi;");
+  };
+
+  // validate recursive roles
+  check_jorginho();
+  check_kante();
+  check_muller();
+  check_messi();
+
+  // cleanup objects
+  drop_roles();
+}
+
 TEST_F(DatabaseObject, AccessDefaultsTest) {
   auto cat_mapd = Catalog_Namespace::Catalog::get(OMNISCI_DEFAULT_DB);
   DBObject mapd_object(OMNISCI_DEFAULT_DB, DBObjectType::DatabaseDBObjectType);

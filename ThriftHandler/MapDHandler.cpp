@@ -1199,6 +1199,26 @@ void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& s
   }
 }
 
+bool MapDHandler::has_role(const TSessionId& sessionId,
+                           const std::string& granteeName,
+                           const std::string& roleName) {
+  const auto stdlog = STDLOG(get_session_ptr(sessionId));
+  const auto session_ptr = stdlog.getConstSessionInfo();
+  const auto current_user = session_ptr->get_currentUser();
+  if (!current_user.isSuper) {
+    if (const auto* user = SysCatalog::instance().getUserGrantee(granteeName);
+        user && current_user.userName != granteeName) {
+      THROW_MAPD_EXCEPTION("Only super users can check other user's roles.");
+    } else if (!SysCatalog::instance().isRoleGrantedToGrantee(
+                   current_user.userName, granteeName, true)) {
+      THROW_MAPD_EXCEPTION(
+          "Only super users can check roles assignment that have not been directly "
+          "granted to a user.");
+    }
+  }
+  return SysCatalog::instance().isRoleGrantedToGrantee(granteeName, roleName, false);
+}
+
 static TDBObject serialize_db_object(const std::string& roleName,
                                      const DBObject& inObject) {
   TDBObject outObject;

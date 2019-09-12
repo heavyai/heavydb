@@ -384,6 +384,9 @@ class MapDHandler : public MapDIf {
                   const int32_t table_id) override;
   // DB Object Privileges
   void get_roles(std::vector<std::string>& _return, const TSessionId& session) override;
+  bool has_role(const TSessionId& sessionId,
+                const std::string& granteeName,
+                const std::string& roleName) override;
   bool has_object_privilege(const TSessionId& sessionId,
                             const std::string& granteeName,
                             const std::string& objectName,

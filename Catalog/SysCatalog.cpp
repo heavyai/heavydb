@@ -1848,15 +1848,19 @@ bool SysCatalog::isRoleGrantedToGrantee(const std::string& granteeName,
   if (roleName == granteeName) {
     return true;
   }
-  bool rc = false;
-  auto* user_rl = instance().getUserGrantee(granteeName);
-  if (user_rl) {
-    auto* rl = instance().getRoleGrantee(roleName);
-    if (rl && user_rl->hasRole(rl, only_direct)) {
-      rc = true;
-    }
+  bool is_role_granted = false;
+  auto* target_role = instance().getRoleGrantee(roleName);
+  auto has_role = [&](auto grantee_rl) {
+    is_role_granted = target_role && grantee_rl->hasRole(target_role, only_direct);
+  };
+  if (auto* user_role = instance().getUserGrantee(granteeName); user_role) {
+    has_role(user_role);
+  } else if (auto* role = instance().getRoleGrantee(granteeName); role) {
+    has_role(role);
+  } else {
+    CHECK(false);
   }
-  return rc;
+  return is_role_granted;
 }
 
 bool SysCatalog::isDashboardSystemRole(const std::string& roleName) {
