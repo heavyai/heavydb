@@ -10,8 +10,7 @@ class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
             int8_t* dest,
             const size_t numBytes) override;
 
-  std::string getType() const override;
+  virtual void registerTable(std::pair<int, int> table_key, const std::string &type) override;
 
- private:
-  std::map<ChunkKey, std::vector<int8_t>> buffers_;
+  std::string getType() const override;
 };

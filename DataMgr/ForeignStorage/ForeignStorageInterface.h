@@ -34,6 +34,7 @@ class PersistentForeignStorageInterface {
                     const SQLTypeInfo& sql_type,
                     int8_t* dest,
                     const size_t num_bytes) = 0;
+  virtual void registerTable(std::pair<int, int> table_key, const std::string &type) = 0;
   virtual std::string getType() const = 0;
 };
 

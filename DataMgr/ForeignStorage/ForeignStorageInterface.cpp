@@ -148,7 +148,7 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
                               // oly read here for chunk
     auto chunk_it = chunk_index_.lower_bound(keyPrefix);
     if (chunk_it == chunk_index_.end()) {
-      return;  // throw?
+      CHECK(false);  // throw?
     }
     while (chunk_it != chunk_index_.end() &&
            std::search(chunk_it->first.begin(),
@@ -277,11 +277,19 @@ void ForeignStorageInterface::registerTable(const int db_id,
                                             const std::string& type) {
   std::lock_guard<std::mutex> persistent_storage_interfaces_lock(
       persistent_storage_interfaces_mutex_);
-  const auto it = persistent_storage_interfaces_.find(type);
+  size_t sep = type.find_first_of(':');
+  std::string type_id = type.substr(0, sep);
+  if(sep != std::string::npos)
+    sep++;
+  std::string type_info = type.substr(sep);
+  std::transform(type_info.begin(), type_info.end(), type_info.begin(),
+                 [](unsigned char c){ return std::tolower(c); }); // TODO: get original unmodified case
+  const auto it = persistent_storage_interfaces_.find(type_id);
   CHECK(it != persistent_storage_interfaces_.end());
   const auto it_ok = table_persistent_storage_interface_map_.emplace(
       std::make_pair(db_id, table_id), it->second.get());
   CHECK(it_ok.second);
+  it_ok.first->second->registerTable(it_ok.first->first, type_info);
 }
 
 std::unordered_map<std::string, std::unique_ptr<PersistentForeignStorageInterface>>
