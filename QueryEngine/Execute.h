@@ -759,7 +759,7 @@ class Executor {
                              CodeCache&);
 
  private:
-  static ResultSetPtr resultsUnion(ExecutionDispatch& execution_dispatch);
+  ResultSetPtr resultsUnion(ExecutionDispatch& execution_dispatch);
   std::vector<int64_t> getJoinHashTablePtrs(const ExecutorDeviceType device_type,
                                             const int device_id);
   ResultSetPtr reduceMultiDeviceResults(
