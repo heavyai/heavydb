@@ -608,6 +608,7 @@ void fill_one_entry_baseline(int64_t* value_slots,
     }
 
     switch (target_info.sql_type.get_type()) {
+      case kTINYINT:
       case kSMALLINT:
       case kINT:
       case kBIGINT:

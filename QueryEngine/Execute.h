@@ -88,6 +88,7 @@ extern size_t g_big_group_threshold;
 extern bool g_enable_window_functions;
 extern size_t g_max_memory_allocation_size;
 extern double g_bump_allocator_step_reduction;
+extern bool g_enable_direct_columnarization;
 
 class QueryCompilationDescriptor;
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;

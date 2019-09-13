@@ -874,6 +874,31 @@ bool use_parallel_algorithms(const ResultSet& rows) {
   return can_use_parallel_algorithms(rows) && rows.entryCount() >= 20000;
 }
 
+/**
+ * Determines if it is possible to directly form a ColumnarResults class from this
+ * result set, bypassing the default columnarization.
+ *
+ * NOTE: If there exists a permutation vector (i.e., in some ORDER BY queries), it
+ * becomes equivalent to the row-wise columnarization.
+ */
+bool ResultSet::isDirectColumnarConversionPossible() const {
+  if (!g_enable_direct_columnarization) {
+    return false;
+  } else if (query_mem_desc_.didOutputColumnar()) {
+    return permutation_.empty() && (query_mem_desc_.getQueryDescriptionType() ==
+                                        QueryDescriptionType::Projection ||
+                                    (query_mem_desc_.getQueryDescriptionType() ==
+                                         QueryDescriptionType::GroupByPerfectHash ||
+                                     query_mem_desc_.getQueryDescriptionType() ==
+                                         QueryDescriptionType::GroupByBaselineHash));
+  } else {
+    return permutation_.empty() && (query_mem_desc_.getQueryDescriptionType() ==
+                                        QueryDescriptionType::GroupByPerfectHash ||
+                                    query_mem_desc_.getQueryDescriptionType() ==
+                                        QueryDescriptionType::GroupByBaselineHash);
+  }
+}
+
 // returns a bitmap (and total number) of all single slot targets
 std::tuple<std::vector<bool>, size_t> ResultSet::getSingleSlotTargetBitmap() const {
   std::vector<bool> target_bitmap(targets_.size(), true);
@@ -889,6 +914,32 @@ std::tuple<std::vector<bool>, size_t> ResultSet::getSingleSlotTargetBitmap() con
     }
   }
   return std::make_tuple(std::move(target_bitmap), num_single_slot_targets);
+}
+
+/**
+ * This function returns a bitmap and population count of it, where it denotes
+ * all supported single-column targets suitable for direct columnarization.
+ *
+ * The final goal is to remove the need for such selection, but at the moment for any
+ * target that doesn't qualify for direct columnarization, we use the traditional
+ * result set's iteration to handle it (e.g., count distinct, approximate count distinct)
+ */
+std::tuple<std::vector<bool>, size_t> ResultSet::getSupportedSingleSlotTargetBitmap()
+    const {
+  CHECK(isDirectColumnarConversionPossible());
+  auto [single_slot_targets, num_single_slot_targets] = getSingleSlotTargetBitmap();
+
+  for (size_t target_idx = 0; target_idx < single_slot_targets.size(); target_idx++) {
+    const auto& target = targets_[target_idx];
+    if (single_slot_targets[target_idx] &&
+        (is_distinct_target(target) ||
+         (target.is_agg && target.agg_kind == kSAMPLE && target.sql_type == kFLOAT))) {
+      single_slot_targets[target_idx] = false;
+      num_single_slot_targets--;
+    }
+  }
+  CHECK_GE(num_single_slot_targets, size_t(0));
+  return std::make_tuple(std::move(single_slot_targets), num_single_slot_targets);
 }
 
 // returns the starting slot index for all targets in the result set

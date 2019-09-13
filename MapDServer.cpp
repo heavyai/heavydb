@@ -601,6 +601,12 @@ void MapDProgramOptions::fillAdvancedOptions() {
           ->default_value(g_enable_smem_group_by)
           ->implicit_value(true),
       "Enable using GPU shared memory for some GROUP BY queries.");
+  developer_desc.add_options()("enable-direct-columnarization",
+                               po::value<bool>(&g_enable_direct_columnarization)
+                                   ->default_value(g_enable_direct_columnarization)
+                                   ->implicit_value(true),
+                               "Enables/disables a more optimized columnarization method "
+                               "for intermediate steps in multi-step queries.");
   developer_desc.add_options()("enable-window-functions",
                                po::value<bool>(&g_enable_window_functions)
                                    ->default_value(g_enable_window_functions)

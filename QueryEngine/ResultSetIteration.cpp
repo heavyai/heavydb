@@ -147,7 +147,7 @@ std::vector<TargetValue> ResultSet::getRowAt(
   for (size_t target_idx = 0; target_idx < storage_->targets_.size(); ++target_idx) {
     const auto& agg_info = storage_->targets_[target_idx];
     if (query_mem_desc_.didOutputColumnar()) {
-      if (!targets_to_skip.empty()) {
+      if (UNLIKELY(!targets_to_skip.empty())) {
         row.push_back(!targets_to_skip[target_idx]
                           ? getTargetValueFromBufferColwise(crt_col_ptr,
                                                             keys_ptr,
@@ -178,15 +178,29 @@ std::vector<TargetValue> ResultSet::getRowAt(
                                                 storage->query_mem_desc_,
                                                 separate_varlen_storage_valid_);
     } else {
-      row.push_back(getTargetValueFromBufferRowwise(rowwise_target_ptr,
-                                                    keys_ptr,
-                                                    global_entry_idx,
-                                                    agg_info,
-                                                    target_idx,
-                                                    agg_col_idx,
-                                                    translate_strings,
-                                                    decimal_to_double,
-                                                    fixup_count_distinct_pointers));
+      if (UNLIKELY(!targets_to_skip.empty())) {
+        row.push_back(!targets_to_skip[target_idx]
+                          ? getTargetValueFromBufferRowwise(rowwise_target_ptr,
+                                                            keys_ptr,
+                                                            global_entry_idx,
+                                                            agg_info,
+                                                            target_idx,
+                                                            agg_col_idx,
+                                                            translate_strings,
+                                                            decimal_to_double,
+                                                            fixup_count_distinct_pointers)
+                          : nullptr);
+      } else {
+        row.push_back(getTargetValueFromBufferRowwise(rowwise_target_ptr,
+                                                      keys_ptr,
+                                                      global_entry_idx,
+                                                      agg_info,
+                                                      target_idx,
+                                                      agg_col_idx,
+                                                      translate_strings,
+                                                      decimal_to_double,
+                                                      fixup_count_distinct_pointers));
+      }
       rowwise_target_ptr = advance_target_ptr_row_wise(rowwise_target_ptr,
                                                        agg_info,
                                                        agg_col_idx,
@@ -1145,27 +1159,150 @@ void ResultSet::copyColumnIntoBuffer(const size_t column_idx,
   }
 }
 
+template <typename ENTRY_TYPE, QueryDescriptionType QUERY_TYPE, bool COLUMNAR_FORMAT>
+ENTRY_TYPE ResultSet::getEntryAt(const size_t row_idx,
+                                 const size_t target_idx,
+                                 const size_t slot_idx) const {
+  if constexpr (QUERY_TYPE == QueryDescriptionType::GroupByPerfectHash) {  // NOLINT
+    if constexpr (COLUMNAR_FORMAT) {                                       // NOLINT
+      return getColumnarPerfectHashEntryAt<ENTRY_TYPE>(row_idx, target_idx, slot_idx);
+    } else {
+      return getRowWisePerfectHashEntryAt<ENTRY_TYPE>(row_idx, target_idx, slot_idx);
+    }
+  } else if constexpr (QUERY_TYPE == QueryDescriptionType::GroupByBaselineHash) {
+    if constexpr (COLUMNAR_FORMAT) {  // NOLINT
+      return getColumnarBaselineEntryAt<ENTRY_TYPE>(row_idx, target_idx, slot_idx);
+    } else {
+      return getRowWiseBaselineEntryAt<ENTRY_TYPE>(row_idx, target_idx, slot_idx);
+    }
+  } else {
+    UNREACHABLE() << "Invalid query type is used";
+    return 0;
+  }
+}
+
+#define DEF_GET_ENTRY_AT(query_type, columnar_output)                         \
+  template DATA_T ResultSet::getEntryAt<DATA_T, query_type, columnar_output>( \
+      const size_t row_idx, const size_t target_idx, const size_t slot_idx) const;
+
+#define DATA_T int64_t
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByPerfectHash, true)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByPerfectHash, false)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByBaselineHash, true)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByBaselineHash, false)
+#undef DATA_T
+
+#define DATA_T int32_t
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByPerfectHash, true)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByPerfectHash, false)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByBaselineHash, true)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByBaselineHash, false)
+#undef DATA_T
+
+#define DATA_T int16_t
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByPerfectHash, true)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByPerfectHash, false)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByBaselineHash, true)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByBaselineHash, false)
+#undef DATA_T
+
+#define DATA_T int8_t
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByPerfectHash, true)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByPerfectHash, false)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByBaselineHash, true)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByBaselineHash, false)
+#undef DATA_T
+
+#define DATA_T float
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByPerfectHash, true)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByPerfectHash, false)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByBaselineHash, true)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByBaselineHash, false)
+#undef DATA_T
+
+#define DATA_T double
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByPerfectHash, true)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByPerfectHash, false)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByBaselineHash, true)
+DEF_GET_ENTRY_AT(QueryDescriptionType::GroupByBaselineHash, false)
+#undef DATA_T
+
+#undef DEF_GET_ENTRY_AT
+
 /**
- * For direct columnar conversion only
+ * Directly accesses the result set's storage buffer for a particular data type (columnar
+ * output, perfect hash group by)
+ *
+ * NOTE: Currently, only used in direct columnarization
  */
 template <typename ENTRY_TYPE>
-ENTRY_TYPE ResultSet::getEntryAt(const size_t row_idx, const size_t column_idx) const {
-  const size_t column_offset = storage_->query_mem_desc_.getColOffInBytes(column_idx);
+ENTRY_TYPE ResultSet::getColumnarPerfectHashEntryAt(const size_t row_idx,
+                                                    const size_t target_idx,
+                                                    const size_t slot_idx) const {
+  const size_t column_offset = storage_->query_mem_desc_.getColOffInBytes(slot_idx);
   const int8_t* storage_buffer = storage_->getUnderlyingBuffer() + column_offset;
   return reinterpret_cast<const ENTRY_TYPE*>(storage_buffer)[row_idx];
 }
-template int64_t ResultSet::getEntryAt<int64_t>(const size_t row_idx,
-                                                const size_t column_idx) const;
-template int32_t ResultSet::getEntryAt<int32_t>(const size_t row_idx,
-                                                const size_t column_idx) const;
-template int16_t ResultSet::getEntryAt<int16_t>(const size_t row_idx,
-                                                const size_t column_idx) const;
-template int8_t ResultSet::getEntryAt<int8_t>(const size_t row_idx,
-                                              const size_t column_idx) const;
-template float ResultSet::getEntryAt<float>(const size_t row_idx,
-                                            const size_t column_idx) const;
-template double ResultSet::getEntryAt<double>(const size_t row_idx,
-                                              const size_t column_idx) const;
+
+/**
+ * Directly accesses the result set's storage buffer for a particular data type (row-wise
+ * output, perfect hash group by)
+ *
+ * NOTE: Currently, only used in direct columnarization
+ */
+template <typename ENTRY_TYPE>
+ENTRY_TYPE ResultSet::getRowWisePerfectHashEntryAt(const size_t row_idx,
+                                                   const size_t target_idx,
+                                                   const size_t slot_idx) const {
+  const size_t row_offset = storage_->query_mem_desc_.getRowSize() * row_idx;
+  const size_t column_offset = storage_->query_mem_desc_.getColOffInBytes(slot_idx);
+  const int8_t* storage_buffer =
+      storage_->getUnderlyingBuffer() + row_offset + column_offset;
+  return *reinterpret_cast<const ENTRY_TYPE*>(storage_buffer);
+}
+
+/**
+ * Directly accesses the result set's storage buffer for a particular data type (columnar
+ * output, baseline hash group by)
+ *
+ * NOTE: Currently, only used in direct columnarization
+ */
+template <typename ENTRY_TYPE>
+ENTRY_TYPE ResultSet::getRowWiseBaselineEntryAt(const size_t row_idx,
+                                                const size_t target_idx,
+                                                const size_t slot_idx) const {
+  CHECK_NE(storage_->query_mem_desc_.targetGroupbyIndicesSize(), size_t(0));
+  const auto key_width = storage_->query_mem_desc_.getEffectiveKeyWidth();
+  auto keys_ptr = row_ptr_rowwise(
+      storage_->getUnderlyingBuffer(), storage_->query_mem_desc_, row_idx);
+  const auto column_offset =
+      (storage_->query_mem_desc_.getTargetGroupbyIndex(target_idx) < 0)
+          ? storage_->query_mem_desc_.getColOffInBytes(slot_idx)
+          : storage_->query_mem_desc_.getTargetGroupbyIndex(target_idx) * key_width;
+  const auto storage_buffer = keys_ptr + column_offset;
+  return *reinterpret_cast<const ENTRY_TYPE*>(storage_buffer);
+}
+
+/**
+ * Directly accesses the result set's storage buffer for a particular data type (row-wise
+ * output, baseline hash group by)
+ *
+ * NOTE: Currently, only used in direct columnarization
+ */
+template <typename ENTRY_TYPE>
+ENTRY_TYPE ResultSet::getColumnarBaselineEntryAt(const size_t row_idx,
+                                                 const size_t target_idx,
+                                                 const size_t slot_idx) const {
+  CHECK_NE(storage_->query_mem_desc_.targetGroupbyIndicesSize(), size_t(0));
+  const auto key_width = storage_->query_mem_desc_.getEffectiveKeyWidth();
+  const auto column_offset =
+      (storage_->query_mem_desc_.getTargetGroupbyIndex(target_idx) < 0)
+          ? storage_->query_mem_desc_.getColOffInBytes(slot_idx)
+          : storage_->query_mem_desc_.getTargetGroupbyIndex(target_idx) * key_width *
+                storage_->query_mem_desc_.getEntryCount();
+  const auto column_buffer = storage_->getUnderlyingBuffer() + column_offset;
+  return reinterpret_cast<const ENTRY_TYPE*>(column_buffer)[row_idx];
+}
 
 // Interprets ptr1, ptr2 as the ptr and len pair used for variable length data.
 TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,

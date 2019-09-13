@@ -15366,6 +15366,7 @@ TEST(Select, EmptyString) {
 TEST(Select, MultiStepColumnarization) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    // single-column perfect hash, columnarization, and then a projection
     c("SELECT id, SUM(big_int) / SUM(float_not_null), MAX(small_int) / MAX(tiny_int), "
       "MIN(tiny_int) + MIN(small_int) FROM logical_size_test GROUP BY id ORDER BY id;",
       dt);
@@ -15389,6 +15390,70 @@ TEST(Select, MultiStepColumnarization) {
       ASSERT_TRUE((int64_t(79) == v<int64_t>(first_row[1])) ||
                   ((int64_t(76) == v<int64_t>(first_row[1]))));
       ASSERT_EQ(int64_t(2252), v<int64_t>(first_row[2]));
+    }
+    // multi-column perfect hash, columnarization, and then a projection
+    c("SELECT id, small_int, MAX(float_not_null) + MAX(double_not_null), MAX(id_null), "
+      "MAX(small_int_null), MAX(tiny_int), MAX(tiny_int_null), MAX(float_null), "
+      "MAX(double_null), "
+      "MIN(id_null), MIN(small_int_null), MIN(tiny_int), MIN(tiny_int_null), "
+      "MIN(float_null), MIN(double_null), "
+      "COUNT(id_null), COUNT(small_int_null), COUNT(tiny_int), COUNT(tiny_int_null), "
+      "COUNT(float_null), COUNT(double_null) "
+      "FROM logical_size_test GROUP BY id, small_int ORDER BY id, small_int;",
+      dt);
+
+    c("SELECT small_int, tiny_int, id, SUM(float_not_null) "
+      "/ (case when COUNT(big_int) = 0 then 1 else COUNT(big_int) end) FROM "
+      "logical_size_test GROUP BY small_int, tiny_int, id ORDER BY id, tiny_int, "
+      "small_int;",
+      dt);
+    {
+      std::string query(
+          "SELECT x, fixed_str, COUNT(*), SUM(t), SUM(dd), SUM(dd_notnull), MAX(ofd), "
+          "MAX(ufd), COUNT(ofq), COUNT(ufq) FROM test GROUP BY x, fixed_str ORDER BY x, "
+          "fixed_str ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
+    {
+      std::string query(
+          "SELECT DATE_TRUNC(MONTH, o) AS month_, DATE_TRUNC(DAY, m) AS day_, COUNT(*), "
+          "SUM(x) + SUM(y), SAMPLE(t) FROM test GROUP BY month_, day_ ORDER BY month_, "
+          "day_ LIMIT 1;");
+      const auto result = run_multiple_agg(query, dt);
+      const auto first_row = result->getNextRow(true, true);
+      ASSERT_EQ(size_t(5), first_row.size());
+      ASSERT_EQ(int64_t(936144000), v<int64_t>(first_row[0]));
+      ASSERT_EQ(int64_t(1418428800), v<int64_t>(first_row[1]));
+      ASSERT_EQ(int64_t(10), v<int64_t>(first_row[2]));
+      ASSERT_EQ(int64_t(490), v<int64_t>(first_row[3]));
+      ASSERT_EQ(int64_t(1001), v<int64_t>(first_row[4]));
+    }
+    // baseline hash, columnarization, and then a projection
+    c("SELECT cast (id as double) as key0, count(*) as cnt, big_int as key1 from "
+      "logical_size_test group by key0, key1 having cnt < 4 order by key0, key1;",
+      dt);
+    c("SELECT cast (id as float) as key0, COUNT(*), SUM(float_not_null) + "
+      "SUM(double_not_null), MAX(tiny_int_null), MIN(tiny_int) as min0, "
+      "AVG(big_int) FROM logical_size_test GROUP BY key0 ORDER BY min0;",
+      dt);
+    {
+      std::string query(
+          "SELECT CAST(x as float) as key0, DATE_TRUNC(microsecond, m_6) as key1, dd as "
+          "key2, EXTRACT(epoch from m) as key3, fixed_str as key4, COUNT(*), (SUM(y) + "
+          "SUM(t)) / AVG(z), SAMPLE(f) + SAMPLE(d) FROM test GROUP BY key0, key1, key2, "
+          "key3, key4 ORDER BY key2 LIMIT 1;");
+      const auto result = run_multiple_agg(query, dt);
+      const auto first_row = result->getNextRow(true, true);
+      ASSERT_EQ(size_t(8), first_row.size());
+      ASSERT_NEAR(float(7), v<float>(first_row[0]), 0.01);
+      ASSERT_EQ(int64_t(931701773874533), v<int64_t>(first_row[1]));
+      ASSERT_NEAR(double(111.1), v<double>(first_row[2]), 0.01);
+      ASSERT_EQ(int64_t(1418509395), v<int64_t>(first_row[3]));
+      ASSERT_EQ(std::string("foo"),
+                boost::get<std::string>(v<NullableString>(first_row[4])));
+      ASSERT_EQ(int64_t(10), v<int64_t>(first_row[5]));
+      ASSERT_NEAR(double(103.267), v<double>(first_row[6]), 0.01);
+      ASSERT_NEAR(double(3.3), v<double>(first_row[7]), 0.01);
     }
   }
 }

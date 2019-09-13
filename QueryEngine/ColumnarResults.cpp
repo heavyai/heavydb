@@ -65,59 +65,11 @@ ColumnarResults::ColumnarResults(
         reinterpret_cast<int8_t*>(checked_malloc(num_rows_ * target_types[i].get_size()));
     row_set_mem_owner->addColBuffer(column_buffers_[i]);
   }
-  std::atomic<size_t> row_idx{0};
-  const auto do_work = [num_columns, this](const std::vector<TargetValue>& crt_row,
-                                           const size_t row_idx) {
-    for (size_t i = 0; i < num_columns; ++i) {
-      writeBackCell(crt_row[i], row_idx, i);
-    }
-  };
 
   if (isDirectColumnarConversionPossible() && rows.entryCount() > 0) {
-    materializeAllColumns(rows, num_columns);
+    materializeAllColumnsDirectly(rows, num_columns);
   } else {
-    if (isParallelConversion()) {
-      const size_t worker_count = cpu_threads();
-      std::vector<std::future<void>> conversion_threads;
-      const auto entry_count = rows.entryCount();
-      for (size_t i = 0,
-                  start_entry = 0,
-                  stride = (entry_count + worker_count - 1) / worker_count;
-           i < worker_count && start_entry < entry_count;
-           ++i, start_entry += stride) {
-        const auto end_entry = std::min(start_entry + stride, entry_count);
-        conversion_threads.push_back(std::async(
-            std::launch::async,
-            [&rows, &do_work, &row_idx](const size_t start, const size_t end) {
-              for (size_t i = start; i < end; ++i) {
-                const auto crt_row = rows.getRowAtNoTranslations(i);
-                if (!crt_row.empty()) {
-                  do_work(crt_row, row_idx.fetch_add(1));
-                }
-              }
-            },
-            start_entry,
-            end_entry));
-      }
-      for (auto& child : conversion_threads) {
-        child.wait();
-      }
-      for (auto& child : conversion_threads) {
-        child.get();
-      }
-      num_rows_ = row_idx;
-      rows.setCachedRowCount(num_rows_);
-      return;
-    }
-    while (true) {
-      const auto crt_row = rows.getNextRow(false, false);
-      if (crt_row.empty()) {
-        break;
-      }
-      do_work(crt_row, row_idx);
-      ++row_idx;
-    }
-    rows.moveToBegin();
+    materializeAllColumnsThroughIteration(rows, num_columns);
   }
 }
 
@@ -186,6 +138,61 @@ std::unique_ptr<ColumnarResults> ColumnarResults::mergeResults(
   return merged_results;
 }
 
+/**
+ * This function iterates through the result set (using the getRowAtNoTranslation and
+ * getNextRow family of functions) and writes back the results into output column buffers.
+ */
+void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& rows,
+                                                            const size_t num_columns) {
+  std::atomic<size_t> row_idx{0};
+  const auto do_work = [num_columns, this](const std::vector<TargetValue>& crt_row,
+                                           const size_t row_idx) {
+    for (size_t i = 0; i < num_columns; ++i) {
+      writeBackCell(crt_row[i], row_idx, i);
+    }
+  };
+  if (isParallelConversion()) {
+    const size_t worker_count = cpu_threads();
+    std::vector<std::future<void>> conversion_threads;
+    const auto entry_count = rows.entryCount();
+    for (size_t i = 0,
+                start_entry = 0,
+                stride = (entry_count + worker_count - 1) / worker_count;
+         i < worker_count && start_entry < entry_count;
+         ++i, start_entry += stride) {
+      const auto end_entry = std::min(start_entry + stride, entry_count);
+      conversion_threads.push_back(std::async(
+          std::launch::async,
+          [&rows, &do_work, &row_idx](const size_t start, const size_t end) {
+            for (size_t i = start; i < end; ++i) {
+              const auto crt_row = rows.getRowAtNoTranslations(i);
+              if (!crt_row.empty()) {
+                do_work(crt_row, row_idx.fetch_add(1));
+              }
+            }
+          },
+          start_entry,
+          end_entry));
+    }
+    for (auto& child : conversion_threads) {
+      child.wait();
+    }
+
+    num_rows_ = row_idx;
+    rows.setCachedRowCount(num_rows_);
+    return;
+  }
+  while (true) {
+    const auto crt_row = rows.getNextRow(false, false);
+    if (crt_row.empty()) {
+      break;
+    }
+    do_work(crt_row, row_idx);
+    ++row_idx;
+  }
+  rows.moveToBegin();
+}
+
 /*
  * This function processes and decodes its input TargetValue
  * and write it into its corresponding column buffer's cell (with corresponding
@@ -244,29 +251,28 @@ inline void ColumnarResults::writeBackCell(const TargetValue& col_val,
  * NOTE: currently only used for direct columnarizations
  */
 template <typename DATA_TYPE>
-void ColumnarResults::writeBackCellDirect(
-    const ResultSet& rows,
-    const size_t input_buffer_entry_idx,
-    const size_t output_buffer_entry_idx,
-    const size_t target_idx,
-    const size_t slot_idx,
-    const ReadFunctionPerfectHash& read_from_function) {
+void ColumnarResults::writeBackCellDirect(const ResultSet& rows,
+                                          const size_t input_buffer_entry_idx,
+                                          const size_t output_buffer_entry_idx,
+                                          const size_t target_idx,
+                                          const size_t slot_idx,
+                                          const ReadFunction& read_from_function) {
   const auto val = static_cast<DATA_TYPE>(fixed_encoding_nullable_val(
-      read_from_function(rows, input_buffer_entry_idx, slot_idx),
+      read_from_function(rows, input_buffer_entry_idx, target_idx, slot_idx),
       target_types_[target_idx]));
   reinterpret_cast<DATA_TYPE*>(column_buffers_[target_idx])[output_buffer_entry_idx] =
       val;
 }
 
 template <>
-void ColumnarResults::writeBackCellDirect<float>(
-    const ResultSet& rows,
-    const size_t input_buffer_entry_idx,
-    const size_t output_buffer_entry_idx,
-    const size_t target_idx,
-    const size_t slot_idx,
-    const ReadFunctionPerfectHash& read_from_function) {
-  const int32_t ival = read_from_function(rows, input_buffer_entry_idx, slot_idx);
+void ColumnarResults::writeBackCellDirect<float>(const ResultSet& rows,
+                                                 const size_t input_buffer_entry_idx,
+                                                 const size_t output_buffer_entry_idx,
+                                                 const size_t target_idx,
+                                                 const size_t slot_idx,
+                                                 const ReadFunction& read_from_function) {
+  const int32_t ival =
+      read_from_function(rows, input_buffer_entry_idx, target_idx, slot_idx);
   const float fval = *reinterpret_cast<const float*>(may_alias_ptr(&ival));
   reinterpret_cast<float*>(column_buffers_[target_idx])[output_buffer_entry_idx] = fval;
 }
@@ -278,13 +284,14 @@ void ColumnarResults::writeBackCellDirect<double>(
     const size_t output_buffer_entry_idx,
     const size_t target_idx,
     const size_t slot_idx,
-    const ReadFunctionPerfectHash& read_from_function) {
-  const int64_t ival = read_from_function(rows, input_buffer_entry_idx, slot_idx);
+    const ReadFunction& read_from_function) {
+  const int64_t ival =
+      read_from_function(rows, input_buffer_entry_idx, target_idx, slot_idx);
   const double dval = *reinterpret_cast<const double*>(may_alias_ptr(&ival));
   reinterpret_cast<double*>(column_buffers_[target_idx])[output_buffer_entry_idx] = dval;
 }
 
-/*
+/**
  * This function materializes all columns from the main storage and all appended storages
  * and form a single continguous column for each output column. Depending on whether the
  * column is lazily fetched or not, it will treat them differently.
@@ -293,26 +300,46 @@ void ColumnarResults::writeBackCellDirect<double>(
  * only be used when the result set is columnar and completely compacted (e.g., in
  * columnar projections).
  */
-void ColumnarResults::materializeAllColumns(const ResultSet& rows,
-                                            const size_t num_columns) {
+void ColumnarResults::materializeAllColumnsDirectly(const ResultSet& rows,
+                                                    const size_t num_columns) {
   CHECK(isDirectColumnarConversionPossible());
   switch (rows.getQueryDescriptionType()) {
     case QueryDescriptionType::Projection: {
-      const auto& lazy_fetch_info = rows.getLazyFetchInfo();
-
-      // We can directly copy each non-lazy column's content
-      copyAllNonLazyColumns(lazy_fetch_info, rows, num_columns);
-
-      // Only lazy columns are iterated through first and then materialized
-      materializeAllLazyColumns(lazy_fetch_info, rows, num_columns);
-    } break;
-    case QueryDescriptionType::GroupByPerfectHash: {
-      materializeAllColumnsPerfectHash(rows, num_columns);
-    } break;
+      materializeAllColumnsProjection(rows, num_columns);
+      break;
+    }
+    case QueryDescriptionType::GroupByPerfectHash:
+    case QueryDescriptionType::GroupByBaselineHash: {
+      materializeAllColumnsGroupBy(rows, num_columns);
+      break;
+    }
     default:
       UNREACHABLE()
-          << "Direct columnar conversion for this query type not supported yet.";
+          << "Direct columnar conversion for this query type is not supported yet.";
   }
+}
+
+/**
+ * This function handles materialization for two types of columns in columnar projections:
+ * 1. for all non-lazy columns, it directly copies the results from the result set's
+ * storage into the output column buffers
+ * 2. for all lazy fetched columns, it uses result set's iterators to decode the proper
+ * values before storing them into the output column buffers
+ */
+void ColumnarResults::materializeAllColumnsProjection(const ResultSet& rows,
+                                                      const size_t num_columns) {
+  CHECK(rows.query_mem_desc_.didOutputColumnar());
+  CHECK(isDirectColumnarConversionPossible() &&
+        rows.query_mem_desc_.getQueryDescriptionType() ==
+            QueryDescriptionType::Projection);
+
+  const auto& lazy_fetch_info = rows.getLazyFetchInfo();
+
+  // We can directly copy each non-lazy column's content
+  copyAllNonLazyColumns(lazy_fetch_info, rows, num_columns);
+
+  // Only lazy columns are iterated through first and then materialized
+  materializeAllLazyColumns(lazy_fetch_info, rows, num_columns);
 }
 
 /*
@@ -325,7 +352,7 @@ void ColumnarResults::copyAllNonLazyColumns(
     const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
     const ResultSet& rows,
     const size_t num_columns) {
-  CHECK(rows.isDirectColumnarConversionPossible());
+  CHECK(isDirectColumnarConversionPossible());
   const auto is_column_non_lazily_fetched = [&lazy_fetch_info](const size_t col_idx) {
     // Saman: make sure when this lazy_fetch_info is empty
     if (lazy_fetch_info.empty()) {
@@ -353,12 +380,9 @@ void ColumnarResults::copyAllNonLazyColumns(
   for (auto& child : direct_copy_threads) {
     child.wait();
   }
-  for (auto& child : direct_copy_threads) {
-    child.get();
-  }
 }
 
-/*
+/**
  * For all lazy fetched columns, we should iterate through the column's content and
  * properly materialize it.
  *
@@ -371,7 +395,7 @@ void ColumnarResults::materializeAllLazyColumns(
     const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
     const ResultSet& rows,
     const size_t num_columns) {
-  CHECK(rows.isDirectColumnarConversionPossible());
+  CHECK(isDirectColumnarConversionPossible());
   const auto do_work_just_lazy_columns = [num_columns, this](
                                              const std::vector<TargetValue>& crt_row,
                                              const size_t row_idx,
@@ -430,58 +454,21 @@ void ColumnarResults::materializeAllLazyColumns(
     for (auto& child : conversion_threads) {
       child.wait();
     }
-    for (auto& child : conversion_threads) {
-      child.get();
-    }
   }
 }
 
-/*
- * It returns the corresponding entry in the generated column buffers
- * These get functions are to be used for unit tests, and should not be used
- * where performance matters.
- */
-template <typename ENTRY_TYPE>
-ENTRY_TYPE ColumnarResults::getEntryAt(const size_t row_idx,
-                                       const size_t column_idx) const {
-  CHECK_LT(column_idx, column_buffers_.size());
-  CHECK_LT(row_idx, num_rows_);
-  return reinterpret_cast<ENTRY_TYPE*>(column_buffers_[column_idx])[row_idx];
-}
-template int64_t ColumnarResults::getEntryAt<int64_t>(const size_t row_idx,
-                                                      const size_t column_idx) const;
-template int32_t ColumnarResults::getEntryAt<int32_t>(const size_t row_idx,
-                                                      const size_t column_idx) const;
-template int16_t ColumnarResults::getEntryAt<int16_t>(const size_t row_idx,
-                                                      const size_t column_idx) const;
-template int8_t ColumnarResults::getEntryAt<int8_t>(const size_t row_idx,
-                                                    const size_t column_idx) const;
-
-template <>
-float ColumnarResults::getEntryAt<float>(const size_t row_idx,
-                                         const size_t column_idx) const {
-  CHECK_LT(column_idx, column_buffers_.size());
-  CHECK_LT(row_idx, num_rows_);
-  return reinterpret_cast<float*>(column_buffers_[column_idx])[row_idx];
-}
-
-template <>
-double ColumnarResults::getEntryAt<double>(const size_t row_idx,
-                                           const size_t column_idx) const {
-  CHECK_LT(column_idx, column_buffers_.size());
-  CHECK_LT(row_idx, num_rows_);
-  return reinterpret_cast<double*>(column_buffers_[column_idx])[row_idx];
-}
-
 /**
- * This function is to columnarize a result set for a perfect hash group by
- * Its main difference with the row-wise alternative is that it directly copy
- * non-empty entries into the new buffers, rather than using result set's iterators.
+ * This function is to directly columnarize a result set for group by queries.
+ * Its main difference with the traditional alternative is that it directly reads
+ * non-empty entries from the result set, and then writes them into output column buffers,
+ * rather than using the result set's iterators.
  */
-void ColumnarResults::materializeAllColumnsPerfectHash(const ResultSet& rows,
-                                                       const size_t num_columns) {
-  CHECK(rows.isDirectColumnarConversionPossible() &&
-        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash);
+void ColumnarResults::materializeAllColumnsGroupBy(const ResultSet& rows,
+                                                   const size_t num_columns) {
+  CHECK(isDirectColumnarConversionPossible());
+  CHECK(rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
+        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash);
+
   const size_t num_threads = isParallelConversion() ? cpu_threads() : 1;
   const size_t entry_count = rows.entryCount();
   const size_t size_per_thread = (entry_count + num_threads - 1) / num_threads;
@@ -492,29 +479,34 @@ void ColumnarResults::materializeAllColumnsPerfectHash(const ResultSet& rows,
 
   ColumnBitmap bitmap(num_threads * size_per_thread);
 
-  locateAndCountEntriesPerfectHash(
+  locateAndCountEntries(
       rows, bitmap, non_empty_per_thread, entry_count, num_threads, size_per_thread);
 
   // step 2: go through the generated bitmap and copy/decode corresponding entries
   // into the output buffer
-  compactAndCopyEntriesPerfectHash(rows,
-                                   bitmap,
-                                   non_empty_per_thread,
-                                   num_columns,
-                                   entry_count,
-                                   num_threads,
-                                   size_per_thread);
+  compactAndCopyEntries(rows,
+                        bitmap,
+                        non_empty_per_thread,
+                        num_columns,
+                        entry_count,
+                        num_threads,
+                        size_per_thread);
 }
 
-void ColumnarResults::locateAndCountEntriesPerfectHash(
-    const ResultSet& rows,
-    ColumnBitmap& bitmap,
-    std::vector<size_t>& non_empty_per_thread,
-    const size_t entry_count,
-    const size_t num_threads,
-    const size_t size_per_thread) const {
-  CHECK(rows.isDirectColumnarConversionPossible() &&
-        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash);
+/**
+ * This function goes through all the keys in the result set, and count the total number
+ * of non-empty keys. It also store the location of non-empty keys in a bitmap data
+ * structure for later faster access.
+ */
+void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
+                                            ColumnBitmap& bitmap,
+                                            std::vector<size_t>& non_empty_per_thread,
+                                            const size_t entry_count,
+                                            const size_t num_threads,
+                                            const size_t size_per_thread) const {
+  CHECK(isDirectColumnarConversionPossible());
+  CHECK(rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
+        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash);
   CHECK_EQ(num_threads, non_empty_per_thread.size());
   auto locate_and_count_func =
       [&rows, &bitmap, &non_empty_per_thread](
@@ -542,15 +534,18 @@ void ColumnarResults::locateAndCountEntriesPerfectHash(
   for (auto& child : conversion_threads) {
     child.wait();
   }
-  for (auto& child : conversion_threads) {
-    child.get();
-  }
 }
 
-// TODO(Saman): if necessary, we can look into the distribution of non-empty entries
-// and choose a different load-balanced strategy (assigning equal number of non-empties
-// to each thread) as opposed to equal partitioning of the bitmap
-void ColumnarResults::compactAndCopyEntriesPerfectHash(
+/**
+ * This function goes through all non-empty elements marked in the bitmap data structure,
+ * and store them back into output column buffers. The output column buffers are compacted
+ * without any holes in it.
+ *
+ * TODO(Saman): if necessary, we can look into the distribution of non-empty entries
+ * and choose a different load-balanced strategy (assigning equal number of non-empties
+ * to each thread) as opposed to equal partitioning of the bitmap
+ */
+void ColumnarResults::compactAndCopyEntries(
     const ResultSet& rows,
     const ColumnBitmap& bitmap,
     const std::vector<size_t>& non_empty_per_thread,
@@ -558,8 +553,9 @@ void ColumnarResults::compactAndCopyEntriesPerfectHash(
     const size_t entry_count,
     const size_t num_threads,
     const size_t size_per_thread) {
-  CHECK(rows.isDirectColumnarConversionPossible() &&
-        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash);
+  CHECK(isDirectColumnarConversionPossible());
+  CHECK(rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
+        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash);
   CHECK_EQ(num_threads, non_empty_per_thread.size());
 
   // compute the exclusive scan over all non-empty totals
@@ -570,32 +566,31 @@ void ColumnarResults::compactAndCopyEntriesPerfectHash(
 
   const auto slot_idx_per_target_idx = rows.getSlotIndicesForTargetIndices();
   const auto [single_slot_targets_to_skip, num_single_slot_targets] =
-      rows.getSingleSlotTargetBitmap();
+      rows.getSupportedSingleSlotTargetBitmap();
 
-  // We skip multi-slot targets (e.g., AVG), or single-slot targets where logical sized
-  // slot is not used (e.g., COUNT hidden in STDDEV) Those skipped targets are treated
+  // We skip multi-slot targets (e.g., AVG). These skipped targets are treated
   // differently and accessed through result set's iterator
   if (num_single_slot_targets < num_columns) {
-    compactAndCopyEntriesPHWithTargetSkipping(rows,
-                                              bitmap,
-                                              non_empty_per_thread,
-                                              global_offsets,
-                                              single_slot_targets_to_skip,
-                                              slot_idx_per_target_idx,
-                                              num_columns,
-                                              entry_count,
-                                              num_threads,
-                                              size_per_thread);
+    compactAndCopyEntriesWithTargetSkipping(rows,
+                                            bitmap,
+                                            non_empty_per_thread,
+                                            global_offsets,
+                                            single_slot_targets_to_skip,
+                                            slot_idx_per_target_idx,
+                                            num_columns,
+                                            entry_count,
+                                            num_threads,
+                                            size_per_thread);
   } else {
-    compactAndCopyEntriesPHWithoutTargetSkipping(rows,
-                                                 bitmap,
-                                                 non_empty_per_thread,
-                                                 global_offsets,
-                                                 slot_idx_per_target_idx,
-                                                 num_columns,
-                                                 entry_count,
-                                                 num_threads,
-                                                 size_per_thread);
+    compactAndCopyEntriesWithoutTargetSkipping(rows,
+                                               bitmap,
+                                               non_empty_per_thread,
+                                               global_offsets,
+                                               slot_idx_per_target_idx,
+                                               num_columns,
+                                               entry_count,
+                                               num_threads,
+                                               size_per_thread);
   }
 }
 
@@ -605,7 +600,7 @@ void ColumnarResults::compactAndCopyEntriesPerfectHash(
  * In this variation, multi-slot targets (e.g., AVG) are treated with the existing
  * result set's iterations, but everything else is directly columnarized.
  */
-void ColumnarResults::compactAndCopyEntriesPHWithTargetSkipping(
+void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
     const ResultSet& rows,
     const ColumnBitmap& bitmap,
     const std::vector<size_t>& non_empty_per_thread,
@@ -616,11 +611,12 @@ void ColumnarResults::compactAndCopyEntriesPHWithTargetSkipping(
     const size_t entry_count,
     const size_t num_threads,
     const size_t size_per_thread) {
-  CHECK(rows.isDirectColumnarConversionPossible() &&
-        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash);
+  CHECK(isDirectColumnarConversionPossible());
+  CHECK(rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
+        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash);
 
-  const auto [write_functions, read_functions] = initAllConversionFunctionsPerfectHash(
-      rows, slot_idx_per_target_idx, targets_to_skip);
+  const auto [write_functions, read_functions] =
+      initAllConversionFunctions(rows, slot_idx_per_target_idx, targets_to_skip);
   CHECK_EQ(write_functions.size(), num_columns);
   CHECK_EQ(read_functions.size(), num_columns);
 
@@ -685,9 +681,6 @@ void ColumnarResults::compactAndCopyEntriesPHWithTargetSkipping(
   for (auto& child : compaction_threads) {
     child.wait();
   }
-  for (auto& child : compaction_threads) {
-    child.get();
-  }
 }
 
 /**
@@ -696,7 +689,7 @@ void ColumnarResults::compactAndCopyEntriesPHWithTargetSkipping(
  * In this variation, all targets are assumed to be single-slot and thus can be directly
  * columnarized.
  */
-void ColumnarResults::compactAndCopyEntriesPHWithoutTargetSkipping(
+void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
     const ResultSet& rows,
     const ColumnBitmap& bitmap,
     const std::vector<size_t>& non_empty_per_thread,
@@ -706,11 +699,12 @@ void ColumnarResults::compactAndCopyEntriesPHWithoutTargetSkipping(
     const size_t entry_count,
     const size_t num_threads,
     const size_t size_per_thread) {
-  CHECK(rows.isDirectColumnarConversionPossible() &&
-        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash);
+  CHECK(isDirectColumnarConversionPossible());
+  CHECK(rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
+        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash);
 
   const auto [write_functions, read_functions] =
-      initAllConversionFunctionsPerfectHash(rows, slot_idx_per_target_idx);
+      initAllConversionFunctions(rows, slot_idx_per_target_idx);
   CHECK_EQ(write_functions.size(), num_columns);
   CHECK_EQ(read_functions.size(), num_columns);
 
@@ -726,26 +720,27 @@ void ColumnarResults::compactAndCopyEntriesPHWithoutTargetSkipping(
                                                                 const size_t end_index,
                                                                 const size_t thread_idx) {
     const size_t total_non_empty = non_empty_per_thread[thread_idx];
-
-    for (size_t column_idx = 0; column_idx < num_columns; column_idx++) {
-      size_t non_empty_idx = 0;
-      size_t local_idx = 0;
-      for (size_t entry_idx = start_index; entry_idx < end_index;
-           entry_idx++, local_idx++) {
-        if (non_empty_idx >= total_non_empty) {
-          // all non-empty entries has been written back
-          break;
-        }
-        const size_t output_buffer_row_idx = global_offsets[thread_idx] + non_empty_idx;
-        if (bitmap.get(entry_idx)) {
+    size_t non_empty_idx = 0;
+    size_t local_idx = 0;
+    for (size_t entry_idx = start_index; entry_idx < end_index;
+         entry_idx++, local_idx++) {
+      if (non_empty_idx >= total_non_empty) {
+        // all non-empty entries has been written back
+        break;
+      }
+      const size_t output_buffer_row_idx = global_offsets[thread_idx] + non_empty_idx;
+      if (bitmap.get(entry_idx)) {
+        for (size_t column_idx = 0; column_idx < num_columns; column_idx++) {
           write_functions[column_idx](rows,
                                       entry_idx,
                                       output_buffer_row_idx,
                                       column_idx,
                                       slot_idx_per_target_idx[column_idx],
                                       read_functions[column_idx]);
-          non_empty_idx++;
         }
+        non_empty_idx++;
+      } else {
+        continue;
       }
     }
   };
@@ -761,9 +756,6 @@ void ColumnarResults::compactAndCopyEntriesPHWithoutTargetSkipping(
   for (auto& child : compaction_threads) {
     child.wait();
   }
-  for (auto& child : compaction_threads) {
-    child.get();
-  }
 }
 
 /**
@@ -771,12 +763,14 @@ void ColumnarResults::compactAndCopyEntriesPHWithoutTargetSkipping(
  * size are used to categorize the correct write function per target. These functions are
  * then used for every row in the result set.
  */
-std::vector<ColumnarResults::WriteFunctionPerfectHash>
-ColumnarResults::initWriteFunctionsPerfectHash(const ResultSet& rows,
-                                               const std::vector<bool>& targets_to_skip) {
-  CHECK(rows.isDirectColumnarConversionPossible() &&
-        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash);
-  std::vector<WriteFunctionPerfectHash> result;
+std::vector<ColumnarResults::WriteFunction> ColumnarResults::initWriteFunctions(
+    const ResultSet& rows,
+    const std::vector<bool>& targets_to_skip) {
+  CHECK(isDirectColumnarConversionPossible());
+  CHECK(rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
+        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash);
+
+  std::vector<WriteFunction> result;
   result.reserve(target_types_.size());
 
   for (size_t target_idx = 0; target_idx < target_types_.size(); target_idx++) {
@@ -786,7 +780,7 @@ ColumnarResults::initWriteFunctionsPerfectHash(const ResultSet& rows,
                              const size_t output_buffer_entry_idx,
                              const size_t target_idx,
                              const size_t slot_idx,
-                             const ReadFunctionPerfectHash& read_function) {
+                             const ReadFunction& read_function) {
         UNREACHABLE() << "Invalid write back function used.";
       });
       continue;
@@ -869,84 +863,176 @@ ColumnarResults::initWriteFunctionsPerfectHash(const ResultSet& rows,
   return result;
 }
 
+namespace {
+
+int64_t invalid_read_func(const ResultSet& rows,
+                          const size_t input_buffer_entry_idx,
+                          const size_t target_idx,
+                          const size_t slot_idx) {
+  UNREACHABLE() << "Invalid read function used, target should have been skipped.";
+  return static_cast<int64_t>(0);
+}
+
+template <QueryDescriptionType QUERY_TYPE, bool COLUMNAR_OUTPUT>
+int64_t read_float_key_baseline(const ResultSet& rows,
+                                const size_t input_buffer_entry_idx,
+                                const size_t target_idx,
+                                const size_t slot_idx) {
+  // float keys in baseline hash are written as doubles in the buffer, so
+  // the result should properly be casted before being written in the output
+  // columns
+  auto fval = static_cast<float>(rows.getEntryAt<double, QUERY_TYPE, COLUMNAR_OUTPUT>(
+      input_buffer_entry_idx, target_idx, slot_idx));
+  return *reinterpret_cast<int32_t*>(may_alias_ptr(&fval));
+}
+
+template <QueryDescriptionType QUERY_TYPE, bool COLUMNAR_OUTPUT>
+int64_t read_int64_func(const ResultSet& rows,
+                        const size_t input_buffer_entry_idx,
+                        const size_t target_idx,
+                        const size_t slot_idx) {
+  return rows.getEntryAt<int64_t, QUERY_TYPE, COLUMNAR_OUTPUT>(
+      input_buffer_entry_idx, target_idx, slot_idx);
+}
+
+template <QueryDescriptionType QUERY_TYPE, bool COLUMNAR_OUTPUT>
+int64_t read_int32_func(const ResultSet& rows,
+                        const size_t input_buffer_entry_idx,
+                        const size_t target_idx,
+                        const size_t slot_idx) {
+  return rows.getEntryAt<int32_t, QUERY_TYPE, COLUMNAR_OUTPUT>(
+      input_buffer_entry_idx, target_idx, slot_idx);
+}
+
+template <QueryDescriptionType QUERY_TYPE, bool COLUMNAR_OUTPUT>
+int64_t read_int16_func(const ResultSet& rows,
+                        const size_t input_buffer_entry_idx,
+                        const size_t target_idx,
+                        const size_t slot_idx) {
+  return rows.getEntryAt<int16_t, QUERY_TYPE, COLUMNAR_OUTPUT>(
+      input_buffer_entry_idx, target_idx, slot_idx);
+}
+
+template <QueryDescriptionType QUERY_TYPE, bool COLUMNAR_OUTPUT>
+int64_t read_int8_func(const ResultSet& rows,
+                       const size_t input_buffer_entry_idx,
+                       const size_t target_idx,
+                       const size_t slot_idx) {
+  return rows.getEntryAt<int8_t, QUERY_TYPE, COLUMNAR_OUTPUT>(
+      input_buffer_entry_idx, target_idx, slot_idx);
+}
+
+template <QueryDescriptionType QUERY_TYPE, bool COLUMNAR_OUTPUT>
+int64_t read_float_func(const ResultSet& rows,
+                        const size_t input_buffer_entry_idx,
+                        const size_t target_idx,
+                        const size_t slot_idx) {
+  auto fval = rows.getEntryAt<float, QUERY_TYPE, COLUMNAR_OUTPUT>(
+      input_buffer_entry_idx, target_idx, slot_idx);
+  return *reinterpret_cast<int32_t*>(may_alias_ptr(&fval));
+}
+
+template <QueryDescriptionType QUERY_TYPE, bool COLUMNAR_OUTPUT>
+int64_t read_double_func(const ResultSet& rows,
+                         const size_t input_buffer_entry_idx,
+                         const size_t target_idx,
+                         const size_t slot_idx) {
+  auto dval = rows.getEntryAt<double, QUERY_TYPE, COLUMNAR_OUTPUT>(
+      input_buffer_entry_idx, target_idx, slot_idx);
+  return *reinterpret_cast<int64_t*>(may_alias_ptr(&dval));
+}
+
+}  // namespace
+
 /**
  * Initializes a set of read funtions to properly access the contents of the result set's
- * storage buffer. Each slots padded size is used to identify the proper function.
+ * storage buffer. Each particular read function is chosen based on the data type and data
+ * size used to store that target in the result set's storage buffer. These functions are
+ * then used for each row in the result set.
  */
-std::vector<ColumnarResults::ReadFunctionPerfectHash>
-ColumnarResults::initReadFunctionsPerfectHash(
+template <QueryDescriptionType QUERY_TYPE, bool COLUMNAR_OUTPUT>
+std::vector<ColumnarResults::ReadFunction> ColumnarResults::initReadFunctions(
     const ResultSet& rows,
     const std::vector<size_t>& slot_idx_per_target_idx,
     const std::vector<bool>& targets_to_skip) {
-  CHECK(rows.isDirectColumnarConversionPossible() &&
-        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash);
-  std::vector<ReadFunctionPerfectHash> read_functions;
+  CHECK(isDirectColumnarConversionPossible());
+  CHECK(COLUMNAR_OUTPUT == rows.didOutputColumnar());
+  CHECK(QUERY_TYPE == rows.getQueryDescriptionType());
+
+  std::vector<ReadFunction> read_functions;
   read_functions.reserve(target_types_.size());
 
   for (size_t target_idx = 0; target_idx < target_types_.size(); target_idx++) {
     if (!targets_to_skip.empty() && !targets_to_skip[target_idx]) {
-      read_functions.emplace_back([](const ResultSet& rows,
-                                     const size_t input_buffer_entry_idx,
-                                     const size_t column_idx) {
-        UNREACHABLE() << "Invalid read function used, target should have been skipped.";
-        return static_cast<int64_t>(0);
-      });
+      // for targets that should be skipped, we use a placeholder function that should
+      // never be called. The CHECKs inside it make sure that never happens.
+      read_functions.emplace_back(invalid_read_func);
       continue;
+    }
+
+    if (QUERY_TYPE == QueryDescriptionType::GroupByBaselineHash) {
+      if (rows.getPaddedSlotWidthBytes(slot_idx_per_target_idx[target_idx]) == 0) {
+        // for key columns only
+        CHECK(rows.query_mem_desc_.getTargetGroupbyIndex(target_idx) >= 0);
+        if (target_types_[target_idx].is_fp()) {
+          CHECK_EQ(size_t(8), rows.query_mem_desc_.getEffectiveKeyWidth());
+          switch (target_types_[target_idx].get_type()) {
+            case kFLOAT:
+              read_functions.emplace_back(
+                  read_float_key_baseline<QUERY_TYPE, COLUMNAR_OUTPUT>);
+              break;
+            case kDOUBLE:
+              read_functions.emplace_back(read_double_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
+              break;
+            default:
+              UNREACHABLE()
+                  << "Invalid data type encountered (BaselineHash, floating point key).";
+              break;
+          }
+        } else {
+          switch (rows.query_mem_desc_.getEffectiveKeyWidth()) {
+            case 8:
+              read_functions.emplace_back(read_int64_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
+              break;
+            case 4:
+              read_functions.emplace_back(read_int32_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
+              break;
+            default:
+              UNREACHABLE()
+                  << "Invalid data type encountered (BaselineHash, integer key).";
+          }
+        }
+        continue;
+      }
     }
     if (target_types_[target_idx].is_fp()) {
       switch (rows.getPaddedSlotWidthBytes(slot_idx_per_target_idx[target_idx])) {
         case 8:
-          read_functions.emplace_back([](const ResultSet& rows,
-                                         const size_t input_buffer_entry_idx,
-                                         const size_t column_idx) {
-            auto dval = rows.getEntryAt<double>(input_buffer_entry_idx, column_idx);
-            return *reinterpret_cast<int64_t*>(may_alias_ptr(&dval));
-          });
+          read_functions.emplace_back(read_double_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
           break;
         case 4:
-          read_functions.emplace_back([](const ResultSet& rows,
-                                         const size_t input_buffer_entry_idx,
-                                         const size_t column_idx) {
-            auto fval = rows.getEntryAt<float>(input_buffer_entry_idx, column_idx);
-            return *reinterpret_cast<int32_t*>(may_alias_ptr(&fval));
-          });
+          read_functions.emplace_back(read_float_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
           break;
         default:
-          UNREACHABLE() << "Invalid target type encountered.";
+          UNREACHABLE() << "Invalid data type encountered (floating point agg column).";
           break;
       }
     } else {
       switch (rows.getPaddedSlotWidthBytes(slot_idx_per_target_idx[target_idx])) {
         case 8:
-          read_functions.emplace_back([](const ResultSet& rows,
-                                         const size_t input_buffer_entry_idx,
-                                         const size_t column_idx) {
-            return rows.getEntryAt<int64_t>(input_buffer_entry_idx, column_idx);
-          });
+          read_functions.emplace_back(read_int64_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
           break;
         case 4:
-          read_functions.emplace_back([](const ResultSet& rows,
-                                         const size_t input_buffer_entry_idx,
-                                         const size_t column_idx) {
-            return rows.getEntryAt<int32_t>(input_buffer_entry_idx, column_idx);
-          });
+          read_functions.emplace_back(read_int32_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
           break;
         case 2:
-          read_functions.emplace_back([](const ResultSet& rows,
-                                         const size_t input_buffer_entry_idx,
-                                         const size_t column_idx) {
-            return rows.getEntryAt<int16_t>(input_buffer_entry_idx, column_idx);
-          });
+          read_functions.emplace_back(read_int16_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
           break;
         case 1:
-          read_functions.emplace_back([](const ResultSet& rows,
-                                         const size_t input_buffer_entry_idx,
-                                         const size_t column_idx) {
-            return rows.getEntryAt<int8_t>(input_buffer_entry_idx, column_idx);
-          });
+          read_functions.emplace_back(read_int8_func<QUERY_TYPE, COLUMNAR_OUTPUT>);
           break;
         default:
-          UNREACHABLE() << "Invalid slot size encountered.";
+          UNREACHABLE() << "Invalid data type encountered (integer agg column).";
           break;
       }
     }
@@ -954,15 +1040,47 @@ ColumnarResults::initReadFunctionsPerfectHash(
   return read_functions;
 }
 
-std::tuple<std::vector<ColumnarResults::WriteFunctionPerfectHash>,
-           std::vector<ColumnarResults::ReadFunctionPerfectHash>>
-ColumnarResults::initAllConversionFunctionsPerfectHash(
+/**
+ * This function goes through all target types in the output, and chooses appropriate
+ * write and read functions per target. The goal is then to simply use these functions
+ * for each row and per target. Read functions are used to read each cell's data content
+ * (particular target in a row), and write functions are used to properly write back the
+ * cell's content into the output column buffers.
+ */
+std::tuple<std::vector<ColumnarResults::WriteFunction>,
+           std::vector<ColumnarResults::ReadFunction>>
+ColumnarResults::initAllConversionFunctions(
     const ResultSet& rows,
     const std::vector<size_t>& slot_idx_per_target_idx,
     const std::vector<bool>& targets_to_skip) {
-  CHECK(rows.isDirectColumnarConversionPossible() &&
-        rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash);
-  return std::make_tuple(std::move(initWriteFunctionsPerfectHash(rows, targets_to_skip)),
-                         std::move(initReadFunctionsPerfectHash(
-                             rows, slot_idx_per_target_idx, targets_to_skip)));
+  CHECK(isDirectColumnarConversionPossible() &&
+        (rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash ||
+         rows.getQueryDescriptionType() == QueryDescriptionType::GroupByBaselineHash));
+
+  const auto write_functions = initWriteFunctions(rows, targets_to_skip);
+  if (rows.getQueryDescriptionType() == QueryDescriptionType::GroupByPerfectHash) {
+    if (rows.didOutputColumnar()) {
+      return std::make_tuple(
+          std::move(write_functions),
+          std::move(initReadFunctions<QueryDescriptionType::GroupByPerfectHash, true>(
+              rows, slot_idx_per_target_idx, targets_to_skip)));
+    } else {
+      return std::make_tuple(
+          std::move(write_functions),
+          std::move(initReadFunctions<QueryDescriptionType::GroupByPerfectHash, false>(
+              rows, slot_idx_per_target_idx, targets_to_skip)));
+    }
+  } else {
+    if (rows.didOutputColumnar()) {
+      return std::make_tuple(
+          std::move(write_functions),
+          std::move(initReadFunctions<QueryDescriptionType::GroupByBaselineHash, true>(
+              rows, slot_idx_per_target_idx, targets_to_skip)));
+    } else {
+      return std::make_tuple(
+          std::move(write_functions),
+          std::move(initReadFunctions<QueryDescriptionType::GroupByBaselineHash, false>(
+              rows, slot_idx_per_target_idx, targets_to_skip)));
+    }
+  }
 }

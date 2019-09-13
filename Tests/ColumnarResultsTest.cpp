@@ -14,26 +14,53 @@
  * limitations under the License.
  */
 
-/**
- * @file    ColumnarResultsTest.cpp
- * @author  Saman Ashkiani <saman.ashkiani@omnisci.com>
- * @brief   Provides unit tests for the ColumnarResults class
- */
-
-#include "../QueryEngine/ColumnarResults.h"
-#include "../QueryEngine/Descriptors/RowSetMemoryOwner.h"
-#include "../QueryEngine/ResultSet.h"
-#include "../QueryEngine/TargetValue.h"
-#include "../Shared/TargetInfo.h"
+#include "QueryEngine/ColumnarResults.h"
+#include "QueryEngine/Descriptors/RowSetMemoryOwner.h"
+#include "QueryEngine/ResultSet.h"
+#include "QueryEngine/TargetValue.h"
 #include "ResultSetTestUtils.h"
+#include "Shared/Logger.h"
+#include "Shared/TargetInfo.h"
 #include "TestHelpers.h"
 
 #include <gtest/gtest.h>
 
-void test_perfect_hash_columnar_conversion(const std::vector<TargetInfo>& target_infos,
-                                           const QueryMemoryDescriptor& query_mem_desc,
-                                           const size_t non_empty_step_size,
-                                           const bool is_parallel_conversion = false) {
+class ColumnarResultsTester : public ColumnarResults {
+ public:
+  ColumnarResultsTester(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
+                        const ResultSet& rows,
+                        const size_t num_columns,
+                        const std::vector<SQLTypeInfo>& target_types)
+      : ColumnarResults(row_set_mem_owner, rows, num_columns, target_types) {}
+
+  template <typename ENTRY_TYPE>
+  ENTRY_TYPE getEntryAt(const size_t row_idx, const size_t column_idx) const {
+    CHECK_LT(column_idx, column_buffers_.size());
+    CHECK_LT(row_idx, num_rows_);
+    return reinterpret_cast<ENTRY_TYPE*>(column_buffers_[column_idx])[row_idx];
+  }
+};
+
+template <>
+float ColumnarResultsTester::getEntryAt<float>(const size_t row_idx,
+                                               const size_t column_idx) const {
+  CHECK_LT(column_idx, column_buffers_.size());
+  CHECK_LT(row_idx, num_rows_);
+  return reinterpret_cast<float*>(column_buffers_[column_idx])[row_idx];
+}
+
+template <>
+double ColumnarResultsTester::getEntryAt<double>(const size_t row_idx,
+                                                 const size_t column_idx) const {
+  CHECK_LT(column_idx, column_buffers_.size());
+  CHECK_LT(row_idx, num_rows_);
+  return reinterpret_cast<double*>(column_buffers_[column_idx])[row_idx];
+}
+
+void test_columnar_conversion(const std::vector<TargetInfo>& target_infos,
+                              const QueryMemoryDescriptor& query_mem_desc,
+                              const size_t non_empty_step_size,
+                              const bool is_parallel_conversion = false) {
   auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
   ResultSet result_set(
       target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
@@ -52,7 +79,7 @@ void test_perfect_hash_columnar_conversion(const std::vector<TargetInfo>& target
   for (size_t i = 0; i < result_set.colCount(); ++i) {
     col_types.push_back(get_logical_type_info(result_set.getColType(i)));
   }
-  ColumnarResults columnar_results(
+  ColumnarResultsTester columnar_results(
       row_set_mem_owner, result_set, col_types.size(), col_types);
   columnar_results.setParallelConversion(is_parallel_conversion);
 
@@ -130,7 +157,7 @@ TEST(Construct, Empty) {
   auto row_set_mem_owner = std::make_shared<RowSetMemoryOwner>();
   ResultSet result_set(
       target_infos, ExecutorDeviceType::CPU, query_mem_desc, row_set_mem_owner, nullptr);
-  ColumnarResults columnar_results(
+  ColumnarResultsTester columnar_results(
       row_set_mem_owner, result_set, sql_type_infos.size(), sql_type_infos);
 }
 
@@ -138,43 +165,75 @@ TEST(Construct, Empty) {
 // TODO(Saman): add tests for Projections
 
 // Perfect Hash:
-TEST(PerfectHash, RowWise_64Key_64Agg) {
+TEST(PerfectHashRowWise, OneCol_64Key_64Agg_wo_avg) {
   std::vector<int8_t> key_column_widths{8};
   const int8_t suggested_agg_width = 8;
   std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
       key_column_widths,
-      {kSUM, kSUM, kCOUNT, kAVG, kMAX, kMIN},
+      {kSUM, kSUM, kCOUNT, kMIN, kMAX, kMIN},
       {kBIGINT, kBIGINT, kBIGINT, kDOUBLE, kBIGINT, kBIGINT},
-      {kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT});
+      {kBIGINT, kBIGINT, kBIGINT, kDOUBLE, kBIGINT, kBIGINT});
   auto query_mem_desc =
       perfect_hash_one_col_desc(target_infos, suggested_agg_width, 0, 118);
   for (auto is_parallel : {false, true}) {
     for (auto step_size : {1, 2, 13, 67, 127}) {
-      test_perfect_hash_columnar_conversion(
-          target_infos, query_mem_desc, step_size, is_parallel);
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
     }
   }
 }
 
-TEST(PerfectHash, RowWise_32Key_64Agg) {
+TEST(PerfectHashRowWise, OneCol_64Key_64Agg_w_avg) {
+  std::vector<int8_t> key_column_widths{8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kSUM, kSUM, kCOUNT, kAVG, kMAX, kAVG, kMIN},
+      {kBIGINT, kBIGINT, kBIGINT, kDOUBLE, kBIGINT, kDOUBLE, kBIGINT},
+      {kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT});
+  auto query_mem_desc =
+      perfect_hash_one_col_desc(target_infos, suggested_agg_width, 0, 118);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {1, 2, 13, 67, 127}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(PerfectHashRowWise, OneCol_32Key_64Agg_wo_avg) {
   std::vector<int8_t> key_column_widths{4};
   const int8_t suggested_agg_width = 8;
   std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
       key_column_widths,
-      {kSUM, kSUM, kCOUNT, kAVG, kMAX, kMIN},
+      {kSUM, kSUM, kCOUNT, kMIN, kMAX, kMIN},
       {kBIGINT, kBIGINT, kBIGINT, kDOUBLE, kBIGINT, kBIGINT},
-      {kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT});
+      {kBIGINT, kBIGINT, kBIGINT, kDOUBLE, kBIGINT, kBIGINT});
   auto query_mem_desc =
       perfect_hash_one_col_desc(target_infos, suggested_agg_width, 0, 118);
   for (auto is_parallel : {false, true}) {
     for (auto step_size : {1, 3, 17, 33, 117}) {
-      test_perfect_hash_columnar_conversion(
-          target_infos, query_mem_desc, step_size, is_parallel);
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
     }
   }
 }
 
-TEST(PerfectHash, RowWise_64Key_MixedAggs) {
+TEST(PerfectHashRowWise, OneCol_32Key_64Agg_w_avg) {
+  std::vector<int8_t> key_column_widths{4};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kSUM, kSUM, kAVG, kCOUNT, kAVG, kMAX, kMIN},
+      {kBIGINT, kBIGINT, kDOUBLE, kBIGINT, kDOUBLE, kBIGINT, kBIGINT},
+      {kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT});
+  auto query_mem_desc =
+      perfect_hash_one_col_desc(target_infos, suggested_agg_width, 0, 118);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {1, 3, 17, 33, 117}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(PerfectHashRowWise, OneCol_64Key_MixedAggs_wo_avg) {
   std::vector<int8_t> key_column_widths{8};
   const int8_t suggested_agg_width = 8;
   std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
@@ -186,13 +245,29 @@ TEST(PerfectHash, RowWise_64Key_MixedAggs) {
       perfect_hash_one_col_desc(target_infos, suggested_agg_width, 0, 118);
   for (auto is_parallel : {false, true}) {
     for (auto step_size : {2, 13, 67, 127}) {
-      test_perfect_hash_columnar_conversion(
-          target_infos, query_mem_desc, step_size, is_parallel);
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
     }
   }
 }
 
-TEST(PerfectHash, RowWise_32Key_MixedAggs) {
+TEST(PerfectHashRowWise, OneCol_64Key_MixedAggs_w_avg) {
+  std::vector<int8_t> key_column_widths{8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kMAX, kMAX, kAVG, kMAX, kMAX, kAVG, kMAX},
+      {kTINYINT, kSMALLINT, kINT, kDOUBLE, kBIGINT, kFLOAT, kDOUBLE, kDOUBLE},
+      {kTINYINT, kSMALLINT, kINT, kSMALLINT, kBIGINT, kFLOAT, kINT, kDOUBLE});
+  auto query_mem_desc =
+      perfect_hash_one_col_desc(target_infos, suggested_agg_width, 0, 118);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 13, 67, 127}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(PerfectHashRowWise, OneCol_32Key_MixedAggs_wo_avg) {
   std::vector<int8_t> key_column_widths{4};
   const int8_t suggested_agg_width = 8;
   std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
@@ -204,13 +279,29 @@ TEST(PerfectHash, RowWise_32Key_MixedAggs) {
       perfect_hash_one_col_desc(target_infos, suggested_agg_width, 0, 118);
   for (auto is_parallel : {false, true}) {
     for (auto step_size : {3, 7, 17, 33, 117}) {
-      test_perfect_hash_columnar_conversion(
-          target_infos, query_mem_desc, step_size, is_parallel);
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
     }
   }
 }
 
-TEST(PerfectHash, Columnar_64Key_64Agg_w_avg) {
+TEST(PerfectHashRowWise, OneCol_32Key_MixedAggs_w_avg) {
+  std::vector<int8_t> key_column_widths{4};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kAVG, kMAX, kMAX, kAVG, kMAX, kMAX, kMAX},
+      {kDOUBLE, kDOUBLE, kFLOAT, kBIGINT, kDOUBLE, kINT, kSMALLINT, kTINYINT},
+      {kDOUBLE, kDOUBLE, kFLOAT, kBIGINT, kFLOAT, kINT, kSMALLINT, kTINYINT});
+  auto query_mem_desc =
+      perfect_hash_one_col_desc(target_infos, suggested_agg_width, 0, 118);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {3, 7, 17, 33, 117}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(PerfectHashColumnar, OneCol_64Key_64Agg_w_avg) {
   std::vector<int8_t> key_column_widths{8};
   const int8_t suggested_agg_width = 8;
   std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
@@ -223,13 +314,12 @@ TEST(PerfectHash, Columnar_64Key_64Agg_w_avg) {
   query_mem_desc.setOutputColumnar(true);
   for (auto is_parallel : {false, true}) {
     for (auto step_size : {1, 2, 13, 67, 127}) {
-      test_perfect_hash_columnar_conversion(
-          target_infos, query_mem_desc, step_size, is_parallel);
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
     }
   }
 }
 
-TEST(PerfectHash, Columnar_64Key_64Agg_wo_avg) {
+TEST(PerfectHashColumnar, OneCol_64Key_64Agg_wo_avg) {
   std::vector<int8_t> key_column_widths{8};
   const int8_t suggested_agg_width = 8;
   std::vector<TargetInfo> target_infos =
@@ -242,13 +332,12 @@ TEST(PerfectHash, Columnar_64Key_64Agg_wo_avg) {
   query_mem_desc.setOutputColumnar(true);
   for (auto is_parallel : {false, true}) {
     for (auto step_size : {1, 2, 13, 67, 127}) {
-      test_perfect_hash_columnar_conversion(
-          target_infos, query_mem_desc, step_size, is_parallel);
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
     }
   }
 }
 
-TEST(PerfectHash, Columnar_64Key_MixedAggs_w_avg) {
+TEST(PerfectHashColumnar, OneCol_64Key_MixedAggs_w_avg) {
   std::vector<int8_t> key_column_widths{8};
   const int8_t suggested_agg_width = 1;
   std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
@@ -261,13 +350,12 @@ TEST(PerfectHash, Columnar_64Key_MixedAggs_w_avg) {
   query_mem_desc.setOutputColumnar(true);
   for (auto is_parallel : {false, true}) {
     for (auto step_size : {3, 7, 16, 37, 127}) {
-      test_perfect_hash_columnar_conversion(
-          target_infos, query_mem_desc, step_size, is_parallel);
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
     }
   }
 }
 
-TEST(PerfectHash, Columnar_64Key_MixedAggs_wo_avg) {
+TEST(PerfectHashColumnar, OneCol_64Key_MixedAggs_wo_avg) {
   std::vector<int8_t> key_column_widths{8};
   const int8_t suggested_agg_width = 1;
   std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
@@ -280,13 +368,12 @@ TEST(PerfectHash, Columnar_64Key_MixedAggs_wo_avg) {
   query_mem_desc.setOutputColumnar(true);
   for (auto is_parallel : {false, true}) {
     for (auto step_size : {3, 7, 16, 37, 127}) {
-      test_perfect_hash_columnar_conversion(
-          target_infos, query_mem_desc, step_size, is_parallel);
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
     }
   }
 }
 
-TEST(PerfectHash, Columnar_32Key_MixedAggs_w_avg) {
+TEST(PerfectHashColumnar, OneCol_32Key_MixedAggs_w_avg) {
   std::vector<int8_t> key_column_widths{4};
   const int8_t suggested_agg_width = 1;
   std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
@@ -299,13 +386,12 @@ TEST(PerfectHash, Columnar_32Key_MixedAggs_w_avg) {
   query_mem_desc.setOutputColumnar(true);
   for (auto is_parallel : {false, true}) {
     for (auto step_size : {3, 7, 16, 37, 127}) {
-      test_perfect_hash_columnar_conversion(
-          target_infos, query_mem_desc, step_size, is_parallel);
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
     }
   }
 }
 
-TEST(PerfectHash, Columnar_32Key_MixedAggs_wo_avg) {
+TEST(PerfectHashColumnar, OneCol_32Key_MixedAggs_wo_avg) {
   std::vector<int8_t> key_column_widths{4};
   const int8_t suggested_agg_width = 1;
   std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
@@ -318,13 +404,12 @@ TEST(PerfectHash, Columnar_32Key_MixedAggs_wo_avg) {
   query_mem_desc.setOutputColumnar(true);
   for (auto is_parallel : {false, true}) {
     for (auto step_size : {3, 7, 16, 37, 127}) {
-      test_perfect_hash_columnar_conversion(
-          target_infos, query_mem_desc, step_size, is_parallel);
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
     }
   }
 }
 
-TEST(PerfectHash, Columnar_16Key_MixedAggs_w_avg) {
+TEST(PerfectHashColumnar, OneCol_16Key_MixedAggs_w_avg) {
   std::vector<int8_t> key_column_widths{2};
   const int8_t suggested_agg_width = 1;
   std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
@@ -337,13 +422,12 @@ TEST(PerfectHash, Columnar_16Key_MixedAggs_w_avg) {
   query_mem_desc.setOutputColumnar(true);
   for (auto is_parallel : {false, true}) {
     for (auto step_size : {3, 7, 16, 37, 127}) {
-      test_perfect_hash_columnar_conversion(
-          target_infos, query_mem_desc, step_size, is_parallel);
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
     }
   }
 }
 
-TEST(PerfectHash, Columnar_16Key_MixedAggs_wo_avg) {
+TEST(PerfectHashColumnar, OneCol_16Key_MixedAggs_wo_avg) {
   std::vector<int8_t> key_column_widths{2};
   const int8_t suggested_agg_width = 1;
   std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
@@ -356,13 +440,12 @@ TEST(PerfectHash, Columnar_16Key_MixedAggs_wo_avg) {
   query_mem_desc.setOutputColumnar(true);
   for (auto is_parallel : {false, true}) {
     for (auto step_size : {3, 7, 16, 37, 127}) {
-      test_perfect_hash_columnar_conversion(
-          target_infos, query_mem_desc, step_size, is_parallel);
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
     }
   }
 }
 
-TEST(PerfectHash, Columnar_8Key_MixedAggs_w_avg) {
+TEST(PerfectHashColumnar, OneCol_8Key_MixedAggs_w_avg) {
   std::vector<int8_t> key_column_widths{1};
   const int8_t suggested_agg_width = 1;
   std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
@@ -375,13 +458,12 @@ TEST(PerfectHash, Columnar_8Key_MixedAggs_w_avg) {
   query_mem_desc.setOutputColumnar(true);
   for (auto is_parallel : {false, true}) {
     for (auto step_size : {3, 7, 16, 37, 127}) {
-      test_perfect_hash_columnar_conversion(
-          target_infos, query_mem_desc, step_size, is_parallel);
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
     }
   }
 }
 
-TEST(PerfectHash, Columnar_8Key_MixedAggs_wo_avg) {
+TEST(PerfectHashColumnar, OneCol_8Key_MixedAggs_wo_avg) {
   std::vector<int8_t> key_column_widths{1};
   const int8_t suggested_agg_width = 1;
   std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
@@ -394,15 +476,354 @@ TEST(PerfectHash, Columnar_8Key_MixedAggs_wo_avg) {
   query_mem_desc.setOutputColumnar(true);
   for (auto is_parallel : {false, true}) {
     for (auto step_size : {3, 7, 16, 37, 127}) {
-      test_perfect_hash_columnar_conversion(
-          target_infos, query_mem_desc, step_size, is_parallel);
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
     }
   }
 }
 
-// TODO(Saman): add tests for multi-column perfect hash
+// Multi-column perfect hash:
+TEST(PerfectHashRowWise, TwoCol_64_64_64Agg_wo_avg) {
+  std::vector<int8_t> key_column_widths{8, 8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kSUM, kSUM, kCOUNT, kMIN, kMAX, kMIN},
+      {kBIGINT, kBIGINT, kBIGINT, kDOUBLE, kBIGINT, kBIGINT},
+      {kBIGINT, kBIGINT, kBIGINT, kDOUBLE, kBIGINT, kBIGINT});
+  auto query_mem_desc = perfect_hash_two_col_desc(target_infos, suggested_agg_width);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {1, 2, 13, 67, 127}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(PerfectHashRowWise, TwoCol_64_64_64Agg_w_avg) {
+  std::vector<int8_t> key_column_widths{8, 8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kSUM, kSUM, kCOUNT, kAVG, kMAX, kAVG, kMIN},
+      {kBIGINT, kBIGINT, kBIGINT, kDOUBLE, kBIGINT, kDOUBLE, kBIGINT},
+      {kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT});
+  auto query_mem_desc = perfect_hash_two_col_desc(target_infos, suggested_agg_width);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {1, 2, 13, 67, 127}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(PerfectHashRowWise, TwoCol_64_64_MixedAggs_wo_avg) {
+  std::vector<int8_t> key_column_widths{8, 8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kMAX, kMAX, kMAX, kMAX, kMAX},
+      {kTINYINT, kSMALLINT, kINT, kBIGINT, kFLOAT, kDOUBLE},
+      {kTINYINT, kSMALLINT, kINT, kBIGINT, kFLOAT, kDOUBLE});
+  auto query_mem_desc = perfect_hash_two_col_desc(target_infos, suggested_agg_width);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 13, 67, 127}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(PerfectHashRowWise, TwoCol_64_64_MixedAggs_w_avg) {
+  std::vector<int8_t> key_column_widths{8, 8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kMAX, kMAX, kAVG, kMAX, kMAX, kAVG, kMAX},
+      {kTINYINT, kSMALLINT, kINT, kDOUBLE, kBIGINT, kFLOAT, kDOUBLE, kDOUBLE},
+      {kTINYINT, kSMALLINT, kINT, kSMALLINT, kBIGINT, kFLOAT, kINT, kDOUBLE});
+  auto query_mem_desc = perfect_hash_two_col_desc(target_infos, suggested_agg_width);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 13, 67, 127}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(PerfectHashColumnar, OneCol_TwoCol_64_64_64Agg_wo_avg) {
+  std::vector<int8_t> key_column_widths{8, 8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kSUM, kSUM, kCOUNT, kMIN, kMAX, kMIN},
+      {kBIGINT, kBIGINT, kBIGINT, kDOUBLE, kBIGINT, kBIGINT},
+      {kBIGINT, kBIGINT, kBIGINT, kDOUBLE, kBIGINT, kBIGINT});
+  auto query_mem_desc = perfect_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setOutputColumnar(true);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {1, 2, 13, 67, 127}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(PerfectHashColumnar, TwoCol_64_64_64Agg_w_avg) {
+  std::vector<int8_t> key_column_widths{8, 8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kSUM, kSUM, kCOUNT, kAVG, kMAX, kAVG, kMIN},
+      {kBIGINT, kBIGINT, kBIGINT, kDOUBLE, kBIGINT, kDOUBLE, kBIGINT},
+      {kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT, kBIGINT});
+  auto query_mem_desc = perfect_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setOutputColumnar(true);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {1, 2, 13, 67, 127}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(PerfectHashColumnar, TwoCol_64_64_MixedAggs_wo_avg) {
+  std::vector<int8_t> key_column_widths{8, 8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kMAX, kMAX, kMAX, kMAX, kMAX},
+      {kTINYINT, kSMALLINT, kINT, kBIGINT, kFLOAT, kDOUBLE},
+      {kTINYINT, kSMALLINT, kINT, kBIGINT, kFLOAT, kDOUBLE});
+  auto query_mem_desc = perfect_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setOutputColumnar(true);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 13, 67, 127}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(PerfectHashColumnar, TwoCol_64_64_MixedAggs_w_avg) {
+  std::vector<int8_t> key_column_widths{8, 8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kMAX, kMAX, kAVG, kMAX, kMAX, kAVG, kMAX},
+      {kTINYINT, kSMALLINT, kINT, kDOUBLE, kBIGINT, kFLOAT, kDOUBLE, kDOUBLE},
+      {kTINYINT, kSMALLINT, kINT, kSMALLINT, kBIGINT, kFLOAT, kINT, kDOUBLE});
+  auto query_mem_desc = perfect_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setOutputColumnar(true);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 13, 67, 127}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
 // Baseline Hash:
-// TODO(Saman): add tests for baseline hash
+TEST(BaselineHashRowWise, TwoCol_64_64_MixedAggs_wo_avg) {
+  std::vector<int8_t> key_column_widths{8, 8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kMAX, kMAX, kMAX, kMAX, kMAX},
+      {kFLOAT, kBIGINT, kTINYINT, kINT, kSMALLINT, kDOUBLE},
+      {kFLOAT, kBIGINT, kTINYINT, kINT, kSMALLINT, kDOUBLE});
+  auto query_mem_desc = baseline_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setAllTargetGroupbyIndices({0, 1, -1, -1, -1, -1, -1, -1});
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 3, 5, 13, 67}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(BaselineHashRowWise, TwoCol_64_64_MixedAggs_w_avg) {
+  std::vector<int8_t> key_column_widths{8, 8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kAVG, kMAX, kMAX, kMAX, kAVG, kMAX, kMAX},
+      {kFLOAT, kDOUBLE, kBIGINT, kTINYINT, kINT, kDOUBLE, kSMALLINT, kDOUBLE},
+      {kFLOAT, kTINYINT, kBIGINT, kTINYINT, kINT, kINT, kSMALLINT, kDOUBLE});
+  auto query_mem_desc = baseline_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setAllTargetGroupbyIndices({0, 1, -1, -1, -1, -1, -1, -1, -1, -1});
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 3, 5, 13, 67}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(BaselineHashRowWise, TwoCol_64_32_MixedAggs_wo_avg) {
+  std::vector<int8_t> key_column_widths{8, 4};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kMAX, kMAX, kMAX, kMAX, kMAX},
+      {kFLOAT, kBIGINT, kTINYINT, kINT, kSMALLINT, kDOUBLE},
+      {kFLOAT, kBIGINT, kTINYINT, kINT, kSMALLINT, kDOUBLE});
+  auto query_mem_desc = baseline_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setAllTargetGroupbyIndices({0, 1, -1, -1, -1, -1, -1, -1});
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 3, 5, 13, 67}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(BaselineHashRowWise, TwoCol_32_64_MixedAggs_w_avg) {
+  std::vector<int8_t> key_column_widths{4, 8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kAVG, kMAX, kMAX, kMAX, kAVG, kMAX, kMAX},
+      {kFLOAT, kDOUBLE, kBIGINT, kTINYINT, kINT, kDOUBLE, kSMALLINT, kDOUBLE},
+      {kFLOAT, kTINYINT, kBIGINT, kTINYINT, kINT, kINT, kSMALLINT, kDOUBLE});
+  auto query_mem_desc = baseline_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setAllTargetGroupbyIndices({0, 1, -1, -1, -1, -1, -1, -1, -1, -1});
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 3, 5, 13, 67}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(BaselineHashRowWise, TwoCol_32_32_MixedAggs_wo_avg) {
+  std::vector<int8_t> key_column_widths{4, 4};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kMAX, kMAX, kMAX, kMAX, kMAX},
+      {kFLOAT, kBIGINT, kTINYINT, kINT, kSMALLINT, kDOUBLE},
+      {kFLOAT, kBIGINT, kTINYINT, kINT, kSMALLINT, kDOUBLE});
+  auto query_mem_desc = baseline_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setAllTargetGroupbyIndices({0, 1, -1, -1, -1, -1, -1, -1});
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 3, 5, 13, 67}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(BaselineHashRowWise, TwoCol_32_32_MixedAggs_w_avg) {
+  std::vector<int8_t> key_column_widths{4, 4};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kAVG, kMAX, kMAX, kMAX, kAVG, kMAX, kMAX},
+      {kFLOAT, kDOUBLE, kBIGINT, kTINYINT, kINT, kDOUBLE, kSMALLINT, kDOUBLE},
+      {kFLOAT, kTINYINT, kBIGINT, kTINYINT, kINT, kINT, kSMALLINT, kDOUBLE});
+  auto query_mem_desc = baseline_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setAllTargetGroupbyIndices({0, 1, -1, -1, -1, -1, -1, -1, -1, -1});
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 3, 5, 13, 67}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(BaselineHashColumnar, TwoCol_64_64_MixedAggs_wo_avg) {
+  std::vector<int8_t> key_column_widths{8, 8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kAVG, kMAX, kMAX, kMAX, kAVG, kMAX, kMAX},
+      {kFLOAT, kDOUBLE, kBIGINT, kTINYINT, kINT, kDOUBLE, kSMALLINT, kDOUBLE},
+      {kFLOAT, kTINYINT, kBIGINT, kTINYINT, kINT, kINT, kSMALLINT, kDOUBLE});
+  auto query_mem_desc = baseline_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setAllTargetGroupbyIndices({0, 1, -1, -1, -1, -1, -1, -1, -1, -1});
+  query_mem_desc.setOutputColumnar(true);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 3, 5, 13, 67}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(BaselineHashColumnar, TwoCol_64_64_MixedAggs_w_avg) {
+  std::vector<int8_t> key_column_widths{8, 8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kAVG, kMAX, kMAX, kMAX, kAVG, kMAX, kMAX},
+      {kFLOAT, kDOUBLE, kBIGINT, kTINYINT, kINT, kDOUBLE, kSMALLINT, kDOUBLE},
+      {kFLOAT, kTINYINT, kBIGINT, kTINYINT, kINT, kINT, kSMALLINT, kDOUBLE});
+  auto query_mem_desc = baseline_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setAllTargetGroupbyIndices({0, 1, -1, -1, -1, -1, -1, -1, -1, -1});
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 3, 5, 13, 67}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(BaselineHashColumnar, TwoCol_64_32_MixedAggs_wo_avg) {
+  std::vector<int8_t> key_column_widths{8, 4};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kMAX, kMAX, kMAX, kMAX, kMAX},
+      {kFLOAT, kBIGINT, kTINYINT, kINT, kSMALLINT, kDOUBLE},
+      {kFLOAT, kBIGINT, kTINYINT, kINT, kSMALLINT, kDOUBLE});
+  auto query_mem_desc = baseline_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setAllTargetGroupbyIndices({0, 1, -1, -1, -1, -1, -1, -1});
+  query_mem_desc.setOutputColumnar(true);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 3, 5, 13, 67}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(BaselineHashColumnar, TwoCol_32_64_MixedAggs_w_avg) {
+  std::vector<int8_t> key_column_widths{4, 8};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kAVG, kMAX, kMAX, kMAX, kAVG, kMAX, kMAX},
+      {kFLOAT, kDOUBLE, kBIGINT, kTINYINT, kINT, kDOUBLE, kSMALLINT, kDOUBLE},
+      {kFLOAT, kTINYINT, kBIGINT, kTINYINT, kINT, kINT, kSMALLINT, kDOUBLE});
+  auto query_mem_desc = baseline_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setAllTargetGroupbyIndices({0, 1, -1, -1, -1, -1, -1, -1, -1, -1});
+  query_mem_desc.setOutputColumnar(true);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 3, 5, 13, 67}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(BaselineHashColumnar, TwoCol_32_32_MixedAggs_wo_avg) {
+  std::vector<int8_t> key_column_widths{4, 4};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kMAX, kMAX, kMAX, kMAX, kMAX},
+      {kFLOAT, kBIGINT, kTINYINT, kINT, kSMALLINT, kDOUBLE},
+      {kFLOAT, kBIGINT, kTINYINT, kINT, kSMALLINT, kDOUBLE});
+  auto query_mem_desc = baseline_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setAllTargetGroupbyIndices({0, 1, -1, -1, -1, -1, -1, -1});
+  query_mem_desc.setOutputColumnar(true);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 3, 5, 13, 67}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
+TEST(BaselineHashColumnar, TwoCol_32_32_MixedAggs_w_avg) {
+  std::vector<int8_t> key_column_widths{4, 4};
+  const int8_t suggested_agg_width = 8;
+  std::vector<TargetInfo> target_infos = generate_custom_agg_target_infos(
+      key_column_widths,
+      {kMAX, kAVG, kMAX, kMAX, kMAX, kAVG, kMAX, kMAX},
+      {kFLOAT, kDOUBLE, kBIGINT, kTINYINT, kINT, kDOUBLE, kSMALLINT, kDOUBLE},
+      {kFLOAT, kTINYINT, kBIGINT, kTINYINT, kINT, kINT, kSMALLINT, kDOUBLE});
+  auto query_mem_desc = baseline_hash_two_col_desc(target_infos, suggested_agg_width);
+  query_mem_desc.setAllTargetGroupbyIndices({0, 1, -1, -1, -1, -1, -1, -1, -1, -1});
+  query_mem_desc.setOutputColumnar(true);
+  for (auto is_parallel : {false, true}) {
+    for (auto step_size : {2, 3, 5, 13, 67}) {
+      test_columnar_conversion(target_infos, query_mem_desc, step_size, is_parallel);
+    }
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

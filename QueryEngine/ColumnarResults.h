@@ -48,6 +48,7 @@ class ColumnBitmap {
     CHECK(index < bitmap_.size());
     bitmap_[index] = val;
   }
+  size_t size() { return bitmap_.size(); }
 
  private:
   std::vector<bool> bitmap_;
@@ -79,24 +80,29 @@ class ColumnarResults {
     return target_types_[col_id];
   }
 
-  template <typename EntryT>
-  EntryT getEntryAt(const size_t row_idx, const size_t column_idx) const;
-
   void setParallelConversion(const bool is_parallel) {
     parallel_conversion_ = is_parallel;
   }
   bool isParallelConversion() const { return parallel_conversion_; }
   bool isDirectColumnarConversionPossible() const { return direct_columnar_conversion_; }
 
-  using ReadFunctionPerfectHash =
-      std::function<int64_t(const ResultSet&, const size_t, const size_t)>;
+  // functions used to read content from the result set (direct columnarization, group by
+  // queries)
+  using ReadFunction =
+      std::function<int64_t(const ResultSet&, const size_t, const size_t, const size_t)>;
 
-  using WriteFunctionPerfectHash = std::function<void(const ResultSet&,
-                                                      const size_t,
-                                                      const size_t,
-                                                      const size_t,
-                                                      const size_t,
-                                                      const ReadFunctionPerfectHash&)>;
+  // functions used to write back contents into output column buffers (direct
+  // columnarization, group by queries)
+  using WriteFunction = std::function<void(const ResultSet&,
+                                           const size_t,
+                                           const size_t,
+                                           const size_t,
+                                           const size_t,
+                                           const ReadFunction&)>;
+
+ protected:
+  std::vector<int8_t*> column_buffers_;
+  size_t num_rows_;
 
  private:
   ColumnarResults(const size_t num_rows, const std::vector<SQLTypeInfo>& target_types)
@@ -104,27 +110,37 @@ class ColumnarResults {
   inline void writeBackCell(const TargetValue& col_val,
                             const size_t row_idx,
                             const size_t column_idx);
-  void materializeAllColumns(const ResultSet& rows, const size_t num_columns);
+  void materializeAllColumnsDirectly(const ResultSet& rows, const size_t num_columns);
+  void materializeAllColumnsThroughIteration(const ResultSet& rows,
+                                             const size_t num_columns);
 
-  // TODO(Saman): maybe refactor these into speciliazed sub-classes for each query
-  // description type.
+  // Direct columnarization for group by queries (perfect hash or baseline hash)
+  void materializeAllColumnsGroupBy(const ResultSet& rows, const size_t num_columns);
 
-  // Direct columnarization for Perfect Hash (with columnar output)
-  void materializeAllColumnsPerfectHash(const ResultSet& rows, const size_t num_columns);
-  void locateAndCountEntriesPerfectHash(const ResultSet& rows,
-                                        ColumnBitmap& bitmap,
-                                        std::vector<size_t>& non_empty_per_thread,
-                                        const size_t entry_count,
-                                        const size_t num_threads,
-                                        const size_t size_per_thread) const;
-  void compactAndCopyEntriesPerfectHash(const ResultSet& rows,
-                                        const ColumnBitmap& bitmap,
-                                        const std::vector<size_t>& non_empty_per_thread,
-                                        const size_t num_columns,
-                                        const size_t entry_count,
-                                        const size_t num_threads,
-                                        const size_t size_per_thread);
-  void compactAndCopyEntriesPHWithTargetSkipping(
+  // Direct columnarization for Projections (only output is columnar)
+  void materializeAllColumnsProjection(const ResultSet& rows, const size_t num_columns);
+
+  void copyAllNonLazyColumns(const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
+                             const ResultSet& rows,
+                             const size_t num_columns);
+  void materializeAllLazyColumns(const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
+                                 const ResultSet& rows,
+                                 const size_t num_columns);
+
+  void locateAndCountEntries(const ResultSet& rows,
+                             ColumnBitmap& bitmap,
+                             std::vector<size_t>& non_empty_per_thread,
+                             const size_t entry_count,
+                             const size_t num_threads,
+                             const size_t size_per_thread) const;
+  void compactAndCopyEntries(const ResultSet& rows,
+                             const ColumnBitmap& bitmap,
+                             const std::vector<size_t>& non_empty_per_thread,
+                             const size_t num_columns,
+                             const size_t entry_count,
+                             const size_t num_threads,
+                             const size_t size_per_thread);
+  void compactAndCopyEntriesWithTargetSkipping(
       const ResultSet& rows,
       const ColumnBitmap& bitmap,
       const std::vector<size_t>& non_empty_per_thread,
@@ -135,7 +151,7 @@ class ColumnarResults {
       const size_t entry_count,
       const size_t num_threads,
       const size_t size_per_thread);
-  void compactAndCopyEntriesPHWithoutTargetSkipping(
+  void compactAndCopyEntriesWithoutTargetSkipping(
       const ResultSet& rows,
       const ColumnBitmap& bitmap,
       const std::vector<size_t>& non_empty_per_thread,
@@ -145,35 +161,30 @@ class ColumnarResults {
       const size_t entry_count,
       const size_t num_threads,
       const size_t size_per_thread);
-  template <typename DataType>
+
+  template <typename DATA_TYPE>
   void writeBackCellDirect(const ResultSet& rows,
                            const size_t input_buffer_entry_idx,
                            const size_t output_buffer_entry_idx,
                            const size_t target_idx,
                            const size_t slot_idx,
-                           const ReadFunctionPerfectHash& read_function);
-  std::vector<WriteFunctionPerfectHash> initWriteFunctionsPerfectHash(
-      const ResultSet& rows,
-      const std::vector<bool>& targets_to_skip = {});
-  std::vector<ReadFunctionPerfectHash> initReadFunctionsPerfectHash(
-      const ResultSet& rows,
-      const std::vector<size_t>& slot_idx_per_target_idx,
-      const std::vector<bool>& targets_to_skip = {});
-  std::tuple<std::vector<WriteFunctionPerfectHash>, std::vector<ReadFunctionPerfectHash>>
-  initAllConversionFunctionsPerfectHash(
-      const ResultSet& rows,
-      const std::vector<size_t>& slot_idx_per_target_idx,
-      const std::vector<bool>& targets_to_skip = {});
-  // Direct columnarization for Projections (with columnar output)
-  void copyAllNonLazyColumns(const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
-                             const ResultSet& rows,
-                             const size_t num_columns);
-  void materializeAllLazyColumns(const std::vector<ColumnLazyFetchInfo>& lazy_fetch_info,
-                                 const ResultSet& rows,
-                                 const size_t num_columns);
+                           const ReadFunction& read_function);
 
-  std::vector<int8_t*> column_buffers_;
-  size_t num_rows_;
+  std::vector<WriteFunction> initWriteFunctions(
+      const ResultSet& rows,
+      const std::vector<bool>& targets_to_skip = {});
+
+  template <QueryDescriptionType QUERY_TYPE, bool COLUMNAR_OUTPUT>
+  std::vector<ReadFunction> initReadFunctions(
+      const ResultSet& rows,
+      const std::vector<size_t>& slot_idx_per_target_idx,
+      const std::vector<bool>& targets_to_skip = {});
+
+  std::tuple<std::vector<WriteFunction>, std::vector<ReadFunction>>
+  initAllConversionFunctions(const ResultSet& rows,
+                             const std::vector<size_t>& slot_idx_per_target_idx,
+                             const std::vector<bool>& targets_to_skip = {});
+
   const std::vector<SQLTypeInfo> target_types_;
   bool parallel_conversion_;  // multi-threaded execution of columnar conversion
   bool
