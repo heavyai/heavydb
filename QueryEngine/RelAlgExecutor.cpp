@@ -48,6 +48,18 @@ bool node_is_aggregate(const RelAlgNode* ra) {
   return ((compound && compound->isAggregate()) || aggregate);
 }
 
+std::unordered_set<PhysicalInput> get_physical_inputs(
+    const Catalog_Namespace::Catalog& cat,
+    const RelAlgNode* ra) {
+  auto phys_inputs = get_physical_inputs(ra);
+  std::unordered_set<PhysicalInput> phys_inputs2;
+  for (auto& phi : phys_inputs) {
+    phys_inputs2.insert(
+        PhysicalInput{cat.getColumnIdBySpi(phi.table_id, phi.col_id), phi.table_id});
+  }
+  return phys_inputs2;
+}
+
 }  // namespace
 
 ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
@@ -100,12 +112,10 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
     }
     cleanupPostExecution();
   };
-  executor_->row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
-  executor_->catalog_ = &cat_;
-  executor_->agg_col_range_cache_ = computeColRangesCache(ra.get());
-  executor_->string_dictionary_generations_ =
-      computeStringDictionaryGenerations(ra.get());
-  executor_->table_generations_ = computeTableGenerations(ra.get());
+  const auto phys_inputs = get_physical_inputs(cat_, ra.get());
+  const auto phys_table_ids = get_physical_table_inputs(ra.get());
+  executor_->setCatalog(&cat_);
+  executor_->setupCaching(phys_inputs, phys_table_ids);
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   auto ed_list = get_execution_descriptors(ra.get());
@@ -142,86 +152,21 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
   return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
 }
 
-namespace {
-
-std::unordered_set<int> get_physical_table_ids(
-    const std::unordered_set<PhysicalInput>& phys_inputs) {
-  std::unordered_set<int> physical_table_ids;
-  for (const auto& phys_input : phys_inputs) {
-    physical_table_ids.insert(phys_input.table_id);
-  }
-  return physical_table_ids;
-}
-
-std::unordered_set<PhysicalInput> get_physical_inputs(
-    const Catalog_Namespace::Catalog& cat,
-    const RelAlgNode* ra) {
-  auto phys_inputs = get_physical_inputs(ra);
-  std::unordered_set<PhysicalInput> phys_inputs2;
-  for (auto& phi : phys_inputs) {
-    phys_inputs2.insert(
-        PhysicalInput{cat.getColumnIdBySpi(phi.table_id, phi.col_id), phi.table_id});
-  }
-  return phys_inputs2;
-}
-
-}  // namespace
-
 AggregatedColRange RelAlgExecutor::computeColRangesCache(const RelAlgNode* ra) {
   AggregatedColRange agg_col_range_cache;
   const auto phys_inputs = get_physical_inputs(cat_, ra);
-  const auto phys_table_ids = get_physical_table_ids(phys_inputs);
-  std::vector<InputTableInfo> query_infos;
-  executor_->catalog_ = &cat_;
-  for (const int table_id : phys_table_ids) {
-    query_infos.emplace_back(InputTableInfo{table_id, executor_->getTableInfo(table_id)});
-  }
-  for (const auto& phys_input : phys_inputs) {
-    const auto cd = cat_.getMetadataForColumn(phys_input.table_id, phys_input.col_id);
-    CHECK(cd);
-    const auto& col_ti =
-        cd->columnType.is_array() ? cd->columnType.get_elem_type() : cd->columnType;
-    if (col_ti.is_number() || col_ti.is_boolean() || col_ti.is_time() ||
-        (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT)) {
-      const auto col_var = boost::make_unique<Analyzer::ColumnVar>(
-          cd->columnType, phys_input.table_id, phys_input.col_id, 0);
-      const auto col_range =
-          getLeafColumnRange(col_var.get(), query_infos, executor_, false);
-      agg_col_range_cache.setColRange(phys_input, col_range);
-    }
-  }
-  return agg_col_range_cache;
+  return executor_->computeColRangesCache(phys_inputs);
 }
 
 StringDictionaryGenerations RelAlgExecutor::computeStringDictionaryGenerations(
     const RelAlgNode* ra) {
-  StringDictionaryGenerations string_dictionary_generations;
   const auto phys_inputs = get_physical_inputs(cat_, ra);
-  for (const auto& phys_input : phys_inputs) {
-    const auto cd = cat_.getMetadataForColumn(phys_input.table_id, phys_input.col_id);
-    CHECK(cd);
-    const auto& col_ti =
-        cd->columnType.is_array() ? cd->columnType.get_elem_type() : cd->columnType;
-    if (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT) {
-      const int dict_id = col_ti.get_comp_param();
-      const auto dd = cat_.getMetadataForDict(dict_id);
-      CHECK(dd && dd->stringDict);
-      string_dictionary_generations.setGeneration(dict_id,
-                                                  dd->stringDict->storageEntryCount());
-    }
-  }
-  return string_dictionary_generations;
+  return executor_->computeStringDictionaryGenerations(phys_inputs);
 }
 
 TableGenerations RelAlgExecutor::computeTableGenerations(const RelAlgNode* ra) {
   const auto phys_table_ids = get_physical_table_inputs(ra);
-  TableGenerations table_generations;
-  for (const int table_id : phys_table_ids) {
-    const auto table_info = executor_->getTableInfo(table_id);
-    table_generations.setGeneration(
-        table_id, TableGeneration{table_info.getPhysicalNumTuples(), 0});
-  }
-  return table_generations;
+  return executor_->computeTableGenerations(phys_table_ids);
 }
 
 Executor* RelAlgExecutor::getExecutor() const {

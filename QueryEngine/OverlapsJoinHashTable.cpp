@@ -27,12 +27,13 @@ std::map<OverlapsJoinHashTable::HashTableCacheKey, double>
     OverlapsJoinHashTable::auto_tuner_cache_;
 std::mutex OverlapsJoinHashTable::auto_tuner_cache_mutex_;
 
+//! Make hash table from an in-flight SQL query's parse tree etc.
 std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> condition,
     const std::vector<InputTableInfo>& query_infos,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_count,
-    ColumnCacheMap& column_map,
+    ColumnCacheMap& column_cache,
     Executor* executor) {
   auto inner_outer_pairs = normalize_column_pairs(
       condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
@@ -52,7 +53,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                                                                  query_infos,
                                                                  memory_level,
                                                                  entries_per_device,
-                                                                 column_map,
+                                                                 column_cache,
                                                                  executor,
                                                                  inner_outer_pairs);
   join_hash_table->checkHashJoinReplicationConstraint(getInnerTableId(inner_outer_pairs));
@@ -70,6 +71,76 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
                << e.what();
   }
   return join_hash_table;
+}
+
+//! Make hash table from named tables and columns (such as for testing).
+std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getSyntheticInstance(
+    std::string_view table1,
+    std::string_view column1,
+    std::string_view table2,
+    std::string_view column2,
+    const Data_Namespace::MemoryLevel memory_level,
+    const int device_count,
+    ColumnCacheMap& column_cache,
+    Executor* executor) {
+  auto catalog = executor->getCatalog();
+  CHECK(catalog);
+
+  auto tmeta1 = catalog->getMetadataForTable(std::string(table1));
+  auto tmeta2 = catalog->getMetadataForTable(std::string(table2));
+
+  CHECK(tmeta1);
+  CHECK(tmeta2);
+
+  auto cmeta1 = catalog->getMetadataForColumn(tmeta1->tableId, std::string(column1));
+  auto cmeta2 = catalog->getMetadataForColumn(tmeta2->tableId, std::string(column2));
+
+  CHECK(cmeta1);
+  CHECK(cmeta2);
+
+  auto ti1 = cmeta1->columnType;
+  auto ti2 = cmeta2->columnType;
+
+  CHECK(ti1.is_geometry());
+  CHECK(ti2.is_geometry());
+
+  int targetColumnId;
+  switch (ti2.get_type()) {
+    case kLINESTRING: {
+      targetColumnId = cmeta2->columnId + 2;
+      break;
+    }
+    case kPOLYGON: {
+      targetColumnId = cmeta2->columnId + 3;
+      break;
+    }
+    case kMULTIPOLYGON: {
+      targetColumnId = cmeta2->columnId + 4;
+      break;
+    }
+    default:
+      CHECK(false);
+  }
+
+  auto cmeta3 = catalog->getMetadataForColumn(tmeta2->tableId, targetColumnId);
+  CHECK(cmeta3);
+  auto ti3 = cmeta3->columnType;
+
+  auto a1 = std::make_shared<Analyzer::ColumnVar>(ti1, tmeta1->tableId, 1, 0);
+  auto a2 =
+      std::make_shared<Analyzer::ColumnVar>(ti3, tmeta2->tableId, cmeta3->columnId, 1);
+
+  auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kOVERLAPS, kONE, a1, a2);
+
+  size_t number_of_join_tables{2};
+  std::vector<InputTableInfo> query_infos(number_of_join_tables);
+  query_infos[0].table_id = tmeta1->tableId;
+  query_infos[0].info = tmeta1->fragmenter->getFragmentsForQuery();
+  query_infos[1].table_id = tmeta2->tableId;
+  query_infos[1].info = tmeta2->fragmenter->getFragmentsForQuery();
+
+  return OverlapsJoinHashTable::getInstance(
+      op, query_infos, memory_level, device_count, column_cache, executor);
 }
 
 void OverlapsJoinHashTable::reifyWithLayout(

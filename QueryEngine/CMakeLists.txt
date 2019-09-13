@@ -96,6 +96,7 @@ set(query_engine_source_files
     StringOpsIR.cpp
     RegexpFunctions.cpp
     JoinHashTable.cpp
+    JoinHashTableInterface.cpp
     HashJoinRuntime.cpp
     WindowContext.cpp
     WindowExpressionRewrite.cpp

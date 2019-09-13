@@ -25,6 +25,7 @@
 #define SQLTYPES_H
 
 #include "ConfigResolve.h"
+#include "StringTransform.h"
 
 #include <cassert>
 #include <cfloat>
@@ -446,6 +447,27 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     return type_name[(int)type] + ps;
   }
   inline std::string get_compression_name() const { return comp_name[(int)compression]; }
+  inline std::string to_string() const {
+    return concat("(",
+                  type_name[(int)type],
+                  ", ",
+                  get_dimension(),
+                  ", ",
+                  get_scale(),
+                  ", ",
+                  get_notnull() ? "not nullable" : "nullable",
+                  ", ",
+                  get_compression_name(),
+                  ", ",
+                  get_comp_param(),
+                  ", ",
+                  type_name[(int)subtype],
+                  ": ",
+                  get_size(),
+                  ": ",
+                  get_elem_type().get_size(),
+                  ")");
+  }
 #endif
   inline bool is_string() const { return IS_STRING(type); }
   inline bool is_string_array() const { return (type == kARRAY) && IS_STRING(subtype); }

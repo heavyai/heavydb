@@ -300,6 +300,7 @@ size_t get_shard_count(
              : 0;
 }
 
+//! Make hash table from an in-flight SQL query's parse tree etc.
 std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
     const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
     const std::vector<InputTableInfo>& query_infos,
@@ -394,6 +395,70 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
         e.what());
   }
   return join_hash_table;
+}
+
+//! Make hash table from named tables and columns (such as for testing).
+std::shared_ptr<JoinHashTable> JoinHashTable::getSyntheticInstance(
+    std::string_view table1,
+    std::string_view column1,
+    std::string_view table2,
+    std::string_view column2,
+    const Data_Namespace::MemoryLevel memory_level,
+    const HashType preferred_hash_type,
+    const int device_count,
+    ColumnCacheMap& column_cache,
+    Executor* executor) {
+  auto catalog = executor->getCatalog();
+  CHECK(catalog);
+
+  auto tmeta1 = catalog->getMetadataForTable(std::string(table1));
+  auto tmeta2 = catalog->getMetadataForTable(std::string(table2));
+
+  CHECK(tmeta1);
+  CHECK(tmeta2);
+
+  auto cmeta1 = catalog->getMetadataForColumn(tmeta1->tableId, std::string(column1));
+  auto cmeta2 = catalog->getMetadataForColumn(tmeta2->tableId, std::string(column2));
+
+  CHECK(cmeta1);
+  CHECK(cmeta2);
+
+  auto ti1 = cmeta1->columnType;
+  auto ti2 = cmeta2->columnType;
+
+  auto a1 =
+      std::make_shared<Analyzer::ColumnVar>(ti1, tmeta1->tableId, cmeta1->columnId, 0);
+  auto a2 =
+      std::make_shared<Analyzer::ColumnVar>(ti2, tmeta2->tableId, cmeta2->columnId, 1);
+
+  auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, a1, a2);
+
+  size_t number_of_join_tables{2};
+  std::vector<InputTableInfo> query_infos(number_of_join_tables);
+  query_infos[0].table_id = tmeta1->tableId;
+  query_infos[0].info = tmeta1->fragmenter->getFragmentsForQuery();
+  query_infos[1].table_id = tmeta2->tableId;
+  query_infos[1].info = tmeta2->fragmenter->getFragmentsForQuery();
+
+  std::unordered_set<PhysicalInput> phys_inputs;
+  phys_inputs.emplace(PhysicalInput{cmeta1->columnId, cmeta1->tableId});
+  phys_inputs.emplace(PhysicalInput{cmeta2->columnId, cmeta2->tableId});
+
+  std::unordered_set<int> phys_table_ids;
+  phys_table_ids.insert(cmeta1->tableId);
+  phys_table_ids.insert(cmeta2->tableId);
+
+  executor->setupCaching(phys_inputs, phys_table_ids);
+
+  auto hash_table = JoinHashTable::getInstance(op,
+                                               query_infos,
+                                               memory_level,
+                                               preferred_hash_type,
+                                               device_count,
+                                               column_cache,
+                                               executor);
+
+  return hash_table;
 }
 
 std::pair<const int8_t*, size_t> JoinHashTable::getOneColumnFragment(
@@ -1384,6 +1449,102 @@ size_t JoinHashTable::payloadBufferOff() const noexcept {
 
 size_t JoinHashTable::getComponentBufferSize() const noexcept {
   return hash_entry_count_ * sizeof(int32_t);
+}
+
+int64_t JoinHashTable::getJoinHashBuffer(const ExecutorDeviceType device_type,
+                                         const int device_id) const noexcept {
+  if (device_type == ExecutorDeviceType::CPU && !cpu_hash_table_buff_) {
+    return 0;
+  }
+#ifdef HAVE_CUDA
+  CHECK_LT(static_cast<size_t>(device_id), gpu_hash_table_buff_.size());
+  if (device_type == ExecutorDeviceType::CPU) {
+    return reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0]);
+  } else {
+    return gpu_hash_table_buff_[device_id]
+               ? reinterpret_cast<CUdeviceptr>(
+                     gpu_hash_table_buff_[device_id]->getMemoryPtr())
+               : reinterpret_cast<CUdeviceptr>(nullptr);
+  }
+#else
+  CHECK(device_type == ExecutorDeviceType::CPU);
+  return reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0]);
+#endif
+}
+
+size_t JoinHashTable::getJoinHashBufferSize(const ExecutorDeviceType device_type,
+                                            const int device_id) const noexcept {
+  if (device_type == ExecutorDeviceType::CPU && !cpu_hash_table_buff_) {
+    return 0;
+  }
+#ifdef HAVE_CUDA
+  CHECK_LT(static_cast<size_t>(device_id), gpu_hash_table_buff_.size());
+  if (device_type == ExecutorDeviceType::CPU) {
+    return cpu_hash_table_buff_->size() *
+           sizeof(decltype(cpu_hash_table_buff_)::element_type::value_type);
+  } else {
+    return gpu_hash_table_buff_[device_id]
+               ? gpu_hash_table_buff_[device_id]->reservedSize()
+               : 0;
+  }
+#else
+  CHECK(device_type == ExecutorDeviceType::CPU);
+  return cpu_hash_table_buff_->size() *
+         sizeof(decltype(cpu_hash_table_buff_)::element_type::value_type);
+#endif
+}
+
+std::string JoinHashTable::toString(const ExecutorDeviceType device_type,
+                                    const int device_id,
+                                    bool raw) const noexcept {
+  auto buffer = getJoinHashBuffer(device_type, device_id);
+  auto buffer_size = getJoinHashBufferSize(device_type, device_id);
+#ifdef HAVE_CUDA
+  std::unique_ptr<int8_t[]> buffer_copy;
+  if (device_type == ExecutorDeviceType::GPU) {
+    buffer_copy = std::make_unique<int8_t[]>(buffer_size);
+
+    copy_from_gpu(&executor_->getCatalog()->getDataMgr(),
+                  buffer_copy.get(),
+                  reinterpret_cast<CUdeviceptr>(reinterpret_cast<int8_t*>(buffer)),
+                  buffer_size,
+                  device_id);
+  }
+  auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
+#else
+  auto ptr1 = reinterpret_cast<const int8_t*>(buffer);
+#endif  // HAVE_CUDA
+  auto ptr2 = ptr1 + offsetBufferOff();
+  auto ptr3 = ptr1 + countBufferOff();
+  auto ptr4 = ptr1 + payloadBufferOff();
+  return ::decodeJoinHashBufferToString(
+      1, sizeof(int32_t), ptr1, ptr2, ptr3, ptr4, buffer_size, raw);
+}
+
+std::set<DecodedJoinHashBufferEntry> JoinHashTable::decodeJoinHashBuffer(
+    const ExecutorDeviceType device_type,
+    const int device_id) const noexcept {
+  auto buffer = getJoinHashBuffer(device_type, device_id);
+  auto buffer_size = getJoinHashBufferSize(device_type, device_id);
+#ifdef HAVE_CUDA
+  std::unique_ptr<int8_t[]> buffer_copy;
+  if (device_type == ExecutorDeviceType::GPU) {
+    buffer_copy = std::make_unique<int8_t[]>(buffer_size);
+
+    copy_from_gpu(&executor_->getCatalog()->getDataMgr(),
+                  buffer_copy.get(),
+                  reinterpret_cast<CUdeviceptr>(reinterpret_cast<int8_t*>(buffer)),
+                  buffer_size,
+                  device_id);
+  }
+  auto ptr1 = buffer_copy ? buffer_copy.get() : reinterpret_cast<const int8_t*>(buffer);
+#else
+  auto ptr1 = reinterpret_cast<const int8_t*>(buffer);
+#endif  // HAVE_CUDA
+  auto ptr2 = ptr1 + offsetBufferOff();
+  auto ptr3 = ptr1 + countBufferOff();
+  auto ptr4 = ptr1 + payloadBufferOff();
+  return ::decodeJoinHashBuffer(1, sizeof(int32_t), ptr1, ptr2, ptr3, ptr4, buffer_size);
 }
 
 llvm::Value* JoinHashTable::codegenSlot(const CompilationOptions& co,

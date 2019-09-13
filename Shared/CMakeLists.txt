@@ -9,6 +9,7 @@ set(shared_source_files
     StackTrace.cpp
     base64.cpp
     Logger.cpp
+    thread_count.cpp
 )
 
 add_library(Shared ${shared_source_files})

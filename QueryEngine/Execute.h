@@ -442,6 +442,7 @@ class Executor {
                                                       int) const;
 
   const Catalog_Namespace::Catalog* getCatalog() const;
+  void setCatalog(const Catalog_Namespace::Catalog* catalog);
 
   const std::shared_ptr<RowSetMemoryOwner> getRowSetMemoryOwner() const;
 
@@ -922,6 +923,17 @@ class Executor {
       const std::vector<uint64_t>& frag_offsets,
       const size_t frag_idx);
 
+  AggregatedColRange computeColRangesCache(
+      const std::unordered_set<PhysicalInput>& phys_inputs);
+  StringDictionaryGenerations computeStringDictionaryGenerations(
+      const std::unordered_set<PhysicalInput>& phys_inputs);
+  TableGenerations computeTableGenerations(std::unordered_set<int> phys_table_ids);
+
+ public:
+  void setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
+                    const std::unordered_set<int>& phys_table_ids);
+
+ private:
   std::vector<std::pair<void*, void*>> getCodeFromCache(const CodeCacheKey&,
                                                         const CodeCache&);
 
