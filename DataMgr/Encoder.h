@@ -159,6 +159,7 @@ class Encoder {
   virtual ChunkMetadata getMetadata(const SQLTypeInfo& ti) = 0;
   virtual void updateStats(const int64_t val, const bool is_null) = 0;
   virtual void updateStats(const double val, const bool is_null) = 0;
+  virtual void updateStats(const int8_t* const dst, const size_t numBytes) = 0;
   virtual void reduceStats(const Encoder&) = 0;
   virtual void copyMetadata(const Encoder* copyFromEncoder) = 0;
   virtual void writeMetadata(FILE* f /*, const size_t offset*/) = 0;

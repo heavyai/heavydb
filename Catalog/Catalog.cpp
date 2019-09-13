@@ -2026,11 +2026,16 @@ void Catalog::createTable(
     const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
     bool isLogicalTable) {
   cat_write_lock write_lock(this);
-  list<ColumnDescriptor> cds;
+  list<ColumnDescriptor> cds = cols;
   list<DictDescriptor> dds;
   std::set<std::string> toplevel_column_names;
   list<ColumnDescriptor> columns;
-  for (auto cd : cols) {
+
+  if (!td.storageType.empty()) {
+    ForeignStorageInterface::prepareTable(getCurrentDB().dbId, td, cds);
+  }
+
+  for (auto cd : cds) {
     if (cd.columnName == "rowid") {
       throw std::runtime_error(
           "Cannot create column with name rowid. rowid is a system defined column.");
@@ -2041,6 +2046,7 @@ void Catalog::createTable(
       expandGeoColumn(cd, columns);
     }
   }
+  cds.clear();
 
   ColumnDescriptor cd;
   // add row_id column -- Must be last column in the table
@@ -2149,10 +2155,6 @@ void Catalog::createTable(
             "INSERT INTO mapd_views (tableid, sql) VALUES (?,?)",
             std::vector<std::string>{std::to_string(td.tableId), td.viewSQL});
       }
-      if (!td.storageType.empty()) {
-        ForeignStorageInterface::registerTable(
-            getCurrentDB().dbId, td.tableId, td.storageType);
-      }
     } catch (std::exception& e) {
       sqliteConnector_.query("ROLLBACK TRANSACTION");
       throw;
@@ -2209,7 +2211,10 @@ void Catalog::createTable(
     removeTableFromMap(td.tableName, td.tableId, true);
     throw;
   }
-
+  // TODO: rollback if exception is raised
+  if (!td.storageType.empty()) {
+    ForeignStorageInterface::registerTable(this, getCurrentDB().dbId, td, cds);
+  }
   sqliteConnector_.query("END TRANSACTION");
 }
 
@@ -2573,9 +2578,10 @@ void Catalog::setColumnDictionary(ColumnDescriptor& cd,
                     folderPath,
                     false);
   dds.push_back(dd);
-  if (!cd.columnType.is_array()) {
-    cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
-  }
+  // TODO: Why??? fix back
+  // if (!cd.columnType.is_array()) {
+  //   cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
+  // }
   cd.columnType.set_comp_param(dictId);
 }
 

@@ -948,7 +948,7 @@ void FileMgr::getChunkMetadataVecForKeyPrefix(
                           // read here for chunk
   auto chunkIt = chunkIndex_.lower_bound(keyPrefix);
   if (chunkIt == chunkIndex_.end()) {
-    return;  // throw?
+    return; // throw?
   }
   while (chunkIt != chunkIndex_.end() &&
          std::search(chunkIt->first.begin(),
