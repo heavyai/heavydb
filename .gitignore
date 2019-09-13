@@ -79,6 +79,7 @@ java/thrift/src/
 *.project
 
 ThirdParty/
+data/
 
 # IntelliJ/CLion settings files
 .idea

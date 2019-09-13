@@ -15,6 +15,7 @@
  */
 
 #include "MapDServer.h"
+#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "ThriftHandler/MapDHandler.h"
 
 #ifdef HAVE_THRIFT_THREADFACTORY
@@ -1228,6 +1229,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
   g_running = false;
   file_delete_thread.join();
   heartbeat_thread.join();
+  ForeignStorageInterface::destroy();
 
   int signum = g_saw_signal;
   if (signum <= 0 || signum == SIGTERM) {
