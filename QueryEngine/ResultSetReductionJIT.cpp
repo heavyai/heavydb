@@ -512,7 +512,8 @@ ReductionCode ResultSetReductionJIT::codegen() const {
   }
   reduceLoop(reduction_code);
   // For small result sets, avoid native code generation and use the interpreter instead.
-  if (query_mem_desc_.getEntryCount() < INTERP_THRESHOLD) {
+  if (query_mem_desc_.getEntryCount() < INTERP_THRESHOLD &&
+      (!query_mem_desc_.getExecutor() || query_mem_desc_.blocksShareMemory())) {
     return reduction_code;
   }
   std::lock_guard<std::mutex> reduction_guard(ReductionCode::s_reduction_mutex);
