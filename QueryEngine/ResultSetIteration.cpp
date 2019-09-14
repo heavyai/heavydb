@@ -961,10 +961,22 @@ struct GeoLazyFetchHandler {
     size_t ctr = 0;
     for (const auto& col_pair : vals_vector) {
       ad_arr[ctr] = lazy_fetch_chunk(col_pair.first, col_pair.second);
+      // Regular chunk iterator used to fetch this datum sets the right nullness.
+      // That includes the fixlen bounds array.
+      // However it may incorrectly set it for the POINT coord array datum
+      // if 1st byte happened to hold NULL_ARRAY_TINYINT. One should either use
+      // the specialized iterator for POINT coords or rely on regular iterator +
+      // reset + recheck, which is what is done below.
+      auto is_point = (geo_ti.get_type() == kPOINT && ctr == 0);
+      if (is_point) {
+        // Resetting POINT coords array nullness here
+        ad_arr[ctr]->is_null = false;
+      }
       if (!geo_ti.get_notnull()) {
-        // Fetched data, now need to check and set the nullness
+        // Recheck and set nullness
         if (ad_arr[ctr]->length == 0 || ad_arr[ctr]->pointer == NULL ||
-            is_null_point(geo_ti, ad_arr[ctr]->pointer, ad_arr[ctr]->length)) {
+            (is_point &&
+             is_null_point(geo_ti, ad_arr[ctr]->pointer, ad_arr[ctr]->length))) {
           ad_arr[ctr]->is_null = true;
         }
       }
@@ -1026,12 +1038,21 @@ struct GeoQueryOutputFetchHandler {
       size_t ctr = 0;
       for (size_t i = 0; i < vals_vector.size(); i += 2) {
         ad_arr[ctr] = datum_fetcher(vals_vector[i], vals_vector[i + 1]);
+        // All fetched datums come in with is_null set to false
         if (!geo_ti.get_notnull()) {
-          // Fetched data, now need to check and set the nullness
-          if (ad_arr[ctr]->length == 0 || ad_arr[ctr]->pointer == NULL ||
-              is_null_point(geo_ti, ad_arr[ctr]->pointer, ad_arr[ctr]->length)) {
-            ad_arr[ctr]->is_null = true;
+          bool is_null = false;
+          // Now need to set the nullness
+          if (ad_arr[ctr]->length == 0 || ad_arr[ctr]->pointer == NULL) {
+            is_null = true;
+          } else if (geo_ti.get_type() == kPOINT && ctr == 0 &&
+                     is_null_point(geo_ti, ad_arr[ctr]->pointer, ad_arr[ctr]->length)) {
+            is_null = true;  // recognizes compressed and uncompressed points
+          } else if (ad_arr[ctr]->length == 4 * sizeof(double)) {
+            // Bounds
+            auto dti = SQLTypeInfo(kARRAY, 0, 0, false, kENCODING_NONE, 0, kDOUBLE);
+            is_null = dti.is_null_fixlen_array(ad_arr[ctr]->pointer, ad_arr[ctr]->length);
           }
+          ad_arr[ctr]->is_null = is_null;
         }
         ctr++;
       }
