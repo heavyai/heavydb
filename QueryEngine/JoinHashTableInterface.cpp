@@ -61,7 +61,7 @@ std::string decodeJoinHashBufferToString(
     bool raw) {
   std::string txt;
 
-  assert(key_component_width == 8 || key_component_width == 4);
+  CHECK(key_component_width == 8 || key_component_width == 4);
 
   auto i64ptr1 = reinterpret_cast<const int64_t*>(ptr1);
   auto i64ptr2 = reinterpret_cast<const int64_t*>(ptr2);
@@ -71,11 +71,11 @@ std::string decodeJoinHashBufferToString(
   auto i32ptr5 = reinterpret_cast<const int32_t*>(ptr1 + buffer_size);
   auto i64ptr5 = reinterpret_cast<const int64_t*>(i32ptr5);
 
-  assert(i64ptr1 <= i64ptr2);
-  assert(i64ptr2 < i64ptr5);
-  assert(i32ptr2 < i32ptr3);
-  assert(i32ptr3 < i32ptr4);
-  assert(i32ptr4 < i32ptr5);
+  CHECK_LE(i64ptr1, i64ptr2);
+  CHECK_LT(i64ptr2, i64ptr5);
+  CHECK_LT(i32ptr2, i32ptr3);
+  CHECK_LT(i32ptr3, i32ptr4);
+  CHECK_LT(i32ptr4, i32ptr5);
 
   size_t entry_count = (ptr3 - ptr2) / sizeof(int32_t);
 
@@ -275,7 +275,7 @@ std::set<DecodedJoinHashBufferEntry> decodeJoinHashBuffer(
     size_t buffer_size) {        // total memory size
   std::set<DecodedJoinHashBufferEntry> s;
 
-  assert(key_component_width == 8 || key_component_width == 4);
+  CHECK(key_component_width == 8 || key_component_width == 4);
 
   auto i64ptr1 = reinterpret_cast<const int64_t*>(ptr1);
   auto i64ptr2 = reinterpret_cast<const int64_t*>(ptr2);
@@ -285,11 +285,11 @@ std::set<DecodedJoinHashBufferEntry> decodeJoinHashBuffer(
   auto i32ptr5 = reinterpret_cast<const int32_t*>(ptr1 + buffer_size);
   auto i64ptr5 = reinterpret_cast<const int64_t*>(i32ptr5);
 
-  assert(i64ptr1 <= i64ptr2);
-  assert(i64ptr2 < i64ptr5);
-  assert(i32ptr2 < i32ptr3);
-  assert(i32ptr3 < i32ptr4);
-  assert(i32ptr4 < i32ptr5);
+  CHECK_LE(i64ptr1, i64ptr2);
+  CHECK_LT(i64ptr2, i64ptr5);
+  CHECK_LT(i32ptr2, i32ptr3);
+  CHECK_LT(i32ptr3, i32ptr4);
+  CHECK_LT(i32ptr4, i32ptr5);
 
   size_t entry_count = (ptr3 - ptr2) / sizeof(int32_t);
 

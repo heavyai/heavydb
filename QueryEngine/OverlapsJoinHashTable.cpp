@@ -104,7 +104,7 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getSyntheticInstan
   CHECK(ti1.is_geometry());
   CHECK(ti2.is_geometry());
 
-  int targetColumnId;
+  int targetColumnId = 0;
   switch (ti2.get_type()) {
     case kLINESTRING: {
       targetColumnId = cmeta2->columnId + 2;
