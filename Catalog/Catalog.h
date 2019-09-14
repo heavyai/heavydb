@@ -260,6 +260,7 @@ class Catalog final {
   void updateDictionaryNames();
   void updateTableDescriptorSchema();
   void updateFixlenArrayColumns();
+  void updateGeoColumns();
   void updateFrontendViewSchema();
   void updateLinkSchema();
   void updateFrontendViewAndLinkUsers();
