@@ -252,15 +252,22 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
 Data_Namespace::AbstractBufferMgr* ForeignStorageInterface::lookupBufferManager(
     const int db_id,
     const int table_id) {
+
+  static std::map<std::pair<int, int>, std::unique_ptr<Data_Namespace::AbstractBufferMgr>> managers_map_;
+  
+  auto key = std::make_pair(db_id, table_id);
+  if(managers_map_.count(key))
+    return managers_map_[key].get();
+
   std::lock_guard<std::mutex> persistent_storage_interfaces_lock(
       persistent_storage_interfaces_mutex_);
-  const auto it =
-      table_persistent_storage_interface_map_.find(std::make_pair(db_id, table_id));
+  const auto it = table_persistent_storage_interface_map_.find(key);
   if (it == table_persistent_storage_interface_map_.end()) {
     return nullptr;
   }
-  // TODO(alex): don't leak
-  return new ForeignStorageBufferMgr(db_id, table_id, it->second);
+  const auto it_ok = managers_map_.emplace(key, new ForeignStorageBufferMgr(db_id, table_id, it->second));
+  CHECK(it_ok.second);
+  return it_ok.first->second.get();
 }
 
 void ForeignStorageInterface::registerPersistentStorageInterface(
@@ -275,21 +282,22 @@ void ForeignStorageInterface::registerPersistentStorageInterface(
 void ForeignStorageInterface::registerTable(const int db_id,
                                             const int table_id,
                                             const std::string& type) {
-  std::lock_guard<std::mutex> persistent_storage_interfaces_lock(
-      persistent_storage_interfaces_mutex_);
+  std::unique_lock<std::mutex> persistent_storage_interfaces_lock(
+    persistent_storage_interfaces_mutex_);
   size_t sep = type.find_first_of(':');
   std::string type_id = type.substr(0, sep);
   if(sep != std::string::npos)
     sep++;
   std::string type_info = type.substr(sep);
   std::transform(type_info.begin(), type_info.end(), type_info.begin(),
-                 [](unsigned char c){ return std::tolower(c); }); // TODO: get original unmodified case
+                [](unsigned char c){ return std::tolower(c); }); // TODO: get original unmodified case
   const auto it = persistent_storage_interfaces_.find(type_id);
   CHECK(it != persistent_storage_interfaces_.end());
   const auto it_ok = table_persistent_storage_interface_map_.emplace(
       std::make_pair(db_id, table_id), it->second.get());
   CHECK(it_ok.second);
-  it_ok.first->second->registerTable(it_ok.first->first, type_info);
+  persistent_storage_interfaces_lock.unlock();
+  it_ok.first->second->registerTable(it_ok.first->first, type_info, lookupBufferManager(db_id, table_id));
 }
 
 std::unordered_map<std::string, std::unique_ptr<PersistentForeignStorageInterface>>
