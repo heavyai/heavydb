@@ -517,6 +517,18 @@ ReductionCode ResultSetReductionJIT::codegen() const {
     return reduction_code;
   }
   std::lock_guard<std::mutex> reduction_guard(ReductionCode::s_reduction_mutex);
+  CodeCacheKey key{cacheKey()};
+  const auto val_ptr = s_code_cache.get(key);
+  if (val_ptr) {
+    return {reinterpret_cast<ReductionCode::FuncPtr>(std::get<0>(val_ptr->first.front())),
+            nullptr,
+            nullptr,
+            nullptr,
+            std::move(reduction_code.ir_is_empty),
+            std::move(reduction_code.ir_reduce_one_entry),
+            std::move(reduction_code.ir_reduce_one_entry_idx),
+            std::move(reduction_code.ir_reduce_loop)};
+  }
   reduction_code.cgen_state.reset(new CgenState({}, false));
   auto cgen_state = reduction_code.cgen_state.get();
   std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
@@ -547,7 +559,8 @@ ReductionCode ResultSetReductionJIT::codegen() const {
   return finalizeReductionCode(std::move(reduction_code),
                                ir_is_empty,
                                ir_reduce_one_entry,
-                               ir_reduce_one_entry_idx);
+                               ir_reduce_one_entry_idx,
+                               key);
 }
 
 void ResultSetReductionJIT::clearCache() {
@@ -1098,22 +1111,8 @@ ReductionCode ResultSetReductionJIT::finalizeReductionCode(
     ReductionCode reduction_code,
     const llvm::Function* ir_is_empty,
     const llvm::Function* ir_reduce_one_entry,
-    const llvm::Function* ir_reduce_one_entry_idx) const {
-  const auto key0 = serialize_llvm_object(ir_is_empty);
-  const auto key1 = serialize_llvm_object(ir_reduce_one_entry);
-  const auto key2 = serialize_llvm_object(ir_reduce_one_entry_idx);
-  CodeCacheKey key{key0, key1, key2};
-  const auto val_ptr = s_code_cache.get(key);
-  if (val_ptr) {
-    return {reinterpret_cast<ReductionCode::FuncPtr>(std::get<0>(val_ptr->first.front())),
-            nullptr,
-            nullptr,
-            nullptr,
-            std::move(reduction_code.ir_is_empty),
-            std::move(reduction_code.ir_reduce_one_entry),
-            std::move(reduction_code.ir_reduce_one_entry_idx),
-            std::move(reduction_code.ir_reduce_loop)};
-  }
+    const llvm::Function* ir_reduce_one_entry_idx,
+    const CodeCacheKey& key) const {
   CompilationOptions co{
       ExecutorDeviceType::CPU, false, ExecutorOptLevel::ReductionJIT, false};
   reduction_code.module.release();
@@ -1130,6 +1129,40 @@ ReductionCode ResultSetReductionJIT::finalizeReductionCode(
                            reduction_code.llvm_reduce_loop->getParent(),
                            s_code_cache);
   return reduction_code;
+}
+
+namespace {
+
+std::string target_info_key(const TargetInfo& target_info) {
+  return std::to_string(target_info.is_agg) + "\n" +
+         std::to_string(target_info.agg_kind) + "\n" +
+         target_info.sql_type.get_type_name() + "\n" +
+         std::to_string(target_info.sql_type.get_notnull()) + "\n" +
+         target_info.agg_arg_type.get_type_name() + "\n" +
+         std::to_string(target_info.agg_arg_type.get_notnull()) + "\n" +
+         std::to_string(target_info.skip_null_val) + "\n" +
+         std::to_string(target_info.is_distinct);
+}
+
+}  // namespace
+
+std::string ResultSetReductionJIT::cacheKey() const {
+  std::vector<std::string> target_init_vals_strings;
+  std::transform(target_init_vals_.begin(),
+                 target_init_vals_.end(),
+                 std::back_inserter(target_init_vals_strings),
+                 [](const int64_t v) { return std::to_string(v); });
+  const auto target_init_vals_key =
+      boost::algorithm::join(target_init_vals_strings, ", ");
+  std::vector<std::string> targets_strings;
+  std::transform(
+      targets_.begin(),
+      targets_.end(),
+      std::back_inserter(targets_strings),
+      [](const TargetInfo& target_info) { return target_info_key(target_info); });
+  const auto targets_key = boost::algorithm::join(targets_strings, ", ");
+  return query_mem_desc_.reductionKey() + "\n" + target_init_vals_key + "\n" +
+         targets_key;
 }
 
 std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state) {

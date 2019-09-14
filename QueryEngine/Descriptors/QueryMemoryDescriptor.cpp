@@ -1122,15 +1122,8 @@ inline std::string queryDescTypeToString(const QueryDescriptionType val) {
 }  // namespace
 
 std::string QueryMemoryDescriptor::toString() const {
-  std::string str;
-  str += "Query Memory Descriptor State\n";
-  str += "\tQuery Type: " + queryDescTypeToString(query_desc_type_) + "\n";
+  auto str = reductionKey();
   str += "\tAllow Multifrag: " + boolToString(allow_multifrag_) + "\n";
-  str +=
-      "\tKeyless Hash: " + boolToString(keyless_hash_) +
-      (keyless_hash_ ? ", target index for key: " + std::to_string(getTargetIdxForKey())
-                     : "") +
-      "\n";
   str += "\tInterleaved Bins on GPU: " + boolToString(interleaved_bins_on_gpu_) + "\n";
   str += "\tBlocks Share Memory: " + boolToString(blocksShareMemory()) + "\n";
   str += "\tThreads Share Memory: " + boolToString(threadsShareMemory()) + "\n";
@@ -1145,6 +1138,29 @@ std::string QueryMemoryDescriptor::toString() const {
   str += "\tOutput Columnar: " + boolToString(output_columnar_) + "\n";
   str += "\tRender Output: " + boolToString(render_output_) + "\n";
   str += "\tUse Baseline Sort: " + boolToString(must_use_baseline_sort_) + "\n";
+  return str;
+}
+
+std::string QueryMemoryDescriptor::reductionKey() const {
+  std::string str;
+  str += "Query Memory Descriptor State\n";
+  str += "\tQuery Type: " + queryDescTypeToString(query_desc_type_) + "\n";
+  str +=
+      "\tKeyless Hash: " + boolToString(keyless_hash_) +
+      (keyless_hash_ ? ", target index for key: " + std::to_string(getTargetIdxForKey())
+                     : "") +
+      "\n";
+  str += "\tEffective key width: " + std::to_string(getEffectiveKeyWidth()) + "\n";
+  str += "\tNumber of group columns: " + std::to_string(groupColWidthsSize()) + "\n";
+  const auto group_indices_size = targetGroupbyIndicesSize();
+  if (group_indices_size) {
+    std::vector<std::string> group_indices_strings;
+    for (size_t target_idx = 0; target_idx < group_indices_size; ++target_idx) {
+      group_indices_strings.push_back(std::to_string(getTargetGroupbyIndex(target_idx)));
+    }
+    str += "\tTarget group by indices: " +
+           boost::algorithm::join(group_indices_strings, ",");
+  }
   str += "\t" + col_slot_context_.toString();
   return str;
 }

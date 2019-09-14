@@ -118,11 +118,13 @@ class ResultSetReductionJIT {
                                   const size_t target_logical_idx,
                                   Function* ir_reduce_one_entry) const;
 
-  ReductionCode finalizeReductionCode(
-      ReductionCode reduction_code,
-      const llvm::Function* ir_is_empty,
-      const llvm::Function* ir_reduce_one_entry,
-      const llvm::Function* ir_reduce_one_entry_idx) const;
+  ReductionCode finalizeReductionCode(ReductionCode reduction_code,
+                                      const llvm::Function* ir_is_empty,
+                                      const llvm::Function* ir_reduce_one_entry,
+                                      const llvm::Function* ir_reduce_one_entry_idx,
+                                      const CodeCacheKey& key) const;
+
+  std::string cacheKey() const;
 
   const QueryMemoryDescriptor query_mem_desc_;
   const std::vector<TargetInfo> targets_;
