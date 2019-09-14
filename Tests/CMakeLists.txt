@@ -77,7 +77,8 @@ target_link_libraries(ResultSetBaselineRadixSortTest gtest QueryEngine ${MAPD_RE
 target_link_libraries(UtilTest Utils gtest Shared ${Boost_LIBRARIES})
 target_link_libraries(StringDictionaryTest StringDictionary gtest Shared ${Boost_LIBRARIES})
 target_link_libraries(StringTransformTest Shared gtest ${Boost_LIBRARIES})
-target_link_libraries(StringFunctionsTest gtest QueryRunner ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
+target_link_libraries(StringFunctionsTest gtest QueryRunner ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${LLVM_LINKER_FLAGS}
+    ${CURSES_LIBRARIES} ${LOCALE_LINK_FLAG})
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift Shared ${Boost_LIBRARIES})
 set(EXECUTE_TEST_LIBS gtest QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${Boost_LIBRARIES})
 list(APPEND EXECUTE_TEST_LIBS Calcite)
