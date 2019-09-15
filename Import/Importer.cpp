@@ -1493,20 +1493,24 @@ void Importer::set_geo_physical_import_buffer(
   bool is_null_point = false;
   if (!col_ti.get_notnull()) {
     // Check for NULL geo
-    is_null_point =
-        (col_type == kPOINT && (coords.empty() || coords[0] == NULL_ARRAY_DOUBLE));
-    is_null_geo = (coords.empty() || is_null_point);
+    if (col_type == kPOINT && (coords.empty() || coords[0] == NULL_ARRAY_DOUBLE)) {
+      is_null_point = true;
+      coords.clear();
+    }
+    is_null_geo = coords.empty();
+    if (is_null_point) {
+      coords.push_back(NULL_ARRAY_DOUBLE);
+      coords.push_back(NULL_DOUBLE);
+      // Treating POINT coords as notnull, need to store actual encoding
+      // [un]compressed+[not]null
+      is_null_geo = false;
+    }
   }
   std::vector<TDatum> td_coords_data;
   // Get the raw data representing [optionally compressed] non-NULL geo's coords.
   // One exception - NULL POINT geo: coords need to be processed to encode nullness
   // in a fixlen array, compressed and uncompressed.
-  if (is_null_point || !is_null_geo) {
-    if (is_null_point) {
-      coords.clear();
-      coords.push_back(NULL_ARRAY_DOUBLE);
-      coords.push_back(NULL_DOUBLE);
-    }
+  if (!is_null_geo) {
     std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
     for (auto cc : compressed_coords) {
       TDatum td_byte;
@@ -1600,16 +1604,35 @@ void Importer::set_geo_physical_import_buffer_columnar(
   auto coords_row_count = coords_column.size();
   auto cd_coords = catalog.getMetadataForColumn(cd->tableId, ++columnId);
   for (auto coords : coords_column) {
+    bool is_null_geo = false;
+    bool is_null_point = false;
+    if (!col_ti.get_notnull()) {
+      // Check for NULL geo
+      if (col_type == kPOINT && (coords.empty() || coords[0] == NULL_ARRAY_DOUBLE)) {
+        is_null_point = true;
+        coords.clear();
+      }
+      is_null_geo = coords.empty();
+      if (is_null_point) {
+        coords.push_back(NULL_ARRAY_DOUBLE);
+        coords.push_back(NULL_DOUBLE);
+        // Treating POINT coords as notnull, need to store actual encoding
+        // [un]compressed+[not]null
+        is_null_geo = false;
+      }
+    }
     std::vector<TDatum> td_coords_data;
-    std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
-    for (auto cc : compressed_coords) {
-      TDatum td_byte;
-      td_byte.val.int_val = cc;
-      td_coords_data.push_back(td_byte);
+    if (!is_null_geo) {
+      std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
+      for (auto cc : compressed_coords) {
+        TDatum td_byte;
+        td_byte.val.int_val = cc;
+        td_coords_data.push_back(td_byte);
+      }
     }
     TDatum tdd_coords;
     tdd_coords.val.arr_val = td_coords_data;
-    tdd_coords.is_null = false;
+    tdd_coords.is_null = is_null_geo;
     import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false, replicate_count);
   }
   col_idx++;
@@ -1621,6 +1644,11 @@ void Importer::set_geo_physical_import_buffer_columnar(
     // Create ring_sizes array value and add it to the physical column
     auto cd_ring_sizes = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     for (auto ring_sizes : ring_sizes_column) {
+      bool is_null_geo = false;
+      if (!col_ti.get_notnull()) {
+        // Check for NULL geo
+        is_null_geo = ring_sizes.empty();
+      }
       std::vector<TDatum> td_ring_sizes;
       for (auto ring_size : ring_sizes) {
         TDatum td_ring_size;
@@ -1629,7 +1657,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
       }
       TDatum tdd_ring_sizes;
       tdd_ring_sizes.val.arr_val = td_ring_sizes;
-      tdd_ring_sizes.is_null = false;
+      tdd_ring_sizes.is_null = is_null_geo;
       import_buffers[col_idx]->add_value(
           cd_ring_sizes, tdd_ring_sizes, false, replicate_count);
     }
@@ -1643,6 +1671,11 @@ void Importer::set_geo_physical_import_buffer_columnar(
     // Create poly_rings array value and add it to the physical column
     auto cd_poly_rings = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     for (auto poly_rings : poly_rings_column) {
+      bool is_null_geo = false;
+      if (!col_ti.get_notnull()) {
+        // Check for NULL geo
+        is_null_geo = poly_rings.empty();
+      }
       std::vector<TDatum> td_poly_rings;
       for (auto num_rings : poly_rings) {
         TDatum td_num_rings;
@@ -1651,7 +1684,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
       }
       TDatum tdd_poly_rings;
       tdd_poly_rings.val.arr_val = td_poly_rings;
-      tdd_poly_rings.is_null = false;
+      tdd_poly_rings.is_null = is_null_geo;
       import_buffers[col_idx]->add_value(
           cd_poly_rings, tdd_poly_rings, false, replicate_count);
     }
@@ -1664,6 +1697,11 @@ void Importer::set_geo_physical_import_buffer_columnar(
     }
     auto cd_bounds = catalog.getMetadataForColumn(cd->tableId, ++columnId);
     for (auto bounds : bounds_column) {
+      bool is_null_geo = false;
+      if (!col_ti.get_notnull()) {
+        // Check for NULL geo
+        is_null_geo = (bounds.empty() || bounds[0] == NULL_ARRAY_DOUBLE);
+      }
       std::vector<TDatum> td_bounds_data;
       for (auto b : bounds) {
         TDatum td_double;
@@ -1672,7 +1710,7 @@ void Importer::set_geo_physical_import_buffer_columnar(
       }
       TDatum tdd_bounds;
       tdd_bounds.val.arr_val = td_bounds_data;
-      tdd_bounds.is_null = false;
+      tdd_bounds.is_null = is_null_geo;
       import_buffers[col_idx]->add_value(cd_bounds, tdd_bounds, false, replicate_count);
     }
     col_idx++;
@@ -1984,12 +2022,16 @@ static ImportStatus import_thread_delimited(
                 // import it
                 SQLTypeInfo import_ti{col_ti};
                 if (is_null) {
-                  throw std::runtime_error("TODO: Imported NULL geometry for column " +
-                                           cd->columnName);
-                  if (col_type == kPOINT) {
-                    coords.push_back(NULL_ARRAY_DOUBLE);
-                    coords.push_back(NULL_DOUBLE);
+                  if (col_ti.get_notnull()) {
+                    throw std::runtime_error("NULL geo for column " + cd->columnName);
                   }
+                  Geo_namespace::GeoTypesFactory::getNullGeoColumns(
+                      import_ti,
+                      coords,
+                      bounds,
+                      ring_sizes,
+                      poly_rings,
+                      PROMOTE_POLYGON_TO_MULTIPOLYGON);
                 } else {
                   if (import_geometry) {
                     // geometry already exploded

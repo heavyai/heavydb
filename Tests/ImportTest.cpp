@@ -1238,11 +1238,11 @@ const char* create_table_geo = R"(
     CREATE TABLE geospatial (
       p1 POINT,
       l LINESTRING,
-      poly POLYGON,
+      poly POLYGON NOT NULL,
       mpoly MULTIPOLYGON,
-      p2 POINT,
-      p3 POINT,
-      p4 POINT,
+      p2 GEOMETRY(POINT, 4326) ENCODING NONE,
+      p3 GEOMETRY(POINT, 4326) NOT NULL ENCODING NONE,
+      p4 GEOMETRY(POINT) NOT NULL,
       trip_distance DOUBLE
     ) WITH (FRAGMENT_SIZE=65000000);
   )";
@@ -1256,18 +1256,22 @@ void check_geo_import() {
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(8), crt_row.size());
   const auto p1 = boost::get<std::string>(v<NullableString>(crt_row[0]));
-  ASSERT_TRUE(Geo_namespace::GeoPoint("POINT (1 1)") == Geo_namespace::GeoPoint(p1));
+  ASSERT_TRUE(p1 == "NULL" ||
+              Geo_namespace::GeoPoint("POINT (1 1)") == Geo_namespace::GeoPoint(p1));
   const auto linestring = boost::get<std::string>(v<NullableString>(crt_row[1]));
-  ASSERT_TRUE(Geo_namespace::GeoLineString("LINESTRING (1 0,2 2,3 3)") ==
-              Geo_namespace::GeoLineString(linestring));
+  ASSERT_TRUE(linestring == "NULL" ||
+              Geo_namespace::GeoLineString("LINESTRING (1 0,2 2,3 3)") ==
+                  Geo_namespace::GeoLineString(linestring));
   const auto poly = boost::get<std::string>(v<NullableString>(crt_row[2]));
   ASSERT_TRUE(Geo_namespace::GeoPolygon("POLYGON ((0 0,2 0,0 2,0 0))") ==
               Geo_namespace::GeoPolygon(poly));
   const auto mpoly = boost::get<std::string>(v<NullableString>(crt_row[3]));
-  ASSERT_TRUE(Geo_namespace::GeoMultiPolygon("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))") ==
-              Geo_namespace::GeoMultiPolygon(mpoly));
+  ASSERT_TRUE(mpoly == "NULL" ||
+              Geo_namespace::GeoMultiPolygon("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))") ==
+                  Geo_namespace::GeoMultiPolygon(mpoly));
   const auto p2 = boost::get<std::string>(v<NullableString>(crt_row[4]));
-  ASSERT_TRUE(Geo_namespace::GeoPoint("POINT (1 1)") == Geo_namespace::GeoPoint(p2));
+  ASSERT_TRUE(p2 == "NULL" ||
+              Geo_namespace::GeoPoint("POINT (1 1)") == Geo_namespace::GeoPoint(p2));
   const auto p3 = boost::get<std::string>(v<NullableString>(crt_row[5]));
   ASSERT_TRUE(Geo_namespace::GeoPoint("POINT (1 1)") == Geo_namespace::GeoPoint(p3));
   const auto p4 = boost::get<std::string>(v<NullableString>(crt_row[6]));
@@ -1365,6 +1369,15 @@ TEST_F(GeoImportTest, CSV_Import_Empties) {
   check_geo_import();
   check_geo_num_rows("p1, l, poly, mpoly, p2, p3, p4, trip_distance",
                      6);  // we expect it to drop the 4 rows containing 'EMPTY'
+}
+
+TEST_F(GeoImportTest, CSV_Import_Nulls) {
+  const auto file_path =
+      boost::filesystem::path("../../Tests/Import/datafiles/geospatial_nulls.csv");
+  run_ddl_statement("COPY geospatial FROM '" + file_path.string() + "';");
+  check_geo_import();
+  check_geo_num_rows("p1, l, poly, mpoly, p2, p3, p4, trip_distance",
+                     7);  // drop 3 rows containing NULL geo for NOT NULL columns
 }
 
 TEST_F(GeoImportTest, CSV_Import_Degenerate) {
