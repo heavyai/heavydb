@@ -97,7 +97,6 @@ DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
   int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
   int32_t end = hash_entry_count;
   int32_t step = blockDim.x * gridDim.x;
-  CHECK_EQ(1, hash_entry_size);
 #else
   int32_t start = cpu_thread_idx * hash_entry_size;
   int32_t step = cpu_thread_count * hash_entry_size;
@@ -114,6 +113,7 @@ DEVICE void SUFFIX(init_hash_join_buff)(int32_t* groups_buffer,
 #define mapd_cas(address, compare, val) __sync_val_compare_and_swap(address, compare, val)
 #endif
 
+#ifndef __CUDACC__
 DEVICE void store_payload(int32_t* hash_entry,
                           const PayloadColumn* payload,
                           const size_t payload_count,
@@ -131,6 +131,7 @@ DEVICE void store_payload(int32_t* hash_entry,
       CHECK(false);
   }
 }
+#endif
 
 template <typename SLOT_SELECTOR>
 DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
@@ -177,7 +178,9 @@ DEVICE auto fill_hash_join_buff_impl(int32_t* buff,
     if (mapd_cas(entry_ptr, invalid_slot_val, i) != invalid_slot_val) {
       return -1;
     }
+#ifndef __CUDACC__
     store_payload(entry_ptr, payload, payload_count, i);
+#endif
   }
   return 0;
 };
@@ -835,7 +838,9 @@ DEVICE void fill_row_payload_impl(int32_t* buff,
     const auto bin_idx = pos_ptr - pos_buff;
     const auto id_buff_idx = mapd_add(count_buff + bin_idx, 1) + *pos_ptr;
     id_buff[id_buff_idx * hash_entry_size] = static_cast<int32_t>(i);
+#ifndef __CUDACC__
     store_payload(id_buff + id_buff_idx * hash_entry_size, payload, payload_count, i);
+#endif
   }
 }
 

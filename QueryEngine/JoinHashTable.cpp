@@ -1123,7 +1123,6 @@ void JoinHashTable::initHashTableForDevice(
 #ifdef HAVE_CUDA
     int err{0};
     CHECK_EQ(Data_Namespace::GPU_LEVEL, effective_memory_level);
-    CHECK_EQ(PayloadType::RowId, payload_type_);
     auto& data_mgr = catalog->getDataMgr();
     gpu_hash_table_err_buff_[device_id] =
         CudaAllocator::allocGpuAbstractBuffer(&data_mgr, sizeof(int), device_id);
