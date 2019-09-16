@@ -848,6 +848,7 @@ add_custom_target(sphinx
   COMMAND python3 -m venv sphinx-env
   COMMAND . sphinx-env/bin/activate
   COMMAND pip install -r requirements.txt
+  COMMAND rm -rf build
   COMMAND make html
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/docs
   )
