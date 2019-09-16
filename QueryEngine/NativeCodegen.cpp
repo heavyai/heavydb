@@ -133,41 +133,6 @@ std::string serialize_llvm_object(const T* llvm_obj) {
   return ss.str();
 }
 
-void dump_module_to_file(llvm::Module* module,
-                         const std::string& dir,
-                         const std::string& suffix) {
-  if (!llvm::sys::fs::is_directory(dir)) {
-    LOG(INFO) << "Cannot dump IR to invalid path '" << dir << "'";
-    return;
-  }
-
-  // Choose nonexistent file name with name template
-  // /dir/omnisci-ir-N-suffix.ll
-  static uint32_t cur_no = 0;
-  static std::mutex check_file_mutex;
-  std::string file_name;
-  {
-    std::lock_guard<std::mutex> lock(check_file_mutex);
-    while (true) {
-      file_name = dir + "/omnisci-ir-" + std::to_string(cur_no) + "-" + suffix + ".ll";
-      if (!llvm::sys::fs::exists(file_name))
-        break;
-      ++cur_no;
-    }
-  }
-
-  std::ofstream fs;
-  fs.open(file_name);
-  if (!fs.is_open()) {
-    LOG(INFO) << "Cannot open file '" << file_name << "' for IR dump";
-    return;
-  }
-
-  llvm::raw_os_ostream os(fs);
-  module->print(os, nullptr, false, true);
-  os.flush();
-}
-
 ExecutionEngineWrapper::ExecutionEngineWrapper() {}
 
 ExecutionEngineWrapper::ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine)
@@ -258,11 +223,7 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
     const std::unordered_set<llvm::Function*>& live_funcs,
     const CompilationOptions& co) {
   auto module = func->getParent();
-
-  if (co.dump_jit_ir_to_file_)
-    dump_module_to_file(module, co.debug_dump_dir_, "noopt");
-
-    // run optimizations
+  // run optimizations
 #ifndef WITH_JIT_DEBUG
   optimize_ir(func, module, live_funcs, co);
 #endif  // WITH_JIT_DEBUG
@@ -290,9 +251,6 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
   CHECK(execution_engine.get());
 
   execution_engine->finalizeObject();
-
-  if (co.dump_jit_ir_to_file_)
-    dump_module_to_file(module, co.debug_dump_dir_, "opt");
 
   return execution_engine;
 }

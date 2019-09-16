@@ -63,7 +63,12 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
     }
   }
   LOG(INFO) << "Query unable to run in GPU mode, retrying on CPU";
-  CompilationOptions co_cpu = co.with_device_type(ExecutorDeviceType::CPU);
+  CompilationOptions co_cpu{ExecutorDeviceType::CPU,
+                            co.hoist_literals_,
+                            co.opt_level_,
+                            co.with_dynamic_watchdog_,
+                            co.explain_type_,
+                            co.register_intel_jit_listener_};
   if (render_info) {
     render_info->setForceNonInSituData();
   }

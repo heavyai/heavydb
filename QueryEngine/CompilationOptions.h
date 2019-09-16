@@ -17,8 +17,6 @@
 #ifndef QUERYENGINE_COMPILATIONOPTIONS_H
 #define QUERYENGINE_COMPILATIONOPTIONS_H
 
-#include <string>
-
 enum class ExecutorDeviceType { CPU, GPU };
 
 enum class ExecutorOptLevel { Default, LoopStrengthReduction, ReductionJIT };
@@ -34,14 +32,6 @@ struct CompilationOptions {
   const bool with_dynamic_watchdog_;
   const ExecutorExplainType explain_type_{ExecutorExplainType::Default};
   const bool register_intel_jit_listener_{false};
-  const bool dump_jit_ir_to_file_;
-  const std::string debug_dump_dir_;
-
-  CompilationOptions with_device_type(ExecutorDeviceType device_type) const {
-    CompilationOptions res(*this);
-    res.device_type_ = device_type;
-    return res;
-  }
 };
 
 struct ExecutionOptions {

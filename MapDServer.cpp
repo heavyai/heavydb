@@ -263,7 +263,6 @@ class MapDProgramOptions {
   bool verbose_logging = false;
   bool jit_debug = false;
   bool intel_jit_profile = false;
-  bool dump_jit_ir_to_file = false;
   bool allow_multifrag = true;
   bool read_only = false;
   bool allow_loop_joins = false;
@@ -614,12 +613,6 @@ void MapDProgramOptions::fillAdvancedOptions() {
           ->default_value(intel_jit_profile)
           ->implicit_value(true),
       "Enable runtime support for the JIT code profiling using Intel VTune.");
-  developer_desc.add_options()(
-      "dump-jit-ir-to-file",
-      po::value<bool>(&dump_jit_ir_to_file)
-          ->default_value(dump_jit_ir_to_file)
-          ->implicit_value(true),
-      "Dump each JIT compiled module IR into temporary files '/tmp/omnisci-ir-*'.");
   developer_desc.add_options()(
       "skip-intermediate-count",
       po::value<bool>(&g_skip_intermediate_count)
@@ -1123,7 +1116,6 @@ int startMapdServer(MapDProgramOptions& prog_config_opts) {
                                      prog_config_opts.allow_multifrag,
                                      prog_config_opts.jit_debug,
                                      prog_config_opts.intel_jit_profile,
-                                     prog_config_opts.dump_jit_ir_to_file,
                                      prog_config_opts.read_only,
                                      prog_config_opts.allow_loop_joins,
                                      prog_config_opts.enable_rendering,

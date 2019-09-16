@@ -1171,7 +1171,12 @@ ResultSetPtr Executor::executeWorkUnitImpl(
       std::tie(query_comp_desc_owned, query_mem_desc_owned) =
           execution_dispatch.compile(max_groups_buffer_entry_guess,
                                      crt_min_byte_width,
-                                     co.with_device_type(device_type),
+                                     {device_type,
+                                      co.hoist_literals_,
+                                      co.opt_level_,
+                                      co.with_dynamic_watchdog_,
+                                      co.explain_type_,
+                                      co.register_intel_jit_listener_},
                                      eo,
                                      column_fetcher,
                                      has_cardinality_estimation);
