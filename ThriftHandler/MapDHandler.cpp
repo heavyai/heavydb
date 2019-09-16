@@ -1692,8 +1692,6 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
   if (td->isView) {
     try {
       if (hasTableAccessPrivileges(td, session)) {
-        // Due to this line, query_state and stdlog have separate session_infos.
-        session_copy->make_superuser();
         auto query_state = create_query_state(session_copy, td->viewSQL);
         stdlog.setQueryState(query_state);
         const auto query_ra = parse_to_ra(query_state->createQueryStateProxy(),

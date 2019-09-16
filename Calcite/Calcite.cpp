@@ -192,11 +192,10 @@ Calcite::getClient(int port) {
   return std::make_pair(client, transport);
 }
 
-template <>
 void Calcite::checkAndSetCatalog(
-    const std::shared_ptr<Catalog_Namespace::Catalog>& catalog_ptr) {
+    const std::shared_ptr<Catalog_Namespace::SessionInfo const>& session_ptr) {
   CHECK(calcite_session_ptr_);
-  calcite_session_ptr_->set_catalog_ptr(catalog_ptr);
+  calcite_session_ptr_->set_catalog_ptr(session_ptr->get_catalog_ptr());
 }
 
 void Calcite::runServer(const int mapd_port,
@@ -451,9 +450,7 @@ TPlanResult Calcite::processImpl(
     const bool is_explain,
     const bool is_view_optimize) {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
-  const auto session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
-  const auto& catalog_ptr = session_ptr->get_catalog_ptr();
-  checkAndSetCatalog(catalog_ptr);
+  checkAndSetCatalog(query_state_proxy.getQueryState().getConstSessionInfo());
   const auto& cat = calcite_session_ptr_->getCatalog();
   const std::string user = calcite_session_ptr_->get_currentUser().userName;
   const std::string catalog = cat.getCurrentDB().dbName;

@@ -111,8 +111,8 @@ class Calcite final {
   void inner_close_calcite_server(bool log);
   std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
   getClient(int port);
-  template <typename T>
-  void checkAndSetCatalog(const T& catalog_ptr);
+  void checkAndSetCatalog(
+      const std::shared_ptr<Catalog_Namespace::SessionInfo const>& session_ptr);
 
   int ping();
 

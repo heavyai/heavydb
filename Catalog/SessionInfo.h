@@ -98,7 +98,6 @@ class SessionInfo {
   std::string get_session_id() const { return session_id_; }
   time_t get_last_used_time() const { return last_used_time_; }
   void update_last_used_time() { last_used_time_ = time(0); }
-  void make_superuser() { currentUser_.isSuper = true; }
   bool checkDBAccessPrivileges(const DBObjectType& permissionType,
                                const AccessPrivileges& privs,
                                const std::string& objectName = "") const;
