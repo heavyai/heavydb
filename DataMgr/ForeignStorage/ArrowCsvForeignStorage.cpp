@@ -53,12 +53,13 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key, const 
     int num_frags = table.column(0)->data()->num_chunks();
     // data comes like this - database_id, table_id, column_id, fragment_id
     ChunkKey key{table_key.first, table_key.second, 0, 0};
-    for(int c = 0; c < num_cols; c++ ) {
+    for(int c = 1; c <= num_cols; c++ ) {
       key[2] = c;
       for(int f = 0; f < num_frags; f++ ) {
         key[3] = f;
         mgr->createBuffer(key);
     } }
+    printf("-- created %d:%d cols:frags\n", num_cols, num_frags);
 }
 
 std::string ArrowCsvForeignStorage::getType() const {

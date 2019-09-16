@@ -159,7 +159,8 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
         ChunkMetadata chunkMetadata;
         chunk_it->second->encoder->getMetadata(chunkMetadata);
         chunkMetadataVec.push_back(std::make_pair(chunk_it->first, chunkMetadata));
-      }
+      } else 
+        chunkMetadataVec.push_back(std::make_pair(chunk_it->first, ChunkMetadata{}));
       chunk_it++;
     }
   }
