@@ -95,7 +95,7 @@ size_t g_min_memory_allocation_size{
            // without pre-flight count
 bool g_enable_bump_allocator{false};
 double g_bump_allocator_step_reduction{0.75};
-bool g_enable_direct_columnarization{true};
+bool g_enable_direct_columnarization{false};
 
 int const Executor::max_gpu_count;
 
