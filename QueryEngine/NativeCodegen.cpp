@@ -53,6 +53,7 @@ static_assert(false, "LLVM Version >= 4 is required.");
 #include <llvm/Transforms/Utils/Cloning.h>
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 
 #if LLVM_VERSION_MAJOR >= 7
 #include <llvm/Transforms/Scalar/InstSimplifyPass.h>
@@ -100,23 +101,34 @@ void optimize_ir(llvm::Function* query_func,
                  llvm::Module* module,
                  const std::unordered_set<llvm::Function*>& live_funcs,
                  const CompilationOptions& co) {
-  llvm::legacy::PassManager pass_manager;
+  if (co.opt_level_ >= ExecutorOptLevel::O1 && co.opt_level_ <= ExecutorOptLevel::O3) {
+    llvm::legacy::PassManager mpm;
+    llvm::legacy::FunctionPassManager fpm(module);
+    llvm::PassManagerBuilder pmb;
+    pmb.OptLevel = (unsigned)co.opt_level_;
+    pmb.Inliner = llvm::createFunctionInliningPass();
+    pmb.populateFunctionPassManager(fpm);
+    pmb.populateModulePassManager(mpm);
+    mpm.run(*module);
+  } else {
+    llvm::legacy::PassManager pass_manager;
 
-  pass_manager.add(llvm::createAlwaysInlinerLegacyPass());
-  pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
+    pass_manager.add(llvm::createAlwaysInlinerLegacyPass());
+    pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
 #if LLVM_VERSION_MAJOR >= 7
-  pass_manager.add(llvm::createInstSimplifyLegacyPass());
+    pass_manager.add(llvm::createInstSimplifyLegacyPass());
 #else
-  pass_manager.add(llvm::createInstructionSimplifierPass());
+    pass_manager.add(llvm::createInstructionSimplifierPass());
 #endif
-  pass_manager.add(llvm::createInstructionCombiningPass());
-  pass_manager.add(llvm::createGlobalOptimizerPass());
+    pass_manager.add(llvm::createInstructionCombiningPass());
+    pass_manager.add(llvm::createGlobalOptimizerPass());
 
-  pass_manager.add(llvm::createLICMPass());
-  if (co.opt_level_ == ExecutorOptLevel::LoopStrengthReduction) {
-    pass_manager.add(llvm::createLoopStrengthReducePass());
+    pass_manager.add(llvm::createLICMPass());
+    if (co.opt_level_ == ExecutorOptLevel::LoopStrengthReduction) {
+      pass_manager.add(llvm::createLoopStrengthReducePass());
+    }
+    pass_manager.run(*module);
   }
-  pass_manager.run(*module);
 
   eliminate_dead_self_recursive_funcs(*module, live_funcs);
 }

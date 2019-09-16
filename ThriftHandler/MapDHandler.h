@@ -127,6 +127,7 @@ class MapDHandler : public MapDIf {
               const bool allow_multifrag,
               const bool jit_debug,
               const bool intel_jit_profile,
+              const unsigned opt_level,
               const bool read_only,
               const bool allow_loop_joins,
               const bool enable_rendering,
@@ -448,6 +449,7 @@ class MapDHandler : public MapDIf {
   std::uniform_int_distribution<int64_t> session_id_dist_;
   const bool jit_debug_;
   const bool intel_jit_profile_;
+  const ExecutorOptLevel opt_level_;
   bool allow_multifrag_;
   const bool read_only_;
   const bool allow_loop_joins_;

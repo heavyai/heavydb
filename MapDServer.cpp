@@ -282,6 +282,8 @@ class MapDProgramOptions {
   bool enable_dynamic_watchdog = false;
   unsigned dynamic_watchdog_time_limit = 10000;
 
+  unsigned opt_level = 0;
+
   /**
    * Can be used to override the number of gpus detected on the system
    * -1 means do not override
@@ -612,6 +614,9 @@ void MapDProgramOptions::fillAdvancedOptions() {
           ->default_value(intel_jit_profile)
           ->implicit_value(true),
       "Enable runtime support for the JIT code profiling using Intel VTune.");
+  developer_desc.add_options()("opt-level",
+                               po::value<unsigned>(&opt_level)->default_value(opt_level),
+                               "Set LLVM opt level IR optimization");
   developer_desc.add_options()(
       "skip-intermediate-count",
       po::value<bool>(&g_skip_intermediate_count)
@@ -1103,6 +1108,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts) {
                                      prog_config_opts.allow_multifrag,
                                      prog_config_opts.jit_debug,
                                      prog_config_opts.intel_jit_profile,
+                                     prog_config_opts.opt_level,
                                      prog_config_opts.read_only,
                                      prog_config_opts.allow_loop_joins,
                                      prog_config_opts.enable_rendering,
