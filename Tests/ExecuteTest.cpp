@@ -5674,6 +5674,53 @@ void import_geospatial_join_test(const bool replicate_inner_table = false) {
   }
 }
 
+void import_geospatial_null_test() {
+  const std::string geospatial_null_test("DROP TABLE IF EXISTS geospatial_null_test;");
+  run_ddl_statement(geospatial_null_test);
+  constexpr char create_ddl[] = R"(CREATE TABLE geospatial_null_test (
+        id INT,
+        p POINT,
+        l LINESTRING,
+        poly POLYGON,
+        mpoly MULTIPOLYGON,
+        gpnotnull GEOMETRY(POINT) NOT NULL,
+        gp4326 GEOMETRY(POINT,4326) ENCODING COMPRESSED(32),
+        gp4326none GEOMETRY(POINT,4326) ENCODING NONE,
+        gp900913 GEOMETRY(POINT,900913),
+        gl4326none GEOMETRY(LINESTRING,4326) ENCODING NONE,
+        gpoly4326 GEOMETRY(POLYGON,4326)
+      ) WITH (fragment_size=2);
+  )";
+  run_ddl_statement(create_ddl);
+  TestHelpers::ValuesGenerator gen("geospatial_null_test");
+  for (ssize_t i = 0; i < g_num_rows; ++i) {
+    const std::string point{"'POINT(" + std::to_string(i) + " " + std::to_string(i) +
+                            ")'"};
+    const std::string linestring{
+        "'LINESTRING(" + std::to_string(i) + " 0, " + std::to_string(2 * i) + " " +
+        std::to_string(2 * i) +
+        ((i % 2) ? (", " + std::to_string(2 * i + 1) + " " + std::to_string(2 * i + 1))
+                 : "") +
+        ")'"};
+    const std::string poly{"'POLYGON((0 0, " + std::to_string(i + 1) + " 0, 0 " +
+                           std::to_string(i + 1) + ", 0 0))'"};
+    const std::string mpoly{"'MULTIPOLYGON(((0 0, " + std::to_string(i + 1) + " 0, 0 " +
+                            std::to_string(i + 1) + ", 0 0)))'"};
+    run_multiple_agg(gen(i,
+                         (i % 2 == 0) ? "NULL" : point,
+                         (i == 1) ? "NULL" : linestring,
+                         (i == 2) ? "NULL" : poly,
+                         (i == 3) ? "NULL" : mpoly,
+                         point,
+                         (i == 4) ? "NULL" : point,
+                         (i == 5) ? "NULL" : point,
+                         (i == 6) ? "NULL" : point,
+                         (i == 7) ? "NULL" : linestring,
+                         (i == 8) ? "NULL" : poly),
+                     ExecutorDeviceType::CPU);
+  }
+}
+
 void import_logical_size_test() {
   const std::string table_name("logical_size_test");
   const std::string drop_old_logical_size_test{"DROP TABLE IF EXISTS " + table_name +
@@ -13518,6 +13565,86 @@ TEST(Select, GeoSpatial_Basics) {
   }
 }
 
+TEST(Select, GeoSpatial_Null) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM geospatial_null_test where p IS NOT NULL;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM geospatial_null_test where p IS NULL;", dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows / 2),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM geospatial_null_test WHERE ST_Distance(p,p) < 0.1;",
+            dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(g_num_rows / 2),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM geospatial_null_test WHERE ST_Distance(p,p) IS NULL;",
+            dt)));
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test WHERE "
+                                        "ST_Distance(l,gpnotnull) IS NULL;",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(gpnotnull) FROM geospatial_null_test;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(ST_X(p)) FROM geospatial_null_test;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows - 1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(ST_X(gp4326)) FROM geospatial_null_test;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test WHERE "
+                                        "ST_Distance('POINT(0 0)', p) < 100.0;",
+                                        dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(3),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test WHERE "
+                                  "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 9;",
+                                  dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT COUNT(*) FROM geospatial_null_test WHERE ST_Distance(p,l) < 2.0;",
+            dt)));
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows / 2),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test WHERE "
+                                        "ST_Distance(p,gpnotnull) >= 0.0;",
+                                        dt)));
+    ASSERT_EQ(static_cast<int64_t>(2),
+              v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test WHERE "
+                                        "ST_Distance(gp4326,gp4326none) IS NULL;",
+                                        dt)));
+    ASSERT_EQ(
+        static_cast<int64_t>(2),
+        v<int64_t>(run_simple_agg("SELECT COUNT(*) FROM geospatial_null_test "
+                                  "WHERE ST_Distance('LINESTRING(-1 0, 0 1)', p) < 6.0;",
+                                  dt)));
+
+    ASSERT_EQ("POINT (1 1)",
+              boost::get<std::string>(v<NullableString>(run_simple_agg(
+                  "SELECT p FROM geospatial_null_test WHERE id = 1;", dt, false))));
+    ASSERT_EQ("NULL",
+              boost::get<std::string>(v<NullableString>(run_simple_agg(
+                  "SELECT p FROM geospatial_null_test WHERE id = 2;", dt, false))));
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT ST_Contains(poly,p) FROM geospatial_null_test WHERE id=1;",
+                  dt,
+                  false)));
+    ASSERT_EQ(
+        static_cast<int64_t>(1),
+        v<int64_t>(run_simple_agg(
+            "SELECT ST_Contains(poly,p) IS NULL FROM geospatial_null_test WHERE id=2;",
+            dt,
+            false)));
+  }
+}
+
 TEST(Select, GeoSpatial_Projection) {
   SKIP_WITH_TEMP_TABLES();
 
@@ -17180,6 +17307,12 @@ int create_and_populate_tables(const bool use_temporary_tables,
   }
   if (!use_temporary_tables) {
     // Geospatial not yet supported in temporary tables
+    try {
+      import_geospatial_null_test();
+    } catch (...) {
+      LOG(ERROR) << "Failed to (re-)create table 'geospatial_null_test'";
+      return -EEXIST;
+    }
     try {
       import_geospatial_test();
     } catch (...) {
