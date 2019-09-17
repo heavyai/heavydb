@@ -25,7 +25,6 @@
 
 #include "Shared/Logger.h"
 #include "Shared/StringTransform.h"
-#include "gen-cpp/mapd_types.h"
 
 #include <boost/circular_buffer.hpp>
 #include <boost/filesystem.hpp>

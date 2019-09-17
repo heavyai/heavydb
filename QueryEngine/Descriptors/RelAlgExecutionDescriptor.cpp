@@ -242,7 +242,8 @@ bool RaExecutionSequence::executionFinished() const {
     return true;
   } else {
     const auto next_step_id = nextStepId(true);
-    if (next_step_id < 0 || (next_step_id == totalDescriptorsCount())) {
+    if (next_step_id < 0 ||
+        (static_cast<size_t>(next_step_id) == totalDescriptorsCount())) {
       // One step remains (the current vertex), or all remaining steps can be executed
       // without another reduction
       return true;

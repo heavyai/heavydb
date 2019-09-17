@@ -708,8 +708,7 @@ void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
   CHECK_EQ(write_functions.size(), num_columns);
   CHECK_EQ(read_functions.size(), num_columns);
 
-  auto compact_buffer_func = [this,
-                              &rows,
+  auto compact_buffer_func = [&rows,
                               &bitmap,
                               &global_offsets,
                               &non_empty_per_thread,
@@ -1062,25 +1061,25 @@ ColumnarResults::initAllConversionFunctions(
     if (rows.didOutputColumnar()) {
       return std::make_tuple(
           std::move(write_functions),
-          std::move(initReadFunctions<QueryDescriptionType::GroupByPerfectHash, true>(
-              rows, slot_idx_per_target_idx, targets_to_skip)));
+          initReadFunctions<QueryDescriptionType::GroupByPerfectHash, true>(
+              rows, slot_idx_per_target_idx, targets_to_skip));
     } else {
       return std::make_tuple(
           std::move(write_functions),
-          std::move(initReadFunctions<QueryDescriptionType::GroupByPerfectHash, false>(
-              rows, slot_idx_per_target_idx, targets_to_skip)));
+          initReadFunctions<QueryDescriptionType::GroupByPerfectHash, false>(
+              rows, slot_idx_per_target_idx, targets_to_skip));
     }
   } else {
     if (rows.didOutputColumnar()) {
       return std::make_tuple(
           std::move(write_functions),
-          std::move(initReadFunctions<QueryDescriptionType::GroupByBaselineHash, true>(
-              rows, slot_idx_per_target_idx, targets_to_skip)));
+          initReadFunctions<QueryDescriptionType::GroupByBaselineHash, true>(
+              rows, slot_idx_per_target_idx, targets_to_skip));
     } else {
       return std::make_tuple(
           std::move(write_functions),
-          std::move(initReadFunctions<QueryDescriptionType::GroupByBaselineHash, false>(
-              rows, slot_idx_per_target_idx, targets_to_skip)));
+          initReadFunctions<QueryDescriptionType::GroupByBaselineHash, false>(
+              rows, slot_idx_per_target_idx, targets_to_skip));
     }
   }
 }

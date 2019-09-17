@@ -718,7 +718,7 @@ int BaselineJoinHashTable::initHashTableOnCpu(
       entry_size * entry_count_ + one_to_many_hash_entries * sizeof(int32_t);
 
   // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
-  if (hash_table_size > std::numeric_limits<int32_t>::max()) {
+  if (hash_table_size > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
     throw TooManyHashEntries();
   }
 
@@ -1046,7 +1046,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
         entry_size * entry_count_ + one_to_many_hash_entries * sizeof(int32_t);
 
     // We can't allocate more than 2GB contiguous memory on GPU and each entry is 4 bytes.
-    if (hash_table_size > std::numeric_limits<int32_t>::max()) {
+    if (hash_table_size > static_cast<size_t>(std::numeric_limits<int32_t>::max())) {
       throw TooManyHashEntries();
     }
 
