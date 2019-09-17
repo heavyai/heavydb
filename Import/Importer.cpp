@@ -1425,7 +1425,8 @@ uint64_t compress_null_point(const SQLTypeInfo& ti, bool x) {
              : Geo_namespace::compress_null_point_lattitude_geoint32();
   }
   double n = x ? NULL_ARRAY_DOUBLE : NULL_DOUBLE;
-  return *reinterpret_cast<uint64_t*>(&n);
+  uint64_t u = *reinterpret_cast<uint64_t*>(&n);
+  return u;
 }
 
 // Compress non-NULL geo coords; and also NULL POINT coords (special case)

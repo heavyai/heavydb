@@ -174,7 +174,9 @@ struct GeoTargetValuePtrSerializer<kPOINT> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 1>& vals) {
     if (!geo_ti.get_notnull() && vals[0]->is_null) {
-      return GeoTargetValuePtr();
+      // NULL geo
+      // Pass along null datum, instead of an empty/null GeoTargetValuePtr
+      // return GeoTargetValuePtr();
     }
     return GeoPointTargetValuePtr({std::move(vals[0])});
   }
@@ -212,7 +214,9 @@ struct GeoTargetValuePtrSerializer<kLINESTRING> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 1>& vals) {
     if (!geo_ti.get_notnull() && vals[0]->is_null) {
-      return GeoTargetValuePtr();
+      // NULL geo
+      // Pass along null datum, instead of an empty/null GeoTargetValuePtr
+      // return GeoTargetValuePtr();
     }
     return GeoLineStringTargetValuePtr({std::move(vals[0])});
   }
@@ -257,7 +261,9 @@ struct GeoTargetValuePtrSerializer<kPOLYGON> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 2>& vals) {
     if (!geo_ti.get_notnull() && (vals[0]->is_null || vals[1]->is_null)) {
-      return GeoTargetValuePtr();
+      // NULL geo
+      // Pass along null datum, instead of an empty/null GeoTargetValuePtr
+      // return GeoTargetValuePtr();
     }
     return GeoPolyTargetValuePtr({std::move(vals[0]), std::move(vals[1])});
   }
@@ -311,7 +317,9 @@ struct GeoTargetValuePtrSerializer<kMULTIPOLYGON> {
                                       std::array<VarlenDatumPtr, 3>& vals) {
     if (!geo_ti.get_notnull() &&
         (vals[0]->is_null || vals[1]->is_null || vals[2]->is_null)) {
-      return GeoTargetValuePtr();
+      // NULL geo
+      // Pass along null datum, instead of an empty/null GeoTargetValuePtr
+      // return GeoTargetValuePtr();
     }
     return GeoMultiPolyTargetValuePtr(
         {std::move(vals[0]), std::move(vals[1]), std::move(vals[2])});

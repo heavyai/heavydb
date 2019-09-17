@@ -1104,7 +1104,9 @@ struct GeoTargetValueBuilder {
       case ResultSet::GeoReturnType::GeoTargetValuePtr:
       case ResultSet::GeoReturnType::GeoTargetValueGpuPtr: {
         if (!geo_ti.get_notnull() && ad_arr[0]->is_null) {
-          return GeoTargetValuePtr();
+          // NULL geo
+          // Pass along null datum, instead of an empty/null GeoTargetValuePtr
+          // return GeoTargetValuePtr();
         }
         return GeoReturnTypeTraits<ResultSet::GeoReturnType::GeoTargetValuePtr,
                                    GEO_SOURCE_TYPE>::GeoSerializerType::serialize(geo_ti,
