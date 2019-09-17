@@ -12,7 +12,7 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-#import os
+import os
 #import sys
 #sys.path.insert(1, os.path.abspath(os.environ['DOXYRESTROOT'] + '/share/doxyrest/sphinx'))
 
@@ -42,9 +42,13 @@ extensions = [
     'sphinx.ext.todo',
     'sphinx.ext.mathjax',
     'sphinx.ext.githubpages',
+    'sphinx.ext.graphviz',
+    'sphinxcontrib.plantuml'
 #    'doxyrest',
 #    'cpplexer'
 ]
+
+plantuml = 'plantuml -config %s'  % os.path.join(os.path.dirname(__file__), 'plantuml.cfg')
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
