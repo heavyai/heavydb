@@ -7,32 +7,35 @@ OmniSciDB Developer Documentation
 ========================================
 
 .. toctree::
-    :caption: System Architecture
-    :maxdepth: 3
+    :caption: High Level Overview
+    :maxdepth: 2
     :numbered:
 
-    architecture/overview
-    architecture/catalog
-    architecture/calcite
-    architecture/thrift 
+    overview/index
 
 .. toctree::
-    :caption: Reference Guides
-    :maxdepth: 3
+    :caption: Data Model:
+    :maxdepth: 2
     :numbered:
-    :glob:
 
-    guides/*
-
-.. toctree::
-    :caption: API Documentation
-    :maxdepth: 1
-
-    api/index
+    data_model/columnar_layout
+    data_model/physical_layout
+    data_model/catalog
+    data_model/api
+    data_model/types
 
 .. toctree::
-    :caption: Other
+    :caption: Query Execution
+    :maxdepth: 2
     :numbered:
+    
+    execution/flow
+    execution/parse
+    execution/optimization
+    execution/scheduler
+    execution/codegen
+    execution/kernels
+    execution/results
 
 
 Indices and tables

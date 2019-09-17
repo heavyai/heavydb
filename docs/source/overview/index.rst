@@ -1,7 +1,7 @@
 .. OmniSciDB Architecture Overview
 
 ==================================
-Architecture Overview
+OmnisciDB at 30,000 feet
 ==================================
 
 High Level Diagram
