@@ -338,7 +338,7 @@ bucketized_hash_join_idx_nullable(int64_t hash_buff,
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t
-bucketized_hash_join_idx_payload_nullable(int64_t hash_buff,
+bucketized_hash_join_idx_nullable_payload(int64_t hash_buff,
                                           const int64_t key,
                                           const int64_t min_key,
                                           const int64_t max_key,
@@ -365,7 +365,7 @@ extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_nullable(int64_t hash_buff
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t
-hash_join_idx_payload_nullable(int64_t hash_buff,
+hash_join_idx_nullable_payload(int64_t hash_buff,
                                const int64_t key,
                                const int64_t min_key,
                                const int64_t max_key,
@@ -395,7 +395,7 @@ bucketized_hash_join_idx_bitwise(int64_t hash_buff,
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t
-bucketized_hash_join_idx_payload_bitwise(int64_t hash_buff,
+bucketized_hash_join_idx_bitwise_payload(int64_t hash_buff,
                                          const int64_t key,
                                          const int64_t min_key,
                                          const int64_t max_key,
@@ -433,7 +433,7 @@ hash_join_idx_bitwise(int64_t hash_buff,
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t
-hash_join_idx_payload_bitwise(int64_t hash_buff,
+hash_join_idx_bitwise_payload(int64_t hash_buff,
                               const int64_t key,
                               const int64_t min_key,
                               const int64_t max_key,
@@ -471,7 +471,7 @@ hash_join_idx_sharded(int64_t hash_buff,
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t
-hash_join_idx_payload_sharded(int64_t hash_buff,
+hash_join_idx_sharded_payload(int64_t hash_buff,
                               const int64_t key,
                               const int64_t min_key,
                               const int64_t max_key,
@@ -514,7 +514,7 @@ hash_join_idx_sharded_nullable(int64_t hash_buff,
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t
-hash_join_idx_sharded_payload_nullable(int64_t hash_buff,
+hash_join_idx_sharded_nullable_payload(int64_t hash_buff,
                                        const int64_t key,
                                        const int64_t min_key,
                                        const int64_t max_key,
@@ -524,7 +524,7 @@ hash_join_idx_sharded_payload_nullable(int64_t hash_buff,
                                        const int64_t null_val,
                                        const int64_t entry_size,
                                        int32_t** entry_ptr) {
-  return key != null_val ? hash_join_idx_payload_sharded(hash_buff,
+  return key != null_val ? hash_join_idx_sharded_payload(hash_buff,
                                                          key,
                                                          min_key,
                                                          max_key,
@@ -563,7 +563,7 @@ hash_join_idx_bitwise_sharded(int64_t hash_buff,
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t
-hash_join_idx_payload_bitwise_sharded(int64_t hash_buff,
+hash_join_idx_bitwise_sharded_payload(int64_t hash_buff,
                                       const int64_t key,
                                       const int64_t min_key,
                                       const int64_t max_key,
@@ -574,7 +574,7 @@ hash_join_idx_payload_bitwise_sharded(int64_t hash_buff,
                                       const int64_t translated_val,
                                       const int64_t entry_size,
                                       int32_t** entry_ptr) {
-  return key != null_val ? hash_join_idx_payload_sharded(hash_buff,
+  return key != null_val ? hash_join_idx_sharded_payload(hash_buff,
                                                          key,
                                                          min_key,
                                                          max_key,
@@ -583,7 +583,7 @@ hash_join_idx_payload_bitwise_sharded(int64_t hash_buff,
                                                          device_count,
                                                          entry_size,
                                                          entry_ptr)
-                         : hash_join_idx_payload_sharded(hash_buff,
+                         : hash_join_idx_sharded_payload(hash_buff,
                                                          translated_val,
                                                          min_key,
                                                          translated_val,

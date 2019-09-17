@@ -479,7 +479,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner) {
   std::lock_guard<std::mutex> linearized_multifrag_column_lock(
       linearized_multifrag_column_mutex_);
-  if (linearized_multifrag_column_.first) {
+  if (hash_col == *col_var_ && linearized_multifrag_column_.first) {
     return linearized_multifrag_column_;
   }
   const int8_t* col_buff;
@@ -487,7 +487,7 @@ std::pair<const int8_t*, size_t> JoinHashTable::getAllColumnFragments(
   std::tie(col_buff, total_elem_count) = ColumnFetcher::getAllColumnFragments(
       executor_, hash_col, fragments, chunks_owner, column_cache_);
   linearized_multifrag_column_owner_.addColBuffer(col_buff);
-  if (!shardCount()) {
+  if (hash_col == *col_var_ && !shardCount()) {
     linearized_multifrag_column_ = {col_buff, total_elem_count};
   }
   return {col_buff, total_elem_count};
