@@ -59,6 +59,11 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key, const 
         key[3] = f;
         mgr->createBuffer(key);
     } }
+    key[2] = 3;
+    for(int f = 0; f < num_frags; f++ ) {
+      key[3] = f;
+      mgr->createBuffer(key);
+    }
     printf("-- created %d:%d cols:frags\n", num_cols, num_frags);
 }
 
