@@ -14,7 +14,7 @@ OmniSciDB Developer Documentation
     overview/index
 
 .. toctree::
-    :caption: Data Model:
+    :caption: Data Model
     :maxdepth: 2
     :numbered:
 
@@ -36,6 +36,14 @@ OmniSciDB Developer Documentation
     execution/codegen
     execution/kernels
     execution/results
+
+.. toctree::
+    :caption: Components
+    :maxdepth: 2
+    :numbered:
+
+    components/query_state
+
 
 
 Indices and tables
