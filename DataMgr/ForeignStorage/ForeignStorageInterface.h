@@ -34,7 +34,15 @@ class PersistentForeignStorageInterface {
                     const SQLTypeInfo& sql_type,
                     int8_t* dest,
                     const size_t num_bytes) = 0;
-  virtual void registerTable(std::pair<int, int> table_key, const std::string &type, Data_Namespace::AbstractBufferMgr *mgr) = 0;
+  virtual void prepareTable(const int /*db_id*/,
+                            const std::string &type,
+                            TableDescriptor& /*td*/,
+                            std::list<ColumnDescriptor>& /*cols*/) {}
+  virtual void registerTable(std::pair<int, int> table_key,
+                             const std::string &type,
+                             const TableDescriptor& td,
+                             const std::list<ColumnDescriptor>& cols,
+                             Data_Namespace::AbstractBufferMgr *mgr) = 0;
   virtual std::string getType() const = 0;
 };
 
@@ -46,7 +54,10 @@ class ForeignStorageInterface {
   static void registerPersistentStorageInterface(
       PersistentForeignStorageInterface* persistent_foreign_storage);
 
-  static void registerTable(const int db_id, const int table_id, const std::string& type);
+  //! prepare table options and modify columns
+  static void prepareTable(const int db_id, TableDescriptor& td, std::list<ColumnDescriptor>& cols);
+  //! ids are created
+  static void registerTable(const int db_id, const TableDescriptor& td, const std::list<ColumnDescriptor>& cols);
 
  private:
   static std::unordered_map<std::string,

@@ -10,7 +10,8 @@ class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
             int8_t* dest,
             const size_t numBytes) override;
 
-  virtual void registerTable(std::pair<int, int> table_key, const std::string &type, Data_Namespace::AbstractBufferMgr *mgr) override;
+  virtual void prepareTable(const int db_id, const std::string &type, TableDescriptor& td, std::list<ColumnDescriptor>& cols) override;
+  virtual void registerTable(std::pair<int, int> table_key, const std::string &type, const TableDescriptor& td, const std::list<ColumnDescriptor>& cols, Data_Namespace::AbstractBufferMgr *mgr) override;
 
   std::string getType() const override;
 };

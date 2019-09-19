@@ -150,6 +150,7 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     if (chunk_it == chunk_index_.end()) {
       CHECK(false);  // throw?
     }
+
     while (chunk_it != chunk_index_.end() &&
            std::search(chunk_it->first.begin(),
                        chunk_it->first.begin() + keyPrefix.size(),
@@ -159,8 +160,13 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
         ChunkMetadata chunkMetadata;
         chunk_it->second->encoder->getMetadata(chunkMetadata);
         chunkMetadataVec.push_back(std::make_pair(chunk_it->first, chunkMetadata));
-      } else 
-        chunkMetadataVec.push_back(std::make_pair(chunk_it->first, ChunkMetadata{}));
+      } else {
+        const auto& chunk_key = chunk_it->first;
+        const auto& buffer = *chunk_it->second.get();
+        ChunkMetadata m{buffer.sql_type, buffer.size() * buffer.sql_type.get_size(), buffer.size(), ChunkStats{}};
+        m.fillChunkStats(Datum{0}, Datum{0}, false);
+        chunkMetadataVec.push_back(std::make_pair(chunk_key, m));
+      }
       chunk_it++;
     }
   }
@@ -280,25 +286,42 @@ void ForeignStorageInterface::registerPersistentStorageInterface(
   CHECK(it_ok.second);
 }
 
-void ForeignStorageInterface::registerTable(const int db_id,
-                                            const int table_id,
-                                            const std::string& type) {
-  std::unique_lock<std::mutex> persistent_storage_interfaces_lock(
-    persistent_storage_interfaces_mutex_);
-  size_t sep = type.find_first_of(':');
-  std::string type_id = type.substr(0, sep);
-  if(sep != std::string::npos)
-    sep++;
-  std::string type_info = type.substr(sep);
+std::pair<std::string, std::string> parseStorageType(const std::string &type) {
+  size_t sep = type.find_first_of(':'), sep2 = sep != std::string::npos? sep+1 : sep;
+  auto res = std::make_pair(type.substr(0, sep), type.substr(sep2));
+  auto &type_info = res.second;
   std::transform(type_info.begin(), type_info.end(), type_info.begin(),
                 [](unsigned char c){ return std::tolower(c); }); // TODO: get original unmodified case
-  const auto it = persistent_storage_interfaces_.find(type_id);
+  return res;
+}
+
+void ForeignStorageInterface::prepareTable(const int db_id, TableDescriptor& td, std::list<ColumnDescriptor>& cols) {
+  auto type = parseStorageType(td.storageType);
+  std::unique_lock<std::mutex> persistent_storage_interfaces_lock(
+    persistent_storage_interfaces_mutex_);
+  const auto it = persistent_storage_interfaces_.find(type.first);
+  CHECK(it != persistent_storage_interfaces_.end());
+  auto p = it->second.get();
+  persistent_storage_interfaces_lock.unlock();
+  p->prepareTable(db_id, type.second, td, cols);
+}
+
+void ForeignStorageInterface::registerTable(const int db_id,
+                                            const TableDescriptor& td,
+                                            const std::list<ColumnDescriptor>& cols) {
+  const int table_id = td.tableId;
+  auto type = parseStorageType(td.storageType);
+
+  std::unique_lock<std::mutex> persistent_storage_interfaces_lock(
+    persistent_storage_interfaces_mutex_);
+  const auto it = persistent_storage_interfaces_.find(type.first);
   CHECK(it != persistent_storage_interfaces_.end());
   const auto it_ok = table_persistent_storage_interface_map_.emplace(
       std::make_pair(db_id, table_id), it->second.get());
   CHECK(it_ok.second);
   persistent_storage_interfaces_lock.unlock();
-  it_ok.first->second->registerTable(it_ok.first->first, type_info, lookupBufferManager(db_id, table_id));
+  it_ok.first->second->registerTable(it_ok.first->first, type.second,
+                                     td, cols, lookupBufferManager(db_id, table_id));
 }
 
 std::unordered_map<std::string, std::unique_ptr<PersistentForeignStorageInterface>>

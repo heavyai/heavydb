@@ -1953,11 +1953,16 @@ void Catalog::createTable(
     const std::vector<Parser::SharedDictionaryDef>& shared_dict_defs,
     bool isLogicalTable) {
   cat_write_lock write_lock(this);
-  list<ColumnDescriptor> cds;
+  list<ColumnDescriptor> cds = cols;
   list<DictDescriptor> dds;
   std::set<std::string> toplevel_column_names;
   list<ColumnDescriptor> columns;
-  for (auto cd : cols) {
+  
+  if (!td.storageType.empty()) {
+    ForeignStorageInterface::prepareTable(getCurrentDB().dbId, td, cds);
+  }
+
+  for (auto cd : cds) {
     if (cd.columnName == "rowid") {
       throw std::runtime_error(
           "Cannot create column with name rowid. rowid is a system defined column.");
@@ -1968,6 +1973,7 @@ void Catalog::createTable(
       expandGeoColumn(cd, columns);
     }
   }
+  cds.clear();
 
   ColumnDescriptor cd;
   // add row_id column -- Must be last column in the table
@@ -2078,7 +2084,7 @@ void Catalog::createTable(
       }
       if (!td.storageType.empty()) {
         ForeignStorageInterface::registerTable(
-            getCurrentDB().dbId, td.tableId, td.storageType);
+            getCurrentDB().dbId, td, cds);
       }
     } catch (std::exception& e) {
       sqliteConnector_.query("ROLLBACK TRANSACTION");
@@ -2115,6 +2121,10 @@ void Catalog::createTable(
       cd.tableId = td.tableId;
       cd.columnId = colId++;
       cds.push_back(cd);
+    }
+    if (!td.storageType.empty()) {
+      ForeignStorageInterface::registerTable(
+          getCurrentDB().dbId, td, cds);
     }
   }
   try {
