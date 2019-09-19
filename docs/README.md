@@ -31,3 +31,18 @@ deactivate
 #### With top-level make target
 
 Alternatively, there is a make target to do the above steps, use `make sphinx` from the top-level `../build/` directory.
+
+#### VSCode Live Preview
+
+Install the [reStructuredText extension](https://github.com/vscode-restructuredtext/vscode-restructuredtext)
+
+Point `settings.json` to the the correct Python path. 
+Assuming the manual using `sphinx-env` virtualenv from above:
+
+```json
+{
+    "python.pythonPath": "${workspaceFolder}/docs/sphinx-env/bin/python"
+}
+```
+
+`reStructuredText: Open Locked Preview to the Side` will give a live preview window with the generated sphinx docs.
