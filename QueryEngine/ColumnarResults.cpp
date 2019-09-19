@@ -44,13 +44,15 @@ ColumnarResults::ColumnarResults(
     const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const ResultSet& rows,
     const size_t num_columns,
-    const std::vector<SQLTypeInfo>& target_types)
+    const std::vector<SQLTypeInfo>& target_types,
+    const bool is_parallel_execution_enforced)
     : column_buffers_(num_columns)
     , num_rows_(use_parallel_algorithms(rows) || rows.isDirectColumnarConversionPossible()
                     ? rows.entryCount()
                     : rows.rowCount())
     , target_types_(target_types)
-    , parallel_conversion_(use_parallel_algorithms(rows))
+    , parallel_conversion_(is_parallel_execution_enforced ? true
+                                                          : use_parallel_algorithms(rows))
     , direct_columnar_conversion_(rows.isDirectColumnarConversionPossible()) {
   column_buffers_.resize(num_columns);
   for (size_t i = 0; i < num_columns; ++i) {
@@ -477,7 +479,7 @@ void ColumnarResults::materializeAllColumnsGroupBy(const ResultSet& rows,
   std::vector<size_t> non_empty_per_thread(num_threads,
                                            0);  // number of non-empty entries per thread
 
-  ColumnBitmap bitmap(num_threads * size_per_thread);
+  ColumnBitmap bitmap(size_per_thread, num_threads);
 
   locateAndCountEntries(
       rows, bitmap, non_empty_per_thread, entry_count, num_threads, size_per_thread);
@@ -517,7 +519,7 @@ void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
              entry_idx++, local_idx++) {
           if (!rows.isRowAtEmpty(entry_idx)) {
             total_non_empty++;
-            bitmap.set(entry_idx, true);
+            bitmap.set(local_idx, thread_idx, true);
           }
         }
         non_empty_per_thread[thread_idx] = total_non_empty;
@@ -642,7 +644,7 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
         break;
       }
       const size_t output_buffer_row_idx = global_offsets[thread_idx] + non_empty_idx;
-      if (bitmap.get(entry_idx)) {
+      if (bitmap.get(local_idx, thread_idx)) {
         // targets that are recovered from the result set iterators:
         const auto crt_row = rows.getRowAtNoTranslations(entry_idx, targets_to_skip);
         for (size_t column_idx = 0; column_idx < num_columns; ++column_idx) {
@@ -728,7 +730,7 @@ void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
         break;
       }
       const size_t output_buffer_row_idx = global_offsets[thread_idx] + non_empty_idx;
-      if (bitmap.get(entry_idx)) {
+      if (bitmap.get(local_idx, thread_idx)) {
         for (size_t column_idx = 0; column_idx < num_columns; column_idx++) {
           write_functions[column_idx](rows,
                                       entry_idx,

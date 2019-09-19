@@ -30,8 +30,13 @@ class ColumnarResultsTester : public ColumnarResults {
   ColumnarResultsTester(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                         const ResultSet& rows,
                         const size_t num_columns,
-                        const std::vector<SQLTypeInfo>& target_types)
-      : ColumnarResults(row_set_mem_owner, rows, num_columns, target_types) {}
+                        const std::vector<SQLTypeInfo>& target_types,
+                        const bool is_parallel_execution_enforced = false)
+      : ColumnarResults(row_set_mem_owner,
+                        rows,
+                        num_columns,
+                        target_types,
+                        is_parallel_execution_enforced) {}
 
   template <typename ENTRY_TYPE>
   ENTRY_TYPE getEntryAt(const size_t row_idx, const size_t column_idx) const {
@@ -80,8 +85,7 @@ void test_columnar_conversion(const std::vector<TargetInfo>& target_infos,
     col_types.push_back(get_logical_type_info(result_set.getColType(i)));
   }
   ColumnarResultsTester columnar_results(
-      row_set_mem_owner, result_set, col_types.size(), col_types);
-  columnar_results.setParallelConversion(is_parallel_conversion);
+      row_set_mem_owner, result_set, col_types.size(), col_types, is_parallel_conversion);
 
   // Validate the results:
   for (size_t rs_row_idx = 0, cr_row_idx = 0; rs_row_idx < query_mem_desc.getEntryCount();

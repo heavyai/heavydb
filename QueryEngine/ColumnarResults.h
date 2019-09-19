@@ -34,24 +34,28 @@ class ColumnarConversionNotSupported : public std::runtime_error {
 /**
  * A helper data structure to track non-empty entries in the input buffer
  * Currently only used for direct columnarization with columnar outputs.
+ * Each bank is assigned to a thread so that concurrent updates of the
+ * data structure is non-blocking.
  */
 class ColumnBitmap {
  public:
-  ColumnBitmap(const size_t num_elements) : bitmap_(num_elements, false) {}
+  ColumnBitmap(const size_t num_elements_per_bank, size_t num_banks)
+      : bitmaps_(num_banks, std::vector<bool>(num_elements_per_bank, false)) {}
 
-  inline bool get(const size_t index) const {
-    CHECK(index < bitmap_.size());
-    return bitmap_[index];
+  inline bool get(const size_t index, const size_t bank_index) const {
+    CHECK_LT(bank_index, bitmaps_.size());
+    CHECK_LT(index, bitmaps_[bank_index].size());
+    return bitmaps_[bank_index][index];
   }
 
-  inline void set(const size_t index, const bool val) {
-    CHECK(index < bitmap_.size());
-    bitmap_[index] = val;
+  inline void set(const size_t index, const size_t bank_index, const bool val) {
+    CHECK_LT(bank_index, bitmaps_.size());
+    CHECK_LT(index, bitmaps_[bank_index].size());
+    bitmaps_[bank_index][index] = val;
   }
-  size_t size() { return bitmap_.size(); }
 
  private:
-  std::vector<bool> bitmap_;
+  std::vector<std::vector<bool>> bitmaps_;
 };
 
 class ColumnarResults {
@@ -59,7 +63,8 @@ class ColumnarResults {
   ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                   const ResultSet& rows,
                   const size_t num_columns,
-                  const std::vector<SQLTypeInfo>& target_types);
+                  const std::vector<SQLTypeInfo>& target_types,
+                  const bool is_parallel_execution_enforced = false);
 
   ColumnarResults(const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                   const int8_t* one_col_buffer,
@@ -80,9 +85,6 @@ class ColumnarResults {
     return target_types_[col_id];
   }
 
-  void setParallelConversion(const bool is_parallel) {
-    parallel_conversion_ = is_parallel;
-  }
   bool isParallelConversion() const { return parallel_conversion_; }
   bool isDirectColumnarConversionPossible() const { return direct_columnar_conversion_; }
 
