@@ -212,6 +212,7 @@ TEST_F(UDFCompilerTest, UdfQuery) {
   run_ddl_statement("DROP TABLE IF EXISTS stocks;");
   run_ddl_statement("DROP TABLE IF EXISTS sal_emp;");
   run_ddl_statement("DROP TABLE IF EXISTS geospatial_test;");
+  run_ddl_statement("DROP TABLE IF EXISTS geospatial_linestring;");
 
   run_ddl_statement(
       "CREATE TABLE stocks(symbol text, open_p int, high_p int, "
@@ -222,6 +223,8 @@ TEST_F(UDFCompilerTest, UdfQuery) {
       "gp4326none GEOMETRY(POINT,4326) ENCODING NONE) ;");
 
   run_ddl_statement("CREATE TABLE sal_emp(name text, pay_by_quarter integer[]);");
+
+  run_ddl_statement("CREATE TABLE geospatial_linestring (id INT, l LINESTRING)");
 
   std::string insert1(
       "INSERT into stocks VALUES ('NVDA', '178', '178', '171', '173', '2019-05-07');");
@@ -258,6 +261,14 @@ TEST_F(UDFCompilerTest, UdfQuery) {
       "'POINT(51.4618933852762 -0.926690306514502)', "
       "'POINT(55.9523783996701 -3.20510306395594326)');");
   EXPECT_NO_THROW(run_multiple_agg(point_insert1, ExecutorDeviceType::CPU));
+  std::string linestring_insert1(
+      "INSERT into geospatial_linestring VALUES(0, 'LINESTRING(1 0, 2 3, 3 4)');");
+  std::string linestring_insert2(
+      "INSERT into geospatial_linestring VALUES(1, 'LINESTRING(1 0, 0 1, -1 0, 0 -1, 1 "
+      "0)');");
+
+  EXPECT_NO_THROW(run_multiple_agg(linestring_insert1, ExecutorDeviceType::CPU));
+  EXPECT_NO_THROW(run_multiple_agg(linestring_insert2, ExecutorDeviceType::CPU));
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -356,6 +367,38 @@ TEST_F(UDFCompilerTest, UdfQuery) {
         v<int64_t>(run_simple_agg(
             "select point_compression(gp4326none) from geospatial_test WHERE id = 0;",
             dt)));
+
+    ASSERT_DOUBLE_EQ(
+        1.0,
+        v<double>(run_simple_agg(
+            "select linestring_x(l, 1) from geospatial_linestring WHERE id = 0;", dt)));
+    ASSERT_DOUBLE_EQ(
+        2.0,
+        v<double>(run_simple_agg(
+            "select linestring_x(l, 2) from geospatial_linestring WHERE id = 0;", dt)));
+
+    ASSERT_DOUBLE_EQ(
+        3.0,
+        v<double>(run_simple_agg(
+            "select linestring_x(l, 3) from geospatial_linestring WHERE id = 0;", dt)));
+    ASSERT_DOUBLE_EQ(
+        0.0,
+        v<double>(run_simple_agg(
+            "select linestring_y(l, 1) from geospatial_linestring WHERE id = 0;", dt)));
+    ASSERT_DOUBLE_EQ(
+        3.0,
+        v<double>(run_simple_agg(
+            "select linestring_y(l, 2) from geospatial_linestring WHERE id = 0;", dt)));
+
+    ASSERT_DOUBLE_EQ(
+        4.0,
+        v<double>(run_simple_agg(
+            "select linestring_y(l, 3) from geospatial_linestring WHERE id = 0;", dt)));
+
+    ASSERT_DOUBLE_EQ(
+        5.656854249492381,
+        v<double>(run_simple_agg(
+            "select linestring_length(l) from geospatial_linestring WHERE id = 1;", dt)));
   }
 
   EXPECT_THROW(run_simple_agg("SELECT udf_range_integer(high_p, low_p) from stocks where "
@@ -366,6 +409,7 @@ TEST_F(UDFCompilerTest, UdfQuery) {
   run_ddl_statement("DROP TABLE stocks;");
   run_ddl_statement("DROP TABLE sal_emp;");
   run_ddl_statement("DROP TABLE geospatial_test;");
+  run_ddl_statement("DROP TABLE geospatial_linestring;");
 }
 
 int main(int argc, char** argv) {

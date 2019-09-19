@@ -185,3 +185,70 @@ double udf_truerange(const double high_price,
   return (udf_truehigh(high_price, prev_close_price) -
           udf_truelow(low_price, prev_close_price));
 }
+
+EXTENSION_NOINLINE
+double ST_X_LineString(int8_t* l,
+                       int64_t lsize,
+                       int32_t lindex,
+                       int32_t ic,
+                       int32_t isr,
+                       int32_t osr);
+
+EXTENSION_NOINLINE
+double ST_Y_LineString(int8_t* l,
+                       int64_t lsize,
+                       int32_t lindex,
+                       int32_t ic,
+                       int32_t isr,
+                       int32_t osr);
+
+EXTENSION_NOINLINE
+double ST_Length_LineString(int8_t* coords,
+                            int64_t coords_sz,
+                            int32_t ic,
+                            int32_t isr,
+                            int32_t osr);
+
+struct GeoLineString {
+  int8_t* ptr;
+  std::size_t sz;
+  int32_t compression;
+  int32_t input_srid;
+  int32_t output_srid;
+
+  DEVICE std::size_t getSize() const { return sz; }
+
+  DEVICE int32_t getCompression() const { return compression; }
+
+  DEVICE int32_t getInputSrid() const { return input_srid; }
+
+  DEVICE int32_t getOutputSrid() const { return output_srid; }
+};
+
+// LineString udf
+
+EXTENSION_NOINLINE
+double linestring_x(GeoLineString l, int32_t lindex) {
+  return ST_X_LineString(l.ptr,
+                         l.getSize(),
+                         lindex,
+                         l.getCompression(),
+                         l.getInputSrid(),
+                         l.getOutputSrid());
+}
+
+EXTENSION_NOINLINE
+double linestring_y(GeoLineString l, int32_t lindex) {
+  return ST_Y_LineString(l.ptr,
+                         l.getSize(),
+                         lindex,
+                         l.getCompression(),
+                         l.getInputSrid(),
+                         l.getOutputSrid());
+}
+
+EXTENSION_NOINLINE
+double linestring_length(GeoLineString l) {
+  return ST_Length_LineString(
+      l.ptr, l.getSize(), l.getCompression(), l.getInputSrid(), l.getOutputSrid());
+}

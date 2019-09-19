@@ -54,6 +54,7 @@ enum class ExtArgumentType {
   ArrayFloat,
   ArrayDouble,
   GeoPoint,
+  GeoLineString,
   Cursor
 };
 

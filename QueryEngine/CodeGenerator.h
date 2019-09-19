@@ -439,6 +439,18 @@ class CodeGenerator {
                            llvm::Value* output_srid,
                            std::vector<llvm::Value*>& output_args);
 
+  llvm::StructType* createLineStringStructType(const std::string& udf_func_name,
+                                               size_t param_num);
+
+  void codegenGeoLineStringArgs(const std::string& udf_func_name,
+                                size_t param_num,
+                                llvm::Value* line_string_buf,
+                                llvm::Value* line_string_size,
+                                llvm::Value* compression,
+                                llvm::Value* input_srid,
+                                llvm::Value* output_srid,
+                                std::vector<llvm::Value*>& output_args);
+
   std::vector<llvm::Value*> codegenFunctionOperCastArgs(
       const Analyzer::FunctionOper*,
       const ExtensionFunction*,

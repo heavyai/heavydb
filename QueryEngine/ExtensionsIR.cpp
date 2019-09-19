@@ -454,6 +454,71 @@ void CodeGenerator::codegenGeoPointArgs(const std::string& udf_func_name,
   output_args.push_back(alloc_mem);
 }
 
+llvm::StructType* CodeGenerator::createLineStringStructType(
+    const std::string& udf_func_name,
+    size_t param_num) {
+  llvm::Function* udf_func = cgen_state_->module_->getFunction(udf_func_name);
+  llvm::Module* module_for_lookup = cgen_state_->module_;
+
+  CHECK(udf_func);
+
+  llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
+  CHECK(param_num < udf_func_type->getNumParams());
+  llvm::Type* param_type = udf_func_type->getParamType(param_num);
+  CHECK(param_type->isPointerTy());
+  llvm::Type* struct_type = param_type->getPointerElementType();
+  CHECK(struct_type->isStructTy());
+  CHECK(struct_type->getStructNumElements() == 5);
+
+  llvm::StringRef struct_name = struct_type->getStructName();
+
+  llvm::StructType* line_string_type = module_for_lookup->getTypeByName(struct_name);
+  CHECK(line_string_type);
+
+  return (line_string_type);
+}
+
+void CodeGenerator::codegenGeoLineStringArgs(const std::string& udf_func_name,
+                                             size_t param_num,
+                                             llvm::Value* line_string_buf,
+                                             llvm::Value* line_string_size,
+                                             llvm::Value* compression,
+                                             llvm::Value* input_srid,
+                                             llvm::Value* output_srid,
+                                             std::vector<llvm::Value*>& output_args) {
+  CHECK(line_string_buf);
+  CHECK(line_string_size);
+  CHECK(compression);
+  CHECK(input_srid);
+  CHECK(output_srid);
+
+  auto line_string_abstraction = createLineStringStructType(udf_func_name, param_num);
+  auto alloc_mem =
+      cgen_state_->ir_builder_.CreateAlloca(line_string_abstraction, nullptr);
+
+  auto line_string_buf_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(line_string_abstraction, alloc_mem, 0);
+  cgen_state_->ir_builder_.CreateStore(line_string_buf, line_string_buf_ptr);
+
+  auto line_string_size_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(line_string_abstraction, alloc_mem, 1);
+  cgen_state_->ir_builder_.CreateStore(line_string_size, line_string_size_ptr);
+
+  auto line_string_compression_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(line_string_abstraction, alloc_mem, 2);
+  cgen_state_->ir_builder_.CreateStore(compression, line_string_compression_ptr);
+
+  auto input_srid_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(line_string_abstraction, alloc_mem, 3);
+  cgen_state_->ir_builder_.CreateStore(input_srid, input_srid_ptr);
+
+  auto output_srid_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(line_string_abstraction, alloc_mem, 4);
+  cgen_state_->ir_builder_.CreateStore(output_srid, output_srid_ptr);
+
+  output_args.push_back(alloc_mem);
+}
+
 // Generate CAST operations for arguments in `orig_arg_lvs` to the types required by
 // `ext_func_sig`.
 std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
@@ -563,7 +628,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
       }
 
       if (is_ext_arg_type_geo(ext_func_args[i])) {
-        if (arg_ti.get_type() == kPOINT) {
+        if (arg_ti.get_type() == kPOINT || arg_ti.get_type() == kLINESTRING) {
           auto array_buf_arg = castArrayPointer(ptr_lv, elem_ti);
           auto builder = cgen_state_->ir_builder_;
           auto array_size_arg =
@@ -575,14 +640,26 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
           auto compression_val = cgen_state_->llInt(compression);
           auto input_srid_val = cgen_state_->llInt(arg_ti.get_input_srid());
           auto output_srid_val = cgen_state_->llInt(arg_ti.get_output_srid());
-          codegenGeoPointArgs(ext_func_sig->getName(),
-                              k,
-                              array_buf_arg,
-                              array_size_arg,
-                              compression_val,
-                              input_srid_val,
-                              output_srid_val,
-                              args);
+
+          if (arg_ti.get_type() == kPOINT) {
+            codegenGeoPointArgs(ext_func_sig->getName(),
+                                k,
+                                array_buf_arg,
+                                array_size_arg,
+                                compression_val,
+                                input_srid_val,
+                                output_srid_val,
+                                args);
+          } else {
+            codegenGeoLineStringArgs(ext_func_sig->getName(),
+                                     k,
+                                     array_buf_arg,
+                                     array_size_arg,
+                                     compression_val,
+                                     input_srid_val,
+                                     output_srid_val,
+                                     args);
+          }
         }
       } else {
         args.push_back(castArrayPointer(ptr_lv, elem_ti));
