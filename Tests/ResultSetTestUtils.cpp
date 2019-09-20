@@ -22,7 +22,7 @@ int8_t* advance_to_next_columnar_key_buff(int8_t* key_ptr,
                                           const QueryMemoryDescriptor& query_mem_desc,
                                           const size_t key_idx) {
   CHECK(!query_mem_desc.hasKeylessHash());
-  CHECK_LT(key_idx, query_mem_desc.groupColWidthsSize());
+  CHECK_LT(key_idx, query_mem_desc.getGroupbyColCount());
   const auto column_offset =
       query_mem_desc.getEntryCount() * query_mem_desc.groupColWidth(key_idx);
   auto new_key_ptr = align_to_int64(key_ptr + column_offset);

@@ -178,7 +178,6 @@ class QueryMemoryDescriptor {
   int32_t getTargetIdxForKey() const { return idx_target_as_key_; }
   void setTargetIdxForKey(const int32_t val) { idx_target_as_key_ = val; }
 
-  size_t groupColWidthsSize() const { return group_col_widths_.size(); }
   int8_t groupColWidth(const size_t key_idx) const {
     CHECK_LT(key_idx, group_col_widths_.size());
     return group_col_widths_[key_idx];

@@ -314,7 +314,7 @@ void QueryMemoryInitializer::initGroups(const QueryMemoryDescriptor& query_mem_d
                                         const int32_t groups_buffer_entry_count,
                                         const size_t warp_size,
                                         const Executor* executor) {
-  const size_t key_count{query_mem_desc.groupColWidthsSize()};
+  const size_t key_count{query_mem_desc.getGroupbyColCount()};
   const size_t row_size{query_mem_desc.getRowSize()};
   const size_t col_base_off{query_mem_desc.getColOffInBytes(0)};
 
@@ -379,7 +379,7 @@ void QueryMemoryInitializer::initColumnarGroups(
 
   const auto groups_buffer_entry_count = query_mem_desc.getEntryCount();
   if (!query_mem_desc.hasKeylessHash()) {
-    const size_t key_count{query_mem_desc.groupColWidthsSize()};
+    const size_t key_count{query_mem_desc.getGroupbyColCount()};
     for (size_t i = 0; i < key_count; ++i) {
       buffer_ptr = initColumnarBuffer<int64_t>(reinterpret_cast<int64_t*>(buffer_ptr),
                                                EMPTY_KEY_64,
@@ -606,7 +606,7 @@ GpuGroupByBuffers QueryMemoryInitializer::prepareTopNHeapsDevBuffer(
           dev_buffer + streaming_top_n::get_rows_offset_of_heaps(n, thread_count)),
       reinterpret_cast<int64_t*>(init_agg_vals_dev_ptr),
       n * thread_count,
-      query_mem_desc.groupColWidthsSize(),
+      query_mem_desc.getGroupbyColCount(),
       query_mem_desc.getEffectiveKeyWidth(),
       query_mem_desc.getRowSize() / sizeof(int64_t),
       query_mem_desc.hasKeylessHash(),
@@ -682,7 +682,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
             reinterpret_cast<int64_t*>(group_by_dev_buffer),
             reinterpret_cast<const int64_t*>(init_agg_vals_dev_ptr),
             dev_group_by_buffers.entry_count,
-            query_mem_desc.groupColWidthsSize(),
+            query_mem_desc.getGroupbyColCount(),
             col_count,
             col_widths_dev_ptr,
             /*need_padding = */ true,
@@ -694,7 +694,7 @@ GpuGroupByBuffers QueryMemoryInitializer::createAndInitializeGroupByBufferGpu(
         init_group_by_buffer_on_device(reinterpret_cast<int64_t*>(group_by_dev_buffer),
                                        reinterpret_cast<int64_t*>(init_agg_vals_dev_ptr),
                                        dev_group_by_buffers.entry_count,
-                                       query_mem_desc.groupColWidthsSize(),
+                                       query_mem_desc.getGroupbyColCount(),
                                        query_mem_desc.getEffectiveKeyWidth(),
                                        query_mem_desc.getRowSize() / sizeof(int64_t),
                                        query_mem_desc.hasKeylessHash(),

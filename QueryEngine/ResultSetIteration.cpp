@@ -2097,7 +2097,7 @@ bool ResultSetStorage::isEmptyEntryColumnar(const size_t entry_idx,
     if (query_mem_desc_.getQueryDescriptionType() == QueryDescriptionType::Projection) {
       return reinterpret_cast<const int64_t*>(buff)[entry_idx] == EMPTY_KEY_64;
     } else {
-      CHECK(query_mem_desc_.groupColWidthsSize() > 0);
+      CHECK(query_mem_desc_.getGroupbyColCount() > 0);
       const auto target_buff = buff + query_mem_desc_.getPrependedGroupColOffInBytes(0);
       switch (query_mem_desc_.groupColWidth(0)) {
         case 8:

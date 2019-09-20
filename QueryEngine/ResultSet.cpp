@@ -453,7 +453,7 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
     const QueryMemoryDescriptor& query_mem_desc) {
   auto query_mem_desc_copy = query_mem_desc;
   query_mem_desc_copy.resetGroupColWidths(
-      std::vector<int8_t>(query_mem_desc_copy.groupColWidthsSize(), 8));
+      std::vector<int8_t>(query_mem_desc_copy.getGroupbyColCount(), 8));
   if (query_mem_desc.didOutputColumnar()) {
     return query_mem_desc_copy;
   }

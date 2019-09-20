@@ -1151,7 +1151,7 @@ std::string QueryMemoryDescriptor::reductionKey() const {
                      : "") +
       "\n";
   str += "\tEffective key width: " + std::to_string(getEffectiveKeyWidth()) + "\n";
-  str += "\tNumber of group columns: " + std::to_string(groupColWidthsSize()) + "\n";
+  str += "\tNumber of group columns: " + std::to_string(getGroupbyColCount()) + "\n";
   const auto group_indices_size = targetGroupbyIndicesSize();
   if (group_indices_size) {
     std::vector<std::string> group_indices_strings;
