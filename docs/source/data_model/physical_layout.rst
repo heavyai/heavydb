@@ -1,7 +1,7 @@
 .. OmniSciDB Data Model
 
 ==================================
-Phyiscal Data Layout
+Physical Data Layout
 ==================================
 
 Directory Structure

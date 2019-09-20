@@ -28,7 +28,7 @@ OmniSciDB Developer Documentation
     :caption: Query Execution
     :maxdepth: 2
     :numbered:
-    
+
     execution/flow
     execution/parse
     execution/optimization
