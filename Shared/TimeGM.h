@@ -69,8 +69,8 @@ class DateTimeStringValidate {
   constexpr int64_t parseDateTimeString() {
     char* tp = nullptr;
     if constexpr (SQL_TYPE == kTIME) {
-      tm_.tm_hour = tm_.tm_min = tm_.tm_sec = -1;
-      parseTimePart<const char*>(str_.c_str(), tp);
+      char const* x = str_.c_str();
+      parseTimePart(x, tp);
       tm_.tm_mday = 1;
       tm_.tm_mon = 0;
       tm_.tm_year = 70;
@@ -82,7 +82,7 @@ class DateTimeStringValidate {
       return getEpochValue();
     }
     char* p = nullptr;
-    parseTimePart<char*&>(tp, p);
+    parseTimePart(tp, p);
     if constexpr (SQL_TYPE == kDATE) {
       return static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_));
     }
@@ -107,7 +107,7 @@ class DateTimeStringValidate {
   }
 
   template <typename T>
-  constexpr void parseTimePart(T s, char*& p) {
+  constexpr void parseTimePart(T*& s, std::remove_const_t<T>*& p) {
     if constexpr (SQL_TYPE == kDATE) {
       if (*s == 'T' || *s == ' ') {
         ++s;
@@ -115,8 +115,11 @@ class DateTimeStringValidate {
       detectFormatFromString(s, p, "%z");
       return;
     } else if constexpr (SQL_TYPE == kTIME) {
+      if (*s == 'T') {
+        ++s;
+      }
       detectFormatFromString(s, p, "%T %z", "%T", "%H%M%S", "%R");
-      if (tm_.tm_hour == -1 || tm_.tm_min == -1 || tm_.tm_sec == -1) {
+      if (!p) {
         throw std::runtime_error("Invalid TIME string " + str_);
       }
       return;
@@ -186,10 +189,11 @@ class DateTimeStringValidate {
   }
 
   template <typename EVAL_STRING, typename TARGET_CHAR, typename... EVAL_FORMATS>
-  inline void detectFormatFromString(EVAL_STRING s,
+  inline auto detectFormatFromString(EVAL_STRING s,
                                      TARGET_CHAR& p,
                                      EVAL_FORMATS... eval_formats) {
     ((p = strptime(s, eval_formats, &tm_)) || ...);
+    return;
   }
 
   std::string str_;
