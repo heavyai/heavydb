@@ -236,7 +236,8 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
   } else {
     auto callback = [this,
                      &update_parameters](FragmentUpdaterType const& update_log) -> void {
-      auto rows_per_column = update_log.getEntryCount();
+      auto entries_per_column = update_log.getEntryCount();
+      auto rows_per_column = update_log.getRowCount();
       if (rows_per_column == 0) {
         return;
       }
@@ -244,28 +245,39 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
       OffsetVector column_offsets(rows_per_column);
       ScalarTargetValueVector scalar_target_values(rows_per_column);
 
-      auto complete_row_block_size = rows_per_column / normalized_cpu_threads();
+      auto complete_entry_block_size = entries_per_column / normalized_cpu_threads();
       auto partial_row_block_size = rows_per_column % normalized_cpu_threads();
       auto usable_threads = normalized_cpu_threads();
       if (UNLIKELY(rows_per_column < (unsigned)normalized_cpu_threads())) {
-        complete_row_block_size = rows_per_column;
+        complete_entry_block_size = entries_per_column;
         partial_row_block_size = 0;
         usable_threads = 1;
       }
 
-      auto process_rows =
-          [&update_log, &update_parameters, &column_offsets, &scalar_target_values](
-              auto type_tag,
-              uint64_t column_index,
-              uint64_t row_start,
-              uint64_t row_count) -> uint64_t {
-        uint64_t rows_processed = 0;
-        for (uint64_t row_index = row_start; row_index < (row_start + row_count);
-             row_index++, rows_processed++) {
-          constexpr auto get_entry_method_sel(MethodSelector::getEntryAt(type_tag));
-          auto const row((update_log.*get_entry_method_sel)(row_index));
+      std::atomic<size_t> row_idx{0};
 
-          CHECK(!row.empty());
+      auto process_rows = [&update_log,
+                           &update_parameters,
+                           &column_offsets,
+                           &scalar_target_values,
+                           &row_idx](auto type_tag,
+                                     uint64_t column_index,
+                                     uint64_t entry_start,
+                                     uint64_t entry_count) -> uint64_t {
+        uint64_t entries_processed = 0;
+        for (uint64_t entry_index = entry_start;
+             entry_index < (entry_start + entry_count);
+             entry_index++) {
+          constexpr auto get_entry_method_sel(MethodSelector::getEntryAt(type_tag));
+          auto const row((update_log.*get_entry_method_sel)(entry_index));
+
+          if (row.empty()) {
+            continue;
+          }
+
+          entries_processed++;
+          size_t row_index = row_idx.fetch_add(1);
+
           CHECK(row.size() == update_parameters.getUpdateColumnCount() + 1);
 
           auto terminal_column_iter = std::prev(row.end());
@@ -278,32 +290,34 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
           scalar_target_values[row_index] =
               boost::get<ScalarTargetValue>(row[column_index]);
         }
-        return rows_processed;
+        return entries_processed;
       };
 
-      auto get_row_index = [complete_row_block_size](uint64_t thread_index) -> uint64_t {
-        return (thread_index * complete_row_block_size);
+      auto get_row_index =
+          [complete_entry_block_size](uint64_t thread_index) -> uint64_t {
+        return (thread_index * complete_entry_block_size);
       };
 
       // Iterate over each column
       for (decltype(update_parameters.getUpdateColumnCount()) column_index = 0;
            column_index < update_parameters.getUpdateColumnCount();
            column_index++) {
-        RowProcessingFuturesVector row_processing_futures;
-        row_processing_futures.reserve(usable_threads);
+        row_idx = 0;
+        RowProcessingFuturesVector entry_processing_futures;
+        entry_processing_futures.reserve(usable_threads);
 
         auto thread_launcher = [&](auto const& type_tag) {
           for (unsigned i = 0; i < static_cast<unsigned>(usable_threads); i++) {
-            row_processing_futures.emplace_back(
+            entry_processing_futures.emplace_back(
                 std::async(std::launch::async,
                            std::forward<decltype(process_rows)>(process_rows),
                            type_tag,
                            column_index,
                            get_row_index(i),
-                           complete_row_block_size));
+                           complete_entry_block_size));
           }
           if (partial_row_block_size) {
-            row_processing_futures.emplace_back(
+            entry_processing_futures.emplace_back(
                 std::async(std::launch::async,
                            std::forward<decltype(process_rows)>(process_rows),
                            type_tag,
@@ -319,10 +333,10 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
           thread_launcher(StringSelector());
         }
 
-        uint64_t rows_processed(0);
-        for (auto& t : row_processing_futures) {
+        uint64_t entries_processed(0);
+        for (auto& t : entry_processing_futures) {
           t.wait();
-          rows_processed += t.get();
+          entries_processed += t.get();
         }
 
         IOFacility::updateColumn(catalog_,

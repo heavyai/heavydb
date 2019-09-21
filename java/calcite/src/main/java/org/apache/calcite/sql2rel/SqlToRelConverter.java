@@ -2359,7 +2359,13 @@ public class SqlToRelConverter {
     final Join originalJoin = (Join) RelFactories.DEFAULT_JOIN_FACTORY.createJoin(
             leftRel, rightRel, joinCond, ImmutableSet.of(), joinType, false);
 
-    return RelOptUtil.pushDownJoinConditions(originalJoin, relBuilder);
+    boolean applyPushdown =
+            config.getPushdownJoinCondition().test(bb.getTopNode(), originalJoin);
+    if (applyPushdown) {
+      return RelOptUtil.pushDownJoinConditions(originalJoin, relBuilder);
+    } else {
+      return originalJoin;
+    }
   }
 
   private CorrelationUse getCorrelationUse(Blackboard bb, final RelNode r0) {
@@ -5284,6 +5290,11 @@ public class SqlToRelConverter {
     boolean isConvertTableAccess();
 
     /**
+     * Returns if join conditions should be pushed down to the projections, if possible.
+     */
+    BiPredicate<SqlNode, Join> getPushdownJoinCondition();
+
+    /**
      * Returns the {@code decorrelationEnabled} option. Controls whether to
      * disable sub-query decorrelation when needed. e.g. if outer joins are not
      * supported.
@@ -5351,6 +5362,7 @@ public class SqlToRelConverter {
     private boolean createValuesRel = true;
     private boolean explain;
     private boolean expand = true;
+    private BiPredicate<SqlNode, Join> pushdownJoinCondition;
     private int inSubQueryThreshold = DEFAULT_IN_SUB_QUERY_THRESHOLD;
     private RelBuilderFactory relBuilderFactory = RelFactories.LOGICAL_BUILDER;
     private BiPredicate<SqlNode, SqlNode> expandPredicate;
@@ -5370,6 +5382,7 @@ public class SqlToRelConverter {
       if (!(config.getExpandPredicate() instanceof ConfigImpl.DefaultExpandPredicate)) {
         this.expandPredicate = config.getExpandPredicate();
       }
+      this.pushdownJoinCondition = config.getPushdownJoinCondition();
       return this;
     }
 
@@ -5403,6 +5416,11 @@ public class SqlToRelConverter {
       return this;
     }
 
+    public ConfigBuilder withPushdownJoinCondition(BiPredicate<SqlNode, Join> pushdown) {
+      this.pushdownJoinCondition = pushdown;
+      return this;
+    }
+
     public ConfigBuilder withExpandPredicate(BiPredicate<SqlNode, SqlNode> predicate) {
       this.expandPredicate = predicate;
       return this;
@@ -5431,6 +5449,7 @@ public class SqlToRelConverter {
               createValuesRel,
               explain,
               expand,
+              pushdownJoinCondition,
               expandPredicate,
               inSubQueryThreshold,
               relBuilderFactory);
@@ -5459,12 +5478,20 @@ public class SqlToRelConverter {
       }
     }
 
+    private BiPredicate<SqlNode, Join> pushdownJoinCondition =
+            new BiPredicate<SqlNode, Join>() {
+              public boolean test(SqlNode t, Join u) {
+                return true;
+              };
+            };
+
     private ConfigImpl(boolean convertTableAccess,
             boolean decorrelationEnabled,
             boolean trimUnusedFields,
             boolean createValuesRel,
             boolean explain,
             boolean expand,
+            BiPredicate<SqlNode, Join> pushdownJoinCondition,
             BiPredicate<SqlNode, SqlNode> expandPredicate,
             int inSubQueryThreshold,
             RelBuilderFactory relBuilderFactory) {
@@ -5474,12 +5501,17 @@ public class SqlToRelConverter {
       this.createValuesRel = createValuesRel;
       this.explain = explain;
       this.expand = expand;
+
       if (null == expandPredicate) {
         expandPredicate = new DefaultExpandPredicate();
       }
       this.expandPredicate = expandPredicate;
       this.inSubQueryThreshold = inSubQueryThreshold;
       this.relBuilderFactory = relBuilderFactory;
+
+      if (null != pushdownJoinCondition) {
+        this.pushdownJoinCondition = pushdownJoinCondition;
+      }
     }
 
     public boolean isConvertTableAccess() {
@@ -5504,6 +5536,10 @@ public class SqlToRelConverter {
 
     public boolean isExpand() {
       return expand;
+    }
+
+    public BiPredicate<SqlNode, Join> getPushdownJoinCondition() {
+      return pushdownJoinCondition;
     }
 
     public int getInSubQueryThreshold() {

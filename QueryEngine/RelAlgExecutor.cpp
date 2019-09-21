@@ -1076,7 +1076,7 @@ void RelAlgExecutor::executeUpdateViaCompound(const RelCompound* compound,
         "are not supported.)");
   }
 
-  const auto work_unit = createModifyCompoundWorkUnit(
+  const auto work_unit = createCompoundWorkUnit(
       compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
@@ -1091,7 +1091,7 @@ void RelAlgExecutor::executeUpdateViaCompound(const RelCompound* compound,
                                               compound->isVarlenUpdateRequired());
     auto update_callback = yieldUpdateCallback(update_params);
     executor_->executeUpdate(work_unit.exe_unit,
-                             table_infos.front(),
+                             table_infos,
                              co_project,
                              eo,
                              cat_,
@@ -1116,8 +1116,8 @@ void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
         "are not supported.)");
   }
 
-  auto work_unit = createModifyProjectWorkUnit(
-      project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  auto work_unit =
+      createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
   co_project.device_type_ = ExecutorDeviceType::CPU;
@@ -1142,7 +1142,7 @@ void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
                                               project->isVarlenUpdateRequired());
     auto update_callback = yieldUpdateCallback(update_params);
     executor_->executeUpdate(work_unit.exe_unit,
-                             table_infos.front(),
+                             table_infos,
                              co_project,
                              eo,
                              cat_,
@@ -1179,7 +1179,7 @@ void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
     auto delete_callback = yieldDeleteCallback(delete_params);
 
     executor_->executeUpdate(work_unit.exe_unit,
-                             table_infos.front(),
+                             table_infos,
                              co_project,
                              eo,
                              cat_,
@@ -1227,7 +1227,7 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
     auto delete_callback = yieldDeleteCallback(delete_params);
 
     executor_->executeUpdate(work_unit.exe_unit,
-                             table_infos.front(),
+                             table_infos,
                              co_project,
                              eo,
                              cat_,

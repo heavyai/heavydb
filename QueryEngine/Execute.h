@@ -297,11 +297,11 @@ class UpdateLogForFragment : public RowDataProvider {
   std::vector<TargetValue> getEntryAt(const size_t index) const override;
   std::vector<TargetValue> getTranslatedEntryAt(const size_t index) const override;
 
-  size_t count() const override;
+  size_t const getRowCount() const override;
   StringDictionaryProxy* getLiteralDictionary() const override {
     return rs_->getRowSetMemOwner()->getLiteralStringDictProxy();
   }
-  size_t const getEntryCount() const;
+  size_t const getEntryCount() const override;
   size_t const getFragmentIndex() const;
   FragmentInfoType const& getFragmentInfo() const;
   decltype(FragmentInfoType::physicalTableId) const getPhysicalTableId() const {
@@ -609,7 +609,7 @@ class Executor {
                                ColumnCacheMap& column_cache);
 
   void executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
-                     const InputTableInfo& table_info,
+                     const std::vector<InputTableInfo>& table_infos,
                      const CompilationOptions& co,
                      const ExecutionOptions& eo,
                      const Catalog_Namespace::Catalog& cat,
