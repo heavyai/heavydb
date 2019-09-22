@@ -728,9 +728,12 @@ llvm::Value* CodeGenerator::codegenBinOpWithOverflowForCPU(
 
   // Compute result and overflow flag
   auto func = getArithWithOverflowIntrinsic(bin_oper, lhs_lv->getType());
-  auto ret_and_overflow = cgen_state_->ir_builder_.CreateCall(func, {lhs_lv, rhs_lv});
-  auto ret = cgen_state_->ir_builder_.CreateExtractValue(ret_and_overflow, {0});
-  auto overflow = cgen_state_->ir_builder_.CreateExtractValue(ret_and_overflow, {1});
+  auto ret_and_overflow = cgen_state_->ir_builder_.CreateCall(
+      func, std::vector<llvm::Value*>{lhs_lv, rhs_lv});
+  auto ret = cgen_state_->ir_builder_.CreateExtractValue(ret_and_overflow,
+                                                         std::vector<unsigned>{0});
+  auto overflow = cgen_state_->ir_builder_.CreateExtractValue(ret_and_overflow,
+                                                              std::vector<unsigned>{1});
   auto val_bb = cgen_state_->ir_builder_.GetInsertBlock();
 
   // Return error on overflow
