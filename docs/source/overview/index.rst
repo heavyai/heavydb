@@ -1,13 +1,52 @@
 .. OmniSciDB Architecture Overview
 
 ==================================
-OmnisciDB at 30,000 feet
+OmniSciDB at 30,000 feet
 ==================================
+
+Introduction to OmniSciDB
+=========================
+
+OmniSciDB is an open source SQL-based, relational, columnar database engine.
+This project is specifically developed to harness the parallel processing power
+of graphics processing units (GPUs). OmniSciDB can query up to billions of rows
+in milliseconds, and benefits from the advantages that GPUs provide, such as
+parallelism or the ability to process in parallel, which can boost performance.
+OmniSciDB also uses multi-tiered memory caching and a Just-In-Time (JIT) query
+compilation framework.
+
+This developer documentation provides an in-depth discussion of the OmniSciDB
+internals, and details the data model and query execution flows.
+
+
 
 High Level Diagram
 ==================
 
 .. image:: ../img/platform_overview.png
+
+Query Execution
+==========================
+The `Query Execution` section provides a high-level overview
+of how a query is executed by the OmniSci server.
+
+At a high-level, all queries made to the server pass through the 
+Thrift_ `sql_execute` endpoint. Once the query string is received,
+it is then parsed, yielding a relational algebra tree. This relational
+algebra tree is then optimized and prepared for execution
+on either the CPU or the GPU. From here, the optimized relational
+algebra is consumed by then codegen step, which produces code
+suitable for executing the query on the target device.
+
+A `ResultSet` is returned by the execution and is converted
+to the corresponding `TResultSet` Thrift type before returning.
+
+The sections following provide in-depth details on each of the
+stages involved in executing a query.
+
+.. _Thrift: https://thrift.apache.org/
+.. _Calcite: https://calcite.apache.org/
+.. _Bison: https://www.gnu.org/software/bison/
 
 Simple Execution Model
 ======================
