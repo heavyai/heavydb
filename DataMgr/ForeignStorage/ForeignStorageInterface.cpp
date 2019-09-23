@@ -138,6 +138,7 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     auto file_buffer = getBuffer(key, numBytes);
     file_buffer->read(destBuffer->getMemoryPtr(), numBytes);
     destBuffer->setSize(numBytes);
+    destBuffer->syncEncoder(file_buffer);
   }
 
   void getChunkMetadataVecForKeyPrefix(
@@ -156,14 +157,9 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
                        chunk_it->first.begin() + keyPrefix.size(),
                        keyPrefix.begin(),
                        keyPrefix.end()) != chunk_it->first.begin() + keyPrefix.size()) {
-      if (chunk_it->second->has_encoder) {
-        ChunkMetadata chunkMetadata;
-        chunk_it->second->encoder->getMetadata(chunkMetadata);
-        chunkMetadataVec.push_back(std::make_pair(chunk_it->first, chunkMetadata));
-      } else {
-        const auto& chunk_key = chunk_it->first;
-        if(chunk_key.size() == 5) {
-          if(chunk_key[4] == 2) return;
+      const auto& chunk_key = chunk_it->first;
+      if (chunk_key.size() == 5) {
+        if (chunk_key[4] == 1) {
           const auto& buffer = *chunk_it->second.get();
           auto type = buffer.sql_type;
           auto size = buffer.size();
@@ -173,12 +169,15 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
           ChunkMetadata m{type, size, bs, ChunkStats{}};
           m.fillChunkStats(Datum{0}, Datum{0}, false);
           chunkMetadataVec.push_back(std::make_pair(chunk_key, m));
-        } else {
-          const auto& buffer = *chunk_it->second.get();
-          ChunkMetadata m{buffer.sql_type, buffer.size() * buffer.sql_type.get_size(), buffer.size(), ChunkStats{}};
-          m.fillChunkStats(Datum{0}, Datum{0}, false);
-          chunkMetadataVec.push_back(std::make_pair(chunk_key, m));
         }
+      } else {
+        const auto& buffer = *chunk_it->second.get();
+        ChunkMetadata m{buffer.sql_type,
+                        buffer.size() * buffer.sql_type.get_size(),
+                        buffer.size(),
+                        ChunkStats{}};
+        m.fillChunkStats(Datum{0}, Datum{0}, false);
+        chunkMetadataVec.push_back(std::make_pair(chunk_key, m));
       }
       chunk_it++;
     }
@@ -272,11 +271,11 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
 Data_Namespace::AbstractBufferMgr* ForeignStorageInterface::lookupBufferManager(
     const int db_id,
     const int table_id) {
+  static std::map<std::pair<int, int>, std::unique_ptr<Data_Namespace::AbstractBufferMgr>>
+      managers_map_;
 
-  static std::map<std::pair<int, int>, std::unique_ptr<Data_Namespace::AbstractBufferMgr>> managers_map_;
-  
   auto key = std::make_pair(db_id, table_id);
-  if(managers_map_.count(key))
+  if (managers_map_.count(key))
     return managers_map_[key].get();
 
   std::lock_guard<std::mutex> persistent_storage_interfaces_lock(
@@ -285,7 +284,8 @@ Data_Namespace::AbstractBufferMgr* ForeignStorageInterface::lookupBufferManager(
   if (it == table_persistent_storage_interface_map_.end()) {
     return nullptr;
   }
-  const auto it_ok = managers_map_.emplace(key, new ForeignStorageBufferMgr(db_id, table_id, it->second));
+  const auto it_ok = managers_map_.emplace(
+      key, new ForeignStorageBufferMgr(db_id, table_id, it->second));
   CHECK(it_ok.second);
   return it_ok.first->second.get();
 }
@@ -299,19 +299,23 @@ void ForeignStorageInterface::registerPersistentStorageInterface(
   CHECK(it_ok.second);
 }
 
-std::pair<std::string, std::string> parseStorageType(const std::string &type) {
-  size_t sep = type.find_first_of(':'), sep2 = sep != std::string::npos? sep+1 : sep;
+std::pair<std::string, std::string> parseStorageType(const std::string& type) {
+  size_t sep = type.find_first_of(':'), sep2 = sep != std::string::npos ? sep + 1 : sep;
   auto res = std::make_pair(type.substr(0, sep), type.substr(sep2));
-  auto &type_info = res.second;
-  std::transform(type_info.begin(), type_info.end(), type_info.begin(),
-                [](unsigned char c){ return std::tolower(c); }); // TODO: get original unmodified case
+  auto& type_info = res.second;
+  std::transform(
+      type_info.begin(), type_info.end(), type_info.begin(), [](unsigned char c) {
+        return std::tolower(c);
+      });  // TODO: get original unmodified case
   return res;
 }
 
-void ForeignStorageInterface::prepareTable(const int db_id, TableDescriptor& td, std::list<ColumnDescriptor>& cols) {
+void ForeignStorageInterface::prepareTable(const int db_id,
+                                           TableDescriptor& td,
+                                           std::list<ColumnDescriptor>& cols) {
   auto type = parseStorageType(td.storageType);
   std::unique_lock<std::mutex> persistent_storage_interfaces_lock(
-    persistent_storage_interfaces_mutex_);
+      persistent_storage_interfaces_mutex_);
   const auto it = persistent_storage_interfaces_.find(type.first);
   CHECK(it != persistent_storage_interfaces_.end());
   auto p = it->second.get();
@@ -326,15 +330,15 @@ void ForeignStorageInterface::registerTable(const int db_id,
   auto type = parseStorageType(td.storageType);
 
   std::unique_lock<std::mutex> persistent_storage_interfaces_lock(
-    persistent_storage_interfaces_mutex_);
+      persistent_storage_interfaces_mutex_);
   const auto it = persistent_storage_interfaces_.find(type.first);
   CHECK(it != persistent_storage_interfaces_.end());
   const auto it_ok = table_persistent_storage_interface_map_.emplace(
       std::make_pair(db_id, table_id), it->second.get());
   CHECK(it_ok.second);
   persistent_storage_interfaces_lock.unlock();
-  it_ok.first->second->registerTable(it_ok.first->first, type.second,
-                                     td, cols, lookupBufferManager(db_id, table_id));
+  it_ok.first->second->registerTable(
+      it_ok.first->first, type.second, td, cols, lookupBufferManager(db_id, table_id));
 }
 
 std::unordered_map<std::string, std::unique_ptr<PersistentForeignStorageInterface>>

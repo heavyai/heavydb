@@ -30,12 +30,13 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
   if(sql_type.get_type() == kTEXT) {
     // ONLY FOR NONE ENCODED STRINGS
     if(chunk_key[4] == 1) {
-      bp = array_data->buffers[3];
-    } else {
       bp = array_data->buffers[2];
+    } else {
+      bp = array_data->buffers[1];
     }
+  } else {
+    bp = array_data->buffers[1];
   }
-  bp = array_data->buffers[1];
   std::memcpy(dest, bp->data(), bp->size());
   CHECK_EQ(numBytes, (size_t)bp->size());
 }
@@ -90,7 +91,7 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key, const 
             auto sz = c0f->data()->buffers[2]->size();
             b->setSize(sz);
             b->encoder = std::make_unique<StringNoneEncoder>(b);
-            b->has_encoder = false;
+            b->has_encoder = true;
             b->sql_type = c.columnType;
           }
           {
@@ -103,6 +104,7 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key, const 
           }
         } else {
           auto &b = *mgr->createBuffer(key);
+          b.sql_type = SQLTypeInfo(kBIGINT, false);
           auto sz = c0f->length();
           b.setSize(sz);
         }
