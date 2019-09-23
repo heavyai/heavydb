@@ -104,7 +104,7 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key, const 
           }
         } else {
           auto &b = *mgr->createBuffer(key);
-          b.sql_type = SQLTypeInfo(kBIGINT, false);
+          b.sql_type = c.columnType;
           auto sz = c0f->length();
           b.setSize(sz);
         }
