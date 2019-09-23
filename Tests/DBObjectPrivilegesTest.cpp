@@ -1105,7 +1105,7 @@ TEST_F(ViewObject, CalciteViewResolution) {
   auto query_state1 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_table");
   TPlanResult result = ::g_calcite->process(query_state1->createQueryStateProxy(),
-                                            query_state1->get_query_str(),
+                                            query_state1->getQueryStr(),
                                             {},
                                             true,
                                             false,
@@ -1124,7 +1124,7 @@ TEST_F(ViewObject, CalciteViewResolution) {
   auto query_state2 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_view");
   result = ::g_calcite->process(query_state2->createQueryStateProxy(),
-                                query_state2->get_query_str(),
+                                query_state2->getQueryStr(),
                                 {},
                                 true,
                                 false,
@@ -1143,7 +1143,7 @@ TEST_F(ViewObject, CalciteViewResolution) {
   auto query_state3 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_view_outer");
   result = ::g_calcite->process(query_state3->createQueryStateProxy(),
-                                query_state3->get_query_str(),
+                                query_state3->getQueryStr(),
                                 {},
                                 true,
                                 false,

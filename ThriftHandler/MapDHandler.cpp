@@ -801,7 +801,7 @@ void MapDHandler::sql_execute(TQueryResult& _return,
       try {
         agg_handler_->cluster_execute(_return,
                                       query_state->createQueryStateProxy(),
-                                      query_state->get_query_str(),
+                                      query_state->getQueryStr(),
                                       column_format,
                                       nonce,
                                       first_n,
@@ -1177,7 +1177,7 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                    QueryStateProxy query_state_proxy) {
   try {
     const auto query_ra = parse_to_ra(query_state_proxy,
-                                      query_state_proxy.getQueryState().get_query_str(),
+                                      query_state_proxy.getQueryState().getQueryStr(),
                                       {},
                                       boost::none,
                                       mapd_parameters_);
@@ -1695,7 +1695,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
         auto query_state = create_query_state(session_copy, td->viewSQL);
         stdlog.setQueryState(query_state);
         const auto query_ra = parse_to_ra(query_state->createQueryStateProxy(),
-                                          query_state->get_query_str(),
+                                          query_state->getQueryStr(),
                                           {},
                                           boost::none,
                                           mapd_parameters_);
@@ -4784,7 +4784,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
 
   _return.nonce = nonce;
   _return.execution_time_ms = 0;
-  auto const& query_str = query_state_proxy.getQueryState().get_query_str();
+  auto const& query_str = query_state_proxy.getQueryState().getQueryStr();
   auto session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
   // Call to DistributedValidate() below may change cat.
   auto& cat = session_ptr->getCatalog();
@@ -5192,7 +5192,7 @@ void MapDHandler::execute_rel_alg_with_filter_push_down(
   // deriving the new relational algebra plan with respect to the pushed down filters
   _return.execution_time_ms += measure<>::execution([&]() {
     query_ra = parse_to_ra(query_state_proxy,
-                           query_state_proxy.getQueryState().get_query_str(),
+                           query_state_proxy.getQueryState().getQueryStr(),
                            filter_push_down_info,
                            boost::none,
                            mapd_parameters_);

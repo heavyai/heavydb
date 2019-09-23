@@ -144,15 +144,15 @@ class QueryState : public std::enable_shared_from_this<QueryState> {
   QueryStateProxy createQueryStateProxy();
   QueryStateProxy createQueryStateProxy(Events::iterator parent);
   Timer createTimer(char const* event_name, Events::iterator parent);
-  inline bool empty_log() const { return events_.empty() && query_str_.empty(); }
-  inline Id get_id() const { return id_; }
-  inline std::string const& get_query_str() const { return query_str_; }
+  inline bool emptyLog() const { return events_.empty() && query_str_.empty(); }
+  inline Id getId() const { return id_; }
+  inline std::string const& getQueryStr() const { return query_str_; }
   // Will throw exception if session_data_.session_info.expired().
   std::shared_ptr<Catalog_Namespace::SessionInfo const> getConstSessionInfo() const;
-  SessionData const* get_session_data() const;
-  inline bool is_logged() const { return logged_.load(); }
+  boost::optional<SessionData> const& getSessionData() const { return session_data_; }
+  inline bool isLogged() const { return logged_.load(); }
   void logCallStack(std::stringstream&);
-  inline void set_logged(bool logged) { logged_.store(logged); }
+  inline void setLogged(bool logged) { logged_.store(logged); }
   friend class QueryStates;
 };
 
@@ -182,7 +182,7 @@ class QueryStates {
   CircleBuffer::value_type create(ARGS&&... args) {
     std::lock_guard<std::mutex> lock(circle_mutex_);
     /* Logic for ensuring QueryState objects are logged before deleting them.
-        if (circle_buffer_.full() && !circle_buffer_.front()->is_logged()) {
+        if (circle_buffer_.full() && !circle_buffer_.front()->isLogged()) {
           constexpr size_t MAX_SIZE_BEFORE_OVERWRITE = 128;
           if (circle_buffer_.size() < MAX_SIZE_BEFORE_OVERWRITE) {
             circle_buffer_.set_capacity(2 * circle_buffer_.capacity());

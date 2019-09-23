@@ -370,7 +370,7 @@ ExecutionResult run_select_query_with_filter_push_down(
   auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra = calcite_mgr
                             ->process(query_state_proxy,
-                                      pg_shim(query_state.get_query_str()),
+                                      pg_shim(query_state.getQueryStr()),
                                       {},
                                       true,
                                       false,
@@ -391,7 +391,7 @@ ExecutionResult run_select_query_with_filter_push_down(
     }
     const auto new_query_ra = calcite_mgr
                                   ->process(query_state_proxy,
-                                            pg_shim(query_state.get_query_str()),
+                                            pg_shim(query_state.getQueryStr()),
                                             filter_push_down_info,
                                             true,
                                             false,
