@@ -1151,7 +1151,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
   llvm::Value* key_size_lv = nullptr;
 
   if (!query_mem_desc.isSingleColumnGroupByWithPerfectHash()) {
-    key_size_lv = LL_INT(static_cast<int32_t>(query_mem_desc.groupColWidthsSize()));
+    key_size_lv = LL_INT(static_cast<int32_t>(query_mem_desc.getGroupbyColCount()));
     if (query_mem_desc.getQueryDescriptionType() ==
         QueryDescriptionType::GroupByPerfectHash) {
       group_key =

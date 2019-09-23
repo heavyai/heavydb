@@ -201,6 +201,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.BiPredicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -968,6 +969,9 @@ public class SqlToRelConverter {
     final RelNode rel;
     final SqlNode query;
     final RelOptUtil.Exists converted;
+
+    boolean isExpand = config.getExpandPredicate().test(bb.getTopNode(), subQuery.node);
+
     switch (subQuery.node.getKind()) {
       case CURSOR:
         convertCursor(bb, subQuery);
@@ -986,7 +990,7 @@ public class SqlToRelConverter {
       case ALL:
         call = (SqlBasicCall) subQuery.node;
         query = call.operand(1);
-        if (!config.isExpand() && !(query instanceof SqlNodeList)) {
+        if (!isExpand && !(query instanceof SqlNodeList)) {
           return;
         }
         final SqlNode leftKeyNode = call.operand(0);
@@ -1111,7 +1115,7 @@ public class SqlToRelConverter {
         // boolean indicating whether the sub-query returned 0 or >= 1 row.
         call = (SqlBasicCall) subQuery.node;
         query = call.operand(0);
-        if (!config.isExpand()) {
+        if (!isExpand) {
           return;
         }
         final SqlValidatorScope seekScope = (query instanceof SqlSelect)
@@ -1143,7 +1147,7 @@ public class SqlToRelConverter {
       case SCALAR_QUERY:
         // Convert the sub-query.  If it's non-correlated, convert it
         // to a constant expression.
-        if (!config.isExpand()) {
+        if (!isExpand) {
           return;
         }
         call = (SqlBasicCall) subQuery.node;
@@ -3907,6 +3911,17 @@ public class SqlToRelConverter {
       this.top = top;
     }
 
+    public SqlNode getTopNode() {
+      try {
+        if (null == scope) {
+          return null;
+        }
+        return scope.getNode();
+      } catch (Exception e) {
+        return null;
+      }
+    }
+
     public void setPatternVarRef(boolean isVarRef) {
       this.isPatternVarRef = isVarRef;
     }
@@ -4230,7 +4245,9 @@ public class SqlToRelConverter {
       // expressions.
       final SqlKind kind = expr.getKind();
       final SubQuery subQuery;
-      if (!config.isExpand()) {
+
+      boolean isExpand = config.getExpandPredicate().test(getTopNode(), expr);
+      if (!isExpand) {
         final SqlCall call;
         final SqlNode query;
         final RelRoot root;
@@ -4300,7 +4317,7 @@ public class SqlToRelConverter {
       switch (kind) {
         case SOME:
         case ALL:
-          if (config.isExpand()) {
+          if (isExpand) {
             throw new RuntimeException(kind + " is only supported if expand = false");
           }
           // fall through
@@ -5300,6 +5317,14 @@ public class SqlToRelConverter {
     boolean isExpand();
 
     /**
+     *  predicate used to determine if a sql node should be expanded.
+     *  (assuming expansion is supported for that node)
+     *  <p>
+     *  Per default returns the vaule of {@link #isExpand()} on all nodes
+     */
+    BiPredicate<SqlNode, SqlNode> getExpandPredicate();
+
+    /**
      * Returns the {@code inSubQueryThreshold} option,
      * default {@link #DEFAULT_IN_SUB_QUERY_THRESHOLD}. Controls the list size
      * threshold under which {@link #convertInToOr} is used. Lists of this size
@@ -5328,6 +5353,7 @@ public class SqlToRelConverter {
     private boolean expand = true;
     private int inSubQueryThreshold = DEFAULT_IN_SUB_QUERY_THRESHOLD;
     private RelBuilderFactory relBuilderFactory = RelFactories.LOGICAL_BUILDER;
+    private BiPredicate<SqlNode, SqlNode> expandPredicate;
 
     private ConfigBuilder() {}
 
@@ -5341,6 +5367,9 @@ public class SqlToRelConverter {
       this.expand = config.isExpand();
       this.inSubQueryThreshold = config.getInSubQueryThreshold();
       this.relBuilderFactory = config.getRelBuilderFactory();
+      if (!(config.getExpandPredicate() instanceof ConfigImpl.DefaultExpandPredicate)) {
+        this.expandPredicate = config.getExpandPredicate();
+      }
       return this;
     }
 
@@ -5374,6 +5403,11 @@ public class SqlToRelConverter {
       return this;
     }
 
+    public ConfigBuilder withExpandPredicate(BiPredicate<SqlNode, SqlNode> predicate) {
+      this.expandPredicate = predicate;
+      return this;
+    }
+
     @Deprecated // to be removed before 2.0
     public ConfigBuilder withInSubqueryThreshold(int inSubQueryThreshold) {
       return withInSubQueryThreshold(inSubQueryThreshold);
@@ -5397,6 +5431,7 @@ public class SqlToRelConverter {
               createValuesRel,
               explain,
               expand,
+              expandPredicate,
               inSubQueryThreshold,
               relBuilderFactory);
     }
@@ -5413,8 +5448,16 @@ public class SqlToRelConverter {
     private final boolean createValuesRel;
     private final boolean explain;
     private final boolean expand;
+    private final BiPredicate<SqlNode, SqlNode> expandPredicate;
     private final int inSubQueryThreshold;
     private final RelBuilderFactory relBuilderFactory;
+
+    private class DefaultExpandPredicate implements BiPredicate<SqlNode, SqlNode> {
+      @Override
+      public boolean test(SqlNode t, SqlNode u) {
+        return expand;
+      }
+    }
 
     private ConfigImpl(boolean convertTableAccess,
             boolean decorrelationEnabled,
@@ -5422,6 +5465,7 @@ public class SqlToRelConverter {
             boolean createValuesRel,
             boolean explain,
             boolean expand,
+            BiPredicate<SqlNode, SqlNode> expandPredicate,
             int inSubQueryThreshold,
             RelBuilderFactory relBuilderFactory) {
       this.convertTableAccess = convertTableAccess;
@@ -5430,6 +5474,10 @@ public class SqlToRelConverter {
       this.createValuesRel = createValuesRel;
       this.explain = explain;
       this.expand = expand;
+      if (null == expandPredicate) {
+        expandPredicate = new DefaultExpandPredicate();
+      }
+      this.expandPredicate = expandPredicate;
       this.inSubQueryThreshold = inSubQueryThreshold;
       this.relBuilderFactory = relBuilderFactory;
     }
@@ -5464,6 +5512,10 @@ public class SqlToRelConverter {
 
     public RelBuilderFactory getRelBuilderFactory() {
       return relBuilderFactory;
+    }
+
+    public BiPredicate<SqlNode, SqlNode> getExpandPredicate() {
+      return expandPredicate;
     }
   }
 }

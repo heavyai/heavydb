@@ -34,7 +34,7 @@ class MapDAggHandler {
   MapDAggHandler(MapDHandler* mapd_handler) { CHECK(false); }
 
   void cluster_execute(TQueryResult& _return,
-                       const Catalog_Namespace::SessionInfo& session_info,
+                       QueryStateProxy,
                        const std::string& query_str,
                        const bool column_format,
                        const std::string& nonce,
@@ -66,7 +66,7 @@ class MapDLeafHandler {
     CHECK(false);
   }
 
-  void execute_first_step(TStepResult& _return, const TPendingQuery& pending_query) {
+  void execute_query_step(TStepResult& _return, const TPendingQuery& pending_query) {
     CHECK(false);
   }
 

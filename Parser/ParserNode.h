@@ -33,12 +33,19 @@
 #include "../Distributed/AggregatedResult.h"
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
+#include "ThriftHandler/QueryState.h"
 
 #include "../Fragmenter/InsertDataLoader.h"
 
 #include <Import/Importer.h>
 
 #include <functional>
+
+namespace query_state {
+class QueryState;
+class QueryStateProxy;
+}  // namespace query_state
+using query_state::QueryStateProxy;
 
 namespace Parser {
 
@@ -1007,12 +1014,8 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
     delete select_query;
   }
 
-  void populateData(const Catalog_Namespace::SessionInfo& session,
-                    bool is_temporary,
-                    bool validate_table);
-  void execute(const Catalog_Namespace::SessionInfo& session) override {
-    populateData(session, false, true);
-  }
+  void populateData(QueryStateProxy, bool is_temporary, bool validate_table);
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
 
   std::string& get_table() { return table_name_; }
 
@@ -1020,9 +1023,7 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
 
   struct DistributedConnector
       : public Fragmenter_Namespace::InsertDataLoader::DistributedConnector {
-    virtual AggregatedResult query(
-        const Catalog_Namespace::SessionInfo& parent_session_info,
-        std::string& sql_query_string) = 0;
+    virtual AggregatedResult query(QueryStateProxy, std::string& sql_query_string) = 0;
     virtual void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
                             int tableId) = 0;
     virtual void rollback(const Catalog_Namespace::SessionInfo& parent_session_info,
@@ -1031,13 +1032,10 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
 
   struct LocalConnector : public DistributedConnector {
     virtual ~LocalConnector() {}
-    AggregatedResult query(const Catalog_Namespace::SessionInfo& session,
+    AggregatedResult query(QueryStateProxy,
                            std::string& sql_query_string,
                            bool validate_only);
-    AggregatedResult query(const Catalog_Namespace::SessionInfo& session,
-                           std::string& sql_query_string) override {
-      return query(session, sql_query_string, false);
-    }
+    AggregatedResult query(QueryStateProxy, std::string& sql_query_string) override;
     size_t leafCount() override { return 1; };
     void insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
                           const size_t leaf_idx,

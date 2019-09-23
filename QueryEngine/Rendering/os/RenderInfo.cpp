@@ -33,6 +33,12 @@ const Catalog_Namespace::SessionInfo& RenderInfo::getSessionInfo() const {
   return tmp;
 }
 
+std::shared_ptr<Catalog_Namespace::SessionInfo const> RenderInfo::getSessionInfoPtr()
+    const {
+  UNREACHABLE();
+  return {};
+}
+
 void RenderInfo::setForceNonInSituData() {
   CHECK(false);
 }

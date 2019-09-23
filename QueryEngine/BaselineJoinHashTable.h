@@ -42,13 +42,26 @@ class Executor;
 // now, such tuples must be unique within the inner table.
 class BaselineJoinHashTable : public JoinHashTableInterface {
  public:
+  //! Make hash table from an in-flight SQL query's parse tree etc.
   static std::shared_ptr<BaselineJoinHashTable> getInstance(
       const std::shared_ptr<Analyzer::BinOper> condition,
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
       const HashType preferred_hash_type,
       const int device_count,
-      ColumnCacheMap& column_map,
+      ColumnCacheMap& column_cache,
+      Executor* executor);
+
+  //! Make hash table from named tables and columns (such as for testing).
+  static std::shared_ptr<BaselineJoinHashTable> getSyntheticInstance(
+      std::string_view table1,
+      std::string_view column1,
+      std::string_view table2,
+      std::string_view column2,
+      const Data_Namespace::MemoryLevel memory_level,
+      const HashType preferred_hash_type,
+      const int device_count,
+      ColumnCacheMap& column_cache,
       Executor* executor);
 
   static size_t getShardCountForCondition(
@@ -57,7 +70,18 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
       const std::vector<InnerOuter>& inner_outer_pairs);
 
   int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
-                            const int device_id) noexcept override;
+                            const int device_id) const noexcept override;
+
+  size_t getJoinHashBufferSize(const ExecutorDeviceType device_type,
+                               const int device_id) const noexcept override;
+
+  std::string toString(const ExecutorDeviceType device_type,
+                       const int device_id,
+                       bool raw = false) const noexcept override;
+
+  std::set<DecodedJoinHashBufferEntry> decodeJoinHashBuffer(
+      const ExecutorDeviceType device_type,
+      const int device_id) const noexcept override;
 
   llvm::Value* codegenSlot(const CompilationOptions&, const size_t) override;
 
@@ -94,7 +118,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
                         const Data_Namespace::MemoryLevel memory_level,
                         const HashType preferred_hash_type,
                         const size_t entry_count,
-                        ColumnCacheMap& column_map,
+                        ColumnCacheMap& column_cache,
                         Executor* executor,
                         const std::vector<InnerOuter>& inner_outer_pairs);
 

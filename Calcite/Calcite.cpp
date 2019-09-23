@@ -22,25 +22,27 @@
  */
 
 #include "Calcite.h"
-#include <thread>
-#include <utility>
 #include "Catalog/Catalog.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/Logger.h"
+#include "Shared/MapDParameters.h"
 #include "Shared/ThriftClient.h"
+#include "Shared/fixautotools.h"
 #include "Shared/mapd_shared_ptr.h"
 #include "Shared/mapdpath.h"
 #include "Shared/measure.h"
-
-#include "Shared/fixautotools.h"
+#include "ThriftHandler/QueryState.h"
 
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TTransportUtils.h>
-
-#include "Shared/fixautotools.h"
+#include <type_traits>
 
 #include "gen-cpp/CalciteServer.h"
+
+#include "rapidjson/document.h"
+
+#include <utility>
 
 using namespace rapidjson;
 using namespace apache::thrift;
@@ -190,6 +192,12 @@ Calcite::getClient(int port) {
   return std::make_pair(client, transport);
 }
 
+void Calcite::checkAndSetCatalog(
+    const std::shared_ptr<Catalog_Namespace::SessionInfo const>& session_ptr) {
+  CHECK(calcite_session_ptr_);
+  calcite_session_ptr_->set_catalog_ptr(session_ptr->get_catalog_ptr());
+}
+
 void Calcite::runServer(const int mapd_port,
                         const int port,
                         const std::string& data_dir,
@@ -267,9 +275,8 @@ Calcite::Calcite(const int mapd_port,
                  const int calcite_port,
                  const std::string& data_dir,
                  const size_t calcite_max_mem,
-                 const std::string& session_prefix,
                  const std::string& udf_filename)
-    : server_available_(false), session_prefix_(session_prefix) {
+    : server_available_(false) {
   init(mapd_port, calcite_port, data_dir, calcite_max_mem, udf_filename);
 }
 
@@ -297,15 +304,13 @@ void Calcite::init(const int mapd_port,
 
 Calcite::Calcite(const MapDParameters& mapd_parameter,
                  const std::string& data_dir,
-                 const std::string& session_prefix,
                  const std::string& udf_filename)
     : ssl_trust_store_(mapd_parameter.ssl_trust_store)
     , ssl_trust_password_(mapd_parameter.ssl_trust_password)
     , ssl_key_file_(mapd_parameter.ssl_key_file)
     , ssl_keystore_(mapd_parameter.ssl_keystore)
     , ssl_keystore_password_(mapd_parameter.ssl_keystore_password)
-    , ssl_cert_file_(mapd_parameter.ssl_cert_file)
-    , session_prefix_(session_prefix) {
+    , ssl_cert_file_(mapd_parameter.ssl_cert_file) {
   init(mapd_parameter.omnisci_server_port,
        mapd_parameter.calcite_port,
        data_dir,
@@ -363,14 +368,14 @@ void checkPermissionForTables(const Catalog_Namespace::SessionInfo& session_info
 }
 
 TPlanResult Calcite::process(
-    const Catalog_Namespace::SessionInfo& session_info,
-    const std::string sql_string,
+    query_state::QueryStateProxy query_state_proxy,
+    std::string sql_string,
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
     const bool is_explain,
     const bool is_view_optimize) {
-  TPlanResult result = processImpl(session_info,
-                                   sql_string,
+  TPlanResult result = processImpl(query_state_proxy,
+                                   std::move(sql_string),
                                    filter_push_down_info,
                                    legacy_syntax,
                                    is_explain,
@@ -380,19 +385,20 @@ TPlanResult Calcite::process(
 
   if (!is_explain) {
     // check the individual tables
-    checkPermissionForTables(session_info,
+    auto const session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
+    checkPermissionForTables(*session_ptr,
                              result.primary_accessed_objects.tables_selected_from,
                              AccessPrivileges::SELECT_FROM_TABLE,
                              AccessPrivileges::SELECT_FROM_VIEW);
-    checkPermissionForTables(session_info,
+    checkPermissionForTables(*session_ptr,
                              result.primary_accessed_objects.tables_inserted_into,
                              AccessPrivileges::INSERT_INTO_TABLE,
                              NOOP);
-    checkPermissionForTables(session_info,
+    checkPermissionForTables(*session_ptr,
                              result.primary_accessed_objects.tables_updated_in,
                              AccessPrivileges::UPDATE_IN_TABLE,
                              NOOP);
-    checkPermissionForTables(session_info,
+    checkPermissionForTables(*session_ptr,
                              result.primary_accessed_objects.tables_deleted_from,
                              AccessPrivileges::DELETE_FROM_TABLE,
                              NOOP);
@@ -437,21 +443,17 @@ std::vector<std::string> Calcite::get_db_objects(const std::string ra) {
 }
 
 TPlanResult Calcite::processImpl(
-    const Catalog_Namespace::SessionInfo& session_info,
+    query_state::QueryStateProxy query_state_proxy,
     const std::string sql_string,
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
     const bool is_explain,
     const bool is_view_optimize) {
-  auto& cat = session_info.getCatalog();
-  std::string user = session_info.get_currentUser().userName;
-  std::string session = session_info.get_session_id();
-  if (!session_prefix_.empty()) {
-    // preprend session prefix, if present
-    session = session_prefix_ + "/" + session;
-  }
-  std::string catalog = cat.getCurrentDB().dbName;
-
+  query_state::Timer timer = query_state_proxy.createTimer(__func__);
+  checkAndSetCatalog(query_state_proxy.getQueryState().getConstSessionInfo());
+  const auto& cat = calcite_session_ptr_->getCatalog();
+  const std::string user = calcite_session_ptr_->get_currentUser().userName;
+  const std::string catalog = cat.getCurrentDB().dbName;
   LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";
   LOG(IR) << "SQL query\n" << sql_string << "\nEnd of SQL query";
   LOG(PTX) << "SQL query\n" << sql_string << "\nEnd of SQL query";
@@ -463,7 +465,7 @@ TPlanResult Calcite::processImpl(
         auto clientP = getClient(remote_calcite_port_);
         clientP.first->process(ret,
                                user,
-                               session,
+                               calcite_session_ptr_->get_session_id(),
                                catalog,
                                sql_string,
                                filter_push_down_info,

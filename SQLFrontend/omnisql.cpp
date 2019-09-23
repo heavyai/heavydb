@@ -1159,10 +1159,10 @@ int main(int argc, char** argv) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;
   }
-
   if (!vm.count("passwd")) {
     passwd = mapd_getpass();
   }
+
   mapd::shared_ptr<ThriftClientConnection> connMgr;
   connMgr = std::make_shared<ThriftClientConnection>();
   mapd::shared_ptr<TTransport> transport;
@@ -1196,7 +1196,6 @@ int main(int argc, char** argv) {
     std::cout << "Failed to open transport. Is omnisci_server running?" << std::endl;
     return 1;
   }
-
   if (thrift_with_retry(kCONNECT, context, nullptr)) {
     if (print_connection) {
       std::cout << "User " << context.user_name << " connected to database "

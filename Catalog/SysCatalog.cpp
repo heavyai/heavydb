@@ -1133,6 +1133,7 @@ bool SysCatalog::checkPasswordForUserImpl(const std::string& passwd,
 }
 
 bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
+  LOG(INFO) << "getMetadataForUser " << name;
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
       "SELECT userid, name, passwd_hash, issuper, default_db FROM mapd_users WHERE name "
@@ -1146,7 +1147,6 @@ bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
   user.userName = sqliteConnector_->getData<string>(0, 1);
   user.passwd_hash = sqliteConnector_->getData<string>(0, 2);
   user.isSuper = sqliteConnector_->getData<bool>(0, 3);
-  user.isReallySuper = user.isSuper;
   user.defaultDbId =
       sqliteConnector_->isNull(0, 4) ? -1 : sqliteConnector_->getData<int>(0, 4);
   return true;
@@ -1166,7 +1166,6 @@ bool SysCatalog::getMetadataForUserById(const int32_t idIn, UserMetadata& user) 
   user.userName = sqliteConnector_->getData<string>(0, 1);
   user.passwd_hash = sqliteConnector_->getData<string>(0, 2);
   user.isSuper = sqliteConnector_->getData<bool>(0, 3);
-  user.isReallySuper = user.isSuper;
   user.defaultDbId =
       sqliteConnector_->isNull(0, 4) ? -1 : sqliteConnector_->getData<int>(0, 4);
   return true;
@@ -1629,7 +1628,7 @@ void SysCatalog::grantRole_unsafe(const std::string& roleName,
     sys_sqlite_lock sqlite_lock(this);
     sqliteConnector_->query_with_text_params(
         "INSERT INTO mapd_roles(roleName, userName) VALUES (?, ?)",
-        std::vector<std::string>{roleName, granteeName});
+        std::vector<std::string>{rl->getName(), grantee->getName()});
   }
 }
 
@@ -1660,7 +1659,7 @@ void SysCatalog::revokeRole_unsafe(const std::string& roleName,
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_params(
       "DELETE FROM mapd_roles WHERE roleName = ? AND userName = ?",
-      std::vector<std::string>{roleName, granteeName});
+      std::vector<std::string>{rl->getName(), grantee->getName()});
 }
 
 // Update or add element in ObjectRoleDescriptorMap
@@ -1849,15 +1848,19 @@ bool SysCatalog::isRoleGrantedToGrantee(const std::string& granteeName,
   if (roleName == granteeName) {
     return true;
   }
-  bool rc = false;
-  auto* user_rl = instance().getUserGrantee(granteeName);
-  if (user_rl) {
-    auto* rl = instance().getRoleGrantee(roleName);
-    if (rl && user_rl->hasRole(rl, only_direct)) {
-      rc = true;
-    }
+  bool is_role_granted = false;
+  auto* target_role = instance().getRoleGrantee(roleName);
+  auto has_role = [&](auto grantee_rl) {
+    is_role_granted = target_role && grantee_rl->hasRole(target_role, only_direct);
+  };
+  if (auto* user_role = instance().getUserGrantee(granteeName); user_role) {
+    has_role(user_role);
+  } else if (auto* role = instance().getRoleGrantee(granteeName); role) {
+    has_role(role);
+  } else {
+    CHECK(false);
   }
-  return rc;
+  return is_role_granted;
 }
 
 bool SysCatalog::isDashboardSystemRole(const std::string& roleName) {
@@ -2148,12 +2151,12 @@ void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
   if (user_rl) {
     current_roles = user_rl->getRoles();
   }
+  std::for_each(current_roles.begin(), current_roles.end(), to_upper);
+  std::for_each(roles.begin(), roles.end(), to_upper);
   // first remove obsolete ones
   for (auto& current_role_name : current_roles) {
-    if (current_role_name != user_name) {
-      if (std::find(roles.begin(), roles.end(), current_role_name) == roles.end()) {
-        revokeRole(current_role_name, user_name);
-      }
+    if (std::find(roles.begin(), roles.end(), current_role_name) == roles.end()) {
+      revokeRole(current_role_name, user_name);
     }
   }
   // now re-add them

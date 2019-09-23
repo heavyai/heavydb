@@ -88,6 +88,7 @@ extern size_t g_big_group_threshold;
 extern bool g_enable_window_functions;
 extern size_t g_max_memory_allocation_size;
 extern double g_bump_allocator_step_reduction;
+extern bool g_enable_direct_columnarization;
 
 class QueryCompilationDescriptor;
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
@@ -453,6 +454,7 @@ class Executor {
                                                       int) const;
 
   const Catalog_Namespace::Catalog* getCatalog() const;
+  void setCatalog(const Catalog_Namespace::Catalog* catalog);
 
   const std::shared_ptr<RowSetMemoryOwner> getRowSetMemoryOwner() const;
 
@@ -771,7 +773,7 @@ class Executor {
                              CodeCache&);
 
  private:
-  static ResultSetPtr resultsUnion(ExecutionDispatch& execution_dispatch);
+  ResultSetPtr resultsUnion(ExecutionDispatch& execution_dispatch);
   std::vector<int64_t> getJoinHashTablePtrs(const ExecutorDeviceType device_type,
                                             const int device_id);
   ResultSetPtr reduceMultiDeviceResults(
@@ -938,6 +940,17 @@ class Executor {
       const std::vector<uint64_t>& frag_offsets,
       const size_t frag_idx);
 
+  AggregatedColRange computeColRangesCache(
+      const std::unordered_set<PhysicalInput>& phys_inputs);
+  StringDictionaryGenerations computeStringDictionaryGenerations(
+      const std::unordered_set<PhysicalInput>& phys_inputs);
+  TableGenerations computeTableGenerations(std::unordered_set<int> phys_table_ids);
+
+ public:
+  void setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
+                    const std::unordered_set<int>& phys_table_ids);
+
+ private:
   std::vector<std::pair<void*, void*>> getCodeFromCache(const CodeCacheKey&,
                                                         const CodeCache&);
 

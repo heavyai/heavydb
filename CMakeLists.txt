@@ -71,6 +71,12 @@ if(PREFER_STATIC_LIBS)
   endif()
 
   set(CUDA_USE_STATIC_CUDA_RUNTIME ON CACHE STRING "Use static CUDA runtime")
+
+  # On ppc, build failures occur for targets that depend on locale related functions due to unresolved symbols that are
+  # present in the stdc++ library. Add the library flag to these targets to be used in resolving these symbols.
+  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "ppc64le")
+    set(LOCALE_LINK_FLAG "-lstdc++")
+  endif()
 else()
   add_definitions("-DBOOST_LOG_DYN_LINK")
 endif()
@@ -181,7 +187,7 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 if(APPLE OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
     AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 3.6 OR CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL 3.6))
     OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 4.9))
-  find_package( Boost COMPONENTS log log_setup filesystem program_options regex system thread timer REQUIRED )
+  find_package( Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale REQUIRED )
 else()
   message(FATAL_ERROR, "GCC v4.9 or clang v3.6 (or newer) is required")
 endif()
@@ -247,7 +253,7 @@ endif()
 
 option(ENABLE_DECODERS_BOUNDS_CHECKING "Enable bounds checking for column decoding" OFF)
 
-option(ENABLE_REDUCTION_JIT "Enable JIT for result set reduction" OFF)
+option(ENABLE_REDUCTION_JIT "Enable JIT for result set reduction" ON)
 if( ENABLE_REDUCTION_JIT )
   add_definitions("-DWITH_REDUCTION_JIT")
 endif()
@@ -477,10 +483,13 @@ if(ENABLE_ODBC)
   add_subdirectory(ODBC)
 endif()
 
-set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner CsvImport QueryRunner QueryEngine LockMgr DataMgr Fragmenter Chunk)
+set(MAPD_LIBRARIES Shared Catalog SqliteConnector Parser Analyzer Planner CsvImport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter Chunk)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND MAPD_LIBRARIES Distributed)
+  if(ENABLE_DISTRIBUTED_5_0)
+    list(APPEND MAPD_LIBRARIES StringDictionaryThread)
+  endif()
 endif()
 
 list(APPEND MAPD_LIBRARIES Calcite)
@@ -578,7 +587,7 @@ add_custom_target(rerun_cmake ALL
   )
 add_dependencies(omnisci_server rerun_cmake)
 
-target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
+target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
 
 target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
 
@@ -840,3 +849,12 @@ set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${MAPD_EDITION_LOWER}-${CPACK
 set(CPACK_GENERATOR "STGZ")
 
 include(CPack)
+
+add_custom_target(sphinx
+  COMMAND python3 -m venv sphinx-env
+  COMMAND . sphinx-env/bin/activate
+  COMMAND pip install -r requirements.txt
+  COMMAND rm -rf build
+  COMMAND make html
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/docs
+  )

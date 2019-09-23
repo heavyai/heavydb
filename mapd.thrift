@@ -93,7 +93,13 @@ struct TStringRow {
 typedef list<TColumnType> TRowDescriptor
 typedef map<string, TColumnType> TTableDescriptor
 typedef string TSessionId
+typedef string TKrb5Token
 typedef i64 TQueryId
+
+struct TKrb5Session {
+  1: TSessionId sessionId
+  2: TKrb5Token krbToken
+}
 
 enum TMergeType {
   UNION,
@@ -479,6 +485,7 @@ struct TGeoFileLayerInfo {
 service MapD {
   # connection, admin
   TSessionId connect(1: string user, 2: string passwd, 3: string dbname) throws (1: TMapDException e)
+  TKrb5Session krb5_connect(1: string inputToken, 2: string dbname) throws (1: TMapDException e)
   void disconnect(1: TSessionId session) throws (1: TMapDException e)
   void switch_database(1: TSessionId session, 2: string dbname) throws(1: TMapDException e)
   TServerStatus get_server_status(1: TSessionId session) throws (1: TMapDException e)
@@ -543,7 +550,7 @@ service MapD {
   # distributed
   TTableMeta check_table_consistency(1: TSessionId session, 2: i32 table_id) throws (1: TMapDException e)
   TPendingQuery start_query(1: TSessionId session, 2: string query_ra, 3: bool just_explain) throws (1: TMapDException e)
-  TStepResult execute_first_step(1: TPendingQuery pending_query) throws (1: TMapDException e)
+  TStepResult execute_query_step(1: TPendingQuery pending_query) throws (1: TMapDException e)
   void broadcast_serialized_rows(1: serialized_result_set.TSerializedRows serialized_rows, 2: TRowDescriptor row_desc, 3: TQueryId query_id) throws (1: TMapDException e)
   TPendingRenderQuery start_render_query(1: TSessionId session, 2: i64 widget_id, 3: i16 node_idx, 4: string vega_json) throws (1: TMapDException e)
   TRenderStepResult execute_next_render_step(1: TPendingRenderQuery pending_render, 2: TRenderAggDataMap merged_data) throws (1: TMapDException e)
@@ -554,6 +561,7 @@ service MapD {
   list<TDBObject> get_db_objects_for_grantee(1: TSessionId session 2: string roleName) throws (1: TMapDException e)
   list<TDBObject> get_db_object_privs(1: TSessionId session 2: string objectName 3: TDBObjectType type) throws (1: TMapDException e)
   list<string> get_all_roles_for_user(1: TSessionId session 2: string userName) throws (1: TMapDException e)
+  bool has_role(1: TSessionId session 2: string granteeName 3: string roleName) throws (1: TMapDException e)
   bool has_object_privilege(1: TSessionId session 2: string granteeName 3: string ObjectName 4: TDBObjectType objectType 5: TDBObjectPermissions permissions) throws (1: TMapDException e)
   # licensing
   TLicenseInfo set_license_key(1: TSessionId session, 2: string key, 3: string nonce = "") throws (1: TMapDException e)

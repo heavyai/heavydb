@@ -15,9 +15,13 @@
  */
 
 #include "../../Shared/DateConverters.h"
+#include "../../Shared/TimeGM.h"
 #include "Tests/TestHelpers.h"
 
 #include <gtest/gtest.h>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace {
 
@@ -54,6 +58,34 @@ TEST(DATE, EpochDaysToSecondsTest) {
   }
   compare_epoch(computed, sample.expected_seconds);
 }
+
+#ifndef __APPLE__
+TEST(TIME, LegalParseTimeString) {
+  using namespace std::string_literals;
+  static const std::unordered_map<std::string, int64_t> values = {
+      {"22:28:48"s, 80928},
+      {"22:28:48.876"s, 80928},
+      {"T22:28:48"s, 80928},
+      {"222848"s, 80928},
+      {"22:28:48-05:00"s, 98928},
+      {"22:28:48+05:00"s, 62928},
+      {"22:28"s, 80880}};
+
+  for (const auto& [time_str, expected_epoch] : values) {
+    ASSERT_EQ(expected_epoch, DateTimeStringValidate<kTIME>()(time_str, 0));
+  }
+}
+
+TEST(TIME, IllegalParseTimeString) {
+  using namespace std::string_literals;
+  static const std::unordered_set<std::string> values = {
+      "22-28-48"s, "2228.48"s, "22.28.48"s, "22"s};
+
+  for (const auto& val : values) {
+    ASSERT_THROW(DateTimeStringValidate<kTIME>()(val, 0), std::runtime_error);
+  }
+}
+#endif
 
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);

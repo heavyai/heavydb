@@ -20,6 +20,7 @@
 #include "Catalog/Catalog.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/types.h"
+#include "ThriftHandler/QueryState.h"
 
 #include <map>
 #include <mutex>
@@ -71,9 +72,7 @@ ChunkKey getTableChunkKey(const Catalog_Namespace::Catalog& cat,
                           const std::string& tableName);
 void getTableNames(std::map<std::string, bool>& tableNames, const Value& value);
 void getTableNames(std::map<std::string, bool>& tableNames, const std::string query_ra);
-std::string parse_to_ra(const Catalog_Namespace::Catalog& cat,
-                        const std::string& query_str,
-                        const Catalog_Namespace::SessionInfo& session_info);
+std::string parse_to_ra(query_state::QueryStateProxy, const std::string& query_str);
 
 template <typename MutexType>
 std::shared_ptr<MutexType> getTableMutex(const Catalog_Namespace::Catalog& cat,

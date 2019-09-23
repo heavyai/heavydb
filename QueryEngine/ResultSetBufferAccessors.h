@@ -130,7 +130,7 @@ inline size_t get_key_bytes_rowwise(const QueryMemoryDescriptor& query_mem_desc)
   }
   auto consist_key_width = query_mem_desc.getEffectiveKeyWidth();
   CHECK(consist_key_width);
-  return consist_key_width * query_mem_desc.groupColWidthsSize();
+  return consist_key_width * query_mem_desc.getGroupbyColCount();
 }
 
 inline size_t get_row_bytes(const QueryMemoryDescriptor& query_mem_desc) {

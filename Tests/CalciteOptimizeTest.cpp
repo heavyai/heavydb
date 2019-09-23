@@ -10,6 +10,7 @@
 #include "../QueryRunner/QueryRunner.h"
 #include "Shared/MapDParameters.h"
 #include "TestHelpers.h"
+#include "ThriftHandler/QueryState.h"
 #include "gen-cpp/CalciteServer.h"
 
 using QR = QueryRunner::QueryRunner;
@@ -57,35 +58,35 @@ TEST_F(ViewObject, BasicTest) {
   auto session = QR::get()->getSession();
   CHECK(session);
 
-  TPlanResult tresult =
-      g_calcite->process(*session, "select i1 from table1", {}, true, false, false);
+  auto qs1 = QR::create_query_state(session, "select i1 from table1");
+  TPlanResult tresult = g_calcite->process(
+      qs1->createQueryStateProxy(), qs1->get_query_str(), {}, true, false, false);
 
+  auto qs2 = QR::create_query_state(session, "select i1 from view_view_table1");
   TPlanResult vresult = g_calcite->process(
-      *session, "select i1 from view_view_table1", {}, true, false, false);
+      qs2->createQueryStateProxy(), qs2->get_query_str(), {}, true, false, false);
 
   EXPECT_EQ(vresult.plan_result, tresult.plan_result);
 
+  auto qs3 = QR::create_query_state(session, "select i1 from view_view_table1");
   TPlanResult ovresult = g_calcite->process(
-      *session, "select i1 from view_view_table1", {}, true, false, true);
+      qs3->createQueryStateProxy(), qs3->get_query_str(), {}, true, false, true);
 
   EXPECT_EQ(ovresult.plan_result, tresult.plan_result);
 
-  TPlanResult tab_result = g_calcite->process(
-      *session,
+  auto qs4 = QR::create_query_state(
+      session,
       "SELECT shape_table.rowid FROM shape_table, attribute_table WHERE "
-      "shape_table.block_group_id = attribute_table.block_group_id",
-      {},
-      true,
-      false,
-      true);
-  TPlanResult view_result =
-      g_calcite->process(*session,
-                         "SELECT shape_view.rowid FROM shape_view, attribute_view WHERE "
-                         "shape_view.block_group_id = attribute_view.block_group_id",
-                         {},
-                         true,
-                         false,
-                         true);
+      "shape_table.block_group_id = attribute_table.block_group_id");
+  TPlanResult tab_result = g_calcite->process(
+      qs4->createQueryStateProxy(), qs4->get_query_str(), {}, true, false, true);
+
+  auto qs5 = QR::create_query_state(
+      session,
+      "SELECT shape_view.rowid FROM shape_view, attribute_view WHERE "
+      "shape_view.block_group_id = attribute_view.block_group_id");
+  TPlanResult view_result = g_calcite->process(
+      qs5->createQueryStateProxy(), qs5->get_query_str(), {}, true, false, true);
   EXPECT_EQ(tab_result.plan_result, view_result.plan_result);
 }
 
