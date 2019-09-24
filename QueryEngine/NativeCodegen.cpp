@@ -101,18 +101,15 @@ void optimize_ir(llvm::Function* query_func,
                  llvm::Module* module,
                  const std::unordered_set<llvm::Function*>& live_funcs,
                  const CompilationOptions& co) {
+  llvm::legacy::PassManager pass_manager;
   if (co.opt_level_ >= ExecutorOptLevel::O1 && co.opt_level_ <= ExecutorOptLevel::O3) {
-    llvm::legacy::PassManager mpm;
-    llvm::legacy::FunctionPassManager fpm(module);
-    llvm::PassManagerBuilder pmb;
-    pmb.OptLevel = (unsigned)co.opt_level_;
-    pmb.Inliner = llvm::createFunctionInliningPass();
-    pmb.populateFunctionPassManager(fpm);
-    pmb.populateModulePassManager(mpm);
-    mpm.run(*module);
+    llvm::legacy::FunctionPassManager pm_function(module);
+    llvm::PassManagerBuilder pm_builder;
+    pm_builder.OptLevel = (unsigned)co.opt_level_;
+    pm_builder.Inliner = llvm::createFunctionInliningPass();
+    pm_builder.populateFunctionPassManager(pm_function);
+    pm_builder.populateModulePassManager(pass_manager);
   } else {
-    llvm::legacy::PassManager pass_manager;
-
     pass_manager.add(llvm::createAlwaysInlinerLegacyPass());
     pass_manager.add(llvm::createPromoteMemoryToRegisterPass());
 #if LLVM_VERSION_MAJOR >= 7
@@ -127,8 +124,8 @@ void optimize_ir(llvm::Function* query_func,
     if (co.opt_level_ == ExecutorOptLevel::LoopStrengthReduction) {
       pass_manager.add(llvm::createLoopStrengthReducePass());
     }
-    pass_manager.run(*module);
   }
+  pass_manager.run(*module);
 
   eliminate_dead_self_recursive_funcs(*module, live_funcs);
 }
