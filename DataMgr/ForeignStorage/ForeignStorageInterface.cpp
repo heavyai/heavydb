@@ -162,10 +162,23 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
         chunkMetadataVec.push_back(std::make_pair(chunk_it->first, chunkMetadata));
       } else {
         const auto& chunk_key = chunk_it->first;
-        const auto& buffer = *chunk_it->second.get();
-        ChunkMetadata m{buffer.sql_type, buffer.size() * buffer.sql_type.get_size(), buffer.size(), ChunkStats{}};
-        m.fillChunkStats(Datum{0}, Datum{0}, false);
-        chunkMetadataVec.push_back(std::make_pair(chunk_key, m));
+        if(chunk_key.size() == 5) {
+          if(chunk_key[4] == 2) return;
+          const auto& buffer = *chunk_it->second.get();
+          auto type = buffer.sql_type;
+          auto size = buffer.size();
+          auto subkey = chunk_key;
+          subkey[4] = 2;
+          auto bs = chunk_index_.find(subkey)->second->size();
+          ChunkMetadata m{type, size, bs, ChunkStats{}};
+          m.fillChunkStats(Datum{0}, Datum{0}, false);
+          chunkMetadataVec.push_back(std::make_pair(chunk_key, m));
+        } else {
+          const auto& buffer = *chunk_it->second.get();
+          ChunkMetadata m{buffer.sql_type, buffer.size() * buffer.sql_type.get_size(), buffer.size(), ChunkStats{}};
+          m.fillChunkStats(Datum{0}, Datum{0}, false);
+          chunkMetadataVec.push_back(std::make_pair(chunk_key, m));
+        }
       }
       chunk_it++;
     }

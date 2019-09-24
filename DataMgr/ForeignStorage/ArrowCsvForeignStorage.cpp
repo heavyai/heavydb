@@ -7,6 +7,7 @@
 #include <arrow/api.h>
 #include <arrow/csv/reader.h>
 #include <arrow/io/file.h>
+#include "../DataMgr/StringNoneEncoder.h"
 
 std::shared_ptr<arrow::Table> g_arrowTable;
 
@@ -24,7 +25,17 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
   arrow::Table &table = *g_arrowTable.get();
   auto ch_array = table.column(chunk_key[2]-1)->data();
   auto array_data = ch_array->chunk(chunk_key[3])->data().get();
-  auto bp = array_data->buffers[1].get();
+  std::shared_ptr<arrow::Buffer> bp;
+  
+  if(sql_type.get_type() == kTEXT) {
+    // ONLY FOR NONE ENCODED STRINGS
+    if(chunk_key[4] == 1) {
+      bp = array_data->buffers[3];
+    } else {
+      bp = array_data->buffers[2];
+    }
+  }
+  bp = array_data->buffers[1];
   std::memcpy(dest, bp->data(), bp->size());
   CHECK_EQ(numBytes, (size_t)bp->size());
 }
@@ -71,11 +82,31 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key, const 
       for(int f = 0; f < num_frags; f++ ) {
         key[3] = f;
         auto c0f = c0->chunk(f).get();
-        auto &b = *mgr->createBuffer(key);
-        b.sql_type = c.columnType;
-        auto sz = c0f->length();
+        if(c.columnType.get_type() == kTEXT) {
+          {
+            auto k = key;
+            k.push_back(1);
+            auto b = mgr->createBuffer(k);
+            auto sz = c0f->data()->buffers[2]->size();
+            b->setSize(sz);
+            b->encoder = std::make_unique<StringNoneEncoder>(b);
+            b->has_encoder = false;
+            b->sql_type = c.columnType;
+          }
+          {
+            auto k = key;
+            k.push_back(2);
+            auto &b = *mgr->createBuffer(k);
+            b.sql_type = SQLTypeInfo(kINT, false);
+            auto sz = c0f->length();
+            b.setSize(sz);
+          }
+        } else {
+          auto &b = *mgr->createBuffer(key);
+          auto sz = c0f->length();
+          b.setSize(sz);
+        }
         //TODO: check dynamic_cast<arrow::FixedWidthType*>(c0f->type().get())->bit_width() == b.sql_type.get_size()
-        b.setSize(sz);
   }   }
   printf("-- created %d:%d cols:frags\n", num_cols, num_frags);
 }
