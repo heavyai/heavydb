@@ -1,9 +1,26 @@
-//
-// Created by mehmet on 2019-09-23.
-//
+/*
+ * Copyright 2017 MapD Technologies, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-#ifndef OMNISCI_CSVPARSERUTILS_H
-#define OMNISCI_CSVPARSERUTILS_H
+/*
+ * @file CsvParserUtils.h
+ * @author Mehmet Sariyuce <mehmet.sariyuce@omnisci.com>
+ * @brief CsvParserUtils class for parsing csv
+ */
+#ifndef _CSVPARSERUTILS_H
+#define _CSVPARSERUTILS_H
 
 #include "CopyParams.h"
 
@@ -36,4 +53,4 @@ class CsvParserUtils {
 };
 }  // namespace Importer_NS
 
-#endif  // OMNISCI_CSVPARSERUTILS_H
+#endif  // _CSVPARSERUTILS_H
