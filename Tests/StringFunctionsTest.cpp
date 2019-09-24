@@ -36,7 +36,12 @@
 extern bool g_enable_experimental_string_functions;
 
 namespace {
-inline auto sql(const std::string& sql_stmts) {
+inline auto sql(const std::string& sql_stmt) {
+  return QueryRunner::QueryRunner::get()->runSQL(
+      sql_stmt, ExecutorDeviceType::CPU, true, true);
+}
+
+inline auto multi_sql(const std::string& sql_stmts) {
   return QueryRunner::QueryRunner::get()
       ->runMultipleStatements(sql_stmts, ExecutorDeviceType::CPU)
       .back();
@@ -118,7 +123,7 @@ void compare_result_set(
 class LowerFunctionTest : public testing::Test {
  public:
   void SetUp() override {
-    ASSERT_NO_THROW(sql(R"(
+    ASSERT_NO_THROW(multi_sql(R"(
         drop table if exists lower_function_test_people;
         create table lower_function_test_people(first_name text, last_name text encoding none, age integer, country_code text);
         insert into lower_function_test_people values('JOHN', 'SMITH', 25, 'us');
@@ -135,7 +140,7 @@ class LowerFunctionTest : public testing::Test {
   }
 
   void TearDown() override {
-    ASSERT_NO_THROW(sql(R"(
+    ASSERT_NO_THROW(multi_sql(R"(
         drop table lower_function_test_people;
         drop table lower_function_test_countries;
       )"););
@@ -185,23 +190,22 @@ TEST_F(LowerFunctionTest, LowercaseGroupBy) {
   compare_result_set(expected_result_set, result_set);
 }
 
-// TODO: Enable test after fixing bug
-TEST_F(LowerFunctionTest, DISABLED_LowercaseJoin) {
-  auto result_set = sql(
-      "select first_name, last_name, name as country_name, capital as country_capital "
-      "from lower_function_test_people "
-      "join lower_function_test_countries on lower(country_code) = lower(code);");
+TEST_F(LowerFunctionTest, LowercaseJoin) {
+  auto result_set =
+      sql("select first_name, name as country_name "
+          "from lower_function_test_people "
+          "join lower_function_test_countries on lower(country_code) = lower(code);");
   std::vector<std::vector<ScalarTargetValue>> expected_result_set{
-      {"JOHN", "SMITH", "United States", "Washington"},
-      {"John", "Banks", "United States", "Washington"},
-      {"JOHN", "Wilson", "Canada", "Ottawa"},
-      {"Sue", "Smith", "Canada", "Ottawa"}};
+      {"JOHN", "United States"},
+      {"John", "United States"},
+      {"JOHN", "Canada"},
+      {"Sue", "Canada"}};
   compare_result_set(expected_result_set, result_set);
 }
 
 // TODO: Add support for constants
 TEST_F(LowerFunctionTest, DISABLED_InsertLowercaseConstant) {
-  auto result_set = sql(R"(
+  auto result_set = multi_sql(R"(
         insert into lower_function_test_people values('SUE', 'Watson', 25, lower('GB'));
         select first_name, last_name from lower_function_test_people where country_code = 'gb';
       )");
@@ -211,7 +215,7 @@ TEST_F(LowerFunctionTest, DISABLED_InsertLowercaseConstant) {
 
 // TODO: Enable test after fixing bug
 TEST_F(LowerFunctionTest, DISABLED_InsertSelectLowercase) {
-  auto result_set = sql(R"(
+  auto result_set = multi_sql(R"(
        insert into lower_function_test_people (first_name, last_name, age, country_code)
           (select first_name, last_name, age, lower(country_code) from lower_function_test_people
            where first_name = 'Sue');
@@ -223,7 +227,7 @@ TEST_F(LowerFunctionTest, DISABLED_InsertSelectLowercase) {
 }
 
 TEST_F(LowerFunctionTest, UpdateLowercase) {
-  auto result_set = sql(R"(
+  auto result_set = multi_sql(R"(
        update lower_function_test_people set country_code = lower(country_code);
        select country_code from lower_function_test_people;
      )");
@@ -233,7 +237,7 @@ TEST_F(LowerFunctionTest, UpdateLowercase) {
 }
 
 TEST_F(LowerFunctionTest, LowercaseNonAscii) {
-  auto result_set = sql(R"(
+  auto result_set = multi_sql(R"(
        insert into lower_function_test_people values('Ħ', 'Ħ', 25, 'GB');
        select lower(first_name), last_name from lower_function_test_people where country_code = 'GB';
      )");
@@ -286,7 +290,7 @@ TEST_F(LowerFunctionTest, LowercaseGpuMode) {
 }
 
 TEST_F(LowerFunctionTest, LowercaseNullColumn) {
-  auto result_set = sql(R"(
+  auto result_set = multi_sql(R"(
        insert into lower_function_test_people values(null, 'Empty', 25, 'US');
        select lower(first_name), last_name from lower_function_test_people where last_name = 'Empty';
      )");
