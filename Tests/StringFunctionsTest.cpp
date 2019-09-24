@@ -163,8 +163,7 @@ TEST_F(LowerFunctionTest, LowercaseFilter) {
   compare_result_set(expected_result_set, result_set);
 }
 
-// TODO: Enable test after fixing bug
-TEST_F(LowerFunctionTest, DISABLED_MultipleLowercaseFilters) {
+TEST_F(LowerFunctionTest, MultipleLowercaseFilters) {
   auto result_set =
       sql("select first_name, last_name from lower_function_test_people "
           "where lower(country_code) = 'us' or lower(first_name) = 'sue';");
@@ -236,7 +235,8 @@ TEST_F(LowerFunctionTest, UpdateLowercase) {
   compare_result_set(expected_result_set, result_set);
 }
 
-TEST_F(LowerFunctionTest, LowercaseNonAscii) {
+// TODO: Re-enable after clear definition around handling non-ASCII characters
+TEST_F(LowerFunctionTest, DISABLED_LowercaseNonAscii) {
   auto result_set = multi_sql(R"(
        insert into lower_function_test_people values('Ħ', 'Ħ', 25, 'GB');
        select lower(first_name), last_name from lower_function_test_people where country_code = 'GB';
@@ -259,15 +259,7 @@ TEST_F(LowerFunctionTest, LowercaseNonTextColumn) {
     sql("select lower(age) from lower_function_test_people;");
     FAIL() << "An exception should have been thrown for this test case";
   } catch (const std::exception& e) {
-    const auto expected_substring =
-        "Cannot apply 'LOWER' to arguments of type 'LOWER(<INTEGER>)'";
-
-    if (std::string(e.what()).find(expected_substring) == std::string::npos) {
-      FAIL()
-          << boost::format(
-                 R"(Exception message: "%s" does not contain expected substring: "%s")") %
-                 e.what() % expected_substring;
-    }
+    ASSERT_STREQ("LOWER expects a dictionary encoded text column.", e.what());
   }
 }
 

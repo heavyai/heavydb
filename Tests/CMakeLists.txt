@@ -187,6 +187,7 @@ set(SANITY_TESTS
   UpdateMetadataTest
   CalciteOptimizeTest
   JoinHashTableTest
+  StringFunctionsTest
 )
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
@@ -213,7 +214,7 @@ add_custom_target(all_tests
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS ${SANITY_TESTS} ProfileTest UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StringFunctionsTest StoragePerfTest
+    DEPENDS ${SANITY_TESTS} ProfileTest UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StoragePerfTest
     USES_TERMINAL)
 
 add_custom_target(storage_perf_tests

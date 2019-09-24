@@ -96,6 +96,7 @@ size_t g_min_memory_allocation_size{
 bool g_enable_bump_allocator{false};
 double g_bump_allocator_step_reduction{0.75};
 bool g_enable_direct_columnarization{true};
+extern bool g_enable_experimental_string_functions;
 
 int const Executor::max_gpu_count;
 
@@ -475,8 +476,12 @@ std::vector<int8_t> Executor::serializeLiterals(
       case 6: {
         const auto p = boost::get<std::pair<std::string, int>>(&lit);
         CHECK(p);
-        const auto str_id = getStringDictionaryProxy(p->second, row_set_mem_owner_, true)
-                                ->getIdOfString(p->first);
+        const auto str_id =
+            g_enable_experimental_string_functions
+                ? getStringDictionaryProxy(p->second, row_set_mem_owner_, true)
+                      ->getOrAddTransient(p->first)
+                : getStringDictionaryProxy(p->second, row_set_mem_owner_, true)
+                      ->getIdOfString(p->first);
         memcpy(&serialized[off - lit_bytes], &str_id, lit_bytes);
         break;
       }
