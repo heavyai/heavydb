@@ -50,6 +50,7 @@
 #include "../Fragmenter/Fragmenter.h"
 #include "../Shared/ThreadController.h"
 #include "../Shared/checked_alloc.h"
+#include "CopyParams.h"
 
 #include "QueryRunner/QueryRunner.h"
 
@@ -59,9 +60,6 @@
 
 class TDatum;
 class TColumn;
-
-// not too big (need much memory) but not too small (many thread forks)
-constexpr static size_t kImportFileBufferSize = (1 << 23);
 
 namespace arrow {
 
@@ -82,103 +80,6 @@ struct BadRowsTracker {
   std::string file_name;
   int row_group;
   Importer* importer;
-};
-
-enum class FileType {
-  DELIMITED,
-  POLYGON
-#ifdef ENABLE_IMPORT_PARQUET
-  ,
-  PARQUET
-#endif
-};
-
-enum class ImportHeaderRow { AUTODETECT, NO_HEADER, HAS_HEADER };
-
-struct CopyParams {
-  char delimiter;
-  std::string null_str;
-  ImportHeaderRow has_header;
-  bool quoted;  // does the input have any quoted fields, default to false
-  char quote;
-  char escape;
-  char line_delim;
-  char array_delim;
-  char array_begin;
-  char array_end;
-  int threads;
-  size_t
-      max_reject;  // maximum number of records that can be rejected before copy is failed
-  FileType file_type;
-  bool plain_text = false;
-  // s3/parquet related params
-  std::string s3_access_key;  // per-query credentials to override the
-  std::string s3_secret_key;  // settings in ~/.aws/credentials or environment
-  std::string s3_region;
-  std::string s3_endpoint;
-  // kafka related params
-  size_t retry_count;
-  size_t retry_wait;
-  size_t batch_size;
-  size_t buffer_size;
-  // geospatial params
-  bool lonlat;
-  EncodingType geo_coords_encoding;
-  int32_t geo_coords_comp_param;
-  SQLTypes geo_coords_type;
-  int32_t geo_coords_srid;
-  bool sanitize_column_names;
-  std::string geo_layer_name;
-
-  CopyParams()
-      : delimiter(',')
-      , null_str("\\N")
-      , has_header(ImportHeaderRow::AUTODETECT)
-      , quoted(true)
-      , quote('"')
-      , escape('"')
-      , line_delim('\n')
-      , array_delim(',')
-      , array_begin('{')
-      , array_end('}')
-      , threads(0)
-      , max_reject(100000)
-      , file_type(FileType::DELIMITED)
-      , retry_count(100)
-      , retry_wait(5)
-      , batch_size(1000)
-      , buffer_size(kImportFileBufferSize)
-      , lonlat(true)
-      , geo_coords_encoding(kENCODING_GEOINT)
-      , geo_coords_comp_param(32)
-      , geo_coords_type(kGEOMETRY)
-      , geo_coords_srid(4326)
-      , sanitize_column_names(true) {}
-
-  CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
-      : delimiter(d)
-      , null_str(n)
-      , has_header(ImportHeaderRow::AUTODETECT)
-      , quoted(true)
-      , quote('"')
-      , escape('"')
-      , line_delim(l)
-      , array_delim(',')
-      , array_begin('{')
-      , array_end('}')
-      , threads(0)
-      , max_reject(100000)
-      , file_type(FileType::DELIMITED)
-      , retry_count(retries)
-      , retry_wait(wait)
-      , batch_size(b)
-      , buffer_size(kImportFileBufferSize)
-      , lonlat(true)
-      , geo_coords_encoding(kENCODING_GEOINT)
-      , geo_coords_comp_param(32)
-      , geo_coords_type(kGEOMETRY)
-      , geo_coords_srid(4326)
-      , sanitize_column_names(true) {}
 };
 
 class TypedImportBuffer : boost::noncopyable {
@@ -811,45 +712,6 @@ class Detector : public DataStreamSink {
 
 class ImporterUtils {
  public:
-  static bool parseStringArray(const std::string& s,
-                               const CopyParams& copy_params,
-                               std::vector<std::string>& string_vec) {
-    if (s == copy_params.null_str || s == "NULL" || s.size() < 1 || s.empty()) {
-      // TODO: should not convert NULL, empty arrays to {"NULL"},
-      //       need to support NULL, empty properly
-      string_vec.emplace_back("NULL");
-      return true;
-    }
-    if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
-      throw std::runtime_error("Malformed Array :" + s);
-    }
-    size_t last = 1;
-    for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos;
-         i = s.find(copy_params.array_delim, last)) {
-      if (i > last) {  // if not empty string - disallow empty strings for now
-        if (s.substr(last, i - last).length() > StringDictionary::MAX_STRLEN) {
-          throw std::runtime_error("Array String too long : " +
-                                   std::to_string(s.substr(last, i - last).length()) +
-                                   " max is " +
-                                   std::to_string(StringDictionary::MAX_STRLEN));
-        }
-
-        string_vec.push_back(s.substr(last, i - last));
-      }
-      last = i + 1;
-    }
-    if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
-      if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN) {
-        throw std::runtime_error(
-            "Array String too long : " +
-            std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
-            std::to_string(StringDictionary::MAX_STRLEN));
-      }
-
-      string_vec.push_back(s.substr(last, s.size() - 1 - last));
-    }
-    return false;
-  }
   static ArrayDatum composeNullArray(const SQLTypeInfo& ti);
 };
 

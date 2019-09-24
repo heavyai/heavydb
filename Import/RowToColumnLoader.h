@@ -51,7 +51,7 @@
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/THttpClient.h>
 #include <thrift/transport/TSocket.h>
-#include "Importer.h"
+#include "CopyParams.h"
 #include "gen-cpp/MapD.h"
 #include "gen-cpp/mapd_types.h"
 

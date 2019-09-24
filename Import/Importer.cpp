@@ -59,6 +59,7 @@
 #include "Shared/Logger.h"
 #include "Shared/SqlTypesLayout.h"
 
+#include "CsvParserUtils.h"
 #include "Importer.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Utils/ChunkAccessorTable.h"
@@ -216,113 +217,6 @@ void Importer::set_import_status(const std::string& import_id, ImportStatus is) 
   import_status_map[import_id] = is;
 }
 
-static const std::string trim_space(const char* field, const size_t len) {
-  size_t i = 0;
-  size_t j = len;
-  while (i < j && (field[i] == ' ' || field[i] == '\r')) {
-    i++;
-  }
-  while (i < j && (field[j - 1] == ' ' || field[j - 1] == '\r')) {
-    j--;
-  }
-  return std::string(field + i, j - i);
-}
-
-static const bool is_eol(const char& p, const std::string& line_delims) {
-  for (auto i : line_delims) {
-    if (p == i) {
-      return true;
-    }
-  }
-  return false;
-}
-
-static const char* get_row(const char* buf,
-                           const char* buf_end,
-                           const char* entire_buf_end,
-                           const CopyParams& copy_params,
-                           bool is_begin,
-                           const bool* is_array,
-                           std::vector<std::string>& row,
-                           bool& try_single_thread) {
-  const char* field = buf;
-  const char* p;
-  bool in_quote = false;
-  bool in_array = false;
-  bool has_escape = false;
-  bool strip_quotes = false;
-  try_single_thread = false;
-  std::string line_endings({copy_params.line_delim, '\r', '\n'});
-  for (p = buf; p < entire_buf_end; p++) {
-    if (*p == copy_params.escape && p < entire_buf_end - 1 &&
-        *(p + 1) == copy_params.quote) {
-      p++;
-      has_escape = true;
-    } else if (copy_params.quoted && *p == copy_params.quote) {
-      in_quote = !in_quote;
-      if (in_quote) {
-        strip_quotes = true;
-      }
-    } else if (!in_quote && is_array != nullptr && *p == copy_params.array_begin &&
-               is_array[row.size()]) {
-      in_array = true;
-    } else if (!in_quote && is_array != nullptr && *p == copy_params.array_end &&
-               is_array[row.size()]) {
-      in_array = false;
-    } else if (*p == copy_params.delimiter || is_eol(*p, line_endings)) {
-      if (!in_quote && !in_array) {
-        if (!has_escape && !strip_quotes) {
-          std::string s = trim_space(field, p - field);
-          row.push_back(s);
-        } else {
-          auto field_buf = std::make_unique<char[]>(p - field + 1);
-          int j = 0, i = 0;
-          for (; i < p - field; i++, j++) {
-            if (has_escape && field[i] == copy_params.escape &&
-                field[i + 1] == copy_params.quote) {
-              field_buf[j] = copy_params.quote;
-              i++;
-            } else {
-              field_buf[j] = field[i];
-            }
-          }
-          std::string s = trim_space(field_buf.get(), j);
-          if (copy_params.quoted && s.size() > 0 && s.front() == copy_params.quote) {
-            s.erase(0, 1);
-          }
-          if (copy_params.quoted && s.size() > 0 && s.back() == copy_params.quote) {
-            s.pop_back();
-          }
-          row.push_back(s);
-        }
-        field = p + 1;
-        has_escape = false;
-        strip_quotes = false;
-
-        if (is_eol(*p, line_endings)) {
-          // We are at the end of the row. Skip the line endings now.
-          while (p + 1 < buf_end && is_eol(*(p + 1), line_endings)) {
-            p++;
-          }
-          break;
-        }
-      }
-    }
-  }
-  /*
-  @TODO(wei) do error handling
-  */
-  if (in_quote) {
-    LOG(ERROR) << "Unmatched quote.";
-    try_single_thread = true;
-  }
-  if (in_array) {
-    LOG(ERROR) << "Unmatched array.";
-    try_single_thread = true;
-  }
-  return p;
-}
-
 int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti) {
   switch (ti.get_type()) {
     case kBOOLEAN:
@@ -464,7 +358,7 @@ ArrayDatum StringToArray(const std::string& s,
   }
   if (elem_strs.size() == 1) {
     auto str = elem_strs.front();
-    auto str_trimmed = trim_space(str.c_str(), str.length());
+    auto str_trimmed = Importer_NS::CsvParserUtils::trim_space(str.c_str(), str.length());
     if (str_trimmed == "") {
       elem_strs.clear();  // Empty array
     }
@@ -474,7 +368,7 @@ ArrayDatum StringToArray(const std::string& s,
     int8_t* buf = (int8_t*)checked_malloc(len);
     int8_t* p = buf;
     for (auto& es : elem_strs) {
-      auto e = trim_space(es.c_str(), es.length());
+      auto e = Importer_NS::CsvParserUtils::trim_space(es.c_str(), es.length());
       bool is_null = (e == copy_params.null_str) || e == "NULL";
       if (!elem_ti.is_string() && e == "") {
         is_null = true;
@@ -595,24 +489,6 @@ ArrayDatum TDatumToArrayDatum(const TDatum& datum, const SQLTypeInfo& ti) {
   }
 
   return ArrayDatum(len, buf, false);
-}
-
-static size_t find_beginning(const char* buffer,
-                             size_t begin,
-                             size_t end,
-                             const CopyParams& copy_params) {
-  // @TODO(wei) line_delim is in quotes note supported
-  if (begin == 0 || (begin > 0 && buffer[begin - 1] == copy_params.line_delim)) {
-    return 0;
-  }
-  size_t i;
-  const char* buf = buffer + begin;
-  for (i = 0; i < end - begin; i++) {
-    if (buf[i] == copy_params.line_delim) {
-      return i + 1;
-    }
-  }
-  return i;
 }
 
 void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
@@ -765,7 +641,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       if (IS_STRING(ti.get_subtype())) {
         std::vector<std::string> string_vec;
         // Just parse string array, don't push it to buffer yet as we might throw
-        ImporterUtils::parseStringArray(val, copy_params, string_vec);
+        Importer_NS::CsvParserUtils::parseStringArray(val, copy_params, string_vec);
         if (!is_null) {
           // TODO: add support for NULL string arrays
           if (ti.get_size() > 0) {
@@ -1786,7 +1662,8 @@ static ImportStatus import_thread_delimited(
   auto ms = measure<>::execution([&]() {
     const CopyParams& copy_params = importer->get_copy_params();
     const std::list<const ColumnDescriptor*>& col_descs = importer->get_column_descs();
-    size_t begin = find_beginning(buffer, begin_pos, end_pos, copy_params);
+    size_t begin =
+        CsvParserUtils::find_beginning(buffer, begin_pos, end_pos, copy_params);
     const char* thread_buf = buffer + begin_pos + begin;
     const char* thread_buf_end = buffer + end_pos;
     const char* buf_end = buffer + total_size;
@@ -1813,25 +1690,23 @@ static ImportStatus import_thread_delimited(
       row.clear();
       if (DEBUG_TIMING) {
         us = measure<std::chrono::microseconds>::execution([&]() {
-          p = get_row(p,
-                      thread_buf_end,
-                      buf_end,
-                      copy_params,
-                      p == thread_buf,
-                      importer->get_is_array(),
-                      row,
-                      try_single_thread);
+          p = Importer_NS::CsvParserUtils::get_row(p,
+                                                   thread_buf_end,
+                                                   buf_end,
+                                                   copy_params,
+                                                   importer->get_is_array(),
+                                                   row,
+                                                   try_single_thread);
         });
         total_get_row_time_us += us;
       } else {
-        p = get_row(p,
-                    thread_buf_end,
-                    buf_end,
-                    copy_params,
-                    p == thread_buf,
-                    importer->get_is_array(),
-                    row,
-                    try_single_thread);
+        p = Importer_NS::CsvParserUtils::get_row(p,
+                                                 thread_buf_end,
+                                                 buf_end,
+                                                 copy_params,
+                                                 importer->get_is_array(),
+                                                 row,
+                                                 try_single_thread);
       }
       row_index_plus_one++;
       // Each POINT could consume two separate coords instead of a single WKT
@@ -2260,72 +2135,6 @@ static ImportStatus import_thread_shapefile(
   }
 
   return import_status;
-}
-
-/**
- * @brief Finds the closest possible row ending to the end of the given buffer.
- *
- * @param buffer               Given buffer which has the rows in csv format. (NOT OWN)
- * @param size                 Size of the buffer.
- * @param copy_params          Copy params for the table.
- * @param num_rows_this_buffer Number of rows until the closest possible row ending.
- *
- * @return The position of the closest possible row ending to the end of the given
- * buffer.
- */
-static size_t find_end(const char* buffer,
-                       size_t size,
-                       const CopyParams& copy_params,
-                       unsigned int& num_rows_this_buffer) {
-  size_t last_line_delim_pos = 0;
-  if (copy_params.quoted) {
-    const char* current = buffer;
-    last_line_delim_pos = 0;
-    bool in_quote = false;
-
-    while (current < buffer + size) {
-      while (in_quote && current < buffer + size) {
-        // We are in a quoted field. We have to find the ending quote.
-        if ((*current == copy_params.escape) && (current < buffer + size - 1) &&
-            (*(current + 1) == copy_params.quote)) {
-          ++current;
-        } else if (*current == copy_params.quote) {
-          in_quote = false;
-        }
-        ++current;
-      }
-
-      // We are outside of quotes. We have to find the last possible line delimiter.
-      while (!in_quote && current < buffer + size) {
-        if (*current == copy_params.line_delim) {
-          last_line_delim_pos = current - buffer;
-          ++num_rows_this_buffer;
-        } else if (*current == copy_params.quote) {
-          in_quote = true;
-        }
-        ++current;
-      }
-    }
-  } else {
-    const char* current = buffer;
-    while (current < buffer + size) {
-      if (*current == copy_params.line_delim) {
-        last_line_delim_pos = current - buffer;
-        ++num_rows_this_buffer;
-      }
-      ++current;
-    }
-  }
-
-  if (last_line_delim_pos <= 0) {
-    size_t slen = size < 50 ? size : 50;
-    std::string showMsgStr(buffer, buffer + slen);
-    LOG(ERROR) << "No line delimiter in block. Block was of size " << size
-               << " bytes, first few characters " << showMsgStr;
-    return size;
-  }
-
-  return last_line_delim_pos + 1;
 }
 
 bool Loader::loadNoCheckpoint(
@@ -2770,7 +2579,8 @@ void Detector::split_raw_data() {
   bool try_single_thread = false;
   for (const char* p = buf; p < buf_end; p++) {
     std::vector<std::string> row;
-    p = get_row(p, buf_end, buf_end, copy_params, true, nullptr, row, try_single_thread);
+    p = Importer_NS::CsvParserUtils::get_row(
+        p, buf_end, buf_end, copy_params, nullptr, row, try_single_thread);
     raw_rows.push_back(row);
     if (try_single_thread) {
       break;
@@ -2781,8 +2591,8 @@ void Detector::split_raw_data() {
     raw_rows.clear();
     for (const char* p = buf; p < buf_end; p++) {
       std::vector<std::string> row;
-      p = get_row(
-          p, buf_end, buf_end, copy_params, true, nullptr, row, try_single_thread);
+      p = Importer_NS::CsvParserUtils::get_row(
+          p, buf_end, buf_end, copy_params, nullptr, row, try_single_thread);
       raw_rows.push_back(row);
     }
   }
@@ -3824,7 +3634,8 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     while (size > 0) {
       unsigned int num_rows_this_buffer = 0;
       CHECK(scratch_buffer);
-      end_pos = find_end(scratch_buffer.get(), size, copy_params, num_rows_this_buffer);
+      end_pos = CsvParserUtils::find_end(
+          scratch_buffer.get(), size, copy_params, num_rows_this_buffer);
 
       // unput residual
       int nresidual = size - end_pos;

@@ -4910,9 +4910,6 @@ namespace Importer_NS {
 ArrayDatum StringToArray(const std::string& s,
                          const SQLTypeInfo& ti,
                          const CopyParams& copy_params);
-bool parseStringArray(const std::string& s,
-                      const CopyParams& copy_params,
-                      std::vector<std::string>& string_vec);
 
 }  // namespace Importer_NS
 
