@@ -43,6 +43,7 @@ OmniSciDB Developer Documentation
     :numbered:
 
     components/query_state
+    components/thrift_api
 
 
 
