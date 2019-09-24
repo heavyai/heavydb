@@ -21,24 +21,29 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
                                   const SQLTypeInfo& sql_type,
                                   int8_t* dest,
                                   const size_t numBytes) {
-  printf("-- reading %d:%d<=%u\n", chunk_key[2], chunk_key[3], unsigned(numBytes));
+  //printf("-- reading %d:%d<=%u\n", chunk_key[2], chunk_key[3], unsigned(numBytes));
   arrow::Table &table = *g_arrowTable.get();
   auto ch_array = table.column(chunk_key[2]-1)->data();
   auto array_data = ch_array->chunk(chunk_key[3])->data().get();
-  std::shared_ptr<arrow::Buffer> bp;
+  arrow::Buffer *bp = nullptr;
   
   if(sql_type.get_type() == kTEXT) {
     // ONLY FOR NONE ENCODED STRINGS
     if(chunk_key[4] == 1) {
-      bp = array_data->buffers[2];
+      CHECK_GE(array_data->buffers.size(), 3UL);
+      bp = array_data->buffers[2].get();
     } else {
-      bp = array_data->buffers[1];
+      CHECK_GE(array_data->buffers.size(), 2UL);
+      bp = array_data->buffers[1].get();
     }
-  } else {
-    bp = array_data->buffers[1];
+  } else if(array_data->null_count != array_data->length) {
+      CHECK_GE(array_data->buffers.size(), 2UL);
+      bp = array_data->buffers[1].get();
   }
-  std::memcpy(dest, bp->data(), bp->size());
-  CHECK_EQ(numBytes, (size_t)bp->size());
+  if(bp) {
+    std::memcpy(dest, bp->data(), bp->size());
+    CHECK_EQ(numBytes, (size_t)bp->size());
+  } else /*TODO: nullify?*/;
 }
 
 void ArrowCsvForeignStorage::prepareTable(const int db_id, const std::string &type, TableDescriptor& td, std::list<ColumnDescriptor>& cols) {
@@ -71,41 +76,52 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key, const 
   CHECK(r.ok());
   
   arrow::Table &table = *g_arrowTable.get();
-  auto c0 = table.column(0)->data().get();
-  int num_cols = table.num_columns();
-  int num_frags = c0->num_chunks();
+  int cln = 0, num_cols = table.num_columns();
+  int num_frags = table.column(0)->data()->num_chunks();
 
   // data comes like this - database_id, table_id, column_id, fragment_id
   ChunkKey key{table_key.first, table_key.second, 0, 0};
   for(auto c : cols) {
+    if(cln >= num_cols) {
+      LOG(WARNING) << "Number of columns read from Arrow (" << num_cols << ") mismatch CREATE TABLE request: " << cols.size();
+      break;
+    }
     key[2] = c.columnId;
+    auto clp = table.column(cln++)->data().get();
     if(!c.isSystemCol)
       for(int f = 0; f < num_frags; f++ ) {
         key[3] = f;
-        auto c0f = c0->chunk(f).get();
+        auto clf = clp->chunk(f).get();
         if(c.columnType.get_type() == kTEXT) {
+          if(clf->data()->buffers.size() <= 2) {
+            LOG(FATAL) << "Type of column #" << cln << " does not match between Arrow and description of " << c.columnName;
+            throw std::runtime_error("Column ingress mismatch: " + c.columnName);
+          }
+          auto k = key;
+          k.push_back(1);
           {
-            auto k = key;
-            k.push_back(1);
             auto b = mgr->createBuffer(k);
-            auto sz = c0f->data()->buffers[2]->size();
+            auto sz = clf->data()->buffers[2]->size();
             b->setSize(sz);
             b->encoder = std::make_unique<StringNoneEncoder>(b);
             b->has_encoder = true;
             b->sql_type = c.columnType;
           }
+          k[4] = 2;
           {
-            auto k = key;
-            k.push_back(2);
             auto &b = *mgr->createBuffer(k);
             b.sql_type = SQLTypeInfo(kINT, false);
-            auto sz = c0f->length();
+            auto sz = clf->length();
             b.setSize(sz);
           }
         } else {
+          if(clf->data()->buffers.size() > 2) {
+            LOG(FATAL) << "Type of column #" << cln << " does not match between Arrow and description of " << c.columnName;
+            throw std::runtime_error("Column ingress mismatch: " + c.columnName);
+          }
           auto &b = *mgr->createBuffer(key);
           b.sql_type = c.columnType;
-          auto sz = c0f->length();
+          auto sz = clf->length();
           b.setSize(sz);
         }
         //TODO: check dynamic_cast<arrow::FixedWidthType*>(c0f->type().get())->bit_width() == b.sql_type.get_size()
