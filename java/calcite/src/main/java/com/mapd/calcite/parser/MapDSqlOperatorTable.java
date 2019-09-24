@@ -117,7 +117,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
 
     // register our approx count distinct against std table
-    //    SqlStdOperatorTable.instance().register(new ApproxCountDistinct());
+    // SqlStdOperatorTable.instance().register(new ApproxCountDistinct());
   }
 
   /**
@@ -149,7 +149,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     // using reflection when we are deserializing from JSON.
     // opTab.addOperator(new RampFunction());
     // opTab.addOperator(new DedupFunction());
-    opTab.addOperator(new MyTableUDF()); // Table UDF prototype
+    opTab.addOperator(new RowCopier()); // Table UDF prototype
     opTab.addOperator(new MyUDFFunction());
     opTab.addOperator(new PgUnnest());
     opTab.addOperator(new Any());
@@ -301,11 +301,11 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   }
 
   /**
-   * Example table level UDF
+   * Table-level functions
    */
-  public static class MyTableUDF extends SqlFunction {
-    public MyTableUDF() {
-      super("MY_UDTF",
+  public static class RowCopier extends SqlFunction {
+    public RowCopier() {
+      super("ROW_COPIER",
               SqlKind.OTHER_FUNCTION,
               null,
               null,
@@ -316,13 +316,13 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
       assert opBinding.getOperandCount() == 2;
-      return opBinding.getCursorOperand(1);
+      return opBinding.getCursorOperand(0);
     }
 
     private static java.util.List<SqlTypeFamily> signature() {
       java.util.List<SqlTypeFamily> sig_family = new java.util.ArrayList<SqlTypeFamily>();
-      sig_family.add(SqlTypeFamily.ANY);
       sig_family.add(SqlTypeFamily.CURSOR);
+      sig_family.add(SqlTypeFamily.ANY);
       return sig_family;
     }
   }
@@ -1511,7 +1511,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
   //
   // Internal accessors for in-situ poly render queries
   //
-  // The MapD_* varietals are deprecated. The OmniSci_Geo_* ones should be used instead
+  // The MapD_* varietals are deprecated. The OmniSci_Geo_* ones should be used
+  // instead
   //
 
   static class MapD_GeoPolyBoundsPtr extends SqlFunction {

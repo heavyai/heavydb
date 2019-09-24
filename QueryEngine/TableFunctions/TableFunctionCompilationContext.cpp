@@ -20,6 +20,7 @@
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #include <algorithm>
+#include <boost/algorithm/string.hpp>
 
 extern std::unique_ptr<llvm::Module> g_rt_module;
 
@@ -92,7 +93,7 @@ TableFunctionCompilationContext::TableFunctionCompilationContext()
 void TableFunctionCompilationContext::compile(const TableFunctionExecutionUnit& exe_unit,
                                               const CompilationOptions& co,
                                               Executor* executor) {
-  generateEntryPoint(exe_unit.input_exprs.size());
+  generateEntryPoint(exe_unit);
   if (co.device_type_ == ExecutorDeviceType::GPU) {
     generateGpuKernel();
   }
@@ -121,7 +122,8 @@ std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
 
 }  // namespace
 
-void TableFunctionCompilationContext::generateEntryPoint(const size_t in_col_count) {
+void TableFunctionCompilationContext::generateEntryPoint(
+    const TableFunctionExecutionUnit& exe_unit) {
   CHECK(entry_point_func_);
   auto arg_it = entry_point_func_->arg_begin();
   const auto input_cols_arg = &*arg_it;
@@ -142,27 +144,39 @@ void TableFunctionCompilationContext::generateEntryPoint(const size_t in_col_cou
       ctx, ".func_body", cgen_state->ir_builder_.GetInsertBlock()->getParent());
   cgen_state->ir_builder_.SetInsertPoint(func_body_bb);
 
-  auto col_heads =
-      generate_column_heads_load(in_col_count, input_cols_arg, cgen_state, ctx);
-  CHECK_EQ(in_col_count, col_heads.size());
+  auto col_heads = generate_column_heads_load(
+      exe_unit.input_exprs.size(), input_cols_arg, cgen_state, ctx);
+  CHECK_EQ(exe_unit.input_exprs.size(), col_heads.size());
 
-  // convert the first column from int8_t* to double*
-  CHECK(!col_heads.empty());
-  auto first_double_col_lv = cgen_state->ir_builder_.CreateBitCast(
-      col_heads.front(), llvm::PointerType::get(get_fp_type(64, ctx), 0));
-  auto first_int_col_lv = cgen_state->ir_builder_.CreateBitCast(
-      col_heads[1], llvm::PointerType::get(get_int_type(32, ctx), 0));
-  // prep the output buffer as well
-  auto output_buffer_col = cgen_state->ir_builder_.CreateLoad(
+  std::vector<llvm::Value*> func_args;
+  for (size_t i = 0; i < exe_unit.input_exprs.size(); i++) {
+    const auto& expr = exe_unit.input_exprs[i];
+    const auto& ti = expr->get_type_info();
+    if (ti.is_varlen() || ti.is_string()) {
+      throw std::runtime_error(
+          "Varlen or string inputs to table functions are not yet supported.");
+    }
+    if (ti.is_fp()) {
+      func_args.push_back(cgen_state->ir_builder_.CreateBitCast(
+          col_heads[i], llvm::PointerType::get(get_fp_type(get_bit_width(ti), ctx), 0)));
+    } else {
+      func_args.push_back(cgen_state->ir_builder_.CreateBitCast(
+          col_heads[i], llvm::PointerType::get(get_int_type(get_bit_width(ti), ctx), 0)));
+    }
+  }
+
+  func_args.push_back(input_row_count);
+
+  // TODO(adb): read outputs properly
+  func_args.push_back(cgen_state->ir_builder_.CreateLoad(
       cgen_state->ir_builder_.CreateGEP(output_buffers_arg, cgen_state_->llInt(0)),
-      "first_output_column");
-  const auto table_func_return = cgen_state->emitExternalCall("my_table_func",
-                                                              get_int_type(32, ctx),
-                                                              {first_double_col_lv,
-                                                               first_int_col_lv,
-                                                               input_row_count,
-                                                               output_buffer_col,
-                                                               output_row_count_ptr});
+      "first_output_column"));
+  func_args.push_back(output_row_count_ptr);
+
+  auto func_name = exe_unit.table_func_name;
+  boost::algorithm::to_lower(func_name);
+  const auto table_func_return =
+      cgen_state->emitExternalCall(func_name, get_int_type(32, ctx), func_args);
   table_func_return->setName("table_func_ret");
   cgen_state->ir_builder_.SetInsertPoint(bb_exit);
   cgen_state->ir_builder_.CreateRet(table_func_return);

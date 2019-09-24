@@ -22,6 +22,21 @@
 #include "QueryEngine/TableFunctions/TableFunctionCompilationContext.h"
 #include "Shared/Logger.h"
 
+namespace {
+
+template <typename T>
+const int8_t* create_literal_buffer(
+    T literal,
+    const ExecutorDeviceType device_type,
+    std::vector<std::unique_ptr<char[]>>& literals_owner) {
+  CHECK_LE(sizeof(T), sizeof(int64_t));  // pad to 8 bytes
+  literals_owner.emplace_back(std::make_unique<char[]>(sizeof(int64_t)));
+  std::memcpy(literals_owner.back().get(), &literal, sizeof(T));
+  return reinterpret_cast<const int8_t*>(literals_owner.back().get());
+}
+
+}  // namespace
+
 ResultSetPtr TableFunctionExecutionContext::execute(
     const TableFunctionExecutionUnit& exe_unit,
     const InputTableInfo& table_info,
@@ -32,33 +47,87 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   CHECK(compilation_context);
 
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
-
-  Analyzer::ColumnVar* col_var = exe_unit.table_func_inputs[0];
-  CHECK(col_var);
-  // TODO(adb): should always only be one fragment, because it's synthesized. But, need to
-  // check that assumption
-  auto [col_buf, elem_count] = ColumnFetcher::getOneColumnFragment(
-      executor,
-      *col_var,
-      table_info.info.fragments.front(),
-      device_type == ExecutorDeviceType::CPU ? Data_Namespace::MemoryLevel::CPU_LEVEL
-                                             : Data_Namespace::MemoryLevel::GPU_LEVEL,
-      0,
-      chunks_owner,
-      column_fetcher.columnarized_table_cache_);
+  std::vector<std::unique_ptr<char[]>> literals_owner;
 
   std::vector<const int8_t*> col_buf_ptrs;
-  col_buf_ptrs.push_back(col_buf);
+  ssize_t element_count = -1;
+  for (const auto& input_expr : exe_unit.input_exprs) {
+    if (auto col_var = dynamic_cast<Analyzer::ColumnVar*>(input_expr)) {
+      auto [col_buf, buf_elem_count] = ColumnFetcher::getOneColumnFragment(
+          executor,
+          *col_var,
+          table_info.info.fragments.front(),
+          device_type == ExecutorDeviceType::CPU ? Data_Namespace::MemoryLevel::CPU_LEVEL
+                                                 : Data_Namespace::MemoryLevel::GPU_LEVEL,
+          0,
+          chunks_owner,
+          column_fetcher.columnarized_table_cache_);
+      if (element_count < 0) {
+        element_count = static_cast<ssize_t>(buf_elem_count);
+      } else {
+        CHECK_EQ(static_cast<ssize_t>(buf_elem_count), element_count);
+      }
+      col_buf_ptrs.push_back(col_buf);
+    } else if (const auto& constant_val = dynamic_cast<Analyzer::Constant*>(input_expr)) {
+      // TODO(adb): Unify literal handling with rest of system, either in Codegen or as a
+      // separate serialization component
+      const auto const_val_datum = constant_val->get_constval();
+      const auto& ti = constant_val->get_type_info();
+      if (ti.is_fp()) {
+        switch (get_bit_width(ti)) {
+          case 32:
+            col_buf_ptrs.push_back(create_literal_buffer(
+                const_val_datum.floatval, device_type, literals_owner));
+            break;
+          case 64:
+            col_buf_ptrs.push_back(create_literal_buffer(
+                const_val_datum.doubleval, device_type, literals_owner));
+            break;
+          default:
+            UNREACHABLE();
+        }
+      } else if (ti.is_integer()) {
+        switch (get_bit_width(ti)) {
+          case 8:
+            col_buf_ptrs.push_back(create_literal_buffer(
+                const_val_datum.tinyintval, device_type, literals_owner));
+            break;
+          case 16:
+            col_buf_ptrs.push_back(create_literal_buffer(
+                const_val_datum.smallintval, device_type, literals_owner));
+            break;
+          case 32:
+            col_buf_ptrs.push_back(create_literal_buffer(
+                const_val_datum.intval, device_type, literals_owner));
+            break;
+          case 64:
+            col_buf_ptrs.push_back(create_literal_buffer(
+                const_val_datum.bigintval, device_type, literals_owner));
+            break;
+          default:
+            UNREACHABLE();
+        }
+      } else {
+        throw std::runtime_error("Literal value " + constant_val->toString() +
+                                 " is not yet supported.");
+      }
+    }
+  }
+  CHECK_EQ(col_buf_ptrs.size(), exe_unit.input_exprs.size());
 
+  CHECK_GE(element_count, ssize_t(0));
   switch (device_type) {
     case ExecutorDeviceType::CPU:
-      return launchCpuCode(
-          exe_unit, compilation_context, col_buf_ptrs, elem_count, executor);
+      return launchCpuCode(exe_unit,
+                           compilation_context,
+                           col_buf_ptrs,
+                           static_cast<size_t>(element_count),
+                           executor);
     case ExecutorDeviceType::GPU:
       return launchGpuCode(exe_unit,
                            compilation_context,
                            col_buf_ptrs,
-                           elem_count,
+                           static_cast<size_t>(element_count),
                            /*device_id=*/0,
                            executor);
   }
@@ -72,13 +141,6 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
     std::vector<const int8_t*>& col_buf_ptrs,
     const size_t elem_count,
     Executor* executor) {
-  // TODO(adb): create literals buffer, merge w/ GPU
-  auto const_val = dynamic_cast<Analyzer::Constant*>(exe_unit.input_exprs[0]);
-  CHECK(const_val);
-  auto const_val_datum = const_val->get_constval();
-  int copy_multiplier = const_val_datum.intval;
-  col_buf_ptrs.push_back(reinterpret_cast<const int8_t*>(&copy_multiplier));
-
   // setup the inputs
   const auto byte_stream_ptr = reinterpret_cast<const int8_t**>(col_buf_ptrs.data());
   CHECK(byte_stream_ptr);
@@ -89,14 +151,13 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   query_mem_desc.setOutputColumnar(true);
   query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});  // single 8 byte col, for now
 
-  auto new_elem_count = elem_count * copy_multiplier;
-
+  const auto allocated_output_row_count = elem_count * exe_unit.output_buffer_multiplier;
   auto query_buffers = std::make_unique<QueryMemoryInitializer>(
       exe_unit,
       query_mem_desc,
       /*device_id=*/0,
       ExecutorDeviceType::CPU,
-      new_elem_count,
+      allocated_output_row_count,
       std::vector<std::vector<const int8_t*>>{col_buf_ptrs},
       std::vector<std::vector<uint64_t>>{{0}},  // frag offsets
       row_set_mem_owner_,
@@ -154,7 +215,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   std::vector<CUdeviceptr> kernel_params(KERNEL_PARAM_COUNT, 0);
 
   // TODO(adb): create literals buffer, merge w/ CPU
-  auto const_val = dynamic_cast<Analyzer::Constant*>(exe_unit.input_exprs[0]);
+  auto const_val = dynamic_cast<Analyzer::Constant*>(exe_unit.input_exprs[1]);
   CHECK(const_val);
   auto const_val_datum = const_val->get_constval();
   int copy_multiplier = const_val_datum.intval;

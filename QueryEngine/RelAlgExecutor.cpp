@@ -3093,9 +3093,9 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
 
   // TODO: temporarily just clone the first input and make it the output
   std::vector<Analyzer::Expr*> table_func_outputs;
-  // TODO(adb): probably wrong
-  target_exprs_owned_.push_back(std::make_shared<Analyzer::Var>(
-      SQLTypeInfo(kDOUBLE, true), Analyzer::Var::WhichRow::kOUTPUT, 0));
+  size_t outputs_ctr = 0;
+  target_exprs_owned_.push_back(std::make_shared<Analyzer::ColumnVar>(
+      SQLTypeInfo(kDOUBLE, true), 0, outputs_ctr++, 0));
   table_func_outputs.push_back(target_exprs_owned_.back().get());
 
   const TableFunctionExecutionUnit exe_unit = {
@@ -3104,6 +3104,7 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
       input_exprs,         // table function inputs
       input_col_exprs,     // table function column inputs (duplicates w/ above)
       table_func_outputs,  // table function projected exprs
+      5,                   // output buffer multiplier
       table_func->getFunctionName()};
   const auto targets_meta = get_targets_meta(table_func, exe_unit.target_exprs);
   table_func->setOutputMetainfo(targets_meta);

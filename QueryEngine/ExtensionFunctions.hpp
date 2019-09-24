@@ -882,23 +882,3 @@ EXTENSION_NOINLINE bool is_point_size_in_merc_view(const double lon,
 }
 
 #include "ExtensionFunctionsGeo.hpp"
-
-// Table Functions (experimental)
-EXTENSION_NOINLINE int32_t my_table_func(double* input_col,
-                                         int* copy_multiplier,
-                                         const int64_t* input_row_count_ptr,
-                                         int64_t* output_buffer,
-                                         int64_t* output_row_count) {
-  // Copy the input buffer to the output, duplicating according to copy_multiplier
-  const auto input_row_count = *input_row_count_ptr;
-
-  auto output_buf_ptr = reinterpret_cast<double*>(output_buffer);
-  for (auto i = 0; i < input_row_count; i++) {
-    for (int c = 0; c < *copy_multiplier; c++) {
-      output_buf_ptr[i + (c * input_row_count)] = input_col[i];
-    }
-  }
-
-  *output_row_count = (*copy_multiplier) * input_row_count;
-  return 0;
-}

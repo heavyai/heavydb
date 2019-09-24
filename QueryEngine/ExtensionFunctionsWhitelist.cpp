@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-#include "ExtensionFunctionsWhitelist.h"
-#include <iostream>
-#include "JsonAccessors.h"
-
-#include "../Shared/StringTransform.h"
+#include "QueryEngine/ExtensionFunctionsWhitelist.h"
 
 #include <boost/algorithm/string/join.hpp>
+#include <iostream>
+
+#include "QueryEngine/JsonAccessors.h"
+#include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
+#include "Shared/StringTransform.h"
 
 // Get the list of all type specializations for the given function name.
 std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get(
@@ -254,6 +255,17 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
       declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") +
                              ");");
     }
+  }
+  TableFunctionsFactory::init();
+  for (const auto& kv : TableFunctionsFactory::functions_) {
+    std::string decl_prefix{"declare " + serialize_type(ExtArgumentType::Int32) + " @" +
+                            kv.first};
+    std::vector<std::string> arg_strs;
+    for (const auto arg : kv.second.getArgs()) {
+      arg_strs.push_back(serialize_type(arg));
+    }
+    declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") +
+                           ");");
   }
   return declarations;
 }
