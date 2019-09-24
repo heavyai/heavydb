@@ -10,3 +10,39 @@
    fun:_ZN14File_Namespace10FileBuffer13writeMetadataEi
    fun:_ZN14File_Namespace7FileMgr10checkpointEv
 }
+{
+   go_runtime_cond
+   Memcheck:Cond
+   ...
+   fun:runtime.*
+}
+{
+   go_runtime_addr1
+   Memcheck:Addr1
+   ...
+   fun:runtime.*
+}
+{
+   go_runtime_addr2
+   Memcheck:Addr2
+   ...
+   fun:runtime.*
+}
+{
+   go_runtime_addr4
+   Memcheck:Addr4
+   ...
+   fun:runtime.*
+}
+{
+   go_runtime_addr8
+   Memcheck:Addr8
+   ...
+   fun:runtime.*
+}
+{
+   go_runtime_addr16
+   Memcheck:Addr16
+   ...
+   fun:runtime.*
+}

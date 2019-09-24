@@ -338,6 +338,9 @@ class MapDProgramOptions {
 };
 
 void MapDProgramOptions::init_logging() {
+  if (verbose_logging && logger::Severity::DEBUG1 < log_options_.severity_) {
+    log_options_.severity_ = logger::Severity::DEBUG1;
+  }
   log_options_.set_base_path(base_path);
   logger::init(log_options_);
 }
