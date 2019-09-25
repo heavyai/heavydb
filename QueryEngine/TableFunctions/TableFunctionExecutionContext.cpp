@@ -25,14 +25,27 @@
 namespace {
 
 template <typename T>
-const int8_t* create_literal_buffer(
-    T literal,
-    const ExecutorDeviceType device_type,
-    std::vector<std::unique_ptr<char[]>>& literals_owner) {
+const int8_t* create_literal_buffer(T literal,
+                                    const ExecutorDeviceType device_type,
+                                    std::vector<std::unique_ptr<char[]>>& literals_owner,
+                                    CudaAllocator* gpu_allocator) {
   CHECK_LE(sizeof(T), sizeof(int64_t));  // pad to 8 bytes
-  literals_owner.emplace_back(std::make_unique<char[]>(sizeof(int64_t)));
-  std::memcpy(literals_owner.back().get(), &literal, sizeof(T));
-  return reinterpret_cast<const int8_t*>(literals_owner.back().get());
+  switch (device_type) {
+    case ExecutorDeviceType::CPU: {
+      literals_owner.emplace_back(std::make_unique<char[]>(sizeof(int64_t)));
+      std::memcpy(literals_owner.back().get(), &literal, sizeof(T));
+      return reinterpret_cast<const int8_t*>(literals_owner.back().get());
+    }
+    case ExecutorDeviceType::GPU: {
+      CHECK(gpu_allocator);
+      const auto gpu_literal_buf_ptr = gpu_allocator->alloc(sizeof(int64_t));
+      gpu_allocator->copyToDevice(
+          gpu_literal_buf_ptr, reinterpret_cast<int8_t*>(&literal), sizeof(T));
+      return gpu_literal_buf_ptr;
+    }
+  }
+  UNREACHABLE();
+  return nullptr;
 }
 
 }  // namespace
@@ -49,6 +62,13 @@ ResultSetPtr TableFunctionExecutionContext::execute(
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::vector<std::unique_ptr<char[]>> literals_owner;
 
+  const int device_id = 0;  // TODO(adb): support multi-gpu table functions
+  std::unique_ptr<CudaAllocator> device_allocator;
+  if (device_type == ExecutorDeviceType::GPU) {
+    auto& data_mgr = executor->catalog_->getDataMgr();
+    device_allocator.reset(new CudaAllocator(&data_mgr, device_id));
+  }
+
   std::vector<const int8_t*> col_buf_ptrs;
   ssize_t element_count = -1;
   for (const auto& input_expr : exe_unit.input_exprs) {
@@ -59,7 +79,7 @@ ResultSetPtr TableFunctionExecutionContext::execute(
           table_info.info.fragments.front(),
           device_type == ExecutorDeviceType::CPU ? Data_Namespace::MemoryLevel::CPU_LEVEL
                                                  : Data_Namespace::MemoryLevel::GPU_LEVEL,
-          0,
+          device_id,
           chunks_owner,
           column_fetcher.columnarized_table_cache_);
       if (element_count < 0) {
@@ -76,12 +96,16 @@ ResultSetPtr TableFunctionExecutionContext::execute(
       if (ti.is_fp()) {
         switch (get_bit_width(ti)) {
           case 32:
-            col_buf_ptrs.push_back(create_literal_buffer(
-                const_val_datum.floatval, device_type, literals_owner));
+            col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.floatval,
+                                                         device_type,
+                                                         literals_owner,
+                                                         device_allocator.get()));
             break;
           case 64:
-            col_buf_ptrs.push_back(create_literal_buffer(
-                const_val_datum.doubleval, device_type, literals_owner));
+            col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.doubleval,
+                                                         device_type,
+                                                         literals_owner,
+                                                         device_allocator.get()));
             break;
           default:
             UNREACHABLE();
@@ -89,20 +113,28 @@ ResultSetPtr TableFunctionExecutionContext::execute(
       } else if (ti.is_integer()) {
         switch (get_bit_width(ti)) {
           case 8:
-            col_buf_ptrs.push_back(create_literal_buffer(
-                const_val_datum.tinyintval, device_type, literals_owner));
+            col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.tinyintval,
+                                                         device_type,
+                                                         literals_owner,
+                                                         device_allocator.get()));
             break;
           case 16:
-            col_buf_ptrs.push_back(create_literal_buffer(
-                const_val_datum.smallintval, device_type, literals_owner));
+            col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.smallintval,
+                                                         device_type,
+                                                         literals_owner,
+                                                         device_allocator.get()));
             break;
           case 32:
-            col_buf_ptrs.push_back(create_literal_buffer(
-                const_val_datum.intval, device_type, literals_owner));
+            col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.intval,
+                                                         device_type,
+                                                         literals_owner,
+                                                         device_allocator.get()));
             break;
           case 64:
-            col_buf_ptrs.push_back(create_literal_buffer(
-                const_val_datum.bigintval, device_type, literals_owner));
+            col_buf_ptrs.push_back(create_literal_buffer(const_val_datum.bigintval,
+                                                         device_type,
+                                                         literals_owner,
+                                                         device_allocator.get()));
             break;
           default:
             UNREACHABLE();
@@ -213,18 +245,6 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   CHECK(gpu_allocator);
 
   std::vector<CUdeviceptr> kernel_params(KERNEL_PARAM_COUNT, 0);
-
-  // TODO(adb): create literals buffer, merge w/ CPU
-  auto const_val = dynamic_cast<Analyzer::Constant*>(exe_unit.input_exprs[1]);
-  CHECK(const_val);
-  auto const_val_datum = const_val->get_constval();
-  int copy_multiplier = const_val_datum.intval;
-  auto copy_multiplier_gpu = gpu_allocator->alloc(sizeof(copy_multiplier));
-  gpu_allocator->copyToDevice(copy_multiplier_gpu,
-                              reinterpret_cast<int8_t*>(&copy_multiplier),
-                              sizeof(copy_multiplier));
-  col_buf_ptrs.push_back(reinterpret_cast<const int8_t*>(copy_multiplier_gpu));
-
   // setup the inputs
   auto byte_stream_ptr = gpu_allocator->alloc(col_buf_ptrs.size() * sizeof(int64_t));
   gpu_allocator->copyToDevice(byte_stream_ptr,
@@ -247,14 +267,13 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   query_mem_desc.setOutputColumnar(true);
   query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});  // single 8 byte col, for now
 
-  auto new_elem_count = elem_count * copy_multiplier;
-
+  const auto allocated_output_row_count = elem_count * exe_unit.output_buffer_multiplier;
   auto query_buffers = std::make_unique<QueryMemoryInitializer>(
       exe_unit,
       query_mem_desc,
       device_id,
       ExecutorDeviceType::GPU,
-      new_elem_count,
+      allocated_output_row_count,
       std::vector<std::vector<const int8_t*>>{col_buf_ptrs},
       std::vector<std::vector<uint64_t>>{{0}},  // frag offsets
       row_set_mem_owner_,

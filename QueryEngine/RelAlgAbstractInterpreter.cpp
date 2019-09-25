@@ -2002,8 +2002,6 @@ class RelAlgAbstractInterpreter {
 
   std::shared_ptr<RelTableFunction> dispatchTableFunction(
       const rapidjson::Value& table_func_ra) {
-    LOG(INFO) << "Dispatching table func " << json_node_to_string(table_func_ra);
-
     const auto inputs = getRelAlgInputs(table_func_ra);
     CHECK_EQ(size_t(1), inputs.size());
 
