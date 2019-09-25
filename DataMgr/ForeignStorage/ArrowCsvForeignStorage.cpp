@@ -32,24 +32,40 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
   std::array<int, 3> col_key {chunk_key[0], chunk_key[1], chunk_key[2]};
   auto &frag = g_columns.at(col_key).at(chunk_key[3]);
   int64_t sz, copied = 0;
+  std::shared_ptr<arrow::ArrayData> prev_data = nullptr;
+  int varlen_offset = 0;
+
   for( auto array_data : frag.chunks ) {
     arrow::Buffer *bp = nullptr;
     
     if(sql_type.get_type() == kTEXT) {
-      // ONLY FOR NONE ENCODED STRINGS
-      if(chunk_key[4] == 1) {
         CHECK_GE(array_data->buffers.size(), 3UL);
         bp = array_data->buffers[2].get();
-      } else {
-        CHECK_GE(array_data->buffers.size(), 2UL);
-        bp = array_data->buffers[1].get();
-      }
     } else if(array_data->null_count != array_data->length) {
         CHECK_GE(array_data->buffers.size(), 2UL);
         bp = array_data->buffers[1].get();
     }
     if(bp) {
-      std::memcpy(dest, bp->data(), sz = bp->size());
+      if(chunk_key.size() == 4 && chunk_key[4] == 2) {
+        const uint32_t *data = reinterpret_cast<const uint32_t *>(bp->data());
+        sz = bp->size();
+        // We are trying to merge separate arrow arrays with offsets to one omnisci chunk
+        // So we need to know that:
+        // - offsets length of every array = array.len() + 1
+        // - offsets array of every array starts from zero
+        // So, we calculate offset of (n+1)th array as sum of offsets of previous n arrays
+        // and ignore first value of every new array offset
+        if(prev_data != nullptr) {
+          data++;
+          sz-=sizeof(uint32_t);
+        }
+        std::transform(data, data+(sz / sizeof(uint32_t)), dest, [varlen_offset](uint32_t val) {
+          return val + varlen_offset;
+        });
+        varlen_offset += data[bp->size() - 1]; // get offset of the last element of current array
+      } else {
+        std::memcpy(dest, bp->data(), sz = bp->size());
+      }
     } else {
       // TODO: nullify?
       auto fixed_type = dynamic_cast<arrow::FixedWidthType*>(array_data->type.get());
@@ -58,6 +74,7 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
       else CHECK(false); // TODO: else???
     }
     dest += sz; copied += sz;
+    prev_data = array_data;
   }
   CHECK_EQ(numBytes, size_t(copied));
 }
