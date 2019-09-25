@@ -12,8 +12,8 @@ add_library(CsvImport Importer.cpp Importer.h ${S3Archive})
 
 add_library(CsvParserUtils CsvParserUtils.cpp CsvParserUtils.h)
 
-target_link_libraries(CsvImport mapd_thrift Shared Catalog Chunk DataMgr StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS}
- ${LibArchive_LIBRARIES} ${IMPORT_LIBRARIES} ${Arrow_LIBRARIES} CsvParserUtils)
+target_link_libraries(CsvImport CsvParserUtils mapd_thrift Shared Catalog Chunk DataMgr StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS}
+ ${LibArchive_LIBRARIES} ${IMPORT_LIBRARIES} ${Arrow_LIBRARIES})
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/ThirdParty/gdal-data DESTINATION "ThirdParty")
 add_custom_target(gdal-data ALL COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/ThirdParty/gdal-data" "${CMAKE_BINARY_DIR}/ThirdParty/gdal-data")

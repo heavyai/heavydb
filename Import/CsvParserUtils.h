@@ -22,6 +22,9 @@
 
 #pragma once
 
+#include <string>
+#include <vector>
+
 #include "Import/CopyParams.h"
 
 namespace Importer_NS {

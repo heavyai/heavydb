@@ -22,6 +22,8 @@
 
 #pragma once
 
+#include <string>
+
 #include "Shared/sqltypes.h"
 
 namespace Importer_NS {
