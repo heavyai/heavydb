@@ -9,7 +9,14 @@
 #include <arrow/io/file.h>
 #include "../DataMgr/StringNoneEncoder.h"
 
-std::shared_ptr<arrow::Table> g_arrowTable;
+#include <array>
+
+struct ArrowFragment {
+  int64_t sz;
+  std::vector<std::shared_ptr<arrow::ArrayData>> chunks;
+};
+
+std::map<std::array<int, 3>, std::vector<ArrowFragment>> g_columns;
 
 void ArrowCsvForeignStorage::append(
     const std::vector<ForeignStorageColumnBuffer>& column_buffers) {
@@ -22,28 +29,37 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
                                   int8_t* dest,
                                   const size_t numBytes) {
   //printf("-- reading %d:%d<=%u\n", chunk_key[2], chunk_key[3], unsigned(numBytes));
-  arrow::Table &table = *g_arrowTable.get();
-  auto ch_array = table.column(chunk_key[2]-1)->data();
-  auto array_data = ch_array->chunk(chunk_key[3])->data().get();
-  arrow::Buffer *bp = nullptr;
-  
-  if(sql_type.get_type() == kTEXT) {
-    // ONLY FOR NONE ENCODED STRINGS
-    if(chunk_key[4] == 1) {
-      CHECK_GE(array_data->buffers.size(), 3UL);
-      bp = array_data->buffers[2].get();
-    } else {
-      CHECK_GE(array_data->buffers.size(), 2UL);
-      bp = array_data->buffers[1].get();
+  std::array<int, 3> col_key {chunk_key[0], chunk_key[1], chunk_key[2]};
+  auto &frag = g_columns.at(col_key).at(chunk_key[3]);
+  int64_t sz, copied = 0;
+  for( auto array_data : frag.chunks ) {
+    arrow::Buffer *bp = nullptr;
+    
+    if(sql_type.get_type() == kTEXT) {
+      // ONLY FOR NONE ENCODED STRINGS
+      if(chunk_key[4] == 1) {
+        CHECK_GE(array_data->buffers.size(), 3UL);
+        bp = array_data->buffers[2].get();
+      } else {
+        CHECK_GE(array_data->buffers.size(), 2UL);
+        bp = array_data->buffers[1].get();
+      }
+    } else if(array_data->null_count != array_data->length) {
+        CHECK_GE(array_data->buffers.size(), 2UL);
+        bp = array_data->buffers[1].get();
     }
-  } else if(array_data->null_count != array_data->length) {
-      CHECK_GE(array_data->buffers.size(), 2UL);
-      bp = array_data->buffers[1].get();
+    if(bp) {
+      std::memcpy(dest, bp->data(), sz = bp->size());
+    } else {
+      // TODO: nullify?
+      auto fixed_type = dynamic_cast<arrow::FixedWidthType*>(array_data->type.get());
+      if(fixed_type)
+        sz = array_data->length*fixed_type->bit_width()/8;
+      else CHECK(false); // TODO: else???
+    }
+    dest += sz; copied += sz;
   }
-  if(bp) {
-    std::memcpy(dest, bp->data(), bp->size());
-    CHECK_EQ(numBytes, (size_t)bp->size());
-  } else /*TODO: nullify?*/;
+  CHECK_EQ(numBytes, size_t(copied));
 }
 
 void ArrowCsvForeignStorage::prepareTable(const int db_id, const std::string &type, TableDescriptor& td, std::list<ColumnDescriptor>& cols) {
@@ -72,64 +88,96 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key, const 
   r = arrow::csv::TableReader::Make(memp, inp, ropt, popt, copt, &trp);
   CHECK(r.ok());
 
-  r = trp->Read(&g_arrowTable);
+  std::shared_ptr<arrow::Table> arrowTable;
+  r = trp->Read(&arrowTable);
   CHECK(r.ok());
   
-  arrow::Table &table = *g_arrowTable.get();
+  arrow::Table &table = *arrowTable.get();
   int cln = 0, num_cols = table.num_columns();
-  int num_frags = table.column(0)->data()->num_chunks();
+  int arr_frags = table.column(0)->data()->num_chunks();
+  arrow::ChunkedArray *c0p = table.column(0)->data().get();
+
+  std::vector<std::pair<int,int>> fragments;
+  int start = 0;
+  int64_t sz = c0p->chunk(0)->length();
+  // claculate size and boundaries of fragments
+  for(int i = 1; i < arr_frags; i++) {
+    if(sz > td.fragPageSize) {
+      fragments.push_back(std::make_pair(start, i));
+      start = i;
+      sz = 0;
+    }
+    sz += c0p->chunk(i)->length();
+  }
+  fragments.push_back(std::make_pair(start, arr_frags));
 
   // data comes like this - database_id, table_id, column_id, fragment_id
   ChunkKey key{table_key.first, table_key.second, 0, 0};
+  std::array<int, 3> col_key {table_key.first, table_key.second, 0};
+
   for(auto c : cols) {
     if(cln >= num_cols) {
-      LOG(WARNING) << "Number of columns read from Arrow (" << num_cols << ") mismatch CREATE TABLE request: " << cols.size();
+      LOG(ERROR) << "Number of columns read from Arrow (" << num_cols << ") mismatch CREATE TABLE request: " << cols.size();
       break;
     }
-    key[2] = c.columnId;
+    if(c.isSystemCol)
+      continue; // must be processed by base interface implementation
+
+    auto ctype = c.columnType.get_type();
+    col_key[2] = key[2] = c.columnId;
+    auto &col = g_columns[col_key];
+    col.resize(fragments.size());
     auto clp = table.column(cln++)->data().get();
-    if(!c.isSystemCol)
-      for(int f = 0; f < num_frags; f++ ) {
-        key[3] = f;
-        auto clf = clp->chunk(f).get();
-        if(c.columnType.get_type() == kTEXT) {
-          if(clf->data()->buffers.size() <= 2) {
+
+    // fill each fragment
+    for(size_t f = 0; f < fragments.size(); f++ ) {
+      key[3] = f;
+      auto &frag = col[f];
+      int64_t varlen = 0;
+      // for each arrow chunk
+      for(int i = fragments[f].first, e = fragments[f].second; i < e; i++) {
+        frag.chunks.emplace_back(clp->chunk(i)->data());
+        frag.sz += clp->chunk(i)->length();
+        auto &buffers = clp->chunk(i)->data()->buffers;
+        if(ctype == kTEXT) {
+          if(buffers.size() <= 2) {
             LOG(FATAL) << "Type of column #" << cln << " does not match between Arrow and description of " << c.columnName;
             throw std::runtime_error("Column ingress mismatch: " + c.columnName);
           }
-          auto k = key;
-          k.push_back(1);
-          {
-            auto b = mgr->createBuffer(k);
-            auto sz = clf->data()->buffers[2]->size();
-            b->setSize(sz);
-            b->encoder = std::make_unique<StringNoneEncoder>(b);
-            b->has_encoder = true;
-            b->sql_type = c.columnType;
-          }
-          k[4] = 2;
-          {
-            auto &b = *mgr->createBuffer(k);
-            b.sql_type = SQLTypeInfo(kINT, false);
-            auto sz = clf->length();
-            b.setSize(sz);
-          }
-        } else {
-          if(clf->data()->buffers.size() > 2) {
-            LOG(FATAL) << "Type of column #" << cln << " does not match between Arrow and description of " << c.columnName;
-            throw std::runtime_error("Column ingress mismatch: " + c.columnName);
-          }
-          auto &b = *mgr->createBuffer(key);
-          b.sql_type = c.columnType;
-          auto sz = clf->length();
-          b.setSize(sz);
+          varlen += buffers[2]->size();
+        } else if(buffers.size() > 2) {
+          LOG(FATAL) << "Type of column #" << cln << " does not match between Arrow and description of " << c.columnName;
+          throw std::runtime_error("Column ingress mismatch: " + c.columnName);
         }
-        //TODO: check dynamic_cast<arrow::FixedWidthType*>(c0f->type().get())->bit_width() == b.sql_type.get_size()
-  }   }
-  printf("-- created %d:%d cols:frags\n", num_cols, num_frags);
+      }
+      //TODO: check dynamic_cast<arrow::FixedWidthType*>(c0f->type().get())->bit_width() == b.sql_type.get_size()
+      // create buffer descriptotrs
+      if(ctype == kTEXT) {
+        auto k = key;
+        k.push_back(1);
+        {
+          auto b = mgr->createBuffer(k);
+          b->setSize(varlen);
+          b->encoder = std::make_unique<StringNoneEncoder>(b);
+          b->has_encoder = true;
+          b->sql_type = c.columnType;
+        }
+        k[4] = 2;
+        {
+          auto &b = *mgr->createBuffer(k);
+          b.sql_type = SQLTypeInfo(kINT, false);
+          b.setSize(frag.sz);
+        }
+      } else {
+        auto &b = *mgr->createBuffer(key);
+        b.sql_type = c.columnType;
+        b.setSize(frag.sz);
+      }
+  } } // each col and fragment
+  printf("-- created: %d columns, %d chunks, %d frags\n", num_cols, arr_frags, int(fragments.size()));
 }
 
 std::string ArrowCsvForeignStorage::getType() const {
-  printf("-- getting used!!!!\n");
+  printf("CSV importer is activated. Create table `with (storage_type='CSV:path/to/file.csv');`\n");
   return "CSV";
 }
