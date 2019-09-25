@@ -42,6 +42,7 @@ OmniSciDB Developer Documentation
     :maxdepth: 2
     :numbered:
 
+    components/logger
     components/query_state
     components/thrift_api
 
