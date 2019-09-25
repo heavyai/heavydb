@@ -21,6 +21,7 @@
  */
 #include "CsvParserUtils.h"
 
+#include "Shared/Logger.h"
 #include "StringDictionary/StringDictionary.h"
 
 namespace {
@@ -53,17 +54,6 @@ size_t CsvParserUtils::find_beginning(const char* buffer,
   return i;
 }
 
-/**
- * @brief Finds the closest possible row ending to the end of the given buffer.
- *
- * @param buffer               Given buffer which has the rows in csv format. (NOT OWN)
- * @param size                 Size of the buffer.
- * @param copy_params          Copy params for the table.
- * @param num_rows_this_buffer Number of rows until the closest possible row ending.
- *
- * @return The position of the closest possible row ending to the end of the given
- * buffer.
- */
 size_t CsvParserUtils::find_end(const char* buffer,
                                 size_t size,
                                 const Importer_NS::CopyParams& copy_params,
