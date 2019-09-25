@@ -8,15 +8,16 @@ Introduction to OmniSciDB
 =========================
 
 OmniSciDB is an open source SQL-based, relational, columnar database engine
-that leverages the full performance and parallelism of modern hardware 
-(both CPUs and GPUs) to enable querying of multi-billion row datasets in milliseconds,
-without the need for indexing, pre-aggregation, or downsampling.
+that leverages the full performance and parallelism of modern hardware
+(both CPUs and GPUs) to enable querying of multi-billion row datasets
+in milliseconds, without the need for indexing, pre-aggregation, or
+downsampling.
 
 OmniSciDB can be run on hybrid CPU/GPU systems, as well as on CPU-only systems
 featuring X86, Power, and ARM (experimental support) architectures. To achieve
 maximum performance, OmniSciDB features multi-tiered caching of data between
-storage, CPU memory, and GPU memory, and an innovative Just-In-Time (JIT) query
-compilation framework.
+storage, CPU memory, and GPU memory, as well as an innovative Just-In-Time
+(JIT) query compilation framework built around LLVM.
 
 This developer documentation provides an in-depth discussion of the OmniSciDB
 internals, and details the data model and query execution flows.
