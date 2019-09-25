@@ -85,10 +85,6 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
     prev_data = array_data.get();
   }
   CHECK_EQ(numBytes, size_t(copied));
-  // we are doing in-memory analytics where read() happens once, it's better to save
-  // memory and release it for consecuent operations however, if there is not enough
-  // memory, read() could can be called again, which will break this assumption.
-  frag.chunks.clear();
 }
 
 void ArrowCsvForeignStorage::prepareTable(const int db_id,
