@@ -21,29 +21,71 @@
 
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 
+namespace table_functions {
+
+enum class OutputBufferSizeType {
+  kUserSpecifiedConstantParameter,
+  kUserSpecifiedRowMultiplier,
+  kConstant
+};
+
+struct TableFunctionOutputRowSizer {
+  OutputBufferSizeType type{OutputBufferSizeType::kConstant};
+  const size_t val{0};
+};
+
 class TableFunction {
  public:
   TableFunction(const std::string& name,
+                const TableFunctionOutputRowSizer output_sizer,
                 const std::vector<ExtArgumentType>& input_args,
-                const std::vector<ExtArgumentType>& return_args)
-      : name_(name), input_args_(input_args), return_args_(return_args) {}
+                const std::vector<ExtArgumentType>& output_args)
+      : name_(name)
+      , output_sizer_(output_sizer)
+      , input_args_(input_args)
+      , output_args_(output_args) {}
 
-  std::vector<ExtArgumentType> getArgs() const { return input_args_; }
+  std::vector<ExtArgumentType> getArgs() const {
+    std::vector<ExtArgumentType> args;
+    args.insert(args.end(), input_args_.begin(), input_args_.end());
+    args.insert(args.end(), output_args_.begin(), output_args_.end());
+    return args;
+  }
+
+  SQLTypeInfo getOutputSQLType(const size_t idx) const;
+
+  auto getOutputsSize() const { return output_args_.size(); }
+
+  auto getName() const { return name_; }
+
+  bool hasUserSpecifiedOutputMultiplier() const {
+    return output_sizer_.type == OutputBufferSizeType::kUserSpecifiedRowMultiplier;
+  }
+
+  size_t getOutputRowParameter() const { return output_sizer_.val; }
 
  private:
   const std::string name_;
+  const TableFunctionOutputRowSizer output_sizer_;
   const std::vector<ExtArgumentType> input_args_;
-  const std::vector<ExtArgumentType> return_args_;
+  const std::vector<ExtArgumentType> output_args_;
 };
 
 class TableFunctionsFactory {
  public:
-  static void add(const std::string& name, const std::vector<ExtArgumentType>& args);
+  static void add(const std::string& name,
+                  const TableFunctionOutputRowSizer sizer,
+                  const std::vector<ExtArgumentType>& input_args,
+                  const std::vector<ExtArgumentType>& output_args);
+
+  static const TableFunction& get(const std::string& name);
 
  private:
   static void init();
 
   static std::unordered_map<std::string, TableFunction> functions_;
 
-  friend class ExtensionFunctionsWhitelist;
+  friend class ::ExtensionFunctionsWhitelist;
 };
+
+}  // namespace table_functions

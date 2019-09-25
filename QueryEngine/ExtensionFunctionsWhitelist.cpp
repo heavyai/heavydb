@@ -256,8 +256,8 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
                              ");");
     }
   }
-  TableFunctionsFactory::init();
-  for (const auto& kv : TableFunctionsFactory::functions_) {
+  table_functions::TableFunctionsFactory::init();
+  for (const auto& kv : table_functions::TableFunctionsFactory::functions_) {
     std::string decl_prefix{"declare " + serialize_type(ExtArgumentType::Int32) + " @" +
                             kv.first};
     std::vector<std::string> arg_strs;

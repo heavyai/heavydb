@@ -16,24 +16,76 @@
 
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 
+#include <boost/algorithm/string.hpp>
 #include <mutex>
 
+namespace table_functions {
+
+namespace {
+
+SQLTypeInfo ext_arg_pointer_type_to_type_info(const ExtArgumentType ext_arg_type) {
+  switch (ext_arg_type) {
+    case ExtArgumentType::PInt8:
+      return SQLTypeInfo(kTINYINT, false);
+    case ExtArgumentType::PInt16:
+      return SQLTypeInfo(kSMALLINT, false);
+    case ExtArgumentType::PInt32:
+      return SQLTypeInfo(kINT, false);
+    case ExtArgumentType::PInt64:
+      return SQLTypeInfo(kBIGINT, false);
+    case ExtArgumentType::PFloat:
+      return SQLTypeInfo(kFLOAT, false);
+    case ExtArgumentType::PDouble:
+      return SQLTypeInfo(kDOUBLE, false);
+    default:
+      UNREACHABLE();
+  }
+  UNREACHABLE();
+  return SQLTypeInfo(kNULLT, false);
+}
+
+}  // namespace
+
+SQLTypeInfo TableFunction::getOutputSQLType(const size_t idx) const {
+  CHECK_LT(idx, output_args_.size());
+  // TODO(adb): conditionally handle nulls
+  return ext_arg_pointer_type_to_type_info(output_args_[idx]);
+}
+
 void TableFunctionsFactory::add(const std::string& name,
-                                const std::vector<ExtArgumentType>& args) {
-  functions_.insert(std::make_pair(name, TableFunction(name, args, {})));
+                                const TableFunctionOutputRowSizer sizer,
+                                const std::vector<ExtArgumentType>& input_args,
+                                const std::vector<ExtArgumentType>& output_args) {
+  functions_.insert(
+      std::make_pair(name, TableFunction(name, sizer, input_args, output_args)));
 }
 
 std::once_flag init_flag;
 
 void TableFunctionsFactory::init() {
   std::call_once(init_flag, []() {
-    TableFunctionsFactory::add("row_copier",
-                               std::vector<ExtArgumentType>{ExtArgumentType::PDouble,
-                                                            ExtArgumentType::PInt32,
-                                                            ExtArgumentType::PInt64,
-                                                            ExtArgumentType::PInt64,
-                                                            ExtArgumentType::PInt64});
+    TableFunctionsFactory::add(
+        "row_copier",
+        TableFunctionOutputRowSizer{OutputBufferSizeType::kUserSpecifiedRowMultiplier, 2},
+        std::vector<ExtArgumentType>{ExtArgumentType::PDouble,
+                                     ExtArgumentType::PInt32,
+                                     ExtArgumentType::PInt64,
+                                     ExtArgumentType::PInt64},
+        std::vector<ExtArgumentType>{ExtArgumentType::PDouble});
   });
 }
 
+const TableFunction& TableFunctionsFactory::get(const std::string& name) {
+  auto func_name = name;
+  boost::algorithm::to_lower(func_name);
+  auto itr = functions_.find(func_name);
+  if (itr == functions_.end()) {
+    throw std::runtime_error("Failed to find registered table function with name " +
+                             name);
+  }
+  return itr->second;
+}
+
 std::unordered_map<std::string, TableFunction> TableFunctionsFactory::functions_;
+
+}  // namespace table_functions

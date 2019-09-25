@@ -53,9 +53,7 @@ llvm::Function* generate_entry_point(const CgenState* cgen_state) {
   const auto pi64_type = llvm::PointerType::get(get_int_type(64, ctx), 0);
   const auto ppi64_type = llvm::PointerType::get(pi64_type, 0);
   const auto i32_type = get_int_type(32, ctx);
-  const auto i64_type = get_int_type(64, ctx);
 
-  const auto pvoid_type = llvm::PointerType::get(llvm::Type::getVoidTy(ctx), 0);
   const auto func_type = llvm::FunctionType::get(
       i32_type, {ppi8_type, pi64_type, ppi64_type, pi64_type}, false);
 
@@ -152,26 +150,38 @@ void TableFunctionCompilationContext::generateEntryPoint(
   for (size_t i = 0; i < exe_unit.input_exprs.size(); i++) {
     const auto& expr = exe_unit.input_exprs[i];
     const auto& ti = expr->get_type_info();
-    if (ti.is_varlen() || ti.is_string()) {
-      throw std::runtime_error(
-          "Varlen or string inputs to table functions are not yet supported.");
-    }
     if (ti.is_fp()) {
       func_args.push_back(cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], llvm::PointerType::get(get_fp_type(get_bit_width(ti), ctx), 0)));
-    } else {
+    } else if (ti.is_integer()) {
       func_args.push_back(cgen_state->ir_builder_.CreateBitCast(
           col_heads[i], llvm::PointerType::get(get_int_type(get_bit_width(ti), ctx), 0)));
+    } else {
+      throw std::runtime_error(
+          "Only integer and floating point columns are supported as inputs to table "
+          "functions.");
     }
   }
 
   func_args.push_back(input_row_count);
-
-  // TODO(adb): read outputs properly
-  func_args.push_back(cgen_state->ir_builder_.CreateLoad(
-      cgen_state->ir_builder_.CreateGEP(output_buffers_arg, cgen_state_->llInt(0)),
-      "first_output_column"));
   func_args.push_back(output_row_count_ptr);
+
+  for (size_t i = 0; i < exe_unit.target_exprs.size(); i++) {
+    auto output_load = cgen_state->ir_builder_.CreateLoad(
+        cgen_state->ir_builder_.CreateGEP(output_buffers_arg, cgen_state_->llInt(i)));
+    const auto& ti = exe_unit.target_exprs[i]->get_type_info();
+    if (ti.is_fp()) {
+      func_args.push_back(cgen_state->ir_builder_.CreateBitCast(
+          output_load, llvm::PointerType::get(get_fp_type(get_bit_width(ti), ctx), 0)));
+    } else if (ti.is_integer()) {
+      func_args.push_back(cgen_state->ir_builder_.CreateBitCast(
+          output_load, llvm::PointerType::get(get_int_type(get_bit_width(ti), ctx), 0)));
+    } else {
+      throw std::runtime_error(
+          "Only integer and floating point columns are supported as outputs to table "
+          "functions.");
+    }
+  }
 
   auto func_name = exe_unit.table_func_name;
   boost::algorithm::to_lower(func_name);

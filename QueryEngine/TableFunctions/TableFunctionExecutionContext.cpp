@@ -48,6 +48,19 @@ const int8_t* create_literal_buffer(T literal,
   return nullptr;
 }
 
+size_t get_output_row_count(const TableFunctionExecutionUnit& exe_unit,
+                            size_t input_element_count) {
+  size_t allocated_output_row_count = 0;
+  if (*exe_unit.output_buffer_multiplier) {
+    allocated_output_row_count = *exe_unit.output_buffer_multiplier * input_element_count;
+  } else {
+    throw std::runtime_error(
+        "Only row multiplier output buffer configuration is supported for table "
+        "functions.");
+  }
+  return allocated_output_row_count;
+}
+
 }  // namespace
 
 ResultSetPtr TableFunctionExecutionContext::execute(
@@ -183,7 +196,7 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   query_mem_desc.setOutputColumnar(true);
   query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});  // single 8 byte col, for now
 
-  const auto allocated_output_row_count = elem_count * exe_unit.output_buffer_multiplier;
+  const auto allocated_output_row_count = get_output_row_count(exe_unit, elem_count);
   auto query_buffers = std::make_unique<QueryMemoryInitializer>(
       exe_unit,
       query_mem_desc,
@@ -267,7 +280,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   query_mem_desc.setOutputColumnar(true);
   query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});  // single 8 byte col, for now
 
-  const auto allocated_output_row_count = elem_count * exe_unit.output_buffer_multiplier;
+  const auto allocated_output_row_count = get_output_row_count(exe_unit, elem_count);
   auto query_buffers = std::make_unique<QueryMemoryInitializer>(
       exe_unit,
       query_mem_desc,

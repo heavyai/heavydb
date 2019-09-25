@@ -29,6 +29,7 @@
 #include "QueryPhysicalInputsCollector.h"
 #include "RangeTableIndexVisitor.h"
 #include "RexVisitor.h"
+#include "TableFunctions/TableFunctionsFactory.h"
 #include "UsedColumnsVisitor.h"
 #include "WindowContext.h"
 
@@ -3091,20 +3092,39 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   }
   CHECK_EQ(input_col_exprs.size(), table_func->getColInputsSize());
 
-  // TODO: temporarily just clone the first input and make it the output
+  const auto& table_function_impl =
+      table_functions::TableFunctionsFactory::get(table_func->getFunctionName());
+
   std::vector<Analyzer::Expr*> table_func_outputs;
-  size_t outputs_ctr = 0;
-  target_exprs_owned_.push_back(std::make_shared<Analyzer::ColumnVar>(
-      SQLTypeInfo(kDOUBLE, true), 0, outputs_ctr++, 0));
-  table_func_outputs.push_back(target_exprs_owned_.back().get());
+  for (size_t i = 0; i < table_function_impl.getOutputsSize(); i++) {
+    const auto ti = table_function_impl.getOutputSQLType(i);
+    target_exprs_owned_.push_back(std::make_shared<Analyzer::ColumnVar>(ti, 0, i, -1));
+    table_func_outputs.push_back(target_exprs_owned_.back().get());
+  }
+
+  std::optional<size_t> output_row_multiplier;
+  if (table_function_impl.hasUserSpecifiedOutputMultiplier()) {
+    const auto parameter_index = table_function_impl.getOutputRowParameter();
+    CHECK_GT(parameter_index, size_t(0));
+    const auto parameter_expr = table_func->getTableFuncInputAt(parameter_index - 1);
+    const auto parameter_expr_literal = dynamic_cast<const RexLiteral*>(parameter_expr);
+    CHECK(parameter_expr_literal);
+    int64_t literal_val = parameter_expr_literal->getVal<int64_t>();
+    if (literal_val < 0) {
+      throw std::runtime_error("Provided output row multiplier " +
+                               std::to_string(literal_val) +
+                               " is not valid for table functions.");
+    }
+    output_row_multiplier = static_cast<size_t>(literal_val);
+  }
 
   const TableFunctionExecutionUnit exe_unit = {
       input_descs,
       input_col_descs,
-      input_exprs,         // table function inputs
-      input_col_exprs,     // table function column inputs (duplicates w/ above)
-      table_func_outputs,  // table function projected exprs
-      5,                   // output buffer multiplier
+      input_exprs,            // table function inputs
+      input_col_exprs,        // table function column inputs (duplicates w/ above)
+      table_func_outputs,     // table function projected exprs
+      output_row_multiplier,  // output buffer multiplier
       table_func->getFunctionName()};
   const auto targets_meta = get_targets_meta(table_func, exe_unit.target_exprs);
   table_func->setOutputMetainfo(targets_meta);

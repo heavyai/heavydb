@@ -79,7 +79,7 @@ struct TableFunctionExecutionUnit {
   std::vector<Analyzer::Expr*> input_exprs;
   std::vector<Analyzer::ColumnVar*> table_func_inputs;
   std::vector<Analyzer::Expr*> target_exprs;
-  const size_t output_buffer_multiplier;
+  const std::optional<size_t> output_buffer_multiplier;
   const std::string table_func_name;
 };
 
