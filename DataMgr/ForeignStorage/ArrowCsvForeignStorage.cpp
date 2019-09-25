@@ -54,7 +54,7 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
         // So we need to know that:
         // - offsets length of every array = array.len() + 1
         // - offsets array of every array starts from zero
-        // So, we calculate offset of (n+1)th array as sum of offsets of previous n arrays
+        // So, we calculate offset of (n+1)th array as a sum of last (max) offsets of previous n arrays
         // and ignore first value of every new array offset
         if(prev_data != nullptr && sz > 0) {
           data++;
