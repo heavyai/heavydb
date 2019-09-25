@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2019 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,8 @@
  * @author Mehmet Sariyuce <mehmet.sariyuce@omnisci.com>
  * @brief Implementation of CsvParserUtils class.
  */
-#include "CsvParserUtils.h"
+
+#include "Import/CsvParserUtils.h"
 
 #include "Shared/Logger.h"
 #include "StringDictionary/StringDictionary.h"

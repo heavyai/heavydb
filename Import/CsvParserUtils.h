@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2019 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,10 @@
  * @author Mehmet Sariyuce <mehmet.sariyuce@omnisci.com>
  * @brief CsvParserUtils class for parsing csv
  */
-#ifndef _CSVPARSERUTILS_H
-#define _CSVPARSERUTILS_H
 
-#include "CopyParams.h"
+#pragma once
+
+#include "Import/CopyParams.h"
 
 namespace Importer_NS {
 class CsvParserUtils {
@@ -103,5 +103,3 @@ class CsvParserUtils {
   static const std::string trim_space(const char* field, const size_t len);
 };
 }  // namespace Importer_NS
-
-#endif  // _CSVPARSERUTILS_H

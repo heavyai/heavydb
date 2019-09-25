@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2019 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,7 @@
  * @brief CopyParams struct
  */
 
-#ifndef _COPYPARAMS_H
-#define _COPYPARAMS_H
+#pragma once
 
 #include "Shared/sqltypes.h"
 
@@ -127,4 +126,3 @@ struct CopyParams {
       , sanitize_column_names(true) {}
 };
 }  // namespace Importer_NS
-#endif  // _COPYPARAMS_H
