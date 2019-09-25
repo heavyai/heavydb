@@ -46,8 +46,9 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
         bp = array_data->buffers[1].get();
     }
     if(bp) {
-      if(chunk_key.size() == 4 && chunk_key[4] == 2) {
+      if(chunk_key.size() == 5 && chunk_key[4] == 2) {
         const uint32_t *data = reinterpret_cast<const uint32_t *>(bp->data());
+        uint32_t *dest_ui32 = reinterpret_cast<uint32_t *>(dest);
         sz = bp->size();
         // We are trying to merge separate arrow arrays with offsets to one omnisci chunk
         // So we need to know that:
@@ -55,14 +56,16 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
         // - offsets array of every array starts from zero
         // So, we calculate offset of (n+1)th array as sum of offsets of previous n arrays
         // and ignore first value of every new array offset
-        if(prev_data != nullptr) {
+        if(prev_data != nullptr && sz > 0) {
           data++;
           sz-=sizeof(uint32_t);
         }
-        std::transform(data, data+(sz / sizeof(uint32_t)), dest, [varlen_offset](uint32_t val) {
-          return val + varlen_offset;
-        });
-        varlen_offset += data[bp->size() - 1]; // get offset of the last element of current array
+        if(sz > 0) {
+          std::transform(data, data+(sz / sizeof(uint32_t)), dest_ui32, [varlen_offset](uint32_t val) {
+            return val + varlen_offset;
+          });
+          varlen_offset += data[(sz / sizeof(uint32_t)) - 1]; // get offset of the last element of current array
+        }
       } else {
         std::memcpy(dest, bp->data(), sz = bp->size());
       }
