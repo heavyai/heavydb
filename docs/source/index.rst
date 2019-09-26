@@ -18,7 +18,7 @@ OmniSciDB Developer Documentation
     :maxdepth: 3
     :numbered:
 
-    data_model/catalog/index.rst
+    data_model/catalog/index
     data_model/columnar_layout
     data_model/physical_layout
     data_model/memory_layout

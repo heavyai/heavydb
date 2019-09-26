@@ -10,4 +10,4 @@ Data buffers in the in-memory levels of the BufferMgr hierarchy are backed by `s
 
 Internally, slabs are divided into 512 byte pages. Allocations within a slab are aligned to a 512 byte boundary; therefore, all top-level OmniSciDB allocations are aligned to 512 bytes.
 
-Buffers within a slab contain access counters to track the last access to the buffer and allow for a last-recently used caching mechanism to evict data from a slab if it is no longer needed. Buffers may also be **pinned* to a slab, preventing them from being evicted.
+Buffers within a slab contain access counters to track the last access to the buffer and allow for a last-recently used caching mechanism to evict data from a slab if it is no longer needed. Buffers may also be *pinned* to a slab, preventing them from being evicted.

@@ -7,20 +7,20 @@ Catalog
 
 High Level Overview
 ============================================
-.. include:: ./overview.rst
+.. include:: ./overview.inc
 
 
 System Catalog (Global)
 ============================================
-.. include:: ./system_catalog.rst
+.. include:: ./system_catalog.inc
 
 
 Catalog (Database Specific)
 ============================================
-.. include:: ./individual_catalog.rst
+.. include:: ./catalog.inc
 
 
 Migration
 ============================================
 
-.. include:: ./migration.rst
+.. include:: ./migration.inc
