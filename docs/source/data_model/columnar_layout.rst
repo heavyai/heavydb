@@ -10,9 +10,9 @@ Columns
 Fragments
 ==================
 
-.. include:: ./columnar_data_organization/fragment.rst
+.. include:: ./columnar_data_organization/fragment.inc
 
 Chunks
 ==================
 
-.. include:: ./columnar_data_organization/chunk.rst
+.. include:: ./columnar_data_organization/chunk.inc

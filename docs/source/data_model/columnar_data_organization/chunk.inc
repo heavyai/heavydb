@@ -38,7 +38,7 @@ The table will contain a single fragment with the following two chunks;
 
     chunk for **c2** will be 8M x 4 bytes (Int size) = **32Mbytes** in actual chunk physical size.
 
-Table **t** contains a single fragment, defined solely by the number of rows in the table. As each individual chunk is less than the maxium size of 1GByte they do not cause the fragment to be split.
+Table **t** contains a single fragment, defined solely by the number of rows in the table. As each individual chunk is less than the maximum size of 1GByte they do not cause the fragment to be split.
 
 Adding another column **c3** as Date will add the following chunk to the table;
 

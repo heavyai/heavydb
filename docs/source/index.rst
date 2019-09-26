@@ -21,6 +21,7 @@ OmniSciDB Developer Documentation
     data_model/columnar_layout
     data_model/physical_layout
     data_model/Catalog/index.rst
+    data_model/memory_layout
     data_model/api
     data_model/types
 
