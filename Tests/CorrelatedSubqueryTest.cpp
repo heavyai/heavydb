@@ -1095,6 +1095,211 @@ TEST(Delete, DISABLED_NonCorrelatedAllowed) {
   ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
 }
 
+TEST(Select, DISABLED_Exists_NoJoinCorrelation) {
+  int factsCount = 13;
+  int lookupCount = 5;
+  setupTest("int", factsCount, lookupCount);
+
+  std::string sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS "
+      "(SELECT 1 FROM test_lookup l);";
+  auto results1 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  uint32_t numResultRows = results1->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(factsCount), numResultRows);
+
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS "
+      "(SELECT 1 FROM test_lookup l);";
+  auto results2 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  numResultRows = results2->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(0), numResultRows);
+
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS "
+      "(SELECT * FROM test_lookup l);";
+  auto results3 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  numResultRows = results3->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(factsCount), numResultRows);
+
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS "
+      "(SELECT * FROM test_lookup l);";
+  auto results4 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  numResultRows = results4->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(0), numResultRows);
+}
+
+TEST(Select, JoinCorrelation) {
+  int factsCount = 13;
+  int lookupCount = 5;
+  setupTest("int", factsCount, lookupCount);
+
+  // single join-correlation with filter predicates
+  std::string sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS "
+      "(SELECT l.id FROM test_lookup l WHERE l.id = fact.id AND l.val > 3);";
+  auto results1 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  uint32_t numResultRows = results1->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
+  const auto select_crt_row = results1->getNextRow(true, false);
+  auto id = getIntValue(select_crt_row[0]);
+  auto val = getIntValue(select_crt_row[1]);
+  ASSERT_EQ(id, 4);
+  ASSERT_EQ(val, 4);
+
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS "
+      "(SELECT l.id FROM test_lookup l WHERE l.id = fact.id AND l.val > 3);";
+  auto results2 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  numResultRows = results2->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(12), numResultRows);
+  bool correct = true;
+  for (uint32_t i = 0; i < numResultRows; i++) {
+    const auto select_crt_row = results2->getNextRow(true, false);
+    auto id = getIntValue(select_crt_row[0]);
+    auto val = getIntValue(select_crt_row[1]);
+    if (id == 4 && val == 4) {
+      correct = false;
+    }
+  }
+  ASSERT_EQ(correct, true);
+
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS "
+      "(SELECT l.id FROM test_lookup l WHERE l.id <> fact.id AND l.val > 3);";
+  auto results3 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  numResultRows = results3->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(12), numResultRows);
+  correct = true;
+  for (uint32_t i = 0; i < numResultRows; i++) {
+    const auto select_crt_row = results3->getNextRow(true, false);
+    auto id = getIntValue(select_crt_row[0]);
+    auto val = getIntValue(select_crt_row[1]);
+    if (id == 4 && val == 4) {
+      correct = false;
+    }
+  }
+  ASSERT_EQ(correct, true);
+
+  // asterisks in SELECT clause of inner query
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS "
+      "(SELECT l.id FROM test_lookup l WHERE l.id = fact.id AND l.val > 3);";
+  auto results5 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  numResultRows = results5->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
+  const auto select_crt_row5 = results5->getNextRow(true, false);
+  id = getIntValue(select_crt_row5[0]);
+  val = getIntValue(select_crt_row5[1]);
+  ASSERT_EQ(id, 4);
+  ASSERT_EQ(val, 4);
+
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS "
+      "(SELECT l.id FROM test_lookup l WHERE l.id <> fact.id AND l.val > 3);";
+  auto results6 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  numResultRows = results6->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
+  const auto select_crt_row6 = results6->getNextRow(true, false);
+  id = getIntValue(select_crt_row6[0]);
+  val = getIntValue(select_crt_row6[1]);
+  ASSERT_EQ(id, 4);
+  ASSERT_EQ(val, 4);
+
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS "
+      "(SELECT l.id FROM test_lookup l WHERE l.id <> fact.id AND l.val > 3);";
+  auto results4 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  numResultRows = results4->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
+  const auto select_crt_row4 = results4->getNextRow(true, false);
+  id = getIntValue(select_crt_row4[0]);
+  val = getIntValue(select_crt_row4[1]);
+  ASSERT_EQ(id, 4);
+  ASSERT_EQ(val, 4);
+}
+
+TEST(Select, JoinCorrelation_withMultipleExists) {
+  int factsCount = 13;
+  int lookupCount = 5;
+  setupTest("int", factsCount, lookupCount);
+
+  // # EXISTS clause: 2
+  std::string sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS"
+      "(SELECT l.id FROM test_lookup l WHERE l.id = fact.id AND l.val > 3) AND EXISTS"
+      "(SELECT l2.id FROM test_lookup l2 WHERE l2.id = fact.id AND l2.val > 3);";
+  auto results1 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  uint32_t numResultRows = results1->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
+  const auto select_crt_row = results1->getNextRow(true, false);
+  auto id = getIntValue(select_crt_row[0]);
+  auto val = getIntValue(select_crt_row[1]);
+  ASSERT_EQ(id, 4);
+  ASSERT_EQ(val, 4);
+
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS"
+      "(SELECT l.id FROM test_lookup l WHERE l.id = fact.id AND l.val > 3) AND NOT EXISTS"
+      "(SELECT l2.id FROM test_lookup l2 WHERE l2.id = fact.id AND l2.val > 5);";
+  auto results2 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  numResultRows = results2->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
+  const auto select_crt_row2 = results2->getNextRow(true, false);
+  id = getIntValue(select_crt_row2[0]);
+  val = getIntValue(select_crt_row2[1]);
+  ASSERT_EQ(id, 4);
+  ASSERT_EQ(val, 4);
+
+  // # EXISTS clause: 3
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS"
+      "(SELECT l.id FROM test_lookup l WHERE l.id <> fact.id AND l.val > 5) AND EXISTS"
+      "(SELECT l2.id FROM test_lookup l2 WHERE l2.id = fact.id AND l2.val > 3) AND EXISTS"
+      "(SELECT l3.id FROM test_lookup l3 WHERE l3.id = fact.id AND l3.val > 3);";
+  auto results3 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  numResultRows = results3->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
+  const auto select_crt_row3 = results3->getNextRow(true, false);
+  id = getIntValue(select_crt_row3[0]);
+  val = getIntValue(select_crt_row3[1]);
+  ASSERT_EQ(id, 4);
+  ASSERT_EQ(val, 4);
+
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS"
+      "(SELECT l.id FROM test_lookup l WHERE l.id <> fact.id AND l.val > 5) AND EXISTS"
+      "(SELECT l2.id FROM test_lookup l2 WHERE l2.id = fact.id AND l2.val > 3) AND NOT "
+      "EXISTS (SELECT l3.id FROM test_lookup l3 WHERE l3.id = fact.id AND l3.val > 3);";
+  auto results4 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  numResultRows = results4->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(0), numResultRows);
+
+  // asterisks in SELECT clause of inner query
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS"
+      "(SELECT * FROM test_lookup l WHERE l.id <> fact.id AND l.val > 5) AND EXISTS"
+      "(SELECT * FROM test_lookup l2 WHERE l2.id = fact.id AND l2.val > 3) AND EXISTS"
+      "(SELECT * FROM test_lookup l3 WHERE l3.id = fact.id AND l3.val > 3);";
+  auto results5 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  numResultRows = results5->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
+  const auto select_crt_row5 = results5->getNextRow(true, false);
+  id = getIntValue(select_crt_row5[0]);
+  val = getIntValue(select_crt_row5[1]);
+  ASSERT_EQ(id, 4);
+  ASSERT_EQ(val, 4);
+
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS"
+      "(SELECT * FROM test_lookup l WHERE l.id <> fact.id AND l.val > 5) AND EXISTS"
+      "(SELECT * FROM test_lookup l2 WHERE l2.id = fact.id AND l2.val > 3) AND NOT "
+      "EXISTS (SELECT * FROM test_lookup l3 WHERE l3.id = fact.id AND l3.val > 3);";
+  auto results6 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  numResultRows = results6->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(0), numResultRows);
+}
+
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);

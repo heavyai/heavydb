@@ -12924,6 +12924,58 @@ TEST(Delete, Joins_ImplicitJoins) {
   }
 }
 
+TEST(Select, DISABLED_Exists) {
+  // this test is disabled since non-correlated exists
+  // is currently not supported in our engine
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    c("SELECT ename FROM emp WHERE EXISTS (SELECT dname FROM dept WHERE deptno > 40) "
+      "ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp WHERE EXISTS (SELECT dname FROM dept WHERE deptno < 20) "
+      "ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp WHERE NOT EXISTS (SELECT dname FROM dept WHERE deptno > 40) "
+      "ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp WHERE NOT EXISTS (SELECT dname FROM dept WHERE deptno < 20) "
+      "ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp WHERE EXISTS (SELECT * FROM dept WHERE deptno > 40) "
+      "ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp WHERE NOT EXISTS (SELECT * FROM dept WHERE deptno < 20) "
+      "ORDER BY ename;",
+      dt);
+  }
+}
+
+TEST(Select, Correlated_Exists) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    c("SELECT ename FROM emp E WHERE EXISTS (SELECT D.dname FROM dept D WHERE "
+      "D.deptno > 40 and E.deptno = D.deptno) ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp E WHERE EXISTS (SELECT D.dname FROM dept D WHERE "
+      "D.deptno < 20 and E.deptno = D.deptno) ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp E WHERE NOT EXISTS (SELECT D.dname FROM dept D WHERE "
+      "D.deptno > 40 and E.deptno = D.deptno) ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp E WHERE NOT EXISTS (SELECT D.dname FROM dept D WHERE "
+      "D.deptno < 20 and E.deptno = D.deptno) ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp E WHERE EXISTS (SELECT * from dept D WHERE "
+      "D.deptno > 40 and E.deptno = D.deptno) ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp E WHERE NOT EXISTS (SELECT * from dept D WHERE "
+      "D.deptno > 40 and E.deptno = D.deptno) ORDER BY ename;",
+      dt);
+  }
+}
+
 TEST(Create, Delete) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

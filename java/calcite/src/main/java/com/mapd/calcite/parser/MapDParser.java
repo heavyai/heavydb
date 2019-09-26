@@ -118,6 +118,7 @@ public final class MapDParser {
   public static final ThreadLocal<MapDParser> CURRENT_PARSER = new ThreadLocal<>();
   private static final EnumSet<SqlKind> SCALAR =
           EnumSet.of(SqlKind.SCALAR_QUERY, SqlKind.SELECT);
+  private static final EnumSet<SqlKind> EXISTS = EnumSet.of(SqlKind.EXISTS);
   private static final EnumSet<SqlKind> DELETE = EnumSet.of(SqlKind.DELETE);
   private static final EnumSet<SqlKind> UPDATE = EnumSet.of(SqlKind.UPDATE);
 
@@ -213,8 +214,15 @@ public final class MapDParser {
         }
 
         // special handling of sub-queries
-        if (expression.isA(SCALAR)) {
+        if (expression.isA(SCALAR) || expression.isA(EXISTS)) {
           // only expand if it is correlated.
+
+          if (expression.isA(EXISTS)) {
+            if (expression instanceof SqlCall) {
+              SqlCall call = (SqlCall) expression;
+              expression = call.getOperandList().get(0);
+            }
+          }
 
           if (isCorrelated(expression)) {
             SqlSelect select = null;
