@@ -1,3 +1,1 @@
-Migration is performed in Omnisci whenever it is necessary to update or revert existing data in SQLite database. 
-Each SQLite database has a ``mapd_version_history`` table which is used internally to verify if migration was performed or needs to be performed.
-``mapd_record_ownership_marker`` table holds the DB owner privileges from older databases.
+OmniSciDB includes a schema migration service for migrating user catalog information between versions. The schema migration service can also drive storage level migrations. The ``mapd_version_history`` table enables tracking whether or not a migration has been performed. When changing `SysCatalog` or `Catalog` *SQLite* schema, migrations must be used to ensure previous data directories work properly. 

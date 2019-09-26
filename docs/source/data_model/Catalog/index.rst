@@ -10,7 +10,7 @@ High Level Overview
 .. include:: ./overview.rst
 
 
-System Catalog
+System Catalog (Global)
 ============================================
 .. include:: ./system_catalog.rst
 

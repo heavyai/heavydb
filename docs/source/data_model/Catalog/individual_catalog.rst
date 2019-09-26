@@ -1,5 +1,4 @@
-``Catalog`` class is responsible for responsible for metadata of a specific database. The default database is ``omnisci``.
-Below are the objects that are maintained by Catalog:
+The ``Catalog`` is the top-level metadata object for a database. When the OmniSciDB data directory is initialized, an initial "default" database is created. By default, OmniSciDB always has at least one catalog at startup. The ``Catalog`` maintains the following objects:
 
 - Tables
 - Columns
@@ -7,48 +6,45 @@ Below are the objects that are maintained by Catalog:
 - Dashboards
 - mapd_dictionaries
 
-Catalog holds the data of objects in their respective tables in ``<path_to_db/mapd_catalogs/<db_name>>`` SQLite database and is also cached in memory for fast access.
+Data is persisted using a *SQLite* database per catalog in the `mapd_catalogs` directory, with the name of the *SQLite* database file corresponding to the database name. Just like the `SysCatalog`, a `Catalog` loads all data from SQLite on creation and flushes writes to SQLite immediately.
 
-Below is the general schema of a Catalog SQLite database:
+Below is a UML representation of the schema of the SQLite database backing a catalog:
 
 .. image:: ../../img/catalog/cat_schema.png
     :height: 400
-
-In the above diagram, ``physical_table_id`` and ``logical_table_id`` in mapd_logical_to_physical are foreign keys to ``mapd_tables.tableid``.
 
 ****************************************
 Tables
 ****************************************
 
-.. include:: ./tables.rst
+Tables metadata for all tables in a given database is stored in the ``mapd_tables`` *SQLite* table and read by the ``Catalog`` at startup. Table metadata is stored in a ``TableDescriptor`` for access by other objects in the system. For a given table, the ``TableDescriptor`` both holds table metadata (id, fragment size, etc) and is responsible for instantiating the ``Fragmenter`` for the table. That is, the ``TableDescriptor`` is the primary interface to locating storage for a given table.
 
 ****************************************
 Columns
 ****************************************
 
-.. include:: ./columns.rst
+Column metadata is stored in the ``mapd_columns`` table. Each column is uniquely identified by an ID pair, mapping to a unique table ID and a unique column ID within that table. ``ColumnDescriptor`` objects pass column metadata (including the `SQL Type` of a column) throughout the system.
 
 ****************************************
 Dictionaries
 ****************************************
 
-.. include:: ./dictionaries.rst
+Columns of type `dictionary encoded string` require a separate string dictionary. The string dictionary metadata is stored in the ``mapd_dictionaries`` SQLite table. ``DictDescriptor`` objects encapsulate string dictionary information. Like the ``TabelDescriptor``, ``DictDescriptor`` is the primary interface for accessing physical string dictionary storage. 
 
 ****************************************
-Logical to Physical Mapping
+Sharded Tables
 ****************************************
 
-.. include:: ./logical_to_physical.rst
+OmniSciDB supports `sharded tables` -- that is, a table partitioned by a predefined column (called the `shard key`) into a pre-determined number of `physical tables`, more commonly referred to as `shards`. Sharding is used for increasing performance (by grouping like data on like devices) and for support complex queries in distributed mode (Enterprise Edition only). Internally, a sharded table is represented as a top-level `logical` table and several underlying `physical` tables (with the number of physical tables corresponding to the total shard count). This mapping is stored in the ``mapd_logical_to_physical`` *SQLite* table. 
 
 ****************************************
 Views
 ****************************************
 
-.. include:: ./views.rst
-
+Views in OmniSciDB are currently not materialized during creation. Instead, the definition for the view is stored in the ``mapd_views`` *SQLite* table, and the view is materialized lazily when the view is queried. By using lazy materialization, OmniSciDB fuse the query on the view with the underlying table(s) backing the view, reducing the number of intermediate projections required and/or the amount of data that must be loaded and processed. Views are represented by a ``TableDescriptor`` object with the `isView` boolean member set to `true`.
 
 ****************************************
 Dashboards
 ****************************************
 
-.. include:: ./dashboards.rst
+OmniSciDB holds the dashboard state for OmniSci Immerse (Enterprise Edition only), our web-based data exploration tool. Dashboards are serialized and stored in the ``mapd_dashboards`` table. Because dashboards are built over a database and typically contain many database objects, they are considered a top-level object in the OmniSciDB catalog and object permissions model. 

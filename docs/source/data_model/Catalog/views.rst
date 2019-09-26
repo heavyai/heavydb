@@ -1,2 +1,0 @@
-Views in Omnisci are not materialized. A select statement used to create a view is stored in ``mapd_views`` table and a table is created in ``mapd_tables`` SQLite table.
-A table and a view within the system can be distinguished by ``isView`` member is both ``TableDescriptor`` as well as ``mapd_tables``.

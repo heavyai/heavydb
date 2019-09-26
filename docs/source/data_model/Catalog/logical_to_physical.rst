@@ -1,3 +1,0 @@
-When a table is created with ``nShards > 0`` then internally ``nShards`` number of tables are created in the database but we only expose one table on the surface.
-The internal tables here are called ``physical tables`` and the exposed table is called ``logical table``. The data is split between the tables depending upon the ``shardId`` and ``shardKey`` specified.
-The mapping is stored in ``mapd_logical_to_physical`` SQLite table and in ``logicalToPhysicalTableMapById_`` in-memory map.
