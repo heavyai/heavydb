@@ -30,6 +30,7 @@ OmniSciDB Developer Documentation
     :maxdepth: 2
     :numbered:
 
+    execution/overview
     execution/flow
     execution/parse
     execution/optimization
@@ -37,6 +38,7 @@ OmniSciDB Developer Documentation
     execution/codegen
     execution/kernels
     execution/results
+    execution/workflows
 
 .. toctree::
     :caption: Components
