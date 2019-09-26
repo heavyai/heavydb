@@ -18,9 +18,9 @@ OmniSciDB Developer Documentation
     :maxdepth: 3
     :numbered:
 
+    data_model/catalog/index.rst
     data_model/columnar_layout
     data_model/physical_layout
-    data_model/Catalog/index.rst
     data_model/memory_layout
     data_model/api
     data_model/types
@@ -47,7 +47,6 @@ OmniSciDB Developer Documentation
 
     components/logger
     components/query_state
-    components/thrift_api
 
 
 
