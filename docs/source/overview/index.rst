@@ -34,16 +34,15 @@ Query Execution
 The `Query Execution` section provides a high-level overview
 of how a query is executed by the OmniSci server.
 
-At a high-level, all queries made to the server pass through the
-Thrift_ `sql_execute` endpoint. Once the query string is received,
-it is then parsed, yielding a relational algebra tree. This relational
-algebra tree is then optimized and prepared for execution
-on either the CPU or the GPU. From here, the optimized relational
-algebra is consumed by then codegen step, which produces code
-suitable for executing the query on the target device.
-
-A `ResultSet` is returned by the execution and is converted
-to the corresponding `TResultSet` Thrift type before returning.
+At a high-level, all SQL queries made to the server pass through the
+Thrift_ `sql_execute` endpoint. The query string is passed to Apache Calcite_ 
+for parsing and cost-based optimization, yielding an optimized relational 
+algebra tree. This relational algebra tree is then passed through OmniSci-specific 
+optimization passes and translated into an OmniSCi-specific abstract syntax tree (AST). 
+The AST provides all the information neccessary to generate native machine code for 
+query execution on the target device. Execution then occurs in parallel on the target 
+device, with device results being aggregated and reduced into a final `ResultSet`
+for each query step.
 
 The sections following provide in-depth details on each of the
 stages involved in executing a query.
@@ -56,6 +55,7 @@ Simple Execution Model
 ======================
 
 .. uml::
+   :align: center
 
     @startuml
    
@@ -97,5 +97,3 @@ Simple Execution Model
     stop
 
     @enduml
-
-.. image:: ../img/query_exe_workflow.png
