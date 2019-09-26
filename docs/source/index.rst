@@ -15,12 +15,12 @@ OmniSciDB Developer Documentation
 
 .. toctree::
     :caption: Data Model
-    :maxdepth: 2
+    :maxdepth: 3
     :numbered:
 
     data_model/columnar_layout
     data_model/physical_layout
-    data_model/catalog
+    data_model/Catalog/index.rst
     data_model/api
     data_model/types
 
