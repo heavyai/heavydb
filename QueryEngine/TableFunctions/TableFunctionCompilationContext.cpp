@@ -245,7 +245,12 @@ void TableFunctionCompilationContext::finalize(const CompilationOptions& co,
   module_.release();
   // Add code to cache?
 
+  LOG(IR) << "Table Function Entry Point IR\n"
+          << serialize_llvm_object(entry_point_func_);
+
   if (co.device_type_ == ExecutorDeviceType::GPU) {
+    LOG(IR) << "Table Function Kernel IR\n" << serialize_llvm_object(kernel_func_);
+
     CHECK(executor);
     executor->initializeNVPTXBackend();
     const auto cuda_mgr = executor->catalog_->getDataMgr().getCudaMgr();
@@ -268,4 +273,6 @@ void TableFunctionCompilationContext::finalize(const CompilationOptions& co,
     func_ptr = reinterpret_cast<FuncPtr>(ee->getPointerToFunction(entry_point_func_));
     own_execution_engine_ = std::move(ee);
   }
+
+  LOG(IR) << "End of IR";
 }
