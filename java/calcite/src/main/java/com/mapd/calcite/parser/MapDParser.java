@@ -59,7 +59,9 @@ import org.apache.calcite.sql.JoinConditionType;
 import org.apache.calcite.sql.JoinType;
 import org.apache.calcite.sql.SqlAsOperator;
 import org.apache.calcite.sql.SqlBasicCall;
+import org.apache.calcite.sql.SqlBasicTypeNameSpec;
 import org.apache.calcite.sql.SqlCall;
+import org.apache.calcite.sql.SqlCollectionTypeNameSpec;
 import org.apache.calcite.sql.SqlDataTypeSpec;
 import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.SqlFunctionCategory;
@@ -505,24 +507,34 @@ public final class MapDParser {
             if (null != fieldType.getComponentType()) {
               expression = new SqlBasicCall(new SqlCastFunction(),
                       new SqlNode[] {identifierExpression,
-                              new SqlDataTypeSpec(fieldType.getSqlIdentifier(),
-                                      fieldType.getComponentType().getSqlIdentifier(),
-                                      fieldType.getPrecision(),
-                                      fieldType.getScale(),
-                                      null == fieldType.getCharset()
-                                              ? null
-                                              : fieldType.getCharset().name(),
+                              new SqlDataTypeSpec(
+                                      new SqlCollectionTypeNameSpec(
+
+                                              new SqlBasicTypeNameSpec(
+                                                      fieldType.getComponentType()
+                                                              .getSqlTypeName(),
+                                                      fieldType.getPrecision(),
+                                                      fieldType.getScale(),
+                                                      null == fieldType.getCharset()
+                                                              ? null
+                                                              : fieldType.getCharset()
+                                                                        .name(),
+                                                      SqlParserPos.ZERO),
+                                              fieldType.getSqlTypeName(),
+                                              SqlParserPos.ZERO),
                                       SqlParserPos.ZERO)},
                       SqlParserPos.ZERO);
             } else {
               expression = new SqlBasicCall(new SqlCastFunction(),
                       new SqlNode[] {identifierExpression,
-                              new SqlDataTypeSpec(fieldType.getSqlIdentifier(),
-                                      fieldType.getPrecision(),
-                                      fieldType.getScale(),
-                                      null == fieldType.getCharset()
-                                              ? null
-                                              : fieldType.getCharset().name(),
+                              new SqlDataTypeSpec(
+                                      new SqlBasicTypeNameSpec(fieldType.getSqlTypeName(),
+                                              fieldType.getPrecision(),
+                                              fieldType.getScale(),
+                                              null == fieldType.getCharset()
+                                                      ? null
+                                                      : fieldType.getCharset().name(),
+                                              SqlParserPos.ZERO),
                                       null,
                                       SqlParserPos.ZERO)},
                       SqlParserPos.ZERO);
