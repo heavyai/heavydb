@@ -5623,7 +5623,9 @@ void MapDHandler::emergency_shutdown() {
 
 extern std::map<std::string, std::string> get_device_parameters();
 
-void MapDHandler::get_device_parameters(std::map<std::string, std::string>& _return) {
+void MapDHandler::get_device_parameters(std::map<std::string, std::string>& _return,
+                                        const TSessionId& session) {
+  const auto session_info = get_session_copy(session);
   auto params = ::get_device_parameters();
   for (auto item : params) {
     _return.insert(item);

@@ -568,6 +568,6 @@ service MapD {
   TLicenseInfo set_license_key(1: TSessionId session, 2: string key, 3: string nonce = "") throws (1: TMapDException e)
   TLicenseInfo get_license_claims(1: TSessionId session, 2: string nonce = "") throws (1: TMapDException e)
   # user-defined functions
-  map<string, string> get_device_parameters() throws (1: TMapDException e)
+  map<string, string> get_device_parameters(1: TSessionId session) throws (1: TMapDException e)
   void register_runtime_udf(1: TSessionId session, 2: string signatures, 3: map<string, string> device_ir_map) throws (1: TMapDException e)
 }

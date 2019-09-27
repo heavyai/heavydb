@@ -418,7 +418,8 @@ class MapDHandler : public MapDIf {
     Returns a mapping of device (CPU, GPU) parameters (name, LLVM IR
     triplet, features, etc)
    */
-  void get_device_parameters(std::map<std::string, std::string>& _return) override;
+  void get_device_parameters(std::map<std::string, std::string>& _return,
+                             const TSessionId& session) override;
   /*
     Register UDFs with given signatures. The UDF implementations are
     given in a mapping of a device and the corresponding LLVM IR
