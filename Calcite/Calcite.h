@@ -34,8 +34,10 @@
 
 using namespace apache::thrift::transport;
 
-constexpr char const* CALCITE_USER_NAME = "calcite";
-constexpr char const* CALCITE_USER_PASSWORD = "HyperInteractive";
+namespace {
+constexpr char const* kCalciteUserName = "calcite";
+constexpr char const* kCalciteUserPassword = "HyperInteractive";
+}  // namespace
 
 class CalciteServerClient;
 
@@ -72,7 +74,8 @@ class Calcite final {
                       const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                       const bool legacy_syntax,
                       const bool is_explain,
-                      const bool is_view_optimize);
+                      const bool is_view_optimize,
+                      const std::string& calcite_session_id = "");
   std::vector<TCompletionHint> getCompletionHints(
       const Catalog_Namespace::SessionInfo& session_info,
       const std::vector<std::string>& visible_tables,
@@ -85,10 +88,8 @@ class Calcite final {
   ~Calcite();
   std::string getRuntimeUserDefinedFunctionWhitelist();
   void setRuntimeUserDefinedFunction(std::string udf_string);
-  void setCalciteSessionPtr(
-      const std::shared_ptr<Catalog_Namespace::SessionInfo>& session_ptr) {
-    calcite_session_ptr_ = session_ptr;
-  }
+  std::string const getInternalSessionProxyUserName() { return kCalciteUserName; }
+  std::string const getInternalSessionProxyPassword() { return kCalciteUserPassword; }
 
  private:
   void init(const int mapd_port,
@@ -106,13 +107,12 @@ class Calcite final {
                           const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                           const bool legacy_syntax,
                           const bool is_explain,
-                          const bool is_view_optimize);
+                          const bool is_view_optimize,
+                          const std::string& calcite_session_id);
   std::vector<std::string> get_db_objects(const std::string ra);
   void inner_close_calcite_server(bool log);
   std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
   getClient(int port);
-  void checkAndSetCatalog(
-      const std::shared_ptr<Catalog_Namespace::SessionInfo const>& session_ptr);
 
   int ping();
 
@@ -126,7 +126,6 @@ class Calcite final {
   std::string ssl_keystore_password_;
   std::string ssl_cert_file_;
   std::once_flag shutdown_once_flag_;
-  std::shared_ptr<Catalog_Namespace::SessionInfo> calcite_session_ptr_;
 };
 
 #endif /* CALCITE_H */
