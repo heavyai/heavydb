@@ -63,6 +63,7 @@
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/JsonAccessors.h"
+#include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/ThriftSerializers.h"
 #include "Shared/SQLTypeUtilities.h"
@@ -226,6 +227,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
   if (!udf_filename.empty()) {
     ExtensionFunctionsWhitelist::addUdfs(calcite_->getUserDefinedFunctionWhitelist());
   }
+
+  table_functions::TableFunctionsFactory::init();
 
   if (!data_mgr_->gpusPresent() && !cpu_mode_only_) {
     executor_device_type_ = ExecutorDeviceType::CPU;

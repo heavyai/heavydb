@@ -1,0 +1,194 @@
+/*
+ * Copyright 2019 OmniSci, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "TestHelpers.h"
+
+#include <gtest/gtest.h>
+
+#include "QueryEngine/ResultSet.h"
+#include "QueryRunner/QueryRunner.h"
+
+#ifndef BASE_PATH
+#define BASE_PATH "./tmp"
+#endif
+
+using QR = QueryRunner::QueryRunner;
+
+namespace {
+
+inline void run_ddl_statement(const std::string& stmt) {
+  QR::get()->runDDLStatement(stmt);
+}
+
+std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str,
+                                            const ExecutorDeviceType device_type) {
+  return QR::get()->runSQL(query_str, device_type, false, false);
+}
+
+}  // namespace
+
+bool skip_tests(const ExecutorDeviceType device_type) {
+#ifdef HAVE_CUDA
+  return device_type == ExecutorDeviceType::GPU && !(QR::get()->gpusPresent());
+#else
+  return device_type == ExecutorDeviceType::GPU;
+#endif
+}
+
+#define SKIP_NO_GPU()                                        \
+  if (skip_tests(dt)) {                                      \
+    CHECK(dt == ExecutorDeviceType::GPU);                    \
+    LOG(WARNING) << "GPU not available, skipping GPU tests"; \
+    continue;                                                \
+  }
+
+class RowCopierTableFunction : public ::testing::Test {
+  void SetUp() override {
+    run_ddl_statement("DROP TABLE IF EXISTS tf_test;");
+    run_ddl_statement("CREATE TABLE tf_test (x INT, d DOUBLE) WITH (FRAGMENT_SIZE=2);");
+
+    TestHelpers::ValuesGenerator gen("tf_test");
+
+    for (int i = 0; i < 5; i++) {
+      const auto insert_query = gen(i, i * 1.1);
+      run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    }
+  }
+
+  void TearDown() override { run_ddl_statement("DROP TABLE IF EXISTS tf_test;"); }
+};
+
+TEST_F(RowCopierTableFunction, BasicProjection) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 1)) ORDER BY d;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 2)) ORDER BY d;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(10));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 3)) ORDER BY d;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(15));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 4)) ORDER BY d;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(20));
+    }
+  }
+}
+
+TEST_F(RowCopierTableFunction, GroupByIn) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), 1)) "
+          "ORDER BY d;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(5));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), 2)) "
+          "ORDER BY d;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(10));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), 3)) "
+          "ORDER BY d;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(15));
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT d FROM TABLE(row_copier(cursor(SELECT d FROM tf_test GROUP BY d), 4)) "
+          "ORDER BY d;",
+          dt);
+      ASSERT_EQ(rows->rowCount(), size_t(20));
+    }
+  }
+}
+
+TEST_F(RowCopierTableFunction, GroupByInAndOut) {
+  auto check_result = [](const auto rows, const size_t copies) {
+    ASSERT_EQ(rows->rowCount(), size_t(5));
+    for (size_t i = 0; i < 5; i++) {
+      auto crt_row = rows->getNextRow(false, false);
+      ASSERT_EQ(TestHelpers::v<int64_t>(crt_row[1]), static_cast<int64_t>(copies));
+    }
+  };
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT d, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 1)) "
+          "GROUP BY d ORDER BY d;",
+          dt);
+      check_result(rows, 1);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT d, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 2)) "
+          "GROUP BY d ORDER BY d;",
+          dt);
+      check_result(rows, 2);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT d, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 3)) "
+          "GROUP BY d ORDER BY d;",
+          dt);
+      check_result(rows, 3);
+    }
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT d, count(*) FROM TABLE(row_copier(cursor(SELECT d FROM tf_test), 4)) "
+          "GROUP BY d ORDER BY d;",
+          dt);
+      check_result(rows, 4);
+    }
+  }
+}
+
+int main(int argc, char** argv) {
+  TestHelpers::init_logger_stderr_only(argc, argv);
+  testing::InitGoogleTest(&argc, argv);
+
+  QR::init(BASE_PATH);
+
+  int err{0};
+  try {
+    err = RUN_ALL_TESTS();
+  } catch (const std::exception& e) {
+    LOG(ERROR) << e.what();
+  }
+  QR::reset();
+  return err;
+}

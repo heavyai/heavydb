@@ -80,9 +80,9 @@ class TableFunctionsFactory {
 
   static const TableFunction& get(const std::string& name);
 
- private:
   static void init();
 
+ private:
   static std::unordered_map<std::string, TableFunction> functions_;
 
   friend class ::ExtensionFunctionsWhitelist;
