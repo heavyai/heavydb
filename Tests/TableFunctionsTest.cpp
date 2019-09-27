@@ -27,6 +27,7 @@
 
 using QR = QueryRunner::QueryRunner;
 
+extern bool g_enable_table_functions;
 namespace {
 
 inline void run_ddl_statement(const std::string& stmt) {
@@ -181,6 +182,9 @@ int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
 
+  // Table function support must be enabled before initialized the query runner
+  // environment
+  g_enable_table_functions = true;
   QR::init(BASE_PATH);
 
   int err{0};

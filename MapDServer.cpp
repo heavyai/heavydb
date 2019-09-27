@@ -71,6 +71,7 @@ extern bool g_enable_bump_allocator;
 extern size_t g_max_memory_allocation_size;
 extern size_t g_min_memory_allocation_size;
 extern bool g_enable_experimental_string_functions;
+extern bool g_enable_table_functions;
 
 bool g_enable_thrift_logs{false};
 
@@ -612,6 +613,11 @@ void MapDProgramOptions::fillAdvancedOptions() {
                                    ->default_value(g_enable_window_functions)
                                    ->implicit_value(true),
                                "Enable experimental window function support.");
+  developer_desc.add_options()("enable-table-functions",
+                               po::value<bool>(&g_enable_table_functions)
+                                   ->default_value(g_enable_table_functions)
+                                   ->implicit_value(true),
+                               "Enable experimental table functions support.");
   developer_desc.add_options()(
       "jit-debug-ir",
       po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),

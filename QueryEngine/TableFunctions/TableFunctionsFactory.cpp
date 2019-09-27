@@ -19,6 +19,8 @@
 #include <boost/algorithm/string.hpp>
 #include <mutex>
 
+extern bool g_enable_table_functions;
+
 namespace table_functions {
 
 namespace {
@@ -63,6 +65,9 @@ void TableFunctionsFactory::add(const std::string& name,
 std::once_flag init_flag;
 
 void TableFunctionsFactory::init() {
+  if (!g_enable_table_functions) {
+    return;
+  }
   std::call_once(init_flag, []() {
     TableFunctionsFactory::add(
         "row_copier",

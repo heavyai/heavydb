@@ -92,7 +92,7 @@ bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
 size_t g_big_group_threshold{20000};
 bool g_enable_window_functions{true};
-bool g_enable_table_functions{true};
+bool g_enable_table_functions{false};
 size_t g_max_memory_allocation_size{2000000000};  // set to max slab size
 size_t g_min_memory_allocation_size{
     256};  // minimum memory allocation required for projection query output buffer
