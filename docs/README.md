@@ -8,7 +8,7 @@ https://www.mapd.com/docs/
 
 [Sphinx](http://www.sphinx-doc.org) is a python-based tool to generate documentation. Here it will be used to generate HTML pages with the OmniSciDB Developer Documentation.
 
-##Building docs
+## Building docs
 
 Documentation can be build locally using a make target on the host machine, using a docker container, or manually.
 
