@@ -193,6 +193,7 @@ class DBObject {
   void setObjectType(const DBObjectType& objectType);
   void setName(std::string name) { objectName_ = name; }
   std::string getName() const { return objectName_; }
+  DBObjectType getType() const { return objectType_; }
   DBObjectKey getObjectKey() const {
     CHECK(-1 != objectKey_.dbId); /** load key not called? */
     return objectKey_;
