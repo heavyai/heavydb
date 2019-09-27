@@ -1264,7 +1264,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
   const auto ap = inObject.getPrivileges();
   switch (inObject.getObjectKey().permissionType) {
     case DatabaseDBObjectType:
-      outObject.objectType = TDBObjectType::DatabaseDBObjectType;
+      outObject.privilegeObjectType = TDBObjectType::DatabaseDBObjectType;
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::CREATE_DATABASE));
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::DROP_DATABASE));
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::VIEW_SQL_EDITOR));
@@ -1272,7 +1272,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
 
       break;
     case TableDBObjectType:
-      outObject.objectType = TDBObjectType::TableDBObjectType;
+      outObject.privilegeObjectType = TDBObjectType::TableDBObjectType;
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::CREATE_TABLE));
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::DROP_TABLE));
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::SELECT_FROM_TABLE));
@@ -1284,7 +1284,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
 
       break;
     case DashboardDBObjectType:
-      outObject.objectType = TDBObjectType::DashboardDBObjectType;
+      outObject.privilegeObjectType = TDBObjectType::DashboardDBObjectType;
       outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::CREATE_DASHBOARD));
       outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::DELETE_DASHBOARD));
       outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
@@ -1292,7 +1292,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
 
       break;
     case ViewDBObjectType:
-      outObject.objectType = TDBObjectType::ViewDBObjectType;
+      outObject.privilegeObjectType = TDBObjectType::ViewDBObjectType;
       outObject.privs.push_back(ap.hasPermission(ViewPrivileges::CREATE_VIEW));
       outObject.privs.push_back(ap.hasPermission(ViewPrivileges::DROP_VIEW));
       outObject.privs.push_back(ap.hasPermission(ViewPrivileges::SELECT_FROM_VIEW));
@@ -1304,6 +1304,9 @@ static TDBObject serialize_db_object(const std::string& roleName,
     default:
       CHECK(false);
   }
+  const int type_val = static_cast<int>(inObject.getType());
+  CHECK(type_val >= 0 && type_val < 5);
+  outObject.objectType = static_cast<TDBObjectType::type>(type_val);
   return outObject;
 }
 

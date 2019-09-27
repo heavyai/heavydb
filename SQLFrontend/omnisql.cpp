@@ -845,43 +845,112 @@ void print_all_hardware_info(ClientContext& context) {
   std::cout << tss.str();
 }
 
-static void print_privs(const std::vector<bool>& privs, TDBObjectType::type type) {
+static std::vector<std::string> print_privs(const std::vector<bool>& privs,
+                                            TDBObjectType::type type) {
   // Client priviliges print lookup
+  std::vector<std::string> priv_strs;
   static const std::unordered_map<const TDBObjectType::type,
                                   const std::vector<std::string>>
       privilege_names_lookup{
           {TDBObjectType::DatabaseDBObjectType,
-           {" create"s, " drop"s, " view-sql-editor"s, " login-access"s}},
+           {"create"s, "drop"s, "view-sql-editor"s, "login-access"s}},
           {TDBObjectType::TableDBObjectType,
-           {" create"s,
-            " drop"s,
-            " select"s,
-            " insert"s,
-            " update"s,
-            " delete"s,
-            " truncate"s,
-            " alter"s}},
+           {"create"s,
+            "drop"s,
+            "select"s,
+            "insert"s,
+            "update"s,
+            "delete"s,
+            "truncate"s,
+            "alter"s}},
           {TDBObjectType::DashboardDBObjectType,
-           {" create"s, " delete"s, " view"s, " edit"s}},
+           {"create"s, "delete"s, "view"s, "edit"s}},
           {TDBObjectType::ViewDBObjectType,
-           {" create"s, " drop"s, " select"s, " insert"s, " update"s, " delete"s}}};
+           {"create"s, "drop"s, "select"s, "insert"s, "update"s, "delete"s}}};
 
   const auto privilege_names = privilege_names_lookup.find(type);
   size_t i = 0;
   if (privilege_names != privilege_names_lookup.end()) {
     for (const auto& priv : privs) {
       if (priv) {
-        std::cout << privilege_names->second[i];
+        priv_strs.push_back(privilege_names->second[i]);
       }
       ++i;
     }
   }
+  return priv_strs;
 }
+
+namespace {
+const size_t priv_col_width = 20;
+
+struct PrivilegeRow {
+  std::string object_name;
+  std::string object_type;
+  std::string privilege_object_type;
+  std::vector<std::string> privileges;
+};
+
+std::ostream& operator<<(std::ostream& os, const PrivilegeRow& priv_row) {
+  os << std::setw(priv_col_width) << priv_row.object_name;
+  os << std::setw(priv_col_width) << priv_row.object_type;
+  os << std::setw(priv_col_width) << priv_row.privilege_object_type;
+  for (auto priv_it = priv_row.privileges.begin(); priv_it != priv_row.privileges.end();
+       ++priv_it) {
+    os << *priv_it;
+    if (std::next(priv_it) != priv_row.privileges.end()) {
+      os << ",";
+    }
+  }
+  return os;
+};
+
+}  // namespace
 
 void get_db_objects_for_grantee(ClientContext& context) {
   context.db_objects.clear();
+  std::ostringstream tss;
+  tss << std::left << std::setfill(' ');
+
+  // NOTE(jclay): At some point, we may want to pull these up into
+  // a utility for use in omnisql that allows us to easily format and write out tables.
+  auto write_table_header = [&tss](auto headers) -> void {
+    for (const auto& h : headers) {
+      tss << std::setw(priv_col_width);
+      tss << h;
+    }
+    tss << std::endl;
+    tss << std::string(tss.str().length(), '-') << std::endl;
+  };
+
+  auto write_table_rows = [&tss](std::vector<PrivilegeRow> rows) -> void {
+    std::sort(
+        rows.begin(), rows.end(), [](const PrivilegeRow& lhs, const PrivilegeRow& rhs) {
+          return lhs.object_type < rhs.object_type;
+        });
+
+    tss.width(priv_col_width);
+    for (const auto& r : rows) {
+      tss << r;
+      tss << std::endl;
+    }
+    std::cout << tss.str() << std::endl;
+  };
+
+  const std::string object_names[4] = {"database", "table", "dashboard", "view"};
+  auto type_to_string = [&](TDBObjectType::type type) -> std::string {
+    const int type_val = static_cast<int>(type);
+    CHECK(type_val > 0 && type_val < 5);
+    return object_names[type_val - 1];
+  };
+
+  const std::vector<std::string> headers = {
+      "ObjectName", "ObjectType", "PrivilegeType", "Privileges"};
+  write_table_header(headers);
   if (thrift_with_retry(kGET_OBJECTS_FOR_GRANTEE, context, nullptr)) {
+    std::vector<PrivilegeRow> table_values;
     for (const auto& db_object : context.db_objects) {
+      PrivilegeRow out_row;
       bool any_granted_privs = false;
       for (size_t j = 0; j < db_object.privs.size(); j++) {
         if (db_object.privs[j]) {
@@ -892,31 +961,15 @@ void get_db_objects_for_grantee(ClientContext& context) {
       if (!any_granted_privs) {
         continue;
       }
-      std::cout << db_object.objectName.c_str();
-      switch (db_object.objectType) {
-        case (TDBObjectType::DatabaseDBObjectType): {
-          std::cout << " (database):";
-          break;
-        }
-        case (TDBObjectType::TableDBObjectType): {
-          std::cout << " (table):";
-          break;
-        }
-        case (TDBObjectType::DashboardDBObjectType): {
-          std::cout << " (dashboard):";
-          break;
-        }
-        case (TDBObjectType::ViewDBObjectType): {
-          std::cout << " (view):";
-          break;
-        }
-        default: {
-          CHECK(false);
-        }
-      }
-      print_privs(db_object.privs, db_object.objectType);
-      std::cout << std::endl;
+
+      out_row.object_name = db_object.objectName.c_str();
+      out_row.object_type = type_to_string(db_object.objectType);
+      out_row.privilege_object_type = type_to_string(db_object.privilegeObjectType);
+      out_row.privileges = print_privs(db_object.privs, db_object.privilegeObjectType);
+
+      table_values.push_back(out_row);
     }
+    write_table_rows(table_values);
   }
 }
 
