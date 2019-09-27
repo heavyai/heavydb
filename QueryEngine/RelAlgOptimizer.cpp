@@ -187,8 +187,7 @@ bool is_identical_copy(
 void propagate_rex_input_renumber(
     const RelFilter* excluded_root,
     const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>&
-        du_web,
-    const std::unordered_map<const RelAlgNode*, RelAlgNode*>& deconst_mapping) {
+        du_web) {
   CHECK(excluded_root);
   auto src_project = dynamic_cast<const RelProject*>(excluded_root->getInput(0));
   CHECK(src_project && src_project->isSimple());
@@ -213,9 +212,7 @@ void propagate_rex_input_renumber(
   while (!work_set.empty()) {
     auto node = work_set.back();
     work_set.pop_back();
-    auto node_it = deconst_mapping.find(node);
-    CHECK(node_it != deconst_mapping.end());
-    auto modified_node = node_it->second;
+    auto modified_node = const_cast<RelAlgNode*>(node);
     if (auto filter = dynamic_cast<RelFilter*>(modified_node)) {
       auto new_condition = renumber.visit(filter->getCondition());
       filter->setCondition(new_condition);
@@ -241,8 +238,7 @@ void redirect_inputs_of(
     const std::unordered_set<const RelProject*>& projects,
     const std::unordered_set<const RelProject*>& permutating_projects,
     const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>&
-        du_web,
-    const std::unordered_map<const RelAlgNode*, RelAlgNode*>& deconst_mapping) {
+        du_web) {
   std::shared_ptr<const RelProject> src_project = nullptr;
   for (size_t i = 0; i < node->inputCount(); ++i) {
     if (auto project =
@@ -293,7 +289,7 @@ void redirect_inputs_of(
     const bool is_permutating_proj = permutating_projects.count(src_project.get());
     if (is_permutating_proj || dynamic_cast<const RelJoin*>(src_project->getInput(0))) {
       if (is_permutating_proj) {
-        propagate_rex_input_renumber(filter.get(), du_web, deconst_mapping);
+        propagate_rex_input_renumber(filter.get(), du_web);
       }
       filter->RelAlgNode::replaceInput(src_project, src_project->getAndOwnInput(0));
       RexProjectInputRedirector redirector(projects);
@@ -484,11 +480,6 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) n
 
   auto web = build_du_web(nodes);
 
-  std::unordered_map<const RelAlgNode*, RelAlgNode*> deconst_mapping;
-  for (auto node : nodes) {
-    deconst_mapping.insert(std::make_pair(node.get(), node.get()));
-  }
-
   std::unordered_set<const RelProject*> projects;
   std::unordered_set<const RelProject*> permutating_projects;
   auto visible_projs = get_visible_projects(nodes.back().get());
@@ -502,7 +493,7 @@ void eliminate_identical_copy(std::vector<std::shared_ptr<RelAlgNode>>& nodes) n
   }
 
   for (auto node : nodes) {
-    redirect_inputs_of(node, projects, permutating_projects, web, deconst_mapping);
+    redirect_inputs_of(node, projects, permutating_projects, web);
   }
 
   cleanup_dead_nodes(nodes);
@@ -917,8 +908,8 @@ std::string get_field_name(const RelAlgNode* node, size_t index) {
 void try_insert_coalesceable_proj(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes,
     std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>>& liveouts,
-    std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>& du_web,
-    std::unordered_map<const RelAlgNode*, RelAlgNode*>& deconst_mapping) {
+    std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>&
+        du_web) {
   std::vector<std::shared_ptr<RelAlgNode>> new_nodes;
   for (auto node : nodes) {
     new_nodes.push_back(node);
@@ -938,7 +929,7 @@ void try_insert_coalesceable_proj(
     if (usrs.size() != 1 || does_redef_cols(*usrs.begin())) {
       continue;
     }
-    auto only_usr = deconst_mapping[*usrs.begin()];
+    auto only_usr = const_cast<RelAlgNode*>(*usrs.begin());
 
     std::vector<std::unique_ptr<const RexScalar>> exprs;
     std::vector<std::string> fields;
@@ -968,10 +959,6 @@ void try_insert_coalesceable_proj(
   }
   if (new_nodes.size() > nodes.size()) {
     nodes.swap(new_nodes);
-    deconst_mapping.clear();
-    for (auto node : nodes) {
-      deconst_mapping.insert(std::make_pair(node.get(), node.get()));
-    }
   }
 }
 
@@ -1045,7 +1032,6 @@ void propagate_input_renumbering(
         liveout_renumbering,
     const std::vector<const RelAlgNode*>& ready_nodes,
     const std::unordered_map<const RelAlgNode*, std::unordered_set<size_t>>& old_liveouts,
-    const std::unordered_map<const RelAlgNode*, RelAlgNode*>& deconst_mapping,
     const std::unordered_set<const RelAlgNode*>& intact_nodes,
     const std::unordered_map<const RelAlgNode*, std::unordered_set<const RelAlgNode*>>&
         du_web,
@@ -1057,9 +1043,7 @@ void propagate_input_renumbering(
     auto walker = work_set.front();
     work_set.pop_front();
     CHECK(!dynamic_cast<const RelScan*>(walker));
-    auto node_it = deconst_mapping.find(walker);
-    CHECK(node_it != deconst_mapping.end());
-    auto node = node_it->second;
+    auto node = const_cast<RelAlgNode*>(walker);
     if (auto project = dynamic_cast<RelProject*>(node)) {
       auto old_exprs = project->getExpressionsAndRelease();
       std::vector<std::unique_ptr<const RexScalar>> new_exprs;
@@ -1143,13 +1127,8 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
   if (!has_dead_cols) {
     return;
   }
-  // Patch
-  std::unordered_map<const RelAlgNode*, RelAlgNode*> deconst_mapping;
-  for (auto node : nodes) {
-    deconst_mapping.insert(std::make_pair(node.get(), node.get()));
-  }
   auto web = build_du_web(nodes);
-  try_insert_coalesceable_proj(nodes, old_liveouts, web, deconst_mapping);
+  try_insert_coalesceable_proj(nodes, old_liveouts, web);
 
   for (auto node : nodes) {
     if (intact_nodes.count(node.get()) || does_redef_cols(node.get())) {
@@ -1179,13 +1158,8 @@ void eliminate_dead_columns(std::vector<std::shared_ptr<RelAlgNode>>& nodes) noe
   std::tie(liveout_renumbering, ready_nodes) =
       sweep_dead_columns(old_liveouts, nodes, intact_nodes, web, orig_node_sizes);
   // Propagate
-  propagate_input_renumbering(liveout_renumbering,
-                              ready_nodes,
-                              old_liveouts,
-                              deconst_mapping,
-                              intact_nodes,
-                              web,
-                              orig_node_sizes);
+  propagate_input_renumbering(
+      liveout_renumbering, ready_nodes, old_liveouts, intact_nodes, web, orig_node_sizes);
 }
 
 namespace {
@@ -1231,10 +1205,6 @@ class SubConditionReplacer : public RexDeepCopyVisitor {
 void sink_projected_boolean_expr_to_join(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
   auto web = build_du_web(nodes);
-  std::unordered_map<const RelAlgNode*, RelAlgNode*> deconst_mapping;
-  for (auto node : nodes) {
-    deconst_mapping.insert(std::make_pair(node.get(), node.get()));
-  }
   auto liveouts = mark_live_columns(nodes);
   for (auto node : nodes) {
     auto project = std::dynamic_pointer_cast<RelProject>(node);
@@ -1249,7 +1219,7 @@ void sink_projected_boolean_expr_to_join(
     if (usrs.size() != 1) {
       continue;
     }
-    auto join = dynamic_cast<RelJoin*>(deconst_mapping[*usrs.begin()]);
+    auto join = dynamic_cast<RelJoin*>(const_cast<RelAlgNode*>(*usrs.begin()));
     if (!join) {
       continue;
     }
@@ -1542,10 +1512,6 @@ class SubConditionRemover : public RexDeepCopyVisitor {
 
 void hoist_filter_cond_to_cross_join(
     std::vector<std::shared_ptr<RelAlgNode>>& nodes) noexcept {
-  std::unordered_map<const RelAlgNode*, RelAlgNode*> deconst_mapping;
-  for (auto node : nodes) {
-    deconst_mapping.insert(std::make_pair(node.get(), node.get()));
-  }
   std::unordered_set<const RelAlgNode*> visited;
   auto web = build_du_web(nodes);
   for (auto node : nodes) {
@@ -1589,10 +1555,7 @@ void hoist_filter_cond_to_cross_join(
         }
         const auto src_join = dynamic_cast<const RelJoin*>(filter->getInput(0));
         CHECK(src_join);
-        auto filter_it = deconst_mapping.find(filter);
-        CHECK(filter_it != deconst_mapping.end());
-        auto modified_filter = dynamic_cast<RelFilter*>(filter_it->second);
-        CHECK(modified_filter);
+        auto modified_filter = const_cast<RelFilter*>(filter);
 
         if (src_join == join) {
           std::unique_ptr<const RexScalar> filter_condition(
