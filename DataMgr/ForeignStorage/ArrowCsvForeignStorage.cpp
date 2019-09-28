@@ -8,6 +8,8 @@
 #include <arrow/csv/reader.h>
 #include <arrow/io/file.h>
 #include "../DataMgr/StringNoneEncoder.h"
+#include "../QueryEngine/ArrowResultSet.h"
+#include "../QueryEngine/ArrowUtil.h"
 
 #include <array>
 
@@ -87,6 +89,69 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
   CHECK_EQ(numBytes, size_t(copied));
 }
 
+// TODO: this overlaps with getArrowType() from ArrowResultSetConverter.cpp but with few
+// differences in kTEXT and kDATE
+static std::shared_ptr<arrow::DataType> getArrowImportType(const SQLTypeInfo type) {
+  using namespace arrow;
+  auto ktype = type.get_type();
+  if (IS_INTEGER(ktype)) {
+    switch (type.get_size()) {
+      case 1:
+        return int8();
+      case 2:
+        return int16();
+      case 4:
+        return int32();
+      case 8:
+        return int64();
+      default:
+        CHECK(false);
+    }
+  }
+  switch (ktype) {
+    case kBOOLEAN:
+      return boolean();
+    case kFLOAT:
+      return float32();
+    case kDOUBLE:
+      return float64();
+    case kCHAR:
+    case kVARCHAR:
+    case kTEXT:
+      return utf8();
+    case kDECIMAL:
+    case kNUMERIC:
+      return decimal(type.get_precision(), type.get_scale());
+    case kTIME:
+      return time32(TimeUnit::SECOND);
+    // case kDATE:
+    // TODO(wamsi) : Remove date64() once date32() support is added in cuDF. date32()
+    // Currently support for date32() is missing in cuDF.Hence, if client requests for
+    // date on GPU, return date64() for the time being, till support is added.
+    // return device_type_ == ExecutorDeviceType::GPU ? date64() : date32();
+    case kTIMESTAMP:
+      switch (type.get_precision()) {
+        case 0:
+          return timestamp(TimeUnit::SECOND);
+        case 3:
+          return timestamp(TimeUnit::MILLI);
+        case 6:
+          return timestamp(TimeUnit::MICRO);
+        case 9:
+          return timestamp(TimeUnit::NANO);
+        default:
+          throw std::runtime_error("Unsupported timestamp precision for Arrow: " +
+                                   std::to_string(type.get_precision()));
+      }
+    case kARRAY:
+    case kINTERVAL_DAY_TIME:
+    case kINTERVAL_YEAR_MONTH:
+    default:
+      throw std::runtime_error(type.get_type_name() + " is not supported in Arrow.");
+  }
+  return nullptr;
+}
+
 void ArrowCsvForeignStorage::prepareTable(const int db_id,
                                           const std::string& type,
                                           TableDescriptor& td,
@@ -100,8 +165,10 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key,
                                            const std::list<ColumnDescriptor>& cols,
                                            Data_Namespace::AbstractBufferMgr* mgr) {
   printf("-- registering %s!!!!\n", info.c_str());
+  auto memp = arrow::default_memory_pool();
   auto popt = arrow::csv::ParseOptions::Defaults();
   popt.quoting = false;
+  popt.escaping = false;
   popt.newlines_in_values = false;
 
   auto ropt = arrow::csv::ReadOptions::Defaults();
@@ -109,24 +176,37 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key,
   ropt.block_size = 1 * 1024 * 1024;
 
   auto copt = arrow::csv::ConvertOptions::Defaults();
-  auto memp = arrow::default_memory_pool();
+  copt.check_utf8 = false;
+
+#if ARROW_VERSION >= 14900
+  ropt.skip_rows = 0;  // TODO: add a way to switch csv header on
+  ropt.autogenerate_column_names = true;
+  // ropt.column_names =
+  copt.include_columns = ropt.column_names;
+#endif
+
+  for (auto c : cols) {
+    if (c.isSystemCol)
+      continue;  // must be processed by base interface implementation
+    copt.column_types.emplace(c.columnName, getArrowImportType(c.columnType));
+  }
 
   std::shared_ptr<arrow::io::ReadableFile> inp;
   auto r = arrow::io::ReadableFile::Open(info.c_str(), &inp);  // TODO check existence
-  CHECK(r.ok());
+  ARROW_THROW_NOT_OK(r);
 
   std::shared_ptr<arrow::csv::TableReader> trp;
   r = arrow::csv::TableReader::Make(memp, inp, ropt, popt, copt, &trp);
-  CHECK(r.ok());
+  ARROW_THROW_NOT_OK(r);
 
   std::shared_ptr<arrow::Table> arrowTable;
   r = trp->Read(&arrowTable);
-  CHECK(r.ok());
+  ARROW_THROW_NOT_OK(r);
 
   arrow::Table& table = *arrowTable.get();
   int cln = 0, num_cols = table.num_columns();
-  int arr_frags = table.column(0)->data()->num_chunks();
-  arrow::ChunkedArray* c0p = table.column(0)->data().get();
+  int arr_frags = ARROW_GET_DATA(table.column(0))->num_chunks();
+  arrow::ChunkedArray* c0p = ARROW_GET_DATA(table.column(0)).get();
 
   std::vector<std::pair<int, int>> fragments;
   int start = 0;
@@ -159,7 +239,7 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key,
     col_key[2] = key[2] = c.columnId;
     auto& col = g_columns[col_key];
     col.resize(fragments.size());
-    auto clp = table.column(cln++)->data().get();
+    auto clp = ARROW_GET_DATA(table.column(cln++)).get();
 
     // fill each fragment
     for (size_t f = 0; f < fragments.size(); f++) {
@@ -168,9 +248,9 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key,
       int64_t varlen = 0;
       // for each arrow chunk
       for (int i = fragments[f].first, e = fragments[f].second; i < e; i++) {
-        frag.chunks.emplace_back(clp->chunk(i)->data());
+        frag.chunks.emplace_back(ARROW_GET_DATA(clp->chunk(i)));
         frag.sz += clp->chunk(i)->length();
-        auto& buffers = clp->chunk(i)->data()->buffers;
+        auto& buffers = ARROW_GET_DATA(clp->chunk(i))->buffers;
         if (ctype == kTEXT) {
           if (buffers.size() <= 2) {
             LOG(FATAL) << "Type of column #" << cln
