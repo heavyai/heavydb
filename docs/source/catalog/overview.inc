@@ -2,4 +2,4 @@ OmniSciDB stores database, table, and user information in a centralized `Catalog
 
 Both SysCatalog and Catalog classes are defined in files of the same name in the `Catalog` source directory. All catalog-related code lives inside the ``Catalog_Namespace``.
 
-.. image:: ../../img/catalog/catalog_overview.png
+.. image:: ../img/catalog/catalog_overview.png
