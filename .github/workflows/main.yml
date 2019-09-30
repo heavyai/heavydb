@@ -1,0 +1,31 @@
+name: "Build Sphinx docs and push to Pages"
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - uses: actions/setup-python@v1
+        with:
+          python-version: "3.7"
+      - name: Setup requirements
+        working-directory: docs
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Build Sphinx docs
+        working-directory: docs
+        run: |
+          make html
+      - name: Deploy to Pages
+        uses: JamesIves/github-pages-deploy-action@master
+        env:
+          ACCESS_TOKEN: ${{ secrets.GITHUB_WRITE_TOKEN }}
+          BASE_BRANCH: master # The branch the action should deploy from.
+          BRANCH: gh-pages # The branch the action should deploy to.
+          FOLDER: docs/build/html # The folder the action should deploy.
+          BUILD_SCRIPT: touch build/html/.nojekyll
