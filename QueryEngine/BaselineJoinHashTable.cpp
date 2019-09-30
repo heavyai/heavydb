@@ -163,8 +163,12 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     , inner_outer_pairs_(inner_outer_pairs)
     , catalog_(executor->getCatalog())
 #ifdef HAVE_CUDA
-    , block_size_(executor->blockSize())
-    , grid_size_(executor->gridSize()) {
+    , block_size_(memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
+                      ? executor->blockSize()
+                      : 0)
+    , grid_size_(memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
+                     ? executor->gridSize()
+                     : 0) {
 }
 #else
 {
