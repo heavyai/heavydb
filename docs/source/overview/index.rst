@@ -11,6 +11,29 @@ High Level Diagram
 
 .. image:: ../img/platform_overview.png
 
+The major components in the above diagram and their respective reference pages are listed in the table below.
+
+
+.. list-table:: Component Reference
+    :header-rows: 1
+
+    * - Component
+      - Reference Page
+    * - Thrift Interface  
+      - :doc:`../data_model/api`
+    * - Calcite Server
+      - :doc:`../calcite/calcite_parser`
+    * - Catalog
+      - :doc:`../catalog/index`
+    * - Executor
+      - :doc:`../execution/overview`
+    * - LLVM JIT
+      - :doc:`../execution/codegen`
+    * - CPU / GPU Kernels 
+      - :doc:`../execution/kernels`
+    * - Database Files, Metadata Files, Dictionary Files
+      - :doc:`../data_model/physical_layout`
+
 Data Model
 ===========
 
