@@ -204,7 +204,7 @@ void Calcite::runServer(const int mapd_port,
   if (ping_time > -1) {
     // we have an orphaned server shut it down
     LOG(ERROR)
-        << "Appears to be orphaned Calcite serve already running, shutting it down";
+        << "Appears to be orphaned Calcite server already running, shutting it down";
     LOG(ERROR) << "Please check that you are not trying to run two servers on same port";
     LOG(ERROR) << "Attempting to shutdown orphaned Calcite server";
     try {
