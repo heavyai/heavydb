@@ -47,6 +47,7 @@ internals, and details the data model and query execution flows.
 
     Doxygen <https://doxygen.omnisci.com>
     GitHub Repository <https://github.com/omnisci/omniscidb>
+    glossary/index
 
 .. toctree::
     :caption: Detailed Class Information
