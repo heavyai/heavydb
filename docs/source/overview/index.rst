@@ -1,8 +1,8 @@
 .. OmniSciDB System Overview
 
-###############
-System Overview
-###############
+#########################
+OmniSciDB at 30,000 Feet
+#########################
 
 OmniSciDB is made up of several high level components. A diagram illustrating most of the components of the system is displayed below, with a short description of each major section of the documentation following.
 

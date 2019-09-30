@@ -4,7 +4,7 @@
    contain the root `toctree` directive.
 
 ==================================
-OmniSciDB at 30,000 feet
+OmniSciDB Developer Documentation
 ==================================
 
 OmniSciDB is an open source SQL-based, relational, columnar database engine
