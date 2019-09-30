@@ -458,7 +458,6 @@ struct TDBObject {
   2: TDBObjectType objectType
   3: list<bool> privs
   4: string grantee
-  5: TDBObjectType privilegeObjectType
 }
 
 struct TDashboardGrantees {

@@ -192,6 +192,12 @@ Calcite::getClient(int port) {
   return std::make_pair(client, transport);
 }
 
+void Calcite::checkAndSetCatalog(
+    const std::shared_ptr<Catalog_Namespace::SessionInfo const>& session_ptr) {
+  CHECK(calcite_session_ptr_);
+  calcite_session_ptr_->set_catalog_ptr(session_ptr->get_catalog_ptr());
+}
+
 void Calcite::runServer(const int mapd_port,
                         const int port,
                         const std::string& data_dir,
@@ -367,15 +373,13 @@ TPlanResult Calcite::process(
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
     const bool is_explain,
-    const bool is_view_optimize,
-    const std::string& calcite_session_id) {
+    const bool is_view_optimize) {
   TPlanResult result = processImpl(query_state_proxy,
                                    std::move(sql_string),
                                    filter_push_down_info,
                                    legacy_syntax,
                                    is_explain,
-                                   is_view_optimize,
-                                   calcite_session_id);
+                                   is_view_optimize);
 
   AccessPrivileges NOOP;
 
@@ -444,12 +448,11 @@ TPlanResult Calcite::processImpl(
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
     const bool is_explain,
-    const bool is_view_optimize,
-    const std::string& calcite_session_id) {
+    const bool is_view_optimize) {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
-  const auto& user_session_info = query_state_proxy.getQueryState().getConstSessionInfo();
-  const auto& cat = user_session_info->getCatalog();
-  const std::string user = getInternalSessionProxyUserName();
+  checkAndSetCatalog(query_state_proxy.getQueryState().getConstSessionInfo());
+  const auto& cat = calcite_session_ptr_->getCatalog();
+  const std::string user = calcite_session_ptr_->get_currentUser().userName;
   const std::string catalog = cat.getCurrentDB().dbName;
   LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";
   LOG(IR) << "SQL query\n" << sql_string << "\nEnd of SQL query";
@@ -458,16 +461,11 @@ TPlanResult Calcite::processImpl(
   TPlanResult ret;
   if (server_available_) {
     try {
-      // calcite_session_id would be an empty string when accessed by internal resources
-      // that would not access `process` through handler instance, like for eg: Unit
-      // Tests. In these cases we would use the session_id from query state.
       auto ms = measure<>::execution([&]() {
         auto clientP = getClient(remote_calcite_port_);
         clientP.first->process(ret,
                                user,
-                               calcite_session_id.empty()
-                                   ? user_session_info->get_session_id()
-                                   : calcite_session_id,
+                               calcite_session_ptr_->get_session_id(),
                                catalog,
                                sql_string,
                                filter_push_down_info,

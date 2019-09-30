@@ -21,7 +21,6 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -950,8 +949,7 @@ func samlPostHandler(rw http.ResponseWriter, r *http.Request) {
 
 		relayState := r.FormValue("RelayState")
 		if relayState != "" {
-			cleanedState := path.Clean(relayState)
-			targetPage = cleanedState
+			targetPage = relayState
 		}
 
 		// We should have one of the two following payloads at this point:
