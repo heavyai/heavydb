@@ -1,7 +1,7 @@
 Overview
 ========
 
-The OmniSciDB *Query Engine* refers to the system components which manage query kernel compilation and kernel execution. The ``RelAlgExecutor`` manages overall query state, while the ``Executor`` manages the code generation and execution for each query step. A query step takes as input a ``WorkUnit`` and returns a ``ResultSet``. The query engine includes support for complex, multi-step queries (e.g. joins on subquery results) as well as code generation and execution for queries which can run on either the CPU or the GPU. The general execution sequence for a single relational algebra query is depicted below.
+The OmniSciDB *Query Engine* refers to the system components which manage query :term:`kernel` compilation and kernel execution. The ``RelAlgExecutor`` manages overall query state, while the ``Executor`` manages the code generation and execution for each query step. A query step takes as input a ``WorkUnit`` and returns a ``ResultSet``. The query engine includes support for complex, multi-step queries (e.g. joins on subquery results) as well as code generation and execution for queries which can run on either the CPU or the GPU. The general execution sequence for a single relational algebra query is depicted below.
 
 .. uml::
     :align: center
@@ -75,7 +75,7 @@ The ``RelAlgExecutor`` manages the execution of a relational algebra query. The 
 Relational Algebra Abstract Interpreter and Optimizer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The ``RelAlgAbstractInterpreter`` deserializes the JSON string containing the optimized relational algebra tree from Calcite. The interpreter creates a ``RelAlgNode`` object for each top-level relational algebra node. Each ``RelAlgNode`` is made up of ``Rex`` (relational algebra expression) nodes. The interpreter also manages OmniSciDB specific query optimization (see :doc:`./optimizer`). After optimization, each RA node in the tree is a discrete unit of execution, typically referred to as a **query step**.
+The ``RelAlgAbstractInterpreter`` deserializes the JSON string containing the optimized relational algebra tree from Calcite. The interpreter creates a ``RelAlgNode`` object for each top-level relational algebra node. Each ``RelAlgNode`` is made up of ``Rex`` (relational algebra :term:`expression`) nodes. The interpreter also manages OmniSciDB specific query optimization (see :doc:`./optimizer`). After optimization, each RA node in the tree is a discrete unit of execution, typically referred to as a **query step**.
 
 Relational Algebra Translator
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

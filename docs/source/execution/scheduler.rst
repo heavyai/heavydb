@@ -69,9 +69,9 @@ After the ordering has been determined, query steps are wrapped in ``RaExecution
 Query Step Translation
 ======================
 
-Each query step is packaged into a work unit for code generation and execution. The act of packaging a query step into code generation is called `translation` and is managed by the ``RelAlgTranslator``. The translator converts a set of `Rex` expressions into an abstract syntax tree (AST) representation, which maps directly to the generated code for the kernel. 
+Each query step is packaged into a work unit for code generation and execution. The act of packaging a query step into code generation is called `translation` and is managed by the ``RelAlgTranslator``. The translator converts a set of `Rex` expressions into an abstract syntax tree (AST) representation, which maps directly to the generated code for the :term:`kernel`. 
 
-The translated AST is stored in multiple vectors which logically separate the different parts of a fused kernel. The ``RelAlgExecutionUnit`` stores analyzer expressions in the following members:
+The translated AST is stored in multiple vectors which logically separate the projected SQL expressions from group by targets, filters, etc. The ``RelAlgExecutionUnit`` stores analyzer expressions in the following members:
 
 - ``target_exprs``: Projected output expressions for the query step.
 - ``groupby_exprs``: Columns being grouped. Note that all projection queries are considered group by queries with the group key being the identity function.
@@ -82,7 +82,7 @@ The translated AST is stored in multiple vectors which logically separate the di
 
 .. note:: 
 
-  The ``quals``, ``simple_quals``, and ``join_quals`` vectors together make up the set of all filter expressions. That is, a filter expression comparing with a literal will be in ``simple_quals`` only, and will not be duplicated in the ``quals`` vector. 
+  The ``quals``, ``simple_quals``, and ``join_quals`` vectors together make up the set of all filter expressions. That is, a filter :term:`expression` comparing with a literal will be in ``simple_quals`` only, and will not be duplicated in the ``quals`` vector. 
 
 The ``RelAlgExecutionUnit`` is the primary member of the ``WorkUnit`` and contains all the information required to generate code for the query. 
 

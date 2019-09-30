@@ -15,7 +15,7 @@ The execution process consists of the following main steps (each run concurrentl
 3. Execute the generated code (i.e. launch kernels on the device).
 4. Prepare ``ResultSet`` and return (reducing if necessary).
 
-Execution is managed by the ``ExecutionDispatch`` class (a singleton) which manages the execution process. Each device has its own ``QueryExecutionContext``, which owns and manages the state for the duration of the kernel execution on the device. 
+Execution is managed by the ``ExecutionDispatch`` class (a singleton) which manages the execution process. Each device has its own ``QueryExecutionContext``, which owns and manages the state for the duration of the :term:`kernel` execution on the device. 
 
 .. image:: ../img/dispatch_fragments.png
 

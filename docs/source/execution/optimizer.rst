@@ -17,7 +17,7 @@ Calcite Node Type      ``RelAlgNode`` Subclass    Calcite Description
 EnumerableTableScan    RelScan                  Returns the contents of a table through
                                                 sequential traversal.
 LogicalProject         RelProject               Computes a set of 'select expressions'
-                                                from its input relational expression.
+                                                from its input relational :term:`expression`.
 LogicalFilter          RelFilter                Iterates over its input and returns
                                                 elements for which condition evaluates to true.
 LogicalAggregate       RelAggregate             Eliminates duplicates and computes
@@ -134,7 +134,7 @@ The project node on line 4 can be removed, with its projected targets pushed to 
 Eliminate Dead Columns
 ----------------------
 
-Intermediate projection nodes may sometimes load more inputs than are actually required by subsequent nodes. In OmniSciDB, each projection node input is loaded into memory and projected through as an output target. The dead columns elimination step ensures that only columns that are be used in subsequent projections are loaded into memory. As an example, consider the following table and query:
+Intermediate projection nodes may sometimes load more inputs than are actually required by subsequent nodes. In OmniSciDB, each projection node input is loaded into memory and projected through as an output :term:`target`. The dead columns elimination step ensures that only columns that are be used in subsequent projections are loaded into memory. As an example, consider the following table and query:
 
 .. code-block:: sql
 

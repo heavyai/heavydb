@@ -8,7 +8,7 @@ OmniSciDB generates native code using the `LLVM <http://llvm.org>`_ library. Cod
 
 Code generation for a query is managed by the ``Executor`` object assigned to the query. Code generation state is stored within the ``QueryCompilationDescriptor``. The compilation descriptor also initiatives code generation via its ``compile`` method. 
 
-The outer-most function for a kernel is pre-defined in ``RuntimeFunctions.cpp``. The generated code typically consists of two functions; the ``query_func`` and the ``row_func``. The ``query_func`` loops over all input rows, while the ``row_func`` contains most of the logic for processing inputs, running expressions, and writing outputs. 
+The outer-most function for a :term:`kernel` is pre-defined in ``RuntimeFunctions.cpp``. The generated code typically consists of two functions; the ``query_func`` and the ``row_func``. The ``query_func`` loops over all input rows, while the ``row_func`` contains most of the logic for processing inputs, running expressions, and writing outputs. 
 
 Query Templates
 ===============
@@ -45,7 +45,7 @@ All query kernels are generated from LLVM IR using the ``CodeGenerator``. Howeve
     }
 
 
-System functions like the example above are referred to as `Runtime Functions`. SQL functions are stored in a separate file and are referred to as `Extension Functions`. The extension functions are automatically registered with Calcite at startup, where runtime functions are helpers functions meant for use by the kernel.
+System functions like the example above are referred to as `Runtime Functions`. SQL functions are stored in a separate file and are referred to as `Extension Functions`. The extension functions are automatically registered with Calcite at startup, where runtime functions are helpers functions meant for use by the :term:`kernel`.
 
 The `ALWAYS_INLINE` decorator tells the LLVM compiler to inline the runtime functions, so the net effect is the same as generating the function using the LLVM IR Builder. 
 
