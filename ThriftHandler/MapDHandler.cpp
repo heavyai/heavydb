@@ -273,6 +273,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       LOG(ERROR) << "Distributed leaf support disabled: " << e.what();
     }
   }
+  calcite_->setCalciteSessionPtr(createInMemoryCalciteSession());
 }
 
 MapDHandler::~MapDHandler() {}
@@ -283,45 +284,29 @@ void MapDHandler::check_read_only(const std::string& str) {
   }
 }
 
-std::string const MapDHandler::createInMemoryCalciteSession(
-    const std::shared_ptr<Catalog_Namespace::Catalog>& catalog_ptr) {
+std::shared_ptr<Catalog_Namespace::SessionInfo>
+MapDHandler::createInMemoryCalciteSession() {
   // We would create an in memory session for calcite with super user privileges which
   // would be used for getting all tables metadata when a user runs the query. The
   // session would be under the name of a proxy user/password which would only persist
-  // till server's lifetime or execution of calcite query(in memory) whichever is the
-  // earliest.
-  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
-  std::string session_id;
-  do {
-    session_id = generate_random_string(64);
-  } while (sessions_.find(session_id) != sessions_.end());
-  Catalog_Namespace::UserMetadata user_meta(-1,
-                                            calcite_->getInternalSessionProxyUserName(),
-                                            calcite_->getInternalSessionProxyPassword(),
-                                            true,
-                                            -1);
+  // till server's lifetime(in memory).
+  const std::string& session_id = generate_random_string(64);
+  Catalog_Namespace::UserMetadata user_meta(
+      -1, CALCITE_USER_NAME, CALCITE_USER_PASSWORD, true, -1);
   const auto emplace_ret =
       sessions_.emplace(session_id,
                         std::make_shared<Catalog_Namespace::SessionInfo>(
-                            catalog_ptr, user_meta, executor_device_type_, session_id));
+                            nullptr, user_meta, executor_device_type_, session_id));
   CHECK(emplace_ret.second);
-  return session_id;
+  return emplace_ret.first->second;
 }
 
 bool MapDHandler::isInMemoryCalciteSession(
     const Catalog_Namespace::UserMetadata user_meta) {
-  return user_meta.userName == calcite_->getInternalSessionProxyUserName() &&
-         user_meta.userId == -1 && user_meta.defaultDbId == -1 &&
-         user_meta.isSuper.load();
+  return user_meta.userName == CALCITE_USER_NAME && user_meta.userId == -1 &&
+         user_meta.defaultDbId == -1 && user_meta.isSuper.load();
 }
 
-void MapDHandler::removeInMemoryCalciteSession(const std::string& session_id) {
-  // Remove InMemory calcite Session.
-  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
-  const auto it = sessions_.find(session_id);
-  CHECK(it != sessions_.end());
-  sessions_.erase(it);
-}
 // internal connection for connections with no password
 void MapDHandler::internal_connect(TSessionId& session,
                                    const std::string& username,
@@ -1264,7 +1249,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
   const auto ap = inObject.getPrivileges();
   switch (inObject.getObjectKey().permissionType) {
     case DatabaseDBObjectType:
-      outObject.privilegeObjectType = TDBObjectType::DatabaseDBObjectType;
+      outObject.objectType = TDBObjectType::DatabaseDBObjectType;
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::CREATE_DATABASE));
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::DROP_DATABASE));
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::VIEW_SQL_EDITOR));
@@ -1272,7 +1257,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
 
       break;
     case TableDBObjectType:
-      outObject.privilegeObjectType = TDBObjectType::TableDBObjectType;
+      outObject.objectType = TDBObjectType::TableDBObjectType;
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::CREATE_TABLE));
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::DROP_TABLE));
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::SELECT_FROM_TABLE));
@@ -1284,7 +1269,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
 
       break;
     case DashboardDBObjectType:
-      outObject.privilegeObjectType = TDBObjectType::DashboardDBObjectType;
+      outObject.objectType = TDBObjectType::DashboardDBObjectType;
       outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::CREATE_DASHBOARD));
       outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::DELETE_DASHBOARD));
       outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
@@ -1292,7 +1277,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
 
       break;
     case ViewDBObjectType:
-      outObject.privilegeObjectType = TDBObjectType::ViewDBObjectType;
+      outObject.objectType = TDBObjectType::ViewDBObjectType;
       outObject.privs.push_back(ap.hasPermission(ViewPrivileges::CREATE_VIEW));
       outObject.privs.push_back(ap.hasPermission(ViewPrivileges::DROP_VIEW));
       outObject.privs.push_back(ap.hasPermission(ViewPrivileges::SELECT_FROM_VIEW));
@@ -1304,9 +1289,6 @@ static TDBObject serialize_db_object(const std::string& roleName,
     default:
       CHECK(false);
   }
-  const int type_val = static_cast<int>(inObject.getType());
-  CHECK(type_val >= 0 && type_val < 5);
-  outObject.objectType = static_cast<TDBObjectType::type>(type_val);
   return outObject;
 }
 
@@ -5264,28 +5246,12 @@ std::string MapDHandler::parse_to_ra(
   ParserWrapper pw{query_str};
   const std::string actual_query{pw.isSelectExplain() ? pw.actual_query : query_str};
   if (pw.isCalcitePathPermissable()) {
-    TPlanResult result;
-    auto session_cleanup_handler = [&](const auto& session_id) {
-      removeInMemoryCalciteSession(session_id);
-    };
-    auto process_calcite_request = [&] {
-      const auto& in_memory_session_id = createInMemoryCalciteSession(
-          query_state_proxy.getQueryState().getConstSessionInfo()->get_catalog_ptr());
-      try {
-        result = calcite_->process(timer.createQueryStateProxy(),
-                                   legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                                   filter_push_down_info,
-                                   legacy_syntax_,
-                                   pw.isCalciteExplain(),
-                                   mapd_parameters.enable_calcite_view_optimize,
-                                   in_memory_session_id);
-        session_cleanup_handler(in_memory_session_id);
-      } catch (std::exception&) {
-        session_cleanup_handler(in_memory_session_id);
-        throw;
-      }
-    };
-    process_calcite_request();
+    auto result = calcite_->process(timer.createQueryStateProxy(),
+                                    legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                                    filter_push_down_info,
+                                    legacy_syntax_,
+                                    pw.isCalciteExplain(),
+                                    mapd_parameters.enable_calcite_view_optimize);
     if (tableNames) {
       for (const auto& table : result.resolved_accessed_objects.tables_selected_from) {
         (tableNames.value())[table] = false;

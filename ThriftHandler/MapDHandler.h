@@ -717,7 +717,9 @@ class MapDHandler : public MapDIf {
   void invalidate_sessions(std::string& name, STMT_TYPE* stmt) {
     using namespace Parser;
     auto is_match = [&](auto session_it) {
-      if (ShouldInvalidateSessionsByDB<STMT_TYPE>()) {
+      if (isInMemoryCalciteSession(session_it->second->get_currentUser())) {
+        return false;
+      } else if (ShouldInvalidateSessionsByDB<STMT_TYPE>()) {
         return boost::iequals(name,
                               session_it->second->getCatalog().getCurrentDB().dbName);
       } else if (ShouldInvalidateSessionsByUser<STMT_TYPE>()) {
@@ -737,10 +739,8 @@ class MapDHandler : public MapDIf {
     check_and_remove_sessions();
   }
 
-  std::string const createInMemoryCalciteSession(
-      const std::shared_ptr<Catalog_Namespace::Catalog>& catalog_ptr);
+  std::shared_ptr<Catalog_Namespace::SessionInfo> createInMemoryCalciteSession();
   bool isInMemoryCalciteSession(const Catalog_Namespace::UserMetadata user_meta);
-  void removeInMemoryCalciteSession(const std::string& session_id);
 };
 
 #endif /* MAPDHANDLER_H */
