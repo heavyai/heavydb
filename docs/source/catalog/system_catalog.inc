@@ -9,7 +9,7 @@ Data is persisted using a *SQLite* database at `<path_to_db/mapd_catalogs/omnisc
 
 Below is a UML representation of the schema of the SQLite database backing the system catalog:
 
-.. image:: ../../img/catalog/syscat_schema.png
+.. image:: ../img/catalog/syscat_schema.png
     :height: 400
 
 

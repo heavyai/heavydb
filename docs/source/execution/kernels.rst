@@ -1,90 +1,111 @@
 .. OmniSciDB Query Execution
 
-==================================
+==================
 Execution Kernels
-==================================
-From the moment the query is compiled and the generated code is available (per execution step),
-the execution process is started and it continues until all required results from all devices are 
-available on the CPU host. In our execution mode, each available device (GPU/CPU) is represented by a single CPU thread
-and that thread is responsible to make sure the execution process for that particular device 
-finished successfully and the results were collected.
+==================
 
-Overall, the execution process is consisted of the following main steps, each being done concurrently per execution device:
+Query execution begins with ``Executor::dispatchFragments`` and ends with reducing results from each device and returning a ``ResultSet`` back to the ``RelAlgExecutor``. Each device (GPU or CPU thread) has a dedicated CPU thread. All devices initialize state and execute queries in parallel. On CPU, this means the execution within a single device is not parallel. On GPU, execution within a device also occurs in parallel. 
 
-1. Assigning fragments to the device
-2. Fetching all required input data (copying them to the device if necessary)
-3. Preparing output buffers (allocations and initializations)
-4. Executing the generated code (launching kernels)
+Input data is assigned to the relevant device in a pre-processing step. Input fragments are typically assigned in round-robin order, unless the input data is sharded. For sharded input data, all shards of the same `key` are assigned to the same device. Input assignment is managed by the ``QueryFragmentDescriptor``.
 
-Item 1 is done by the ``QueryFragmentDescriptor`` class. Item 2 is done in `Executor::dispatchFragments`. 
-Items 3 and 4 are initiated by the ``dispatchFragments`` function through ``ExecutionDispatch`` class's member functions, 
-but most of the work is actually done by the ``QueryExecutionContext`` class.
-There are plenty of optimization passes around these simplified steps, 
-which might lead to bypassing some of them, but the current itemized list captures the high level idea.
-Next, we will discuss each of these components more thoroughly. 
+The execution process consists of the following main steps (each run concurrently per execution device):
+
+1. Fetch all assigned input chunks (assigned input fragments across columns required for the query).
+2. Prepare output buffers (allocation and initialization if necessary).
+3. Execute the generated code (i.e. launch kernels on the device).
+4. Prepare ``ResultSet`` and return (reducing if necessary).
+
+Execution is managed by the ``ExecutionDispatch`` class (a singleton) which manages the execution process. Each device has its own ``QueryExecutionContext``, which owns and manages the state for the duration of the :term:`kernel` execution on the device. 
 
 .. image:: ../img/dispatch_fragments.png
 
 Query Fragment Descriptor
 ----------------------------------
-The basic unit of work in OmniSciDB is a fragment. The main goal of the ``QueryFragmentDescriptor`` class is  
-to maintain useful information about fragments that are involved with execution of a particular work unit. 
-Among this class's responsibilities is the ability to partition fragments into different groups
-so that each is assigned to an available device (or kernel). 
+
+The basic unit of work in OmniSciDB is a fragment. The ``QueryFragmentDescriptor`` class maintains useful information about fragments that are involved with execution of a particular work unit; most importantly, the fragment descriptor partitions fragments among all available devices. 
+
+Dispatch Fragments
+----------------------------------
+
+As discussed above, the ``QueryFragmentDescriptor`` assigns fragments to devices (i.e., kernels). Using this information, the ``Executor`` concurrently dispatches an execution procedure per device. 
+
+All CPU queries are executed in `kernel per fragment` mode, meaning each CPU kernel executes over a single fragment.
+
+GPU queries can execute in either `kernel per fragment` mode or `multi-fragment kernel` mode, where a single GPU kernel executes over multiple input fragments. Since GPU execution supports intra-kernel parallelism, multi-fragment kernels are typically more efficient in GPU execution mode. 
 
 Query Execution Context
 ----------------------------------
-The ``QueryExecutionContext`` object is created for each device and is in charge of the following high level tasks:
 
-1. Preparing the requirements for kernel execution
-2. Launching the execution kernel on the device
-3. Error handling for the launched kernel 
-4. Transferring the output buffers from the device back to the host
+The ``QueryExecutionContext`` object is created for each device and manages the following high level tasks:
 
-Whether this class is created for GPU execution or not, 
-there might be a different set of actions required. 
-As a result of this and for the sake of clarity, we discuss each case separately.
+1. Prepares for kernel execution (setup output buffers, parameters, etc)
+2. Launches the execution kernel on the device
+3. Handles errors returned by the kernel (if any)
+4. Transfers the output buffers from the device back to the host (for GPU execution)
+
+While the same execution context is created for CPU and GPU execution, the exact procedure for each mode is slightly different. 
 
 CPU execution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Upon construction of this class, and depending on the query type 
-(e.g., whether the query is a group by or not), 
-the output buffer is allocated and initialized accordingly (through a unique object of ``QueryMemoryInitializer``).
-Different aggregate targets may require different initial values.
-After this stage, it is possible to launch the CPU code through ``launchCpuCode``. 
-By doing so, the compiled code is executed on the CPU. 
-After execution, error codes are readily verified, and then results are ready to be collected. 
+
+.. uml::
+    :align: center
+
+    @startuml
+    (*) --> "Initialization"
+
+    --> "CPU Output Buffer Allocation / Initialization"
+
+    if "is Group By / Projection" then
+    -->[true] "Execute Plan With Group By"
+    --> "Launch CPU Code"
+    else
+    -> [false] "Execute Plan Without Group By" 
+    --> "Launch CPU Code"
+    endif
+
+    --> "Reduce inter-device Results"
+
+    -right-> (*)
+
+    @enduml
 
 GPU execution
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-Similar to CPU execution, upon construction of this object a proper set of output buffers 
-are allocated and initialized on the GPU device.
-It is possible to allocate more than one output buffer on the GPU. This decision is made based on some low-level 
-optimizations and depending on the query's type and related details about the metadata involved. 
-Regardless of the number of output buffers, there should be a matching number of buffers allocated on the CPU too, 
-so that GPU results can be directly transferred back to the host. 
 
-All arguments for the GPU kernel should also be properly allocated and transferred to the GPU device 
-using the ``prepareKernelParams`` function.
+.. uml::
+    :align: center
 
-Once all required output buffers are ready, the compiled code for the GPU can be launched.
-Proper error handling is done immediately after the kernel launch. 
-The error code buffer is transferred back to the CPU and gets verified. 
-Once a successful execution is verified, all output buffers are directly transferred back 
-to the CPU to their corresponding buffers on the CPU.
+    @startuml
+    (*) --> "Initialization"
 
-Dispatch fragments
-----------------------------------
-As discussed above, the ``QueryFragmentDescriptor`` assigns fragments to devices (i.e., kernels). 
-By using this information, the ``Executor`` concurrently dispatches an execution procedure per device 
-(to execute a single or multiple fragments).
-For CPU execution, this means assigning a CPU thread to each available fragment. 
-For GPU execution, this means assigning a CPU thread to each group of fragments per device.
-These thread concurrently execute the code on all available resources until all executions 
-and data transfers are successfully finished.
+    --> "CPU Output Buffer Allocation / Initialization"
+    --> "GPU Output Buffer Allocation / Initialization"
 
-The execution procedure mentioned above is done through the ``ExecutionDispatch`` class. 
-Upon each usage of its ``run`` member function, 
-it proceeds with execution of the assigned fragments on a particular device.
-To do so, among many other things, it fetches proper input data to be available on each device, and also creates and owns 
-an instance of ``QueryExecutionContext`` per device (which itself handles required output buffer allocations, etc.).
+    if "is Group By / Projection" then
+    -->[true] "Execute Plan With Group By"
+    --> "Launch GPU Code"
+    else
+    -> [false] "Execute Plan Without Group By" 
+    --> "Launch GPU Code"
+    endif
+
+    --> "Prepare Kernel Params"
+    --> "Launch Cuda Kernel"
+    --> "Copy Back Output Buffer"
+    --> "Reduce inter-device Results"
+
+    -right-> (*)
+
+    @enduml
+
+
+
+.. note::
+
+    Some queries will allocate more than one output buffer on the GPU to reduce thread contention during parallel intra-fragment execution. For each allocated output buffer on the GPU, a match output buffer on CPU is also allocated to support copying results back from the GPU once execution finishes.
+
+All arguments for the GPU kernel must be allocated in GPU memory and copied to the device. The GPU kernel launch function takes a pointer to the GPU generated code (in device memory) and a pointer to the kernel parameters buffer (also in device memory).
+
+Kernel launches on GPU are asynchronous; that is, ``cuLaunchKernel`` returns immediately after the kernel successfully starts on the device. The next call to the nVidia CUDA driver API is blocking. Immediately after the kernel is launched, an attempt is made to copy the error codes buffer back using the CUDA driver API. This call is blocking; therefore, if the kernel generates an error during execution, we will detect it only after the entire kernel finishes. 
+

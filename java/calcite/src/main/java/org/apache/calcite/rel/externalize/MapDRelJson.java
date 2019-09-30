@@ -47,7 +47,7 @@ import org.apache.calcite.rex.RexOver;
 import org.apache.calcite.rex.RexSubQuery;
 import org.apache.calcite.rex.RexWindow;
 import org.apache.calcite.rex.RexWindowBound;
-import org.apache.calcite.sql.SemiJoinType;
+import org.apache.calcite.sql.JoinType;
 import org.apache.calcite.sql.SqlAggFunction;
 import org.apache.calcite.sql.SqlFunction;
 import org.apache.calcite.sql.SqlOperator;
@@ -262,7 +262,7 @@ public class MapDRelJson {
       return toJson((RelDataType) value);
     } else if (value instanceof RelDataTypeField) {
       return toJson((RelDataTypeField) value);
-    } else if (value instanceof SemiJoinType) {
+    } else if (value instanceof JoinType) {
       return value.toString();
     } else if (value instanceof Operation) {
       return value.toString();

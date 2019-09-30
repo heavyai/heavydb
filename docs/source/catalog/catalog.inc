@@ -10,7 +10,7 @@ Data is persisted using a *SQLite* database per catalog in the `mapd_catalogs` d
 
 Below is a UML representation of the schema of the SQLite database backing a catalog:
 
-.. image:: ../../img/catalog/cat_schema.png
+.. image:: ../img/catalog/cat_schema.png
     :height: 400
 
 ****************************************

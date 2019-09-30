@@ -42,8 +42,6 @@ extern bool g_enable_filter_push_down;
 
 double g_gpu_mem_limit_percent{0.9};
 
-constexpr char const* CALCITE_SESSION_ID = "calcite_session";
-
 using namespace Catalog_Namespace;
 namespace {
 
@@ -180,9 +178,6 @@ QueryRunner::QueryRunner(const char* db_path,
   Catalog_Namespace::Catalog::set(cat->getCurrentDB().dbName, cat);
   session_info_ = std::make_unique<Catalog_Namespace::SessionInfo>(
       cat, user, ExecutorDeviceType::GPU, "");
-  const UserMetadata proxy_user(-1, CALCITE_USER_NAME, CALCITE_USER_PASSWORD, true, -1);
-  g_calcite->setCalciteSessionPtr(std::make_shared<SessionInfo>(
-      cat, proxy_user, ExecutorDeviceType::GPU, CALCITE_SESSION_ID));
 }
 
 QueryRunner::QueryRunner(std::unique_ptr<Catalog_Namespace::SessionInfo> session)
