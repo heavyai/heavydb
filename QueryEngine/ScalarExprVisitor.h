@@ -109,6 +109,10 @@ class ScalarExprVisitor {
     if (array) {
       return visitArrayOper(array);
     }
+    const auto geo_expr = dynamic_cast<const Analyzer::GeoExpr*>(expr);
+    if (geo_expr) {
+      return visitGeoExpr(geo_expr);
+    }
     const auto datediff = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
     if (datediff) {
       return visitDatediffExpr(datediff);
@@ -243,6 +247,14 @@ class ScalarExprVisitor {
     T result = defaultResult();
     for (size_t i = 0; i < array_expr->getElementCount(); ++i) {
       result = aggregateResult(result, visit(array_expr->getElement(i)));
+    }
+    return result;
+  }
+
+  virtual T visitGeoExpr(const Analyzer::GeoExpr* geo_expr) const {
+    T result = defaultResult();
+    for (const auto& arg : geo_expr->getArgs()) {
+      result = aggregateResult(result, visit(arg.get()));
     }
     return result;
   }

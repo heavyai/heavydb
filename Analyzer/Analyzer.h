@@ -1454,6 +1454,26 @@ class ArrayExpr : public Expr {
 };
 
 /*
+ * @type GeoExpr
+ * @brief Geospatial expression
+ */
+class GeoExpr : public Expr {
+ public:
+  GeoExpr(const SQLTypeInfo& ti, const std::vector<std::shared_ptr<Analyzer::Expr>>& args)
+      : Expr(ti), args_(args){};
+
+  std::shared_ptr<Analyzer::Expr> deep_copy() const override;
+
+  bool operator==(const Expr& rhs) const override;
+  std::string toString() const override;
+
+  const std::vector<std::shared_ptr<Analyzer::Expr>>& getArgs() const { return args_; }
+
+ private:
+  const std::vector<std::shared_ptr<Analyzer::Expr>> args_;
+};
+
+/*
  * @type TargetEntry
  * @brief Target list defines a relational projection.  It is a list of TargetEntry's.
  */

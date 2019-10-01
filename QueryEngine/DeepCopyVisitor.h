@@ -136,6 +136,15 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
         type_info, args_copy, array_expr->getExprIndex(), array_expr->isLocalAlloc());
   }
 
+  RetType visitGeoExpr(const Analyzer::GeoExpr* geo_expr) const override {
+    std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
+    for (const auto& arg : geo_expr->getArgs()) {
+      args_copy.push_back(visit(arg.get()));
+    }
+    const auto& type_info = geo_expr->get_type_info();
+    return makeExpr<Analyzer::GeoExpr>(type_info, args_copy);
+  }
+
   RetType visitWindowFunction(
       const Analyzer::WindowFunction* window_func) const override {
     std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;

@@ -181,6 +181,9 @@ class CodeGenerator {
   std::vector<llvm::Value*> codegenArrayExpr(const Analyzer::ArrayExpr*,
                                              const CompilationOptions&);
 
+  std::vector<llvm::Value*> codegenGeoExpr(const Analyzer::GeoExpr*,
+                                           const CompilationOptions&);
+
   llvm::Value* codegenFunctionOper(const Analyzer::FunctionOper*,
                                    const CompilationOptions&);
 

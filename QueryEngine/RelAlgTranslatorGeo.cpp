@@ -538,6 +538,21 @@ std::string suffix(SQLTypes type) {
 
 }  // namespace
 
+std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoConstructor(
+    const RexFunctionOperator* rex_function) const {
+  if (rex_function->getName() == std::string("ST_Point") ||
+      rex_function->getName() == std::string("ST_GeomFromText") ||
+      rex_function->getName() == std::string("ST_GeogFromText")) {
+    SQLTypeInfo arg_ti;
+    int32_t lindex = 0;
+    auto geoargs =
+        translateGeoFunctionArg(rex_function, arg_ti, lindex, false, false, true);
+    return makeExpr<Analyzer::GeoExpr>(arg_ti, geoargs);
+  }
+  throw QueryNotSupported(rex_function->getName() +
+                          " geo constructor is not supported in this context");
+}
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnaryGeoFunction(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(1), rex_function->size());

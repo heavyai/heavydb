@@ -119,6 +119,10 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   if (array_oper_expr) {
     return {codegenArrayExpr(array_oper_expr, co)};
   }
+  auto geo_expr = dynamic_cast<const Analyzer::GeoExpr*>(expr);
+  if (geo_expr) {
+    return {codegenGeoExpr(geo_expr, co)};
+  }
   auto function_oper_expr = dynamic_cast<const Analyzer::FunctionOper*>(expr);
   if (function_oper_expr) {
     return {codegenFunctionOper(function_oper_expr, co)};

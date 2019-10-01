@@ -145,6 +145,9 @@ class RelAlgTranslator {
 
   std::shared_ptr<Analyzer::Expr> translateGeoComparison(const RexOperator*) const;
 
+  std::shared_ptr<Analyzer::Expr> translateGeoConstructor(
+      const RexFunctionOperator*) const;
+
   std::shared_ptr<Analyzer::Expr> translateGeoOverlapsOper(const RexOperator*) const;
 
   std::vector<std::shared_ptr<Analyzer::Expr>> translateGeoFunctionArg(

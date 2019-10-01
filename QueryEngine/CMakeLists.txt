@@ -44,6 +44,7 @@ set(query_engine_source_files
     ExtensionFunctions.ast
     ExtensionsIR.cpp
     FromTableReordering.cpp
+    GeoIR.cpp
     GpuInterrupt.cpp
     GpuMemUtils.cpp
     InPlaceSort.cpp

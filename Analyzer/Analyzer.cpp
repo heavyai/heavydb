@@ -205,6 +205,10 @@ ExpressionPtr ArrayExpr::deep_copy() const {
       type_info, contained_expressions_, expr_index_, local_alloc_);
 }
 
+std::shared_ptr<Analyzer::Expr> GeoExpr::deep_copy() const {
+  return makeExpr<GeoExpr>(type_info, args_);
+}
+
 SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
                                        const SQLTypeInfo& left_type,
                                        const SQLTypeInfo& right_type,
@@ -2263,6 +2267,17 @@ bool ArrayExpr::operator==(Expr const& rhs) const {
   return true;
 }
 
+bool GeoExpr::operator==(const Expr& rhs) const {
+  const auto rhs_geo = dynamic_cast<const GeoExpr*>(&rhs);
+  if (!rhs_geo) {
+    return false;
+  }
+  if (args_.size() != rhs_geo->args_.size()) {
+    return false;
+  }
+  return expr_list_match(args_, rhs_geo->args_);
+}
+
 std::string ColumnVar::toString() const {
   return "(ColumnVar table: " + std::to_string(table_id) +
          " column: " + std::to_string(column_id) + " rte: " + std::to_string(rte_idx) +
@@ -2588,6 +2603,15 @@ std::string ArrayExpr::toString() const {
   }
   str += "]";
   return str;
+}
+
+std::string GeoExpr::toString() const {
+  // TODO: generate ST_GeomFromText(wkt)
+  std::string result = "Geo(";
+  for (const auto& arg : args_) {
+    result += " " + arg->toString();
+  }
+  return result + ") ";
 }
 
 std::string TargetEntry::toString() const {

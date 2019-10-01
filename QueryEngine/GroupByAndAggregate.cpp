@@ -1786,6 +1786,12 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
               bool const fetch_columns) -> std::vector<llvm::Value*> {
         const auto target_lvs =
             code_generator.codegen(selected_target_expr, fetch_columns, co);
+        const auto geo_expr = dynamic_cast<const Analyzer::GeoExpr*>(target_expr);
+        if (geo_expr) {
+          CHECK_EQ(2 * static_cast<size_t>(target_ti.get_physical_coord_cols()),
+                   target_lvs.size());
+          return target_lvs;
+        }
         CHECK_EQ(static_cast<size_t>(target_ti.get_physical_coord_cols()),
                  target_lvs.size());
 
