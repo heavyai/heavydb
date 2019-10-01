@@ -1516,8 +1516,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (rex_function->getName() == std::string("ST_GeomFromText") ||
       rex_function->getName() == std::string("ST_GeogFromText") ||
       rex_function->getName() == std::string("ST_Point")) {
-    throw QueryNotSupported("Geo constructor " + rex_function->getName() +
-                            " currently not supported in this context");
+    return translateGeoConstructor(rex_function);
   }
 
   auto arg_expr_list = translateFunctionArgs(rex_function);
