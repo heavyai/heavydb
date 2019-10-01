@@ -205,7 +205,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
     int32_t& lindex,
     const bool with_bounds,
     const bool with_render_group,
-    const bool expand_geo_col) const {
+    const bool expand_geo_col,
+    const bool is_projection) const {
   std::vector<std::shared_ptr<Analyzer::Expr>> geoargs;
 
   const auto rex_input = dynamic_cast<const RexInput*>(rex_scalar);
@@ -501,7 +502,8 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
       da_ti.set_subtype(kDOUBLE);
       da_ti.set_size(16);
       auto cast_coords = {cast_coord1, cast_coord2};
-      auto ae = makeExpr<Analyzer::ArrayExpr>(da_ti, cast_coords, 0, true);
+      auto is_local_alloca = !is_projection;
+      auto ae = makeExpr<Analyzer::ArrayExpr>(da_ti, cast_coords, 0, is_local_alloca);
       // cast it to  tinyint[16]
       SQLTypeInfo tia_ti = SQLTypeInfo(kARRAY, true);
       tia_ti.set_subtype(kTINYINT);
@@ -546,7 +548,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoConstructor(
     SQLTypeInfo arg_ti;
     int32_t lindex = 0;
     auto geoargs =
-        translateGeoFunctionArg(rex_function, arg_ti, lindex, false, false, true);
+        translateGeoFunctionArg(rex_function, arg_ti, lindex, false, false, true, true);
     return makeExpr<Analyzer::GeoExpr>(arg_ti, geoargs);
   }
   throw QueryNotSupported(rex_function->getName() +

@@ -13221,6 +13221,20 @@ TEST(Select, GeoSpatial_Projection) {
                                    "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
                                    dt,
                                    false))));
+    ASSERT_EQ(
+        "POINT (2 2)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            "SELECT ST_GeomFromText('POINT(2 2)') FROM geospatial_test WHERE id = 2;",
+            dt,
+            false))));
+    ASSERT_EQ(
+        "POINT (2 2)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            "SELECT ST_Point(2,2) FROM geospatial_test WHERE id = 2;", dt, false))));
+    ASSERT_EQ(
+        "POINT (2 2)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            "SELECT ST_Point(id,id) FROM geospatial_test WHERE id = 2;", dt, false))));
 
     // ST_Distance
     ASSERT_NEAR(static_cast<double>(2.0),
