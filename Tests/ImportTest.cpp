@@ -47,6 +47,7 @@ extern size_t g_leaf_count;
 
 namespace {
 
+void decode_str_array(const TargetValue& r, std::vector<std::string>& arr);
 bool g_aggregator{false};
 size_t g_num_leafs{1};
 
@@ -182,6 +183,35 @@ bool import_test_line_endings_in_quotes_local(const string& filename, const int6
   CHECK_EQ(size_t(1), crt_row.size());
   auto r_cnt = v<int64_t>(crt_row[0]);
   return r_cnt == cnt;
+}
+
+bool import_test_array_including_quoted_fields_local(const string& filename,
+                                                     const int64_t row_count) {
+  string query_str =
+      "COPY array_including_quoted_fields FROM '../../Tests/Import/datafiles/" +
+      filename + "' WITH (header='false', quoted='true');";
+  run_ddl_statement(query_str);
+
+  std::string select_query_str = "SELECT * FROM array_including_quoted_fields;";
+  auto rows = run_query(select_query_str);
+  if (rows->rowCount() != size_t(row_count)) {
+    return false;
+  }
+
+  for (int r = 0; r < row_count; ++r) {
+    auto row = rows->getNextRow(true, true);
+    CHECK_EQ(size_t(4), row.size());
+    std::vector<std::string> array;
+    decode_str_array(row[3], array);
+    const auto ns1 = v<NullableString>(row[1]);
+    const auto str1 = boost::get<std::string>(&ns1);
+    const auto ns2 = v<NullableString>(row[2]);
+    const auto str2 = boost::get<std::string>(&ns2);
+    if ((array[0] != *str1) || (array[1] != *str2)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 void import_test_with_quoted_fields(const std::string& filename,
@@ -889,6 +919,15 @@ const char* create_table_trips = R"(
     ) WITH (FRAGMENT_SIZE=75000000);
   )";
 
+const char* create_table_with_array_including_quoted_fields = R"(
+  CREATE TABLE array_including_quoted_fields (
+    i1            INTEGER,
+    t1            TEXT,
+    t2            TEXT,
+    stringArray   TEXT[]
+  ) WITH (FRAGMENT_SIZE=75000000);
+)";
+
 const char* create_table_random_strings_with_line_endings = R"(
     CREATE TABLE random_strings_with_line_endings (
       random_string TEXT
@@ -916,6 +955,9 @@ class ImportTest : public ::testing::Test {
     ASSERT_NO_THROW(run_ddl_statement(create_table_random_strings_with_line_endings););
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists with_quoted_fields;"););
     ASSERT_NO_THROW(run_ddl_statement(create_table_with_quoted_fields););
+    ASSERT_NO_THROW(
+        run_ddl_statement("drop table if exists array_including_quoted_fields;"););
+    ASSERT_NO_THROW(run_ddl_statement(create_table_with_array_including_quoted_fields););
   }
 
   void TearDown() override {
@@ -923,6 +965,8 @@ class ImportTest : public ::testing::Test {
     ASSERT_NO_THROW(run_ddl_statement("drop table random_strings_with_line_endings;"););
     ASSERT_NO_THROW(run_ddl_statement("drop table with_quoted_fields;"););
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists geo;"););
+    ASSERT_NO_THROW(
+        run_ddl_statement("drop table if exists array_including_quoted_fields;"););
   }
 };
 
@@ -996,6 +1040,11 @@ TEST_F(ImportTest, S3_Wildcard_Prefix) {
 
 TEST_F(ImportTest, One_csv_file) {
   EXPECT_TRUE(import_test_local("trip_data_9.csv", 100, 1.0));
+}
+
+TEST_F(ImportTest, array_including_quoted_fields) {
+  EXPECT_TRUE(import_test_array_including_quoted_fields_local(
+      "array_including_quoted_fields.csv", 2));
 }
 
 TEST_F(ImportTest, random_strings_with_line_endings) {

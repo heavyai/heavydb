@@ -143,7 +143,8 @@ const char* CsvParserUtils::get_row(const char* buf,
       in_array = false;
     } else if (*p == copy_params.delimiter || is_eol(*p, line_endings)) {
       if (!in_quote && !in_array) {
-        if (!has_escape && !strip_quotes) {
+        if ((!has_escape && !strip_quotes) ||
+            (is_array != nullptr && is_array[row.size()])) {
           std::string s = trim_space(field, p - field);
           row.push_back(s);
         } else {
@@ -207,30 +208,26 @@ void CsvParserUtils::parseStringArray(const std::string& s,
   if (s[0] != copy_params.array_begin || s[s.size() - 1] != copy_params.array_end) {
     throw std::runtime_error("Malformed Array :" + s);
   }
-  size_t last = 1;
-  for (size_t i = s.find(copy_params.array_delim, 1); i != std::string::npos;
-       i = s.find(copy_params.array_delim, last)) {
-    if (i > last) {  // if not empty string - disallow empty strings for now
-      if (s.substr(last, i - last).length() > StringDictionary::MAX_STRLEN) {
-        throw std::runtime_error("Array String too long : " +
-                                 std::to_string(s.substr(last, i - last).length()) +
-                                 " max is " +
-                                 std::to_string(StringDictionary::MAX_STRLEN));
-      }
 
-      string_vec.push_back(s.substr(last, i - last));
-    }
-    last = i + 1;
-  }
-  if (s.size() - 1 > last) {  // if not empty string - disallow empty strings for now
-    if (s.substr(last, s.size() - 1 - last).length() > StringDictionary::MAX_STRLEN) {
-      throw std::runtime_error(
-          "Array String too long : " +
-          std::to_string(s.substr(last, s.size() - 1 - last).length()) + " max is " +
-          std::to_string(StringDictionary::MAX_STRLEN));
-    }
+  std::string row(s.c_str() + 1, s.length() - 2);
+  row.push_back('\n');
+  bool try_single_thread = false;
+  get_row(row.c_str(),
+          row.c_str() + row.length(),
+          row.c_str() + row.length(),
+          copy_params,
+          nullptr,
+          string_vec,
+          try_single_thread);
 
-    string_vec.push_back(s.substr(last, s.size() - 1 - last));
+  for (size_t i = 0; i < string_vec.size(); ++i) {
+    if (string_vec[i].empty()) {  // Disallow empty strings for now
+      string_vec.erase(string_vec.begin() + i);
+      --i;
+    } else if (string_vec[i].size() > StringDictionary::MAX_STRLEN) {
+      throw std::runtime_error("Array String too long : " + string_vec[i] + " max is " +
+                               std::to_string(StringDictionary::MAX_STRLEN));
+    }
   }
 }
 
