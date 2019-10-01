@@ -106,6 +106,10 @@ class FixedLengthEncoder : public Encoder {
     }
   }
 
+  void updateStats(const int8_t* const dst, const size_t numBytes) override {
+    CHECK(false);
+  }
+
   // Only called from the executor for synthesized meta-information.
   void reduceStats(const Encoder& that) override {
     const auto that_typed = static_cast<const FixedLengthEncoder<T, V>&>(that);

@@ -106,6 +106,13 @@ class NoneEncoder : public Encoder {
     }
   }
 
+  void updateStats(const int8_t* const dst, const size_t numElements) override {
+    const T* unencodedData = reinterpret_cast<const T*>(dst);
+    auto minmax = std::minmax_element(unencodedData, unencodedData + numElements);
+    dataMin = std::min(dataMin, *minmax.first);
+    dataMax = std::max(dataMax, *minmax.second);
+  }
+
   // Only called from the executor for synthesized meta-information.
   void reduceStats(const Encoder& that) override {
     const auto that_typed = static_cast<const NoneEncoder&>(that);
