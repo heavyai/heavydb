@@ -46,7 +46,12 @@ class ThriftClientConnection {
       , ca_cert_name_(ca_cert_name)
       , trust_cert_file_(trust_cert_file){};
 
-  ThriftClientConnection(const std::string& ca_cert_name);
+  ThriftClientConnection(const std::string& server_host,
+                         const int port,
+                         const ThriftConnectionType conn_type,
+                         bool skip_host_verify,
+                         mapd::shared_ptr<TSSLSocketFactory> factory);
+
   ThriftClientConnection(){};
 
   mapd::shared_ptr<TTransport> open_buffered_client_transport(
@@ -66,6 +71,7 @@ class ThriftClientConnection {
       bool skip_verify);
 
   mapd::shared_ptr<TProtocol> get_protocol();
+  virtual ~ThriftClientConnection();
 
  private:
   std::string server_host_;
@@ -74,7 +80,7 @@ class ThriftClientConnection {
   bool skip_host_verify_;
   std::string ca_cert_name_;
   std::string trust_cert_file_;
-
+  bool using_X509_store_ = false;
   mapd::shared_ptr<TSSLSocketFactory> factory_;
 };
 

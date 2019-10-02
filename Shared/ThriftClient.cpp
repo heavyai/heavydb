@@ -122,17 +122,27 @@ class ProxyTHttpClient : public THttpClient {
 
   std::vector<std::string> cookies_;
 };
-
-ThriftClientConnection::ThriftClientConnection(const std::string& ca_cert_name) {
-  if (!ca_cert_name.empty()) {
-    factory_ =
-        mapd::shared_ptr<TSSLSocketFactory>(new TSSLSocketFactory(SSLProtocol::SSLTLS));
+ThriftClientConnection::~ThriftClientConnection() {}
+ThriftClientConnection::ThriftClientConnection(
+    const std::string& server_host,
+    const int port,
+    const ThriftConnectionType conn_type,
+    bool skip_host_verify,
+    mapd::shared_ptr<TSSLSocketFactory> factory)
+    : server_host_(server_host)
+    , port_(port)
+    , conn_type_(conn_type)
+    , skip_host_verify_(skip_host_verify)
+    , trust_cert_file_("") {
+  if (factory && (conn_type_ == ThriftConnectionType::BINARY_SSL ||
+                  conn_type_ == ThriftConnectionType::HTTPS)) {
+    using_X509_store_ = true;
+    factory_ = factory;
     factory_->ciphers("ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
-
-    factory_->loadTrustedCertificates(ca_cert_name.c_str());
-    factory_->authenticate(false);
-    factory_->access(
-        mapd::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
+    if (skip_host_verify_) {
+      factory_->access(
+          mapd::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
+    }
   }
 }
 
@@ -162,7 +172,7 @@ mapd::shared_ptr<TProtocol> ThriftClientConnection::get_protocol() {
   } else {
     return mapd::shared_ptr<TProtocol>(new TBinaryProtocol(mytransport));
   }
-};
+}
 
 mapd::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transport(
     const std::string& server_host,
@@ -184,7 +194,7 @@ mapd::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transp
     factory_->access(
         mapd::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
   }
-  if (ca_cert_name.empty()) {
+  if (!using_X509_store_ && ca_cert_name.empty()) {
     const auto socket = mapd::make_shared<TSocket>(server_host, port);
     if (with_timeout) {
       socket->setConnTimeout(connect_timeout);
@@ -208,10 +218,10 @@ mapd::shared_ptr<TTransport> ThriftClientConnection::open_buffered_client_transp
 mapd::shared_ptr<TTransport> ThriftClientConnection::open_http_client_transport(
     const std::string& server_host,
     const int port,
-    const std::string& trust_cert_file_,
+    const std::string& trust_cert_fileX,
     bool use_https,
     bool skip_verify) {
-  std::string trust_cert_file{trust_cert_file_};
+  std::string trust_cert_file{trust_cert_fileX};
   if (trust_cert_file_.empty()) {
     static std::list<std::string> v_known_ca_paths({
         "/etc/ssl/certs/ca-certificates.crt",
@@ -230,7 +240,8 @@ mapd::shared_ptr<TTransport> ThriftClientConnection::open_http_client_transport(
   }
 
   if (!factory_) {
-    factory_ = mapd::shared_ptr<TSSLSocketFactory>(new TSSLSocketFactory());
+    factory_ =
+        mapd::shared_ptr<TSSLSocketFactory>(new TSSLSocketFactory(SSLProtocol::SSLTLS));
   }
   mapd::shared_ptr<TTransport> transport;
   mapd::shared_ptr<TTransport> socket;
@@ -240,7 +251,9 @@ mapd::shared_ptr<TTransport> ThriftClientConnection::open_http_client_transport(
       factory_->access(
           mapd::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
     }
-    factory_->loadTrustedCertificates(trust_cert_file.c_str());
+    if (!using_X509_store_) {
+      factory_->loadTrustedCertificates(trust_cert_file.c_str());
+    }
     socket = factory_->createSocket(server_host, port);
     // transport = mapd::shared_ptr<TTransport>(new THttpClient(socket,
     // server_host,
