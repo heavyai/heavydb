@@ -13,9 +13,8 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 import os
-#import sys
-#sys.path.insert(1, os.path.abspath(os.environ['DOXYRESTROOT'] + '/share/doxyrest/sphinx'))
-
+import sys
+sys.path.append(os.path.join(os.path.dirname(__file__), "/ext/breathe/"))
 
 # -- Project information -----------------------------------------------------
 
@@ -43,9 +42,8 @@ extensions = [
     'sphinx.ext.mathjax',
     'sphinx.ext.githubpages',
     'sphinx.ext.graphviz',
-    'sphinxcontrib.plantuml'
-#    'doxyrest',
-#    'cpplexer'
+    'sphinxcontrib.plantuml',
+    'breathe'
 ]
 
 plantuml = 'plantuml -config %s'  % os.path.join(os.path.dirname(__file__), 'plantuml.cfg')
@@ -116,7 +114,7 @@ html_context = {
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'OmniSciCoredoc'
+htmlhelp_basename = 'OmniSciDBdoc'
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -143,7 +141,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'OmniSciCore.tex', 'OmniSci Core Documentation',
+    (master_doc, 'OmniSciDB.tex', 'OmniSciDB Documentation',
      'OmniSci, Inc', 'manual'),
 ]
 
@@ -153,7 +151,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'omniscicore', 'OmniSci Core Documentation',
+    (master_doc, 'omniscidb', 'OmniSciDB Documentation',
      [author], 1)
 ]
 
@@ -164,8 +162,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'OmniSciCore', 'OmniSci Core Documentation',
-     author, 'OmniSciCore', 'One line description of project.',
+    (master_doc, 'OmniSciDB', 'OmniSciDB Documentation',
+     author, 'OmniSciDB', 'One line description of project.',
      'Miscellaneous'),
 ]
 
@@ -189,6 +187,16 @@ epub_exclude_files = ['search.html']
 
 
 # -- Extension configuration -------------------------------------------------
+
+breathe_projects = { "OmniSciDB": os.path.join(os.path.dirname(__file__) + "/../../build/doxygen/xml") }
+breathe_default_project = "OmniSciDB"
+breathe_domain_by_extension = {"h" : "cpp"}
+
+# Tell sphinx what the primary language being documented is.
+primary_domain = 'cpp'
+
+# Tell sphinx what the pygments highlight language should be.
+highlight_language = 'cpp'
 
 # -- Options for todo extension ----------------------------------------------
 

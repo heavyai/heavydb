@@ -4,7 +4,7 @@
 Execution Kernels
 ==================
 
-Query execution begins with ``Executor::dispatchFragments`` and ends with reducing results from each device and returning a ``ResultSet`` back to the ``RelAlgExecutor``. Each device (GPU or CPU thread) has a dedicated CPU thread. All devices initialize state and execute queries in parallel. On CPU, this means the execution within a single device is not parallel. On GPU, execution within a device also occurs in parallel. 
+Query execution begins with ``Executor::dispatchFragments`` and ends with reducing results from each device and returning a ``ResultSet`` back to the :cpp:class:`RelAlgExecutor`. Each device (GPU or CPU thread) has a dedicated CPU thread. All devices initialize state and execute queries in parallel. On CPU, this means the execution within a single device is not parallel. On GPU, execution within a device also occurs in parallel. 
 
 Input data is assigned to the relevant device in a pre-processing step. Input fragments are typically assigned in round-robin order, unless the input data is sharded. For sharded input data, all shards of the same `key` are assigned to the same device. Input assignment is managed by the ``QueryFragmentDescriptor``.
 

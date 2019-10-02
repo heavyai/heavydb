@@ -68,7 +68,7 @@ OUTPUT_DIRECTORY       = @CMAKE_BINARY_DIR@/doxygen
 # performance problems for the file system.
 # The default value is: NO.
 
-CREATE_SUBDIRS         = YES
+CREATE_SUBDIRS         = NO
 
 # If the ALLOW_UNICODE_NAMES tag is set to YES, doxygen will allow non-ASCII
 # characters to appear in the names of generated files. If set to NO, non-ASCII
@@ -883,6 +883,11 @@ EXCLUDE               += ../Experimental
 EXCLUDE               += ../issue_template.md
 EXCLUDE               += ../README-internal.md
 EXCLUDE               += ../ThirdParty
+EXCLUDE               += ../Tests
+EXCLUDE               += ../ODBC
+EXCLUDE               += ../QueryEngine/GroupByHashTest.cpp
+EXCLUDE               += ../SQLFrontend
+EXCLUDE               += ../SampleCode
 EXCLUDE               += @CMAKE_BINARY_DIR@
 
 # The EXCLUDE_SYMLINKS tag can be used to select whether or not files or
@@ -2100,7 +2105,7 @@ INCLUDE_FILE_PATTERNS  =
 # recursively expanded use the := operator instead of the = operator.
 # This tag requires that the tag ENABLE_PREPROCESSING is set to YES.
 
-PREDEFINED             =
+PREDEFINED             =    
 
 # If the MACRO_EXPANSION and EXPAND_ONLY_PREDEF tags are set to YES then this
 # tag can be used to specify a list of macro names that should be expanded. The

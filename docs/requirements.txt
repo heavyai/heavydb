@@ -1,3 +1,4 @@
 sphinx>=2.2.0
 sphinx_rtd_theme>=0.4.3
 sphinxcontrib-plantuml>=0.17.1
+git+git://github.com/alexbaden/breathe@master#egg=breathe

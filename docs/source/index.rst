@@ -43,6 +43,12 @@ internals, and details the data model and query execution flows.
     execution/index
 
 .. toctree::
+    :caption: API Reference
+    :glob:
+
+    api/*
+
+.. toctree::
     :caption: Additional Resources
 
     Doxygen <https://doxygen.omnisci.com>

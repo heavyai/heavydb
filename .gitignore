@@ -66,6 +66,7 @@ ThirdParty/go/src/*
 docs/build/
 docs/generated-docs/
 docs/sphinx-env
+docs/source/api/*
 
 # java-generated files
 java/**/target/
