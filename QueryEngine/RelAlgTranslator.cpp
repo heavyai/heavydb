@@ -60,10 +60,10 @@ std::pair<std::shared_ptr<Analyzer::Expr>, SQLQualifier> get_quantified_rhs(
   }
   const auto rex_function = dynamic_cast<const RexFunctionOperator*>(rex_operator);
   const auto qual_str = rex_function ? rex_function->getName() : "";
-  if (qual_str == std::string("PG_ANY") || qual_str == std::string("PG_ALL")) {
+  if (qual_str == "PG_ANY"sv || qual_str == "PG_ALL"sv) {
     CHECK_EQ(size_t(1), rex_function->size());
     rhs = translator.translateScalarRex(rex_function->getOperand(0));
-    sql_qual = qual_str == std::string("PG_ANY") ? kANY : kALL;
+    sql_qual = (qual_str == "PG_ANY"sv) ? kANY : kALL;
   }
   if (!rhs && rex_operator->getOperator() == kCAST) {
     CHECK_EQ(size_t(1), rex_operator->size());
@@ -886,7 +886,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLike(
   const auto escape = (rex_function->size() == 3)
                           ? translateScalarRex(rex_function->getOperand(2))
                           : nullptr;
-  const bool is_ilike = rex_function->getName() == std::string("PG_ILIKE");
+  const bool is_ilike = rex_function->getName() == "PG_ILIKE"sv;
   return Parser::LikeExpr::get(arg, like, escape, is_ilike, false);
 }
 
@@ -927,7 +927,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(
     throw std::runtime_error("The time unit parameter must be a literal.");
   }
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
-  const bool is_date_trunc = rex_function->getName() == std::string("PG_DATE_TRUNC");
+  const bool is_date_trunc = rex_function->getName() == "PG_DATE_TRUNC"sv;
   if (is_date_trunc) {
     return DateTruncExpr::generate(from_expr, *timeunit_lit->get_constval().stringval);
   } else {
@@ -1036,7 +1036,7 @@ namespace {
 
 std::string get_datetimeplus_rewrite_funcname(const SQLOps& op) {
   CHECK(op == kPLUS);
-  return "DATETIME_PLUS";
+  return "DATETIME_PLUS"s;
 }
 
 }  // namespace
@@ -1153,8 +1153,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLength(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(1), rex_function->size());
   const auto str_arg = translateScalarRex(rex_function->getOperand(0));
-  return makeExpr<Analyzer::CharLengthExpr>(
-      str_arg->decompress(), rex_function->getName() == std::string("CHAR_LENGTH"));
+  return makeExpr<Analyzer::CharLengthExpr>(str_arg->decompress(),
+                                            rex_function->getName() == "CHAR_LENGTH"sv);
 }
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateKeyForString(
@@ -1234,7 +1234,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatetime(
     throw std::runtime_error(datetime_err);
   }
   CHECK(arg_lit->get_type_info().is_string());
-  if (*arg_lit->get_constval().stringval != std::string("NOW")) {
+  if (*arg_lit->get_constval().stringval != "NOW"sv) {
     throw std::runtime_error(datetime_err);
   }
   return translateNow();
@@ -1348,73 +1348,66 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     const RexFunctionOperator* rex_function) const {
-  if (rex_function->getName() == std::string("LIKE") ||
-      rex_function->getName() == std::string("PG_ILIKE")) {
+  if (func_resolve(rex_function->getName(), "LIKE"sv, "PG_ILIKE"sv)) {
     return translateLike(rex_function);
   }
-  if (rex_function->getName() == std::string("REGEXP_LIKE")) {
+  if (rex_function->getName() == "REGEXP_LIKE"sv) {
     return translateRegexp(rex_function);
   }
-  if (rex_function->getName() == std::string("LIKELY")) {
+  if (rex_function->getName() == "LIKELY"sv) {
     return translateLikely(rex_function);
   }
-  if (rex_function->getName() == std::string("UNLIKELY")) {
+  if (rex_function->getName() == "UNLIKELY"sv) {
     return translateUnlikely(rex_function);
   }
-  if (rex_function->getName() == std::string("PG_EXTRACT") ||
-      rex_function->getName() == std::string("PG_DATE_TRUNC")) {
+  if (func_resolve(rex_function->getName(), "PG_EXTRACT"sv, "PG_DATE_TRUNC"sv)) {
     return translateExtract(rex_function);
   }
-  if (rex_function->getName() == std::string("DATEADD")) {
+  if (rex_function->getName() == "DATEADD"sv) {
     return translateDateadd(rex_function);
   }
-  if (rex_function->getName() == std::string("DATEDIFF")) {
+  if (rex_function->getName() == "DATEDIFF"sv) {
     return translateDatediff(rex_function);
   }
-  if (rex_function->getName() == std::string("DATEPART")) {
+  if (rex_function->getName() == "DATEPART"sv) {
     return translateDatepart(rex_function);
   }
-  if (rex_function->getName() == std::string("LENGTH") ||
-      rex_function->getName() == std::string("CHAR_LENGTH")) {
+  if (func_resolve(rex_function->getName(), "LENGTH"sv, "CHAR_LENGTH"sv)) {
     return translateLength(rex_function);
   }
-  if (rex_function->getName() == std::string("KEY_FOR_STRING")) {
+  if (rex_function->getName() == "KEY_FOR_STRING"sv) {
     return translateKeyForString(rex_function);
   }
-  if (g_enable_experimental_string_functions &&
-      rex_function->getName() == std::string("LOWER")) {
+  if (g_enable_experimental_string_functions && rex_function->getName() == "LOWER"sv) {
     return translateLower(rex_function);
   }
-  if (rex_function->getName() == std::string("CARDINALITY") ||
-      rex_function->getName() == std::string("ARRAY_LENGTH")) {
+  if (func_resolve(rex_function->getName(), "CARDINALITY"sv, "ARRAY_LENGTH"sv)) {
     return translateCardinality(rex_function);
   }
-  if (rex_function->getName() == std::string("ITEM")) {
+  if (rex_function->getName() == "ITEM"sv) {
     return translateItem(rex_function);
   }
-  if (rex_function->getName() == std::string("NOW")) {
+  if (rex_function->getName() == "NOW"sv) {
     return translateNow();
   }
-  if (rex_function->getName() == std::string("DATETIME")) {
+  if (rex_function->getName() == "DATETIME"sv) {
     return translateDatetime(rex_function);
   }
-  if (rex_function->getName() == std::string("usTIMESTAMP") ||
-      rex_function->getName() == std::string("nsTIMESTAMP")) {
+  if (func_resolve(rex_function->getName(), "usTIMESTAMP"sv, "nsTIMESTAMP"sv)) {
     return translateHPTLiteral(rex_function);
   }
-  if (rex_function->getName() == std::string("ABS")) {
+  if (rex_function->getName() == "ABS"sv) {
     return translateAbs(rex_function);
   }
-  if (rex_function->getName() == std::string("SIGN")) {
+  if (rex_function->getName() == "SIGN"sv) {
     return translateSign(rex_function);
   }
-  if (rex_function->getName() == std::string("CEIL") ||
-      rex_function->getName() == std::string("FLOOR")) {
+  if (func_resolve(rex_function->getName(), "CEIL"sv, "FLOOR"sv)) {
     return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
         rex_function->getType(),
         rex_function->getName(),
         translateFunctionArgs(rex_function));
-  } else if (rex_function->getName() == std::string("ROUND")) {
+  } else if (rex_function->getName() == "ROUND"sv) {
     std::vector<std::shared_ptr<Analyzer::Expr>> args =
         translateFunctionArgs(rex_function);
 
@@ -1445,7 +1438,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
         rex_function->getType(), rex_function->getName(), args);
   }
-  if (rex_function->getName() == std::string("DATETIME_PLUS")) {
+  if (rex_function->getName() == "DATETIME_PLUS"sv) {
     auto dt_plus = makeExpr<Analyzer::FunctionOper>(rex_function->getType(),
                                                     rex_function->getName(),
                                                     translateFunctionArgs(rex_function));
@@ -1455,67 +1448,70 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
     }
     return translateDateadd(rex_function);
   }
-  if (rex_function->getName() == std::string("/INT")) {
+  if (rex_function->getName() == "/INT"sv) {
     CHECK_EQ(size_t(2), rex_function->size());
     std::shared_ptr<Analyzer::Expr> lhs = translateScalarRex(rex_function->getOperand(0));
     std::shared_ptr<Analyzer::Expr> rhs = translateScalarRex(rex_function->getOperand(1));
     const auto rhs_lit = std::dynamic_pointer_cast<Analyzer::Constant>(rhs);
     return Parser::OperExpr::normalize(kDIVIDE, kONE, lhs, rhs);
   }
-  if (rex_function->getName() == std::string("Reinterpret")) {
+  if (rex_function->getName() == "Reinterpret"sv) {
     CHECK_EQ(size_t(1), rex_function->size());
     return translateScalarRex(rex_function->getOperand(0));
   }
-  if (rex_function->getName() == std::string("ST_X") ||
-      rex_function->getName() == std::string("ST_Y") ||
-      rex_function->getName() == std::string("ST_XMin") ||
-      rex_function->getName() == std::string("ST_YMin") ||
-      rex_function->getName() == std::string("ST_XMax") ||
-      rex_function->getName() == std::string("ST_YMax") ||
-      rex_function->getName() == std::string("ST_NRings") ||
-      rex_function->getName() == std::string("ST_NPoints") ||
-      rex_function->getName() == std::string("ST_Length") ||
-      rex_function->getName() == std::string("ST_Perimeter") ||
-      rex_function->getName() == std::string("ST_Area") ||
-      rex_function->getName() == std::string("ST_SRID") ||
-      rex_function->getName() == std::string("MapD_GeoPolyBoundsPtr") ||    // deprecated
-      rex_function->getName() == std::string("MapD_GeoPolyRenderGroup") ||  // deprecated
-      rex_function->getName() == std::string("OmniSci_Geo_PolyBoundsPtr") ||
-      rex_function->getName() == std::string("OmniSci_Geo_PolyRenderGroup")) {
+  if (func_resolve(rex_function->getName(),
+                   "ST_X"sv,
+                   "ST_Y"sv,
+                   "ST_XMin"sv,
+                   "ST_YMin"sv,
+                   "ST_XMax"sv,
+                   "ST_YMax"sv,
+                   "ST_NRings"sv,
+                   "ST_NPoints"sv,
+                   "ST_Length"sv,
+                   "ST_Perimeter"sv,
+                   "ST_Area"sv,
+                   "ST_SRID"sv,
+                   "MapD_GeoPolyBoundsPtr"sv /* deprecated */,
+                   "MapD_GeoPolyBoundsPtr"sv /* deprecated */,
+                   "OmniSci_Geo_PolyBoundsPtr"sv,
+                   "OmniSci_Geo_PolyRenderGroup"sv)) {
     CHECK_EQ(rex_function->size(), size_t(1));
     return translateUnaryGeoFunction(rex_function);
   }
-  if (rex_function->getName() == std::string("convert_meters_to_pixel_width") ||
-      rex_function->getName() == std::string("convert_meters_to_pixel_height") ||
-      rex_function->getName() == std::string("is_point_in_view") ||
-      rex_function->getName() == std::string("is_point_size_in_view")) {
+  if (func_resolve(rex_function->getName(),
+                   "convert_meters_to_pixel_width"sv,
+                   "convert_meters_to_pixel_height"sv,
+                   "is_point_in_view"sv,
+                   "is_point_size_in_view"sv)) {
     return translateFunctionWithGeoArg(rex_function);
   }
-  if (rex_function->getName() == std::string("ST_Distance") ||
-      rex_function->getName() == std::string("ST_MaxDistance") ||
-      rex_function->getName() == std::string("ST_Intersects") ||
-      rex_function->getName() == std::string("ST_Disjoint") ||
-      rex_function->getName() == std::string("ST_Contains") ||
-      rex_function->getName() == std::string("ST_Within")) {
+  if (func_resolve(rex_function->getName(),
+                   "ST_Distance"sv,
+                   "ST_MaxDistance"sv,
+                   "ST_Intersects"sv,
+                   "ST_Disjoint"sv,
+                   "ST_Contains"sv,
+                   "ST_Within"sv)) {
     CHECK_EQ(rex_function->size(), size_t(2));
     return translateBinaryGeoFunction(rex_function);
   }
-  if (rex_function->getName() == std::string("ST_DWithin") ||
-      rex_function->getName() == std::string("ST_DFullyWithin")) {
+  if (func_resolve(rex_function->getName(), "ST_DWithin"sv, "ST_DFullyWithin"sv)) {
     CHECK_EQ(rex_function->size(), size_t(3));
     return translateTernaryGeoFunction(rex_function);
   }
-  if (rex_function->getName() == std::string("OFFSET_IN_FRAGMENT")) {
+  if (rex_function->getName() == "OFFSET_IN_FRAGMENT"sv) {
     CHECK_EQ(size_t(0), rex_function->size());
     return translateOffsetInFragment();
   }
-  if (rex_function->getName() == std::string("ARRAY")) {
+  if (rex_function->getName() == "ARRAY"sv) {
     // Var args; currently no check.  Possible fix-me -- can array have 0 elements?
     return translateArrayFunction(rex_function);
   }
-  if (rex_function->getName() == std::string("ST_GeomFromText") ||
-      rex_function->getName() == std::string("ST_GeogFromText") ||
-      rex_function->getName() == std::string("ST_Point")) {
+  if (func_resolve(rex_function->getName(),
+                   "ST_GeomFromText"sv,
+                   "ST_GeogFromText"sv,
+                   "ST_Point"sv)) {
     return translateGeoConstructor(rex_function);
   }
 

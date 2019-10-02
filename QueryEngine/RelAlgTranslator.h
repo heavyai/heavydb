@@ -190,4 +190,10 @@ QualsConjunctiveForm qual_to_conjunctive_form(
 std::vector<std::shared_ptr<Analyzer::Expr>> qual_to_disjunctive_form(
     const std::shared_ptr<Analyzer::Expr>& qual_expr);
 
+inline auto func_resolve = [](auto funcname, auto&&... strlist) {
+  return ((funcname == strlist) || ...);
+};
+
+using namespace std::literals;
+
 #endif  // QUERYENGINE_RELALGTRANSLATOR_H
