@@ -13231,10 +13231,10 @@ TEST(Select, GeoSpatial_Projection) {
         "POINT (2 2)",
         boost::get<std::string>(v<NullableString>(run_simple_agg(
             "SELECT ST_Point(2,2) FROM geospatial_test WHERE id = 2;", dt, false))));
-    ASSERT_EQ(
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
         "POINT (2 2)",
         boost::get<std::string>(v<NullableString>(run_simple_agg(
-            "SELECT ST_Point(id,id) FROM geospatial_test WHERE id = 2;", dt, false))));
+            "SELECT ST_Point(id,id) FROM geospatial_test WHERE id = 2;", dt, false)))));
 
     // ST_Distance
     ASSERT_NEAR(static_cast<double>(2.0),
