@@ -743,6 +743,8 @@ class LowerExpr : public Expr {
 
   const Expr* get_arg() const { return arg.get(); }
 
+  const std::shared_ptr<Analyzer::Expr> get_own_arg() const { return arg; }
+
   void collect_rte_idx(std::set<int>& rte_idx_set) const override {
     arg->collect_rte_idx(rte_idx_set);
   }

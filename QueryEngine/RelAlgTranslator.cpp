@@ -28,6 +28,7 @@
 #include "WindowContext.h"
 
 #include <future>
+
 #include "../Analyzer/Analyzer.h"
 #include "../Parser/ParserNode.h"
 #include "../Shared/likely.h"
@@ -1192,14 +1193,15 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLower(
     const RexFunctionOperator* rex_function) const {
   const auto& args = translateFunctionArgs(rex_function);
   CHECK_EQ(size_t(1), args.size());
+  CHECK(args[0]);
 
-  if (const auto expr = dynamic_cast<Analyzer::Expr*>(args[0].get());
-      expr && expr->get_type_info().is_string() && !expr->get_type_info().is_varlen()) {
+  if (args[0]->get_type_info().is_dict_encoded_string() ||
+      dynamic_cast<Analyzer::Constant*>(args[0].get())) {
     return makeExpr<Analyzer::LowerExpr>(args[0]);
   }
 
   throw std::runtime_error(rex_function->getName() +
-                           " expects a dictionary encoded text column.");
+                           " expects a dictionary encoded text column or a literal.");
 }
 
 Analyzer::ExpressionPtr RelAlgTranslator::translateCardinality(

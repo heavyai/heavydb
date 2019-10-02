@@ -202,13 +202,11 @@ TEST_F(LowerFunctionTest, LowercaseJoin) {
   compare_result_set(expected_result_set, result_set);
 }
 
-// TODO: Add support for constants
-TEST_F(LowerFunctionTest, DISABLED_InsertLowercaseConstant) {
-  auto result_set = multi_sql(R"(
-        insert into lower_function_test_people values('SUE', 'Watson', 25, lower('GB'));
-        select first_name, last_name from lower_function_test_people where country_code = 'gb';
-      )");
-  std::vector<std::vector<ScalarTargetValue>> expected_result_set{{"SUE", "Watson"}};
+TEST_F(LowerFunctionTest, SelectLowercaseLiteral) {
+  auto result_set =
+      sql("select first_name, lower('SMiTH') from lower_function_test_people;");
+  std::vector<std::vector<ScalarTargetValue>> expected_result_set{
+      {"JOHN", "smith"}, {"John", "smith"}, {"JOHN", "smith"}, {"Sue", "smith"}};
   compare_result_set(expected_result_set, result_set);
 }
 
@@ -274,7 +272,8 @@ TEST_F(LowerFunctionTest, LowercaseNonEncodedTextColumn) {
     sql("select lower(last_name) from lower_function_test_people;");
     FAIL() << "An exception should have been thrown for this test case";
   } catch (const std::exception& e) {
-    ASSERT_STREQ("LOWER expects a dictionary encoded text column.", e.what());
+    ASSERT_STREQ("LOWER expects a dictionary encoded text column or a literal.",
+                 e.what());
   }
 }
 
@@ -283,7 +282,8 @@ TEST_F(LowerFunctionTest, LowercaseNonTextColumn) {
     sql("select lower(age) from lower_function_test_people;");
     FAIL() << "An exception should have been thrown for this test case";
   } catch (const std::exception& e) {
-    ASSERT_STREQ("LOWER expects a dictionary encoded text column.", e.what());
+    ASSERT_STREQ("LOWER expects a dictionary encoded text column or a literal.",
+                 e.what());
   }
 }
 
@@ -314,7 +314,7 @@ TEST_F(LowerFunctionTest, LowercaseNullColumn) {
   compare_result_set(expected_result_set, result_set);
 }
 
-TEST_F(LowerFunctionTest, ExperimentalStringFunctionsDisabled) {
+TEST_F(LowerFunctionTest, SelectLowercase_ExperimentalStringFunctionsDisabled) {
   g_enable_experimental_string_functions = false;
 
   try {
