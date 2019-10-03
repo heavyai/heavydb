@@ -326,9 +326,6 @@ class MapDProgramOptions {
   std::string getNodeIds();
   std::vector<std::string> getNodeIdsArray();
   static const std::string nodeIds_token;
-  void overrideFrom(LeafHostInfo& host,
-                    const std::vector<LeafHostInfo>& hosts,
-                    rapidjson::Document& cluster_json);
 
   boost::optional<int> parse_command_line(int argc, char const* const* argv);
   void validate();
@@ -1083,7 +1080,7 @@ void heartbeat() {
   }
 }
 
-int startMapdServer(MapDProgramOptions& prog_config_opts) {
+int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server = true) {
   // try to enforce an orderly shutdown even after a signal
   register_signal_handlers();
 
@@ -1192,29 +1189,32 @@ int startMapdServer(MapDProgramOptions& prog_config_opts) {
       g_thrift_buf_server = &bufServer;
     }
 
-    mapd::shared_ptr<TServerTransport> httpServerTransport(httpServerSocket);
-    mapd::shared_ptr<TTransportFactory> httpTransportFactory(
-        new THttpServerTransportFactory());
-    mapd::shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
-    TThreadedServer httpServer(
-        processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
-    {
-      mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
-      g_thrift_http_server = &httpServer;
-    }
-
     std::thread bufThread(start_server,
                           std::ref(bufServer),
                           prog_config_opts.mapd_parameters.omnisci_server_port);
-    std::thread httpThread(
-        start_server, std::ref(httpServer), prog_config_opts.http_port);
 
     // run warm up queries if any exists
     run_warmup_queries(
         g_mapd_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
 
+    if (start_http_server) {
+      mapd::shared_ptr<TServerTransport> httpServerTransport(httpServerSocket);
+      mapd::shared_ptr<TTransportFactory> httpTransportFactory(
+          new THttpServerTransportFactory());
+      mapd::shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
+      TThreadedServer httpServer(
+          processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
+      {
+        mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
+        g_thrift_http_server = &httpServer;
+      }
+      std::thread httpThread(
+          start_server, std::ref(httpServer), prog_config_opts.http_port);
+      httpThread.join();
+    }
+
     bufThread.join();
-    httpThread.join();
+
   } else {  // running ha server
     LOG(FATAL) << "No High Availability module available, please contact OmniSci support";
   }
