@@ -165,7 +165,8 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
           auto size = buffer.size();
           auto subkey = chunk_key;
           subkey[4] = 2;
-          auto bs = chunk_index_.find(subkey)->second->size();
+          auto &index_buf = *(chunk_index_.find(subkey)->second);
+          auto bs = index_buf.size() / index_buf.sql_type.get_size();
           ChunkMetadata m{type, size, bs, ChunkStats{}};
           chunkMetadataVec.push_back(std::make_pair(chunk_key, m));
         }
