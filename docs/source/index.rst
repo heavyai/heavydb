@@ -7,7 +7,7 @@
 OmniSciDB Developer Documentation
 ==================================
 
-OmniSciDB is an open source SQL-based, relational, columnar database engine
+OmniSciDB is an open-source SQL-based, relational, columnar database engine
 that leverages the full performance and parallelism of modern hardware
 (both CPUs and GPUs) to enable querying of multi-billion row datasets
 in milliseconds, without the need for indexing, pre-aggregation, or
@@ -20,7 +20,7 @@ storage, CPU memory, and GPU memory, as well as an innovative Just-In-Time
 (JIT) query compilation framework built around LLVM.
 
 This developer documentation provides an in-depth discussion of the OmniSciDB
-internals, and details the data model and query execution flows.
+internals and details the data model and query execution flow.
 
 .. toctree::
     :caption: System Architecture
