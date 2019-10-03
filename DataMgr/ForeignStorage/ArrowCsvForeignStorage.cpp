@@ -274,6 +274,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
             ARROW_THROW_NOT_OK(indexBuilder.Finish(&indexArray));
             frag.chunks.emplace_back(ARROW_GET_DATA(indexArray));
           }
+          frag.sz = stringArray->length();
         } else {
           frag.chunks.emplace_back(ARROW_GET_DATA(clp->chunk(i)));
           frag.sz += clp->chunk(i)->length();
