@@ -319,7 +319,8 @@ void ForeignStorageInterface::prepareTable(const int db_id,
   p->prepareTable(db_id, type.second, td, cols);
 }
 
-void ForeignStorageInterface::registerTable(const int db_id,
+void ForeignStorageInterface::registerTable(Catalog_Namespace::Catalog* catalog,
+                                            const int db_id,
                                             const TableDescriptor& td,
                                             const std::list<ColumnDescriptor>& cols) {
   const int table_id = td.tableId;
@@ -334,7 +335,7 @@ void ForeignStorageInterface::registerTable(const int db_id,
   CHECK(it_ok.second);
   persistent_storage_interfaces_lock.unlock();
   it_ok.first->second->registerTable(
-      it_ok.first->first, type.second, td, cols, lookupBufferManager(db_id, table_id));
+      catalog, it_ok.first->first, type.second, td, cols, lookupBufferManager(db_id, table_id));
 }
 
 std::unordered_map<std::string, std::unique_ptr<PersistentForeignStorageInterface>>

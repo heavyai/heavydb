@@ -19,6 +19,7 @@ struct ArrowFragment {
 };
 
 std::map<std::array<int, 3>, std::vector<ArrowFragment>> g_columns;
+std::map<std::array<int, 3>, StringDictionary*> g_dictionaries;
 
 void ArrowCsvForeignStorage::append(
     const std::vector<ForeignStorageColumnBuffer>& column_buffers) {
@@ -33,6 +34,7 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
   // printf("-- reading %d:%d<=%u\n", chunk_key[2], chunk_key[3], unsigned(numBytes));
   std::array<int, 3> col_key{chunk_key[0], chunk_key[1], chunk_key[2]};
   auto& frag = g_columns.at(col_key).at(chunk_key[3]);
+
   CHECK(!frag.chunks.empty() || !chunk_key[3]);
   int64_t sz, copied = 0;
   arrow::ArrayData* prev_data = nullptr;
@@ -72,7 +74,11 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
           varlen_offset += data[(sz / sizeof(uint32_t)) - 1];
         }
       } else {
-        std::memcpy(dest, bp->data(), sz = bp->size());
+        if (sql_type.is_dict_encoded_string()) {
+          auto dict = g_dictionaries[col_key];
+
+        } else
+          std::memcpy(dest, bp->data(), sz = bp->size());
       }
     } else {
       // TODO: nullify?
@@ -159,7 +165,8 @@ void ArrowCsvForeignStorage::prepareTable(const int db_id,
   td.hasDeletedCol = false;
 }
 
-void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key,
+void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
+                                           std::pair<int, int> table_key,
                                            const std::string& info,
                                            const TableDescriptor& td,
                                            const std::list<ColumnDescriptor>& cols,
@@ -241,6 +248,15 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key,
     col.resize(fragments.size());
     auto clp = ARROW_GET_DATA(table.column(cln++)).get();
 
+    if (c.columnType.is_dict_encoded_string()) {
+      auto d = catalog->addDictionary(c);
+      auto dictDesc = const_cast<DictDescriptor*>(
+          catalog->getMetadataForDict(c.columnType.get_comp_param()));
+      CHECK(dictDesc);
+      auto stringDict = dictDesc->stringDict.get();
+      g_dictionaries[col_key] = stringDict;
+    }
+
     // fill each fragment
     for (size_t f = 0; f < fragments.size(); f++) {
       key[3] = f;
@@ -248,29 +264,41 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key,
       int64_t varlen = 0;
       // for each arrow chunk
       for (int i = fragments[f].first, e = fragments[f].second; i < e; i++) {
-        frag.chunks.emplace_back(ARROW_GET_DATA(clp->chunk(i)));
-        frag.sz += clp->chunk(i)->length();
-        auto& buffers = ARROW_GET_DATA(clp->chunk(i))->buffers;
-        if (ctype == kTEXT) {
-          if (buffers.size() <= 2) {
+        if (c.columnType.is_dict_encoded_string()) {
+          arrow::Int32Builder indexBuilder;
+          auto dict = g_dictionaries[col_key];
+          auto stringArray = std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
+          for (int i = 0; i < stringArray->length(); i++) {
+            indexBuilder.Append(dict->getOrAdd(stringArray->GetString(i)));
+            std::shared_ptr<arrow::Array> indexArray;
+            ARROW_THROW_NOT_OK(indexBuilder.Finish(&indexArray));
+            frag.chunks.emplace_back(ARROW_GET_DATA(indexArray));
+          }
+        } else {
+          frag.chunks.emplace_back(ARROW_GET_DATA(clp->chunk(i)));
+          frag.sz += clp->chunk(i)->length();
+          auto& buffers = ARROW_GET_DATA(clp->chunk(i))->buffers;
+          if (ctype == kTEXT) {
+            if (buffers.size() <= 2) {
+              LOG(FATAL) << "Type of column #" << cln
+                         << " does not match between Arrow and description of "
+                         << c.columnName;
+              throw std::runtime_error("Column ingress mismatch: " + c.columnName);
+            }
+            varlen += buffers[2]->size();
+          } else if (buffers.size() > 2) {
             LOG(FATAL) << "Type of column #" << cln
                        << " does not match between Arrow and description of "
                        << c.columnName;
             throw std::runtime_error("Column ingress mismatch: " + c.columnName);
           }
-          varlen += buffers[2]->size();
-        } else if (buffers.size() > 2) {
-          LOG(FATAL) << "Type of column #" << cln
-                     << " does not match between Arrow and description of "
-                     << c.columnName;
-          throw std::runtime_error("Column ingress mismatch: " + c.columnName);
         }
       }
       // TODO: check dynamic_cast<arrow::FixedWidthType*>(c0f->type().get())->bit_width()
       // == b.sql_type.get_size()
 
       // create buffer descriptotrs
-      if (ctype == kTEXT) {
+      if (ctype == kTEXT && !c.columnType.is_dict_encoded_string()) {
         auto k = key;
         k.push_back(1);
         {
@@ -292,7 +320,7 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key,
         b->setSize(frag.sz * b->sql_type.get_size());
         b->encoder.reset(Encoder::Create(b, c.columnType));
         b->has_encoder = true;
-        for(auto chunk: frag.chunks) {
+        for (auto chunk : frag.chunks) {
           auto len = chunk->length;
           auto data = chunk->buffers[1]->data();
           b->encoder->updateStats((const int8_t*)data, len);
