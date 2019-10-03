@@ -20,12 +20,12 @@ There is a make target, `make sphinx` that can be ran from the top-level `../bui
 
 ### Building with Docker
 
-Docker can be used to build the documentation locally without installing any dependencies to the host system. An internal container is available with the name: `docker-internal.mapd.com/mapd/sphinx-doc`. 
+Docker can be used to build the documentation locally without installing any dependencies to the host system. A container is available on [docker hub](https://hub.docker.com/r/omnisci/sphinx-doc) with the name: `omnisci/sphinx-doc`. 
 
 To build the docs using the available container, from inside this `docs` directory run:
 
 ```
-docker run --rm -v $PWD:/doc -e USER_ID=$UID docker-internal.mapd.com/mapd/sphinx-doc make html
+docker run --rm -v $PWD:/doc -e USER_ID=$UID omnisci/sphinx-doc make html
 ```
 
 If there are any changes to dependencies, a new container image can be built using the `Dockerfile` in this directory.
@@ -37,7 +37,7 @@ To build a new version of the `sphinx-doc` container, from inside this `docs` di
 docker build -t sphinx-doc:<version> .
 ```
 
-Where <version> is any unique version number. Proceed with the above step and replace `docker-internal.mapd.com/mapd/sphinx-doc` with `sphinx-doc:<version>` to build the docs with the updated dependencies.
+Where <version> is any unique version number. Proceed with the above step and replace `omnisci/sphinx-doc` with `sphinx-doc:<version>` to build the docs with the updated dependencies.
 
 
 ### Building Manually
