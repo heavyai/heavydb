@@ -42,8 +42,9 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
 
   for (auto array_data : frag.chunks) {
     arrow::Buffer* bp = nullptr;
-
-    if (sql_type.get_type() == kTEXT) {
+    if (sql_type.is_dict_encoded_string()) {
+      bp = array_data->buffers[1].get();
+    } else if (sql_type.get_type() == kTEXT) {
       CHECK_GE(array_data->buffers.size(), 3UL);
       bp = array_data->buffers[2].get();
     } else if (array_data->null_count != array_data->length) {
@@ -74,11 +75,7 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
           varlen_offset += data[(sz / sizeof(uint32_t)) - 1];
         }
       } else {
-        if (sql_type.is_dict_encoded_string()) {
-          auto dict = g_dictionaries[col_key];
-
-        } else
-          std::memcpy(dest, bp->data(), sz = bp->size());
+        std::memcpy(dest, bp->data(), sz = bp->size());
       }
     } else {
       // TODO: nullify?
