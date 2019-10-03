@@ -276,20 +276,28 @@ void ArrowCsvForeignStorage::registerTable(std::pair<int, int> table_key,
         {
           auto b = mgr->createBuffer(k);
           b->setSize(varlen);
-          b->encoder = std::make_unique<StringNoneEncoder>(b);
+          b->encoder.reset(Encoder::Create(b, c.columnType));
           b->has_encoder = true;
           b->sql_type = c.columnType;
         }
         k[4] = 2;
         {
-          auto& b = *mgr->createBuffer(k);
-          b.sql_type = SQLTypeInfo(kINT, false);
-          b.setSize(frag.sz);
+          auto b = mgr->createBuffer(k);
+          b->sql_type = SQLTypeInfo(kINT, false);
+          b->setSize(frag.sz * b->sql_type.get_size());
         }
       } else {
-        auto& b = *mgr->createBuffer(key);
-        b.sql_type = c.columnType;
-        b.setSize(frag.sz);
+        auto b = mgr->createBuffer(key);
+        b->sql_type = c.columnType;
+        b->setSize(frag.sz * b->sql_type.get_size());
+        b->encoder.reset(Encoder::Create(b, c.columnType));
+        b->has_encoder = true;
+        for(auto chunk: frag.chunks) {
+          auto len = chunk->length;
+          auto data = chunk->buffers[1]->data();
+          b->encoder->updateStats((const int8_t*)data, len);
+        }
+        b->encoder->setNumElems(frag.sz);
       }
     }
   }  // each col and fragment
