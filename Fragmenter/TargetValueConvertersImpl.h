@@ -128,6 +128,8 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
   const DictDescriptor* target_dict_desc_;
   const DictDescriptor* source_dict_desc_;
 
+  StringDictionaryProxy* source_dict_proxy_;
+
   const int32_t buffer_null_sentinal_ = std::numeric_limits<int32_t>::min();
 
   const StringDictionaryProxy* literals_dict_;
@@ -142,7 +144,8 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
                            TARGET_TYPE nullValue,
                            int64_t nullCheckValue,
                            bool doNullCheck,
-                           StringDictionaryProxy* literals_dict)
+                           StringDictionaryProxy* literals_dict,
+                           StringDictionaryProxy* source_dict_proxy)
       : NumericValueConverter<int64_t, TARGET_TYPE>(targetDescriptor,
                                                     num_rows,
                                                     nullValue,
@@ -153,6 +156,7 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
         cat.getMetadataForDict(targetDescriptor->columnType.get_comp_param(), true);
 
     source_dict_desc_ = nullptr;
+    source_dict_proxy_ = source_dict_proxy;
 
     use_literals_ = 0 == sourceDictId;
     if (!use_literals_) {
@@ -208,6 +212,15 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
     convertToColumnarFormat(row, scalarValue);
   }
 
+  inline int32_t convertTransientStringIdToPermanentId(int32_t& transient_string_id) {
+    if (source_dict_proxy_) {
+      auto str = source_dict_proxy_->getString(transient_string_id);
+      return source_dict_proxy_->getOrAdd(str);
+    } else {
+      throw std::runtime_error("Unexpected negative source ID");
+    }
+  }
+
   typename NumericValueConverter<int64_t, TARGET_TYPE>::ColumnDataPtr processBuffer(
       ElementsBufferColumnPtr buffer) {
     typename NumericValueConverter<int64_t, TARGET_TYPE>::ColumnDataPtr data =
@@ -235,6 +248,8 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
           auto src_id = (*bufferPtr)[i];
           if (src_id == buffer_null_sentinal_) {
             columnDataPtr[i] = this->null_value_;
+          } else if (src_id < 0) {
+            columnDataPtr[i] = convertTransientStringIdToPermanentId(src_id);
           } else {
             columnDataPtr[i] = static_cast<TARGET_TYPE>(src_id);
           }
@@ -244,10 +259,19 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
         std::vector<int32_t> dest_ids;
         dest_ids.resize(bufferPtr->size());
 
-        StringDictionary::populate_string_ids(dest_ids,
-                                              target_dict_desc_->stringDict.get(),
-                                              *bufferPtr,
-                                              source_dict_desc_->stringDict.get());
+        if (source_dict_proxy_) {
+          StringDictionary::populate_string_ids(
+              dest_ids,
+              target_dict_desc_->stringDict.get(),
+              *bufferPtr,
+              source_dict_desc_->stringDict.get(),
+              source_dict_proxy_->getTransientMapping());
+        } else {
+          StringDictionary::populate_string_ids(dest_ids,
+                                                target_dict_desc_->stringDict.get(),
+                                                *bufferPtr,
+                                                source_dict_desc_->stringDict.get());
+        }
 
         // fixup NULL sentinel
         for (size_t i = 0; i < dest_ids.size(); i++) {

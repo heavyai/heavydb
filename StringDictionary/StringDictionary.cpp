@@ -1128,17 +1128,24 @@ void StringDictionary::mergeSortedCache(std::vector<int32_t>& temp_sorted_cache)
   sorted_cache.swap(updated_cache);
 }
 
-void StringDictionary::populate_string_ids(std::vector<int32_t>& dest_ids,
-                                           StringDictionary* dest_dict,
-                                           const std::vector<int32_t>& source_ids,
-                                           const StringDictionary* source_dict) {
+void StringDictionary::populate_string_ids(
+    std::vector<int32_t>& dest_ids,
+    StringDictionary* dest_dict,
+    const std::vector<int32_t>& source_ids,
+    const StringDictionary* source_dict,
+    const std::map<int32_t, std::string> transient_mapping) {
   std::vector<std::string> strings;
 
   for (const int32_t source_id : source_ids) {
     if (source_id == std::numeric_limits<int32_t>::min()) {
       strings.emplace_back("");
     } else if (source_id < 0) {
-      throw std::runtime_error("Unexpected negative source ID");
+      if (auto string_itr = transient_mapping.find(source_id);
+          string_itr != transient_mapping.end()) {
+        strings.emplace_back(string_itr->second);
+      } else {
+        throw std::runtime_error("Unexpected negative source ID");
+      }
     } else {
       strings.push_back(source_dict->getString(source_id));
     }

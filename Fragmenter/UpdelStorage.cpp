@@ -25,6 +25,7 @@
 #include "DataMgr/DataMgr.h"
 #include "DataMgr/FixedLengthArrayNoneEncoder.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "QueryEngine/Execute.h"
 #include "QueryEngine/TargetValue.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/DateConverters.h"
@@ -32,6 +33,8 @@
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/thread_count.h"
 #include "TargetValueConvertersFactories.h"
+
+extern bool g_enable_experimental_string_functions;
 
 namespace Fragmenter_Namespace {
 
@@ -324,6 +327,11 @@ void InsertOrderFragmenter::updateColumns(
   std::vector<std::unique_ptr<TargetValueConverter>> sourceDataConverters(
       columnDescriptors.size());
   std::vector<std::unique_ptr<ChunkToInsertDataConverter>> chunkConverters;
+  std::shared_ptr<Executor> executor;
+
+  if (g_enable_experimental_string_functions) {
+    executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  }
 
   std::shared_ptr<Chunk_NS::Chunk> deletedChunk;
   for (size_t indexOfChunk = 0; indexOfChunk < chunks.size(); indexOfChunk++) {
@@ -347,13 +355,20 @@ void InsertOrderFragmenter::updateColumns(
       auto sourceDataMetaInfo = sourceMetaInfo[indexOfTargetColumn];
       auto targetDescriptor = columnDescriptors[indexOfTargetColumn];
 
-      ConverterCreateParameter param{num_rows,
-                                     *catalog,
-                                     sourceDataMetaInfo,
-                                     targetDescriptor,
-                                     targetDescriptor->columnType,
-                                     !targetDescriptor->columnType.get_notnull(),
-                                     sourceDataProvider.getLiteralDictionary()};
+      ConverterCreateParameter param{
+          num_rows,
+          *catalog,
+          sourceDataMetaInfo,
+          targetDescriptor,
+          targetDescriptor->columnType,
+          !targetDescriptor->columnType.get_notnull(),
+          sourceDataProvider.getLiteralDictionary(),
+          g_enable_experimental_string_functions
+              ? executor->getStringDictionaryProxy(
+                    sourceDataMetaInfo.get_type_info().get_comp_param(),
+                    executor->getRowSetMemoryOwner(),
+                    true)
+              : nullptr};
       auto converter = factory.create(param);
       sourceDataConverters[indexOfTargetColumn] = std::move(converter);
 

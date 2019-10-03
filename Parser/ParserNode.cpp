@@ -65,6 +65,7 @@
 
 size_t g_leaf_count{0};
 bool g_use_date_in_days_default_encoding{true};
+extern bool g_enable_experimental_string_functions;
 
 using namespace Lock_Namespace;
 using Catalog_Namespace::SysCatalog;
@@ -2606,6 +2607,12 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
     thread_end_idx[0] = result_rows->entryCount();
   }
 
+  std::shared_ptr<Executor> executor;
+
+  if (g_enable_experimental_string_functions) {
+    executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
+  }
+
   while (start_row < num_rows) {
     try {
       value_converters.clear();
@@ -2621,7 +2628,13 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
             targetDescriptor,
             targetDescriptor->columnType,
             !targetDescriptor->columnType.get_notnull(),
-            result_rows->getRowSetMemOwner()->getLiteralStringDictProxy()};
+            result_rows->getRowSetMemOwner()->getLiteralStringDictProxy(),
+            g_enable_experimental_string_functions
+                ? executor->getStringDictionaryProxy(
+                      sourceDataMetaInfo.get_type_info().get_comp_param(),
+                      result_rows->getRowSetMemOwner(),
+                      true)
+                : nullptr};
         auto converter = factory.create(param);
         value_converters.push_back(std::move(converter));
       }
