@@ -246,7 +246,6 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
     auto clp = ARROW_GET_DATA(table.column(cln++)).get();
 
     if (c.columnType.is_dict_encoded_string()) {
-      auto d = catalog->addDictionary(c);
       auto dictDesc = const_cast<DictDescriptor*>(
           catalog->getMetadataForDict(c.columnType.get_comp_param()));
       CHECK(dictDesc);
@@ -266,7 +265,8 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           auto dict = g_dictionaries[col_key];
           auto stringArray = std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
           for (int i = 0; i < stringArray->length(); i++) {
-            indexBuilder.Append(dict->getOrAdd(stringArray->GetString(i)));
+            auto curStr = stringArray->GetString(i);
+            indexBuilder.Append(dict->getOrAdd(curStr));
             std::shared_ptr<arrow::Array> indexArray;
             ARROW_THROW_NOT_OK(indexBuilder.Finish(&indexArray));
             frag.chunks.emplace_back(ARROW_GET_DATA(indexArray));
