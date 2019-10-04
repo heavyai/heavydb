@@ -14,6 +14,16 @@ Documentation can be build locally using a make target on the host machine, usin
 
 * In the below steps, replace `make html` with `make livehtml` to have the build watch for changes and provide a live-preview.
 
+* If you would like to add a version number to the docs, run the following from the root of this repo to export version number into the $VER variable:
+```
+export VER=$(scripts/parse-version.sh)
+```
+and then append it to the `make html` command like so:
+```
+make html SPHINXOPTS="-D version=$VER"
+```
+these steps are not required when building using the make target, as it will gather the version itself.
+
 #### Building with make target
 
 There is a make target, `make sphinx` that can be ran from the top-level `../build/` directory after initialized with `cmake`.
@@ -25,7 +35,7 @@ Docker can be used to build the documentation locally without installing any dep
 To build the docs using the available container, from inside this `docs` directory run:
 
 ```
-docker run --rm -v $PWD:/doc -e USER_ID=$UID omnisci/sphinx-doc make html
+docker run --rm -v $PWD:/doc -e USER_ID=$UID docker-internal.mapd.com/mapd/sphinx-doc make html
 ```
 
 If there are any changes to dependencies, a new container image can be built using the `Dockerfile` in this directory.
@@ -52,13 +62,14 @@ This will take the source docs files from the `./source/` directory and output H
 
 #### Manually
 
-The following steps use a python virtual environment:
+The following steps use a python virtual environment, from inside this `docs` directory run:
 
 ```
 python3 -m venv sphinx-env
 . sphinx-env/bin/activate
 pip install -r requirements.txt
-make html
+
+make html SPHINXOPTS="-D version=$(../scripts/parse-version.sh)"
 deactivate
 ```
 

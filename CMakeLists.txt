@@ -855,6 +855,6 @@ add_custom_target(sphinx
   COMMAND . sphinx-env/bin/activate
   COMMAND pip install -r requirements.txt
   COMMAND rm -rf build
-  COMMAND make html
+  COMMAND make html SPHINXOPTS="-D version=${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}"
   WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/docs
   )
