@@ -1231,7 +1231,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
   }
 }
 
-const std::string MapDProgramOptions::nodeIds_token = {"nodeIds"};
+const std::string MapDProgramOptions::nodeIds_token = {"node_id"};
 
 int main(int argc, char** argv) {
   bool has_clust_topo = false;
