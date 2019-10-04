@@ -60,7 +60,6 @@ TableFunctionCompilationContext::TableFunctionCompilationContext()
     : cgen_state_(std::make_unique<CgenState>(std::vector<InputTableInfo>{}, false)) {
   auto cgen_state = cgen_state_.get();
   CHECK(cgen_state);
-  auto& ctx = cgen_state->context_;
 
   std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
   cgen_state->module_ = module.get();
@@ -78,28 +77,6 @@ void TableFunctionCompilationContext::compile(const TableFunctionExecutionUnit& 
   }
   finalize(co, executor);
 }
-
-namespace {
-
-std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
-                                                     llvm::Value* byte_stream_arg,
-                                                     CgenState* cgen_state,
-                                                     llvm::LLVMContext& ctx) {
-  CHECK(cgen_state);
-  CHECK(byte_stream_arg);
-  auto max_col_local_id = num_columns - 1;
-
-  std::vector<llvm::Value*> col_heads;
-  for (int col_id = 0; col_id <= max_col_local_id; ++col_id) {
-    col_heads.emplace_back(
-        cgen_state->ir_builder_.CreateLoad(cgen_state->ir_builder_.CreateGEP(
-            byte_stream_arg,
-            llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), col_id))));
-  }
-  return col_heads;
-}
-
-}  // namespace
 
 void TableFunctionCompilationContext::generateEntryPoint(
     const TableFunctionExecutionUnit& exe_unit) {
@@ -124,7 +101,7 @@ void TableFunctionCompilationContext::generateEntryPoint(
   cgen_state->ir_builder_.SetInsertPoint(func_body_bb);
 
   auto col_heads = generate_column_heads_load(
-      exe_unit.input_exprs.size(), input_cols_arg, cgen_state, ctx);
+      exe_unit.input_exprs.size(), input_cols_arg, cgen_state->ir_builder_, ctx);
   CHECK_EQ(exe_unit.input_exprs.size(), col_heads.size());
 
   std::vector<llvm::Value*> func_args;

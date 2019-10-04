@@ -960,23 +960,6 @@ void bind_pos_placeholders(const std::string& pos_fn_name,
   }
 }
 
-std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
-                                                     llvm::Function* query_func,
-                                                     llvm::LLVMContext& context) {
-  auto max_col_local_id = num_columns - 1;
-  auto& fetch_bb = query_func->front();
-  llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
-  fetch_ir_builder.SetInsertPoint(&*fetch_bb.begin());
-  auto& byte_stream_arg = *query_func->args().begin();
-  std::vector<llvm::Value*> col_heads;
-  for (int col_id = 0; col_id <= max_col_local_id; ++col_id) {
-    col_heads.emplace_back(fetch_ir_builder.CreateLoad(fetch_ir_builder.CreateGEP(
-        &byte_stream_arg,
-        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), col_id))));
-  }
-  return col_heads;
-}
-
 void set_row_func_argnames(llvm::Function* row_func,
                            const size_t in_col_count,
                            const size_t agg_col_count,
@@ -1072,7 +1055,11 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
 
   // Generate the function signature and column head fetches s.t.
   // double indirection isn't needed in the inner loop
-  auto col_heads = generate_column_heads_load(in_col_count, query_func, context);
+  auto& fetch_bb = query_func->front();
+  llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
+  fetch_ir_builder.SetInsertPoint(&*fetch_bb.begin());
+  auto col_heads = generate_column_heads_load(
+      in_col_count, query_func->args().begin(), fetch_ir_builder, context);
   CHECK_EQ(in_col_count, col_heads.size());
 
   // column buffer arguments
@@ -1908,4 +1895,19 @@ std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state)
         return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
                 func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage);
       });
+}
+
+std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
+                                                     llvm::Value* byte_stream_arg,
+                                                     llvm::IRBuilder<>& ir_builder,
+                                                     llvm::LLVMContext& ctx) {
+  CHECK(byte_stream_arg);
+  const auto max_col_local_id = num_columns - 1;
+
+  std::vector<llvm::Value*> col_heads;
+  for (int col_id = 0; col_id <= max_col_local_id; ++col_id) {
+    col_heads.emplace_back(ir_builder.CreateLoad(ir_builder.CreateGEP(
+        byte_stream_arg, llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), col_id))));
+  }
+  return col_heads;
 }
