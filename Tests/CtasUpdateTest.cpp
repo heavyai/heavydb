@@ -650,7 +650,7 @@ TEST(Ctas, SyntaxCheck) {
   run_ddl_statement("CREATE TABLE CTAS_SOURCE (id int);");
   run_ddl_statement("CREATE TABLE CTAS_SOURCE_WITH (id int);");
 
-  std::string ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
+  std::string ddl = "CREATE TABLE CTAS_TARGET AS SELECT \n * \r FROM CTAS_SOURCE;";
   run_ddl_statement(ddl);
   EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
   ddl = "DROP TABLE CTAS_TARGET;";
@@ -662,7 +662,9 @@ TEST(Ctas, SyntaxCheck) {
   ddl = "DROP TABLE CTAS_TARGET;";
   run_ddl_statement(ddl);
 
-  ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE WITH( FRAGMENT_SIZE=3 );";
+  ddl =
+      "CREATE TABLE CTAS_TARGET AS SELECT * \n FROM \r CTAS_SOURCE WITH( FRAGMENT_SIZE=3 "
+      ");";
   run_ddl_statement(ddl);
   EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
   ddl = "DROP TABLE CTAS_TARGET;";

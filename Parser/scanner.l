@@ -206,7 +206,7 @@ WORK          TOK(WORK)
 -?"."[0-9]*[eE][+-]?[0-9]+	{ yylval.doubleval = atof(yytext); TOK(DOUBLE) }
 
 	/* strings */
-<STATE_CREATE_AS>(.+(\n|\r)*)+[ \n\t\r]+/([Ww][Ii][Tt]) {
+<STATE_CREATE_AS>(.|\n|\r)+[ \n\t\r]+/([Ww][Ii][Tt]) {
     int len = yyleng;
     yylval.stringval = new std::string(yytext, len);
     boost::trim(*yylval.stringval);
@@ -215,7 +215,7 @@ WORK          TOK(WORK)
     return SQLParser::SELECTSTRING;
   }
 
-<STATE_CREATE_AS>(.+(\n|\r)*)+/[;] {
+<STATE_CREATE_AS>(.|\n|\r)+/[;] {
     int len = yyleng;
     const std::string keyword = "with";
     std::string tmp(yytext, len);
