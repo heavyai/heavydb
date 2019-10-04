@@ -68,6 +68,7 @@ std::unique_ptr<llvm::Module> udf_cpu_module;
 std::unique_ptr<llvm::Module> rt_udf_gpu_module;
 std::unique_ptr<llvm::Module> rt_udf_cpu_module;
 
+extern std::unique_ptr<llvm::Module> g_rt_module;
 namespace {
 
 #if defined(HAVE_CUDA) || !defined(WITH_JIT_DEBUG)
@@ -1889,4 +1890,22 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
 
   CHECK(filter_lv->getType()->isIntegerTy(1));
   return group_by_and_aggregate.codegen(filter_lv, sc_false, query_mem_desc, co);
+}
+
+std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state) {
+  return llvm::CloneModule(
+#if LLVM_VERSION_MAJOR >= 7
+      *g_rt_module.get(),
+#else
+      g_rt_module.get(),
+#endif
+      cgen_state->vmap_,
+      [](const llvm::GlobalValue* gv) {
+        auto func = llvm::dyn_cast<llvm::Function>(gv);
+        if (!func) {
+          return true;
+        }
+        return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
+                func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage);
+      });
 }

@@ -18,33 +18,14 @@
 
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/raw_os_ostream.h>
-#include <llvm/Transforms/Utils/Cloning.h>
 #include <algorithm>
 #include <boost/algorithm/string.hpp>
+
+#include "QueryEngine/CodeGenerator.h"
 
 extern std::unique_ptr<llvm::Module> g_rt_module;
 
 namespace {
-
-// TODO(adb): merge with result set JIT once that lands
-std::unique_ptr<llvm::Module> runtime_module_shallow_copy(llvm::LLVMContext& context,
-                                                          CgenState* cgen_state) {
-  return llvm::CloneModule(
-#if LLVM_VERSION_MAJOR >= 7
-      *g_rt_module.get(),
-#else
-      g_rt_module.get(),
-#endif
-      cgen_state->vmap_,
-      [](const llvm::GlobalValue* gv) {
-        auto func = llvm::dyn_cast<llvm::Function>(gv);
-        if (!func) {
-          return true;
-        }
-        return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
-                func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage);
-      });
-}
 
 llvm::Function* generate_entry_point(const CgenState* cgen_state) {
   auto& ctx = cgen_state->context_;
@@ -81,7 +62,7 @@ TableFunctionCompilationContext::TableFunctionCompilationContext()
   CHECK(cgen_state);
   auto& ctx = cgen_state->context_;
 
-  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(ctx, cgen_state));
+  std::unique_ptr<llvm::Module> module(runtime_module_shallow_copy(cgen_state));
   cgen_state->module_ = module.get();
 
   entry_point_func_ = generate_entry_point(cgen_state);

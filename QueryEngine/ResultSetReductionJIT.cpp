@@ -33,7 +33,6 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/Support/SourceMgr.h>
 #include <llvm/Support/raw_os_ostream.h>
-#include <llvm/Transforms/Utils/Cloning.h>
 
 extern std::unique_ptr<llvm::Module> g_rt_module;
 
@@ -1163,22 +1162,4 @@ std::string ResultSetReductionJIT::cacheKey() const {
   const auto targets_key = boost::algorithm::join(targets_strings, ", ");
   return query_mem_desc_.reductionKey() + "\n" + target_init_vals_key + "\n" +
          targets_key;
-}
-
-std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state) {
-  return llvm::CloneModule(
-#if LLVM_VERSION_MAJOR >= 7
-      *g_rt_module.get(),
-#else
-      g_rt_module.get(),
-#endif
-      cgen_state->vmap_,
-      [](const llvm::GlobalValue* gv) {
-        auto func = llvm::dyn_cast<llvm::Function>(gv);
-        if (!func) {
-          return true;
-        }
-        return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
-                func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage);
-      });
 }

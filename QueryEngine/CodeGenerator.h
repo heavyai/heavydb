@@ -526,3 +526,7 @@ class ScalarCodeGenerator : public CodeGenerator {
   std::vector<std::unique_ptr<GpuCompilationContext>> gpu_compilation_contexts_;
   std::unique_ptr<llvm::TargetMachine> nvptx_target_machine_;
 };
+
+// Make a shallow copy (just declarations) of the runtime module. Function definitions are
+// cloned only if they're used from the generated code.
+std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state);
