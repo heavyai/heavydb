@@ -780,19 +780,24 @@ size_t TypedImportBuffer::convert_arrow_val_to_import_buffer(
       // on this path with a GeoImportException so that we wont over
       // push a null to the logical column...
       try {
-        arrow_throw_if<GeoImportException>(
-            array.IsNull(row) ||
-                !Geo_namespace::GeoTypesFactory::getGeoColumns(geo_string_buffer_->back(),
-                                                               ti,
-                                                               coords,
-                                                               bounds,
-                                                               ring_sizes,
-                                                               poly_rings,
-                                                               false),
-            error_context(cd, bad_rows_tracker) + "Invalid geometry");
-        arrow_throw_if<GeoImportException>(
-            cd->columnType.get_type() != ti.get_type(),
-            error_context(cd, bad_rows_tracker) + "Geometry type mismatch");
+        SQLTypeInfo import_ti{ti};
+        if (array.IsNull(row)) {
+          Geo_namespace::GeoTypesFactory::getNullGeoColumns(
+              import_ti, coords, bounds, ring_sizes, poly_rings, false);
+        } else {
+          arrow_throw_if<GeoImportException>(
+              !Geo_namespace::GeoTypesFactory::getGeoColumns(geo_string_buffer_->back(),
+                                                             ti,
+                                                             coords,
+                                                             bounds,
+                                                             ring_sizes,
+                                                             poly_rings,
+                                                             false),
+              error_context(cd, bad_rows_tracker) + "Invalid geometry");
+          arrow_throw_if<GeoImportException>(
+              cd->columnType.get_type() != ti.get_type(),
+              error_context(cd, bad_rows_tracker) + "Geometry type mismatch");
+        }
         auto col_idx_workpad = col_idx;  // what a pitfall!!
         Importer_NS::Importer::set_geo_physical_import_buffer(
             bad_rows_tracker->importer->getCatalog(),
@@ -2250,14 +2255,6 @@ static ImportStatus import_thread_shapefile(
           // is this a geo column?
           const auto& col_ti = cd->columnType;
           if (col_ti.is_geometry()) {
-            // some Shapefiles get us here, but the OGRGeometryRef is null
-            if (!import_geometry) {
-              std::string msg = "Geometry feature " +
-                                std::to_string(firstFeature + iFeature + 1) +
-                                " has null GeometryRef";
-              throw std::runtime_error(msg);
-            }
-
             // Note that this assumes there is one and only one geo column in the table.
             // Currently, the importer only supports reading a single geospatial feature
             // from an input shapefile / geojson file, but this code will need to be
@@ -2277,30 +2274,43 @@ static ImportStatus import_thread_shapefile(
             int render_group = 0;
 
             // extract it
-            SQLTypeInfo import_ti;
+            SQLTypeInfo import_ti{col_ti};
+            bool is_null_geo = !import_geometry;
+            if (is_null_geo) {
+              if (col_ti.get_notnull()) {
+                throw std::runtime_error("NULL geo for column " + cd->columnName);
+              }
+              Geo_namespace::GeoTypesFactory::getNullGeoColumns(
+                  import_ti,
+                  coords,
+                  bounds,
+                  ring_sizes,
+                  poly_rings,
+                  PROMOTE_POLYGON_TO_MULTIPOLYGON);
+            } else {
+              if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+                      import_geometry,
+                      import_ti,
+                      coords,
+                      bounds,
+                      ring_sizes,
+                      poly_rings,
+                      PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
+                std::string msg = "Failed to extract valid geometry from feature " +
+                                  std::to_string(firstFeature + iFeature + 1) +
+                                  " for column " + cd->columnName;
+                throw std::runtime_error(msg);
+              }
 
-            if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
-                    import_geometry,
-                    import_ti,
-                    coords,
-                    bounds,
-                    ring_sizes,
-                    poly_rings,
-                    PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
-              std::string msg = "Failed to extract valid geometry from feature " +
-                                std::to_string(firstFeature + iFeature + 1) +
-                                " for column " + cd->columnName;
-              throw std::runtime_error(msg);
-            }
-
-            // validate types
-            if (col_type != import_ti.get_type()) {
-              if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
-                  !(import_ti.get_type() == SQLTypes::kPOLYGON &&
-                    col_type == SQLTypes::kMULTIPOLYGON)) {
-                throw std::runtime_error(
-                    "Imported geometry doesn't match the type of column " +
-                    cd->columnName);
+              // validate types
+              if (col_type != import_ti.get_type()) {
+                if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
+                    !(import_ti.get_type() == SQLTypes::kPOLYGON &&
+                      col_type == SQLTypes::kMULTIPOLYGON)) {
+                  throw std::runtime_error(
+                      "Imported geometry doesn't match the type of column " +
+                      cd->columnName);
+                }
               }
             }
 
@@ -2320,15 +2330,17 @@ static ImportStatus import_thread_shapefile(
             ++cd_it;
             auto cd_coords = *cd_it;
             std::vector<TDatum> td_coord_data;
-            std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
-            for (auto cc : compressed_coords) {
-              TDatum td_byte;
-              td_byte.val.int_val = cc;
-              td_coord_data.push_back(td_byte);
+            if (!is_null_geo) {
+              std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
+              for (auto cc : compressed_coords) {
+                TDatum td_byte;
+                td_byte.val.int_val = cc;
+                td_coord_data.push_back(td_byte);
+              }
             }
             TDatum tdd_coords;
             tdd_coords.val.arr_val = td_coord_data;
-            tdd_coords.is_null = false;
+            tdd_coords.is_null = is_null_geo;
             import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
             ++col_idx;
 
@@ -2337,14 +2349,16 @@ static ImportStatus import_thread_shapefile(
               ++cd_it;
               auto cd_ring_sizes = *cd_it;
               std::vector<TDatum> td_ring_sizes;
-              for (auto ring_size : ring_sizes) {
-                TDatum td_ring_size;
-                td_ring_size.val.int_val = ring_size;
-                td_ring_sizes.push_back(td_ring_size);
+              if (!is_null_geo) {
+                for (auto ring_size : ring_sizes) {
+                  TDatum td_ring_size;
+                  td_ring_size.val.int_val = ring_size;
+                  td_ring_sizes.push_back(td_ring_size);
+                }
               }
               TDatum tdd_ring_sizes;
               tdd_ring_sizes.val.arr_val = td_ring_sizes;
-              tdd_ring_sizes.is_null = false;
+              tdd_ring_sizes.is_null = is_null_geo;
               import_buffers[col_idx]->add_value(cd_ring_sizes, tdd_ring_sizes, false);
               ++col_idx;
             }
@@ -2354,14 +2368,16 @@ static ImportStatus import_thread_shapefile(
               ++cd_it;
               auto cd_poly_rings = *cd_it;
               std::vector<TDatum> td_poly_rings;
-              for (auto num_rings : poly_rings) {
-                TDatum td_num_rings;
-                td_num_rings.val.int_val = num_rings;
-                td_poly_rings.push_back(td_num_rings);
+              if (!is_null_geo) {
+                for (auto num_rings : poly_rings) {
+                  TDatum td_num_rings;
+                  td_num_rings.val.int_val = num_rings;
+                  td_poly_rings.push_back(td_num_rings);
+                }
               }
               TDatum tdd_poly_rings;
               tdd_poly_rings.val.arr_val = td_poly_rings;
-              tdd_poly_rings.is_null = false;
+              tdd_poly_rings.is_null = is_null_geo;
               import_buffers[col_idx]->add_value(cd_poly_rings, tdd_poly_rings, false);
               ++col_idx;
             }
@@ -2372,14 +2388,16 @@ static ImportStatus import_thread_shapefile(
               ++cd_it;
               auto cd_bounds = *cd_it;
               std::vector<TDatum> td_bounds_data;
-              for (auto b : bounds) {
-                TDatum td_double;
-                td_double.val.real_val = b;
-                td_bounds_data.push_back(td_double);
+              if (!is_null_geo) {
+                for (auto b : bounds) {
+                  TDatum td_double;
+                  td_double.val.real_val = b;
+                  td_bounds_data.push_back(td_double);
+                }
               }
               TDatum tdd_bounds;
               tdd_bounds.val.arr_val = td_bounds_data;
-              tdd_bounds.is_null = false;
+              tdd_bounds.is_null = is_null_geo;
               import_buffers[col_idx]->add_value(cd_bounds, tdd_bounds, false);
               ++col_idx;
             }
@@ -2390,7 +2408,7 @@ static ImportStatus import_thread_shapefile(
               auto cd_render_group = *cd_it;
               TDatum td_render_group;
               td_render_group.val.int_val = render_group;
-              td_render_group.is_null = false;
+              td_render_group.is_null = is_null_geo;
               import_buffers[col_idx]->add_value(cd_render_group, td_render_group, false);
               ++col_idx;
             }
