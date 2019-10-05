@@ -888,6 +888,7 @@ EXCLUDE               += ../ODBC
 EXCLUDE               += ../QueryEngine/GroupByHashTest.cpp
 EXCLUDE               += ../SQLFrontend
 EXCLUDE               += ../SampleCode
+EXCLUDE               += ../QueryRenderer
 EXCLUDE               += @CMAKE_BINARY_DIR@
 
 # The EXCLUDE_SYMLINKS tag can be used to select whether or not files or
