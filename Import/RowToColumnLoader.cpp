@@ -24,7 +24,7 @@
  **/
 
 #include "RowToColumnLoader.h"
-#include "CsvParserUtils.h"
+#include "DelimitedParserUtils.h"
 #include "Shared/Logger.h"
 
 using namespace ::apache::thrift;
@@ -267,7 +267,8 @@ bool RowToColumnLoader::convert_string_to_column(
       switch (column_type_info_[curr_col].get_type()) {
         case SQLTypes::kARRAY: {
           std::vector<std::string> arr_ele;
-          Importer_NS::CsvParserUtils::parseStringArray(ts.str_val, copy_params, arr_ele);
+          Importer_NS::DelimitedParserUtils::parseStringArray(
+              ts.str_val, copy_params, arr_ele);
           TColumn array_tcol;
           for (std::string item : arr_ele) {
             boost::algorithm::trim(item);

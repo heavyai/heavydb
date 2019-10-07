@@ -59,7 +59,7 @@
 #include "Shared/Logger.h"
 #include "Shared/SqlTypesLayout.h"
 
-#include "CsvParserUtils.h"
+#include "DelimitedParserUtils.h"
 #include "Importer.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Utils/ChunkAccessorTable.h"
@@ -217,6 +217,18 @@ void Importer::set_import_status(const std::string& import_id, ImportStatus is) 
   import_status_map[import_id] = is;
 }
 
+static const std::string trim_space(const char* field, const size_t len) {
+  size_t i = 0;
+  size_t j = len;
+  while (i < j && (field[i] == ' ' || field[i] == '\r')) {
+    i++;
+  }
+  while (i < j && (field[j - 1] == ' ' || field[j - 1] == '\r')) {
+    j--;
+  }
+  return std::string(field + i, j - i);
+}
+
 int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti) {
   switch (ti.get_type()) {
     case kBOOLEAN:
@@ -358,7 +370,7 @@ ArrayDatum StringToArray(const std::string& s,
   }
   if (elem_strs.size() == 1) {
     auto str = elem_strs.front();
-    auto str_trimmed = Importer_NS::CsvParserUtils::trim_space(str.c_str(), str.length());
+    auto str_trimmed = trim_space(str.c_str(), str.length());
     if (str_trimmed == "") {
       elem_strs.clear();  // Empty array
     }
@@ -368,7 +380,7 @@ ArrayDatum StringToArray(const std::string& s,
     int8_t* buf = (int8_t*)checked_malloc(len);
     int8_t* p = buf;
     for (auto& es : elem_strs) {
-      auto e = Importer_NS::CsvParserUtils::trim_space(es.c_str(), es.length());
+      auto e = trim_space(es.c_str(), es.length());
       bool is_null = (e == copy_params.null_str) || e == "NULL";
       if (!elem_ti.is_string() && e == "") {
         is_null = true;
@@ -514,9 +526,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     }
     case kTINYINT: {
       if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-        SQLTypeInfo ti = cd->columnType;
-        Datum d = StringToDatum(val, ti);
-        addTinyint(d.tinyintval);
+        addTinyint(std::stoi(val));
       } else {
         if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
@@ -527,9 +537,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     }
     case kSMALLINT: {
       if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-        SQLTypeInfo ti = cd->columnType;
-        Datum d = StringToDatum(val, ti);
-        addSmallint(d.smallintval);
+        addSmallint(std::stoi(val));
       } else {
         if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
@@ -540,9 +548,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     }
     case kINT: {
       if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-        SQLTypeInfo ti = cd->columnType;
-        Datum d = StringToDatum(val, ti);
-        addInt(d.intval);
+        addInt(std::stoi(val));
       } else {
         if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
@@ -553,9 +559,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
     }
     case kBIGINT: {
       if (!is_null && (isdigit(val[0]) || val[0] == '-')) {
-        SQLTypeInfo ti = cd->columnType;
-        Datum d = StringToDatum(val, ti);
-        addBigint(d.bigintval);
+        addBigint(std::stoll(val));
       } else {
         if (cd->columnType.get_notnull()) {
           throw std::runtime_error("NULL for column " + cd->columnName);
@@ -641,7 +645,7 @@ void TypedImportBuffer::add_value(const ColumnDescriptor* cd,
       if (IS_STRING(ti.get_subtype())) {
         std::vector<std::string> string_vec;
         // Just parse string array, don't push it to buffer yet as we might throw
-        Importer_NS::CsvParserUtils::parseStringArray(val, copy_params, string_vec);
+        Importer_NS::DelimitedParserUtils::parseStringArray(val, copy_params, string_vec);
         if (!is_null) {
           // TODO: add support for NULL string arrays
           if (ti.get_size() > 0) {
@@ -1663,7 +1667,7 @@ static ImportStatus import_thread_delimited(
     const CopyParams& copy_params = importer->get_copy_params();
     const std::list<const ColumnDescriptor*>& col_descs = importer->get_column_descs();
     size_t begin =
-        CsvParserUtils::find_beginning(buffer, begin_pos, end_pos, copy_params);
+        DelimitedParserUtils::find_beginning(buffer, begin_pos, end_pos, copy_params);
     const char* thread_buf = buffer + begin_pos + begin;
     const char* thread_buf_end = buffer + end_pos;
     const char* buf_end = buffer + total_size;
@@ -1690,23 +1694,23 @@ static ImportStatus import_thread_delimited(
       row.clear();
       if (DEBUG_TIMING) {
         us = measure<std::chrono::microseconds>::execution([&]() {
-          p = Importer_NS::CsvParserUtils::get_row(p,
-                                                   thread_buf_end,
-                                                   buf_end,
-                                                   copy_params,
-                                                   importer->get_is_array(),
-                                                   row,
-                                                   try_single_thread);
+          p = Importer_NS::DelimitedParserUtils::get_row(p,
+                                                         thread_buf_end,
+                                                         buf_end,
+                                                         copy_params,
+                                                         importer->get_is_array(),
+                                                         row,
+                                                         try_single_thread);
         });
         total_get_row_time_us += us;
       } else {
-        p = Importer_NS::CsvParserUtils::get_row(p,
-                                                 thread_buf_end,
-                                                 buf_end,
-                                                 copy_params,
-                                                 importer->get_is_array(),
-                                                 row,
-                                                 try_single_thread);
+        p = Importer_NS::DelimitedParserUtils::get_row(p,
+                                                       thread_buf_end,
+                                                       buf_end,
+                                                       copy_params,
+                                                       importer->get_is_array(),
+                                                       row,
+                                                       try_single_thread);
       }
       row_index_plus_one++;
       // Each POINT could consume two separate coords instead of a single WKT
@@ -2579,7 +2583,7 @@ void Detector::split_raw_data() {
   bool try_single_thread = false;
   for (const char* p = buf; p < buf_end; p++) {
     std::vector<std::string> row;
-    p = Importer_NS::CsvParserUtils::get_row(
+    p = Importer_NS::DelimitedParserUtils::get_row(
         p, buf_end, buf_end, copy_params, nullptr, row, try_single_thread);
     raw_rows.push_back(row);
     if (try_single_thread) {
@@ -2591,7 +2595,7 @@ void Detector::split_raw_data() {
     raw_rows.clear();
     for (const char* p = buf; p < buf_end; p++) {
       std::vector<std::string> row;
-      p = Importer_NS::CsvParserUtils::get_row(
+      p = Importer_NS::DelimitedParserUtils::get_row(
           p, buf_end, buf_end, copy_params, nullptr, row, try_single_thread);
       raw_rows.push_back(row);
     }
@@ -3634,7 +3638,7 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
     while (size > 0) {
       unsigned int num_rows_this_buffer = 0;
       CHECK(scratch_buffer);
-      end_pos = CsvParserUtils::find_end(
+      end_pos = DelimitedParserUtils::find_end(
           scratch_buffer.get(), size, copy_params, num_rows_this_buffer);
 
       // unput residual

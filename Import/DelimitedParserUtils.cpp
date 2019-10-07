@@ -20,27 +20,45 @@
  * @brief Implementation of CsvParserUtils class.
  */
 
-#include "Import/CsvParserUtils.h"
+#include "Import/DelimitedParserUtils.h"
 
 #include "Shared/Logger.h"
 #include "StringDictionary/StringDictionary.h"
 
 namespace {
-static const bool is_eol(const char& p, const std::string& line_delims) {
-  for (auto i : line_delims) {
-    if (p == i) {
-      return true;
-    }
+inline bool is_eol(const char& c, const Importer_NS::CopyParams& copy_params) {
+  return c == copy_params.line_delim || c == '\n' || c == '\r';
+}
+
+inline void trim_space(const char*& field_begin, const char*& field_end) {
+  while (field_begin < field_end && (*field_begin == ' ' || *field_begin == '\r')) {
+    ++field_begin;
   }
-  return false;
+  while (field_begin < field_end &&
+         (*(field_end - 1) == ' ' || *(field_end - 1) == '\r')) {
+    --field_end;
+  }
+}
+
+inline void trim_quotes(const char*& field_begin,
+                        const char*& field_end,
+                        const Importer_NS::CopyParams& copy_params) {
+  if (copy_params.quoted && field_end - field_begin > 0 &&
+      *field_begin == copy_params.quote) {
+    ++field_begin;
+  }
+  if (copy_params.quoted && field_end - field_begin > 0 &&
+      *(field_end - 1) == copy_params.quote) {
+    --field_end;
+  }
 }
 }  // namespace
 
 namespace Importer_NS {
-size_t CsvParserUtils::find_beginning(const char* buffer,
-                                      size_t begin,
-                                      size_t end,
-                                      const Importer_NS::CopyParams& copy_params) {
+size_t DelimitedParserUtils::find_beginning(const char* buffer,
+                                            size_t begin,
+                                            size_t end,
+                                            const Importer_NS::CopyParams& copy_params) {
   // @TODO(wei) line_delim is in quotes note supported
   if (begin == 0 || (begin > 0 && buffer[begin - 1] == copy_params.line_delim)) {
     return 0;
@@ -55,17 +73,27 @@ size_t CsvParserUtils::find_beginning(const char* buffer,
   return i;
 }
 
-size_t CsvParserUtils::find_end(const char* buffer,
-                                size_t size,
-                                const Importer_NS::CopyParams& copy_params,
-                                unsigned int& num_rows_this_buffer) {
+size_t DelimitedParserUtils::find_end(const char* buffer,
+                                      size_t size,
+                                      const Importer_NS::CopyParams& copy_params,
+                                      unsigned int& num_rows_this_buffer) {
   size_t last_line_delim_pos = 0;
   if (copy_params.quoted) {
     const char* current = buffer;
-    last_line_delim_pos = 0;
     bool in_quote = false;
 
     while (current < buffer + size) {
+      while (!in_quote && current < buffer + size) {
+        // We are outside of quotes. We have to find the last possible line delimiter.
+        if (*current == copy_params.line_delim) {
+          last_line_delim_pos = current - buffer;
+          ++num_rows_this_buffer;
+        } else if (*current == copy_params.quote) {
+          in_quote = true;
+        }
+        ++current;
+      }
+
       while (in_quote && current < buffer + size) {
         // We are in a quoted field. We have to find the ending quote.
         if ((*current == copy_params.escape) && (current < buffer + size - 1) &&
@@ -73,17 +101,6 @@ size_t CsvParserUtils::find_end(const char* buffer,
           ++current;
         } else if (*current == copy_params.quote) {
           in_quote = false;
-        }
-        ++current;
-      }
-
-      // We are outside of quotes. We have to find the last possible line delimiter.
-      while (!in_quote && current < buffer + size) {
-        if (*current == copy_params.line_delim) {
-          last_line_delim_pos = current - buffer;
-          ++num_rows_this_buffer;
-        } else if (*current == copy_params.quote) {
-          in_quote = true;
         }
         ++current;
       }
@@ -110,13 +127,13 @@ size_t CsvParserUtils::find_end(const char* buffer,
   return last_line_delim_pos + 1;
 }
 
-const char* CsvParserUtils::get_row(const char* buf,
-                                    const char* buf_end,
-                                    const char* entire_buf_end,
-                                    const Importer_NS::CopyParams& copy_params,
-                                    const bool* is_array,
-                                    std::vector<std::string>& row,
-                                    bool& try_single_thread) {
+const char* DelimitedParserUtils::get_row(const char* buf,
+                                          const char* buf_end,
+                                          const char* entire_buf_end,
+                                          const Importer_NS::CopyParams& copy_params,
+                                          const bool* is_array,
+                                          std::vector<std::string>& row,
+                                          bool& try_single_thread) {
   const char* field = buf;
   const char* p;
   bool in_quote = false;
@@ -124,8 +141,7 @@ const char* CsvParserUtils::get_row(const char* buf,
   bool has_escape = false;
   bool strip_quotes = false;
   try_single_thread = false;
-  std::string line_endings({copy_params.line_delim, '\r', '\n'});
-  for (p = buf; p < entire_buf_end; p++) {
+  for (p = buf; p < entire_buf_end; ++p) {
     if (*p == copy_params.escape && p < entire_buf_end - 1 &&
         *(p + 1) == copy_params.quote) {
       p++;
@@ -138,15 +154,19 @@ const char* CsvParserUtils::get_row(const char* buf,
     } else if (!in_quote && is_array != nullptr && *p == copy_params.array_begin &&
                is_array[row.size()]) {
       in_array = true;
-    } else if (!in_quote && is_array != nullptr && *p == copy_params.array_end &&
-               is_array[row.size()]) {
-      in_array = false;
-    } else if (*p == copy_params.delimiter || is_eol(*p, line_endings)) {
-      if (!in_quote && !in_array) {
-        if ((!has_escape && !strip_quotes) ||
-            (is_array != nullptr && is_array[row.size()])) {
-          std::string s = trim_space(field, p - field);
-          row.push_back(s);
+      while (p < entire_buf_end - 1) {  // Array type will be parsed separately.
+        ++p;
+        if (*p == copy_params.array_end) {
+          in_array = false;
+          break;
+        }
+      }
+    } else if (*p == copy_params.delimiter || is_eol(*p, copy_params)) {
+      if (!in_quote) {
+        if (!has_escape && !strip_quotes) {
+          const char* field_end = p;
+          trim_space(field, field_end);
+          row.emplace_back(field, field_end - field);
         } else {
           auto field_buf = std::make_unique<char[]>(p - field + 1);
           int j = 0, i = 0;
@@ -159,22 +179,19 @@ const char* CsvParserUtils::get_row(const char* buf,
               field_buf[j] = field[i];
             }
           }
-          std::string s = trim_space(field_buf.get(), j);
-          if (copy_params.quoted && s.size() > 0 && s.front() == copy_params.quote) {
-            s.erase(0, 1);
-          }
-          if (copy_params.quoted && s.size() > 0 && s.back() == copy_params.quote) {
-            s.pop_back();
-          }
-          row.push_back(s);
+          const char* field_begin = field_buf.get();
+          const char* field_end = field_buf.get() + j;
+          trim_space(field_begin, field_end);
+          trim_quotes(field_begin, field_end, copy_params);
+          row.emplace_back(field_begin, field_end - field_begin);
         }
         field = p + 1;
         has_escape = false;
         strip_quotes = false;
 
-        if (is_eol(*p, line_endings)) {
+        if (is_eol(*p, copy_params)) {
           // We are at the end of the row. Skip the line endings now.
-          while (p + 1 < buf_end && is_eol(*(p + 1), line_endings)) {
+          while (p + 1 < buf_end && is_eol(*(p + 1), copy_params)) {
             p++;
           }
           break;
@@ -196,9 +213,9 @@ const char* CsvParserUtils::get_row(const char* buf,
   return p;
 }
 
-void CsvParserUtils::parseStringArray(const std::string& s,
-                                      const Importer_NS::CopyParams& copy_params,
-                                      std::vector<std::string>& string_vec) {
+void DelimitedParserUtils::parseStringArray(const std::string& s,
+                                            const Importer_NS::CopyParams& copy_params,
+                                            std::vector<std::string>& string_vec) {
   if (s == copy_params.null_str || s == "NULL" || s.size() < 1 || s.empty()) {
     // TODO: should not convert NULL, empty arrays to {"NULL"},
     //       need to support NULL, empty properly
@@ -229,17 +246,5 @@ void CsvParserUtils::parseStringArray(const std::string& s,
                                std::to_string(StringDictionary::MAX_STRLEN));
     }
   }
-}
-
-const std::string CsvParserUtils::trim_space(const char* field, const size_t len) {
-  size_t i = 0;
-  size_t j = len;
-  while (i < j && (field[i] == ' ' || field[i] == '\r')) {
-    i++;
-  }
-  while (i < j && (field[j - 1] == ' ' || field[j - 1] == '\r')) {
-    j--;
-  }
-  return std::string(field + i, j - i);
 }
 }  // namespace Importer_NS

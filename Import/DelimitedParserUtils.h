@@ -28,7 +28,7 @@
 #include "Import/CopyParams.h"
 
 namespace Importer_NS {
-class CsvParserUtils {
+class DelimitedParserUtils {
  public:
   /**
    * @brief Finds the closest possible row beginning in the given buffer.
@@ -94,15 +94,5 @@ class CsvParserUtils {
   static void parseStringArray(const std::string& s,
                                const Importer_NS::CopyParams& copy_params,
                                std::vector<std::string>& string_vec);
-
-  /**
-   * @brief Trims the "space" and "\r" from the both sides of the given buffer.
-   *
-   * @param field                Given buffer. (NOT OWN)
-   * @param len                  Length of the buffer.
-   *
-   * @return Trimmed string.
-   */
-  static const std::string trim_space(const char* field, const size_t len);
 };
 }  // namespace Importer_NS

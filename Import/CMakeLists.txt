@@ -10,9 +10,9 @@ endif()
 
 add_library(CsvImport Importer.cpp Importer.h ${S3Archive})
 
-add_library(CsvParserUtils CsvParserUtils.cpp CsvParserUtils.h)
+add_library(DelimitedParserUtils DelimitedParserUtils.cpp DelimitedParserUtils.h)
 
-target_link_libraries(CsvImport CsvParserUtils mapd_thrift Shared Catalog Chunk DataMgr StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS}
+target_link_libraries(CsvImport DelimitedParserUtils mapd_thrift Shared Catalog Chunk DataMgr StringDictionary ${GDAL_LIBRARIES} ${CMAKE_DL_LIBS}
  ${LibArchive_LIBRARIES} ${IMPORT_LIBRARIES} ${Arrow_LIBRARIES})
 
 install(DIRECTORY ${CMAKE_SOURCE_DIR}/ThirdParty/gdal-data DESTINATION "ThirdParty")
@@ -22,7 +22,7 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/ThirdParty/geo_samples DESTINATION "ThirdP
 add_custom_target(geo_samples ALL COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_SOURCE_DIR}/ThirdParty/geo_samples" "${CMAKE_BINARY_DIR}/ThirdParty/geo_samples")
 
 add_library(RowToColumn RowToColumnLoader.cpp RowToColumnLoader.h)
-target_link_libraries(RowToColumn ThriftClient CsvParserUtils)
+target_link_libraries(RowToColumn ThriftClient DelimitedParserUtils)
 
 add_executable(StreamImporter StreamImporter.cpp)
 target_link_libraries(StreamImporter RowToColumn mapd_thrift Shared ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${PROFILER_LIBS})
