@@ -265,12 +265,16 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           auto dict = g_dictionaries[col_key];
           auto stringArray = std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
           for (int i = 0; i < stringArray->length(); i++) {
-            auto curStr = stringArray->GetString(i);
-            indexBuilder.Append(dict->getOrAdd(curStr));
-            std::shared_ptr<arrow::Array> indexArray;
-            ARROW_THROW_NOT_OK(indexBuilder.Finish(&indexArray));
-            frag.chunks.emplace_back(ARROW_GET_DATA(indexArray));
+            if (stringArray->IsNull(i)) {
+              indexBuilder.Append(inline_int_null_value<int32_t>());
+            } else {
+              auto curStr = stringArray->GetString(i);
+              indexBuilder.Append(dict->getOrAdd(curStr));
+            }
           }
+          std::shared_ptr<arrow::Array> indexArray;
+          ARROW_THROW_NOT_OK(indexBuilder.Finish(&indexArray));
+          frag.chunks.emplace_back(ARROW_GET_DATA(indexArray));
           frag.sz += stringArray->length();
         } else {
           frag.chunks.emplace_back(ARROW_GET_DATA(clp->chunk(i)));
@@ -284,7 +288,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
               throw std::runtime_error("Column ingress mismatch: " + c.columnName);
             }
             varlen += buffers[2]->size();
-          } else if (buffers.size() > 2) {
+          } else if (buffers.size() != 2) {
             LOG(FATAL) << "Type of column #" << cln
                        << " does not match between Arrow and description of "
                        << c.columnName;
