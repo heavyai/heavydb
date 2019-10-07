@@ -1251,8 +1251,8 @@ int main(int argc, char** argv) {
 
     if (!has_clust_topo) {
       prog_config_opts.validate_base_path();
-      prog_config_opts.validate();
       prog_config_opts.init_logging();
+      prog_config_opts.validate();
       return (startMapdServer(prog_config_opts));
     }
   } catch (std::runtime_error& e) {
