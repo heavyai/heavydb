@@ -850,12 +850,14 @@ set(CPACK_GENERATOR "STGZ")
 
 include(CPack)
 
-add_custom_target(sphinx
-  COMMAND python3 -m venv sphinx-env
-  COMMAND . sphinx-env/bin/activate && pip install -r requirements.txt
-  COMMAND rm -rf build
-  COMMAND . sphinx-env/bin/activate && make html SPHINXOPTS="-D version=${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}"
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/docs
-  )
+if(DOXYGEN_FOUND)
+  add_custom_target(sphinx
+    COMMAND python3 -m venv sphinx-env
+    COMMAND . sphinx-env/bin/activate && pip install -r requirements.txt
+    COMMAND rm -rf build
+    COMMAND . sphinx-env/bin/activate && make html SPHINXOPTS="-D version=${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/docs
+    )
 
-add_dependencies(sphinx doxygen)
+  add_dependencies(sphinx doxygen)
+endif(DOXYGEN_FOUND)
