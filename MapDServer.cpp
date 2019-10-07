@@ -803,9 +803,6 @@ void MapDProgramOptions::validate() {
 
   // add all parameters to be displayed on startup
   LOG(INFO) << "OmniSci started with data directory at '" << base_path << "'";
-  if (vm.count("license-path")) {
-    LOG(INFO) << "License key path set to '" << license_path << "'";
-  }
   LOG(INFO) << " Watchdog is set to " << enable_watchdog;
   LOG(INFO) << " Dynamic Watchdog is set to " << enable_dynamic_watchdog;
   if (enable_dynamic_watchdog) {
