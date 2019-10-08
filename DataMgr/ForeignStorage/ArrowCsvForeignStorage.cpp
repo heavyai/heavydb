@@ -162,6 +162,7 @@ void ArrowCsvForeignStorage::prepareTable(const int db_id,
   td.hasDeletedCol = false;
 }
 
+// TODO: optimize the number of arguments
 void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
                                            std::pair<int, int> table_key,
                                            const std::string& info,
