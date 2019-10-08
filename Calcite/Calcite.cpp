@@ -547,6 +547,7 @@ void Calcite::inner_close_calcite_server(bool log) {
       clientP.second->close();
     } catch (const std::exception& e) {
       if (std::string(e.what()) != "connect() failed: Connection refused" &&
+          std::string(e.what()) != "socket open() error: Connection refused" &&
           std::string(e.what()) != "No more data to read.") {
         std::cerr << "Error shutting down Calcite server: " << e.what() << std::endl;
       }  // else Calcite already shut down
