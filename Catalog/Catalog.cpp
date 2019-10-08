@@ -2389,6 +2389,7 @@ void Catalog::setColumnDictionary(ColumnDescriptor& cd,
                     folderPath,
                     false);
   dds.push_back(dd);
+  // TODO: Why??? fix back
   // if (!cd.columnType.is_array()) {
   //   cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
   // }
