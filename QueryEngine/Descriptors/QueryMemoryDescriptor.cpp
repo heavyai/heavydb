@@ -405,6 +405,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , output_columnar_(false)
     , render_output_(render_output)
     , must_use_baseline_sort_(must_use_baseline_sort)
+    , is_table_function_(false)
     , force_4byte_float_(false)
     , col_slot_context_(col_slot_context) {
   col_slot_context_.setAllUnsetSlotsPaddedSize(8);
@@ -481,11 +482,13 @@ QueryMemoryDescriptor::QueryMemoryDescriptor()
     , output_columnar_(false)
     , render_output_(false)
     , must_use_baseline_sort_(false)
+    , is_table_function_(false)
     , force_4byte_float_(false) {}
 
 QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
                                              const size_t entry_count,
-                                             const QueryDescriptionType query_desc_type)
+                                             const QueryDescriptionType query_desc_type,
+                                             const bool is_table_function)
     : executor_(executor)
     , allow_multifrag_(false)
     , query_desc_type_(query_desc_type)
@@ -503,6 +506,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , output_columnar_(false)
     , render_output_(false)
     , must_use_baseline_sort_(false)
+    , is_table_function_(is_table_function)
     , force_4byte_float_(false) {}
 
 QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_desc_type,
@@ -528,6 +532,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_de
     , output_columnar_(false)
     , render_output_(false)
     , must_use_baseline_sort_(false)
+    , is_table_function_(false)
     , force_4byte_float_(false) {}
 
 bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const {
@@ -982,7 +987,7 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
-  if (g_cluster) {
+  if (g_cluster || is_table_function_) {
     return true;
   }
   if (!countDescriptorsLogicallyEmpty(count_distinct_descriptors_)) {
