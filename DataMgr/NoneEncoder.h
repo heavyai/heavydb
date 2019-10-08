@@ -108,9 +108,14 @@ class NoneEncoder : public Encoder {
 
   void updateStats(const int8_t* const dst, const size_t numElements) override {
     const T* unencodedData = reinterpret_cast<const T*>(dst);
-    auto minmax = std::minmax_element(unencodedData, unencodedData + numElements);
-    dataMin = std::min(dataMin, *minmax.first);
-    dataMax = std::max(dataMax, *minmax.second);
+    for (size_t i = 0; i < numElements; ++i) {
+      T data = unencodedData[i];
+      if (data != none_encoded_null_value<T>()) {
+        decimal_overflow_validator_.validate(data);
+        dataMin = std::min(dataMin, data);
+        dataMax = std::max(dataMax, data);
+      }
+    }
   }
 
   // Only called from the executor for synthesized meta-information.

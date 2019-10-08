@@ -1957,7 +1957,7 @@ void Catalog::createTable(
   list<DictDescriptor> dds;
   std::set<std::string> toplevel_column_names;
   list<ColumnDescriptor> columns;
-  
+
   if (!td.storageType.empty()) {
     ForeignStorageInterface::prepareTable(getCurrentDB().dbId, td, cds);
   }
@@ -2082,10 +2082,6 @@ void Catalog::createTable(
             "INSERT INTO mapd_views (tableid, sql) VALUES (?,?)",
             std::vector<std::string>{std::to_string(td.tableId), td.viewSQL});
       }
-      if (!td.storageType.empty()) {
-        ForeignStorageInterface::registerTable(
-            getCurrentDB().dbId, td, cds);
-      }
     } catch (std::exception& e) {
       sqliteConnector_.query("ROLLBACK TRANSACTION");
       throw;
@@ -2122,10 +2118,6 @@ void Catalog::createTable(
       cd.columnId = colId++;
       cds.push_back(cd);
     }
-    if (!td.storageType.empty()) {
-      ForeignStorageInterface::registerTable(
-          getCurrentDB().dbId, td, cds);
-    }
   }
   try {
     addTableToMap(td, cds, dds);
@@ -2135,7 +2127,10 @@ void Catalog::createTable(
     removeTableFromMap(td.tableName, td.tableId, true);
     throw;
   }
-
+  // TODO: rollback if exception is raised
+  if (!td.storageType.empty()) {
+    ForeignStorageInterface::registerTable(this, getCurrentDB().dbId, td, cds);
+  }
   sqliteConnector_.query("END TRANSACTION");
 }
 
@@ -2395,9 +2390,10 @@ void Catalog::setColumnDictionary(ColumnDescriptor& cd,
                     folderPath,
                     false);
   dds.push_back(dd);
-  if (!cd.columnType.is_array()) {
-    cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
-  }
+  // TODO: Why??? fix back
+  // if (!cd.columnType.is_array()) {
+  //   cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
+  // }
   cd.columnType.set_comp_param(dictId);
 }
 
