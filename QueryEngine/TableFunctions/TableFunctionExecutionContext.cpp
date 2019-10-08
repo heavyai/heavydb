@@ -194,7 +194,11 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
   QueryMemoryDescriptor query_mem_desc(
       executor, elem_count, QueryDescriptionType::Projection);
   query_mem_desc.setOutputColumnar(true);
-  query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});  // single 8 byte col, for now
+
+  for (size_t i = 0; i < exe_unit.target_exprs.size(); i++) {
+    // All outputs padded to 8 bytes
+    query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});
+  }
 
   const auto allocated_output_row_count = get_output_row_count(exe_unit, elem_count);
   auto query_buffers = std::make_unique<QueryMemoryInitializer>(
