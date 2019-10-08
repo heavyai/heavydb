@@ -1096,7 +1096,8 @@ void RelAlgExecutor::executeUpdateViaCompound(const RelCompound* compound,
                              eo,
                              cat_,
                              executor_->row_set_mem_owner_,
-                             update_callback);
+                             update_callback,
+                             compound->isAggregate());
     update_params.finalizeTransaction();
   } catch (...) {
     LOG(INFO) << "Update operation failed.";

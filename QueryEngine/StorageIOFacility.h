@@ -361,14 +361,15 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
 
   auto callback = [this,
                    &delete_parameters](FragmentUpdaterType const& update_log) -> void {
-    auto rows_per_column = update_log.getEntryCount();
+    auto entries_per_column = update_log.getEntryCount();
+    auto rows_per_column = update_log.getRowCount();
     if (rows_per_column == 0) {
       return;
     }
     DeleteVictimOffsetList victim_offsets(rows_per_column);
 
-    auto complete_row_block_size = rows_per_column / normalized_cpu_threads();
-    auto partial_row_block_size = rows_per_column % normalized_cpu_threads();
+    auto complete_row_block_size = entries_per_column / normalized_cpu_threads();
+    auto partial_row_block_size = entries_per_column % normalized_cpu_threads();
     auto usable_threads = normalized_cpu_threads();
 
     if (UNLIKELY(rows_per_column < (unsigned)normalized_cpu_threads())) {
@@ -377,16 +378,23 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
       usable_threads = 1;
     }
 
-    auto process_rows = [&update_log, &victim_offsets](uint64_t row_start,
-                                                       uint64_t row_count) -> uint64_t {
-      uint64_t rows_processed = 0;
+    std::atomic<size_t> row_idx{0};
 
-      for (uint64_t row_index = row_start; row_index < (row_start + row_count);
-           row_index++, rows_processed++) {
-        auto const row(update_log.getEntryAt(row_index));
-        __builtin_prefetch(row.data(), 0, 0);
+    auto process_rows = [&update_log, &victim_offsets, &row_idx](
+                            uint64_t entry_start, uint64_t entry_count) -> uint64_t {
+      uint64_t entries_processed = 0;
 
-        CHECK(!row.empty());
+      for (uint64_t entry_index = entry_start; entry_index < (entry_start + entry_count);
+           entry_index++) {
+        auto const row(update_log.getEntryAt(entry_index));
+
+        if (row.empty()) {
+          continue;
+        }
+
+        entries_processed++;
+        size_t row_index = row_idx.fetch_add(1);
+
         auto terminal_column_iter = std::prev(row.end());
         const auto scalar_tv = boost::get<ScalarTargetValue>(&*terminal_column_iter);
         CHECK(scalar_tv);
@@ -395,7 +403,7 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
             static_cast<uint64_t>(*(boost::get<int64_t>(scalar_tv)));
         victim_offsets[row_index] = fragment_offset;
       }
-      return rows_processed;
+      return entries_processed;
     };
 
     auto get_row_index = [complete_row_block_size](uint64_t thread_index) -> uint64_t {

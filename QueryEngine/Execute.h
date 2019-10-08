@@ -614,7 +614,8 @@ class Executor {
                      const ExecutionOptions& eo,
                      const Catalog_Namespace::Catalog& cat,
                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                     const UpdateLogForFragment::Callback& cb) __attribute__((hot));
+                     const UpdateLogForFragment::Callback& cb,
+                     const bool is_agg = false);
 
   /**
    * @brief Compiles and dispatches a work unit per fragment processing results with the
