@@ -19,11 +19,34 @@
 #define EXTENSION_INLINE extern "C" ALWAYS_INLINE DEVICE
 #define EXTENSION_NOINLINE extern "C" NEVER_INLINE DEVICE
 
+#ifdef __CUDACC__
+
+EXTENSION_INLINE int32_t row_copier_kernel(double* input_col,
+                                           int* copy_multiplier,
+                                           const int64_t input_row_count,
+                                           int64_t* output_row_count,
+                                           double* output_buffer) {
+  int32_t start = threadIdx.x + blockDim.x * blockIdx.x;
+  int32_t step = blockDim.x * gridDim.x;
+  for (int32_t i = start; i < static_cast<int32_t>(input_row_count); i += step) {
+    for (int c = 0; c < *copy_multiplier; c++) {
+      output_buffer[i + (c * input_row_count)] = input_col[i];
+    }
+  }
+  return 0;
+}
+
+#endif
+
 EXTENSION_NOINLINE int32_t row_copier(double* input_col,
                                       int* copy_multiplier,
                                       const int64_t* input_row_count_ptr,
                                       int64_t* output_row_count,
                                       double* output_buffer) {
+#ifdef __CUDACC__
+  return row_copier_kernel(
+      input_col, copy_multiplier, *input_row_count_ptr, output_row_count, output_buffer);
+#else
   // Copy the input buffer to the output, duplicating according to copy_multiplier
   const auto input_row_count = *input_row_count_ptr;
 
@@ -35,4 +58,5 @@ EXTENSION_NOINLINE int32_t row_copier(double* input_col,
 
   *output_row_count = (*copy_multiplier) * input_row_count;
   return 0;
+#endif
 }

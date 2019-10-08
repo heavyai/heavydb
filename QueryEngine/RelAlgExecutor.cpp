@@ -1544,8 +1544,10 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
   if (eo.just_explain) {
     throw std::runtime_error("EXPLAIN not supported for LogicalValues");
   }
-  QueryMemoryDescriptor query_mem_desc(
-      executor_, 1, QueryDescriptionType::NonGroupedAggregate);
+  QueryMemoryDescriptor query_mem_desc(executor_,
+                                       1,
+                                       QueryDescriptionType::NonGroupedAggregate,
+                                       /*is_table_function=*/false);
 
   const auto& tuple_type = logical_values->getTupleType();
   for (size_t i = 0; i < tuple_type.size(); ++i) {
