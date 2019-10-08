@@ -20,9 +20,14 @@
  * @brief Functions for Importer class
  */
 
+#include "Import/Importer.h"
+
+#include <arrow/api.h>
+#include <arrow/io/api.h>
 #include <gdal.h>
 #include <ogrsf_frmts.h>
 #include <unistd.h>
+
 #include <boost/algorithm/string.hpp>
 #include <boost/dynamic_bitset.hpp>
 #include <boost/filesystem.hpp>
@@ -45,6 +50,9 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+
+#include "../Archive/PosixFileArchive.h"
+#include "../Archive/S3Archive.h"
 #include "../QueryEngine/TypePunning.h"
 #include "../Shared/geo_compression.h"
 #include "../Shared/geo_types.h"
@@ -56,21 +64,13 @@
 #include "../Shared/scope.h"
 #include "../Shared/shard_key.h"
 #include "../Shared/thread_count.h"
+#include "ArrowImporter.h"
+#include "Import/DelimitedParserUtils.h"
+#include "QueryRunner/QueryRunner.h"
 #include "Shared/Logger.h"
 #include "Shared/SqlTypesLayout.h"
-
-#include "Import/DelimitedParserUtils.h"
-#include "Importer.h"
-#include "QueryRunner/QueryRunner.h"
 #include "Utils/ChunkAccessorTable.h"
 #include "gen-cpp/MapD.h"
-
-#include <arrow/api.h>
-#include <arrow/io/api.h>
-
-#include "../Archive/PosixFileArchive.h"
-#include "../Archive/S3Archive.h"
-#include "ArrowImporter.h"
 
 size_t g_archive_read_buf_size = 1 << 20;
 
