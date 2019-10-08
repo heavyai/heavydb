@@ -178,6 +178,17 @@ TEST_F(RowCopierTableFunction, GroupByInAndOut) {
   }
 }
 
+TEST_F(RowCopierTableFunction, Unsupported) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    EXPECT_THROW(run_multiple_agg("select * from table(row_copier(cursor(SELECT d, "
+                                  "cast(x as double) FROM tf_test), 2));",
+                                  dt),
+                 std::runtime_error);
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

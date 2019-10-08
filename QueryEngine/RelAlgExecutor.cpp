@@ -3108,7 +3108,12 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
     CHECK_GT(parameter_index, size_t(0));
     const auto parameter_expr = table_func->getTableFuncInputAt(parameter_index - 1);
     const auto parameter_expr_literal = dynamic_cast<const RexLiteral*>(parameter_expr);
-    CHECK(parameter_expr_literal);
+    if (!parameter_expr_literal) {
+      throw std::runtime_error(
+          "Provided output buffer multiplier parameter is not a literal. Only literal "
+          "values are supported with output buffer multiplier configured table "
+          "functions.");
+    }
     int64_t literal_val = parameter_expr_literal->getVal<int64_t>();
     if (literal_val < 0) {
       throw std::runtime_error("Provided output row multiplier " +
