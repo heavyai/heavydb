@@ -90,7 +90,7 @@ The ``RelAlgExecutionUnit`` is the primary member of the ``WorkUnit`` and contai
 Query Step Execution
 ====================
 
-After translation, the `work unit`is passed to the ``Executor`` for native code generation and kernel execution. The ``Executor`` returns a ``ResultSet`` pointer. The ``ResultSet`` pointer is stored in the ``ExecutionDescriptor`` for the current step, and is also stored in the global temporary tables map. Intermediate results are referenced by negating the node ID of their parent query step. 
+After translation, the `work unit` is passed to the ``Executor`` for native code generation and kernel execution. The ``Executor`` returns a ``ResultSet`` pointer. The ``ResultSet`` pointer is stored in the ``ExecutionDescriptor`` for the current step, and is also stored in the global temporary tables map. Intermediate results are referenced by negating the node ID of their parent query step. 
 
 Scalar Subqueries
 -----------------

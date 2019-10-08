@@ -6,7 +6,7 @@ Code Generation
 
 OmniSciDB generates native code using the `LLVM <http://llvm.org>`_ library. Code generation primarily makes calls into the `LLVM IR Builder` to build up LLVM IR according to the provided AST (see :doc:`./scheduler`). 
 
-Code generation for a query is managed by the ``Executor`` object assigned to the query. Code generation state is stored within the ``QueryCompilationDescriptor``. The compilation descriptor also initiatives code generation via its ``compile`` method. 
+Code generation for a query is managed by the ``Executor`` object assigned to the query. Code generation state is stored within the ``QueryCompilationDescriptor``. The compilation descriptor also initiates code generation via its ``compile`` method. 
 
 The outer-most function for a :term:`kernel` is pre-defined in ``RuntimeFunctions.cpp``. The generated code typically consists of two functions; the ``query_func`` and the ``row_func``. The ``query_func`` loops over all input rows, while the ``row_func`` contains most of the logic for processing inputs, running expressions, and writing outputs. 
 
