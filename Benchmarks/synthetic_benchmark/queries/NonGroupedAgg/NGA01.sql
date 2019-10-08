@@ -1,0 +1,10 @@
+select
+  COUNT(*),
+  COUNT(x10),
+  COUNT(y10),
+  COUNT(z10),
+  COUNT(x100),
+  COUNT(y100),
+  COUNT(z100)
+from
+  ##TAB##

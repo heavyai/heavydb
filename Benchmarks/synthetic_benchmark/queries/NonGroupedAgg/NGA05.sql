@@ -1,0 +1,9 @@
+select
+  AVG(x10),
+  AVG(y10),
+  AVG(z10),
+  AVG(x100),
+  AVG(y100),
+  AVG(z100)
+from
+  ##TAB##

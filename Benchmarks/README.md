@@ -277,6 +277,57 @@ optional arguments:
                         Absolute path of jenkins benchmark .json output file
                         (required if destination = "jenkins_bench")
 ```
+### Synthetic benchmark queries
+The goal of this benchmark is mainly to enable developers to measure performance variations in certain controlled scenarios. Secondary, by increasing the query coverage, it can be used to track down unintentional performance regressions.
+
+#### How to use
+To use it, the user should run an `omnisci_server`. Then, the benchmark process can be started by using the `run_synthetic_benchmark.py` script. Since this code uses the same code structure provided by `run_benchmark.py`, then it needs the same set of python libraries installed and used as well (e.g., `pip install requirements.txt`).
+```
+cd Benchmarks
+
+python3 run_synthetic_benchmark.py
+  --label MasterTest
+  --gpu_label 2080ti
+  --gpu_count 2
+  --iterations 10
+  --num_fragments 4
+  --fragment_size 32000000
+  --query all
+  --print_results
+```
+
+The results for each query group is shown in the terminal until all are finished. Also, the results are structured in a way that `analyze_benchmark.py` code can be used to compare two different runs together.
+
+If data is already created and imported into the database, then data generation and following verification and potential data import
+can all be avoided by using `--skip_data_gen_and_import`. By doing so, the script goes directly into running all requested query groups.
+
+#### Creating synthetic data
+The current code generates a set of randomly generated entries based on the pre-defined schema, all being decided at `synthetic_benchmark/create_table.py`. By default, when the `run_synthetic_benchmark.py` script is run, it is first checked whether such table with expected schema and expected number of rows already exist in the database or not. If yes, it proceeds to the next step which actually runs the queries. If no, at first we generate proper data (in csv format), and then create a table in the database. Finally we import the generated data into the new table so that benchmark queries can be run on it.  
+
+It is also possible to use the code to just generate random data, without any subsequent data import and benchmarking.
+To do so, it is possible to directly apply the `create_table.py`'s main module:
+
+```
+python3 synthetic_benchmark/create_table.py
+  --data_dir /data/dir/to/store/data
+  --num_fragments 4
+  --fragment_size 32000000
+  --just_data_generation
+```
+
+It is also possible to import a previously created data, without going through
+the benchmark structure and directly through the `create_table.py`:
+```
+python3 synthetic_benchmark/create_table.py
+  --data_dir /data/dir/to/store/data
+  --table_name bench_test
+  --num_fragments 4
+  --fragment_size 32000000
+  --just_data_import
+```
+
+#### Running different queries in various groups:
+After verifying that proper data is already available in the database, benchmark queries are run using the `run_benchmark.py` script. Queries are categorized into several query groups (e.g., BaselineHash, PPerfectHashSingleCol, Sort, etc.). By default, if no option is chosen for `--query` argument, then all query groups are run and results are stored.
 
 ### Additional details
 

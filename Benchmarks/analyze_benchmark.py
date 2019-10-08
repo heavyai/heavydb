@@ -136,9 +136,27 @@ def compute_speedup(x, y):
 
 
 class PrettyPrint:
-    def __init__(self, ref, sample, attribute, num_items_per_line=5):
+    """
+        This class is just used to print out the benchmark results into the terminal.
+        By default, it is used for cross comparison of the results between a reference 
+        branch (ref) and a sample branch (sample); for a particular attribute, all elements 
+        within each branch are shown as well as the speedup (sample / ref).
+
+        If cross_comparison is disabled, then it just shows the result for the ref branch.
+    """
+
+    def __init__(
+        self,
+        ref,
+        sample,
+        attribute,
+        cross_comparison=True,
+        num_items_per_line=5,
+    ):
+        self.__cross_comparison = cross_comparison
         assert isinstance(ref, BenchmarkLoader)
-        assert isinstance(sample, BenchmarkLoader)
+        if cross_comparison:
+            assert isinstance(sample, BenchmarkLoader)
         self.__header_info = [
             ref.getRunTableName(),
             attribute,
@@ -146,17 +164,20 @@ class PrettyPrint:
         ]
         self.__num_items_per_line = num_items_per_line
         self.__label_name_ref = ref.fetchQueryNames()
-        self.__label_name_sample = sample.fetchQueryNames()
+        if cross_comparison:
+            self.__label_name_sample = sample.fetchQueryNames()
+            assert self.__label_name_ref == self.__label_name_sample
         self.__missing_queries_ref = []
         self.__missing_queries_sample = []
-        self.collectMissingQueries()
-        assert self.__label_name_ref == self.__label_name_sample
+        if cross_comparison:
+            self.collectMissingQueries()
         self.__attribute_ref = ref.fetchAttribute(
             attribute, self.__label_name_ref
         )
-        self.__attribute_sample = sample.fetchAttribute(
-            attribute, self.__label_name_sample
-        )
+        if cross_comparison:
+            self.__attribute_sample = sample.fetchAttribute(
+                attribute, self.__label_name_sample
+            )
         self.__ref_line_count = 0
         self.__sample_line_count = 0
 
@@ -206,12 +227,15 @@ class PrettyPrint:
             self.printSolidLine("-")
             print("%10s" % "Reference", end="")
             self.printLine(self.__attribute_ref)
-            print("%10s" % "Sample", end="")
-            self.printLine(self.__attribute_sample)
-            print("%10s" % "Speedup", end="")
-            self.printLine(
-                compute_speedup(self.__attribute_ref, self.__attribute_sample)
-            )
+            if self.__cross_comparison:
+                print("%10s" % "Sample", end="")
+                self.printLine(self.__attribute_sample)
+                print("%10s" % "Speedup", end="")
+                self.printLine(
+                    compute_speedup(
+                        self.__attribute_ref, self.__attribute_sample
+                    )
+                )
             self.printSolidLine("=")
             self.__ref_line_count += 1
         print("\n\n\n")
