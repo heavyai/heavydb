@@ -1523,18 +1523,11 @@ bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
   if (std::isinf(lat) || std::isnan(lat) || std::isinf(lon) || std::isnan(lon)) {
     return false;
   }
-  auto point = new OGRPoint(lon, lat);
-  // NOTE(adb): Use OGRSpatialReferenceUqPtr to ensure proper deletion
-  // auto poSR0 = new OGRSpatialReference();
-  // poSR0->importFromEPSG(4326);
-  // point->assignSpatialReference(poSR0);
-
-  // auto poSR = new OGRSpatialReference();
-  // poSR->importFromEPSG(3857);
-  // point->transformTo(poSR);
-
-  coords.push_back(point->getX());
-  coords.push_back(point->getY());
+  // we don't need to do any coordinate-system transformation
+  // here (yet) so we don't need to use any OGR API or types
+  // just use the values directly (assumed to be in 4326)
+  coords.push_back(lon);
+  coords.push_back(lat);
   return true;
 }
 
