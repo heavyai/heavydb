@@ -15,9 +15,9 @@
  */
 
 /*
- * @file CsvParserUtils.h
+ * @file DelimitedParserUtils.h
  * @author Mehmet Sariyuce <mehmet.sariyuce@omnisci.com>
- * @brief CsvParserUtils class for parsing csv
+ * @brief DelimitedParserUtils class for parsing delimited data
  */
 
 #pragma once

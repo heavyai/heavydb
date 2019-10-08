@@ -59,7 +59,7 @@
 #include "Shared/Logger.h"
 #include "Shared/SqlTypesLayout.h"
 
-#include "DelimitedParserUtils.h"
+#include "Import/DelimitedParserUtils.h"
 #include "Importer.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Utils/ChunkAccessorTable.h"

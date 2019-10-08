@@ -24,7 +24,7 @@
  **/
 
 #include "RowToColumnLoader.h"
-#include "DelimitedParserUtils.h"
+#include "Import/DelimitedParserUtils.h"
 #include "Shared/Logger.h"
 
 using namespace ::apache::thrift;

@@ -15,9 +15,9 @@
  */
 
 /*
- * @file CsvParserUtils.cpp
+ * @file DelimitedParserUtils.cpp
  * @author Mehmet Sariyuce <mehmet.sariyuce@omnisci.com>
- * @brief Implementation of CsvParserUtils class.
+ * @brief Implementation of DelimitedParserUtils class.
  */
 
 #include "Import/DelimitedParserUtils.h"
