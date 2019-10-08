@@ -127,6 +127,7 @@ public class ExtensionFunction {
       case GeoPoint:
         return "geo_point";
     }
+    MAPDLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;
     return null;
   }

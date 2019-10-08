@@ -112,7 +112,7 @@ class ExtensionFunctionSignatureParser {
     }
 
     if (type_name.equals("bool") || type_name.equals("_Bool")) {
-      return ExtensionFunction.ExtArgumentType.Bool;
+      return ExtensionFunction.ExtArgumentType.Int8; // bool is mapped to int8
     }
     if (type_name.equals("int8_t") || type_name.equals("char")
             || type_name.equals("int8")) {
@@ -150,6 +150,9 @@ class ExtensionFunctionSignatureParser {
       return pointerType(deserializeType(type_name.substring(0, type_name.length() - 1)));
     }
 
+    if (type_name.equals("Array<bool>")) {
+      return ExtensionFunction.ExtArgumentType.ArrayInt8;
+    }
     if (type_name.equals("Array<int8_t>") || type_name.equals("Array<char>")) {
       return ExtensionFunction.ExtArgumentType.ArrayInt8;
     }
@@ -169,6 +172,9 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("Array<double>")) {
       return ExtensionFunction.ExtArgumentType.ArrayDouble;
     }
+    MAPDLOGGER.info(
+            "ExtensionfunctionSignatureParser::deserializeType: unknown type_name=`"
+            + type_name + "`");
     assert false;
     return null;
   }
@@ -176,6 +182,7 @@ class ExtensionFunctionSignatureParser {
   private static ExtensionFunction.ExtArgumentType pointerType(
           final ExtensionFunction.ExtArgumentType targetType) {
     switch (targetType) {
+      case Bool:
       case Int8:
         return ExtensionFunction.ExtArgumentType.PInt8;
       case Int16:

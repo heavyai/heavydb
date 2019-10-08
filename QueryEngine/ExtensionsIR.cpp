@@ -347,6 +347,10 @@ llvm::StructType* CodeGenerator::createArrayStructType(const std::string& udf_fu
   CHECK(struct_type->isStructTy());
   CHECK(struct_type->getStructNumElements() == 3);
 
+  if (llvm::cast<llvm::StructType>(struct_type)->isLiteral()) {
+    return llvm::cast<llvm::StructType>(struct_type);
+  }
+
   llvm::StringRef struct_name = struct_type->getStructName();
 
   llvm::StructType* array_type = module_for_lookup->getTypeByName(struct_name);
@@ -699,7 +703,7 @@ llvm::Value* CodeGenerator::castArrayPointer(llvm::Value* ptr,
     return cgen_state_->ir_builder_.CreatePointerCast(
         ptr, llvm::Type::getDoublePtrTy(cgen_state_->context_));
   }
-  CHECK(elem_ti.is_integer() ||
+  CHECK(elem_ti.is_integer() || elem_ti.is_boolean() ||
         (elem_ti.is_string() && elem_ti.get_compression() == kENCODING_DICT));
   switch (elem_ti.get_size()) {
     case 1:
