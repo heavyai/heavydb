@@ -253,6 +253,8 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
       g_dictionaries[col_key] = stringDict;
     }
 
+    auto empty = clp->null_count() == clp->length();
+
     // fill each fragment
     for (size_t f = 0; f < fragments.size(); f++) {
       key[3] = f;
@@ -265,7 +267,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           auto dict = g_dictionaries[col_key];
           auto stringArray = std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
           for (int i = 0; i < stringArray->length(); i++) {
-            if (stringArray->IsNull(i)) {
+            if (stringArray->IsNull(i) || empty) {
               indexBuilder.Append(inline_int_null_value<int32_t>());
             } else {
               auto curStr = stringArray->GetString(i);
