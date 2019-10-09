@@ -983,6 +983,10 @@ class CreateTableStmt : public DDLStmt {
   }
 
   void execute(const Catalog_Namespace::SessionInfo& session) override;
+  void executeDryRun(const Catalog_Namespace::SessionInfo& session,
+                     TableDescriptor& td,
+                     std::list<ColumnDescriptor>& columns,
+                     std::vector<SharedDictionaryDef>& shared_dict_defs);
 
  private:
   std::unique_ptr<std::string> table_;
@@ -1259,6 +1263,38 @@ class AddColumnStmt : public DDLStmt {
   std::unique_ptr<std::string> table;
   std::unique_ptr<ColumnDef> coldef;
   std::list<std::unique_ptr<ColumnDef>> coldefs;
+};
+
+/*
+ * @type DumpTableStmt
+ * @brief DUMP TABLE table TO archive_file_path
+ */
+class DumpTableStmt : public DDLStmt {
+ public:
+  DumpTableStmt(std::string* tab, std::string* path) : table(tab), path(path) {}
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  const std::string* getTable() const { return table.get(); }
+  const std::string* getPath() const { return path.get(); }
+
+ private:
+  std::unique_ptr<std::string> table;
+  std::unique_ptr<std::string> path;  // dump TO file path
+};
+
+/*
+ * @type RestoreTableStmt
+ * @brief RESTORE TABLE table FROM archive_file_path
+ */
+class RestoreTableStmt : public DDLStmt {
+ public:
+  RestoreTableStmt(std::string* tab, std::string* path) : table(tab), path(path) {}
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  const std::string* getTable() const { return table.get(); }
+  const std::string* getPath() const { return path.get(); }
+
+ private:
+  std::unique_ptr<std::string> table;
+  std::unique_ptr<std::string> path;  // restore FROM file path
 };
 
 /*

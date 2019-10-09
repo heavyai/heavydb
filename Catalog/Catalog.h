@@ -222,6 +222,19 @@ class Catalog final {
   void vacuumDeletedRows(const TableDescriptor* td) const;
   void vacuumDeletedRows(const int logicalTableId) const;
 
+  // dump & restore
+  void dumpTable(const TableDescriptor* td, const std::string& path) const;
+  void restoreTable(const SessionInfo& session,
+                    const TableDescriptor* td,
+                    const std::string& file_path);
+  void restoreTable(const SessionInfo& session,
+                    const std::string& table_name,
+                    const std::string& file_path);
+  std::vector<std::string> getTableDataDirectories(const TableDescriptor* td) const;
+  std::vector<std::string> getTableDictDirectories(const TableDescriptor* td) const;
+  std::string getColumnDictDirectory(const ColumnDescriptor* cd) const;
+  std::string dumpSchema(const TableDescriptor* td) const;
+
  protected:
   typedef std::map<std::string, TableDescriptor*> TableDescriptorMap;
   typedef std::map<int, TableDescriptor*> TableDescriptorMapById;
@@ -330,6 +343,12 @@ class Catalog final {
  private:
   static std::map<std::string, std::shared_ptr<Catalog>> mapd_cat_map_;
   DeletedColumnPerTableMap deletedColumnPerTable_;
+  void adjustAlteredTableFiles(
+      const std::string& temp_data_dir,
+      const std::unordered_map<int, int>& all_column_ids_map) const;
+  void renameTableDirectories(const std::string& temp_data_dir,
+                              const std::vector<std::string>& target_paths,
+                              const std::string& name_prefix) const;
 
  public:
   mutable std::mutex sqliteMutex_;

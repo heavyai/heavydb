@@ -2131,24 +2131,12 @@ void get_table_definitions(TableDescriptor& td,
 
 }  // namespace
 
-void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.getCatalog();
-  // check access privileges
-  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
-                                       AccessPrivileges::CREATE_TABLE)) {
-    throw std::runtime_error("Table " + *table_ +
-                             " will not be created. User has no create privileges.");
-  }
-
-  if (catalog.getMetadataForTable(*table_) != nullptr) {
-    if (if_not_exists_) {
-      return;
-    }
-    throw std::runtime_error("Table " + *table_ + " already exists.");
-  }
-  std::list<ColumnDescriptor> columns;
+void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& session,
+                                    TableDescriptor& td,
+                                    std::list<ColumnDescriptor>& columns,
+                                    std::vector<SharedDictionaryDef>& shared_dict_defs) {
   std::unordered_set<std::string> uc_col_names;
-  std::vector<SharedDictionaryDef> shared_dict_defs;
+  const auto& catalog = session.getCatalog();
   const ShardKeyDef* shard_key_def{nullptr};
   for (auto& e : table_element_list_) {
     if (dynamic_cast<SharedDictionaryDef*>(e.get())) {
@@ -2185,9 +2173,7 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     columns.push_back(cd);
   }
 
-  TableDescriptor td;
   td.tableName = *table_;
-  td.userId = session.get_currentUser().userId;
   td.nColumns = columns.size();
   td.isView = false;
   td.fragmenter = nullptr;
@@ -2217,6 +2203,31 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("SHARD_COUNT needs to be specified with SHARD_KEY.");
   }
   td.keyMetainfo = serialize_key_metainfo(shard_key_def, shared_dict_defs);
+}
+
+void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.getCatalog();
+  // check access privileges
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                       AccessPrivileges::CREATE_TABLE)) {
+    throw std::runtime_error("Table " + *table_ +
+                             " will not be created. User has no create privileges.");
+  }
+
+  if (catalog.getMetadataForTable(*table_) != nullptr) {
+    if (if_not_exists_) {
+      return;
+    }
+    throw std::runtime_error("Table " + *table_ + " already exists.");
+  }
+  TableDescriptor td;
+  std::list<ColumnDescriptor> columns;
+  std::unordered_set<std::string> uc_col_names;
+  std::vector<SharedDictionaryDef> shared_dict_defs;
+
+  executeDryRun(session, td, columns, shared_dict_defs);
+  td.userId = session.get_currentUser().userId;
+
   catalog.createShardedTable(td, columns, shared_dict_defs);
   // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o
   // privileges
@@ -4597,6 +4608,43 @@ void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   SysCatalog::instance().dropUser(*user_name);
 }
+
+void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  // check access privileges
+  if (!session.checkDBAccessPrivileges(
+          DBObjectType::TableDBObjectType, AccessPrivileges::SELECT_FROM_TABLE, *table)) {
+    throw std::runtime_error("Table " + *table +
+                             " will not be dumped. User has no select privileges.");
+  }
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                       AccessPrivileges::CREATE_TABLE)) {
+    throw std::runtime_error("Table " + *table +
+                             " will not be dumped. User has no create privileges.");
+  }
+  auto& catalog = session.getCatalog();
+  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+  catalog.dumpTable(td, *path);
+}
+
+void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.getCatalog();
+  const TableDescriptor* td = catalog.getMetadataForTable(*table, false);
+  if (td) {
+    // TODO: v1.0 simply throws to avoid accidentally overwrite target table.
+    // Will add a REPLACE TABLE to explictly replace target table.
+    // catalog.restoreTable(session, td, *path);
+    throw std::runtime_error("Table " + *table + " exists.");
+  } else {
+    // check access privileges
+    if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                         AccessPrivileges::CREATE_TABLE)) {
+      throw std::runtime_error("Table " + *table +
+                               " will not be restored. User has no create privileges.");
+    }
+    catalog.restoreTable(session, *table, *path);
+  }
+}
+
 }  // namespace Parser
 
 // this is a non-clustered version of MapDHandler::prepare_columnar_loader,

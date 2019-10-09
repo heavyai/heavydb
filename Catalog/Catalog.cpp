@@ -21,19 +21,21 @@
  *
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
+#include <sys/wait.h>
 
-#include "Catalog.h"
 #include <algorithm>
 #include <cassert>
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
 #include <exception>
 #include <list>
 #include <memory>
 #include <random>
+#include <regex>
 #include <sstream>
+#include "Catalog.h"
 #include "SysCatalog.h"
-
-#include "LockMgr/LockMgr.h"
-#include "SharedDictionaryValidator.h"
 
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/filesystem.hpp>
@@ -45,12 +47,12 @@
 #include <boost/uuid/sha1.hpp>
 #endif
 
-#include "../QueryEngine/Execute.h"
-#include "../QueryEngine/TableOptimizer.h"
-
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/SortedOrderFragmenter.h"
+#include "../LockMgr/TableLockMgr.h"
 #include "../Parser/ParserNode.h"
+#include "../QueryEngine/Execute.h"
+#include "../QueryEngine/TableOptimizer.h"
 #include "../Shared/File.h"
 #include "../Shared/StringTransform.h"
 #include "../Shared/measure.h"

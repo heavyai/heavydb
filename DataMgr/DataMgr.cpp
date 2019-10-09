@@ -434,4 +434,10 @@ size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {
   return dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->getTableEpoch(db_id, tb_id);
 }
 
+GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
+  auto global_file_mgr = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
+  CHECK(global_file_mgr);
+  return global_file_mgr;
+}
+
 }  // namespace Data_Namespace

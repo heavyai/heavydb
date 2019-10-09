@@ -28,12 +28,15 @@
 
 using namespace std;
 
-const std::vector<std::string> ParserWrapper::ddl_cmd = {"ALTER",
+const std::vector<std::string> ParserWrapper::ddl_cmd = {"ARCHIVE",
+                                                         "ALTER",
                                                          "COPY",
                                                          "GRANT",
                                                          "CREATE",
                                                          "DROP",
+                                                         "DUMP",
                                                          "OPTIMIZE",
+                                                         "RESTORE",
                                                          "REVOKE",
                                                          "SHOW",
                                                          "TRUNCATE"};

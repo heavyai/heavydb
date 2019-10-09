@@ -40,6 +40,7 @@ if(ENABLE_CUDA)
   set(PROF_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/libProfileUtils.so)
 endif()
 
+add_executable(DumpRestoreTest DumpRestoreTest.cpp)
 add_executable(ResultSetTest ResultSetTest.cpp ResultSetTestUtils.cpp)
 add_executable(FromTableReorderingTest FromTableReorderingTest.cpp)
 add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp ResultSetTestUtils.cpp)
@@ -81,10 +82,15 @@ target_link_libraries(StringTransformTest Shared gtest ${Boost_LIBRARIES})
 target_link_libraries(StringFunctionsTest gtest QueryRunner ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${LLVM_LINKER_FLAGS}
     ${CURSES_LIBRARIES} ${LOCALE_LINK_FLAG})
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift Shared ${Boost_LIBRARIES})
-set(EXECUTE_TEST_LIBS gtest QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${Boost_LIBRARIES})
+if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")  # work around linker on centos
+  set(EXECUTE_TEST_LIBS gtest QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${Boost_LIBRARIES} ${MAPD_LIBRARIES})
+else()
+  set(EXECUTE_TEST_LIBS gtest QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${Boost_LIBRARIES})
+endif()
 list(APPEND EXECUTE_TEST_LIBS Calcite)
 list(APPEND EXECUTE_TEST_LIBS Calcite mapd_thrift ${PROFILER_LIBS})
 
+target_link_libraries(DumpRestoreTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS} CsvImport QueryRunner QueryState)
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)
@@ -115,6 +121,7 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
 endif()
 
 set(TEST_ARGS "--gtest_output=xml:../")
+add_test(DumpRestoreTest DumpRestoreTest ${TEST_ARGS})
 add_test(PlanTest PlanTest ${TEST_ARGS})
 add_test(UpdelStorageTest UpdelStorageTest ${TEST_ARGS})
 add_test(ImportTest ImportTest ${TEST_ARGS})
@@ -165,6 +172,7 @@ if("${S3CLIENT_CONF}" MATCHES "AWS_REGION=([^\n]+)")
 endif()
 
 set(SANITY_TESTS
+  DumpRestoreTest
   PlanTest
   ExecuteTest
   CodeGeneratorTest

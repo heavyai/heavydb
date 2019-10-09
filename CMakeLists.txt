@@ -279,7 +279,11 @@ if(ENABLE_LLVM_DBG)
   list(APPEND LLVM_INC_FLAGS "${LLVM_BUILD_DIR}/include")
 endif()
 
-string(REPLACE "\n" " " LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
+if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")  # work around linker on centos
+  string(REPLACE "\n" " " LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS} ${CURSES_LIBRARIES}")
+else()
+  string(REPLACE "\n" " " LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
+endif()
 string(STRIP "${LLVM_LINKER_FLAGS}" LLVM_LINKER_FLAGS)
 include_directories(${Boost_INCLUDE_DIR}
                     "/usr/local/include"

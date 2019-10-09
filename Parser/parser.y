@@ -91,15 +91,15 @@ using namespace Parser;
 
 	/* literal keyword tokens */
 
-%token ADD ALL ALTER AMMSC ANY ARRAY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
+%token ADD ALL ALTER AMMSC ANY ARCHIVE ARRAY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
 %token CASE CAST CHAR_LENGTH CHARACTER CHECK CLOSE CLUSTER COLUMN COMMIT CONTINUE COPY CREATE CURRENT
 %token CURSOR DATABASE DATE DATETIME DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DICTIONARY DISTINCT DOUBLE DROP
-%token ELSE END EXISTS EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM
+%token DUMP ELSE END EXISTS EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM
 %token GEOGRAPHY GEOMETRY GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD MULTIPOLYGON NOW NULLX NUMERIC OF OFFSET ON OPEN OPTIMIZE
 %token OPTIMIZED OPTION ORDER PARAMETER POINT POLYGON PRECISION PRIMARY PRIVILEGES PROCEDURE
 %token SMALLINT SOME TABLE TEMPORARY TEXT THEN TIME TIMESTAMP TINYINT TO TRUNCATE UNION
-%token PUBLIC REAL REFERENCES RENAME REVOKE ROLE ROLLBACK SCHEMA SELECT SET SHARD SHARED SHOW
+%token PUBLIC REAL REFERENCES RENAME RESTORE REVOKE ROLE ROLLBACK SCHEMA SELECT SET SHARD SHARED SHOW
 %token UNIQUE UPDATE USER VALIDATE VALUES VIEW WHEN WHENEVER WHERE WITH WORK EDIT ACCESS DASHBOARD SQL EDITOR
 
 %start sql_list
@@ -142,6 +142,8 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| optimize_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| validate_system_statement { $<nodeval>$ = $<nodeval>1; }
 	| revoke_role_statement { $<nodeval>$ = $<nodeval>1; }
+	| dump_table_statement { $<nodeval>$ = $<nodeval>1; }
+	| restore_table_statement { $<nodeval>$ = $<nodeval>1; }
 	;
 
 /* NOT SUPPORTED
@@ -326,6 +328,23 @@ copy_table_statement:
 	    $<nodeval>$ = new ExportQueryStmt($<stringval>3, $<stringval>6, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>7));
 	}
 	;
+
+dump_or_archive:
+	DUMP | ARCHIVE;
+
+dump_table_statement:
+	dump_or_archive TABLE table TO STRING
+	{
+	    $<nodeval>$ = new DumpTableStmt($<stringval>3, $<stringval>5);
+    }
+    ;
+
+restore_table_statement:
+	RESTORE TABLE table FROM STRING
+	{
+	    $<nodeval>$ = new RestoreTableStmt($<stringval>3, $<stringval>5);
+    }
+    ;
 
 create_role_statement:
 		CREATE ROLE rolename
