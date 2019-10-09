@@ -291,7 +291,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
               throw std::runtime_error("Column ingress mismatch: " + c.columnName);
             }
             varlen += buffers[2]->size();
-          } else if (buffers.size() != 2) {
+          } else if (buffers.size() > 2) {
             LOG(FATAL) << "Type of column #" << cln
                        << " does not match between Arrow and description of "
                        << c.columnName;
