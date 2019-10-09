@@ -23,7 +23,7 @@
  * Copyright (c) 2017 MapD Technologies, Inc.  All rights reserved.
  **/
 
-#include "RowToColumnLoader.h"
+#include "Import/RowToColumnLoader.h"
 #include "Import/DelimitedParserUtils.h"
 #include "Shared/Logger.h"
 
