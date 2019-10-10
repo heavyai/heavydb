@@ -268,7 +268,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           auto dict = g_dictionaries[col_key];
           auto stringArray = std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
           for (int i = 0; i < stringArray->length(); i++) {
-            if (stringArray->IsNull(i) || empty) {
+            if (stringArray->IsNull(i) || empty || stringArray->null_count() == stringArray->length()) {
               indexBuilder.Append(inline_int_null_value<int32_t>());
             } else {
               auto curStr = stringArray->GetString(i);
@@ -283,19 +283,21 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           frag.chunks.emplace_back(ARROW_GET_DATA(clp->chunk(i)));
           frag.sz += clp->chunk(i)->length();
           auto& buffers = ARROW_GET_DATA(clp->chunk(i))->buffers;
-          if (ctype == kTEXT) {
-            if (buffers.size() <= 2) {
+          if(!empty) {
+            if (ctype == kTEXT) {
+              if (buffers.size() <= 2) {
+                LOG(FATAL) << "Type of column #" << cln
+                          << " does not match between Arrow and description of "
+                          << c.columnName;
+                throw std::runtime_error("Column ingress mismatch: " + c.columnName);
+              }
+              varlen += buffers[2]->size();
+            } else if (buffers.size() != 2) {
               LOG(FATAL) << "Type of column #" << cln
-                         << " does not match between Arrow and description of "
-                         << c.columnName;
+                        << " does not match between Arrow and description of "
+                        << c.columnName;
               throw std::runtime_error("Column ingress mismatch: " + c.columnName);
             }
-            varlen += buffers[2]->size();
-          } else if (buffers.size() != 2) {
-            LOG(FATAL) << "Type of column #" << cln
-                       << " does not match between Arrow and description of "
-                       << c.columnName;
-            throw std::runtime_error("Column ingress mismatch: " + c.columnName);
           }
         }
       }
@@ -325,10 +327,12 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
         b->setSize(frag.sz * b->sql_type.get_size());
         b->encoder.reset(Encoder::Create(b, c.columnType));
         b->has_encoder = true;
-        for (auto chunk : frag.chunks) {
-          auto len = chunk->length;
-          auto data = chunk->buffers[1]->data();
-          b->encoder->updateStats((const int8_t*)data, len);
+        if(!empty) {
+          for (auto chunk : frag.chunks) {
+            auto len = chunk->length;
+            auto data = chunk->buffers[1]->data();
+            b->encoder->updateStats((const int8_t*)data, len);
+          }
         }
         b->encoder->setNumElems(frag.sz);
       }
