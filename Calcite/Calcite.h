@@ -34,11 +34,16 @@
 
 using namespace apache::thrift::transport;
 
+namespace {
+constexpr char const* kCalciteUserName = "calcite";
+constexpr char const* kCalciteUserPassword = "HyperInteractive";
+}  // namespace
+
 class CalciteServerClient;
 
 namespace Catalog_Namespace {
 class SessionInfo;
-}
+}  // namespace Catalog_Namespace
 
 namespace query_state {
 class QueryStateProxy;
@@ -59,17 +64,9 @@ class Calcite final {
           const int port,
           const std::string& data_dir,
           const size_t calcite_max_mem,
-          const std::string& udf_filename = "")
-      : Calcite(mapd_port, port, data_dir, calcite_max_mem, "", udf_filename){};
-  Calcite(const int mapd_port,
-          const int port,
-          const std::string& data_dir,
-          const size_t calcite_max_mem,
-          const std::string& session_prefix,
           const std::string& udf_filename = "");
   Calcite(const MapDParameters& mapd_parameter,
           const std::string& data_dir,
-          const std::string& session_prefix,
           const std::string& udf_filename = "");
   // sql_string may differ from what is in query_state due to legacy_syntax option.
   TPlanResult process(query_state::QueryStateProxy,
@@ -77,7 +74,8 @@ class Calcite final {
                       const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                       const bool legacy_syntax,
                       const bool is_explain,
-                      const bool is_view_optimize);
+                      const bool is_view_optimize,
+                      const std::string& calcite_session_id = "");
   std::vector<TCompletionHint> getCompletionHints(
       const Catalog_Namespace::SessionInfo& session_info,
       const std::vector<std::string>& visible_tables,
@@ -90,7 +88,8 @@ class Calcite final {
   ~Calcite();
   std::string getRuntimeUserDefinedFunctionWhitelist();
   void setRuntimeUserDefinedFunction(std::string udf_string);
-  std::string const& get_session_prefix() const { return session_prefix_; }
+  std::string const getInternalSessionProxyUserName() { return kCalciteUserName; }
+  std::string const getInternalSessionProxyPassword() { return kCalciteUserPassword; }
 
  private:
   void init(const int mapd_port,
@@ -108,7 +107,8 @@ class Calcite final {
                           const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                           const bool legacy_syntax,
                           const bool is_explain,
-                          const bool is_view_optimize);
+                          const bool is_view_optimize,
+                          const std::string& calcite_session_id);
   std::vector<std::string> get_db_objects(const std::string ra);
   void inner_close_calcite_server(bool log);
   std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
@@ -125,7 +125,6 @@ class Calcite final {
   std::string ssl_keystore_;
   std::string ssl_keystore_password_;
   std::string ssl_cert_file_;
-  std::string const session_prefix_;
   std::once_flag shutdown_once_flag_;
 };
 

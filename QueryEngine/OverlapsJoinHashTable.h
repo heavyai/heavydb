@@ -25,7 +25,7 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
                         const std::vector<InputTableInfo>& query_infos,
                         const Data_Namespace::MemoryLevel memory_level,
                         const size_t entry_count,
-                        ColumnCacheMap& column_map,
+                        ColumnCacheMap& column_cache,
                         Executor* executor,
                         const std::vector<InnerOuter>& inner_outer_pairs)
       : BaselineJoinHashTable(condition,
@@ -33,29 +33,31 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
                               memory_level,
                               JoinHashTableInterface::HashType::OneToOne,
                               entry_count,
-                              column_map,
+                              column_cache,
                               executor,
                               inner_outer_pairs) {}
 
   ~OverlapsJoinHashTable() override {}
 
+  //! Make hash table from an in-flight SQL query's parse tree etc.
   static std::shared_ptr<OverlapsJoinHashTable> getInstance(
       const std::shared_ptr<Analyzer::BinOper> condition,
       const std::vector<InputTableInfo>& query_infos,
       const Data_Namespace::MemoryLevel memory_level,
       const int device_count,
-      ColumnCacheMap& column_map,
+      ColumnCacheMap& column_cache,
       Executor* executor);
 
-  size_t countBufferOff() const noexcept override {
-    LOG(FATAL) << "Not supported for this layout";
-    return 0;
-  }
-
-  size_t payloadBufferOff() const noexcept override {
-    LOG(FATAL) << "Not supported for this layout";
-    return 0;
-  }
+  //! Make hash table from named tables and columns (such as for testing).
+  static std::shared_ptr<OverlapsJoinHashTable> getSyntheticInstance(
+      std::string_view table1,
+      std::string_view column1,
+      std::string_view table2,
+      std::string_view column2,
+      const Data_Namespace::MemoryLevel memory_level,
+      const int device_count,
+      ColumnCacheMap& column_cache,
+      Executor* executor);
 
   static auto yieldCacheInvalidator() -> std::function<void()> {
     return []() -> void {

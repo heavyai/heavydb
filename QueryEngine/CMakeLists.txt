@@ -78,6 +78,9 @@ set(query_engine_source_files
     ResultSet.cpp
     ResultSetIteration.cpp
     ResultSetReduction.cpp
+    ResultSetReductionCodegen.cpp
+    ResultSetReductionInterpreter.cpp
+    ResultSetReductionInterpreterStubs.cpp
     ResultSetReductionJIT.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LoopControlFlow/JoinLoop.cpp
     ResultSetSort.cpp
@@ -96,6 +99,7 @@ set(query_engine_source_files
     StringOpsIR.cpp
     RegexpFunctions.cpp
     JoinHashTable.cpp
+    JoinHashTableInterface.cpp
     HashJoinRuntime.cpp
     WindowContext.cpp
     WindowExpressionRewrite.cpp

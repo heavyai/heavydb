@@ -335,6 +335,7 @@ struct StringValueConverter : public TargetValueConverter {
 
   StringDictionary* source_dict_;
   StringDictionaryProxy* literals_source_dict_;
+  bool dict_encoded_;
 
   StringValueConverter(const Catalog_Namespace::Catalog& cat,
                        const ColumnDescriptor* cd,
@@ -345,6 +346,7 @@ struct StringValueConverter : public TargetValueConverter {
       : TargetValueConverter(cd) {
     source_dict_ = nullptr;
     literals_source_dict_ = nullptr;
+    dict_encoded_ = dictEncoded;
     if (dictEncoded) {
       if (0 != sourceDictId) {
         auto source_dict_desc = cat.getMetadataForDict(std::abs(sourceDictId), true);
@@ -353,7 +355,6 @@ struct StringValueConverter : public TargetValueConverter {
         CHECK(source_dict_);
       } else {
         literals_source_dict_ = literals_dict;
-        CHECK(literals_source_dict_);
       }
     }
     if (num_rows) {
@@ -380,9 +381,13 @@ struct StringValueConverter : public TargetValueConverter {
       if (source_dict_) {
         std::string strVal = source_dict_->getString(val);
         (*column_data_)[row] = strVal;
-      } else {
+      } else if (literals_source_dict_) {
         std::string strVal = literals_source_dict_->getString(val);
         (*column_data_)[row] = strVal;
+      } else {
+        CHECK_EQ(val, inline_int_null_value<int32_t>());
+        std::string nullStr = "";
+        (*column_data_)[row] = nullStr;
       }
     }
   }
@@ -402,7 +407,7 @@ struct StringValueConverter : public TargetValueConverter {
   }
 
   void convertToColumnarFormat(size_t row, const TargetValue* value) override {
-    if (source_dict_ || literals_source_dict_) {
+    if (dict_encoded_) {
       convertToColumnarFormatFromDict(row, value);
     } else {
       convertToColumnarFormatFromString(row, value);

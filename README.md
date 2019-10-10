@@ -1,18 +1,18 @@
 OmniSciDB (formerly MapD Core)
 ==============================
 
-OmniSciDB is an open source SQL-based, relational, columnar database engine. This project is specifically developed to harness the parallel processing power of graphics processing units (GPUs). OmniSciDB can query up to billions of rows in milliseconds, and benefits from the advantages that GPUs provide, such as parallelism or the ability to process in parallel, which can boost performance. OmniSciDB also uses multi-tiered memory caching, a Just-In-Time (JIT) query compilation framework and in-situ graphics rendering.
+OmniSciDB is an open source SQL-based, relational, columnar database engine that leverages the full performance and parallelism of modern hardware (both CPUs and GPUs) to enable querying of multi-billion row datasets in milliseconds, without the need for indexing, pre-aggregation, or downsampling.  OmniSciDB can be run on hybrid CPU/GPU systems (Nvidia GPUs are currently supported), as well as on CPU-only systems featuring X86, Power, and ARM (experimental support) architectures. To achieve maximum performance, OmniSciDB features multi-tiered caching of data between storage, CPU memory, and GPU memory, and an innovative Just-In-Time (JIT) query compilation framework.
 
 To find out more, please check out the [OmniSci Website](https://www.omnisci.com) and the [OmniSciDB wiki](https://github.com/omnisci/omniscidb/wiki/).
 
 # Quickstart
 
 - Install the dependencies mentioned in the [Dependencies](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Dependencies) page.
-- [Download and Install](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#DownloadsandInstallationInstructions) the package.
-- Read up about [Usage and Configuration](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#building)
+- Read up about [building, running tests, and basic usage and configuration](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#building).
+- [Download and install](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#DownloadsandInstallationInstructions) the package.
 - Initialize servers [using a wrapper](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#starting-using-the-startomnisci-wrapper) or [manually](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#starting-manually)
 - [Load sample data.](#working-with-data) Sample sets can be found in the [Data Set Library](https://community.omnisci.com/browse/new-item2).
-- Perform a Sample Query
+- Perform a sample query
 
 For complete [download and installation instructions](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#downloads-and-installation-instructions), please visit the [Documentation](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation) page.
 

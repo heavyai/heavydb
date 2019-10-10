@@ -65,6 +65,7 @@ ThirdParty/go/src/*
 *.pyc
 docs/build/
 docs/generated-docs/
+docs/sphinx-env
 
 # java-generated files
 java/**/target/
@@ -74,3 +75,7 @@ java/thrift/src/
 
 ThirdParty/
 data/
+
+# IntelliJ/CLion settings files
+.idea
+*.iml

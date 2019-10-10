@@ -227,10 +227,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     }
   }
 
-  std::string calcite_session_prefix = "calcite-" + generate_random_string(64);
-
-  calcite_ = std::make_shared<Calcite>(
-      mapd_parameters, base_data_path_, calcite_session_prefix, udf_ast_filename);
+  calcite_ =
+      std::make_shared<Calcite>(mapd_parameters, base_data_path_, udf_ast_filename);
 
   ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
   if (!udf_filename.empty()) {
@@ -293,6 +291,45 @@ void MapDHandler::check_read_only(const std::string& str) {
   }
 }
 
+std::string const MapDHandler::createInMemoryCalciteSession(
+    const std::shared_ptr<Catalog_Namespace::Catalog>& catalog_ptr) {
+  // We would create an in memory session for calcite with super user privileges which
+  // would be used for getting all tables metadata when a user runs the query. The
+  // session would be under the name of a proxy user/password which would only persist
+  // till server's lifetime or execution of calcite query(in memory) whichever is the
+  // earliest.
+  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+  std::string session_id;
+  do {
+    session_id = generate_random_string(64);
+  } while (sessions_.find(session_id) != sessions_.end());
+  Catalog_Namespace::UserMetadata user_meta(-1,
+                                            calcite_->getInternalSessionProxyUserName(),
+                                            calcite_->getInternalSessionProxyPassword(),
+                                            true,
+                                            -1);
+  const auto emplace_ret =
+      sessions_.emplace(session_id,
+                        std::make_shared<Catalog_Namespace::SessionInfo>(
+                            catalog_ptr, user_meta, executor_device_type_, session_id));
+  CHECK(emplace_ret.second);
+  return session_id;
+}
+
+bool MapDHandler::isInMemoryCalciteSession(
+    const Catalog_Namespace::UserMetadata user_meta) {
+  return user_meta.userName == calcite_->getInternalSessionProxyUserName() &&
+         user_meta.userId == -1 && user_meta.defaultDbId == -1 &&
+         user_meta.isSuper.load();
+}
+
+void MapDHandler::removeInMemoryCalciteSession(const std::string& session_id) {
+  // Remove InMemory calcite Session.
+  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+  const auto it = sessions_.find(session_id);
+  CHECK(it != sessions_.end());
+  sessions_.erase(it);
+}
 // internal connection for connections with no password
 void MapDHandler::internal_connect(TSessionId& session,
                                    const std::string& username,
@@ -321,6 +358,7 @@ void MapDHandler::internal_connect(TSessionId& session,
   }
   connect_impl(session, std::string(""), dbname2, user_meta, cat, stdlog);
 }
+
 void MapDHandler::krb5_connect(TKrb5Session& session,
                                const std::string& inputToken,
                                const std::string& dbname) {
@@ -786,7 +824,7 @@ void MapDHandler::sql_execute(TQueryResult& _return,
       try {
         agg_handler_->cluster_execute(_return,
                                       query_state->createQueryStateProxy(),
-                                      query_state->get_query_str(),
+                                      query_state->getQueryStr(),
                                       column_format,
                                       nonce,
                                       first_n,
@@ -1162,7 +1200,7 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                    QueryStateProxy query_state_proxy) {
   try {
     const auto query_ra = parse_to_ra(query_state_proxy,
-                                      query_state_proxy.getQueryState().get_query_str(),
+                                      query_state_proxy.getQueryState().getQueryStr(),
                                       {},
                                       boost::none,
                                       mapd_parameters_);
@@ -1206,6 +1244,26 @@ void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& s
   }
 }
 
+bool MapDHandler::has_role(const TSessionId& sessionId,
+                           const std::string& granteeName,
+                           const std::string& roleName) {
+  const auto stdlog = STDLOG(get_session_ptr(sessionId));
+  const auto session_ptr = stdlog.getConstSessionInfo();
+  const auto current_user = session_ptr->get_currentUser();
+  if (!current_user.isSuper) {
+    if (const auto* user = SysCatalog::instance().getUserGrantee(granteeName);
+        user && current_user.userName != granteeName) {
+      THROW_MAPD_EXCEPTION("Only super users can check other user's roles.");
+    } else if (!SysCatalog::instance().isRoleGrantedToGrantee(
+                   current_user.userName, granteeName, true)) {
+      THROW_MAPD_EXCEPTION(
+          "Only super users can check roles assignment that have not been directly "
+          "granted to a user.");
+    }
+  }
+  return SysCatalog::instance().isRoleGrantedToGrantee(granteeName, roleName, false);
+}
+
 static TDBObject serialize_db_object(const std::string& roleName,
                                      const DBObject& inObject) {
   TDBObject outObject;
@@ -1214,7 +1272,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
   const auto ap = inObject.getPrivileges();
   switch (inObject.getObjectKey().permissionType) {
     case DatabaseDBObjectType:
-      outObject.objectType = TDBObjectType::DatabaseDBObjectType;
+      outObject.privilegeObjectType = TDBObjectType::DatabaseDBObjectType;
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::CREATE_DATABASE));
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::DROP_DATABASE));
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::VIEW_SQL_EDITOR));
@@ -1222,7 +1280,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
 
       break;
     case TableDBObjectType:
-      outObject.objectType = TDBObjectType::TableDBObjectType;
+      outObject.privilegeObjectType = TDBObjectType::TableDBObjectType;
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::CREATE_TABLE));
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::DROP_TABLE));
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::SELECT_FROM_TABLE));
@@ -1234,7 +1292,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
 
       break;
     case DashboardDBObjectType:
-      outObject.objectType = TDBObjectType::DashboardDBObjectType;
+      outObject.privilegeObjectType = TDBObjectType::DashboardDBObjectType;
       outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::CREATE_DASHBOARD));
       outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::DELETE_DASHBOARD));
       outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
@@ -1242,7 +1300,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
 
       break;
     case ViewDBObjectType:
-      outObject.objectType = TDBObjectType::ViewDBObjectType;
+      outObject.privilegeObjectType = TDBObjectType::ViewDBObjectType;
       outObject.privs.push_back(ap.hasPermission(ViewPrivileges::CREATE_VIEW));
       outObject.privs.push_back(ap.hasPermission(ViewPrivileges::DROP_VIEW));
       outObject.privs.push_back(ap.hasPermission(ViewPrivileges::SELECT_FROM_VIEW));
@@ -1254,6 +1312,9 @@ static TDBObject serialize_db_object(const std::string& roleName,
     default:
       CHECK(false);
   }
+  const int type_val = static_cast<int>(inObject.getType());
+  CHECK(type_val >= 0 && type_val < 5);
+  outObject.objectType = static_cast<TDBObjectType::type>(type_val);
   return outObject;
 }
 
@@ -1337,16 +1398,15 @@ bool MapDHandler::has_object_privilege(const TSessionId& sessionId,
   auto session_ptr = stdlog.getConstSessionInfo();
   auto const& cat = session_ptr->getCatalog();
   auto const& current_user = session_ptr->get_currentUser();
-  if (!current_user.isSuper && !current_user.isReallySuper &&
-      !SysCatalog::instance().isRoleGrantedToGrantee(
-          current_user.userName, granteeName, false)) {
+  if (!current_user.isSuper && !SysCatalog::instance().isRoleGrantedToGrantee(
+                                   current_user.userName, granteeName, false)) {
     THROW_MAPD_EXCEPTION(
         "Users except superusers can only check privileges for self or roles granted to "
         "them.")
   }
   Catalog_Namespace::UserMetadata user_meta;
   if (SysCatalog::instance().getMetadataForUser(granteeName, user_meta) &&
-      (user_meta.isSuper || user_meta.isReallySuper)) {
+      user_meta.isSuper) {
     return true;
   }
   Grantee* grnt = SysCatalog::instance().getGrantee(granteeName);
@@ -1658,12 +1718,10 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
   if (td->isView) {
     try {
       if (hasTableAccessPrivileges(td, session)) {
-        // Due to this line, query_state and stdlog have separate session_infos.
-        session_copy->make_superuser();
         auto query_state = create_query_state(session_copy, td->viewSQL);
         stdlog.setQueryState(query_state);
         const auto query_ra = parse_to_ra(query_state->createQueryStateProxy(),
-                                          query_state->get_query_str(),
+                                          query_state->getQueryStr(),
                                           {},
                                           boost::none,
                                           mapd_parameters_);
@@ -4237,7 +4295,8 @@ void MapDHandler::get_heap_profile(std::string& profile, const TSessionId& sessi
 
 // NOTE: Only call check_session_exp_unsafe() when you hold a lock on sessions_mutex_.
 void MapDHandler::check_session_exp_unsafe(const SessionMap::iterator& session_it) {
-  if (session_it->second.use_count() > 2) {
+  if (session_it->second.use_count() > 2 ||
+      isInMemoryCalciteSession(session_it->second->get_currentUser())) {
     // SessionInfo is being used in more than one active operation. Original copy + one
     // stored in StdLog. Skip the checks.
     return;
@@ -4257,18 +4316,8 @@ void MapDHandler::check_session_exp_unsafe(const SessionMap::iterator& session_i
 
 // NOTE: Only call get_session_it_unsafe() while holding a lock on sessions_mutex_.
 SessionMap::iterator MapDHandler::get_session_it_unsafe(const TSessionId& session) {
-  SessionMap::iterator session_it;
-  const auto calcite_session_prefix = calcite_->get_session_prefix();
-  const auto prefix_length = calcite_session_prefix.size();
-  if (prefix_length && 0 == session.compare(0, prefix_length, calcite_session_prefix)) {
-    session_it = get_session_from_map(session.substr(prefix_length + 1), sessions_);
-    check_session_exp_unsafe(session_it);
-    session_it->second->make_superuser();
-  } else {
-    session_it = get_session_from_map(session, sessions_);
-    check_session_exp_unsafe(session_it);
-    session_it->second->reset_superuser();
-  }
+  auto session_it = get_session_from_map(session, sessions_);
+  check_session_exp_unsafe(session_it);
   return session_it;
 }
 
@@ -4761,7 +4810,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
 
   _return.nonce = nonce;
   _return.execution_time_ms = 0;
-  auto const& query_str = query_state_proxy.getQueryState().get_query_str();
+  auto const& query_str = query_state_proxy.getQueryState().getQueryStr();
   auto session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
   // Call to DistributedValidate() below may change cat.
   auto& cat = session_ptr->getCatalog();
@@ -5169,7 +5218,7 @@ void MapDHandler::execute_rel_alg_with_filter_push_down(
   // deriving the new relational algebra plan with respect to the pushed down filters
   _return.execution_time_ms += measure<>::execution([&]() {
     query_ra = parse_to_ra(query_state_proxy,
-                           query_state_proxy.getQueryState().get_query_str(),
+                           query_state_proxy.getQueryState().getQueryStr(),
                            filter_push_down_info,
                            boost::none,
                            mapd_parameters_);
@@ -5223,12 +5272,28 @@ std::string MapDHandler::parse_to_ra(
   ParserWrapper pw{query_str};
   const std::string actual_query{pw.isSelectExplain() ? pw.actual_query : query_str};
   if (pw.isCalcitePathPermissable()) {
-    auto result = calcite_->process(timer.createQueryStateProxy(),
-                                    legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                                    filter_push_down_info,
-                                    legacy_syntax_,
-                                    pw.isCalciteExplain(),
-                                    mapd_parameters.enable_calcite_view_optimize);
+    TPlanResult result;
+    auto session_cleanup_handler = [&](const auto& session_id) {
+      removeInMemoryCalciteSession(session_id);
+    };
+    auto process_calcite_request = [&] {
+      const auto& in_memory_session_id = createInMemoryCalciteSession(
+          query_state_proxy.getQueryState().getConstSessionInfo()->get_catalog_ptr());
+      try {
+        result = calcite_->process(timer.createQueryStateProxy(),
+                                   legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                                   filter_push_down_info,
+                                   legacy_syntax_,
+                                   pw.isCalciteExplain(),
+                                   mapd_parameters.enable_calcite_view_optimize,
+                                   in_memory_session_id);
+        session_cleanup_handler(in_memory_session_id);
+      } catch (std::exception&) {
+        session_cleanup_handler(in_memory_session_id);
+        throw;
+      }
+    };
+    process_calcite_request();
     if (tableNames) {
       for (const auto& table : result.resolved_accessed_objects.tables_selected_from) {
         (tableNames.value())[table] = false;

@@ -220,7 +220,8 @@ void collect_table_infos(std::vector<InputTableInfo>& table_infos,
       CHECK_LT(table_id, 0);
       CHECK(temporary_tables);
       const auto it = temporary_tables->find(table_id);
-      CHECK(it != temporary_tables->end());
+      LOG_IF(FATAL, it == temporary_tables->end())
+          << "Failed to find previous query result for node " << -table_id;
       table_infos.push_back({table_id, synthesize_table_info(it->second)});
     } else {
       CHECK(input_desc.getSourceType() == InputSourceType::TABLE);

@@ -275,8 +275,13 @@ ArrowResultSetConverter::getSerializedArrowOutput() const {
   ARROW_THROW_NOT_OK(arrow::ipc::SerializeSchema(
       *arrow_copy->schema(), arrow::default_memory_pool(), &serialized_schema));
 
-  ARROW_THROW_NOT_OK(arrow::ipc::SerializeRecordBatch(
-      *arrow_copy, arrow::default_memory_pool(), &serialized_records));
+  if (arrow_copy->num_rows()) {
+    ARROW_THROW_NOT_OK(arrow_copy->Validate());
+    ARROW_THROW_NOT_OK(arrow::ipc::SerializeRecordBatch(
+        *arrow_copy, arrow::default_memory_pool(), &serialized_records));
+  } else {
+    ARROW_THROW_NOT_OK(arrow::AllocateBuffer(0, &serialized_records));
+  }
   return {serialized_schema, serialized_records};
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2019 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,11 +20,14 @@
 #include <unistd.h>
 #include <algorithm>
 
+extern std::size_t g_cpu_threads_override;
+
 inline int cpu_threads() {
   // could use std::thread::hardware_concurrency(), but some
   // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
   // Play it POSIX.1 safe instead.
-  return std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L);
+  auto ov = g_cpu_threads_override;
+  return (ov <= 0) ? std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L) : ov;
 }
 
 #endif  // THREAD_COUNT_H

@@ -95,6 +95,7 @@ size_t g_min_memory_allocation_size{
            // without pre-flight count
 bool g_enable_bump_allocator{false};
 double g_bump_allocator_step_reduction{0.75};
+bool g_enable_direct_columnarization{true};
 
 int const Executor::max_gpu_count;
 
@@ -227,6 +228,10 @@ const ColumnDescriptor* Executor::getPhysicalColumnDescriptor(
 
 const Catalog_Namespace::Catalog* Executor::getCatalog() const {
   return catalog_;
+}
+
+void Executor::setCatalog(const Catalog_Namespace::Catalog* catalog) {
+  catalog_ = catalog;
 }
 
 const std::shared_ptr<RowSetMemoryOwner> Executor::getRowSetMemoryOwner() const {
@@ -803,8 +808,11 @@ ResultSetPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
     for (const auto target_expr : ra_exe_unit.target_exprs) {
       targets.push_back(get_target_info(target_expr, g_bigint_count));
     }
-    return std::make_shared<ResultSet>(
-        targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor(), nullptr, nullptr);
+    return std::make_shared<ResultSet>(targets,
+                                       ExecutorDeviceType::CPU,
+                                       QueryMemoryDescriptor(),
+                                       row_set_mem_owner_,
+                                       this);
   }
   using IndexedResultSet = std::pair<ResultSetPtr, std::vector<size_t>>;
   std::sort(results_per_device.begin(),
@@ -3192,6 +3200,76 @@ std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(
     }
   }
   return skip_frag;
+}
+
+AggregatedColRange Executor::computeColRangesCache(
+    const std::unordered_set<PhysicalInput>& phys_inputs) {
+  AggregatedColRange agg_col_range_cache;
+  CHECK(catalog_);
+  std::unordered_set<int> phys_table_ids;
+  for (const auto& phys_input : phys_inputs) {
+    phys_table_ids.insert(phys_input.table_id);
+  }
+  std::vector<InputTableInfo> query_infos;
+  for (const int table_id : phys_table_ids) {
+    query_infos.emplace_back(InputTableInfo{table_id, getTableInfo(table_id)});
+  }
+  for (const auto& phys_input : phys_inputs) {
+    const auto cd =
+        catalog_->getMetadataForColumn(phys_input.table_id, phys_input.col_id);
+    CHECK(cd);
+    const auto& col_ti =
+        cd->columnType.is_array() ? cd->columnType.get_elem_type() : cd->columnType;
+    if (col_ti.is_number() || col_ti.is_boolean() || col_ti.is_time() ||
+        (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT)) {
+      const auto col_var = boost::make_unique<Analyzer::ColumnVar>(
+          cd->columnType, phys_input.table_id, phys_input.col_id, 0);
+      const auto col_range = getLeafColumnRange(col_var.get(), query_infos, this, false);
+      agg_col_range_cache.setColRange(phys_input, col_range);
+    }
+  }
+  return agg_col_range_cache;
+}
+
+StringDictionaryGenerations Executor::computeStringDictionaryGenerations(
+    const std::unordered_set<PhysicalInput>& phys_inputs) {
+  StringDictionaryGenerations string_dictionary_generations;
+  CHECK(catalog_);
+  for (const auto& phys_input : phys_inputs) {
+    const auto cd =
+        catalog_->getMetadataForColumn(phys_input.table_id, phys_input.col_id);
+    CHECK(cd);
+    const auto& col_ti =
+        cd->columnType.is_array() ? cd->columnType.get_elem_type() : cd->columnType;
+    if (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT) {
+      const int dict_id = col_ti.get_comp_param();
+      const auto dd = catalog_->getMetadataForDict(dict_id);
+      CHECK(dd && dd->stringDict);
+      string_dictionary_generations.setGeneration(dict_id,
+                                                  dd->stringDict->storageEntryCount());
+    }
+  }
+  return string_dictionary_generations;
+}
+
+TableGenerations Executor::computeTableGenerations(
+    std::unordered_set<int> phys_table_ids) {
+  TableGenerations table_generations;
+  for (const int table_id : phys_table_ids) {
+    const auto table_info = getTableInfo(table_id);
+    table_generations.setGeneration(
+        table_id, TableGeneration{table_info.getPhysicalNumTuples(), 0});
+  }
+  return table_generations;
+}
+
+void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
+                            const std::unordered_set<int>& phys_table_ids) {
+  CHECK(catalog_);
+  row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
+  agg_col_range_cache_ = computeColRangesCache(phys_inputs);
+  string_dictionary_generations_ = computeStringDictionaryGenerations(phys_inputs);
+  table_generations_ = computeTableGenerations(phys_table_ids);
 }
 
 std::map<std::pair<int, ::QueryRenderer::QueryRenderManager*>, std::shared_ptr<Executor>>

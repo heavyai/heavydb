@@ -61,7 +61,8 @@ namespace Fragmenter_Namespace {
  */
 class RowDataProvider {
  public:
-  virtual size_t count() const = 0;
+  virtual size_t const getRowCount() const = 0;
+  virtual size_t const getEntryCount() const = 0;
   virtual StringDictionaryProxy* getLiteralDictionary() const = 0;
   virtual std::vector<TargetValue> getEntryAt(const size_t index) const = 0;
   virtual std::vector<TargetValue> getTranslatedEntryAt(const size_t index) const = 0;

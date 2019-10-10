@@ -178,7 +178,6 @@ class QueryMemoryDescriptor {
   int32_t getTargetIdxForKey() const { return idx_target_as_key_; }
   void setTargetIdxForKey(const int32_t val) { idx_target_as_key_ = val; }
 
-  size_t groupColWidthsSize() const { return group_col_widths_.size(); }
   int8_t groupColWidth(const size_t key_idx) const {
     CHECK_LT(key_idx, group_col_widths_.size());
     return group_col_widths_[key_idx];
@@ -225,7 +224,18 @@ class QueryMemoryDescriptor {
     CHECK_LT(target_idx, target_groupby_indices_.size());
     return target_groupby_indices_[target_idx];
   }
+
+  void setAllTargetGroupbyIndices(std::vector<ssize_t> group_by_indices) {
+    target_groupby_indices_ = group_by_indices;
+  }
+
   size_t targetGroupbyIndicesSize() const { return target_groupby_indices_.size(); }
+  size_t targetGroupbyNegativeIndicesSize() const {
+    return std::count_if(
+        target_groupby_indices_.begin(),
+        target_groupby_indices_.end(),
+        [](const ssize_t& target_group_by_index) { return target_group_by_index < 0; });
+  }
   void clearTargetGroupbyIndices() { target_groupby_indices_.clear(); }
 
   size_t getEntryCount() const { return entry_count_; }
@@ -306,6 +316,8 @@ class QueryMemoryDescriptor {
   bool isWarpSyncRequired(const ExecutorDeviceType) const;
 
   std::string toString() const;
+
+  std::string reductionKey() const;
 
  protected:
   void resetGroupColWidths(const std::vector<int8_t>& new_group_col_widths) {

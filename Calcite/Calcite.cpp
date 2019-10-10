@@ -36,6 +36,7 @@
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TTransportUtils.h>
+#include <type_traits>
 
 #include "gen-cpp/CalciteServer.h"
 
@@ -203,7 +204,7 @@ void Calcite::runServer(const int mapd_port,
   if (ping_time > -1) {
     // we have an orphaned server shut it down
     LOG(ERROR)
-        << "Appears to be orphaned Calcite serve already running, shutting it down";
+        << "Appears to be orphaned Calcite server already running, shutting it down";
     LOG(ERROR) << "Please check that you are not trying to run two servers on same port";
     LOG(ERROR) << "Attempting to shutdown orphaned Calcite server";
     try {
@@ -268,9 +269,8 @@ Calcite::Calcite(const int mapd_port,
                  const int calcite_port,
                  const std::string& data_dir,
                  const size_t calcite_max_mem,
-                 const std::string& session_prefix,
                  const std::string& udf_filename)
-    : server_available_(false), session_prefix_(session_prefix) {
+    : server_available_(false) {
   init(mapd_port, calcite_port, data_dir, calcite_max_mem, udf_filename);
 }
 
@@ -298,15 +298,13 @@ void Calcite::init(const int mapd_port,
 
 Calcite::Calcite(const MapDParameters& mapd_parameter,
                  const std::string& data_dir,
-                 const std::string& session_prefix,
                  const std::string& udf_filename)
     : ssl_trust_store_(mapd_parameter.ssl_trust_store)
     , ssl_trust_password_(mapd_parameter.ssl_trust_password)
     , ssl_key_file_(mapd_parameter.ssl_key_file)
     , ssl_keystore_(mapd_parameter.ssl_keystore)
     , ssl_keystore_password_(mapd_parameter.ssl_keystore_password)
-    , ssl_cert_file_(mapd_parameter.ssl_cert_file)
-    , session_prefix_(session_prefix) {
+    , ssl_cert_file_(mapd_parameter.ssl_cert_file) {
   init(mapd_parameter.omnisci_server_port,
        mapd_parameter.calcite_port,
        data_dir,
@@ -369,13 +367,15 @@ TPlanResult Calcite::process(
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
     const bool is_explain,
-    const bool is_view_optimize) {
+    const bool is_view_optimize,
+    const std::string& calcite_session_id) {
   TPlanResult result = processImpl(query_state_proxy,
                                    std::move(sql_string),
                                    filter_push_down_info,
                                    legacy_syntax,
                                    is_explain,
-                                   is_view_optimize);
+                                   is_view_optimize,
+                                   calcite_session_id);
 
   AccessPrivileges NOOP;
 
@@ -444,18 +444,13 @@ TPlanResult Calcite::processImpl(
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     const bool legacy_syntax,
     const bool is_explain,
-    const bool is_view_optimize) {
+    const bool is_view_optimize,
+    const std::string& calcite_session_id) {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
-  auto const session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
-  auto& cat = session_ptr->getCatalog();
-  std::string user = session_ptr->get_currentUser().userName;
-  std::string session = session_ptr->get_session_id();
-  if (!session_prefix_.empty()) {
-    // preprend session prefix, if present
-    session = session_prefix_ + "/" + session;
-  }
-  std::string catalog = cat.getCurrentDB().dbName;
-
+  const auto& user_session_info = query_state_proxy.getQueryState().getConstSessionInfo();
+  const auto& cat = user_session_info->getCatalog();
+  const std::string user = getInternalSessionProxyUserName();
+  const std::string catalog = cat.getCurrentDB().dbName;
   LOG(INFO) << "User " << user << " catalog " << catalog << " sql '" << sql_string << "'";
   LOG(IR) << "SQL query\n" << sql_string << "\nEnd of SQL query";
   LOG(PTX) << "SQL query\n" << sql_string << "\nEnd of SQL query";
@@ -463,11 +458,16 @@ TPlanResult Calcite::processImpl(
   TPlanResult ret;
   if (server_available_) {
     try {
+      // calcite_session_id would be an empty string when accessed by internal resources
+      // that would not access `process` through handler instance, like for eg: Unit
+      // Tests. In these cases we would use the session_id from query state.
       auto ms = measure<>::execution([&]() {
         auto clientP = getClient(remote_calcite_port_);
         clientP.first->process(ret,
                                user,
-                               session,
+                               calcite_session_id.empty()
+                                   ? user_session_info->get_session_id()
+                                   : calcite_session_id,
                                catalog,
                                sql_string,
                                filter_push_down_info,

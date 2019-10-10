@@ -1283,14 +1283,14 @@ class RelModify : public RelAlgNode {
     CHECK(previous_project_node != nullptr);
 
     previous_project_node->setUpdateViaSelectFlag();
-    previous_project_node->injectOffsetInFragmentExpr();
+    // remove the offset column in the projection for update handling
+    target_column_list_.pop_back();
+
     previous_project_node->setModifiedTableDescriptor(table_descriptor_);
     previous_project_node->setTargetColumns(target_column_list_);
 
-    int target_update_column_expr_start =
-        (int)(previous_project_node->getFields().size() - target_column_list_.size() - 1);
-    int target_update_column_expr_end =
-        (int)(previous_project_node->getFields().size() - 2);
+    int target_update_column_expr_start = 0;
+    int target_update_column_expr_end = (int)(target_column_list_.size() - 1);
     CHECK(target_update_column_expr_start >= 0);
     CHECK(target_update_column_expr_end >= 0);
 
