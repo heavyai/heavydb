@@ -299,6 +299,10 @@ class MapDProgramOptions {
    */
   std::string db_query_file = {""};
   /**
+   * exit after warmup
+   */
+  bool exit_after_warmup = false;
+  /**
    * Inactive session tolerance in mins (60 mins)
    */
   int idle_session_duration = kMinsPerHour;
@@ -402,6 +406,11 @@ void MapDProgramOptions::fillOptions() {
   help_desc.add_options()("db-query-list",
                           po::value<std::string>(&db_query_file),
                           "Path to file containing OmniSci warmup queries.");
+  help_desc.add_options()("exit-after-warmup",
+                          po::value<bool>(&exit_after_warmup)
+                              ->default_value(false)
+                              ->implicit_value(true),
+                          "Exit after OmniSci warmup queries.");
   help_desc.add_options()("dynamic-watchdog-time-limit",
                           po::value<unsigned>(&dynamic_watchdog_time_limit)
                               ->default_value(dynamic_watchdog_time_limit)
@@ -1212,6 +1221,8 @@ int startMapdServer(MapDProgramOptions& prog_config_opts) {
     // run warm up queries if any exists
     run_warmup_queries(
         g_mapd_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
+    if (prog_config_opts.exit_after_warmup)
+      g_running = false;
 
     bufThread.join();
     httpThread.join();
