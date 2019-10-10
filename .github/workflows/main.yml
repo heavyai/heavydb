@@ -29,6 +29,7 @@ jobs:
       - name: Build Sphinx docs
         working-directory: docs
         run: |
+          sed -i "/segment_analytics/s/^#//" source/conf.py
           make html
       - name: Deploy to Pages
         uses: JamesIves/github-pages-deploy-action@master
