@@ -111,7 +111,9 @@ class FixedLengthArrayNoneEncoder : public Encoder {
 
   void reduceStats(const Encoder&) override { CHECK(false); }
 
-  void updateStats(const int8_t* const dst, const size_t numBytes) override {}
+  void updateStats(const int8_t* const dst, const size_t numBytes) override {
+    CHECK(false);
+  }
 
   void writeMetadata(FILE* f) override {
     // assumes pointer is already in right place
