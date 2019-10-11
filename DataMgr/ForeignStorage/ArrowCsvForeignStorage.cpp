@@ -1,6 +1,5 @@
-
-
 #include "ArrowCsvForeignStorage.h"
+#include "ForeignStorageInterface.h"
 
 #include "Shared/Logger.h"
 #include "Shared/measure.h"
@@ -8,28 +7,59 @@
 #include <arrow/api.h>
 #include <arrow/csv/reader.h>
 #include <arrow/io/file.h>
+#include <arrow/util/task-group.h>
+#include <arrow/util/thread-pool.h>
+#include "arrow/csv/column-builder.h"
+
 #include "../DataMgr/StringNoneEncoder.h"
 #include "../QueryEngine/ArrowResultSet.h"
 #include "../QueryEngine/ArrowUtil.h"
 
 #include <array>
+#include <future>
 
-struct ArrowFragment {
-  int64_t sz;
-  std::vector<std::shared_ptr<arrow::ArrayData>> chunks;
-  ~ArrowFragment() { chunks.clear(); }
+class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
+  ~ArrowCsvForeignStorage() override;
+  void append(const std::vector<ForeignStorageColumnBuffer>& column_buffers) override;
+
+  void read(const ChunkKey& chunk_key,
+            const SQLTypeInfo& sql_type,
+            int8_t* dest,
+            const size_t numBytes) override;
+
+  void prepareTable(const int db_id,
+                    const std::string& type,
+                    TableDescriptor& td,
+                    std::list<ColumnDescriptor>& cols) override;
+  void registerTable(Catalog_Namespace::Catalog* catalog,
+                     std::pair<int, int> table_key,
+                     const std::string& type,
+                     const TableDescriptor& td,
+                     const std::list<ColumnDescriptor>& cols,
+                     Data_Namespace::AbstractBufferMgr* mgr) override;
+
+  std::string getType() const override;
+
+  struct ArrowFragment {
+    int64_t sz;
+    std::vector<std::shared_ptr<arrow::ArrayData>> chunks;
+    ~ArrowFragment() { chunks.clear(); }
+  };
+
+  std::map<std::array<int, 3>, std::vector<ArrowFragment>> m_columns;
 };
 
-std::map<std::array<int, 3>, std::vector<ArrowFragment>> g_columns;
-std::map<std::array<int, 3>, StringDictionary*> g_dictionaries;
+void registerArrowCsvForeignStorage(void) {
+  ForeignStorageInterface::registerPersistentStorageInterface(
+      new ArrowCsvForeignStorage());
+}
 
 ArrowCsvForeignStorage::~ArrowCsvForeignStorage() {
-  g_columns.clear();
+  m_columns.clear();
 }
 
 void ArrowCsvForeignStorage::append(
     const std::vector<ForeignStorageColumnBuffer>& column_buffers) {
-  printf("-- aaaaaapend!!!!\n");
   CHECK(false);
 }
 
@@ -37,28 +67,31 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
                                   const SQLTypeInfo& sql_type,
                                   int8_t* dest,
                                   const size_t numBytes) {
-  // printf("-- reading %d:%d<=%u\n", chunk_key[2], chunk_key[3], unsigned(numBytes));
   std::array<int, 3> col_key{chunk_key[0], chunk_key[1], chunk_key[2]};
-  auto& frag = g_columns.at(col_key).at(chunk_key[3]);
+  auto& frag = m_columns.at(col_key).at(chunk_key[3]);
 
   CHECK(!frag.chunks.empty() || !chunk_key[3]);
-  int64_t sz, copied = 0;
+  int64_t sz = 0, copied = 0;
   arrow::ArrayData* prev_data = nullptr;
   int varlen_offset = 0;
 
   for (auto array_data : frag.chunks) {
     arrow::Buffer* bp = nullptr;
     if (sql_type.is_dict_encoded_string()) {
+      // array_data->buffers[1] stores dictionary indexes
       bp = array_data->buffers[1].get();
     } else if (sql_type.get_type() == kTEXT) {
       CHECK_GE(array_data->buffers.size(), 3UL);
+      // array_data->buffers[2] stores string array
       bp = array_data->buffers[2].get();
     } else if (array_data->null_count != array_data->length) {
+      // any type except strings (none encoded strings offsets go here as well)
       CHECK_GE(array_data->buffers.size(), 2UL);
       bp = array_data->buffers[1].get();
     }
     if (bp) {
-      // Does this chunk_key request offset table for strings?
+      // offset buffer for none encoded strings need to be merged as arrow chunkes sizes
+      // are less then omnisci fragments sizes
       if (chunk_key.size() == 5 && chunk_key[4] == 2) {
         auto data = reinterpret_cast<const uint32_t*>(bp->data());
         auto dest_ui32 = reinterpret_cast<uint32_t*>(dest);
@@ -86,9 +119,9 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
     } else {
       // TODO: nullify?
       auto fixed_type = dynamic_cast<arrow::FixedWidthType*>(array_data->type.get());
-      if (fixed_type)
+      if (fixed_type) {
         sz = array_data->length * fixed_type->bit_width() / 8;
-      else
+      } else
         CHECK(false);  // TODO: what's else???
     }
     dest += sz;
@@ -168,14 +201,12 @@ void ArrowCsvForeignStorage::prepareTable(const int db_id,
   td.hasDeletedCol = false;
 }
 
-// TODO: optimize the number of arguments
 void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
                                            std::pair<int, int> table_key,
                                            const std::string& info,
                                            const TableDescriptor& td,
                                            const std::list<ColumnDescriptor>& cols,
                                            Data_Namespace::AbstractBufferMgr* mgr) {
-  printf("-- registering %s!!!!\n", info.c_str());
   auto memp = arrow::default_memory_pool();
   auto popt = arrow::csv::ParseOptions::Defaults();
   popt.quoting = false;
@@ -184,7 +215,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
 
   auto ropt = arrow::csv::ReadOptions::Defaults();
   ropt.use_threads = true;
-  ropt.block_size = 1 * 1024 * 1024;
+  ropt.block_size = 2 * 1024 * 1024;
 
   auto copt = arrow::csv::ConvertOptions::Defaults();
   copt.check_utf8 = false;
@@ -197,8 +228,12 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
 #endif
 
   for (auto c : cols) {
-    if (c.isSystemCol)
+    if (c.isSystemCol) {
       continue;  // must be processed by base interface implementation
+    }
+#if ARROW_VERSION >= 14900
+#error TODO: autogenerated column names
+#endif
     copt.column_types.emplace(c.columnName, getArrowImportType(c.columnType));
   }
 
@@ -213,7 +248,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   std::shared_ptr<arrow::Table> arrowTable;
   auto time = measure<>::execution([&]() { r = trp->Read(&arrowTable); });
   ARROW_THROW_NOT_OK(r);
-  LOG(INFO) << "Arrow reads" << info << " in " << time << "ms";
+  LOG(INFO) << "Arrow read " << info << " in " << time << "ms";
 
   arrow::Table& table = *arrowTable.get();
   int cln = 0, num_cols = table.num_columns();
@@ -226,41 +261,43 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   // claculate size and boundaries of fragments
   for (int i = 1; i < arr_frags; i++) {
     if (sz > td.fragPageSize) {
-      fragments.push_back(std::make_pair(start, i));
+      fragments.emplace_back(start, i);
       start = i;
       sz = 0;
     }
     sz += c0p->chunk(i)->length();
   }
-  fragments.push_back(std::make_pair(start, arr_frags));
+  fragments.emplace_back(start, arr_frags);
 
   // data comes like this - database_id, table_id, column_id, fragment_id
   ChunkKey key{table_key.first, table_key.second, 0, 0};
   std::array<int, 3> col_key{table_key.first, table_key.second, 0};
 
-  for (auto c : cols) {
+  auto tp = arrow::internal::GetCpuThreadPool();
+  auto tg = arrow::internal::TaskGroup::MakeThreaded(tp);
+
+  for (auto& c : cols) {
     if (cln >= num_cols) {
       LOG(ERROR) << "Number of columns read from Arrow (" << num_cols
                  << ") mismatch CREATE TABLE request: " << cols.size();
       break;
     }
-    if (c.isSystemCol)
+    if (c.isSystemCol) {
       continue;  // must be processed by base interface implementation
+    }
 
     auto ctype = c.columnType.get_type();
     col_key[2] = key[2] = c.columnId;
-    auto& col = g_columns[col_key];
+    auto& col = m_columns[col_key];
     col.resize(fragments.size());
     auto clp = ARROW_GET_DATA(table.column(cln++)).get();
 
+    StringDictionary* dict;
     if (c.columnType.is_dict_encoded_string()) {
       auto dictDesc = const_cast<DictDescriptor*>(
           catalog->getMetadataForDict(c.columnType.get_comp_param()));
-      CHECK(dictDesc);
-      auto stringDict = dictDesc->stringDict.get();
-      g_dictionaries[col_key] = stringDict;
+      dict = dictDesc->stringDict.get();
     }
-
     auto empty = clp->null_count() == clp->length();
 
     // fill each fragment
@@ -270,12 +307,12 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
       int64_t varlen = 0;
       // for each arrow chunk
       for (int i = fragments[f].first, e = fragments[f].second; i < e; i++) {
-        arrow::Array* chunk = clp->chunk(i).get();
         if (c.columnType.is_dict_encoded_string()) {
           arrow::Int32Builder indexBuilder;
-          auto dict = g_dictionaries[col_key];
-          auto stringArray = static_cast<arrow::StringArray*>(chunk);
+          auto stringArray = std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
+          indexBuilder.Reserve(stringArray->length());
           for (int i = 0; i < stringArray->length(); i++) {
+            // TODO: use arrow dictionary encoding
             if (stringArray->IsNull(i) || empty ||
                 stringArray->null_count() == stringArray->length()) {
               indexBuilder.Append(inline_int_null_value<int32_t>());
@@ -289,9 +326,9 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           frag.chunks.emplace_back(ARROW_GET_DATA(indexArray));
           frag.sz += stringArray->length();
         } else {
-          frag.chunks.push_back(ARROW_GET_DATA(chunk));
-          frag.sz += chunk->length();
-          auto& buffers = ARROW_GET_DATA(chunk)->buffers;
+          frag.chunks.emplace_back(ARROW_GET_DATA(clp->chunk(i)));
+          frag.sz += clp->chunk(i)->length();
+          auto& buffers = ARROW_GET_DATA(clp->chunk(i))->buffers;
           if (!empty) {
             if (ctype == kTEXT) {
               if (buffers.size() <= 2) {
@@ -310,8 +347,6 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           }
         }
       }
-      // TODO: check dynamic_cast<arrow::FixedWidthType*>(c0f->type().get())->bit_width()
-      // == b.sql_type.get_size()
 
       // create buffer descriptotrs
       if (ctype == kTEXT && !c.columnType.is_dict_encoded_string()) {
@@ -337,16 +372,24 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
         b->encoder.reset(Encoder::Create(b, c.columnType));
         b->has_encoder = true;
         if (!empty) {
-          for (auto chunk : frag.chunks) {
-            auto len = chunk->length;
-            auto data = chunk->buffers[1]->data();
-            b->encoder->updateStats((const int8_t*)data, len);
-          }
+          // asynchronously update stats for incoming data
+          tg->Append([b, fr = &frag]() {
+            for (auto chunk : fr->chunks) {
+              auto len = chunk->length;
+              auto data = chunk->buffers[1]->data();
+              b->encoder->updateStats((const int8_t*)data, len);
+            }
+            return arrow::Status::OK();
+          });
         }
         b->encoder->setNumElems(frag.sz);
       }
     }
   }  // each col and fragment
+
+  // wait untill all stats have been updated
+  r = tg->Finish();
+  ARROW_THROW_NOT_OK(r);
   printf("-- created: %d columns, %d chunks, %d frags\n",
          num_cols,
          arr_frags,

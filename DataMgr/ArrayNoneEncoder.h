@@ -209,7 +209,9 @@ class ArrayNoneEncoder : public Encoder {
 
   void updateStats(const double, const bool) override { CHECK(false); }
 
-  void updateStats(const int8_t* const dst, const size_t numBytes) override {}
+  void updateStats(const int8_t* const dst, const size_t numBytes) override {
+    CHECK(false);
+  }
 
   void reduceStats(const Encoder&) override { CHECK(false); }
 

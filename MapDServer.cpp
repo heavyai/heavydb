@@ -228,7 +228,7 @@ void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler,
         std::string single_query;
         while (std::getline(query_file, single_query)) {
           boost::algorithm::trim(single_query);
-          if (single_query.length() == 0) {
+          if (single_query.length() == 0 || single_query[0] == '-') {
             continue;
           }
           if (single_query[0] == '}') {

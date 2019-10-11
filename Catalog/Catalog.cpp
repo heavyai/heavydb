@@ -2206,14 +2206,13 @@ void Catalog::createTable(
   try {
     addTableToMap(td, cds, dds);
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
+    if (!td.storageType.empty()) {
+      ForeignStorageInterface::registerTable(this, td, cds);
+    }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     removeTableFromMap(td.tableName, td.tableId, true);
     throw;
-  }
-  // TODO: rollback if exception is raised
-  if (!td.storageType.empty()) {
-    ForeignStorageInterface::registerTable(this, getCurrentDB().dbId, td, cds);
   }
   sqliteConnector_.query("END TRANSACTION");
 }
@@ -2578,10 +2577,9 @@ void Catalog::setColumnDictionary(ColumnDescriptor& cd,
                     folderPath,
                     false);
   dds.push_back(dd);
-  // TODO: Why??? fix back
-  // if (!cd.columnType.is_array()) {
-  //   cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
-  // }
+  if (!cd.columnType.is_array()) {
+    cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
+  }
   cd.columnType.set_comp_param(dictId);
 }
 

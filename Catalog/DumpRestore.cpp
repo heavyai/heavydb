@@ -160,7 +160,8 @@ std::vector<std::string> Catalog::getTableDataDirectories(
   const auto global_file_mgr = getDataMgr().getGlobalFileMgr();
   std::vector<std::string> file_paths;
   for (auto shard : getPhysicalTablesDescriptors(td)) {
-    const auto file_mgr = global_file_mgr->getFileMgr(currentDB_.dbId, shard->tableId);
+    const auto file_mgr = dynamic_cast<File_Namespace::FileMgr*>(
+        global_file_mgr->getFileMgr(currentDB_.dbId, shard->tableId));
     boost::filesystem::path file_path(file_mgr->getFileMgrBasePath());
     file_paths.push_back(file_path.filename().string());
   }

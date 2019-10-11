@@ -213,10 +213,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , _was_geo_copy_from(false) {
   LOG(INFO) << "OmniSci Server " << MAPD_RELEASE;
   // Register foreign storage interfaces here
-  // ForeignStorageInterface::registerPersistentStorageInterface(
-  // new DummyPersistentForeignStorage());
-  ForeignStorageInterface::registerPersistentStorageInterface(
-      new ArrowCsvForeignStorage());
+  registerArrowCsvForeignStorage();
   bool is_rendering_enabled = enable_rendering;
 
   try {
