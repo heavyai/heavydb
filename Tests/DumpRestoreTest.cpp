@@ -56,10 +56,14 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str) {
 #define NROWS 100
 template <int NSHARDS, int NR = NROWS>
 class DumpRestoreTest : public ::testing::Test {
-  void SetUp() override {
+  void clear() {
     EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS s;"));
     EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS t;"));
     EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS x;"));
+    system(("rm -rf " + tar_ball_path).c_str());
+  }
+  void SetUp() override {
+    clear();
     // preformat shard key phrases
     std::string phrase_shard_key = NSHARDS > 1 ? ", SHARD KEY (i)" : "";
     std::string phrase_shard_count =
@@ -91,12 +95,7 @@ class DumpRestoreTest : public ::testing::Test {
     }
   }
 
-  void TearDown() override {
-    EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS s;"));
-    EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS t;"));
-    EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS x;"));
-    system(("rm -rf " + tar_ball_path).c_str());
-  }
+  void TearDown() override { clear(); }
 };
 
 void check_table(const std::string& table, const bool alter, const int delta) {

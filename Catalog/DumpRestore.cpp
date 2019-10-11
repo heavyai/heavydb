@@ -23,6 +23,7 @@
 #include <regex>
 #include <set>
 #include <sstream>
+#include <system_error>
 
 #include <boost/algorithm/string/join.hpp>
 #include <boost/algorithm/string/predicate.hpp>
@@ -74,36 +75,41 @@ inline std::string abs_path(const File_Namespace::GlobalFileMgr* global_file_mgr
 }
 
 inline std::string run(const std::string& cmd, const std::string& chdir = "") {
+  VLOG(3) << "running cmd: " << cmd;
   int rcode;
-  std::string output;
+  std::error_code ec;
+  std::string output, errors;
   const auto time_ms = measure<>::execution([&]() {
     using namespace boost::process;
     ipstream stdout, stderr;
     if (!chdir.empty()) {
-      rcode = system(cmd, std_out > stdout, std_err > stderr, start_dir = chdir);
+      rcode = system(cmd, std_out > stdout, std_err > stderr, ec, start_dir = chdir);
     } else {
-      rcode = system(cmd, std_out > stdout, std_err > stderr);
+      rcode = system(cmd, std_out > stdout, std_err > stderr, ec);
     }
-    std::string line;
-    while (std::getline(stdout, line) && !line.empty()) {
-      output += line;
-    }
-    while (std::getline(stderr, line) && !line.empty()) {
-      output += line;
-    }
+    std::ostringstream ss_output, ss_errors;
+    stdout >> ss_output.rdbuf();
+    stderr >> ss_errors.rdbuf();
+    output = ss_output.str();
+    errors = ss_errors.str();
   });
-  auto errno_saved = errno;
-  VLOG(3) << "run " << cmd << ": " << time_ms << " ms, exit " << rcode << ", output:\n"
-          << output;
-  if (!WIFEXITED(rcode) || WEXITSTATUS(rcode)) {
+  if (rcode || ec) {
+    LOG(ERROR) << "failed cmd: " << cmd;
+    LOG(ERROR) << "exit code: " << rcode;
+    LOG(ERROR) << "error code: " << ec.value() << " - " << ec.message();
+    LOG(ERROR) << "stdout: " << output;
+    LOG(ERROR) << "stderr: " << errors;
     // circumvent tar warning on reading file that is "changed as we read it".
     // this warning results from reading a table file under concurrent inserts
-    if (1 != WEXITSTATUS(rcode) ||
-        output.find("changed as we read") == std::string::npos) {
-      throw std::runtime_error("Failed to run command: " + cmd + "\nexit " +
-                               std::to_string(WEXITSTATUS(rcode)) + ": " +
-                               std::strerror(errno_saved));
+    if (1 != rcode || errors.find("changed as we read") == std::string::npos) {
+      throw std::runtime_error("Failed to run command: " + cmd +
+                               "\nexit code: " + std::to_string(rcode) + "\nerrors:\n" +
+                               (rcode ? errors : ec.message()));
     }
+  } else {
+    VLOG(3) << "finished cmd: " << cmd;
+    VLOG(3) << "time: " << time_ms << " ms";
+    VLOG(3) << "stdout: " << output;
   }
   return output;
 }
