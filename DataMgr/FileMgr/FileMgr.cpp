@@ -381,7 +381,8 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
       for (auto headerIt = headerVec.begin() + 1; headerIt != headerVec.end();
            ++headerIt) {
         if (headerIt->chunkKey != lastChunkKey) {
-          FileMgr* c_fm_ = dynamic_cast<File_Namespace::FileMgr*>(gfm_->getFileMgr(lastChunkKey));
+          FileMgr* c_fm_ =
+              dynamic_cast<File_Namespace::FileMgr*>(gfm_->getFileMgr(lastChunkKey));
           CHECK(c_fm_);
           FileBuffer* srcBuf = new FileBuffer(this, lastChunkKey, startIt, headerIt);
           chunkIndex_[lastChunkKey] = srcBuf;
@@ -413,7 +414,8 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
       }
 
       // now need to insert last Chunk
-      FileMgr* c_fm_ = dynamic_cast<File_Namespace::FileMgr*>(gfm_->getFileMgr(lastChunkKey));
+      FileMgr* c_fm_ =
+          dynamic_cast<File_Namespace::FileMgr*>(gfm_->getFileMgr(lastChunkKey));
       FileBuffer* srcBuf = new FileBuffer(this, lastChunkKey, startIt, headerVec.end());
       chunkIndex_[lastChunkKey] = srcBuf;
       FileBuffer* destBuf = new FileBuffer(c_fm_, srcBuf->pageSize(), lastChunkKey);
@@ -948,7 +950,7 @@ void FileMgr::getChunkMetadataVecForKeyPrefix(
                           // read here for chunk
   auto chunkIt = chunkIndex_.lower_bound(keyPrefix);
   if (chunkIt == chunkIndex_.end()) {
-    return; // throw?
+    return;  // throw?
   }
   while (chunkIt != chunkIndex_.end() &&
          std::search(chunkIt->first.begin(),
