@@ -118,7 +118,7 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     mapd_unique_lock<mapd_shared_mutex> chunk_index_write_lock(chunk_index_mutex_);
     const auto it_ok = chunk_index_.emplace(
         key, new ForeignStorageBuffer(key, persistent_foreign_storage_));
-    CHECK(it_ok.second);
+    // CHECK(it_ok.second);
     return it_ok.first->second.get();
   }
 
@@ -165,7 +165,7 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
           auto size = buffer.size();
           auto subkey = chunk_key;
           subkey[4] = 2;
-          auto &index_buf = *(chunk_index_.find(subkey)->second);
+          auto& index_buf = *(chunk_index_.find(subkey)->second);
           auto bs = index_buf.size() / index_buf.sql_type.get_size();
           ChunkMetadata m{type, size, bs, ChunkStats{}};
           chunkMetadataVec.push_back(std::make_pair(chunk_key, m));
@@ -333,10 +333,18 @@ void ForeignStorageInterface::registerTable(Catalog_Namespace::Catalog* catalog,
   CHECK(it != persistent_storage_interfaces_.end());
   const auto it_ok = table_persistent_storage_interface_map_.emplace(
       std::make_pair(db_id, table_id), it->second.get());
-  CHECK(it_ok.second);
+  // CHECK(it_ok.second);
   persistent_storage_interfaces_lock.unlock();
-  it_ok.first->second->registerTable(
-      catalog, it_ok.first->first, type.second, td, cols, lookupBufferManager(db_id, table_id));
+  it_ok.first->second->registerTable(catalog,
+                                     it_ok.first->first,
+                                     type.second,
+                                     td,
+                                     cols,
+                                     lookupBufferManager(db_id, table_id));
+}
+
+void ForeignStorageInterface::destroy() {
+  persistent_storage_interfaces_.clear();
 }
 
 std::unordered_map<std::string, std::unique_ptr<PersistentForeignStorageInterface>>

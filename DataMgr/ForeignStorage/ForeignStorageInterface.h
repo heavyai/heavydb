@@ -29,6 +29,7 @@ struct ForeignStorageColumnBuffer {
 
 class PersistentForeignStorageInterface {
  public:
+  virtual ~PersistentForeignStorageInterface() {}
   virtual void append(const std::vector<ForeignStorageColumnBuffer>& column_buffers) = 0;
   virtual void read(const ChunkKey& chunk_key,
                     const SQLTypeInfo& sql_type,
@@ -54,6 +55,8 @@ class ForeignStorageInterface {
 
   static void registerPersistentStorageInterface(
       PersistentForeignStorageInterface* persistent_foreign_storage);
+
+  static void destroy();
 
   //! prepare table options and modify columns
   static void prepareTable(const int db_id,
