@@ -1409,7 +1409,7 @@ class RelTableFunction : public RelAlgNode {
                          std::to_string(reinterpret_cast<uint64_t>(this)) + ">(" +
                          function_name_ + " ";
 
-    result += "targets: " + target_exprs_.size();
+    result += "targets: " + std::to_string(target_exprs_.size());
     result += "inputs: [";
     for (size_t i = 0; i < target_exprs_.size(); ++i) {
       result += target_exprs_[i]->toString();
