@@ -58,6 +58,14 @@ SQLTypes get_sql_types(const TColumnType& ct) {
       return SQLTypes::kTIMESTAMP;
     case TDatumType::SMALLINT:
       return SQLTypes::kSMALLINT;
+    case TDatumType::POINT:
+      return SQLTypes::kPOINT;
+    case TDatumType::LINESTRING:
+      return SQLTypes::kLINESTRING;
+    case TDatumType::POLYGON:
+      return SQLTypes::kPOLYGON;
+    case TDatumType::MULTIPOLYGON:
+      return SQLTypes::kMULTIPOLYGON;
     default:
       LOG(FATAL) << "Unsupported TColumnType found, should not be possible";
       return SQLTypes::kNULLT;  // satisfy return-type warning
@@ -75,6 +83,9 @@ SQLTypeInfo create_sql_type_info_from_col_type(const TColumnType& ct) {
                        get_sql_types(ct));
   } else {
     // normal column
+    // NOTE(se)
+    // for geo types, the values inserted for the other fields
+    // may not be valid, but only the type field is ever used
     return SQLTypeInfo(get_sql_types(ct),
                        ct.col_type.precision,
                        ct.col_type.scale,
@@ -147,6 +158,13 @@ void remove_partial_row(size_t failed_column,
         input_col_vec[idx].nulls.pop_back();
         input_col_vec[idx].data.real_col.pop_back();
         break;
+      case SQLTypes::kPOINT:
+      case SQLTypes::kLINESTRING:
+      case SQLTypes::kPOLYGON:
+      case SQLTypes::kMULTIPOLYGON:
+        input_col_vec[idx].nulls.pop_back();
+        input_col_vec[idx].data.str_col.pop_back();
+        break;
       default:
         LOG(FATAL) << "Trying to process an unsupported datatype, should be impossible";
     }
@@ -165,6 +183,10 @@ void populate_TColumn(TStringValue ts,
     case SQLTypes::kTEXT:
     case SQLTypes::kCHAR:
     case SQLTypes::kVARCHAR:
+    case SQLTypes::kPOINT:
+    case SQLTypes::kLINESTRING:
+    case SQLTypes::kPOLYGON:
+    case SQLTypes::kMULTIPOLYGON:
       if (ts.is_null) {
         input_col.nulls.push_back(true);
         input_col.data.str_col.emplace_back("");
@@ -178,7 +200,10 @@ void populate_TColumn(TStringValue ts,
                 ts.str_val.substr(0, column_type_info.get_precision()));
             break;
           case SQLTypes::kTEXT:
-
+          case SQLTypes::kPOINT:
+          case SQLTypes::kLINESTRING:
+          case SQLTypes::kPOLYGON:
+          case SQLTypes::kMULTIPOLYGON:
             input_col.data.str_col.push_back(ts.str_val);
             break;
           default:
