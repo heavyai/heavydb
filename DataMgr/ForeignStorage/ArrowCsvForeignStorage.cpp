@@ -12,6 +12,7 @@
 #include "../QueryEngine/ArrowUtil.h"
 
 #include <array>
+#include <future>
 
 struct ArrowFragment {
   int64_t sz;
@@ -231,7 +232,8 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   ChunkKey key{table_key.first, table_key.second, 0, 0};
   std::array<int, 3> col_key{table_key.first, table_key.second, 0};
 
-  for (auto c : cols) {
+  std::vector<std::future<void>> threads;
+  for (auto& c : cols) {
     if (cln >= num_cols) {
       LOG(ERROR) << "Number of columns read from Arrow (" << num_cols
                  << ") mismatch CREATE TABLE request: " << cols.size();
@@ -267,8 +269,10 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           arrow::Int32Builder indexBuilder;
           auto dict = g_dictionaries[col_key];
           auto stringArray = std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
+          indexBuilder.Reserve(stringArray->length());
           for (int i = 0; i < stringArray->length(); i++) {
-            if (stringArray->IsNull(i) || empty || stringArray->null_count() == stringArray->length()) {
+            if (stringArray->IsNull(i) || empty ||
+                stringArray->null_count() == stringArray->length()) {
               indexBuilder.Append(inline_int_null_value<int32_t>());
             } else {
               auto curStr = stringArray->GetString(i);
@@ -283,25 +287,26 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           frag.chunks.emplace_back(ARROW_GET_DATA(clp->chunk(i)));
           frag.sz += clp->chunk(i)->length();
           auto& buffers = ARROW_GET_DATA(clp->chunk(i))->buffers;
-          if(!empty) {
+          if (!empty) {
             if (ctype == kTEXT) {
               if (buffers.size() <= 2) {
                 LOG(FATAL) << "Type of column #" << cln
-                          << " does not match between Arrow and description of "
-                          << c.columnName;
+                           << " does not match between Arrow and description of "
+                           << c.columnName;
                 throw std::runtime_error("Column ingress mismatch: " + c.columnName);
               }
               varlen += buffers[2]->size();
-            } else if (buffers.size() > 2) {
+            } else if (buffers.size() != 2) {
               LOG(FATAL) << "Type of column #" << cln
-                        << " does not match between Arrow and description of "
-                        << c.columnName;
+                         << " does not match between Arrow and description of "
+                         << c.columnName;
               throw std::runtime_error("Column ingress mismatch: " + c.columnName);
             }
           }
         }
       }
-      // TODO: check dynamic_cast<arrow::FixedWidthType*>(c0f->type().get())->bit_width()
+      // TODO: check
+      // dynamic_cast<arrow::FixedWidthType*>(c0f->type().get())->bit_width()
       // == b.sql_type.get_size()
 
       // create buffer descriptotrs
@@ -327,17 +332,22 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
         b->setSize(frag.sz * b->sql_type.get_size());
         b->encoder.reset(Encoder::Create(b, c.columnType));
         b->has_encoder = true;
-        if(!empty) {
-          for (auto chunk : frag.chunks) {
-            auto len = chunk->length;
-            auto data = chunk->buffers[1]->data();
-            b->encoder->updateStats((const int8_t*)data, len);
-          }
+        if (!empty) {
+          threads.push_back(std::async(std::launch::async, [b, fr = &frag]() {
+            for (auto chunk : fr->chunks) {
+              auto len = chunk->length;
+              auto data = chunk->buffers[1]->data();
+              b->encoder->updateStats((const int8_t*)data, len);
+            }
+          }));
         }
         b->encoder->setNumElems(frag.sz);
       }
     }
   }  // each col and fragment
+  for (auto& t : threads) {
+    t.get();
+  }
   printf("-- created: %d columns, %d chunks, %d frags\n",
          num_cols,
          arr_frags,
