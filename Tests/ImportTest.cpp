@@ -186,10 +186,11 @@ bool import_test_line_endings_in_quotes_local(const string& filename, const int6
 }
 
 bool import_test_array_including_quoted_fields_local(const string& filename,
-                                                     const int64_t row_count) {
+                                                     const int64_t row_count,
+                                                     const string& other_options) {
   string query_str =
       "COPY array_including_quoted_fields FROM '../../Tests/Import/datafiles/" +
-      filename + "' WITH (header='false', quoted='true');";
+      filename + "' WITH (header='false', quoted='true', " + other_options + ");";
   run_ddl_statement(query_str);
 
   std::string select_query_str = "SELECT * FROM array_including_quoted_fields;";
@@ -1044,7 +1045,15 @@ TEST_F(ImportTest, One_csv_file) {
 
 TEST_F(ImportTest, array_including_quoted_fields) {
   EXPECT_TRUE(import_test_array_including_quoted_fields_local(
-      "array_including_quoted_fields.csv", 2));
+      "array_including_quoted_fields.csv", 2, "array_delimiter=','"));
+}
+
+TEST_F(ImportTest, array_including_quoted_fields_different_delimiter) {
+  ASSERT_NO_THROW(
+      run_ddl_statement("drop table if exists array_including_quoted_fields;"););
+  ASSERT_NO_THROW(run_ddl_statement(create_table_with_array_including_quoted_fields););
+  EXPECT_TRUE(import_test_array_including_quoted_fields_local(
+      "array_including_quoted_fields_different_delimiter.csv", 2, "array_delimiter='|'"));
 }
 
 TEST_F(ImportTest, random_strings_with_line_endings) {
