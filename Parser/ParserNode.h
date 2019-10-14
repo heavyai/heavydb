@@ -1315,8 +1315,8 @@ class DumpRestoreTableStmtBase : public DDLStmt {
     }
     // default lz4 compression, next gzip, or none.
     if (compression.empty()) {
-      if (boost::process::search_path(compression = "lz4").string().empty()) {
-        if (boost::process::search_path(compression = "gzip").string().empty()) {
+      if (boost::process::search_path(compression = "gzip").string().empty()) {
+        if (boost::process::search_path(compression = "lz4").string().empty()) {
           compression = "none";
         }
       }
