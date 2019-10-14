@@ -21,6 +21,7 @@
 #include "LeafAggregator.h"
 #include "ThriftHandler/QueryState.h"
 
+#include <Catalog/SessionInfo.h>
 #include <Catalog/SysCatalog.h>
 #include <Catalog/TableDescriptor.h>
 
