@@ -889,6 +889,17 @@ bool expr_is_null(const Analyzer::Expr* expr) {
   return const_expr && const_expr->get_is_null();
 }
 
+bool bool_from_string_literal(const Parser::StringLiteral* str_literal) {
+  const std::string* s = str_literal->get_stringval();
+  if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
+    return true;
+  } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
+    return false;
+  } else {
+    throw std::runtime_error("Invalid string for boolean " + *s);
+  }
+}
+
 }  // namespace
 
 std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
@@ -3464,14 +3475,9 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         if (str_literal == nullptr) {
           throw std::runtime_error("Header option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.has_header = Importer_NS::ImportHeaderRow::HAS_HEADER;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.has_header = Importer_NS::ImportHeaderRow::NO_HEADER;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
+        copy_params.has_header = bool_from_string_literal(str_literal)
+                                     ? Importer_NS::ImportHeaderRow::HAS_HEADER
+                                     : Importer_NS::ImportHeaderRow::NO_HEADER;
 #ifdef ENABLE_IMPORT_PARQUET
       } else if (boost::iequals(*p->get_name(), "parquet")) {
         const StringLiteral* str_literal =
@@ -3479,14 +3485,10 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         if (str_literal == nullptr) {
           throw std::runtime_error("Parquet option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
+        if (bool_from_string_literal(str_literal)) {
           // not sure a parquet "table" type is proper, but to make code
           // look consistent in some places, let's set "table" type too
           copy_params.file_type = Importer_NS::FileType::PARQUET;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
         }
 #endif  // ENABLE_IMPORT_PARQUET
       } else if (boost::iequals(*p->get_name(), "s3_access_key")) {
@@ -3550,28 +3552,14 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         if (str_literal == nullptr) {
           throw std::runtime_error("Quoted option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.quoted = true;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.quoted = false;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
+        copy_params.quoted = bool_from_string_literal(str_literal);
       } else if (boost::iequals(*p->get_name(), "plain_text")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
           throw std::runtime_error("plain_text option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.plain_text = true;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.plain_text = false;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
+        copy_params.plain_text = bool_from_string_literal(str_literal);
       } else if (boost::iequals(*p->get_name(), "array_marker")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -3598,28 +3586,16 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         if (str_literal == nullptr) {
           throw std::runtime_error("Lonlat option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.lonlat = true;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.lonlat = false;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
+        copy_params.lonlat = bool_from_string_literal(str_literal);
       } else if (boost::iequals(*p->get_name(), "geo")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
           throw std::runtime_error("Geo option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.file_type = Importer_NS::FileType::POLYGON;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.file_type = Importer_NS::FileType::DELIMITED;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
+        copy_params.file_type = bool_from_string_literal(str_literal)
+                                    ? Importer_NS::FileType::POLYGON
+                                    : Importer_NS::FileType::DELIMITED;
       } else if (boost::iequals(*p->get_name(), "geo_coords_type")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -3698,6 +3674,13 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           throw std::runtime_error("PARTITIONS option not supported for non-geo COPY: " +
                                    *p->get_name());
         }
+      } else if (boost::iequals(*p->get_name(), "geo_assign_render_groups")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("geo_assign_render_groups option must be a boolean.");
+        }
+        copy_params.geo_assign_render_groups = bool_from_string_literal(str_literal);
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
@@ -4146,14 +4129,9 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         if (str_literal == nullptr) {
           throw std::runtime_error("Header option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.has_header = Importer_NS::ImportHeaderRow::HAS_HEADER;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.has_header = Importer_NS::ImportHeaderRow::NO_HEADER;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
+        copy_params.has_header = bool_from_string_literal(str_literal)
+                                     ? Importer_NS::ImportHeaderRow::HAS_HEADER
+                                     : Importer_NS::ImportHeaderRow::NO_HEADER;
       } else if (boost::iequals(*p->get_name(), "quote")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -4187,28 +4165,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         if (str_literal == nullptr) {
           throw std::runtime_error("Quoted option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.quoted = true;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.quoted = false;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
-      } else if (boost::iequals(*p->get_name(), "header")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Header option must be a boolean.");
-        }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.has_header = Importer_NS::ImportHeaderRow::HAS_HEADER;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.has_header = Importer_NS::ImportHeaderRow::NO_HEADER;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
+        copy_params.quoted = bool_from_string_literal(str_literal);
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }

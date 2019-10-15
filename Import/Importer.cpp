@@ -3609,14 +3609,16 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  auto columnDescriptors = loader->getCatalog().getAllColumnMetadataForTable(
-      loader->getTableDesc()->tableId, false, false, false);
-  for (auto cd : columnDescriptors) {
-    SQLTypes ct = cd->columnType.get_type();
-    if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
-      auto rga = std::make_shared<RenderGroupAnalyzer>();
-      rga->seedFromExistingTableContents(loader, cd->columnName);
-      columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
+  if (copy_params.geo_assign_render_groups) {
+    auto columnDescriptors = loader->getCatalog().getAllColumnMetadataForTable(
+        loader->getTableDesc()->tableId, false, false, false);
+    for (auto cd : columnDescriptors) {
+      SQLTypes ct = cd->columnType.get_type();
+      if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
+        auto rga = std::make_shared<RenderGroupAnalyzer>();
+        rga->seedFromExistingTableContents(loader, cd->columnName);
+        columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
+      }
     }
   }
 
@@ -4438,14 +4440,16 @@ ImportStatus Importer::importGDAL(
 
   // make render group analyzers for each poly column
   ColumnIdToRenderGroupAnalyzerMapType columnIdToRenderGroupAnalyzerMap;
-  auto columnDescriptors = loader->getCatalog().getAllColumnMetadataForTable(
-      loader->getTableDesc()->tableId, false, false, false);
-  for (auto cd : columnDescriptors) {
-    SQLTypes ct = cd->columnType.get_type();
-    if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
-      auto rga = std::make_shared<RenderGroupAnalyzer>();
-      rga->seedFromExistingTableContents(loader, cd->columnName);
-      columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
+  if (copy_params.geo_assign_render_groups) {
+    auto columnDescriptors = loader->getCatalog().getAllColumnMetadataForTable(
+        loader->getTableDesc()->tableId, false, false, false);
+    for (auto cd : columnDescriptors) {
+      SQLTypes ct = cd->columnType.get_type();
+      if (ct == kPOLYGON || ct == kMULTIPOLYGON) {
+        auto rga = std::make_shared<RenderGroupAnalyzer>();
+        rga->seedFromExistingTableContents(loader, cd->columnName);
+        columnIdToRenderGroupAnalyzerMap[cd->columnId] = rga;
+      }
     }
   }
 

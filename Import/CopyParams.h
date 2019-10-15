@@ -76,6 +76,7 @@ struct CopyParams {
   int32_t geo_coords_srid;
   bool sanitize_column_names;
   std::string geo_layer_name;
+  bool geo_assign_render_groups;
 
   CopyParams()
       : delimiter(',')
@@ -100,7 +101,8 @@ struct CopyParams {
       , geo_coords_comp_param(32)
       , geo_coords_type(kGEOMETRY)
       , geo_coords_srid(4326)
-      , sanitize_column_names(true) {}
+      , sanitize_column_names(true)
+      , geo_assign_render_groups(true) {}
 
   CopyParams(char d, const std::string& n, char l, size_t b, size_t retries, size_t wait)
       : delimiter(d)
@@ -125,6 +127,7 @@ struct CopyParams {
       , geo_coords_comp_param(32)
       , geo_coords_type(kGEOMETRY)
       , geo_coords_srid(4326)
-      , sanitize_column_names(true) {}
+      , sanitize_column_names(true)
+      , geo_assign_render_groups(true) {}
 };
 }  // namespace Importer_NS

@@ -2622,6 +2622,7 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
   }
   copy_params.sanitize_column_names = cp.sanitize_column_names;
   copy_params.geo_layer_name = cp.geo_layer_name;
+  copy_params.geo_assign_render_groups = cp.geo_assign_render_groups;
   return copy_params;
 }
 
@@ -2686,6 +2687,7 @@ TCopyParams MapDHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp)
   copy_params.geo_coords_srid = cp.geo_coords_srid;
   copy_params.sanitize_column_names = cp.sanitize_column_names;
   copy_params.geo_layer_name = cp.geo_layer_name;
+  copy_params.geo_assign_render_groups = cp.geo_assign_render_groups;
   return copy_params;
 }
 
