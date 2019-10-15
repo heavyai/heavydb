@@ -61,6 +61,7 @@ struct TableDescriptor {
   // Spi means Sequential Positional Index which is equivalent to the input index in a
   // RexInput node
   std::vector<int> columnIdBySpi_;  // spi = 1,2,3,...
+  std::string storageType;          // foreign/local storage
 
   // write mutex, only to be used inside catalog package
   std::shared_ptr<std::mutex> mutex_;

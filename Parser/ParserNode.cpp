@@ -35,6 +35,7 @@
 #include "../QueryEngine/Execute.h"
 #include "../QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "../QueryEngine/RelAlgExecutor.h"
+#include "../Shared/StringTransform.h"
 #include "../Shared/TimeGM.h"
 #include "../Shared/geo_types.h"
 #include "../Shared/mapd_glob.h"
@@ -2027,6 +2028,13 @@ decltype(auto) get_property_value(const NameValueAssign* p,
   return op(val);
 }
 
+decltype(auto) get_storage_type(TableDescriptor& td,
+                                const NameValueAssign* p,
+                                const std::list<ColumnDescriptor>& columns) {
+  return get_property_value<StringLiteral>(
+      p, [&td](const auto val) { td.storageType = to_upper(val); });
+}
+
 decltype(auto) get_frag_size_def(TableDescriptor& td,
                                  const NameValueAssign* p,
                                  const std::list<ColumnDescriptor>& columns) {
@@ -2115,7 +2123,8 @@ static const std::map<const std::string, const TableDefFuncPtr> tableDefFuncMap 
     {"partitions"s, get_partions_def},
     {"shard_count"s, get_shard_count_def},
     {"vacuum"s, get_vacuum_def},
-    {"sort_column"s, get_sort_column_def}};
+    {"sort_column"s, get_sort_column_def},
+    {"storage_type"s, get_storage_type}};
 
 void get_table_definitions(TableDescriptor& td,
                            const std::unique_ptr<NameValueAssign>& p,
@@ -2243,7 +2252,6 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   auto& catalog = session->getCatalog();
 
   auto executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
-
 #ifdef HAVE_CUDA
   const auto device_type = session->get_executor_device_type();
 #else
