@@ -99,9 +99,23 @@ inline std::string run(const std::string& cmd, const std::string& chdir = "") {
     LOG(ERROR) << "error code: " << ec.value() << " - " << ec.message();
     LOG(ERROR) << "stdout: " << output;
     LOG(ERROR) << "stderr: " << errors;
-    // circumvent tar warning on reading file that is "changed as we read it".
-    // this warning results from reading a table file under concurrent inserts
-    if (1 != rcode || errors.find("changed as we read") == std::string::npos) {
+#if defined(__APPLE__)
+    // osx bsdtar options "--use-compress-program" and "--fast-read" together
+    // run into pipe write error after tar extracts the first occurrence of a
+    // file and closes the read end while the decompression program still writes
+    // to the pipe. bsdtar doesn't handle this situation well like gnu tar does.
+    if (1 == rcode && cmd.find("--fast-read") &&
+        (errors.find("cannot write decoded block") != std::string::npos ||
+         errors.find("Broken pipe") != std::string::npos)) {
+      // ignore this error, or lose speed advantage of "--fast-read" on osx.
+      LOG(ERROR) << "tar error ignored on osx for --fast-read";
+    } else
+#endif
+        // circumvent tar warning on reading file that is "changed as we read it".
+        // this warning results from reading a table file under concurrent inserts
+        if (1 == rcode && errors.find("changed as we read") != std::string::npos) {
+      LOG(ERROR) << "tar error ignored under concurrent inserts";
+    } else {
       throw std::runtime_error("Failed to run command: " + cmd +
                                "\nexit code: " + std::to_string(rcode) + "\nerrors:\n" +
                                (rcode ? errors : ec.message()));
@@ -114,22 +128,26 @@ inline std::string run(const std::string& cmd, const std::string& chdir = "") {
   return output;
 }
 
-inline std::string simple_file_cat(const std::string& tgz_path,
-                                   const std::string& file_name) {
+inline std::string simple_file_cat(const std::string& archive_path,
+                                   const std::string& file_name,
+                                   const std::string& compression) {
 #if defined(__APPLE__)
   constexpr static auto opt_occurrence = " --fast-read ";
 #else
   constexpr static auto opt_occurrence = " --occurrence=1 ";
 #endif
-  run("tar -xvzf \"" + tgz_path + "\" " + opt_occurrence + file_name);
+  run("tar " + compression + " -xvf \"" + archive_path + "\" " + opt_occurrence +
+      file_name);
   const auto output = run("cat " + file_name);
   run("rm " + file_name);
   return output;
 }
 
-inline std::string get_table_schema(const std::string& tgz_path,
-                                    const std::string& table) {
-  const auto schema_str = simple_file_cat(tgz_path, table_schema_filename);
+inline std::string get_table_schema(const std::string& archive_path,
+                                    const std::string& table,
+                                    const std::string& compression) {
+  const auto schema_str =
+      simple_file_cat(archive_path, table_schema_filename, compression);
   std::regex regex("@T");
   return std::regex_replace(schema_str, regex, table);
 }
@@ -178,12 +196,14 @@ std::vector<std::string> Catalog::getTableDictDirectories(
 }
 
 // dump a table's schema, data files and dict files to a tgz ball
-void Catalog::dumpTable(const TableDescriptor* td, const std::string& tgz_path) const {
+void Catalog::dumpTable(const TableDescriptor* td,
+                        const std::string& archive_path,
+                        const std::string& compression) const {
   if (g_cluster) {
     throw std::runtime_error("DUMP/RESTORE is not supported yet on distributed setup.");
   }
-  if (boost::filesystem::exists(tgz_path)) {
-    throw std::runtime_error("Archive " + tgz_path + " already exists.");
+  if (boost::filesystem::exists(archive_path)) {
+    throw std::runtime_error("Archive " + archive_path + " already exists.");
   }
   if (td->isView || td->persistenceLevel != Data_Namespace::MemoryLevel::DISK_LEVEL) {
     throw std::runtime_error("Dumping view or temporary table is not supported.");
@@ -235,7 +255,8 @@ void Catalog::dumpTable(const TableDescriptor* td, const std::string& tgz_path) 
   const auto dict_file_dirs = getTableDictDirectories(td);
   file_paths.insert(file_paths.end(), dict_file_dirs.begin(), dict_file_dirs.end());
   // run tar to archive the files
-  run("tar -cvzf \"" + tgz_path + "\" " + boost::algorithm::join(file_paths, " "),
+  run("tar " + compression + " -cvf \"" + archive_path + "\" " +
+          boost::algorithm::join(file_paths, " "),
       abs_path(global_file_mgr));
 }
 
@@ -405,12 +426,13 @@ void Catalog::renameTableDirectories(const std::string& temp_data_dir,
 // Restore data and dict files of a table from a tgz ball.
 void Catalog::restoreTable(const SessionInfo& session,
                            const TableDescriptor* td,
-                           const std::string& tgz_path) {
+                           const std::string& archive_path,
+                           const std::string& compression) {
   if (g_cluster) {
     throw std::runtime_error("DUMP/RESTORE is not supported yet on distributed setup.");
   }
-  if (!boost::filesystem::exists(tgz_path)) {
-    throw std::runtime_error("Archive " + tgz_path + " does not exist.");
+  if (!boost::filesystem::exists(archive_path)) {
+    throw std::runtime_error("Archive " + archive_path + " does not exist.");
   }
   if (td->isView || td->persistenceLevel != Data_Namespace::MemoryLevel::DISK_LEVEL) {
     throw std::runtime_error("Restoring view or temporary table is not supported.");
@@ -441,7 +463,7 @@ void Catalog::restoreTable(const SessionInfo& session,
   std::unique_ptr<decltype(tmp_files_cleaner), decltype(tmp_files_cleaner)> tfc(
       &tmp_files_cleaner, tmp_files_cleaner);
   // extract & parse schema
-  const auto schema_str = get_table_schema(tgz_path, td->tableName);
+  const auto schema_str = get_table_schema(archive_path, td->tableName, compression);
   const auto create_table_stmt =
       Parser::parseDDL<Parser::CreateTableStmt>("table schema", schema_str);
   // verify compatibility between source and destination schemas
@@ -473,7 +495,8 @@ void Catalog::restoreTable(const SessionInfo& session,
     }
   }
   // extract src table column ids (ALL columns incl. system/virtual/phy geo cols)
-  const auto all_src_oldinfo_str = simple_file_cat(tgz_path, table_oldinfo_filename);
+  const auto all_src_oldinfo_str =
+      simple_file_cat(archive_path, table_oldinfo_filename, compression);
   std::vector<std::string> src_oldinfo_strs;
   boost::algorithm::split(src_oldinfo_strs,
                           all_src_oldinfo_str,
@@ -529,7 +552,7 @@ void Catalog::restoreTable(const SessionInfo& session,
   // otherwise will corrupt table in case any bad thing happens in the middle.
   run("rm -rf " + temp_data_dir);
   run("mkdir -p " + temp_data_dir);
-  run("tar -xvzf \"" + tgz_path + "\"", temp_data_dir);
+  run("tar " + compression + " -xvf \"" + archive_path + "\"", temp_data_dir);
   // if table was ever altered after it was created, update column ids in chunk headers.
   if (was_table_altered) {
     const auto time_ms = measure<>::execution(
@@ -587,7 +610,7 @@ void Catalog::restoreTable(const SessionInfo& session,
     throw;
   }
   // set for reloading table from the restored/migrated files
-  const auto epoch = simple_file_cat(tgz_path, table_epoch_filename);
+  const auto epoch = simple_file_cat(archive_path, table_epoch_filename, compression);
   setTableEpoch(currentDB_.dbId, td->tableId, boost::lexical_cast<int>(epoch));
 }
 
@@ -595,12 +618,13 @@ void Catalog::restoreTable(const SessionInfo& session,
 // This actually creates the table and restores data/dict files from the tar ball.
 void Catalog::restoreTable(const SessionInfo& session,
                            const std::string& table_name,
-                           const std::string& tgz_path) {
+                           const std::string& archive_path,
+                           const std::string& compression) {
   // replace table name and drop foreign dict references
-  const auto schema_str = get_table_schema(tgz_path, table_name);
+  const auto schema_str = get_table_schema(archive_path, table_name, compression);
   Parser::parseDDL<Parser::CreateTableStmt>("table schema", schema_str)->execute(session);
   try {
-    restoreTable(session, getMetadataForTable(table_name), tgz_path);
+    restoreTable(session, getMetadataForTable(table_name), archive_path, compression);
   } catch (...) {
     Parser::parseDDL<Parser::DropTableStmt>("statement", "DROP TABLE " + table_name + ";")
         ->execute(session);

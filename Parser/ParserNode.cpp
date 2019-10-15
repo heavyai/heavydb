@@ -4623,7 +4623,7 @@ void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
-  catalog.dumpTable(td, *path);
+  catalog.dumpTable(td, *path, compression);
 }
 
 void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -4632,7 +4632,7 @@ void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (td) {
     // TODO: v1.0 simply throws to avoid accidentally overwrite target table.
     // Will add a REPLACE TABLE to explictly replace target table.
-    // catalog.restoreTable(session, td, *path);
+    // catalog.restoreTable(session, td, *path, compression);
     throw std::runtime_error("Table " + *table + " exists.");
   } else {
     // check access privileges
@@ -4641,7 +4641,7 @@ void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       throw std::runtime_error("Table " + *table +
                                " will not be restored. User has no create privileges.");
     }
-    catalog.restoreTable(session, *table, *path);
+    catalog.restoreTable(session, *table, *path, compression);
   }
 }
 

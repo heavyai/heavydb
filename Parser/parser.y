@@ -333,16 +333,16 @@ dump_or_archive:
 	DUMP | ARCHIVE;
 
 dump_table_statement:
-	dump_or_archive TABLE table TO STRING
+	dump_or_archive TABLE table TO STRING opt_with_option_list
 	{
-	    $<nodeval>$ = new DumpTableStmt($<stringval>3, $<stringval>5);
+	    $<nodeval>$ = new DumpTableStmt($<stringval>3, $<stringval>5, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>6));
     }
     ;
 
 restore_table_statement:
-	RESTORE TABLE table FROM STRING
+	RESTORE TABLE table FROM STRING opt_with_option_list
 	{
-	    $<nodeval>$ = new RestoreTableStmt($<stringval>3, $<stringval>5);
+	    $<nodeval>$ = new RestoreTableStmt($<stringval>3, $<stringval>5, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>6));
     }
     ;
 
