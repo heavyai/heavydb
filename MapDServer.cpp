@@ -15,6 +15,7 @@
  */
 
 #include "MapDServer.h"
+#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "ThriftHandler/MapDHandler.h"
 
 #include <thrift/concurrency/PlatformThreadFactory.h>
@@ -225,7 +226,12 @@ void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler,
             single_query.clear();
             break;
           }
-          g_warmup_handler->sql_execute(ret, sessionId, single_query, true, "", -1, -1);
+          try {
+            g_warmup_handler->sql_execute(ret, sessionId, single_query, true, "", -1, -1);
+          } catch (...) {
+            LOG(WARNING) << "Exception while executing '" << single_query
+                         << "', ignoring";
+          }
           single_query.clear();
         }
 
@@ -299,6 +305,10 @@ class MapDProgramOptions {
    * path to file containing warmup queries list
    */
   std::string db_query_file = {""};
+  /**
+   * exit after warmup
+   */
+  bool exit_after_warmup = false;
   /**
    * Inactive session tolerance in mins (60 mins)
    */
@@ -400,6 +410,11 @@ void MapDProgramOptions::fillOptions() {
   help_desc.add_options()("db-query-list",
                           po::value<std::string>(&db_query_file),
                           "Path to file containing OmniSci warmup queries.");
+  help_desc.add_options()("exit-after-warmup",
+                          po::value<bool>(&exit_after_warmup)
+                              ->default_value(false)
+                              ->implicit_value(true),
+                          "Exit after OmniSci warmup queries.");
   help_desc.add_options()("dynamic-watchdog-time-limit",
                           po::value<unsigned>(&dynamic_watchdog_time_limit)
                               ->default_value(dynamic_watchdog_time_limit)
@@ -1202,6 +1217,8 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
     // run warm up queries if any exists
     run_warmup_queries(
         g_mapd_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
+    if (prog_config_opts.exit_after_warmup)
+      g_running = false;
 
     if (start_http_server) {
       mapd::shared_ptr<TServerTransport> httpServerTransport(httpServerSocket);
@@ -1228,6 +1245,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
   g_running = false;
   file_delete_thread.join();
   heartbeat_thread.join();
+  ForeignStorageInterface::destroy();
 
   int signum = g_saw_signal;
   if (signum <= 0 || signum == SIGTERM) {
