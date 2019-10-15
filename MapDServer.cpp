@@ -1200,24 +1200,24 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
     run_warmup_queries(
         g_mapd_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
 
+    mapd::shared_ptr<TServerTransport> httpServerTransport(httpServerSocket);
+    mapd::shared_ptr<TTransportFactory> httpTransportFactory(
+        new THttpServerTransportFactory());
+    mapd::shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
+    TThreadedServer httpServer(
+        processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
     if (start_http_server) {
-      mapd::shared_ptr<TServerTransport> httpServerTransport(httpServerSocket);
-      mapd::shared_ptr<TTransportFactory> httpTransportFactory(
-          new THttpServerTransportFactory());
-      mapd::shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
-      TThreadedServer httpServer(
-          processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
       {
         mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
         g_thrift_http_server = &httpServer;
       }
       std::thread httpThread(
           start_server, std::ref(httpServer), prog_config_opts.http_port);
+      bufThread.join();
       httpThread.join();
+    } else {
+      bufThread.join();
     }
-
-    bufThread.join();
-
   } else {  // running ha server
     LOG(FATAL) << "No High Availability module available, please contact OmniSci support";
   }
