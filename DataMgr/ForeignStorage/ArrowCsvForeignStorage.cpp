@@ -292,7 +292,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           frag.chunks.emplace_back(ARROW_GET_DATA(indexArray));
           frag.sz += stringArray->length();
         } else {
-          frag.chunks.emplace_back(ARROW_GET_DATA(chunk));  // fix for arrow 14
+          frag.chunks.emplace_back(ARROW_GET_DATA(clp->chunk(i)));
           frag.sz += chunk->length();
           auto& buffers = ARROW_GET_DATA(chunk)->buffers;
           if (!empty) {
