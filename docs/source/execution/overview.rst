@@ -38,7 +38,7 @@ Apache Calcite
 OmniSciDB uses Apache Calcite for frontline query parsing and cost-based optimization. Calcite runs as a separate process and communicates with the server using an Apache Thrift :doc:`../data_model/api`. Calcite returns an optimized relational algebra tree serialized via JSON. The serialized JSON string is passed to the ``RelAlgExecutor`` for execution.
 
 .. note::
-    Calcite is used only for DDL statements. For DML statements,
+    Calcite is used only for DML statements. For DDL statements,
     OmniSciDB uses a lightweight Bison-based parser.
 
 Relational Algebra Executor
