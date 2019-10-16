@@ -13,7 +13,7 @@ CREATE TABLE trips (
     pickup_latitude DOUBLE,
     dropoff_longitude DOUBLE,
     dropoff_latitude DOUBLE,
-    passenger_count TINYINT,
+    passenger_count SMALLINT,
     trip_distance DOUBLE,
     fare_amount DOUBLE,
     extra DOUBLE,
