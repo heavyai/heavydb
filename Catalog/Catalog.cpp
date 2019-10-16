@@ -47,9 +47,6 @@
 #include <boost/uuid/sha1.hpp>
 #endif
 
-//#include "../QueryEngine/Execute.h"
-//#include "../QueryEngine/TableOptimizer.h"
-
 #include "../DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/SortedOrderFragmenter.h"
