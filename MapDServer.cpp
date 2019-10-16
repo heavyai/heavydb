@@ -40,10 +40,12 @@
 #include "Shared/scope.h"
 
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/trim.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/locale/generator.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/program_options.hpp>
+
 #include <csignal>
 #include <sstream>
 #include <thread>
@@ -219,13 +221,20 @@ void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler,
         TQueryResult ret;
         std::string single_query;
         while (std::getline(query_file, single_query)) {
+          boost::algorithm::trim(single_query);
           if (single_query.length() == 0) {
             continue;
           }
-          if (single_query.compare("}") == 0) {
+          if (single_query[0] == '}') {
             single_query.clear();
             break;
           }
+          if (single_query.find(';') == single_query.npos) {
+            std::string multiline_query;
+            std::getline(query_file, multiline_query, ';');
+            single_query += multiline_query;
+          }
+
           try {
             g_warmup_handler->sql_execute(ret, sessionId, single_query, true, "", -1, -1);
           } catch (...) {
@@ -410,11 +419,10 @@ void MapDProgramOptions::fillOptions() {
   help_desc.add_options()("db-query-list",
                           po::value<std::string>(&db_query_file),
                           "Path to file containing OmniSci warmup queries.");
-  help_desc.add_options()("exit-after-warmup",
-                          po::value<bool>(&exit_after_warmup)
-                              ->default_value(false)
-                              ->implicit_value(true),
-                          "Exit after OmniSci warmup queries.");
+  help_desc.add_options()(
+      "exit-after-warmup",
+      po::value<bool>(&exit_after_warmup)->default_value(false)->implicit_value(true),
+      "Exit after OmniSci warmup queries.");
   help_desc.add_options()("dynamic-watchdog-time-limit",
                           po::value<unsigned>(&dynamic_watchdog_time_limit)
                               ->default_value(dynamic_watchdog_time_limit)
