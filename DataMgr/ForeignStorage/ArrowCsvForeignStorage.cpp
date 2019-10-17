@@ -46,7 +46,7 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
   auto& frag = g_columns.at(col_key).at(chunk_key[3]);
 
   CHECK(!frag.chunks.empty() || !chunk_key[3]);
-  int64_t sz, copied = 0;
+  int64_t sz = 0, copied = 0;
   arrow::ArrayData* prev_data = nullptr;
   int varlen_offset = 0;
 
