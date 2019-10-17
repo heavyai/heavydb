@@ -5043,6 +5043,30 @@ void import_gpu_sort_test() {
   }
 }
 
+void import_random_test() {
+  const std::string table_name("random_test");
+  const std::string drop_random_test("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement(drop_random_test);
+  g_sqlite_comparator.query(drop_random_test);
+  std::string create_query("CREATE TABLE " + table_name +
+                           " (x1 int, x2 int, x3 int, x4 int, x5 int)");
+  run_ddl_statement(create_query + " WITH (FRAGMENT_SIZE = 256);");
+  g_sqlite_comparator.query(create_query + ";");
+
+  TestHelpers::ValuesGenerator gen(table_name);
+  constexpr double pi = 3.141592653589793;
+  for (size_t i = 0; i < 512; i++) {
+    const auto insert_query =
+        gen(static_cast<int32_t>((3 * i + 1) % 5),
+            static_cast<int32_t>(std::floor(10 * std::sin(i * pi / 64.0))),
+            static_cast<int32_t>(std::floor(10 * std::cos(i * pi / 45.0))),
+            static_cast<int32_t>(100000000 * std::floor(10 * std::sin(i * pi / 32.0))),
+            static_cast<int32_t>(std::floor(1000000000 * std::cos(i * pi / 32.0))));
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+}
+
 void import_query_rewrite_test() {
   const std::string drop_old_query_rewrite_test{
       "DROP TABLE IF EXISTS query_rewrite_test;"};
@@ -5924,6 +5948,33 @@ TEST(Select, GpuSort) {
       dt);
     c("SELECT z, COUNT(*) AS val FROM gpu_sort_test GROUP BY z ORDER BY val DESC;", dt);
     c("SELECT t, COUNT(*) AS val FROM gpu_sort_test GROUP BY t ORDER BY val DESC;", dt);
+  }
+}
+
+TEST(Select, GroupByBaselineHash) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT cast(x1 as double) as key, COUNT(*), SUM(x2), MIN(x3), MAX(x4) FROM "
+      "random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT cast(x2 as double) as key, COUNT(*), SUM(x1), AVG(x3), MIN(x4) FROM "
+      "random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT cast(x3 as double) as key, COUNT(*), AVG(x2), MIN(x1), COUNT(x4) FROM "
+      "random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT x4 as key, COUNT(*), AVG(x1), MAX(x2), MAX(x3) FROM random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT x5 as key, COUNT(*), MAX(x1), MIN(x2), SUM(x3) FROM random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT x1, x2, x3, x4, COUNT(*), MIN(x5) FROM random_test "
+      "GROUP BY x1, x2, x3, x4 ORDER BY x1, x2, x3, x4;",
+      dt);
   }
 }
 
@@ -16507,6 +16558,12 @@ int create_and_populate_tables(bool with_delete_support = true) {
     return -EEXIST;
   }
   try {
+    import_random_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'random_test'";
+    return -EEXIST;
+  }
+  try {
     import_query_rewrite_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'query_rewrite_test'";
@@ -16782,6 +16839,8 @@ void drop_tables() {
   g_sqlite_comparator.query(drop_test_x);
   const std::string drop_gpu_sort_test{"DROP TABLE gpu_sort_test;"};
   run_ddl_statement(drop_gpu_sort_test);
+  const std::string drop_random_test{"DROP TABLE random_test;"};
+  run_ddl_statement(drop_random_test);
   g_sqlite_comparator.query(drop_gpu_sort_test);
   const std::string drop_query_rewrite_test{"DROP TABLE query_rewrite_test;"};
   run_ddl_statement(drop_query_rewrite_test);
