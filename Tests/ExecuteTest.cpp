@@ -978,6 +978,10 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE x + y = 49;", dt);
     c("SELECT COUNT(*) FROM test WHERE x + y + z = 150;", dt);
     c("SELECT COUNT(*) FROM test WHERE x + y + z + t = 1151;", dt);
+    c("SELECT COUNT(*) FROM test WHERE CAST(x as TINYINT) + CAST(y as TINYINT) < CAST(z "
+      "as TINYINT);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE CAST(y as TINYINT) / CAST(x as TINYINT) = 6", dt);
     c("SELECT SUM(x + y) FROM test WHERE x + y = 49;", dt);
     c("SELECT SUM(x + y + z) FROM test WHERE x + y = 49;", dt);
     c("SELECT SUM(x + y + z + t) FROM test WHERE x + y = 49;", dt);

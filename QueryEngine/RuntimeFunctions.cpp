@@ -143,17 +143,12 @@
   DEF_CMP_NULLABLE_RHS(type, null_type, le, <=)      \
   DEF_CMP_NULLABLE_RHS(type, null_type, ge, >=)
 
+DEF_BINARY_NULLABLE_ALL_OPS(int8_t, int64_t)
 DEF_BINARY_NULLABLE_ALL_OPS(int16_t, int64_t)
 DEF_BINARY_NULLABLE_ALL_OPS(int32_t, int64_t)
 DEF_BINARY_NULLABLE_ALL_OPS(int64_t, int64_t)
 DEF_BINARY_NULLABLE_ALL_OPS(float, float)
 DEF_BINARY_NULLABLE_ALL_OPS(double, double)
-DEF_CMP_NULLABLE(int8_t, int64_t, eq, ==)
-DEF_CMP_NULLABLE(int8_t, int64_t, ne, !=)
-DEF_CMP_NULLABLE_LHS(int8_t, int64_t, eq, ==)
-DEF_CMP_NULLABLE_LHS(int8_t, int64_t, ne, !=)
-DEF_CMP_NULLABLE_RHS(int8_t, int64_t, eq, ==)
-DEF_CMP_NULLABLE_RHS(int8_t, int64_t, ne, !=)
 DEF_ARITH_NULLABLE(int8_t, int64_t, mod, %)
 DEF_ARITH_NULLABLE(int16_t, int64_t, mod, %)
 DEF_ARITH_NULLABLE(int32_t, int64_t, mod, %)
