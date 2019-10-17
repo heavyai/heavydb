@@ -301,25 +301,30 @@ __device__ int32_t get_matching_group_value_columnar_slot(int64_t* groups_buffer
                                                           const uint32_t h,
                                                           const T* key,
                                                           const uint32_t key_count) {
-  uint32_t off = h;
-  {
-    const uint64_t old =
-        atomicCAS(reinterpret_cast<T*>(groups_buffer + off), get_empty_key<T>(), *key);
-    if (old == get_empty_key<T>()) {
-      for (size_t i = 0; i < key_count; ++i) {
-        groups_buffer[off] = key[i];
-        off += entry_count;
-      }
-      return h;
+  const T empty_key = get_empty_key<T>();
+  const uint64_t old =
+      atomicCAS(reinterpret_cast<T*>(groups_buffer + h), empty_key, *key);
+  // the winner thread proceeds with writing the rest fo the keys
+  if (old == empty_key) {
+    uint32_t offset = h + entry_count;
+    for (size_t i = 1; i < key_count; ++i) {
+      *reinterpret_cast<T*>(groups_buffer + offset) = key[i];
+      offset += entry_count;
     }
   }
-  __syncthreads();
-  off = h;
-  for (size_t i = 0; i < key_count; ++i) {
-    if (groups_buffer[off] != key[i]) {
-      return -1;
+
+  __threadfence();
+  // for all threads except the winning thread, memory content of the keys
+  // related to the hash offset are checked again. In case of a complete match
+  // the hash offset is returned, otherwise -1 is returned
+  if (old != empty_key) {
+    uint32_t offset = h;
+    for (uint32_t i = 0; i < key_count; ++i) {
+      if (*reinterpret_cast<T*>(groups_buffer + offset) != key[i]) {
+        return -1;
+      }
+      offset += entry_count;
     }
-    off += entry_count;
   }
   return h;
 }
