@@ -39,11 +39,13 @@ class TableFunction {
   TableFunction(const std::string& name,
                 const TableFunctionOutputRowSizer output_sizer,
                 const std::vector<ExtArgumentType>& input_args,
-                const std::vector<ExtArgumentType>& output_args)
+                const std::vector<ExtArgumentType>& output_args,
+                bool is_runtime)
       : name_(name)
       , output_sizer_(output_sizer)
       , input_args_(input_args)
-      , output_args_(output_args) {}
+      , output_args_(output_args)
+      , is_runtime_(is_runtime) {}
 
   std::vector<ExtArgumentType> getArgs() const {
     std::vector<ExtArgumentType> args;
@@ -64,11 +66,14 @@ class TableFunction {
 
   size_t getOutputRowParameter() const { return output_sizer_.val; }
 
+  bool isRuntime() const { return is_runtime_; }
+
  private:
   const std::string name_;
   const TableFunctionOutputRowSizer output_sizer_;
   const std::vector<ExtArgumentType> input_args_;
   const std::vector<ExtArgumentType> output_args_;
+  const bool is_runtime_;
 };
 
 class TableFunctionsFactory {
@@ -76,7 +81,8 @@ class TableFunctionsFactory {
   static void add(const std::string& name,
                   const TableFunctionOutputRowSizer sizer,
                   const std::vector<ExtArgumentType>& input_args,
-                  const std::vector<ExtArgumentType>& output_args);
+                  const std::vector<ExtArgumentType>& output_args,
+                  bool is_runtime = false);
 
   static const TableFunction& get(const std::string& name);
 

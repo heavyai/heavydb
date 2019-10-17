@@ -58,6 +58,11 @@ class ExtensionFunctionSignatureParser {
 
   static Map<String, ExtensionFunction> parseFromString(final String udf_string)
           throws IOException {
+    return parseFromString(udf_string, true);
+  }
+
+  static Map<String, ExtensionFunction> parseFromString(
+          final String udf_string, final boolean is_row_func) throws IOException {
     StringReader stringReader = new StringReader(udf_string);
     BufferedReader bufferedReader = new BufferedReader(stringReader);
     String line;
@@ -69,12 +74,11 @@ class ExtensionFunctionSignatureParser {
         final String name = m.group(1);
         final String ret = m.group(2);
         final String cs_param_list = m.group(3);
-        sigs.put(name, toSignature(ret, cs_param_list));
+        sigs.put(name, toSignature(ret, cs_param_list, is_row_func));
       }
     }
     return sigs;
   }
-
   static String signaturesToJson(final Map<String, ExtensionFunction> sigs) {
     List<String> json_sigs = new ArrayList<String>();
     if (sigs != null) {
@@ -87,6 +91,11 @@ class ExtensionFunctionSignatureParser {
 
   private static ExtensionFunction toSignature(
           final String ret, final String cs_param_list) {
+    return toSignature(ret, cs_param_list, true);
+  }
+
+  private static ExtensionFunction toSignature(
+          final String ret, final String cs_param_list, final boolean is_row_func) {
     String[] params = cs_param_list.split(",");
     List<ExtensionFunction.ExtArgumentType> args =
             new ArrayList<ExtensionFunction.ExtArgumentType>();
@@ -96,9 +105,8 @@ class ExtensionFunctionSignatureParser {
         args.add(arg_type);
       }
     }
-    return new ExtensionFunction(args, deserializeType(ret));
+    return new ExtensionFunction(args, deserializeType(ret), is_row_func);
   }
-
   private static ExtensionFunction.ExtArgumentType deserializeType(
           final String type_name) {
     final String const_prefix = "const ";
@@ -171,6 +179,9 @@ class ExtensionFunctionSignatureParser {
     }
     if (type_name.equals("Array<double>")) {
       return ExtensionFunction.ExtArgumentType.ArrayDouble;
+    }
+    if (type_name.equals("Cursor")) {
+      return ExtensionFunction.ExtArgumentType.Cursor;
     }
     MAPDLOGGER.info(
             "ExtensionfunctionSignatureParser::deserializeType: unknown type_name=`"

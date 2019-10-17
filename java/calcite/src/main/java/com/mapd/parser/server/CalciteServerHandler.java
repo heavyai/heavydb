@@ -26,8 +26,11 @@ import com.mapd.thrift.calciteserver.InvalidParseRequest;
 import com.mapd.thrift.calciteserver.TAccessedQueryObjects;
 import com.mapd.thrift.calciteserver.TCompletionHint;
 import com.mapd.thrift.calciteserver.TCompletionHintType;
+import com.mapd.thrift.calciteserver.TExtArgumentType;
 import com.mapd.thrift.calciteserver.TFilterPushDownInfo;
 import com.mapd.thrift.calciteserver.TPlanResult;
+import com.mapd.thrift.calciteserver.TUserDefinedFunction;
+import com.mapd.thrift.calciteserver.TUserDefinedTableFunction;
 
 import org.apache.calcite.prepare.MapDPlanner;
 import org.apache.calcite.prepare.SqlIdentifierCapturer;
@@ -46,6 +49,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -242,7 +246,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
   }
 
   @Override
-  public String getRuntimeUserDefinedFunctionWhitelist() {
+  public String getRuntimeExtensionFunctionWhitelist() {
     return this.udfRTSigsJson;
   }
 
@@ -329,31 +333,110 @@ class CalciteServerHandler implements CalciteServer.Iface {
   }
 
   @Override
-  public void setRuntimeUserDefinedFunction(String udfString) {
+  public void setRuntimeExtensionFunctions(
+          List<TUserDefinedFunction> udfs, List<TUserDefinedTableFunction> udtfs) {
     // Clean up previously defined Runtime UDFs
     if (udfRTSigs != null) {
       for (String name : udfRTSigs.keySet()) extSigs.remove(name);
       udfRTSigsJson = "";
+      udfRTSigs.clear();
+    } else {
+      udfRTSigs = new HashMap<String, ExtensionFunction>();
     }
 
-    if (!udfString.isEmpty()) {
-      try {
-        udfRTSigs = ExtensionFunctionSignatureParser.parseFromString(udfString);
-      } catch (IOException ex) {
-        MAPDLOGGER.error(
-                "Could not parse extension function signatures: " + ex.getMessage());
+    for (TUserDefinedFunction udf : udfs) {
+      udfRTSigs.put(udf.name, toExtensionFunction(udf));
+    }
+
+    for (TUserDefinedTableFunction udtf : udtfs) {
+      udfRTSigs.put(udtf.name, toExtensionFunction(udtf));
+    }
+
+    // Avoid overwritting compiled and Loadtime UDFs:
+    for (String name : udfRTSigs.keySet()) {
+      if (extSigs.containsKey(name)) {
+        MAPDLOGGER.error("Extension function `" + name
+                + "` exists. Skipping runtime extenension function with the same name.");
+        udfRTSigs.remove(name);
       }
-      // Avoid overwritting compiled and Loadtime UDFs:
-      for (String name : udfRTSigs.keySet()) {
-        if (extSigs.containsKey(name)) {
-          MAPDLOGGER.error("Extension function `" + name
-                  + "` exists. Skipping Runtime UDF with the same name.");
-          udfRTSigs.remove(name);
-        }
+    }
+
+    udfRTSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(udfRTSigs);
+    // Expose RT UDFs to Calcite server:
+    extSigs.putAll(udfRTSigs);
+  }
+
+  private static ExtensionFunction toExtensionFunction(TUserDefinedFunction udf) {
+    List<ExtensionFunction.ExtArgumentType> args =
+            new ArrayList<ExtensionFunction.ExtArgumentType>();
+    for (TExtArgumentType atype : udf.argTypes) {
+      final ExtensionFunction.ExtArgumentType arg_type = toExtArgumentType(atype);
+      if (arg_type != ExtensionFunction.ExtArgumentType.Void) {
+        args.add(arg_type);
       }
-      udfRTSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(udfRTSigs);
-      // Expose RT UDFs to Calcite server:
-      extSigs.putAll(udfRTSigs);
+    }
+    return new ExtensionFunction(args, toExtArgumentType(udf.retType), true);
+  }
+
+  private static ExtensionFunction toExtensionFunction(TUserDefinedTableFunction udtf) {
+    List<ExtensionFunction.ExtArgumentType> args =
+            new ArrayList<ExtensionFunction.ExtArgumentType>();
+    for (TExtArgumentType atype : udtf.sqlArgTypes) {
+      args.add(toExtArgumentType(atype));
+    }
+    return new ExtensionFunction(args, ExtensionFunction.ExtArgumentType.Void, false);
+  }
+
+  private static ExtensionFunction.ExtArgumentType toExtArgumentType(
+          TExtArgumentType type) {
+    switch (type) {
+      case Int8:
+        return ExtensionFunction.ExtArgumentType.Int8;
+      case Int16:
+        return ExtensionFunction.ExtArgumentType.Int16;
+      case Int32:
+        return ExtensionFunction.ExtArgumentType.Int32;
+      case Int64:
+        return ExtensionFunction.ExtArgumentType.Int64;
+      case Float:
+        return ExtensionFunction.ExtArgumentType.Float;
+      case Double:
+        return ExtensionFunction.ExtArgumentType.Double;
+      case Void:
+        return ExtensionFunction.ExtArgumentType.Void;
+      case PInt8:
+        return ExtensionFunction.ExtArgumentType.PInt8;
+      case PInt16:
+        return ExtensionFunction.ExtArgumentType.PInt16;
+      case PInt32:
+        return ExtensionFunction.ExtArgumentType.PInt32;
+      case PInt64:
+        return ExtensionFunction.ExtArgumentType.PInt64;
+      case PFloat:
+        return ExtensionFunction.ExtArgumentType.PFloat;
+      case PDouble:
+        return ExtensionFunction.ExtArgumentType.PDouble;
+      case Bool:
+        return ExtensionFunction.ExtArgumentType.Bool;
+      case ArrayInt8:
+        return ExtensionFunction.ExtArgumentType.ArrayInt8;
+      case ArrayInt16:
+        return ExtensionFunction.ExtArgumentType.ArrayInt16;
+      case ArrayInt32:
+        return ExtensionFunction.ExtArgumentType.ArrayInt32;
+      case ArrayInt64:
+        return ExtensionFunction.ExtArgumentType.ArrayInt64;
+      case ArrayFloat:
+        return ExtensionFunction.ExtArgumentType.ArrayFloat;
+      case ArrayDouble:
+        return ExtensionFunction.ExtArgumentType.ArrayDouble;
+      case GeoPoint:
+        return ExtensionFunction.ExtArgumentType.GeoPoint;
+      case Cursor:
+        return ExtensionFunction.ExtArgumentType.Cursor;
+      default:
+        MAPDLOGGER.error("toExtArgumentType: unknown type " + type);
+        return null;
     }
   }
 

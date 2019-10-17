@@ -82,6 +82,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <algorithm>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/make_shared.hpp>
@@ -5637,46 +5638,131 @@ void MapDHandler::get_device_parameters(std::map<std::string, std::string>& _ret
   }
 }
 
-void MapDHandler::register_runtime_udf(
+ExtArgumentType mapfrom(const TExtArgumentType::type& t) {
+  switch (t) {
+    case TExtArgumentType::Int8:
+      return ExtArgumentType::Int8;
+    case TExtArgumentType::Int16:
+      return ExtArgumentType::Int16;
+    case TExtArgumentType::Int32:
+      return ExtArgumentType::Int32;
+    case TExtArgumentType::Int64:
+      return ExtArgumentType::Int64;
+    case TExtArgumentType::Float:
+      return ExtArgumentType::Float;
+    case TExtArgumentType::Double:
+      return ExtArgumentType::Double;
+    case TExtArgumentType::Void:
+      return ExtArgumentType::Void;
+    case TExtArgumentType::PInt8:
+      return ExtArgumentType::PInt8;
+    case TExtArgumentType::PInt16:
+      return ExtArgumentType::PInt16;
+    case TExtArgumentType::PInt32:
+      return ExtArgumentType::PInt32;
+    case TExtArgumentType::PInt64:
+      return ExtArgumentType::PInt64;
+    case TExtArgumentType::PFloat:
+      return ExtArgumentType::PFloat;
+    case TExtArgumentType::PDouble:
+      return ExtArgumentType::PDouble;
+    case TExtArgumentType::Bool:
+      return ExtArgumentType::Bool;
+    case TExtArgumentType::ArrayInt8:
+      return ExtArgumentType::ArrayInt8;
+    case TExtArgumentType::ArrayInt16:
+      return ExtArgumentType::ArrayInt16;
+    case TExtArgumentType::ArrayInt32:
+      return ExtArgumentType::ArrayInt32;
+    case TExtArgumentType::ArrayInt64:
+      return ExtArgumentType::ArrayInt64;
+    case TExtArgumentType::ArrayFloat:
+      return ExtArgumentType::ArrayFloat;
+    case TExtArgumentType::ArrayDouble:
+      return ExtArgumentType::ArrayDouble;
+    case TExtArgumentType::GeoPoint:
+      return ExtArgumentType::GeoPoint;
+    case TExtArgumentType::Cursor:
+      return ExtArgumentType::Cursor;
+  }
+  assert(false);
+}
+
+table_functions::OutputBufferSizeType mapfrom(const TOutputBufferSizeType::type& t) {
+  switch (t) {
+    case TOutputBufferSizeType::kUserSpecifiedConstantParameter:
+      return table_functions::OutputBufferSizeType::kUserSpecifiedConstantParameter;
+    case TOutputBufferSizeType::kUserSpecifiedRowMultiplier:
+      return table_functions::OutputBufferSizeType::kUserSpecifiedRowMultiplier;
+    case TOutputBufferSizeType::kConstant:
+      return table_functions::OutputBufferSizeType::kConstant;
+  }
+  assert(false);
+}
+
+std::vector<ExtArgumentType> mapfrom(const std::vector<TExtArgumentType::type>& v) {
+  std::vector<ExtArgumentType> result;
+  std::transform(v.begin(),
+                 v.end(),
+                 std::back_inserter(result),
+                 [](TExtArgumentType::type c) -> ExtArgumentType { return mapfrom(c); });
+  return result;
+}
+
+void MapDHandler::register_runtime_extension_functions(
     const TSessionId& session,
-    const std::string& signatures,
+    const std::vector<TUserDefinedFunction>& udfs,
+    const std::vector<TUserDefinedTableFunction>& udtfs,
     const std::map<std::string, std::string>& device_ir_map) {
   const auto session_info = get_session_copy(session);
+  VLOG(1) << "register_runtime_extension_functions: " << udfs.size() << " "
+          << udtfs.size() << std::endl;
 
   if (!runtime_udf_registration_enabled_) {
-    THROW_MAPD_EXCEPTION("Runtime UDF registration is disabled.");
+    THROW_MAPD_EXCEPTION("Runtime extension functions registration is disabled.");
   }
 
   // TODO: add UDF registration permission scheme. Currently, UDFs are
-  // registered globally, that means that all users can use as well as overwrite UDFs
-  // that was created possibly by anoher user.
+  // registered globally, that means that all users can use as well as
+  // overwrite UDFs that was created possibly by anoher user.
 
-  VLOG(1) << "Registering runtime UDF with signatures:\n" << signatures;
   /* Changing a UDF implementation (but not the signature) requires
      cleaning code caches. Nuking executors does that but at the cost
      of loosing all of the caches. TODO: implement more refined code
      cache cleaning. */
   Executor::nukeCacheOfExecutors();
 
-  /* Parse IR strings and store it as LLVM module. */
-  for (auto i = device_ir_map.begin(); i != device_ir_map.end(); ++i) {
-    std::string device = i->first;
-    std::string ir = i->second;
-    if (device == "cpu") {
-      read_rt_udf_cpu_module(ir);
-    } else if (device == "gpu") {
-      read_rt_udf_gpu_module(ir);
-    } else {
-      THROW_MAPD_EXCEPTION(std::string("unsupported device name: ") + device);
-    }
+  /* Parse LLVM/NVVM IR strings and store it as LLVM module. */
+  auto it = device_ir_map.find(std::string{"cpu"});
+  if (it != device_ir_map.end()) {
+    read_rt_udf_cpu_module(it->second);
+  }
+  it = device_ir_map.find(std::string{"gpu"});
+  if (it != device_ir_map.end()) {
+    read_rt_udf_gpu_module(it->second);
   }
 
-  // Register UDFs with Calcite server
+  VLOG(1) << "Registering runtime UDTFs:\n";
+
+  for (auto it = udtfs.begin(); it != udtfs.end(); it++) {
+    VLOG(1) << "UDTF name=" << it->name << std::endl;
+    table_functions::TableFunctionsFactory::add(
+        it->name,
+        table_functions::TableFunctionOutputRowSizer{
+            mapfrom(it->sizerType), static_cast<size_t>(it->sizerArgPos)},
+        mapfrom(it->inputArgTypes),
+        mapfrom(it->outputArgTypes),
+        /*is_runtime =*/true);
+  }
+
+  /* Register extension functions with Calcite server */
   CHECK(calcite_);
-  calcite_->setRuntimeUserDefinedFunction(signatures);
+  calcite_->setRuntimeExtensionFunctions(udfs, udtfs);
+
   /* Update the extension function whitelist */
-  std::string whitelist = calcite_->getRuntimeUserDefinedFunctionWhitelist();
-  VLOG(1) << "Registering runtime UDF with Calcite using whitelist:\n" << whitelist;
+  std::string whitelist = calcite_->getRuntimeExtensionFunctionWhitelist();
+  VLOG(1) << "Registering runtime extension functions with CodeGen using whitelist:\n"
+          << whitelist;
   ExtensionFunctionsWhitelist::clearRTUdfs();
   ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
 }

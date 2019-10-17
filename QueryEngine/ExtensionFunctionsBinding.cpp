@@ -239,6 +239,8 @@ static int match_arguments(const SQLTypeInfo& arg_type,
          kGEOMETRY
          kGEOGRAPHY
          kEVAL_CONTEXT_TYPE
+         kVOID
+         kCURSOR
       */
     default:
       throw std::runtime_error(std::string(__FILE__) + "#" + std::to_string(__LINE__) +

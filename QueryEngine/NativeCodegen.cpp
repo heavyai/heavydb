@@ -284,6 +284,52 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
   return {std::make_pair(native_code, nullptr)};
 }
 
+void CodeGenerator::link_udf_module(const std::unique_ptr<llvm::Module>& udf_module,
+                                    llvm::Module& module,
+                                    CgenState* cgen_state,
+                                    llvm::Linker::Flags flags) {
+  // throw a runtime error if the target module contains functions
+  // with the same name as in module of UDF functions.
+  for (auto& f : *udf_module.get()) {
+    auto func = module.getFunction(f.getName());
+    if (!(func == nullptr) && !f.isDeclaration() && flags == llvm::Linker::Flags::None) {
+      LOG(FATAL) << "  Attempt to overwrite " << f.getName().str() << " in "
+                 << module.getModuleIdentifier() << " from `"
+                 << udf_module->getModuleIdentifier() << "`" << std::endl;
+      throw std::runtime_error(
+          "link_udf_module: *** attempt to overwrite a runtime function with a UDF "
+          "function ***");
+    } else {
+      LOG(INFO) << "  Adding " << f.getName().str() << " to "
+                << module.getModuleIdentifier() << " from `"
+                << udf_module->getModuleIdentifier() << "`" << std::endl;
+    }
+  }
+
+  std::unique_ptr<llvm::Module> udf_module_copy;
+
+  udf_module_copy = llvm::CloneModule(
+#if LLVM_VERSION_MAJOR >= 7
+      *udf_module.get(),
+#else
+      udf_module.get(),
+#endif
+      cgen_state->vmap_);
+
+  udf_module_copy->setDataLayout(module.getDataLayout());
+  udf_module_copy->setTargetTriple(module.getTargetTriple());
+
+  // Initialize linker with module for RuntimeFunctions.bc
+  llvm::Linker ld(module);
+  bool link_error = false;
+
+  link_error = ld.linkInModule(std::move(udf_module_copy), flags);
+
+  if (link_error) {
+    throw std::runtime_error("link_udf_module: *** error linking module ***");
+  }
+}
+
 namespace {
 
 std::string cpp_to_llvm_name(const std::string& s) {
@@ -541,52 +587,6 @@ void legalize_nvvm_ir(llvm::Function* query_func) {
   }
 }
 #endif  // HAVE_CUDA
-
-void link_udf_module(const std::unique_ptr<llvm::Module>& udf_module,
-                     llvm::Module& module,
-                     CgenState* cgen_state,
-                     llvm::Linker::Flags flags = llvm::Linker::Flags::None) {
-  // throw a runtime error if the target module contains functions
-  // with the same name as in module of UDF functions.
-  for (auto& f : *udf_module.get()) {
-    auto func = module.getFunction(f.getName());
-    if (!(func == nullptr) && !f.isDeclaration()) {
-      LOG(FATAL) << "  Attempt to overwrite " << f.getName().str() << " in "
-                 << module.getModuleIdentifier() << " from `"
-                 << udf_module->getModuleIdentifier() << "`" << std::endl;
-      throw std::runtime_error(
-          "link_udf_module: *** attempt to overwrite a runtime function with a UDF "
-          "function ***");
-    } else {
-      LOG(INFO) << "  Adding " << f.getName().str() << " to "
-                << module.getModuleIdentifier() << " from `"
-                << udf_module->getModuleIdentifier() << "`" << std::endl;
-    }
-  }
-
-  std::unique_ptr<llvm::Module> udf_module_copy;
-
-  udf_module_copy = llvm::CloneModule(
-#if LLVM_VERSION_MAJOR >= 7
-      *udf_module.get(),
-#else
-      udf_module.get(),
-#endif
-      cgen_state->vmap_);
-
-  udf_module_copy->setDataLayout(module.getDataLayout());
-  udf_module_copy->setTargetTriple(module.getTargetTriple());
-
-  // Initialize linker with module for RuntimeFunctions.bc
-  llvm::Linker ld(module);
-  bool link_error = false;
-
-  link_error = ld.linkInModule(std::move(udf_module_copy), flags);
-
-  if (link_error) {
-    throw std::runtime_error("link_udf_module: *** error linking module ***");
-  }
-}
 
 }  // namespace
 
@@ -1625,10 +1625,11 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   if (co.device_type_ == ExecutorDeviceType::CPU) {
     if (is_udf_module_present(true)) {
-      link_udf_module(udf_cpu_module, *rt_module_copy, cgen_state_.get());
+      CodeGenerator::link_udf_module(udf_cpu_module, *rt_module_copy, cgen_state_.get());
     }
     if (is_rt_udf_module_present(true)) {
-      link_udf_module(rt_udf_cpu_module, *rt_module_copy, cgen_state_.get());
+      CodeGenerator::link_udf_module(
+          rt_udf_cpu_module, *rt_module_copy, cgen_state_.get());
     }
   } else {
     rt_module_copy->setDataLayout(get_gpu_data_layout());
@@ -1641,10 +1642,11 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
         throw QueryMustRunOnCpu();
       }
 
-      link_udf_module(udf_gpu_module, *rt_module_copy, cgen_state_.get());
+      CodeGenerator::link_udf_module(udf_gpu_module, *rt_module_copy, cgen_state_.get());
     }
     if (is_rt_udf_module_present()) {
-      link_udf_module(rt_udf_gpu_module, *rt_module_copy, cgen_state_.get());
+      CodeGenerator::link_udf_module(
+          rt_udf_gpu_module, *rt_module_copy, cgen_state_.get());
     }
   }
 

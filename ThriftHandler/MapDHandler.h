@@ -100,6 +100,7 @@
 #include <typeinfo>
 #include <unordered_map>
 #include "gen-cpp/MapD.h"
+#include "gen-cpp/extension_functions_types.h"
 
 using namespace std::string_literals;
 
@@ -420,14 +421,17 @@ class MapDHandler : public MapDIf {
    */
   void get_device_parameters(std::map<std::string, std::string>& _return,
                              const TSessionId& session) override;
+
   /*
-    Register UDFs with given signatures. The UDF implementations are
-    given in a mapping of a device and the corresponding LLVM IR
-    string.
+    Register Runtime Extension Functions (UDFs, UDTFs) with given
+    signatures. The extension functions implementations are given in a
+    mapping of a device and the corresponding LLVM/NVVM IR string.
    */
-  void register_runtime_udf(
+
+  void register_runtime_extension_functions(
       const TSessionId& session,
-      const std::string& signatures,
+      const std::vector<TUserDefinedFunction>& udfs,
+      const std::vector<TUserDefinedTableFunction>& udtfs,
       const std::map<std::string, std::string>& device_ir_map) override;
 
   // end of sync block for HAHandler and mapd.thrift
