@@ -69,8 +69,7 @@ class ForeignStorageInterface {
                             const std::list<ColumnDescriptor>& cols);
 
  private:
-  static std::unordered_map<std::string,
-                            std::unique_ptr<PersistentForeignStorageInterface>>
+  static std::unordered_map<std::string, PersistentForeignStorageInterface*>
       persistent_storage_interfaces_;
   static std::map<std::pair<int, int>, PersistentForeignStorageInterface*>
       table_persistent_storage_interface_map_;
