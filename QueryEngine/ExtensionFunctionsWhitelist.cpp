@@ -130,6 +130,8 @@ std::string serialize_type(const ExtArgumentType type) {
       return "float";
     case ExtArgumentType::Double:
       return "double";
+    case ExtArgumentType::Void:
+      return "void";
     case ExtArgumentType::PInt8:
       return "i8*";
     case ExtArgumentType::PInt16:
@@ -156,6 +158,8 @@ std::string serialize_type(const ExtArgumentType type) {
       return "array_double";
     case ExtArgumentType::GeoPoint:
       return "geo_point";
+    case ExtArgumentType::Cursor:
+      return "cursor";
     default:
       CHECK(false);
   }
@@ -256,7 +260,12 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
                              ");");
     }
   }
+
   for (const auto& kv : table_functions::TableFunctionsFactory::functions_) {
+    if (kv.second.isRuntime()) {
+      // Runtime UDTFs are defined in LLVM/NVVM IR module
+      continue;
+    }
     std::string decl_prefix{"declare " + serialize_type(ExtArgumentType::Int32) + " @" +
                             kv.first};
     std::vector<std::string> arg_strs;
@@ -292,6 +301,9 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "double") {
     return ExtArgumentType::Double;
+  }
+  if (type_name == "void") {
+    return ExtArgumentType::Void;
   }
   if (type_name == "i8*") {
     return ExtArgumentType::PInt8;
@@ -331,6 +343,9 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "geo_point") {
     return ExtArgumentType::GeoPoint;
+  }
+  if (type_name == "cursor") {
+    return ExtArgumentType::Cursor;
   }
 
   CHECK(false);

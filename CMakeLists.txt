@@ -376,6 +376,7 @@ endif()
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
+    DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
     OUTPUT
         ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/MapD.h
@@ -387,6 +388,7 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
@@ -401,7 +403,8 @@ add_library(mapd_thrift
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp)
+    ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp)
 
 target_compile_options(mapd_thrift PRIVATE -fPIC)
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
