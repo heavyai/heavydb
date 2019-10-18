@@ -514,7 +514,9 @@ class MapDHandler : public MapDIf {
       const TSessionId& session);
   std::shared_ptr<Catalog_Namespace::SessionInfo> get_session_ptr(
       const TSessionId& session_id);
-  SessionMap::iterator get_session_it_unsafe(const TSessionId& session);
+  template <typename SESSION_MAP_LOCK>
+  SessionMap::iterator get_session_it_unsafe(const TSessionId& session,
+                                             SESSION_MAP_LOCK& lock);
   static void value_to_thrift_column(const TargetValue& tv,
                                      const SQLTypeInfo& ti,
                                      TColumn& column);
