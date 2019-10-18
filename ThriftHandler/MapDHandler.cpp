@@ -117,10 +117,12 @@ using namespace Lock_Namespace;
 #define INVALID_SESSION_ID ""
 
 #define THROW_MAPD_EXCEPTION(errstr) \
-  TMapDException ex;                 \
-  ex.error_msg = errstr;             \
-  LOG(ERROR) << ex.error_msg;        \
-  throw ex;
+  {                                  \
+    TMapDException ex;               \
+    ex.error_msg = errstr;           \
+    LOG(ERROR) << ex.error_msg;      \
+    throw ex;                        \
+  }
 
 namespace {
 
@@ -133,7 +135,42 @@ SessionMap::iterator get_session_from_map(const TSessionId& session,
   return session_it;
 }
 
+struct ForceDisconnect : public std::runtime_error {
+  ForceDisconnect(const std::string& cause) : std::runtime_error(cause) {}
+};
+
 }  // namespace
+
+template <>
+SessionMap::iterator MapDHandler::get_session_it_unsafe(
+    const TSessionId& session,
+    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+  auto session_it = get_session_from_map(session, sessions_);
+  try {
+    check_session_exp_unsafe(session_it);
+  } catch (const ForceDisconnect& e) {
+    read_lock.unlock();
+    mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+    auto session_it2 = get_session_from_map(session, sessions_);
+    disconnect_impl(session_it2);
+    THROW_MAPD_EXCEPTION(e.what());
+  }
+  return session_it;
+}
+
+template <>
+SessionMap::iterator MapDHandler::get_session_it_unsafe(
+    const TSessionId& session,
+    mapd_lock_guard<mapd_shared_mutex>& write_lock) {
+  auto session_it = get_session_from_map(session, sessions_);
+  try {
+    check_session_exp_unsafe(session_it);
+  } catch (const ForceDisconnect& e) {
+    disconnect_impl(session_it);
+    THROW_MAPD_EXCEPTION(e.what());
+  }
+  return session_it;
+}
 
 MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const std::vector<LeafHostInfo>& string_leaves,
@@ -425,7 +462,7 @@ void MapDHandler::connect_impl(TSessionId& session,
 void MapDHandler::disconnect(const TSessionId& session) {
   auto stdlog = STDLOG();
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
-  auto session_it = get_session_it_unsafe(session);
+  auto session_it = get_session_it_unsafe(session, write_lock);
   stdlog.setSessionInfo(session_it->second);
   const auto dbname = session_it->second->getCatalog().getCurrentDB().dbName;
   LOG(INFO) << "User " << session_it->second->get_currentUser().userName
@@ -449,7 +486,7 @@ void MapDHandler::disconnect_impl(const SessionMap::iterator& session_it) {
 void MapDHandler::switch_database(const TSessionId& session, const std::string& dbname) {
   auto stdlog = STDLOG(get_session_ptr(session));
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
-  auto session_it = get_session_it_unsafe(session);
+  auto session_it = get_session_it_unsafe(session, write_lock);
 
   std::string dbname2 = dbname;  // switchDatabase() may reset dbname given as argument
 
@@ -471,7 +508,7 @@ void MapDHandler::interrupt(const TSessionId& session) {
       leaf_aggregator_.interrupt(session);
     }
 
-    auto session_it = get_session_it_unsafe(session);
+    auto session_it = get_session_it_unsafe(session, read_lock);
     auto& cat = session_it->second.get()->getCatalog();
     const auto dbname = cat.getCurrentDB().dbName;
     auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
@@ -2085,7 +2122,7 @@ void MapDHandler::set_execution_mode(const TSessionId& session,
                                      const TExecuteMode::type mode) {
   auto stdlog = STDLOG(get_session_ptr(session));
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
-  auto session_it = get_session_it_unsafe(session);
+  auto session_it = get_session_it_unsafe(session, write_lock);
   if (leaf_aggregator_.leafCount() > 0) {
     leaf_aggregator_.set_execution_mode(session, mode);
     try {
@@ -4304,21 +4341,10 @@ void MapDHandler::check_session_exp_unsafe(const SessionMap::iterator& session_i
   time_t last_used_time = session_it->second->get_last_used_time();
   time_t start_time = session_it->second->get_start_time();
   if ((time(0) - last_used_time) > idle_session_duration_) {
-    disconnect_impl(
-        session_it);  // Already checked session existance in get_session_it_unsafe
-    THROW_MAPD_EXCEPTION("Idle Session Timeout. User should re-authenticate.")
+    throw ForceDisconnect("Idle Session Timeout. User should re-authenticate.");
   } else if ((time(0) - start_time) > max_session_duration_) {
-    disconnect_impl(
-        session_it);  // Already checked session existance in get_session_it_unsafe
-    THROW_MAPD_EXCEPTION("Maximum active Session Timeout. User should re-authenticate.")
+    throw ForceDisconnect("Maximum active Session Timeout. User should re-authenticate.");
   }
-}
-
-// NOTE: Only call get_session_it_unsafe() while holding a lock on sessions_mutex_.
-SessionMap::iterator MapDHandler::get_session_it_unsafe(const TSessionId& session) {
-  auto session_it = get_session_from_map(session, sessions_);
-  check_session_exp_unsafe(session_it);
-  return session_it;
 }
 
 std::shared_ptr<const Catalog_Namespace::SessionInfo> MapDHandler::get_const_session_ptr(
@@ -4328,7 +4354,7 @@ std::shared_ptr<const Catalog_Namespace::SessionInfo> MapDHandler::get_const_ses
 
 Catalog_Namespace::SessionInfo MapDHandler::get_session_copy(const TSessionId& session) {
   mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-  return *get_session_it_unsafe(session)->second;
+  return *get_session_it_unsafe(session, read_lock)->second;
 }
 
 std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::get_session_copy_ptr(
@@ -4340,7 +4366,7 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::get_session_copy_pt
   // a copy. We should eventually aim to merge both `get_const_session_ptr` and
   // `get_session_copy_ptr`.
   mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-  auto& session_info_ref = *get_session_it_unsafe(session)->second;
+  auto& session_info_ref = *get_session_it_unsafe(session, read_lock)->second;
   return std::make_shared<Catalog_Namespace::SessionInfo>(session_info_ref);
 }
 
@@ -4358,7 +4384,7 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::get_session_ptr(
     return {};
   }
   mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-  return get_session_it_unsafe(session_id)->second;
+  return get_session_it_unsafe(session_id, read_lock)->second;
 }
 
 void MapDHandler::check_table_load_privileges(
