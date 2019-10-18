@@ -171,7 +171,7 @@ int main(int argc, char* argv[]) {
               file_path.string());
         }
 
-        import_driver.importGeoTable(file_path.string(), table_name);
+        import_driver.importGeoTable(file_path.string(), table_name, true, true, false);
       }
     }
 

@@ -148,7 +148,8 @@ bool import_test_common_geo(const string& query_str,
 void import_test_geofile_importer(const std::string& file_str,
                                   const std::string& table_name,
                                   const bool compression,
-                                  const bool create_table = true) {
+                                  const bool create_table,
+                                  const bool explode_collections) {
   Importer_NS::ImportDriver import_driver(QR::get()->getCatalog(),
                                           QR::get()->getSession()->get_currentUser(),
                                           ExecutorDeviceType::CPU);
@@ -158,7 +159,7 @@ void import_test_geofile_importer(const std::string& file_str,
   ASSERT_TRUE(boost::filesystem::exists(file_path));
 
   ASSERT_NO_THROW(import_driver.importGeoTable(
-      file_path.string(), table_name, compression, create_table));
+      file_path.string(), table_name, compression, create_table, explode_collections));
 }
 
 bool import_test_local(const string& filename, const int64_t cnt, const double avg) {
@@ -1286,13 +1287,25 @@ void check_geo_gdal_point_import() {
   ASSERT_NEAR(1.0, trip_distance, 1e-7);
 }
 
-void check_geo_gdal_mpoly_import() {
+void check_geo_gdal_poly_or_mpoly_import(const bool mpoly, const bool exploded) {
   auto rows = run_query("SELECT omnisci_geo, trip FROM geospatial WHERE trip = 1.0");
   auto crt_row = rows->getNextRow(true, true);
   CHECK_EQ(size_t(2), crt_row.size());
-  const auto mpoly = boost::get<std::string>(v<NullableString>(crt_row[0]));
-  ASSERT_TRUE(Geo_namespace::GeoMultiPolygon("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))") ==
-              Geo_namespace::GeoMultiPolygon(mpoly));
+  const auto mpoly_or_poly = boost::get<std::string>(v<NullableString>(crt_row[0]));
+  if (mpoly && exploded) {
+    // mpoly explodes to poly (not promoted)
+    ASSERT_TRUE(Geo_namespace::GeoPolygon("POLYGON ((0 0,2 0,0 2,0 0))") ==
+                Geo_namespace::GeoPolygon(mpoly_or_poly));
+  } else if (mpoly) {
+    // mpoly imports as mpoly
+    ASSERT_TRUE(Geo_namespace::GeoMultiPolygon(
+                    "MULTIPOLYGON (((0 0,2 0,0 2,0 0)),((0 0,2 0,0 2,0 0)))") ==
+                Geo_namespace::GeoMultiPolygon(mpoly_or_poly));
+  } else {
+    // poly imports as mpoly (promoted)
+    ASSERT_TRUE(Geo_namespace::GeoMultiPolygon("MULTIPOLYGON (((0 0,2 0,0 2,0 0)))") ==
+                Geo_namespace::GeoMultiPolygon(mpoly_or_poly));
+  }
   const auto trip_distance = v<double>(crt_row[1]);
   ASSERT_NEAR(1.0, trip_distance, 1e-7);
 }
@@ -1429,25 +1442,53 @@ TEST_F(GeoGDALImportTest, Geojson_Point_Import) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_point/geospatial_point.geojson");
-  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
   check_geo_gdal_point_import();
+  check_geo_num_rows("omnisci_geo, trip", 10);
+}
+
+TEST_F(GeoGDALImportTest, Geojson_Poly_Import) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const auto file_path =
+      boost::filesystem::path("geospatial_mpoly/geospatial_poly.geojson");
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
+  check_geo_gdal_poly_or_mpoly_import(false, false);  // poly, not exploded
+  check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
 TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
-  import_test_geofile_importer(file_path.string(), "geospatial", false);
-  check_geo_gdal_mpoly_import();
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
+  check_geo_gdal_poly_or_mpoly_import(true, false);  // mpoly, not exploded
   check_geo_num_rows("omnisci_geo, trip", 10);
+}
+
+TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Explode_MPoly_Import) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const auto file_path =
+      boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, true);
+  check_geo_gdal_poly_or_mpoly_import(true, true);  // mpoly, exploded
+  check_geo_num_rows("omnisci_geo, trip", 20);      // 10M -> 20P
+}
+
+TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Explode_Mixed_Import) {
+  SKIP_ALL_ON_AGGREGATOR();
+  const auto file_path =
+      boost::filesystem::path("geospatial_mpoly/geospatial_mixed.geojson");
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, true);
+  check_geo_gdal_poly_or_mpoly_import(true, true);  // mpoly, exploded
+  check_geo_num_rows("omnisci_geo, trip", 15);      // 5M + 5P -> 15P
 }
 
 TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import_Empties) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_empties.geojson");
-  import_test_geofile_importer(file_path.string(), "geospatial", false);
-  check_geo_gdal_mpoly_import();
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
+  check_geo_gdal_poly_or_mpoly_import(true, false);  // mpoly, not exploded
   check_geo_num_rows("omnisci_geo, trip", 8);  // we expect it to drop 2 of the 10 rows
 }
 
@@ -1455,63 +1496,69 @@ TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Import_Degenerate) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_degenerate.geojson");
-  import_test_geofile_importer(file_path.string(), "geospatial", false);
-  check_geo_gdal_mpoly_import();
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
+  check_geo_gdal_poly_or_mpoly_import(true, false);  // mpoly, not exploded
   check_geo_num_rows("omnisci_geo, trip", 8);  // we expect it to drop 2 of the 10 rows
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_Point_Import) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.shp");
-  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
   check_geo_gdal_point_import();
+  check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.shp");
-  import_test_geofile_importer(file_path.string(), "geospatial", false);
-  check_geo_gdal_mpoly_import();
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
+  check_geo_gdal_poly_or_mpoly_import(false, false);  // poly, not exploded
+  check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_Point_Import_Compressed) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_point/geospatial_point.shp");
-  import_test_geofile_importer(file_path.string(), "geospatial", true);
+  import_test_geofile_importer(file_path.string(), "geospatial", true, true, false);
   check_geo_gdal_point_tv_import();
+  check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import_Compressed) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path = boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.shp");
-  import_test_geofile_importer(file_path.string(), "geospatial", true);
+  import_test_geofile_importer(file_path.string(), "geospatial", true, true, false);
   check_geo_gdal_mpoly_tv_import();
+  check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_Point_Import_3857) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_point/geospatial_point_3857.shp");
-  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
   check_geo_gdal_point_tv_import();
+  check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
 TEST_F(GeoGDALImportTest, Shapefile_MultiPolygon_Import_3857) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly_3857.shp");
-  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
   check_geo_gdal_mpoly_tv_import();
+  check_geo_num_rows("omnisci_geo, trip", 10);
 }
 
 TEST_F(GeoGDALImportTest, Geojson_MultiPolygon_Append) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geospatial_mpoly/geospatial_mpoly.geojson");
-  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
   check_geo_num_rows("omnisci_geo, trip", 10);
-  ASSERT_NO_THROW(
-      import_test_geofile_importer(file_path.string(), "geospatial", false, false));
+  ASSERT_NO_THROW(import_test_geofile_importer(
+      file_path.string(), "geospatial", false, false, false));
   check_geo_num_rows("omnisci_geo, trip", 20);
 }
 
@@ -1519,7 +1566,7 @@ TEST_F(GeoGDALImportTest, Geodatabase_Simple) {
   SKIP_ALL_ON_AGGREGATOR();
   const auto file_path =
       boost::filesystem::path("geodatabase/S_USA.Experimental_Area_Locations.gdb.zip");
-  import_test_geofile_importer(file_path.string(), "geospatial", false);
+  import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
   check_geo_num_rows("omnisci_geo, ESTABLISHED", 87);
 }
 
@@ -1529,7 +1576,7 @@ TEST_F(GeoGDALImportTest, KML_Simple) {
     LOG(ERROR) << "Test requires LibKML support in GDAL";
   } else {
     const auto file_path = boost::filesystem::path("KML/test.kml");
-    import_test_geofile_importer(file_path.string(), "geospatial", false);
+    import_test_geofile_importer(file_path.string(), "geospatial", false, true, false);
     check_geo_num_rows("omnisci_geo, FID", 10);
   }
 }

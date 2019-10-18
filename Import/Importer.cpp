@@ -1648,6 +1648,132 @@ void Importer::set_geo_physical_import_buffer_columnar(
   }
 }
 
+namespace {
+
+std::tuple<int, SQLTypes, std::string> explode_collections_step1(
+    const std::list<const ColumnDescriptor*>& col_descs) {
+  // validate the columns
+  // for now we can only explode into a single destination column
+  // which must be of the child type (POLYGON, LINESTRING, POINT)
+  int collection_col_idx = -1;
+  int col_idx = 0;
+  std::string collection_col_name;
+  SQLTypes collection_child_type = kNULLT;
+  for (auto cd_it = col_descs.begin(); cd_it != col_descs.end(); cd_it++) {
+    auto const& cd = *cd_it;
+    auto const col_type = cd->columnType.get_type();
+    if (col_type == kPOLYGON || col_type == kLINESTRING || col_type == kPOINT) {
+      if (collection_col_idx >= 0) {
+        throw std::runtime_error(
+            "Explode Collections: Found more than one destination column");
+      }
+      collection_col_idx = col_idx;
+      collection_child_type = col_type;
+      collection_col_name = cd->columnName;
+    }
+    for (int i = 0; i < cd->columnType.get_physical_cols(); ++i) {
+      ++cd_it;
+    }
+    col_idx++;
+  }
+  if (collection_col_idx < 0) {
+    throw std::runtime_error(
+        "Explode Collections: Failed to find a supported column type to explode "
+        "into");
+  }
+  return std::make_tuple(collection_col_idx, collection_child_type, collection_col_name);
+}
+
+int64_t explode_collections_step2(
+    OGRGeometry* ogr_geometry,
+    SQLTypes collection_child_type,
+    const std::string& collection_col_name,
+    size_t row_or_feature_idx,
+    std::function<void(OGRGeometry*)> execute_import_lambda) {
+  auto ogr_geometry_type = wkbFlatten(ogr_geometry->getGeometryType());
+  bool is_collection = false;
+  switch (collection_child_type) {
+    case kPOINT:
+      switch (ogr_geometry_type) {
+        case wkbMultiPoint:
+          is_collection = true;
+          break;
+        case wkbPoint:
+          break;
+        default:
+          throw std::runtime_error(
+              "Explode Collections: Source geo type must be MULTIPOINT or POINT");
+      }
+      break;
+    case kLINESTRING:
+      switch (ogr_geometry_type) {
+        case wkbMultiLineString:
+          is_collection = true;
+          break;
+        case wkbLineString:
+          break;
+        default:
+          throw std::runtime_error(
+              "Explode Collections: Source geo type must be MULTILINESTRING or "
+              "LINESTRING");
+      }
+      break;
+    case kPOLYGON:
+      switch (ogr_geometry_type) {
+        case wkbMultiPolygon:
+          is_collection = true;
+          break;
+        case wkbPolygon:
+          break;
+        default:
+          throw std::runtime_error(
+              "Explode Collections: Source geo type must be MULTIPOLYGON or POLYGON");
+      }
+      break;
+    default:
+      CHECK(false) << "Unsupported geo child type " << collection_child_type;
+  }
+
+  int64_t us = 0LL;
+
+  // explode or just import
+  if (is_collection) {
+    // cast to collection
+    OGRGeometryCollection* collection_geometry = ogr_geometry->toGeometryCollection();
+    CHECK(collection_geometry);
+
+#if LOG_EXPLODE_COLLECTIONS
+    // log number of children
+    LOG(INFO) << "Exploding row/feature " << row_or_feature_idx << " for column '"
+              << explode_col_name << "' into " << collection_geometry->getNumGeometries()
+              << " child rows";
+#endif
+
+    // loop over children
+    uint32_t child_geometry_count = 0;
+    auto child_geometry_it = collection_geometry->begin();
+    while (child_geometry_it != collection_geometry->end()) {
+      // get and import this child
+      OGRGeometry* import_geometry = *child_geometry_it;
+      us += measure<std::chrono::microseconds>::execution(
+          [&] { execute_import_lambda(import_geometry); });
+
+      // next child
+      child_geometry_it++;
+      child_geometry_count++;
+    }
+  } else {
+    // import non-collection row just once
+    us = measure<std::chrono::microseconds>::execution(
+        [&] { execute_import_lambda(ogr_geometry); });
+  }
+
+  // done
+  return us;
+}
+
+}  // namespace
+
 static ImportStatus import_thread_delimited(
     int thread_id,
     Importer* importer,
@@ -1723,7 +1849,12 @@ static ImportStatus import_thread_delimited(
         }
         continue;
       }
-      us = measure<std::chrono::microseconds>::execution([&]() {
+
+      //
+      // lambda for importing a row (perhaps multiple times if exploding a collection)
+      //
+
+      auto execute_import_row = [&](OGRGeometry* import_geometry) {
         size_t import_idx = 0;
         size_t col_idx = 0;
         try {
@@ -1738,11 +1869,11 @@ static ImportStatus import_thread_delimited(
                   (row[import_idx] == copy_params.null_str || row[import_idx] == "NULL");
               // Note: default copy_params.null_str is "\N", but everyone uses "NULL".
               // So initially nullness may be missed and not passed to add_value,
-              // which then might also check and still decide it's actually a NULL, e.g.
-              // if kINT doesn't start with a digit or a '-' then it's considered NULL.
-              // So "NULL" is not recognized as NULL but then it's not recognized as
-              // a valid kINT, so it's a NULL after all.
-              // Checking for "NULL" here too, as a widely accepted notation for NULL.
+              // which then might also check and still decide it's actually a NULL,
+              // e.g. if kINT doesn't start with a digit or a '-' then it's considered
+              // NULL. So "NULL" is not recognized as NULL but then it's not
+              // recognized as a valid kINT, so it's a NULL after all. Checking for
+              // "NULL" here too, as a widely accepted notation for NULL.
               if (!cd->columnType.is_string() && row[import_idx].empty()) {
                 is_null = true;
               }
@@ -1760,7 +1891,7 @@ static ImportStatus import_thread_delimited(
                   cd, copy_params.null_str, true, copy_params);
 
               // WKT from string we're not storing
-              std::string wkt{row[import_idx]};
+              auto const& wkt = row[import_idx];
 
               // next
               ++import_idx;
@@ -1792,10 +1923,10 @@ static ImportStatus import_thread_delimited(
                 if (!copy_params.lonlat) {
                   std::swap(lat, lon);
                 }
-                // TODO: should check if POINT column should have been declared with SRID
-                // WGS 84, EPSG 4326 ? if (col_ti.get_dimension() != 4326) {
-                //  throw std::runtime_error("POINT column " + cd->columnName + " is not
-                //  WGS84, cannot insert lon/lat");
+                // TODO: should check if POINT column should have been declared with
+                // SRID WGS 84, EPSG 4326 ? if (col_ti.get_dimension() != 4326) {
+                //  throw std::runtime_error("POINT column " + cd->columnName + " is
+                //  not WGS84, cannot insert lon/lat");
                 // }
                 if (!importGeoFromLonLat(lon, lat, coords)) {
                   throw std::runtime_error(
@@ -1805,19 +1936,38 @@ static ImportStatus import_thread_delimited(
               } else {
                 // import it
                 SQLTypeInfo import_ti;
-                if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
-                        wkt,
-                        import_ti,
-                        coords,
-                        bounds,
-                        ring_sizes,
-                        poly_rings,
-                        PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
-                  std::string msg =
-                      "Failed to extract valid geometry from row " +
-                      std::to_string(first_row_index_this_buffer + row_index_plus_one) +
-                      " for column " + cd->columnName;
-                  throw std::runtime_error(msg);
+                if (import_geometry) {
+                  // geometry already exploded
+                  if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+                          import_geometry,
+                          import_ti,
+                          coords,
+                          bounds,
+                          ring_sizes,
+                          poly_rings,
+                          PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
+                    std::string msg =
+                        "Failed to extract valid geometry from exploded row " +
+                        std::to_string(first_row_index_this_buffer + row_index_plus_one) +
+                        " for column " + cd->columnName;
+                    throw std::runtime_error(msg);
+                  }
+                } else {
+                  // extract geometry directly from WKT
+                  if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+                          wkt,
+                          import_ti,
+                          coords,
+                          bounds,
+                          ring_sizes,
+                          poly_rings,
+                          PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
+                    std::string msg =
+                        "Failed to extract valid geometry from row " +
+                        std::to_string(first_row_index_this_buffer + row_index_plus_one) +
+                        " for column " + cd->columnName;
+                    throw std::runtime_error(msg);
+                  }
                 }
 
                 // validate types
@@ -1831,6 +1981,7 @@ static ImportStatus import_thread_delimited(
                   }
                 }
 
+                // assign render group?
                 if (columnIdToRenderGroupAnalyzerMap.size()) {
                   if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
                     if (ring_sizes.size()) {
@@ -1847,6 +1998,7 @@ static ImportStatus import_thread_delimited(
                 }
               }
 
+              // import extracted geo
               Importer::set_geo_physical_import_buffer(importer->getCatalog(),
                                                        cd,
                                                        import_buffers,
@@ -1856,6 +2008,8 @@ static ImportStatus import_thread_delimited(
                                                        ring_sizes,
                                                        poly_rings,
                                                        render_group);
+
+              // skip remaining physical columns
               for (int i = 0; i < cd->columnType.get_physical_cols(); ++i) {
                 ++cd_it;
               }
@@ -1870,9 +2024,43 @@ static ImportStatus import_thread_delimited(
           LOG(ERROR) << "Input exception thrown: " << e.what()
                      << ". Row discarded. Data: " << row;
         }
-      });
+      };
+
+      if (copy_params.geo_explode_collections) {
+        // explode and import
+        // @TODO(se) convert to structure-bindings when we can use C++17 here
+        auto collection_idx_type_name = explode_collections_step1(col_descs);
+        int collection_col_idx = std::get<0>(collection_idx_type_name);
+        SQLTypes collection_child_type = std::get<1>(collection_idx_type_name);
+        std::string collection_col_name = std::get<2>(collection_idx_type_name);
+        // pull out the collection WKT
+        CHECK_LT(collection_col_idx, (int)row.size()) << "column index out of range";
+        auto const& collection_wkt = row[collection_col_idx];
+        // convert to OGR
+        OGRGeometry* ogr_geometry = nullptr;
+        ScopeGuard destroy_ogr_geometry = [&] {
+          if (ogr_geometry) {
+            OGRGeometryFactory::destroyGeometry(ogr_geometry);
+          }
+        };
+        OGRErr ogr_status = OGRGeometryFactory::createFromWkt(
+            collection_wkt.c_str(), nullptr, &ogr_geometry);
+        if (ogr_status != OGRERR_NONE) {
+          throw std::runtime_error("Failed to convert WKT to geometry");
+        }
+        // do the explode and import
+        us = explode_collections_step2(ogr_geometry,
+                                       collection_child_type,
+                                       collection_col_name,
+                                       first_row_index_this_buffer + row_index_plus_one,
+                                       execute_import_row);
+      } else {
+        // import non-collection row just once
+        us = measure<std::chrono::microseconds>::execution(
+            [&] { execute_import_row(nullptr); });
+      }
       total_str_to_val_time_us += us;
-    }
+    }  // end thread
     if (import_status.rows_completed > 0) {
       load_ms = measure<>::execution(
           [&]() { importer->load(import_buffers, import_status.rows_completed); });
@@ -1915,6 +2103,9 @@ static ImportStatus import_thread_shapefile(
 
   auto convert_timer = timer_start();
 
+  // we create this on the fly based on the first feature's SR
+  std::unique_ptr<OGRCoordinateTransformation> coordinate_transformation;
+
   for (size_t iFeature = 0; iFeature < numFeatures; iFeature++) {
     if (!features[iFeature]) {
       continue;
@@ -1928,185 +2119,223 @@ static ImportStatus import_thread_shapefile(
 
       // transform it
       // avoid GDAL error if not transformable
-      if (pGeometry->getSpatialReference()) {
-        pGeometry->transformTo(poGeographicSR);
-      }
-    }
-
-    size_t col_idx = 0;
-    try {
-      for (auto cd_it = col_descs.begin(); cd_it != col_descs.end(); cd_it++) {
-        auto cd = *cd_it;
-
-        // is this a geo column?
-        const auto& col_ti = cd->columnType;
-        if (col_ti.is_geometry()) {
-          // some Shapefiles get us here, but the OGRGeometryRef is null
-          if (!pGeometry) {
-            std::string msg = "Geometry feature " +
-                              std::to_string(firstFeature + iFeature + 1) +
-                              " has null GeometryRef";
-            throw std::runtime_error(msg);
+      auto geometry_sr = pGeometry->getSpatialReference();
+      if (geometry_sr) {
+        // create an OGRCoordinateTransformation (CT) on the fly
+        // we must assume that all geo in this file will have
+        // the same source SR, so the CT will be valid for all
+        // transforming to a reusable CT is faster than to an SR
+        if (coordinate_transformation == nullptr) {
+          coordinate_transformation.reset(
+              OGRCreateCoordinateTransformation(geometry_sr, poGeographicSR));
+          if (coordinate_transformation == nullptr) {
+            throw std::runtime_error(
+                "Failed to create a GDAL CoordinateTransformation for incoming geo");
           }
-
-          // Note that this assumes there is one and only one geo column in the table.
-          // Currently, the importer only supports reading a single geospatial feature
-          // from an input shapefile / geojson file, but this code will need to be
-          // modified if that changes
-          SQLTypes col_type = col_ti.get_type();
-
-          // store null string in the base column
-          import_buffers[col_idx]->add_value(cd, copy_params.null_str, true, copy_params);
-          ++col_idx;
-
-          // the data we now need to extract for the other columns
-          std::vector<double> coords;
-          std::vector<double> bounds;
-          std::vector<int> ring_sizes;
-          std::vector<int> poly_rings;
-          int render_group = 0;
-
-          // extract it
-          SQLTypeInfo import_ti;
-
-          if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
-                  pGeometry,
-                  import_ti,
-                  coords,
-                  bounds,
-                  ring_sizes,
-                  poly_rings,
-                  PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
-            std::string msg = "Failed to extract valid geometry from feature " +
-                              std::to_string(firstFeature + iFeature + 1) +
-                              " for column " + cd->columnName;
-            throw std::runtime_error(msg);
-          }
-
-          // validate types
-          if (col_type != import_ti.get_type()) {
-            if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
-                !(import_ti.get_type() == SQLTypes::kPOLYGON &&
-                  col_type == SQLTypes::kMULTIPOLYGON)) {
-              throw std::runtime_error(
-                  "Imported geometry doesn't match the type of column " + cd->columnName);
-            }
-          }
-
-          if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-            if (ring_sizes.size()) {
-              // get a suitable render group for these poly coords
-              auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
-              CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
-              render_group = (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
-            } else {
-              // empty poly
-              render_group = -1;
-            }
-          }
-
-          // create coords array value and add it to the physical column
-          ++cd_it;
-          auto cd_coords = *cd_it;
-          std::vector<TDatum> td_coord_data;
-          std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
-          for (auto cc : compressed_coords) {
-            TDatum td_byte;
-            td_byte.val.int_val = cc;
-            td_coord_data.push_back(td_byte);
-          }
-          TDatum tdd_coords;
-          tdd_coords.val.arr_val = td_coord_data;
-          tdd_coords.is_null = false;
-          import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
-          ++col_idx;
-
-          if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-            // Create ring_sizes array value and add it to the physical column
-            ++cd_it;
-            auto cd_ring_sizes = *cd_it;
-            std::vector<TDatum> td_ring_sizes;
-            for (auto ring_size : ring_sizes) {
-              TDatum td_ring_size;
-              td_ring_size.val.int_val = ring_size;
-              td_ring_sizes.push_back(td_ring_size);
-            }
-            TDatum tdd_ring_sizes;
-            tdd_ring_sizes.val.arr_val = td_ring_sizes;
-            tdd_ring_sizes.is_null = false;
-            import_buffers[col_idx]->add_value(cd_ring_sizes, tdd_ring_sizes, false);
-            ++col_idx;
-          }
-
-          if (col_type == kMULTIPOLYGON) {
-            // Create poly_rings array value and add it to the physical column
-            ++cd_it;
-            auto cd_poly_rings = *cd_it;
-            std::vector<TDatum> td_poly_rings;
-            for (auto num_rings : poly_rings) {
-              TDatum td_num_rings;
-              td_num_rings.val.int_val = num_rings;
-              td_poly_rings.push_back(td_num_rings);
-            }
-            TDatum tdd_poly_rings;
-            tdd_poly_rings.val.arr_val = td_poly_rings;
-            tdd_poly_rings.is_null = false;
-            import_buffers[col_idx]->add_value(cd_poly_rings, tdd_poly_rings, false);
-            ++col_idx;
-          }
-
-          if (col_type == kLINESTRING || col_type == kPOLYGON ||
-              col_type == kMULTIPOLYGON) {
-            // Create bounds array value and add it to the physical column
-            ++cd_it;
-            auto cd_bounds = *cd_it;
-            std::vector<TDatum> td_bounds_data;
-            for (auto b : bounds) {
-              TDatum td_double;
-              td_double.val.real_val = b;
-              td_bounds_data.push_back(td_double);
-            }
-            TDatum tdd_bounds;
-            tdd_bounds.val.arr_val = td_bounds_data;
-            tdd_bounds.is_null = false;
-            import_buffers[col_idx]->add_value(cd_bounds, tdd_bounds, false);
-            ++col_idx;
-          }
-
-          if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
-            // Create render_group value and add it to the physical column
-            ++cd_it;
-            auto cd_render_group = *cd_it;
-            TDatum td_render_group;
-            td_render_group.val.int_val = render_group;
-            td_render_group.is_null = false;
-            import_buffers[col_idx]->add_value(cd_render_group, td_render_group, false);
-            ++col_idx;
-          }
-        } else {
-          // regular column
-          // pull from GDAL metadata
-          const auto cit = columnNameToSourceNameMap.find(cd->columnName);
-          CHECK(cit != columnNameToSourceNameMap.end());
-          const std::string& fieldName = cit->second;
-          const auto fit = fieldNameToIndexMap.find(fieldName);
-          CHECK(fit != fieldNameToIndexMap.end());
-          size_t iField = fit->second;
-          CHECK(iField < fieldNameToIndexMap.size());
-          std::string fieldContents = features[iFeature]->GetFieldAsString(iField);
-          import_buffers[col_idx]->add_value(cd, fieldContents, false, copy_params);
-          ++col_idx;
         }
+        pGeometry->transform(coordinate_transformation.get());
       }
-      import_status.rows_completed++;
-    } catch (const std::exception& e) {
-      for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
-        import_buffers[col_idx_to_pop]->pop_value();
-      }
-      import_status.rows_rejected++;
-      LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded.";
     }
-  }
+
+    //
+    // lambda for importing a feature (perhaps multiple times if exploding a collection)
+    //
+
+    auto execute_import_feature = [&](OGRGeometry* import_geometry) {
+      size_t col_idx = 0;
+      try {
+        for (auto cd_it = col_descs.begin(); cd_it != col_descs.end(); cd_it++) {
+          auto cd = *cd_it;
+
+          // is this a geo column?
+          const auto& col_ti = cd->columnType;
+          if (col_ti.is_geometry()) {
+            // some Shapefiles get us here, but the OGRGeometryRef is null
+            if (!import_geometry) {
+              std::string msg = "Geometry feature " +
+                                std::to_string(firstFeature + iFeature + 1) +
+                                " has null GeometryRef";
+              throw std::runtime_error(msg);
+            }
+
+            // Note that this assumes there is one and only one geo column in the table.
+            // Currently, the importer only supports reading a single geospatial feature
+            // from an input shapefile / geojson file, but this code will need to be
+            // modified if that changes
+            SQLTypes col_type = col_ti.get_type();
+
+            // store null string in the base column
+            import_buffers[col_idx]->add_value(
+                cd, copy_params.null_str, true, copy_params);
+            ++col_idx;
+
+            // the data we now need to extract for the other columns
+            std::vector<double> coords;
+            std::vector<double> bounds;
+            std::vector<int> ring_sizes;
+            std::vector<int> poly_rings;
+            int render_group = 0;
+
+            // extract it
+            SQLTypeInfo import_ti;
+
+            if (!Geo_namespace::GeoTypesFactory::getGeoColumns(
+                    import_geometry,
+                    import_ti,
+                    coords,
+                    bounds,
+                    ring_sizes,
+                    poly_rings,
+                    PROMOTE_POLYGON_TO_MULTIPOLYGON)) {
+              std::string msg = "Failed to extract valid geometry from feature " +
+                                std::to_string(firstFeature + iFeature + 1) +
+                                " for column " + cd->columnName;
+              throw std::runtime_error(msg);
+            }
+
+            // validate types
+            if (col_type != import_ti.get_type()) {
+              if (!PROMOTE_POLYGON_TO_MULTIPOLYGON ||
+                  !(import_ti.get_type() == SQLTypes::kPOLYGON &&
+                    col_type == SQLTypes::kMULTIPOLYGON)) {
+                throw std::runtime_error(
+                    "Imported geometry doesn't match the type of column " +
+                    cd->columnName);
+              }
+            }
+
+            if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+              if (ring_sizes.size()) {
+                // get a suitable render group for these poly coords
+                auto rga_it = columnIdToRenderGroupAnalyzerMap.find(cd->columnId);
+                CHECK(rga_it != columnIdToRenderGroupAnalyzerMap.end());
+                render_group = (*rga_it).second->insertBoundsAndReturnRenderGroup(bounds);
+              } else {
+                // empty poly
+                render_group = -1;
+              }
+            }
+
+            // create coords array value and add it to the physical column
+            ++cd_it;
+            auto cd_coords = *cd_it;
+            std::vector<TDatum> td_coord_data;
+            std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
+            for (auto cc : compressed_coords) {
+              TDatum td_byte;
+              td_byte.val.int_val = cc;
+              td_coord_data.push_back(td_byte);
+            }
+            TDatum tdd_coords;
+            tdd_coords.val.arr_val = td_coord_data;
+            tdd_coords.is_null = false;
+            import_buffers[col_idx]->add_value(cd_coords, tdd_coords, false);
+            ++col_idx;
+
+            if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+              // Create ring_sizes array value and add it to the physical column
+              ++cd_it;
+              auto cd_ring_sizes = *cd_it;
+              std::vector<TDatum> td_ring_sizes;
+              for (auto ring_size : ring_sizes) {
+                TDatum td_ring_size;
+                td_ring_size.val.int_val = ring_size;
+                td_ring_sizes.push_back(td_ring_size);
+              }
+              TDatum tdd_ring_sizes;
+              tdd_ring_sizes.val.arr_val = td_ring_sizes;
+              tdd_ring_sizes.is_null = false;
+              import_buffers[col_idx]->add_value(cd_ring_sizes, tdd_ring_sizes, false);
+              ++col_idx;
+            }
+
+            if (col_type == kMULTIPOLYGON) {
+              // Create poly_rings array value and add it to the physical column
+              ++cd_it;
+              auto cd_poly_rings = *cd_it;
+              std::vector<TDatum> td_poly_rings;
+              for (auto num_rings : poly_rings) {
+                TDatum td_num_rings;
+                td_num_rings.val.int_val = num_rings;
+                td_poly_rings.push_back(td_num_rings);
+              }
+              TDatum tdd_poly_rings;
+              tdd_poly_rings.val.arr_val = td_poly_rings;
+              tdd_poly_rings.is_null = false;
+              import_buffers[col_idx]->add_value(cd_poly_rings, tdd_poly_rings, false);
+              ++col_idx;
+            }
+
+            if (col_type == kLINESTRING || col_type == kPOLYGON ||
+                col_type == kMULTIPOLYGON) {
+              // Create bounds array value and add it to the physical column
+              ++cd_it;
+              auto cd_bounds = *cd_it;
+              std::vector<TDatum> td_bounds_data;
+              for (auto b : bounds) {
+                TDatum td_double;
+                td_double.val.real_val = b;
+                td_bounds_data.push_back(td_double);
+              }
+              TDatum tdd_bounds;
+              tdd_bounds.val.arr_val = td_bounds_data;
+              tdd_bounds.is_null = false;
+              import_buffers[col_idx]->add_value(cd_bounds, tdd_bounds, false);
+              ++col_idx;
+            }
+
+            if (col_type == kPOLYGON || col_type == kMULTIPOLYGON) {
+              // Create render_group value and add it to the physical column
+              ++cd_it;
+              auto cd_render_group = *cd_it;
+              TDatum td_render_group;
+              td_render_group.val.int_val = render_group;
+              td_render_group.is_null = false;
+              import_buffers[col_idx]->add_value(cd_render_group, td_render_group, false);
+              ++col_idx;
+            }
+          } else {
+            // regular column
+            // pull from GDAL metadata
+            const auto cit = columnNameToSourceNameMap.find(cd->columnName);
+            CHECK(cit != columnNameToSourceNameMap.end());
+            const std::string& fieldName = cit->second;
+            const auto fit = fieldNameToIndexMap.find(fieldName);
+            CHECK(fit != fieldNameToIndexMap.end());
+            size_t iField = fit->second;
+            CHECK(iField < fieldNameToIndexMap.size());
+            std::string fieldContents = features[iFeature]->GetFieldAsString(iField);
+            import_buffers[col_idx]->add_value(cd, fieldContents, false, copy_params);
+            ++col_idx;
+          }
+        }
+        import_status.rows_completed++;
+      } catch (const std::exception& e) {
+        for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
+          import_buffers[col_idx_to_pop]->pop_value();
+        }
+        import_status.rows_rejected++;
+        LOG(ERROR) << "Input exception thrown: " << e.what() << ". Row discarded.";
+      }
+    };
+
+    if (pGeometry && copy_params.geo_explode_collections) {
+      // explode and import
+      // @TODO(se) convert to structure-bindings when we can use C++17 here
+      auto collection_idx_type_name = explode_collections_step1(col_descs);
+      SQLTypes collection_child_type = std::get<1>(collection_idx_type_name);
+      std::string collection_col_name = std::get<2>(collection_idx_type_name);
+      explode_collections_step2(pGeometry,
+                                collection_child_type,
+                                collection_col_name,
+                                firstFeature + iFeature + 1,
+                                execute_import_feature);
+    } else {
+      // import non-collection or null feature just once
+      execute_import_feature(pGeometry);
+    }
+  }  // end features
+
   float convert_ms =
       float(timer_stop<std::chrono::steady_clock::time_point, std::chrono::microseconds>(
           convert_timer)) /
@@ -4154,10 +4383,30 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(
     ColumnDescriptor cd;
     cd.columnName = geo_column_name;
     cd.sourceName = geo_column_name;
-    SQLTypes geoType = ogr_to_type(wkbFlatten(poGeometry->getGeometryType()));
-    if (PROMOTE_POLYGON_TO_MULTIPOLYGON) {
+
+    // get GDAL type
+    auto ogr_type = wkbFlatten(poGeometry->getGeometryType());
+
+    // if exploding, override any collection type to child type
+    if (copy_params.geo_explode_collections) {
+      if (ogr_type == wkbMultiPolygon) {
+        ogr_type = wkbPolygon;
+      } else if (ogr_type == wkbMultiLineString) {
+        ogr_type = wkbLineString;
+      } else if (ogr_type == wkbMultiPoint) {
+        ogr_type = wkbPoint;
+      }
+    }
+
+    // convert to internal type
+    SQLTypes geoType = ogr_to_type(ogr_type);
+
+    // for now, we promote POLYGON to MULTIPOLYGON (unless exploding)
+    if (PROMOTE_POLYGON_TO_MULTIPOLYGON && !copy_params.geo_explode_collections) {
       geoType = (geoType == kPOLYGON) ? kMULTIPOLYGON : geoType;
     }
+
+    // build full internal type
     SQLTypeInfo ti;
     ti.set_type(geoType);
     ti.set_subtype(copy_params.geo_coords_type);
@@ -4166,6 +4415,7 @@ const std::list<ColumnDescriptor> Importer::gdalToColumnDescriptors(
     ti.set_compression(copy_params.geo_coords_encoding);
     ti.set_comp_param(copy_params.geo_coords_comp_param);
     cd.columnType = ti;
+
     cds.push_back(cd);
   }
   return cds;
@@ -4789,7 +5039,8 @@ ImportDriver::ImportDriver(std::shared_ptr<Catalog_Namespace::Catalog> cat,
 void ImportDriver::importGeoTable(const std::string& file_path,
                                   const std::string& table_name,
                                   const bool compression,
-                                  const bool create_table) {
+                                  const bool create_table,
+                                  const bool explode_collections) {
   CHECK(session_info_);
   const std::string geo_column_name(OMNISCI_GEO_PREFIX);
 
@@ -4801,6 +5052,8 @@ void ImportDriver::importGeoTable(const std::string& file_path,
     copy_params.geo_coords_encoding = EncodingType::kENCODING_NONE;
     copy_params.geo_coords_comp_param = 0;
   }
+  copy_params.geo_assign_render_groups = true;
+  copy_params.geo_explode_collections = explode_collections;
 
   auto cds = Importer::gdalToColumnDescriptors(file_path, geo_column_name, copy_params);
   std::map<std::string, std::string> colname_to_src;

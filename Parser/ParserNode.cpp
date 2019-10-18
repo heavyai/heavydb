@@ -3681,6 +3681,13 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           throw std::runtime_error("geo_assign_render_groups option must be a boolean.");
         }
         copy_params.geo_assign_render_groups = bool_from_string_literal(str_literal);
+      } else if (boost::iequals(*p->get_name(), "geo_explode_collections")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("geo_explode_collections option must be a boolean.");
+        }
+        copy_params.geo_explode_collections = bool_from_string_literal(str_literal);
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
