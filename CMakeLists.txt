@@ -81,6 +81,10 @@ else()
   add_definitions("-DBOOST_LOG_DYN_LINK")
 endif()
 
+# Required for macOS with Boost 1.71.0+
+# See https://gitlab.kitware.com/cmake/cmake/issues/19714
+set(Boost_NO_BOOST_CMAKE 1)
+
 option(ENABLE_JAVA_REMOTE_DEBUG "Enable Java Remote Debug" OFF )
 if(ENABLE_JAVA_REMOTE_DEBUG)
   add_definitions("-DENABLE_JAVA_REMOTE_DEBUG")
