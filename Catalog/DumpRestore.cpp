@@ -273,7 +273,16 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
     if (!(cd->isSystemCol || cd->isVirtualCol)) {
       const auto& ti = cd->columnType;
       os << comma << cd->columnName;
-      os << " " << ti.get_type_name();
+      // CHAR is perculiar... better dump it as TEXT(32) like \d does
+      if (ti.get_type() == SQLTypes::kCHAR) {
+        os << " "
+           << "TEXT";
+      } else if (ti.get_subtype() == SQLTypes::kCHAR) {
+        os << " "
+           << "TEXT[]";
+      } else {
+        os << " " << ti.get_type_name();
+      }
       os << (ti.get_notnull() ? " NOT NULL" : "");
       if (ti.is_string()) {
         if (ti.get_compression() == kENCODING_DICT) {
