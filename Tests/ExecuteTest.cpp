@@ -1515,12 +1515,6 @@ TEST(Select, FilterAndGroupBy) {
       "'2014-12-13 22:23:15' group by shared_dict,m;",
       dt);
     c("SELECT x, SUM(z) FROM test WHERE z IS NOT NULL GROUP BY x ORDER BY x;", dt);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT x, MIN(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT x, MAX(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
-                 std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT MIN(str) FROM test GROUP BY x;", dt),
                  std::runtime_error);
   }
@@ -15738,6 +15732,74 @@ TEST(Select, GroupEmptyBlank) {
     }
 
     c("select t1 from blank_test group by t1 order by t1;", dt);
+  }
+}
+
+TEST(Select, VariableLengthAggs) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // non-encoded strings:
+    c("SELECT x, COUNT(real_str) FROM test GROUP BY x ORDER BY x desc;", dt);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT x, MIN(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT x, MAX(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT x, SUM(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT x, AVG(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
+                 std::runtime_error);
+
+    // geometry:
+    {
+      std::string query("SELECT id, COUNT(poly) FROM geospatial_test GROUP BY id;");
+      auto result = run_multiple_agg(query, dt);
+      ASSERT_EQ(result->rowCount(), size_t(g_num_rows));
+    }
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT id, MIN(p) FROM geospatial_test GROUP BY id ORDER BY id DESC;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT id, MAX(l) FROM geospatial_test GROUP BY id ORDER BY id DESC;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT id, SUM(poly) FROM geospatial_test GROUP BY id ORDER BY id DESC;",
+            dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT id, AVG(mpoly) FROM geospatial_test GROUP BY id ORDER BY id DESC;",
+            dt),
+        std::runtime_error);
+
+    // arrays:
+    {
+      std::string query("SELECT x, COUNT(arr_i16) FROM array_test GROUP BY x;");
+      auto result = run_multiple_agg(query, dt);
+      ASSERT_EQ(result->rowCount(), size_t(g_array_test_row_count));
+    }
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT x, MIN(arr_i32) FROM array_test GROUP BY x ORDER BY x DESC;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT x, MAX(arr3_i64) FROM array_test GROUP BY x ORDER BY x DESC;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT x, SUM(arr3_float) FROM array_test GROUP BY x ORDER BY x DESC;", dt),
+        std::exception);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT x, AVG(arr_double) FROM array_test GROUP BY x ORDER BY x DESC;", dt),
+        std::exception);
   }
 }
 
