@@ -3255,8 +3255,7 @@ AggregatedColRange Executor::computeColRangesCache(
     CHECK(cd);
     const auto& col_ti =
         cd->columnType.is_array() ? cd->columnType.get_elem_type() : cd->columnType;
-    if (col_ti.is_number() || col_ti.is_boolean() || col_ti.is_time() ||
-        (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT)) {
+    if (ExpressionRange::typeSupportsRange(col_ti)) {
       const auto col_var = boost::make_unique<Analyzer::ColumnVar>(
           cd->columnType, phys_input.table_id, phys_input.col_id, 0);
       const auto col_range = getLeafColumnRange(col_var.get(), query_infos, this, false);

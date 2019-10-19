@@ -280,6 +280,11 @@ bool ExpressionRange::operator==(const ExpressionRange& other) const {
   return false;
 }
 
+bool ExpressionRange::typeSupportsRange(const SQLTypeInfo& ti) {
+  return (ti.is_number() || ti.is_boolean() || ti.is_time() ||
+          (ti.is_string() && ti.get_compression() == kENCODING_DICT));
+}
+
 ExpressionRange getExpressionRange(
     const Analyzer::BinOper* expr,
     const std::vector<InputTableInfo>& query_infos,
@@ -323,6 +328,10 @@ ExpressionRange getExpressionRange(
     const std::vector<InputTableInfo>& query_infos,
     const Executor* executor,
     boost::optional<std::list<std::shared_ptr<Analyzer::Expr>>> simple_quals) {
+  const auto& expr_ti = expr->get_type_info();
+  if (!ExpressionRange::typeSupportsRange(expr_ti)) {
+    return ExpressionRange::makeInvalidRange();
+  }
   auto bin_oper_expr = dynamic_cast<const Analyzer::BinOper*>(expr);
   if (bin_oper_expr) {
     return getExpressionRange(bin_oper_expr, query_infos, executor, simple_quals);
