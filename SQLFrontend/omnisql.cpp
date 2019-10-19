@@ -38,6 +38,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
+#include <numeric>
 #include <sstream>
 #include <string>
 
@@ -845,8 +846,8 @@ void print_all_hardware_info(ClientContext& context) {
   std::cout << tss.str();
 }
 
-static std::vector<std::string> print_privs(const std::vector<bool>& privs,
-                                            TDBObjectType::type type) {
+static std::vector<std::string> stringify_privs(const std::vector<bool>& priv_mask,
+                                                TDBObjectType::type type) {
   // Client priviliges print lookup
   std::vector<std::string> priv_strs;
   static const std::unordered_map<const TDBObjectType::type,
@@ -869,14 +870,16 @@ static std::vector<std::string> print_privs(const std::vector<bool>& privs,
            {"create"s, "drop"s, "select"s, "insert"s, "update"s, "delete"s}}};
 
   const auto privilege_names = privilege_names_lookup.find(type);
-  size_t i = 0;
+
   if (privilege_names != privilege_names_lookup.end()) {
-    for (const auto& priv : privs) {
-      if (priv) {
-        priv_strs.push_back(privilege_names->second[i]);
-      }
-      ++i;
-    }
+    size_t i = 0;
+    const auto& priv_names = privilege_names->second;
+    std::copy_if(priv_names.begin(),
+                 priv_names.end(),
+                 std::back_inserter(priv_strs),
+                 [&priv_mask, &priv_names, &i](std::string const& s) {
+                   return priv_mask.at(i++);
+                 });
   }
   return priv_strs;
 }
@@ -895,13 +898,7 @@ std::ostream& operator<<(std::ostream& os, const PrivilegeRow& priv_row) {
   os << std::setw(priv_col_width) << priv_row.object_name;
   os << std::setw(priv_col_width) << priv_row.object_type;
   os << std::setw(priv_col_width) << priv_row.privilege_object_type;
-  for (auto priv_it = priv_row.privileges.begin(); priv_it != priv_row.privileges.end();
-       ++priv_it) {
-    os << *priv_it;
-    if (std::next(priv_it) != priv_row.privileges.end()) {
-      os << ",";
-    }
-  }
+  os << boost::algorithm::join(priv_row.privileges, ", ");
   return os;
 };
 
@@ -951,21 +948,19 @@ void get_db_objects_for_grantee(ClientContext& context) {
     std::vector<PrivilegeRow> table_values;
     for (const auto& db_object : context.db_objects) {
       PrivilegeRow out_row;
-      bool any_granted_privs = false;
-      for (size_t j = 0; j < db_object.privs.size(); j++) {
-        if (db_object.privs[j]) {
-          any_granted_privs = true;
-          break;
-        }
-      }
-      if (!any_granted_privs) {
+
+      auto has_granted_privs = [](const std::vector<bool>& privs_mask) -> const bool {
+        return std::accumulate(privs_mask.begin(), privs_mask.end(), 0) > 0;
+      };
+      if (!has_granted_privs(db_object.privs)) {
         continue;
       }
 
       out_row.object_name = db_object.objectName.c_str();
       out_row.object_type = type_to_string(db_object.objectType);
       out_row.privilege_object_type = type_to_string(db_object.privilegeObjectType);
-      out_row.privileges = print_privs(db_object.privs, db_object.privilegeObjectType);
+      out_row.privileges =
+          stringify_privs(db_object.privs, db_object.privilegeObjectType);
 
       table_values.push_back(out_row);
     }
@@ -981,18 +976,15 @@ void get_db_object_privs(ClientContext& context) {
               .compare(boost::to_upper_copy<std::string>(db_object.objectName))) {
         continue;
       }
-      bool any_granted_privs = false;
-      for (size_t j = 0; j < db_object.privs.size(); j++) {
-        if (db_object.privs[j]) {
-          any_granted_privs = true;
-          break;
-        }
-      }
-      if (!any_granted_privs) {
+      auto has_granted_privs = [](const std::vector<bool>& privs_mask) -> const bool {
+        return std::accumulate(privs_mask.begin(), privs_mask.end(), 0) > 0;
+      };
+      if (!has_granted_privs(db_object.privs)) {
         continue;
       }
-      std::cout << db_object.grantee << " privileges:";
-      print_privs(db_object.privs, db_object.objectType);
+      std::cout << db_object.grantee << " privileges: ";
+      auto priv_strs = stringify_privs(db_object.privs, db_object.objectType);
+      std::cout << boost::algorithm::join(priv_strs, ", ");
       std::cout << std::endl;
     }
   }
