@@ -68,7 +68,6 @@
 #include <set>
 #include <thread>
 
-bool g_enable_debug_timer{false};
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
 unsigned g_dynamic_watchdog_time_limit{10000};
@@ -863,6 +862,7 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const QueryMemoryDescriptor& query_mem_desc) const {
+  auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<ResultSet> reduced_results;
 
   const auto& first = results_per_device.front().first;
@@ -1211,7 +1211,10 @@ ResultSetPtr Executor::executeWorkUnitImpl(
       plan_state_->target_exprs_.push_back(target_expr);
     }
 
-    auto dispatch = [&execution_dispatch, &column_fetcher, &eo](
+    auto dispatch = [&execution_dispatch,
+                     &column_fetcher,
+                     &eo,
+                     parent_thread_id = std::this_thread::get_id()](
                         const ExecutorDeviceType chosen_device_type,
                         int chosen_device_id,
                         const QueryCompilationDescriptor& query_comp_desc,
@@ -1219,6 +1222,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                         const FragmentsList& frag_list,
                         const ExecutorDispatchMode kernel_dispatch_mode,
                         const int64_t rowid_lookup_key) {
+      DEBUG_TIMER_NEW_THREAD(parent_thread_id);
       INJECT_TIMER(execution_dispatch_run);
       execution_dispatch.run(chosen_device_type,
                              chosen_device_id,
@@ -1510,6 +1514,7 @@ ResultSetPtr Executor::collectAllDeviceResults(
     const QueryMemoryDescriptor& query_mem_desc,
     const ExecutorDeviceType device_type,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+  auto timer = DEBUG_TIMER(__func__);
   auto& result_per_device = execution_dispatch.getFragmentResults();
   if (result_per_device.empty() && query_mem_desc.getQueryDescriptionType() ==
                                        QueryDescriptionType::NonGroupedAggregate) {
@@ -2020,6 +2025,7 @@ Executor::FetchResult Executor::fetchChunks(
     const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
+  auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(fetchChunks);
   const auto& col_global_ids = ra_exe_unit.input_col_descs;
   std::vector<std::vector<size_t>> selected_fragments_crossjoin;
@@ -2271,6 +2277,7 @@ int32_t Executor::executePlanWithoutGroupBy(
     const uint32_t num_tables,
     RenderInfo* render_info) {
   INJECT_TIMER(executePlanWithoutGroupBy);
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(!results);
   if (col_buffers.empty()) {
     return 0;
@@ -2413,6 +2420,7 @@ int32_t Executor::executePlanWithGroupBy(
     const uint32_t start_rowid,
     const uint32_t num_tables,
     RenderInfo* render_info) {
+  auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(executePlanWithGroupBy);
   CHECK(!results);
   if (col_buffers.empty()) {

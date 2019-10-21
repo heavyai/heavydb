@@ -1569,6 +1569,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                           const bool has_cardinality_estimation,
                           ColumnCacheMap& column_cache,
                           RenderInfo* render_info) {
+  auto timer = DEBUG_TIMER(__func__);
   nukeOldState(allow_lazy_fetch, query_infos, &ra_exe_unit);
 
   GroupByAndAggregate group_by_and_aggregate(

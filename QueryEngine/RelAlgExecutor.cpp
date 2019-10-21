@@ -67,6 +67,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
                                                    const CompilationOptions& co,
                                                    const ExecutionOptions& eo,
                                                    RenderInfo* render_info) {
+  auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(executeRelAlgQuery);
   try {
     return executeRelAlgQueryNoRetry(query_ra, co, eo, render_info);
@@ -1920,6 +1921,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     const int64_t queue_time_ms,
     const ssize_t previous_count) {
   INJECT_TIMER(executeWorkUnit);
+  auto timer = DEBUG_TIMER(__func__);
 
   auto co = co_in;
   ColumnCacheMap column_cache;
