@@ -31,6 +31,8 @@
 
 #include <future>
 
+#include "Utils/Async.h"
+
 std::unique_ptr<CudaMgr_Namespace::CudaMgr> g_cuda_mgr;  // for unit tests only
 
 namespace {
@@ -90,7 +92,7 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
     std::vector<std::future<void>> top_futures;
     std::vector<std::vector<uint32_t>> strided_permutations(step);
     for (size_t start = 0; start < step; ++start) {
-      top_futures.emplace_back(std::async(
+      top_futures.emplace_back(utils::async(
           std::launch::async,
           [&strided_permutations,
            data_mgr,

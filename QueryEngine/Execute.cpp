@@ -68,6 +68,8 @@
 #include <set>
 #include <thread>
 
+#include "Utils/Async.h"
+
 bool g_enable_debug_timer{false};
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
@@ -1746,7 +1748,7 @@ void Executor::dispatchFragments(
             const int device_id,
             const FragmentsList& frag_list,
             const int64_t rowid_lookup_key) {
-          query_threads.push_back(std::async(std::launch::async,
+          query_threads.push_back(utils::async(std::launch::async,
                                              dispatch,
                                              ExecutorDeviceType::GPU,
                                              device_id,
@@ -1788,7 +1790,7 @@ void Executor::dispatchFragments(
       }
       CHECK_GE(device_id, 0);
 
-      query_threads.push_back(std::async(std::launch::async,
+      query_threads.push_back(utils::async(std::launch::async,
                                          dispatch,
                                          device_type,
                                          device_id,

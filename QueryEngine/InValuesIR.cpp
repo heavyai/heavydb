@@ -19,6 +19,8 @@
 
 #include <future>
 
+#include "Utils/Async.h"
+
 llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
                                     const CompilationOptions& co) {
   const auto in_arg = expr->get_arg();
@@ -166,7 +168,7 @@ std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
         return true;
       };
       if (worker_count > 1) {
-        worker_threads.push_back(std::async(
+        worker_threads.push_back(utils::async(
             std::launch::async, do_work, std::ref(values_set[i]), start_it, end_it));
       } else {
         do_work(std::ref(values), start_it, end_it);

@@ -29,6 +29,7 @@
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "Shared/File.h"
 
+#include "Utils/Async.h"
 #define METADATA_PAGE_SIZE 4096
 
 using namespace std;
@@ -306,7 +307,7 @@ void FileBuffer::read(int8_t* const dst,
     for (size_t i = 0; i < numThreads; i++) {
       threadDSArr.push_back(threadDS);
       threads.push_back(
-          std::async(std::launch::async, readForThread, this, threadDSArr[i]));
+          utils::async(std::launch::async, readForThread, this, threadDSArr[i]));
 
       // calculate elements of threadDS
       threadDS.t_fm = fm_;

@@ -38,6 +38,8 @@
 #include <future>
 #include <numeric>
 
+#include "Utils/Async.h"
+
 extern bool g_enable_dynamic_watchdog;
 
 namespace {
@@ -232,7 +234,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
         const auto start_index = thread_idx * thread_entry_count;
         const auto end_index =
             std::min(start_index + thread_entry_count, that_entry_count);
-        reduction_threads.emplace_back(std::async(
+        reduction_threads.emplace_back(utils::async(
             std::launch::async,
             [this,
              this_buff,
@@ -293,7 +295,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
       const auto start_index = thread_idx * thread_entry_count;
       const auto end_index = std::min(start_index + thread_entry_count, entry_count);
       if (query_mem_desc_.didOutputColumnar()) {
-        reduction_threads.emplace_back(std::async(std::launch::async,
+        reduction_threads.emplace_back(utils::async(std::launch::async,
                                                   [this,
                                                    this_buff,
                                                    that_buff,
@@ -310,7 +312,7 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
                                                         serialized_varlen_buffer);
                                                   }));
       } else {
-        reduction_threads.emplace_back(std::async(
+        reduction_threads.emplace_back(utils::async(
             std::launch::async,
             [this,
              this_buff,
@@ -1031,7 +1033,7 @@ void ResultSetStorage::moveEntriesToBuffer(int8_t* new_buff,
       const auto start_index = thread_idx * thread_entry_count;
       const auto end_index =
           std::min(start_index + thread_entry_count, query_mem_desc_.getEntryCount());
-      move_threads.emplace_back(std::async(
+      move_threads.emplace_back(utils::async(
           std::launch::async,
           [this,
            src_buff,

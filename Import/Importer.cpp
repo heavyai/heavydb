@@ -72,6 +72,8 @@
 #include "Utils/ChunkAccessorTable.h"
 #include "gen-cpp/MapD.h"
 
+#include "Utils/Async.h"
+
 size_t g_archive_read_buf_size = 1 << 20;
 
 inline auto get_filesize(const std::string& file_path) {
@@ -2391,10 +2393,11 @@ std::vector<DataBlockPtr> Loader::get_data_block_pointers(
 
       encoded_data_block_ptrs_futures.emplace_back(std::make_pair(
           buf_idx,
-          std::async(std::launch::async, [buf_idx, &import_buffers, string_payload_ptr] {
-            import_buffers[buf_idx]->addDictEncodedString(*string_payload_ptr);
-            return import_buffers[buf_idx]->getStringDictBuffer();
-          })));
+          utils::async(
+              std::launch::async, [buf_idx, &import_buffers, string_payload_ptr] {
+                import_buffers[buf_idx]->addDictEncodedString(*string_payload_ptr);
+                return import_buffers[buf_idx]->getStringDictBuffer();
+              })));
     }
   }
 
@@ -3654,16 +3657,24 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
       stack_thread_ids.pop();
       // LOG(INFO) << " stack_thread_ids.pop " << thread_id << std::endl;
 
-      threads.push_back(std::async(std::launch::async,
-                                   import_thread_delimited,
-                                   thread_id,
-                                   this,
-                                   std::move(scratch_buffer),
-                                   begin_pos,
-                                   end_pos,
-                                   end_pos,
-                                   columnIdToRenderGroupAnalyzerMap,
-                                   first_row_index_this_buffer));
+      threads.push_back(utils::async(std::launch::async,
+                                     [thread_id,
+                                      this,
+                                      &scratch_buffer,
+                                      begin_pos,
+                                      end_pos,
+                                      columnIdToRenderGroupAnalyzerMap,
+                                      first_row_index_this_buffer]() {
+                                       return import_thread_delimited(
+                                           thread_id,
+                                           this,
+                                           std::move(scratch_buffer),
+                                           begin_pos,
+                                           end_pos,
+                                           end_pos,
+                                           columnIdToRenderGroupAnalyzerMap,
+                                           first_row_index_this_buffer);
+                                     }));
 
       first_row_index_this_buffer += num_rows_this_buffer;
 
@@ -4510,17 +4521,17 @@ ImportStatus Importer::importGDAL(
     set_import_status(import_id, import_status);
 #else
     // fire up that thread to import this geometry
-    threads.push_back(std::async(std::launch::async,
-                                 import_thread_shapefile,
-                                 thread_id,
-                                 this,
-                                 poGeographicSR.get(),
-                                 std::move(features[thread_id]),
-                                 firstFeatureThisChunk,
-                                 numFeaturesThisChunk,
-                                 fieldNameToIndexMap,
-                                 columnNameToSourceNameMap,
-                                 columnIdToRenderGroupAnalyzerMap));
+    threads.push_back(utils::async(std::launch::async,
+                                   import_thread_shapefile,
+                                   thread_id,
+                                   this,
+                                   poGeographicSR.get(),
+                                   std::move(features[thread_id]),
+                                   firstFeatureThisChunk,
+                                   numFeaturesThisChunk,
+                                   fieldNameToIndexMap,
+                                   columnNameToSourceNameMap,
+                                   columnIdToRenderGroupAnalyzerMap));
 
     // let the threads run
     while (threads.size() > 0) {

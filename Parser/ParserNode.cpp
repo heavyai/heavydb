@@ -63,6 +63,8 @@
 #include <type_traits>
 #include <typeinfo>
 
+#include "Utils/Async.h"
+
 size_t g_leaf_count{0};
 bool g_use_date_in_days_default_encoding{true};
 extern bool g_enable_experimental_string_functions;
@@ -2653,7 +2655,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
       if (can_go_parallel) {
         std::vector<std::future<void>> worker_threads;
         for (int i = 0; i < num_worker_threads; ++i) {
-          worker_threads.push_back(std::async(std::launch::async, convert_function, i));
+          worker_threads.push_back(utils::async(std::launch::async, convert_function, i));
         }
 
         for (auto& child : worker_threads) {
@@ -2676,7 +2678,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
         std::vector<std::future<void>> worker_threads;
         for (auto& converterPtr : value_converters) {
           worker_threads.push_back(
-              std::async(std::launch::async, finalizer_func, converterPtr.get()));
+              utils::async(std::launch::async, finalizer_func, converterPtr.get()));
         }
 
         for (auto& child : worker_threads) {

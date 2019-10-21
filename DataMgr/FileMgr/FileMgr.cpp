@@ -39,6 +39,8 @@
 #include "Shared/File.h"
 #include "Shared/measure.h"
 
+#include "Utils/Async.h"
+
 #define EPOCH_FILENAME "epoch"
 #define DB_META_FILENAME "dbmeta"
 
@@ -182,7 +184,7 @@ void FileMgr::init(const size_t num_reader_threads) {
           VLOG(4) << "File id: " << fileId << " Page size: " << pageSize
                   << " Num pages: " << numPages;
 
-          file_futures.emplace_back(std::async(
+          file_futures.emplace_back(utils::async(
               std::launch::async, [filePath, fileId, pageSize, numPages, this] {
                 std::vector<HeaderInfo> tempHeaderVec;
                 openExistingFile(filePath, fileId, pageSize, numPages, tempHeaderVec);
@@ -345,7 +347,7 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
           assert(fileSize % pageSize == 0);  // should be no partial pages
           size_t numPages = fileSize / pageSize;
 
-          file_futures.emplace_back(std::async(
+          file_futures.emplace_back(utils::async(
               std::launch::async, [filePath, fileId, pageSize, numPages, this] {
                 std::vector<HeaderInfo> tempHeaderVec;
                 openExistingFile(filePath, fileId, pageSize, numPages, tempHeaderVec);

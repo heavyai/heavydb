@@ -41,6 +41,8 @@
 #include <future>
 #include <numeric>
 
+#include "Utils/Async.h"
+
 ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
                                    const QueryMemoryDescriptor& query_mem_desc,
                                    int8_t* buff,
@@ -353,7 +355,7 @@ size_t ResultSet::parallelRowCount() const {
        i < worker_count && start_entry < entryCount();
        ++i, start_entry += stride) {
     const auto end_entry = std::min(start_entry + stride, entryCount());
-    counter_threads.push_back(std::async(
+    counter_threads.push_back(utils::async(
         std::launch::async,
         [this](const size_t start, const size_t end) {
           size_t row_count{0};
@@ -559,7 +561,7 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   std::vector<std::future<void>> init_futures;
   for (size_t start = 0; start < step; ++start) {
     init_futures.emplace_back(
-        std::async(std::launch::async, [this, start, step, &strided_permutations] {
+        utils::async(std::launch::async, [this, start, step, &strided_permutations] {
           strided_permutations[start] = initPermutationBuffer(start, step);
         }));
   }
@@ -573,7 +575,7 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   std::vector<std::future<void>> top_futures;
   for (auto& strided_permutation : strided_permutations) {
     top_futures.emplace_back(
-        std::async(std::launch::async, [&strided_permutation, &compare, top_n] {
+        utils::async(std::launch::async, [&strided_permutation, &compare, top_n] {
           topPermutation(strided_permutation, top_n, compare);
         }));
   }

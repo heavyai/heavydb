@@ -34,6 +34,8 @@
 #include "Shared/thread_count.h"
 #include "TargetValueConvertersFactories.h"
 
+#include "Utils/Async.h"
+
 extern bool g_enable_experimental_string_functions;
 
 namespace Fragmenter_Namespace {
@@ -545,7 +547,7 @@ void InsertOrderFragmenter::updateColumns(
          i < num_worker_threads && start_entry < num_entries;
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, num_rows);
-      worker_threads.push_back(std::async(
+      worker_threads.push_back(utils::async(
           std::launch::async,
           [&row_converter](const size_t start, const size_t end) {
             for (size_t indexOfRow = start; indexOfRow < end; ++indexOfRow) {
@@ -662,7 +664,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
     updel_roll.dirtyChunkeys.insert(chunkey);
   }
   for (size_t rbegin = 0, c = 0; rbegin < nrow; ++c, rbegin += segsz) {
-    threads.emplace_back(std::async(
+    threads.emplace_back(utils::async(
         std::launch::async,
         [=,
          &has_null_per_thread,
@@ -1051,7 +1053,7 @@ const std::vector<uint64_t> InsertOrderFragmenter::getVacuumOffsets(
   deleted_offsets.resize(ncore);
   std::vector<std::future<void>> threads;
   for (size_t rbegin = 0; rbegin < nrows_in_chunk; rbegin += segsz) {
-    threads.emplace_back(std::async(std::launch::async, [=, &deleted_offsets] {
+    threads.emplace_back(utils::async(std::launch::async, [=, &deleted_offsets] {
       const auto rend = std::min<size_t>(rbegin + segsz, nrows_in_chunk);
       const auto ithread = rbegin / segsz;
       CHECK(ithread < deleted_offsets.size());
@@ -1294,9 +1296,9 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
     };
 
     if (is_varlen) {
-      threads.emplace_back(std::async(std::launch::async, varlen_vacuum));
+      threads.emplace_back(utils::async(std::launch::async, varlen_vacuum));
     } else {
-      threads.emplace_back(std::async(std::launch::async, fixlen_vacuum));
+      threads.emplace_back(utils::async(std::launch::async, fixlen_vacuum));
     }
     if (threads.size() >= (size_t)cpu_threads()) {
       wait_cleanup_threads(threads);

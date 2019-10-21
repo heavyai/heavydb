@@ -31,6 +31,8 @@
 #include <future>
 #include <thread>
 
+#include "Utils/Async.h"
+
 namespace {
 const int SYSTEM_PAGE_SIZE = getpagesize();
 
@@ -170,7 +172,7 @@ StringDictionary::StringDictionary(const std::string& folder,
       std::vector<std::future<std::vector<std::pair<uint32_t, unsigned int>>>>
           dictionary_futures;
       for (string_id = 0; string_id < str_count; string_id += items_per_thread) {
-        dictionary_futures.emplace_back(std::async(
+        dictionary_futures.emplace_back(utils::async(
             std::launch::async, [string_id, str_count, items_per_thread, this] {
               std::vector<std::pair<uint32_t, unsigned int>> hashVec;
               for (uint32_t curr_id = string_id;
@@ -796,7 +798,7 @@ std::shared_ptr<const std::vector<std::string>> StringDictionary::copyStrings() 
     for (size_t worker_idx = 0, start = 0, end = std::min(start + stride, str_count_);
          worker_idx < worker_count && start < str_count_;
          ++worker_idx, start += stride, end = std::min(start + stride, str_count_)) {
-      workers.push_back(std::async(
+      workers.push_back(utils::async(
           std::launch::async, copy, std::ref(worker_results[worker_idx]), start, end));
     }
     for (auto& worker : workers) {
@@ -1182,7 +1184,7 @@ void StringDictionary::populate_string_array_ids(
   if (source_array_ids.size() / num_worker_threads > 10) {
     std::vector<std::future<void>> worker_threads;
     for (int i = 0; i < num_worker_threads; ++i) {
-      worker_threads.push_back(std::async(std::launch::async, processor, i));
+      worker_threads.push_back(utils::async(std::launch::async, processor, i));
     }
 
     for (auto& child : worker_threads) {

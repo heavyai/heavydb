@@ -21,6 +21,8 @@
 
 #include <future>
 
+#include "Utils/Async.h"
+
 InputTableInfoCache::InputTableInfoCache(Executor* executor) : executor_(executor) {}
 
 namespace {
@@ -138,7 +140,7 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultSet* rows) {
          i < worker_count && start_entry < entry_count;
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entry_count);
-      compute_stats_threads.push_back(std::async(
+      compute_stats_threads.push_back(utils::async(
           std::launch::async,
           [rows, &do_work, &dummy_encoders](
               const size_t start, const size_t end, const size_t worker_idx) {

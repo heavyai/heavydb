@@ -23,6 +23,8 @@
 #include <future>
 #include <numeric>
 
+#include "Utils/Async.h"
+
 namespace {
 
 inline int64_t fixed_encoding_nullable_val(const int64_t val,
@@ -163,7 +165,7 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
          i < worker_count && start_entry < entry_count;
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entry_count);
-      conversion_threads.push_back(std::async(
+      conversion_threads.push_back(utils::async(
           std::launch::async,
           [&rows, &do_work, &row_idx](const size_t start, const size_t end) {
             for (size_t i = start; i < end; ++i) {
@@ -368,7 +370,7 @@ void ColumnarResults::copyAllNonLazyColumns(
   std::vector<std::future<void>> direct_copy_threads;
   for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
     if (is_column_non_lazily_fetched(col_idx)) {
-      direct_copy_threads.push_back(std::async(
+      direct_copy_threads.push_back(utils::async(
           std::launch::async,
           [&rows, this](const size_t column_index) {
             const size_t column_size = num_rows_ * target_types_[column_index].get_size();
@@ -440,7 +442,7 @@ void ColumnarResults::materializeAllLazyColumns(
          i < worker_count && start_entry < entry_count;
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entry_count);
-      conversion_threads.push_back(std::async(
+      conversion_threads.push_back(utils::async(
           std::launch::async,
           [&rows, &do_work_just_lazy_columns, &targets_to_skip](const size_t start,
                                                                 const size_t end) {
@@ -529,7 +531,7 @@ void ColumnarResults::locateAndCountEntries(const ResultSet& rows,
   for (size_t thread_idx = 0; thread_idx < num_threads; thread_idx++) {
     const size_t start_entry = thread_idx * size_per_thread;
     const size_t end_entry = std::min(start_entry + size_per_thread, entry_count);
-    conversion_threads.push_back(std::async(
+    conversion_threads.push_back(utils::async(
         std::launch::async, locate_and_count_func, start_entry, end_entry, thread_idx));
   }
 
@@ -676,7 +678,7 @@ void ColumnarResults::compactAndCopyEntriesWithTargetSkipping(
   for (size_t thread_idx = 0; thread_idx < num_threads; thread_idx++) {
     const size_t start_entry = thread_idx * size_per_thread;
     const size_t end_entry = std::min(start_entry + size_per_thread, entry_count);
-    compaction_threads.push_back(std::async(
+    compaction_threads.push_back(utils::async(
         std::launch::async, compact_buffer_func, start_entry, end_entry, thread_idx));
   }
 
@@ -750,7 +752,7 @@ void ColumnarResults::compactAndCopyEntriesWithoutTargetSkipping(
   for (size_t thread_idx = 0; thread_idx < num_threads; thread_idx++) {
     const size_t start_entry = thread_idx * size_per_thread;
     const size_t end_entry = std::min(start_entry + size_per_thread, entry_count);
-    compaction_threads.push_back(std::async(
+    compaction_threads.push_back(utils::async(
         std::launch::async, compact_buffer_func, start_entry, end_entry, thread_idx));
   }
 

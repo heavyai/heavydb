@@ -24,6 +24,8 @@
 
 #include <future>
 
+#include "Utils/Async.h"
+
 std::vector<std::pair<BaselineJoinHashTable::HashTableCacheKey,
                       BaselineJoinHashTable::HashTableCacheValue>>
     BaselineJoinHashTable::hash_table_cache_;
@@ -395,7 +397,7 @@ void BaselineJoinHashTable::reifyWithLayout(
         shard_count
             ? only_shards_for_device(query_info.fragments, device_id, device_count)
             : query_info.fragments;
-    init_threads.push_back(std::async(std::launch::async,
+    init_threads.push_back(utils::async(std::launch::async,
                                       &BaselineJoinHashTable::reifyForDevice,
                                       this,
                                       columns_per_device[device_id],
@@ -461,7 +463,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
   }
   std::vector<std::future<void>> approximate_distinct_device_threads;
   for (int device_id = 0; device_id < device_count; ++device_id) {
-    approximate_distinct_device_threads.emplace_back(std::async(
+    approximate_distinct_device_threads.emplace_back(utils::async(
         std::launch::async,
         [device_id,
          &columns_per_device,
@@ -736,7 +738,7 @@ int BaselineJoinHashTable::initHashTableOnCpu(
   std::vector<std::future<void>> init_cpu_buff_threads;
   for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
     init_cpu_buff_threads.emplace_back(
-        std::async(std::launch::async,
+        utils::async(std::launch::async,
                    [this,
                     key_component_count,
                     key_component_width,
@@ -774,7 +776,7 @@ int BaselineJoinHashTable::initHashTableOnCpu(
   }
   std::vector<std::future<int>> fill_cpu_buff_threads;
   for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-    fill_cpu_buff_threads.emplace_back(std::async(
+    fill_cpu_buff_threads.emplace_back(utils::async(
         std::launch::async,
         [this,
          &composite_key_info,

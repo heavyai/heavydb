@@ -28,6 +28,8 @@
 #include <numeric>
 #include <thread>
 
+#include "Utils/Async.h"
+
 namespace {
 
 class NeedsOneToManyHash : public HashJoinFail {
@@ -570,7 +572,7 @@ void JoinHashTable::reify(const int device_count) {
               ? only_shards_for_device(query_info.fragments, device_id, device_count)
               : query_info.fragments;
       init_threads.push_back(
-          std::async(std::launch::async,
+          utils::async(std::launch::async,
                      hash_type_ == JoinHashTableInterface::HashType::OneToOne
                          ? &JoinHashTable::reifyOneToOneForDevice
                          : &JoinHashTable::reifyOneToManyForDevice,
@@ -595,7 +597,7 @@ void JoinHashTable::reify(const int device_count) {
               ? only_shards_for_device(query_info.fragments, device_id, device_count)
               : query_info.fragments;
 
-      init_threads.push_back(std::async(std::launch::async,
+      init_threads.push_back(utils::async(std::launch::async,
                                         &JoinHashTable::reifyOneToManyForDevice,
                                         this,
                                         fragments,
@@ -907,7 +909,7 @@ void JoinHashTable::initOneToManyHashTableOnCpu(
   int thread_count = cpu_threads();
   std::vector<std::future<void>> init_threads;
   for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-    init_threads.emplace_back(std::async(std::launch::async,
+    init_threads.emplace_back(utils::async(std::launch::async,
                                          init_hash_join_buff,
                                          &(*cpu_hash_table_buff_)[0],
                                          hash_entry_info.getNormalizedHashEntryCount(),

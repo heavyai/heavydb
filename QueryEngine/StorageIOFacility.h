@@ -14,6 +14,8 @@
 
 #include <future>
 
+#include "Utils/Async.h"
+
 template <typename FRAGMENTER_TYPE = Fragmenter_Namespace::InsertOrderFragmenter>
 class DefaultIOFacet {
  public:
@@ -309,7 +311,7 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
         auto thread_launcher = [&](auto const& type_tag) {
           for (unsigned i = 0; i < static_cast<unsigned>(usable_threads); i++) {
             entry_processing_futures.emplace_back(
-                std::async(std::launch::async,
+                utils::async(std::launch::async,
                            std::forward<decltype(process_rows)>(process_rows),
                            type_tag,
                            column_index,
@@ -318,7 +320,7 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
           }
           if (partial_row_block_size) {
             entry_processing_futures.emplace_back(
-                std::async(std::launch::async,
+                utils::async(std::launch::async,
                            std::forward<decltype(process_rows)>(process_rows),
                            type_tag,
                            column_index,
@@ -415,14 +417,14 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
 
     for (unsigned i = 0; i < (unsigned)usable_threads; i++) {
       row_processing_futures.emplace_back(
-          std::async(std::launch::async,
+          utils::async(std::launch::async,
                      std::forward<decltype(process_rows)>(process_rows),
                      get_row_index(i),
                      complete_row_block_size));
     }
     if (partial_row_block_size) {
       row_processing_futures.emplace_back(
-          std::async(std::launch::async,
+          utils::async(std::launch::async,
                      std::forward<decltype(process_rows)>(process_rows),
                      get_row_index(usable_threads),
                      partial_row_block_size));

@@ -40,6 +40,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include "Utils/Async.h"
+
 bool g_gpus_present = false;
 
 const float c_space_usage = 2.0f;
@@ -166,7 +168,7 @@ bool generate_columns_on_host(int8_t* buffers,
     CHECK_LE(ranges[i].first, ranges[i].second);
     switch (col_widths[i]) {
       case 4:
-        child_threads.push_back(std::async(std::launch::async,
+        child_threads.push_back(utils::async(std::launch::async,
                                            generate_numbers<int32_t>,
                                            buffers,
                                            row_count,
@@ -176,7 +178,7 @@ bool generate_columns_on_host(int8_t* buffers,
                                            (is_columnar ? 4 : row_size)));
         break;
       case 8:
-        child_threads.push_back(std::async(std::launch::async,
+        child_threads.push_back(utils::async(std::launch::async,
                                            generate_numbers<int64_t>,
                                            buffers,
                                            row_count,
@@ -215,7 +217,7 @@ inline void init_groups_on_host(int8_t* groups,
     const auto end_group = std::min(group_count, start_group + stride);
     if (is_columnar) {
       child_threads.push_back(
-          std::async(std::launch::async, [&, start_group, end_group]() {
+          utils::async(std::launch::async, [&, start_group, end_group]() {
             auto col_base = groups;
             for (size_t j = 0; j < col_count; col_base += col_widths[j++] * group_count) {
               for (size_t i = start_group; i < end_group; ++i) {
@@ -240,7 +242,7 @@ inline void init_groups_on_host(int8_t* groups,
           }));
     } else {
       child_threads.push_back(
-          std::async(std::launch::async, [&, start_group, end_group]() {
+          utils::async(std::launch::async, [&, start_group, end_group]() {
             for (size_t i = start_group; i < end_group; ++i) {
               auto row_base = groups + i * row_size;
               for (size_t j = 0; j < col_count; row_base += col_widths[j++]) {
@@ -280,7 +282,7 @@ void columnarize_groups_on_host(int8_t* columnar_buffer,
 
   for (size_t start_row = 0; start_row < row_count; start_row += stride) {
     const auto end_row = std::min(row_count, start_row + stride);
-    child_threads.push_back(std::async(std::launch::async, [&, start_row, end_row]() {
+    child_threads.push_back(utils::async(std::launch::async, [&, start_row, end_row]() {
       for (size_t i = start_row; i < end_row; ++i) {
         auto read_ptr = rowwise_buffer + i * row_size;
         auto write_base = columnar_buffer;
@@ -406,7 +408,7 @@ class AggregateEmulator {
     std::vector<ResultType> partial_results(cpu_count);
     for (size_t start_row = 0, i = 0; start_row < row_count; start_row += stride, ++i) {
       const auto end_row = std::min(row_count, start_row + stride);
-      child_threads.push_back(std::async(std::launch::async,
+      child_threads.push_back(utils::async(std::launch::async,
                                          &AggregateEmulator::runDispatch,
                                          this,
                                          std::ref(partial_results[i]),
@@ -437,7 +439,7 @@ class AggregateEmulator {
     const auto stride = (group_count + cpu_count - 1) / cpu_count;
     for (size_t start_group = 0; start_group < group_count; start_group += stride) {
       const auto end_group = std::min(group_count, start_group + stride);
-      child_threads.push_back(std::async(std::launch::async,
+      child_threads.push_back(utils::async(std::launch::async,
                                          &AggregateEmulator::compareDispatch,
                                          this,
                                          buffers,
@@ -707,7 +709,7 @@ void mash_restore_keys(int8_t* output_buffer,
   const auto stride = (group_count + cpu_count - 1) / cpu_count;
   for (size_t start_group = 0; start_group < group_count; start_group += stride) {
     const auto end_group = std::min(group_count, start_group + stride);
-    child_threads.push_back(std::async(std::launch::async,
+    child_threads.push_back(utils::async(std::launch::async,
                                        mash_restore_dispatch<isColumnar, KeyT, ValT>,
                                        output_buffer,
                                        groups_buffer,
@@ -1184,7 +1186,7 @@ class Deduplicater {
     for (size_t start_entry = 0, i = 0; start_entry < entry_cnt_;
          start_entry += stride, ++i) {
       const auto end_entry = std::min(entry_cnt_, start_entry + stride);
-      child_threads.push_back(std::async(std::launch::async,
+      child_threads.push_back(utils::async(std::launch::async,
                                          &Deduplicater::runDispatch,
                                          this,
                                          std::ref(mask_set),
@@ -1385,7 +1387,7 @@ TEST(Reduction, Baseline) {
   if (has_multi_gpus) {
     std::vector<std::future<size_t>> gener_threads;
     for (size_t i = 0; i < results.size(); ++i) {
-      gener_threads.push_back(std::async(std::launch::async,
+      gener_threads.push_back(utils::async(std::launch::async,
                                          gen_func,
                                          results[i]->getStorage()->getUnderlyingBuffer(),
                                          i));
@@ -1462,7 +1464,7 @@ TEST(Reduction, Baseline) {
       std::vector<std::future<void>> reducer_threads;
       for (size_t device_id = 0; device_id + stride < result_count;
            device_id += stride * 2) {
-        reducer_threads.push_back(std::async(
+        reducer_threads.push_back(utils::async(
             std::launch::async,
             [&](const size_t dev_id) {
               if (has_multi_gpus) {
@@ -1644,7 +1646,7 @@ TEST(Reduction, PerfectHash) {
   if (has_multi_gpus) {
     std::vector<std::future<size_t>> gener_threads;
     for (size_t i = 0; i < results.size(); ++i) {
-      gener_threads.push_back(std::async(std::launch::async,
+      gener_threads.push_back(utils::async(std::launch::async,
                                          gen_func,
                                          results[i]->getStorage()->getUnderlyingBuffer(),
                                          i));
@@ -1710,7 +1712,7 @@ TEST(Reduction, PerfectHash) {
   elapsedTime = measure<>::execution([&]() {
     std::vector<std::future<void>> uploader_threads;
     for (size_t device_id = 0; device_id < result_count; ++device_id) {
-      uploader_threads.push_back(std::async(
+      uploader_threads.push_back(utils::async(
           std::launch::async,
           [&](const size_t dev_id) {
             if (has_multi_gpus) {
@@ -1739,7 +1741,7 @@ TEST(Reduction, PerfectHash) {
       for (size_t device_id = 0, start_entry = 0; device_id < result_count;
            ++device_id, start_entry += stride) {
         const auto end_entry = std::min(start_entry + stride, entry_count);
-        redis_threads.push_back(std::async(
+        redis_threads.push_back(utils::async(
             std::launch::async,
             [&](const size_t dev_id, const size_t start, const size_t end) {
               cudaSetDevice(dev_id);
@@ -1768,7 +1770,7 @@ TEST(Reduction, PerfectHash) {
     for (size_t device_id = 0, start_entry = 0; device_id < seg_count;
          ++device_id, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entry_count);
-      reducer_threads.push_back(std::async(
+      reducer_threads.push_back(utils::async(
           std::launch::async,
           [&](const size_t dev_id, const size_t start, const size_t end) {
             if (has_multi_gpus) {

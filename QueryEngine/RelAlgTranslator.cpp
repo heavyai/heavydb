@@ -34,6 +34,8 @@
 #include "../Shared/sql_type_to_string.h"
 #include "../Shared/thread_count.h"
 
+#include "Utils/Async.h"
+
 extern bool g_enable_watchdog;
 
 bool g_enable_experimental_string_functions = false;
@@ -437,7 +439,7 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
        i < fetcher_count && start_entry < entry_count;
        ++i, start_entry += stride) {
     const auto end_entry = std::min(start_entry + stride, entry_count);
-    fetcher_threads.push_back(std::async(
+    fetcher_threads.push_back(utils::async(
         std::launch::async,
         [&](std::list<std::shared_ptr<Analyzer::Expr>>& in_vals,
             const size_t start,
@@ -744,7 +746,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
           col_type.get_comp_param(), val_set.getRowSetMemOwner(), true);
       CHECK(sd);
       const auto needle_null_val = inline_int_null_val(arg_type);
-      fetcher_threads.push_back(std::async(
+      fetcher_threads.push_back(utils::async(
           std::launch::async,
           [this,
            &val_set,
@@ -781,7 +783,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
           end_entry));
     } else {
       CHECK(arg_type.is_integer());
-      fetcher_threads.push_back(std::async(
+      fetcher_threads.push_back(utils::async(
           std::launch::async,
           [&val_set, &total_in_vals_count](
               std::vector<int64_t>& in_vals, const size_t start, const size_t end) {

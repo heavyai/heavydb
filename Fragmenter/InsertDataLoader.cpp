@@ -22,6 +22,8 @@
 #include "InsertDataLoader.h"
 #include "TargetValueConvertersFactories.h"
 
+#include "Utils/Async.h"
+
 namespace Fragmenter_Namespace {
 
 struct ShardDataOwner {
@@ -265,7 +267,7 @@ InsertData copyDataOfShard(const Catalog_Namespace::Catalog& cat,
 
   std::vector<std::future<BlockWithColumnId>> worker_threads;
   for (size_t col = 0; col < insert_data.columnIds.size(); col++) {
-    worker_threads.push_back(std::async(std::launch::async, copycat, col));
+    worker_threads.push_back(utils::async(std::launch::async, copycat, col));
   }
 
   for (auto& child : worker_threads) {
@@ -313,7 +315,7 @@ void InsertDataLoader::insertData(const Catalog_Namespace::SessionInfo& session_
     for (size_t shardId = 0; shardId < rowIndicesOfShards.size(); shardId++) {
       if (rowIndicesOfShards[shardId].size() > 0) {
         worker_threads.push_back(
-            std::async(std::launch::async, insertShardData, shardId));
+            utils::async(std::launch::async, insertShardData, shardId));
       }
     }
     for (auto& child : worker_threads) {
