@@ -281,8 +281,12 @@ bool ExpressionRange::operator==(const ExpressionRange& other) const {
 }
 
 bool ExpressionRange::typeSupportsRange(const SQLTypeInfo& ti) {
-  return (ti.is_number() || ti.is_boolean() || ti.is_time() ||
-          (ti.is_string() && ti.get_compression() == kENCODING_DICT));
+  if (ti.is_array()) {
+    return typeSupportsRange(ti.get_elem_type());
+  } else {
+    return (ti.is_number() || ti.is_boolean() || ti.is_time() ||
+            (ti.is_string() && ti.get_compression() == kENCODING_DICT));
+  }
 }
 
 ExpressionRange getExpressionRange(

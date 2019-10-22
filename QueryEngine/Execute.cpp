@@ -3261,9 +3261,7 @@ AggregatedColRange Executor::computeColRangesCache(
     const auto cd =
         catalog_->getMetadataForColumn(phys_input.table_id, phys_input.col_id);
     CHECK(cd);
-    const auto& col_ti =
-        cd->columnType.is_array() ? cd->columnType.get_elem_type() : cd->columnType;
-    if (ExpressionRange::typeSupportsRange(col_ti)) {
+    if (ExpressionRange::typeSupportsRange(cd->columnType)) {
       const auto col_var = boost::make_unique<Analyzer::ColumnVar>(
           cd->columnType, phys_input.table_id, phys_input.col_id, 0);
       const auto col_range = getLeafColumnRange(col_var.get(), query_infos, this, false);
