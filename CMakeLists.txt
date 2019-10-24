@@ -631,21 +631,7 @@ endif()
 # doxygen
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
-  configure_file(
-    ${CMAKE_SOURCE_DIR}/Doxyfile.in ${CMAKE_BINARY_DIR}/Doxyfile @ONLY)
-  add_custom_target(doxygen ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Generate API documentation with Doxygen"
-    VERBATIM
-    USES_TERMINAL
-  )
-  add_custom_target(doxygen_zip zip -r doxygen-${MAPD_GIT_HASH}.zip doxygen
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Generating .zip with API documentation from Doxygen"
-    VERBATIM
-    USES_TERMINAL
-  )
-  add_dependencies(doxygen_zip doxygen)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/docs/CMakeLists.txt)
 endif(DOXYGEN_FOUND)
 
 # Packaging

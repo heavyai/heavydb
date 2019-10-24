@@ -9,7 +9,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v1
-      - uses: actions/setup-python@v1
+      - run: mkdir build
+      - name: Install doxygen deps
+        run: sudo apt install -y doxygen graphviz
+      - name: Make Doxygen docs
+        working-directory: build
+        run: |
+          cmake ../docs
+          make doxygen
+      - name: Setup python
+        uses: actions/setup-python@v1
         with:
           python-version: "3.7"
       - name: Setup requirements
