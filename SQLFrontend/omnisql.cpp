@@ -877,9 +877,7 @@ static std::vector<std::string> stringify_privs(const std::vector<bool>& priv_ma
     std::copy_if(priv_names.begin(),
                  priv_names.end(),
                  std::back_inserter(priv_strs),
-                 [&priv_mask, &priv_names, &i](std::string const& s) {
-                   return priv_mask.at(i++);
-                 });
+                 [&priv_mask, &i](std::string const& s) { return priv_mask.at(i++); });
   }
   return priv_strs;
 }
