@@ -293,7 +293,7 @@ void CodeGenerator::link_udf_module(const std::unique_ptr<llvm::Module>& udf_mod
   for (auto& f : *udf_module.get()) {
     auto func = module.getFunction(f.getName());
     if (!(func == nullptr) && !f.isDeclaration() && flags == llvm::Linker::Flags::None) {
-      LOG(FATAL) << "  Attempt to overwrite " << f.getName().str() << " in "
+      LOG(ERROR) << "  Attempt to overwrite " << f.getName().str() << " in "
                  << module.getModuleIdentifier() << " from `"
                  << udf_module->getModuleIdentifier() << "`" << std::endl;
       throw std::runtime_error(

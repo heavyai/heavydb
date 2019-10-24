@@ -97,7 +97,7 @@ struct MultiPage {
   inline void push(Page& page, const int epoch) {
     pageVersions.push_back(page);
     epochs.push_back(epoch);
-    assert(pageVersions.size() == epochs.size());
+    CHECK_EQ(pageVersions.size(), epochs.size());
   }
 
   /// Purges the oldest Page
@@ -107,7 +107,7 @@ struct MultiPage {
     }
     pageVersions.pop_front();
     epochs.pop_front();
-    assert(pageVersions.size() == epochs.size());
+    CHECK_EQ(pageVersions.size(), epochs.size());
   }
 };
 

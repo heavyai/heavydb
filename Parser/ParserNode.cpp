@@ -1711,7 +1711,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
     auto e = v->analyze(catalog, query);
     const ColumnDescriptor* cd =
         catalog.getMetadataForColumn(query.get_result_table_id(), *it);
-    assert(cd != nullptr);
+    CHECK(cd);
     if (cd->columnType.get_notnull()) {
       auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
       if (c != nullptr && c->get_is_null()) {
