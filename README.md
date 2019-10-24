@@ -5,7 +5,7 @@ OmniSciDB is an open source SQL-based, relational, columnar database engine that
 
 To find out more, please check out the [OmniSci Website](https://www.omnisci.com) and the [OmniSciDB wiki](https://github.com/omnisci/omniscidb/wiki/).
 
-For more details see the [OmniSciDB Developer Documentation](https://omnisci.github.io/omniscidb/)
+For more details, see the [OmniSciDB Developer Documentation](https://omnisci.github.io/omniscidb/)
 
 # Quickstart
 
