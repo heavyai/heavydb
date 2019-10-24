@@ -196,12 +196,12 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kCHAR:
       case kVARCHAR:
       case kTEXT: {
-        assert(buffer_->sql_type.get_compression() == kENCODING_DICT);
+        CHECK_EQ(buffer_->sql_type.get_compression(), kENCODING_DICT);
         const int32_t* int_array = (int32_t*)array;
         return (int_array[0] == NULL_ARRAY_INT);
       }
       default:
-        assert(false);
+        UNREACHABLE();
     }
     return false;
   }
@@ -404,7 +404,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kCHAR:
       case kVARCHAR:
       case kTEXT: {
-        assert(buffer_->sql_type.get_compression() == kENCODING_DICT);
+        CHECK_EQ(buffer_->sql_type.get_compression(), kENCODING_DICT);
         if (!initialized) {
           elem_min.intval = 1;
           elem_max.intval = 0;
@@ -428,7 +428,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
         break;
       }
       default:
-        assert(false);
+        UNREACHABLE();
     }
   };
 

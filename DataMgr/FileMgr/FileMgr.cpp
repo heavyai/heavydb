@@ -176,7 +176,7 @@ void FileMgr::init(const size_t num_reader_threads) {
               boost::lexical_cast<size_t>(fileStem.substr(dotPos + 1, fileStem.size()));
           std::string filePath(fileIt->path().string());
           size_t fileSize = boost::filesystem::file_size(filePath);
-          assert(fileSize % pageSize == 0);  // should be no partial pages
+          CHECK_EQ(fileSize % pageSize, size_t(0));  // should be no partial pages
           size_t numPages = fileSize / pageSize;
 
           VLOG(4) << "File id: " << fileId << " Page size: " << pageSize
@@ -342,7 +342,7 @@ void FileMgr::init(const std::string dataPathToConvertFrom) {
               boost::lexical_cast<size_t>(fileStem.substr(dotPos + 1, fileStem.size()));
           std::string filePath(fileIt->path().string());
           size_t fileSize = boost::filesystem::file_size(filePath);
-          assert(fileSize % pageSize == 0);  // should be no partial pages
+          CHECK(fileSize % pageSize == 0);  // should be no partial pages
           size_t numPages = fileSize / pageSize;
 
           file_futures.emplace_back(std::async(
@@ -773,7 +773,7 @@ AbstractBuffer* FileMgr::putBuffer(const ChunkKey& key,
                  srcBuffer->getType(),
                  srcBuffer->getDeviceId());
   } else if (srcBuffer->isAppended()) {
-    assert(oldChunkSize < newChunkSize);
+    CHECK_LT(oldChunkSize, newChunkSize);
     chunk->append((int8_t*)srcBuffer->getMemoryPtr() + oldChunkSize,
                   newChunkSize - oldChunkSize,
                   srcBuffer->getType(),
@@ -816,7 +816,7 @@ Page FileMgr::requestFreePage(size_t pageSize, const bool isMetadata) {
     fileInfo = createFile(pageSize, MAX_FILE_N_PAGES);
   }
   pageNum = fileInfo->getFreePage();
-  assert(pageNum != -1);
+  CHECK(pageNum != -1);
   return (Page(fileInfo->fileId, pageNum));
 }
 
@@ -862,7 +862,7 @@ void FileMgr::requestFreePages(size_t numPagesRequested,
       break;
     }
   }
-  assert(pages.size() == numPagesRequested);
+  CHECK(pages.size() == numPagesRequested);
 }
 
 FileInfo* FileMgr::openExistingFile(const std::string& path,
@@ -902,19 +902,19 @@ FileInfo* FileMgr::createFile(const size_t pageSize, const size_t numPages) {
   int fileId = nextFileId_++;
   FileInfo* fInfo =
       new FileInfo(this, fileId, f, pageSize, numPages, true);  // true means init file
-  assert(fInfo);
+  CHECK(fInfo);
 
   mapd_unique_lock<mapd_shared_mutex> write_lock(files_rw_mutex_);
   // update file manager data structures
   files_.push_back(fInfo);
   fileIndex_.insert(std::pair<size_t, int>(pageSize, fileId));
 
-  assert(files_.back() == fInfo);  // postcondition
+  CHECK(files_.back() == fInfo);  // postcondition
   return fInfo;
 }
 
 FILE* FileMgr::getFileForFileId(const int fileId) {
-  assert(fileId >= 0);
+  CHECK(fileId >= 0 && static_cast<size_t>(fileId) < files_.size());
   return files_[fileId]->f;
 }
 /*

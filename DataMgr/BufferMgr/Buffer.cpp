@@ -81,7 +81,7 @@ void Buffer::read(int8_t* const dst,
   if (num_bytes == 0) {
     return;
   }
-  assert(dst && mem_);
+  CHECK(dst && mem_);
 #ifdef BUFFER_MUTEX
   boost::shared_lock<boost::shared_mutex> read_lock(read_write_mutex_);
 #endif
@@ -97,7 +97,7 @@ void Buffer::write(int8_t* src,
                    const size_t offset,
                    const MemoryLevel src_buffer_type,
                    const int src_device_id) {
-  assert(num_bytes > 0);  // cannot write 0 bytes
+  CHECK_GT(num_bytes, size_t(0));  // cannot write 0 bytes
 #ifdef BUFFER_MUTEX
   boost::unique_lock<boost::shared_mutex> write_lock(read_write_mutex_);
 #endif

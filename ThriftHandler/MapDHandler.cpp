@@ -5709,7 +5709,8 @@ ExtArgumentType mapfrom(const TExtArgumentType::type& t) {
     case TExtArgumentType::Cursor:
       return ExtArgumentType::Cursor;
   }
-  assert(false);
+  UNREACHABLE();
+  return ExtArgumentType{};
 }
 
 table_functions::OutputBufferSizeType mapfrom(const TOutputBufferSizeType::type& t) {
@@ -5721,7 +5722,8 @@ table_functions::OutputBufferSizeType mapfrom(const TOutputBufferSizeType::type&
     case TOutputBufferSizeType::kConstant:
       return table_functions::OutputBufferSizeType::kConstant;
   }
-  assert(false);
+  UNREACHABLE();
+  return table_functions::OutputBufferSizeType{};
 }
 
 std::vector<ExtArgumentType> mapfrom(const std::vector<TExtArgumentType::type>& v) {
