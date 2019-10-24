@@ -1,5 +1,4 @@
-
-
+#include "ForeignStorageInterface.h"
 #include "ArrowCsvForeignStorage.h"
 
 #include "Shared/Logger.h"
@@ -18,17 +17,46 @@
 #include <array>
 #include <future>
 
-struct ArrowFragment {
-  int64_t sz;
-  std::vector<std::shared_ptr<arrow::ArrayData>> chunks;
-  ~ArrowFragment() { chunks.clear(); }
+class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
+  ~ArrowCsvForeignStorage() override;
+  void append(const std::vector<ForeignStorageColumnBuffer>& column_buffers) override;
+
+  void read(const ChunkKey& chunk_key,
+            const SQLTypeInfo& sql_type,
+            int8_t* dest,
+            const size_t numBytes) override;
+
+  virtual void prepareTable(const int db_id,
+                            const std::string& type,
+                            TableDescriptor& td,
+                            std::list<ColumnDescriptor>& cols) override;
+  virtual void registerTable(Catalog_Namespace::Catalog* catalog,
+                             std::pair<int, int> table_key,
+                             const std::string& type,
+                             const TableDescriptor& td,
+                             const std::list<ColumnDescriptor>& cols,
+                             Data_Namespace::AbstractBufferMgr* mgr) override;
+
+  std::string getType() const override;
+
+  struct ArrowFragment {
+    int64_t sz;
+    std::vector<std::shared_ptr<arrow::ArrayData>> chunks;
+    ~ArrowFragment() { chunks.clear(); }
+  };
+
+  std::map<std::array<int, 3>, std::vector<ArrowFragment>> m_columns;
+  std::map<std::array<int, 3>, StringDictionary*> m_dictionaries;
 };
 
-std::map<std::array<int, 3>, std::vector<ArrowFragment>> g_columns;
-std::map<std::array<int, 3>, StringDictionary*> g_dictionaries;
+void registerArrowCsvForeignStorage(void) {
+  ForeignStorageInterface::registerPersistentStorageInterface(
+      new ArrowCsvForeignStorage());
+}
 
 ArrowCsvForeignStorage::~ArrowCsvForeignStorage() {
-  g_columns.clear();
+  m_columns.clear();
+  m_dictionaries.clear();
 }
 
 void ArrowCsvForeignStorage::append(
@@ -43,7 +71,7 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
                                   const size_t numBytes) {
   // printf("-- reading %d:%d<=%u\n", chunk_key[2], chunk_key[3], unsigned(numBytes));
   std::array<int, 3> col_key{chunk_key[0], chunk_key[1], chunk_key[2]};
-  auto& frag = g_columns.at(col_key).at(chunk_key[3]);
+  auto& frag = m_columns.at(col_key).at(chunk_key[3]);
 
   CHECK(!frag.chunks.empty() || !chunk_key[3]);
   int64_t sz = 0, copied = 0;
@@ -259,7 +287,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
 
     auto ctype = c.columnType.get_type();
     col_key[2] = key[2] = c.columnId;
-    auto& col = g_columns[col_key];
+    auto& col = m_columns[col_key];
     col.resize(fragments.size());
     auto clp = ARROW_GET_DATA(table.column(cln++)).get();
 
@@ -268,7 +296,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           catalog->getMetadataForDict(c.columnType.get_comp_param()));
       CHECK(dictDesc);
       auto stringDict = dictDesc->stringDict.get();
-      g_dictionaries[col_key] = stringDict;
+      m_dictionaries[col_key] = stringDict;
     }
 
     auto empty = clp->null_count() == clp->length();
@@ -283,7 +311,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
         arrow::Array* chunk = clp->chunk(i).get();
         if (c.columnType.is_dict_encoded_string()) {
           arrow::Int32Builder indexBuilder;
-          auto dict = g_dictionaries[col_key];
+          auto dict = m_dictionaries[col_key];
           auto stringArray = static_cast<arrow::StringArray*>(chunk);
           indexBuilder.Reserve(stringArray->length());
           for (int i = 0; i < stringArray->length(); i++) {
