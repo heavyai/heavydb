@@ -183,8 +183,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
   // Register foreign storage interfaces here
   // ForeignStorageInterface::registerPersistentStorageInterface(
   // new DummyPersistentForeignStorage());
-  ForeignStorageInterface::registerPersistentStorageInterface(
-      new ArrowCsvForeignStorage());
+  registerArrowCsvForeignStorage();
   bool is_rendering_enabled = enable_rendering;
   if (cpu_only) {
     is_rendering_enabled = false;
