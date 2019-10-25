@@ -111,12 +111,16 @@ std::vector<ssize_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_
   return target_indices;
 }
 
-int8_t pick_baseline_key_component_width(const ExpressionRange& range) {
+int8_t pick_baseline_key_component_width(const ExpressionRange& range,
+                                         const size_t group_col_width) {
   if (range.getType() == ExpressionRangeType::Invalid) {
     return sizeof(int64_t);
   }
   switch (range.getType()) {
     case ExpressionRangeType::Integer:
+      if (group_col_width == sizeof(int64_t) && range.hasNulls()) {
+        return sizeof(int64_t);
+      }
       return range.getIntMax() < EMPTY_KEY_32 - 1 ? sizeof(int32_t) : sizeof(int64_t);
     case ExpressionRangeType::Float:
     case ExpressionRangeType::Double:
@@ -134,8 +138,9 @@ int8_t pick_baseline_key_width(const RelAlgExecutionUnit& ra_exe_unit,
   int8_t compact_width{4};
   for (const auto groupby_expr : ra_exe_unit.groupby_exprs) {
     const auto expr_range = getExpressionRange(groupby_expr.get(), query_infos, executor);
-    compact_width =
-        std::max(compact_width, pick_baseline_key_component_width(expr_range));
+    compact_width = std::max(compact_width,
+                             pick_baseline_key_component_width(
+                                 expr_range, groupby_expr->get_type_info().get_size()));
   }
   return compact_width;
 }

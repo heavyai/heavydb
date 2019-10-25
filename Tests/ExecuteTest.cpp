@@ -6038,6 +6038,24 @@ TEST(Select, GroupByBaselineHash) {
     c("SELECT x1, x2, x3, x4, COUNT(*), MIN(x5) FROM random_test "
       "GROUP BY x1, x2, x3, x4 ORDER BY x1, x2, x3, x4;",
       dt);
+    {
+      std::string query(
+          "SELECT x, COUNT(*) from (SELECT ofd - 2 as x FROM test) GROUP BY x ORDER BY "
+          "x ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
+    {
+      std::string query(
+          "SELECT x, COUNT(*) from (SELECT cast(ofd - 2 as bigint) as x FROM test) GROUP "
+          "BY x ORDER BY x ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
+    {
+      std::string query(
+          "SELECT x, COUNT(*) from (SELECT ofq - 2 as x FROM test) GROUP BY x ORDER BY "
+          "x ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
   }
 }
 
