@@ -797,9 +797,6 @@ void MapDProgramOptions::validate() {
       }
     }
   }
-  if (license_path.length() == 0) {
-    license_path = base_path + "/omnisci.license";
-  }
 
   // add all parameters to be displayed on startup
   LOG(INFO) << "OmniSci started with data directory at '" << base_path << "'";
@@ -885,83 +882,6 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
     std::cerr << "hll-precision-bits must be between 1 and 16." << std::endl;
     return 1;
   }
-
-  boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
-  const auto data_path = boost::filesystem::path(base_path) / "mapd_data";
-  if (!boost::filesystem::exists(data_path)) {
-    std::cerr << "OmniSci data directory does not exist at '" << base_path
-              << "'. Run initdb " << base_path << std::endl;
-    return 1;
-  }
-
-  const auto lock_file = boost::filesystem::path(base_path) / "omnisci_server_pid.lck";
-  auto pid = std::to_string(getpid());
-  int pid_fd = open(lock_file.c_str(), O_RDWR | O_CREAT, 0644);
-  if (pid_fd == -1) {
-    auto err = std::string("Failed to open PID file ") + std::string(lock_file.c_str()) +
-               std::string(". ") + strerror(errno) + ".";
-    std::cerr << err << std::endl;
-    return 1;
-  }
-  if (lockf(pid_fd, F_TLOCK, 0) == -1) {
-    auto err = std::string("Another OmniSci Server is using data directory ") +
-               base_path + std::string(".");
-    std::cerr << err << std::endl;
-    close(pid_fd);
-    return 1;
-  }
-  if (ftruncate(pid_fd, 0) == -1) {
-    auto err = std::string("Failed to truncate PID file ") +
-               std::string(lock_file.c_str()) + std::string(". ") + strerror(errno) +
-               std::string(".");
-    std::cerr << err << std::endl;
-    close(pid_fd);
-    return 1;
-  }
-  if (write(pid_fd, pid.c_str(), pid.length()) == -1) {
-    auto err = std::string("Failed to write PID file ") + std::string(lock_file.c_str()) +
-               ". " + strerror(errno) + ".";
-    std::cerr << err << std::endl;
-    close(pid_fd);
-    return 1;
-  }
-
-  if (verbose_logging && logger::Severity::DEBUG1 < log_options_.severity_) {
-    log_options_.severity_ = logger::Severity::DEBUG1;
-  }
-  log_options_.set_base_path(base_path);
-  logger::init(log_options_);
-
-  boost::algorithm::trim_if(db_query_file, boost::is_any_of("\"'"));
-  if (db_query_file.length() > 0 && !boost::filesystem::exists(db_query_file)) {
-    LOG(ERROR) << "File containing DB queries " << db_query_file << " does not exist.";
-    return 1;
-  }
-  const auto db_file =
-      boost::filesystem::path(base_path) / "mapd_catalogs" / OMNISCI_SYSTEM_CATALOG;
-  if (!boost::filesystem::exists(db_file)) {
-    {  // check old system catalog existsense
-      const auto db_file = boost::filesystem::path(base_path) / "mapd_catalogs/mapd";
-      if (!boost::filesystem::exists(db_file)) {
-        LOG(ERROR) << "OmniSci system catalog " << OMNISCI_SYSTEM_CATALOG
-                   << " does not exist.";
-        return 1;
-      }
-    }
-  }
-  // add all parameters to be displayed on startup
-  LOG(INFO) << "OmniSci started with data directory at '" << base_path << "'";
-  LOG(INFO) << " Watchdog is set to " << enable_watchdog;
-  LOG(INFO) << " Dynamic Watchdog is set to " << enable_dynamic_watchdog;
-  if (enable_dynamic_watchdog) {
-    LOG(INFO) << " Dynamic Watchdog timeout is set to " << dynamic_watchdog_time_limit;
-  }
-
-  LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
-
-  LOG(INFO) << " Maximum Idle session duration " << idle_session_duration;
-
-  LOG(INFO) << " Maximum active session duration " << max_session_duration;
 
   if (!g_from_table_reordering) {
     LOG(INFO) << " From clause table reordering is disabled";
