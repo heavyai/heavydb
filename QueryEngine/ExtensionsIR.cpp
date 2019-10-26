@@ -56,9 +56,9 @@ inline SQLTypeInfo get_sql_type_from_llvm_type(const llvm::Type* ll_type) {
   if (ll_type->isFloatingPointTy()) {
     switch (bits) {
       case 32:
-        return SQLTypeInfo(kFLOAT, true);
+        return SQLTypeInfo(kFLOAT, false);
       case 64:
-        return SQLTypeInfo(kDOUBLE, true);
+        return SQLTypeInfo(kDOUBLE, false);
       default:
         LOG(FATAL) << "Unsupported llvm floating point type: " << bits
                    << ", only 32 and 64 bit floating point is supported.";
@@ -66,15 +66,15 @@ inline SQLTypeInfo get_sql_type_from_llvm_type(const llvm::Type* ll_type) {
   } else {
     switch (bits) {
       case 1:
-        return SQLTypeInfo(kBOOLEAN, true);
+        return SQLTypeInfo(kBOOLEAN, false);
       case 8:
-        return SQLTypeInfo(kTINYINT, true);
+        return SQLTypeInfo(kTINYINT, false);
       case 16:
-        return SQLTypeInfo(kSMALLINT, true);
+        return SQLTypeInfo(kSMALLINT, false);
       case 32:
-        return SQLTypeInfo(kINT, true);
+        return SQLTypeInfo(kINT, false);
       case 64:
-        return SQLTypeInfo(kBIGINT, true);
+        return SQLTypeInfo(kBIGINT, false);
       default:
         LOG(FATAL) << "Unrecognized llvm type for SQL type: "
                    << bits;  // TODO let's get the real name here
@@ -164,16 +164,18 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
   // Arguments must be converted to the types the extension function can handle.
   const auto args = codegenFunctionOperCastArgs(
       function_oper, &ext_func_sig, orig_arg_lvs, const_arr_size, co);
-  auto ext_call = cgen_state_->emitExternalCall(ext_func_sig.getName(), ret_ty, args);
+  const auto ext_call =
+      cgen_state_->emitExternalCall(ext_func_sig.getName(), ret_ty, args);
+  auto ext_call_nullcheck = endArgsNullcheck(bbs, ext_call, function_oper);
+
   // Cast the return of the extension function to match the FunctionOper
   const auto extension_ret_ti = get_sql_type_from_llvm_type(ret_ty);
   if (bbs.args_null_bb &&
       extension_ret_ti.get_type() != function_oper->get_type_info().get_type()) {
-    ext_call = codegenCast(
-        ext_call, extension_ret_ti, function_oper->get_type_info(), false, co);
+    ext_call_nullcheck = codegenCast(
+        ext_call_nullcheck, extension_ret_ti, function_oper->get_type_info(), false, co);
   }
 
-  auto ext_call_nullcheck = endArgsNullcheck(bbs, ext_call, function_oper);
   cgen_state_->ext_call_cache_.push_back({function_oper, ext_call_nullcheck});
 
   return ext_call_nullcheck;
@@ -210,22 +212,21 @@ llvm::Value* CodeGenerator::endArgsNullcheck(
     cgen_state_->ir_builder_.CreateBr(bbs.args_null_bb);
     cgen_state_->ir_builder_.SetInsertPoint(bbs.args_null_bb);
 
-    // The return type of the FunctionOper. The extension function call will be cast to
-    // this type if required.
-    const auto& func_oper_ret_ti = function_oper->get_type_info();
+    // The pre-cast SQL equivalent of the type returned by the extension function.
+    const auto extension_ret_ti = get_sql_type_from_llvm_type(fn_ret_lv->getType());
 
     auto ext_call_phi = cgen_state_->ir_builder_.CreatePHI(
-        func_oper_ret_ti.is_fp()
-            ? get_fp_type(func_oper_ret_ti.get_size() * 8, cgen_state_->context_)
-            : get_int_type(func_oper_ret_ti.get_size() * 8, cgen_state_->context_),
+        extension_ret_ti.is_fp()
+            ? get_fp_type(extension_ret_ti.get_size() * 8, cgen_state_->context_)
+            : get_int_type(extension_ret_ti.get_size() * 8, cgen_state_->context_),
         2);
 
     ext_call_phi->addIncoming(fn_ret_lv, bbs.args_notnull_bb);
 
     const auto null_lv =
-        func_oper_ret_ti.is_fp()
-            ? static_cast<llvm::Value*>(cgen_state_->inlineFpNull(func_oper_ret_ti))
-            : static_cast<llvm::Value*>(cgen_state_->inlineIntNull(func_oper_ret_ti));
+        extension_ret_ti.is_fp()
+            ? static_cast<llvm::Value*>(cgen_state_->inlineFpNull(extension_ret_ti))
+            : static_cast<llvm::Value*>(cgen_state_->inlineIntNull(extension_ret_ti));
     ext_call_phi->addIncoming(null_lv, bbs.orig_bb);
     return ext_call_phi;
   }
