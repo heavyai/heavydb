@@ -2343,6 +2343,14 @@ TEST(Select, Case) {
     c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN '1' WHEN x BETWEEN 8 AND 10 THEN '2' ELSE "
       "real_str END AS c FROM test WHERE y IN (43) ORDER BY c ASC;",
       dt);
+    EXPECT_EQ(
+        int64_t(-1),
+        v<int64_t>(run_simple_agg("SELECT ROUND(numerator / denominator, 2) FROM (SELECT "
+                                  "SUM(CASE WHEN a.x > 0 THEN "
+                                  "1 ELSE 0 END) as numerator, SUM(CASE WHEN a.dd < 0 "
+                                  "THEN 1 ELSE -1 END) as denominator "
+                                  "FROM test a, test_inner b where a.x = b.x) test_sub",
+                                  dt)));
 
     const auto constrained_by_in_threshold_state = g_constrained_by_in_threshold;
     g_constrained_by_in_threshold = 0;
