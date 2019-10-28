@@ -1251,6 +1251,29 @@ TEST(Select, FilterAndSimpleAggregation) {
   }
 }
 
+TEST(Select, AggregateOnEmptyDecimalColumn) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (int p = 1; p <= 18; ++p) {
+      for (int s = 0; s <= p - 1; ++s) {
+        std::string decimal_prec("");
+        decimal_prec = "val DECIMAL(" + std::to_string(p) + "," + std::to_string(s) + ")";
+        std::string tbl_name = "D" + std::to_string(p) + "_" + std::to_string(s);
+        std::string drop_table("");
+        drop_table = "DROP TABLE IF EXISTS " + tbl_name + ";";
+        std::string create_stmt = "CREATE TABLE " + tbl_name + "( " + decimal_prec + ");";
+        run_ddl_statement(drop_table);
+        g_sqlite_comparator.query(drop_table);
+        run_ddl_statement(create_stmt);
+        g_sqlite_comparator.query(create_stmt);
+        std::string query("SELECT MIN(val), MAX(val), SUM(val), AVG(val) FROM ");
+        query += tbl_name + ";";
+        c(query, dt);
+      }
+    }
+  }
+}
+
 TEST(Select, AggregateConstantValueOnEmptyTable) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

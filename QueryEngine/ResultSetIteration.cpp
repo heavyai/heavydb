@@ -1838,6 +1838,12 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
   }
   if (chosen_type.is_decimal()) {
     if (decimal_to_double) {
+      if (target_info.is_agg &&
+          (target_info.agg_kind == kAVG || target_info.agg_kind == kSUM ||
+           target_info.agg_kind == kMIN || target_info.agg_kind == kMAX) &&
+          ival == inline_int_null_val(SQLTypeInfo(kBIGINT, false))) {
+        return NULL_DOUBLE;
+      }
       if (ival ==
           inline_int_null_val(SQLTypeInfo(decimal_to_int_type(chosen_type), false))) {
         return NULL_DOUBLE;
