@@ -1058,6 +1058,18 @@ bool is_count_distinct(const Analyzer::Expr* expr) {
   return agg_expr && agg_expr->get_is_distinct();
 }
 
+bool is_agg(const Analyzer::Expr* expr) {
+  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(expr);
+  if (agg_expr && agg_expr->get_contains_agg()) {
+    auto agg_type = agg_expr->get_aggtype();
+    if (agg_type == SQLAgg::kMIN || agg_type == SQLAgg::kMAX ||
+        agg_type == SQLAgg::kSUM || agg_type == SQLAgg::kAVG) {
+      return true;
+    }
+  }
+  return false;
+}
+
 std::vector<TargetMetaInfo> get_modify_manipulated_targets_meta(
     ModifyManipulationTarget const* manip_node,
     const std::vector<Analyzer::Expr*>& target_exprs) {
@@ -1087,7 +1099,9 @@ std::vector<TargetMetaInfo> get_targets_meta(
         ra_node->getFieldName(i),
         is_count_distinct(target_exprs[i])
             ? SQLTypeInfo(kBIGINT, false)
-            : get_logical_type_info(target_exprs[i]->get_type_info()),
+            : is_agg(target_exprs[i])
+                  ? get_nullable_logical_type_info(target_exprs[i]->get_type_info())
+                  : get_logical_type_info(target_exprs[i]->get_type_info()),
         target_exprs[i]->get_type_info());
   }
   return targets_meta;

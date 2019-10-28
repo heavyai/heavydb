@@ -878,6 +878,12 @@ inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
                      type_info.get_subtype());
 }
 
+inline SQLTypeInfo get_nullable_logical_type_info(const SQLTypeInfo& type_info) {
+  SQLTypeInfo nullable_type_info = get_logical_type_info(type_info);
+  nullable_type_info.set_notnull(false);
+  return nullable_type_info;
+}
+
 template <class T>
 constexpr inline int64_t inline_int_null_value() {
   return std::is_signed<T>::value ? std::numeric_limits<T>::min()
