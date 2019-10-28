@@ -262,7 +262,8 @@ std::unique_ptr<Function> setup_reduce_one_entry(ReductionCode* reduction_code,
       that_ptr_name = "that_targets_ptr";
       break;
     }
-    case QueryDescriptionType::GroupByPerfectHash: {
+    case QueryDescriptionType::GroupByPerfectHash:
+    case QueryDescriptionType::NonGroupedAggregate: {
       this_ptr_name = "this_row_ptr";
       that_ptr_name = "that_row_ptr";
       break;
@@ -348,9 +349,10 @@ ReductionCode setup_functions_ir(const QueryDescriptionType hash_type) {
   return reduction_code;
 }
 
-bool is_group_query(const QueryDescriptionType hash_type) {
+bool is_aggregate_query(const QueryDescriptionType hash_type) {
   return hash_type == QueryDescriptionType::GroupByBaselineHash ||
-         hash_type == QueryDescriptionType::GroupByPerfectHash;
+         hash_type == QueryDescriptionType::GroupByPerfectHash ||
+         hash_type == QueryDescriptionType::NonGroupedAggregate;
 }
 
 // Variable length sample fast path (no serialized variable length buffer).
@@ -489,13 +491,14 @@ ResultSetReductionJIT::ResultSetReductionJIT(const QueryMemoryDescriptor& query_
 
 ReductionCode ResultSetReductionJIT::codegen() const {
   const auto hash_type = query_mem_desc_.getQueryDescriptionType();
-  if (query_mem_desc_.didOutputColumnar() || !is_group_query(hash_type)) {
+  if (query_mem_desc_.didOutputColumnar() || !is_aggregate_query(hash_type)) {
     return {};
   }
   auto reduction_code = setup_functions_ir(hash_type);
   isEmpty(reduction_code);
   switch (query_mem_desc_.getQueryDescriptionType()) {
-    case QueryDescriptionType::GroupByPerfectHash: {
+    case QueryDescriptionType::GroupByPerfectHash:
+    case QueryDescriptionType::NonGroupedAggregate: {
       reduceOneEntryNoCollisions(reduction_code);
       reduceOneEntryNoCollisionsIdx(reduction_code);
       break;
@@ -572,7 +575,7 @@ void ResultSetReductionJIT::clearCache() {
 
 void ResultSetReductionJIT::isEmpty(const ReductionCode& reduction_code) const {
   auto ir_is_empty = reduction_code.ir_is_empty.get();
-  CHECK(is_group_query(query_mem_desc_.getQueryDescriptionType()));
+  CHECK(is_aggregate_query(query_mem_desc_.getQueryDescriptionType()));
   CHECK(!query_mem_desc_.didOutputColumnar());
   Value* key{nullptr};
   Value* empty_key_val{nullptr};
@@ -792,7 +795,9 @@ void ResultSetReductionJIT::reduceOneEntryNoCollisionsIdx(
     const ReductionCode& reduction_code) const {
   auto ir_reduce_one_entry_idx = reduction_code.ir_reduce_one_entry_idx.get();
   CHECK(query_mem_desc_.getQueryDescriptionType() ==
-        QueryDescriptionType::GroupByPerfectHash);
+            QueryDescriptionType::GroupByPerfectHash ||
+        query_mem_desc_.getQueryDescriptionType() ==
+            QueryDescriptionType::NonGroupedAggregate);
   const auto this_buff = ir_reduce_one_entry_idx->arg(0);
   const auto that_buff = ir_reduce_one_entry_idx->arg(1);
   const auto entry_idx = ir_reduce_one_entry_idx->arg(2);
