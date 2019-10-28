@@ -257,11 +257,6 @@ endif()
 
 option(ENABLE_DECODERS_BOUNDS_CHECKING "Enable bounds checking for column decoding" OFF)
 
-option(ENABLE_REDUCTION_JIT "Enable JIT for result set reduction" ON)
-if( ENABLE_REDUCTION_JIT )
-  add_definitions("-DWITH_REDUCTION_JIT")
-endif()
-
 if(ENABLE_STANDALONE_CALCITE)
   add_definitions("-DSTANDALONE_CALCITE")
 endif()

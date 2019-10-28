@@ -132,13 +132,6 @@ class ResultSetStorage {
                       int8_t* this_buff,
                       const int8_t* that_buff) const;
 
-  void reduceOneEntryNoCollisionsRowWise(
-      const size_t i,
-      int8_t* this_buff,
-      const int8_t* that_buff,
-      const ResultSetStorage& that,
-      const std::vector<std::string>& serialized_varlen_buffer) const;
-
   bool isEmptyEntry(const size_t entry_idx, const int8_t* buff) const;
   bool isEmptyEntry(const size_t entry_idx) const;
   bool isEmptyEntryColumnar(const size_t entry_idx, const int8_t* buff) const;

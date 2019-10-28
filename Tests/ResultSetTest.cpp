@@ -1786,13 +1786,9 @@ TEST(MoreReduce, MissingValues) {
     buff2[1 * 3 + 2] = 0;
     buff2[2 * 3 + 2] = 5;
   }
-#ifdef WITH_REDUCTION_JIT
   ResultSetReductionJIT reduction_jit(
       rs1->getQueryMemDesc(), rs1->getTargetInfos(), rs1->getTargetInitVals());
   const auto reduction_code = reduction_jit.codegen();
-#else
-  ReductionCode reduction_code{};
-#endif  // WITH_REDUCTION_JIT
   storage1->reduce(*storage2, {}, reduction_code);
   {
     const auto row = rs1->getNextRow(false, false);
@@ -1845,13 +1841,9 @@ TEST(MoreReduce, MissingValuesKeyless) {
     buff2[1 * 2 + 1] = 0;
     buff2[2 * 2 + 1] = 5;
   }
-#ifdef WITH_REDUCTION_JIT
   ResultSetReductionJIT reduction_jit(
       rs1->getQueryMemDesc(), rs1->getTargetInfos(), rs1->getTargetInitVals());
   const auto reduction_code = reduction_jit.codegen();
-#else
-  ReductionCode reduction_code{};
-#endif  // WITH_REDUCTION_JIT
   storage1->reduce(*storage2, {}, reduction_code);
   {
     const auto row = rs1->getNextRow(false, false);
@@ -1922,13 +1914,9 @@ TEST(MoreReduce, OffsetRewrite) {
   }
 
   storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
-#ifdef WITH_REDUCTION_JIT
   ResultSetReductionJIT reduction_jit(
       rs1->getQueryMemDesc(), rs1->getTargetInfos(), rs1->getTargetInitVals());
   const auto reduction_code = reduction_jit.codegen();
-#else
-  ReductionCode reduction_code{};
-#endif  // WITH_REDUCTION_JIT
   storage1->reduce(*storage2, serialized_varlen_buffer, reduction_code);
   rs1->setSeparateVarlenStorageValid(true);
   {
@@ -2029,13 +2017,9 @@ TEST(MoreReduce, OffsetRewriteGeo) {
   }
 
   storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
-#ifdef WITH_REDUCTION_JIT
   ResultSetReductionJIT reduction_jit(
       rs1->getQueryMemDesc(), rs1->getTargetInfos(), rs1->getTargetInitVals());
   const auto reduction_code = reduction_jit.codegen();
-#else
-  ReductionCode reduction_code{};
-#endif  // WITH_REDUCTION_JIT
   storage1->reduce(*storage2, serialized_varlen_buffer, reduction_code);
   rs1->setGeoReturnType(ResultSet::GeoReturnType::WktString);
   rs1->setSeparateVarlenStorageValid(true);
@@ -2132,13 +2116,9 @@ TEST(MoreReduce, OffsetRewriteGeoKeyless) {
   }
 
   storage1->rewriteAggregateBufferOffsets(serialized_varlen_buffer);
-#ifdef WITH_REDUCTION_JIT
   ResultSetReductionJIT reduction_jit(
       rs1->getQueryMemDesc(), rs1->getTargetInfos(), rs1->getTargetInitVals());
   const auto reduction_code = reduction_jit.codegen();
-#else
-  ReductionCode reduction_code{};
-#endif  // WITH_REDUCTION_JIT
   storage1->reduce(*storage2, serialized_varlen_buffer, reduction_code);
   rs1->setGeoReturnType(ResultSet::GeoReturnType::WktString);
   rs1->setSeparateVarlenStorageValid(true);
