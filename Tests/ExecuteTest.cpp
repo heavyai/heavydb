@@ -1251,31 +1251,77 @@ TEST(Select, FilterAndSimpleAggregation) {
   }
 }
 
+TEST(Select, AggregateConstantValueOnEmptyTable) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // tinyint: -126 / 126
+    c("SELECT MIN(-126), MAX(-126), SUM(-126), AVG(-126), MIN(126), MAX(126), SUM(126), "
+      "AVG(126) FROM "
+      "empty_test_table;",
+      dt);
+    // smallint: -32766 / 32766
+    c("SELECT MIN(-32766), MAX(-32766), SUM(-32766), AVG(-32766), MIN(32766), "
+      "MAX(32766), SUM(32766), AVG(32766) "
+      "FROM empty_test_table;",
+      dt);
+    // int: -2147483646 / 2147483646
+    c("SELECT MIN(-2147483646), MAX(-2147483646), SUM(-2147483646), AVG(-2147483646), "
+      "MIN(2147483646), "
+      "MAX(2147483646), SUM(2147483646), AVG(2147483646) FROM empty_test_table;",
+      dt);
+    // bigint: -9223372036854775806 / 9223372036854775806
+    c("SELECT MIN(-9223372036854775806), MAX(-9223372036854775806), "
+      "AVG(-9223372036854775806),"
+      "SUM(-9223372036854775806), MIN(9223372036854775806), MAX(9223372036854775806), "
+      "SUM(9223372036854775806), AVG(9223372036854775806) FROM empty_test_table;",
+      dt);
+    // float: -1.5 / 1.5
+    c("SELECT MIN(-1.5), MAX(-1.5), SUM(-1.5), AVG(-1.5), MIN(1.5), MAX(1.5), SUM(1.5), "
+      "AVG(1.5) FROM "
+      "empty_test_table;",
+      dt);
+    // double: -1.5055487897 / 1.5055487897
+    c("SELECT MIN(-1.5055487897), MAX(-1.5055487897), SUM(-1.5055487897), "
+      "AVG(-1.5055487897),"
+      "MIN(1.5055487897), MAX(1.5055487897), SUM(1.5055487897), AVG(1.5055487897) FROM "
+      "empty_test_table;",
+      dt);
+    // boolean: true / false
+    c("SELECT MIN(true), MAX(true), MIN(false), MAX(false) FROM empty_test_table;", dt);
+  }
+}
+
 TEST(Select, AggregateOnEmptyTable) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) from empty_test_table;", dt);
-    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d) from empty_test_table;", dt);
-    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d) from empty_test_table;", dt);
-    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) from empty_test_table;", dt);
-    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d) from "
+    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) FROM empty_test_table;", dt);
+    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d), MIN(b) FROM "
+      "empty_test_table;",
+      dt);
+    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d), MAX(b)  FROM "
+      "empty_test_table;",
+      dt);
+    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) FROM empty_test_table;", dt);
+    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d), COUNT(b) FROM "
       "empty_test_table;",
       dt);
     // skipped fragment
-    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) from empty_test_table "
-      "where id > 5;",
+    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) FROM empty_test_table "
+      "WHERE id > 5;",
       dt);
-    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d) from empty_test_table where "
+    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d), MIN(b) FROM "
+      "empty_test_table WHERE "
       "id > 5;",
       dt);
-    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d) from empty_test_table where "
+    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d), MAX(b) FROM "
+      "empty_test_table WHERE "
       "id > 5;",
       dt);
-    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) from empty_test_table where "
+    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) FROM empty_test_table WHERE "
       "id > 5;",
       dt);
-    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d) from "
-      "empty_test_table where id > 5;",
+    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d), COUNT(b) FROM "
+      "empty_test_table WHERE id > 5;",
       dt);
   }
 }
@@ -5545,7 +5591,7 @@ void import_empty_table_test() {
   g_sqlite_comparator.query(drop_table);
   std::string create_statement(
       "CREATE TABLE empty_test_table (id int, x bigint, y int, z smallint, t tinyint, "
-      "f float, d double);");
+      "f float, d double, b boolean);");
   run_ddl_statement(create_statement);
   g_sqlite_comparator.query(create_statement);
 }
