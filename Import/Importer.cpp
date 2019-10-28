@@ -3348,7 +3348,7 @@ void Detector::import_local_parquet(const std::string& file_path) {
       if (c) {
         raw_data += copy_params.delimiter;
       }
-      raw_data += table->column(c)->name();
+      raw_data += table->ColumnNames().at(c);
     }
     raw_data += copy_params.line_delim;
   }
