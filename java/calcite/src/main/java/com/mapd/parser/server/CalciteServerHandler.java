@@ -203,7 +203,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
       String msg = "Validate failed: " + ex.getMessage();
       MAPDLOGGER.error(msg);
       throw new InvalidParseRequest(-3, msg);
-    } catch (Exception ex) {
+    } catch (Throwable ex) {
       String msg = "Exception occurred: " + ex.getMessage();
       MAPDLOGGER.error(msg);
       throw new InvalidParseRequest(-4, msg);
