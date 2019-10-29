@@ -2124,14 +2124,13 @@ void Catalog::createTable(
   try {
     addTableToMap(td, cds, dds);
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
+    if (!td.storageType.empty()) {
+      ForeignStorageInterface::registerTable(this, getCurrentDB().dbId, td, cds);
+    }
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     removeTableFromMap(td.tableName, td.tableId, true);
     throw;
-  }
-  // TODO: rollback if exception is raised
-  if (!td.storageType.empty()) {
-    ForeignStorageInterface::registerTable(this, getCurrentDB().dbId, td, cds);
   }
   sqliteConnector_.query("END TRANSACTION");
 }
