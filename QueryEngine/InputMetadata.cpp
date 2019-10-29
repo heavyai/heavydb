@@ -141,7 +141,6 @@ std::map<int, ChunkMetadata> synthesize_metadata(const ResultSet* rows) {
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, entry_count);
       compute_stats_threads.push_back(utils::async(
-          std::launch::async,
           [rows, &do_work, &dummy_encoders](
               const size_t start, const size_t end, const size_t worker_idx) {
             for (size_t i = start; i < end; ++i) {

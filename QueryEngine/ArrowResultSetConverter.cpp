@@ -445,12 +445,11 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
     for (size_t i = 0, start_entry = 0; start_entry < entry_count;
          ++i, start_entry += stride) {
       const auto end_entry = std::min(entry_count, start_entry + stride);
-      child_threads.push_back(utils::async(std::launch::async,
-                                         fetch,
-                                         std::ref(column_value_segs[i]),
-                                         std::ref(null_bitmap_segs[i]),
-                                         start_entry,
-                                         end_entry));
+      child_threads.push_back(utils::async(fetch,
+                                           std::ref(column_value_segs[i]),
+                                           std::ref(null_bitmap_segs[i]),
+                                           start_entry,
+                                           end_entry));
     }
     for (auto& child : child_threads) {
       row_count += child.get();

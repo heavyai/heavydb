@@ -226,12 +226,11 @@ void OverlapsJoinHashTable::reifyWithLayout(
         shard_count
             ? only_shards_for_device(query_info.fragments, device_id, device_count)
             : query_info.fragments;
-    init_threads.push_back(utils::async(std::launch::async,
-                                      &OverlapsJoinHashTable::reifyForDevice,
-                                      this,
-                                      columns_per_device[device_id],
-                                      layout,
-                                      device_id));
+    init_threads.push_back(utils::async(&OverlapsJoinHashTable::reifyForDevice,
+                                        this,
+                                        columns_per_device[device_id],
+                                        layout,
+                                        device_id));
   }
   for (auto& init_thread : init_threads) {
     init_thread.wait();
@@ -385,15 +384,14 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
   std::vector<size_t> emitted_keys_count_device_threads(device_count, 0);
   std::vector<std::future<void>> approximate_distinct_device_threads;
   for (int device_id = 0; device_id < device_count; ++device_id) {
-    approximate_distinct_device_threads.emplace_back(utils::async(
-        std::launch::async,
-        [device_id,
-         &columns_per_device,
-         &count_distinct_desc,
-         &data_mgr,
-         &host_hll_buffers,
-         &emitted_keys_count_device_threads,
-         this] {
+    approximate_distinct_device_threads.emplace_back(
+        utils::async([device_id,
+                      &columns_per_device,
+                      &count_distinct_desc,
+                      &data_mgr,
+                      &host_hll_buffers,
+                      &emitted_keys_count_device_threads,
+                      this] {
           ThrustAllocator allocator(&data_mgr, device_id);
           auto device_hll_buffer =
               allocator.allocateScopedBuffer(count_distinct_desc.bitmapPaddedSizeBytes());
@@ -519,7 +517,6 @@ int OverlapsJoinHashTable::initHashTableOnCpu(
   std::vector<std::future<void>> init_cpu_buff_threads;
   for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
     init_cpu_buff_threads.emplace_back(utils::async(
-        std::launch::async,
         [this, key_component_count, key_component_width, thread_idx, thread_count] {
           switch (key_component_width) {
             case 4:
@@ -550,51 +547,49 @@ int OverlapsJoinHashTable::initHashTableOnCpu(
   }
   std::vector<std::future<int>> fill_cpu_buff_threads;
   for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-    fill_cpu_buff_threads.emplace_back(utils::async(
-        std::launch::async,
-        [this,
-         &join_columns,
-         &join_bucket_info,
-         key_component_count,
-         key_component_width,
-         thread_idx,
-         thread_count] {
-          switch (key_component_width) {
-            case 4: {
-              const auto key_handler = OverlapsKeyHandler(
-                  key_component_count,
-                  &join_columns[0],
-                  join_bucket_info[0].bucket_sizes_for_dimension.data());
-              return overlaps_fill_baseline_hash_join_buff_32(&(*cpu_hash_table_buff_)[0],
-                                                              entry_count_,
-                                                              -1,
-                                                              key_component_count,
-                                                              false,
-                                                              &key_handler,
-                                                              join_columns[0].num_elems,
-                                                              thread_idx,
-                                                              thread_count);
-            }
-            case 8: {
-              const auto key_handler = OverlapsKeyHandler(
-                  key_component_count,
-                  &join_columns[0],
-                  join_bucket_info[0].bucket_sizes_for_dimension.data());
-              return overlaps_fill_baseline_hash_join_buff_64(&(*cpu_hash_table_buff_)[0],
-                                                              entry_count_,
-                                                              -1,
-                                                              key_component_count,
-                                                              false,
-                                                              &key_handler,
-                                                              join_columns[0].num_elems,
-                                                              thread_idx,
-                                                              thread_count);
-            }
-            default:
-              CHECK(false);
-          }
-          return -1;
-        }));
+    fill_cpu_buff_threads.emplace_back(utils::async([this,
+                                                     &join_columns,
+                                                     &join_bucket_info,
+                                                     key_component_count,
+                                                     key_component_width,
+                                                     thread_idx,
+                                                     thread_count] {
+      switch (key_component_width) {
+        case 4: {
+          const auto key_handler =
+              OverlapsKeyHandler(key_component_count,
+                                 &join_columns[0],
+                                 join_bucket_info[0].bucket_sizes_for_dimension.data());
+          return overlaps_fill_baseline_hash_join_buff_32(&(*cpu_hash_table_buff_)[0],
+                                                          entry_count_,
+                                                          -1,
+                                                          key_component_count,
+                                                          false,
+                                                          &key_handler,
+                                                          join_columns[0].num_elems,
+                                                          thread_idx,
+                                                          thread_count);
+        }
+        case 8: {
+          const auto key_handler =
+              OverlapsKeyHandler(key_component_count,
+                                 &join_columns[0],
+                                 join_bucket_info[0].bucket_sizes_for_dimension.data());
+          return overlaps_fill_baseline_hash_join_buff_64(&(*cpu_hash_table_buff_)[0],
+                                                          entry_count_,
+                                                          -1,
+                                                          key_component_count,
+                                                          false,
+                                                          &key_handler,
+                                                          join_columns[0].num_elems,
+                                                          thread_idx,
+                                                          thread_count);
+        }
+        default:
+          CHECK(false);
+      }
+      return -1;
+    }));
   }
   int err = 0;
   for (auto& child : fill_cpu_buff_threads) {

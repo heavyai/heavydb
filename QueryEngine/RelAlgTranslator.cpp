@@ -440,7 +440,6 @@ std::shared_ptr<Analyzer::Expr> get_in_values_expr(std::shared_ptr<Analyzer::Exp
        ++i, start_entry += stride) {
     const auto end_entry = std::min(start_entry + stride, entry_count);
     fetcher_threads.push_back(utils::async(
-        std::launch::async,
         [&](std::list<std::shared_ptr<Analyzer::Expr>>& in_vals,
             const size_t start,
             const size_t end) {
@@ -747,7 +746,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
       CHECK(sd);
       const auto needle_null_val = inline_int_null_val(arg_type);
       fetcher_threads.push_back(utils::async(
-          std::launch::async,
           [this,
            &val_set,
            &total_in_vals_count,
@@ -784,7 +782,6 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::getInIntegerSetExpr(
     } else {
       CHECK(arg_type.is_integer());
       fetcher_threads.push_back(utils::async(
-          std::launch::async,
           [&val_set, &total_in_vals_count](
               std::vector<int64_t>& in_vals, const size_t start, const size_t end) {
             fill_integer_in_vals(in_vals, total_in_vals_count, &val_set, {start, end});

@@ -311,21 +311,19 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
         auto thread_launcher = [&](auto const& type_tag) {
           for (unsigned i = 0; i < static_cast<unsigned>(usable_threads); i++) {
             entry_processing_futures.emplace_back(
-                utils::async(std::launch::async,
-                           std::forward<decltype(process_rows)>(process_rows),
-                           type_tag,
-                           column_index,
-                           get_row_index(i),
-                           complete_entry_block_size));
+                utils::async(std::forward<decltype(process_rows)>(process_rows),
+                             type_tag,
+                             column_index,
+                             get_row_index(i),
+                             complete_entry_block_size));
           }
           if (partial_row_block_size) {
             entry_processing_futures.emplace_back(
-                utils::async(std::launch::async,
-                           std::forward<decltype(process_rows)>(process_rows),
-                           type_tag,
-                           column_index,
-                           get_row_index(usable_threads),
-                           partial_row_block_size));
+                utils::async(std::forward<decltype(process_rows)>(process_rows),
+                             type_tag,
+                             column_index,
+                             get_row_index(usable_threads),
+                             partial_row_block_size));
           }
         };
 
@@ -417,17 +415,15 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldDeleteCallb
 
     for (unsigned i = 0; i < (unsigned)usable_threads; i++) {
       row_processing_futures.emplace_back(
-          utils::async(std::launch::async,
-                     std::forward<decltype(process_rows)>(process_rows),
-                     get_row_index(i),
-                     complete_row_block_size));
+          utils::async(std::forward<decltype(process_rows)>(process_rows),
+                       get_row_index(i),
+                       complete_row_block_size));
     }
     if (partial_row_block_size) {
       row_processing_futures.emplace_back(
-          utils::async(std::launch::async,
-                     std::forward<decltype(process_rows)>(process_rows),
-                     get_row_index(usable_threads),
-                     partial_row_block_size));
+          utils::async(std::forward<decltype(process_rows)>(process_rows),
+                       get_row_index(usable_threads),
+                       partial_row_block_size));
     }
 
     uint64_t rows_processed(0);

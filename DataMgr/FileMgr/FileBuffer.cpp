@@ -306,8 +306,7 @@ void FileBuffer::read(int8_t* const dst,
 
     for (size_t i = 0; i < numThreads; i++) {
       threadDSArr.push_back(threadDS);
-      threads.push_back(
-          utils::async(std::launch::async, readForThread, this, threadDSArr[i]));
+      threads.push_back(utils::async(readForThread, this, threadDSArr[i]));
 
       // calculate elements of threadDS
       threadDS.t_fm = fm_;

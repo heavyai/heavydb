@@ -572,13 +572,12 @@ void JoinHashTable::reify(const int device_count) {
               ? only_shards_for_device(query_info.fragments, device_id, device_count)
               : query_info.fragments;
       init_threads.push_back(
-          utils::async(std::launch::async,
-                     hash_type_ == JoinHashTableInterface::HashType::OneToOne
-                         ? &JoinHashTable::reifyOneToOneForDevice
-                         : &JoinHashTable::reifyOneToManyForDevice,
-                     this,
-                     fragments,
-                     device_id));
+          utils::async(hash_type_ == JoinHashTableInterface::HashType::OneToOne
+                           ? &JoinHashTable::reifyOneToOneForDevice
+                           : &JoinHashTable::reifyOneToManyForDevice,
+                       this,
+                       fragments,
+                       device_id));
     }
     for (auto& init_thread : init_threads) {
       init_thread.wait();
@@ -597,11 +596,8 @@ void JoinHashTable::reify(const int device_count) {
               ? only_shards_for_device(query_info.fragments, device_id, device_count)
               : query_info.fragments;
 
-      init_threads.push_back(utils::async(std::launch::async,
-                                        &JoinHashTable::reifyOneToManyForDevice,
-                                        this,
-                                        fragments,
-                                        device_id));
+      init_threads.push_back(utils::async(
+          &JoinHashTable::reifyOneToManyForDevice, this, fragments, device_id));
     }
     for (auto& init_thread : init_threads) {
       init_thread.wait();
@@ -909,13 +905,12 @@ void JoinHashTable::initOneToManyHashTableOnCpu(
   int thread_count = cpu_threads();
   std::vector<std::future<void>> init_threads;
   for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-    init_threads.emplace_back(utils::async(std::launch::async,
-                                         init_hash_join_buff,
-                                         &(*cpu_hash_table_buff_)[0],
-                                         hash_entry_info.getNormalizedHashEntryCount(),
-                                         hash_join_invalid_val,
-                                         thread_idx,
-                                         thread_count));
+    init_threads.emplace_back(utils::async(init_hash_join_buff,
+                                           &(*cpu_hash_table_buff_)[0],
+                                           hash_entry_info.getNormalizedHashEntryCount(),
+                                           hash_join_invalid_val,
+                                           thread_idx,
+                                           thread_count));
   }
   for (auto& child : init_threads) {
     child.wait();

@@ -92,41 +92,39 @@ void ResultSet::doBaselineSort(const ExecutorDeviceType device_type,
     std::vector<std::future<void>> top_futures;
     std::vector<std::vector<uint32_t>> strided_permutations(step);
     for (size_t start = 0; start < step; ++start) {
-      top_futures.emplace_back(utils::async(
-          std::launch::async,
-          [&strided_permutations,
-           data_mgr,
-           device_type,
-           groupby_buffer,
-           pod_oe,
-           key_bytewidth,
-           layout,
-           top_n,
-           start,
-           step] {
-            if (device_type == ExecutorDeviceType::GPU) {
-              set_cuda_context(data_mgr, start);
-            }
-            strided_permutations[start] = (key_bytewidth == 4)
-                                              ? baseline_sort<int32_t>(device_type,
-                                                                       start,
-                                                                       data_mgr,
-                                                                       groupby_buffer,
-                                                                       pod_oe,
-                                                                       layout,
-                                                                       top_n,
-                                                                       start,
-                                                                       step)
-                                              : baseline_sort<int64_t>(device_type,
-                                                                       start,
-                                                                       data_mgr,
-                                                                       groupby_buffer,
-                                                                       pod_oe,
-                                                                       layout,
-                                                                       top_n,
-                                                                       start,
-                                                                       step);
-          }));
+      top_futures.emplace_back(utils::async([&strided_permutations,
+                                             data_mgr,
+                                             device_type,
+                                             groupby_buffer,
+                                             pod_oe,
+                                             key_bytewidth,
+                                             layout,
+                                             top_n,
+                                             start,
+                                             step] {
+        if (device_type == ExecutorDeviceType::GPU) {
+          set_cuda_context(data_mgr, start);
+        }
+        strided_permutations[start] = (key_bytewidth == 4)
+                                          ? baseline_sort<int32_t>(device_type,
+                                                                   start,
+                                                                   data_mgr,
+                                                                   groupby_buffer,
+                                                                   pod_oe,
+                                                                   layout,
+                                                                   top_n,
+                                                                   start,
+                                                                   step)
+                                          : baseline_sort<int64_t>(device_type,
+                                                                   start,
+                                                                   data_mgr,
+                                                                   groupby_buffer,
+                                                                   pod_oe,
+                                                                   layout,
+                                                                   top_n,
+                                                                   start,
+                                                                   step);
+      }));
     }
     for (auto& top_future : top_futures) {
       top_future.wait();

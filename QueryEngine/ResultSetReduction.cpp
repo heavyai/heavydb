@@ -234,33 +234,31 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
         const auto start_index = thread_idx * thread_entry_count;
         const auto end_index =
             std::min(start_index + thread_entry_count, that_entry_count);
-        reduction_threads.emplace_back(utils::async(
-            std::launch::async,
-            [this,
-             this_buff,
-             that_buff,
-             start_index,
-             end_index,
-             that_entry_count,
-             &reduction_code,
-             &that] {
-              if (reduction_code.ir_reduce_loop) {
-                run_reduction_code(reduction_code,
-                                   this_buff,
-                                   that_buff,
-                                   start_index,
-                                   end_index,
-                                   that_entry_count,
-                                   &query_mem_desc_,
-                                   &that.query_mem_desc_,
-                                   nullptr);
-              } else {
-                for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
-                  reduceOneEntryBaseline(
-                      this_buff, that_buff, entry_idx, that_entry_count, that);
-                }
-              }
-            }));
+        reduction_threads.emplace_back(utils::async([this,
+                                                     this_buff,
+                                                     that_buff,
+                                                     start_index,
+                                                     end_index,
+                                                     that_entry_count,
+                                                     &reduction_code,
+                                                     &that] {
+          if (reduction_code.ir_reduce_loop) {
+            run_reduction_code(reduction_code,
+                               this_buff,
+                               that_buff,
+                               start_index,
+                               end_index,
+                               that_entry_count,
+                               &query_mem_desc_,
+                               &that.query_mem_desc_,
+                               nullptr);
+          } else {
+            for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
+              reduceOneEntryBaseline(
+                  this_buff, that_buff, entry_idx, that_entry_count, that);
+            }
+          }
+        }));
       }
       for (auto& reduction_thread : reduction_threads) {
         reduction_thread.wait();
@@ -295,51 +293,47 @@ void ResultSetStorage::reduce(const ResultSetStorage& that,
       const auto start_index = thread_idx * thread_entry_count;
       const auto end_index = std::min(start_index + thread_entry_count, entry_count);
       if (query_mem_desc_.didOutputColumnar()) {
-        reduction_threads.emplace_back(utils::async(std::launch::async,
-                                                  [this,
-                                                   this_buff,
-                                                   that_buff,
-                                                   start_index,
-                                                   end_index,
-                                                   &that,
-                                                   &serialized_varlen_buffer] {
-                                                    reduceEntriesNoCollisionsColWise(
-                                                        this_buff,
-                                                        that_buff,
-                                                        that,
-                                                        start_index,
-                                                        end_index,
-                                                        serialized_varlen_buffer);
-                                                  }));
+        reduction_threads.emplace_back(utils::async([this,
+                                                     this_buff,
+                                                     that_buff,
+                                                     start_index,
+                                                     end_index,
+                                                     &that,
+                                                     &serialized_varlen_buffer] {
+          reduceEntriesNoCollisionsColWise(this_buff,
+                                           that_buff,
+                                           that,
+                                           start_index,
+                                           end_index,
+                                           serialized_varlen_buffer);
+        }));
       } else {
-        reduction_threads.emplace_back(utils::async(
-            std::launch::async,
-            [this,
-             this_buff,
-             that_buff,
-             start_index,
-             end_index,
-             that_entry_count,
-             &reduction_code,
-             &that,
-             &serialized_varlen_buffer] {
-              if (reduction_code.ir_reduce_loop) {
-                run_reduction_code(reduction_code,
-                                   this_buff,
-                                   that_buff,
-                                   start_index,
-                                   end_index,
-                                   that_entry_count,
-                                   &query_mem_desc_,
-                                   &that.query_mem_desc_,
-                                   &serialized_varlen_buffer);
-              } else {
-                for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
-                  reduceOneEntryNoCollisionsRowWise(
-                      entry_idx, this_buff, that_buff, that, serialized_varlen_buffer);
-                }
-              }
-            }));
+        reduction_threads.emplace_back(utils::async([this,
+                                                     this_buff,
+                                                     that_buff,
+                                                     start_index,
+                                                     end_index,
+                                                     that_entry_count,
+                                                     &reduction_code,
+                                                     &that,
+                                                     &serialized_varlen_buffer] {
+          if (reduction_code.ir_reduce_loop) {
+            run_reduction_code(reduction_code,
+                               this_buff,
+                               that_buff,
+                               start_index,
+                               end_index,
+                               that_entry_count,
+                               &query_mem_desc_,
+                               &that.query_mem_desc_,
+                               &serialized_varlen_buffer);
+          } else {
+            for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
+              reduceOneEntryNoCollisionsRowWise(
+                  entry_idx, this_buff, that_buff, that, serialized_varlen_buffer);
+            }
+          }
+        }));
       }
     }
     for (auto& reduction_thread : reduction_threads) {
@@ -1033,27 +1027,25 @@ void ResultSetStorage::moveEntriesToBuffer(int8_t* new_buff,
       const auto start_index = thread_idx * thread_entry_count;
       const auto end_index =
           std::min(start_index + thread_entry_count, query_mem_desc_.getEntryCount());
-      move_threads.emplace_back(utils::async(
-          std::launch::async,
-          [this,
-           src_buff,
-           new_buff_i64,
-           new_entry_count,
-           start_index,
-           end_index,
-           key_count,
-           row_qw_count,
-           key_byte_width] {
-            for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
-              moveOneEntryToBuffer<KeyType>(entry_idx,
-                                            new_buff_i64,
-                                            new_entry_count,
-                                            key_count,
-                                            row_qw_count,
-                                            src_buff,
-                                            key_byte_width);
-            }
-          }));
+      move_threads.emplace_back(utils::async([this,
+                                              src_buff,
+                                              new_buff_i64,
+                                              new_entry_count,
+                                              start_index,
+                                              end_index,
+                                              key_count,
+                                              row_qw_count,
+                                              key_byte_width] {
+        for (size_t entry_idx = start_index; entry_idx < end_index; ++entry_idx) {
+          moveOneEntryToBuffer<KeyType>(entry_idx,
+                                        new_buff_i64,
+                                        new_entry_count,
+                                        key_count,
+                                        row_qw_count,
+                                        src_buff,
+                                        key_byte_width);
+        }
+      }));
     }
     for (auto& move_thread : move_threads) {
       move_thread.wait();

@@ -168,8 +168,8 @@ std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
         return true;
       };
       if (worker_count > 1) {
-        worker_threads.push_back(utils::async(
-            std::launch::async, do_work, std::ref(values_set[i]), start_it, end_it));
+        worker_threads.push_back(
+            utils::async(do_work, std::ref(values_set[i]), start_it, end_it));
       } else {
         do_work(std::ref(values), start_it, end_it);
       }
