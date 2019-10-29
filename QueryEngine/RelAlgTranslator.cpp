@@ -1453,8 +1453,15 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
       throw std::runtime_error("Only integer 2nd operands are supported");
     }
 
+    // Calcite may upcast decimals in a way that is
+    // incompatible with the extension function input. Play it safe and stick with the
+    // argument type instead.
+    const SQLTypeInfo ret_ti = args[0]->get_type_info().is_decimal()
+                                   ? args[0]->get_type_info()
+                                   : rex_function->getType();
+
     return makeExpr<Analyzer::FunctionOperWithCustomTypeHandling>(
-        rex_function->getType(), rex_function->getName(), args);
+        ret_ti, rex_function->getName(), args);
   }
   if (rex_function->getName() == "DATETIME_PLUS"sv) {
     auto dt_plus = makeExpr<Analyzer::FunctionOper>(rex_function->getType(),
