@@ -3660,15 +3660,15 @@ ImportStatus Importer::importDelimited(const std::string& file_path,
       threads.push_back(utils::async(std::launch::async,
                                      [thread_id,
                                       this,
-                                      &scratch_buffer,
+                                      sb{std::move(scratch_buffer)},
                                       begin_pos,
                                       end_pos,
                                       columnIdToRenderGroupAnalyzerMap,
-                                      first_row_index_this_buffer]() {
+                                      first_row_index_this_buffer]() mutable {
                                        return import_thread_delimited(
                                            thread_id,
                                            this,
-                                           std::move(scratch_buffer),
+                                           std::move(sb),
                                            begin_pos,
                                            end_pos,
                                            end_pos,
