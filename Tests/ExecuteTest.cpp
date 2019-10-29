@@ -2343,6 +2343,16 @@ TEST(Select, Case) {
     c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN '1' WHEN x BETWEEN 8 AND 10 THEN '2' ELSE "
       "real_str END AS c FROM test WHERE y IN (43) ORDER BY c ASC;",
       dt);
+    c("SELECT ROUND(a.numerator / a.denominator, 2) FROM (SELECT SUM(CASE WHEN y > 42 "
+      "THEN 1.0 ELSE 0.0 END) as numerator, SUM(CASE WHEN dd > 0 THEN 1 ELSE -1 END) as "
+      "denominator, y FROM test GROUP BY y ORDER BY y) a",
+      dt);
+    c("SELECT ROUND((numerator / denominator) * 100, 2) FROM (SELECT "
+      "SUM(CASE WHEN a.x > 0 THEN "
+      "1 ELSE 0 END) as numerator, SUM(CASE WHEN a.dd < 0 "
+      "THEN 0.5 ELSE -0.5 END) as denominator "
+      "FROM test a, test_inner b where a.x = b.x) test_sub",
+      dt);
     EXPECT_EQ(
         int64_t(-1),
         v<int64_t>(run_simple_agg("SELECT ROUND(numerator / denominator, 2) FROM (SELECT "
@@ -2351,6 +2361,16 @@ TEST(Select, Case) {
                                   "THEN 1 ELSE -1 END) as denominator "
                                   "FROM test a, test_inner b where a.x = b.x) test_sub",
                                   dt)));
+    EXPECT_EQ(
+        double(100),
+        v<double>(run_simple_agg(
+            "SELECT CEIL((a.numerator / a.denominator) * 100) as c FROM (SELECT SUM(CASE "
+            "WHEN "
+            "y > 42 "
+            "THEN 1.0 ELSE 0.0 END) as numerator, SUM(CASE WHEN dd > 0 THEN 1 ELSE "
+            "-1 END) as "
+            "denominator, y FROM test GROUP BY y ORDER BY y) a GROUP BY c HAVING c > 0",
+            dt)));
 
     const auto constrained_by_in_threshold_state = g_constrained_by_in_threshold;
     g_constrained_by_in_threshold = 0;
