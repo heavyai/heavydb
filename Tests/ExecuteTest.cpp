@@ -2511,6 +2511,7 @@ TEST(Select, Strings) {
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE str REGEXP 'ba.' or str REGEXP 'fo.';",
                   dt)));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT LENGTH(NULL) FROM test;", dt));
   }
 }
 
