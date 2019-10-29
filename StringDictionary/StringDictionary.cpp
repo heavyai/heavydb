@@ -31,7 +31,10 @@
 #include <future>
 #include <thread>
 
+#include "QueryEngine/ArrowUtil.h"
 #include "Utils/Threading.h"
+#include "arrow/util/task-group.h"
+#include "arrow/util/thread-pool.h"
 
 namespace {
 const int SYSTEM_PAGE_SIZE = getpagesize();
@@ -458,21 +461,22 @@ std::vector<int32_t> StringDictionary::getLike(const std::string& pattern,
     return it->second;
   }
   std::vector<int32_t> result;
-  std::vector<std::thread> workers;
+  auto thread_pool = arrow::internal::GetCpuThreadPool();
+  auto workers = arrow::internal::TaskGroup::MakeThreaded(thread_pool);
   int worker_count = cpu_threads();
   CHECK_GT(worker_count, 0);
   std::vector<std::vector<int32_t>> worker_results(worker_count);
   CHECK_LE(generation, str_count_);
   for (int worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
-    workers.emplace_back([&worker_results,
-                          &pattern,
-                          generation,
-                          icase,
-                          is_simple,
-                          escape,
-                          worker_idx,
-                          worker_count,
-                          this]() {
+    workers->Append([&worker_results,
+                     &pattern,
+                     generation,
+                     icase,
+                     is_simple,
+                     escape,
+                     worker_idx,
+                     worker_count,
+                     this]() {
       for (size_t string_id = worker_idx; string_id < generation;
            string_id += worker_count) {
         const auto str = getStringUnlocked(string_id);
@@ -480,11 +484,10 @@ std::vector<int32_t> StringDictionary::getLike(const std::string& pattern,
           worker_results[worker_idx].push_back(string_id);
         }
       }
+      return arrow::Status::OK();
     });
   }
-  for (auto& worker : workers) {
-    worker.join();
-  }
+  ARROW_THROW_NOT_OK(workers->Finish());
   for (const auto& worker_result : worker_results) {
     result.insert(result.end(), worker_result.begin(), worker_result.end());
   }
@@ -516,13 +519,14 @@ std::vector<int32_t> StringDictionary::getEquals(std::string pattern,
       }
     }
   } else {
-    std::vector<std::thread> workers;
+    auto thread_pool = arrow::internal::GetCpuThreadPool();
+    auto workers = arrow::internal::TaskGroup::MakeThreaded(thread_pool);
     int worker_count = cpu_threads();
     CHECK_GT(worker_count, 0);
     std::vector<std::vector<int32_t>> worker_results(worker_count);
     CHECK_LE(generation, str_count_);
     for (int worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
-      workers.emplace_back(
+      workers->Append(
           [&worker_results, &pattern, generation, worker_idx, worker_count, this]() {
             for (size_t string_id = worker_idx; string_id < generation;
                  string_id += worker_count) {
@@ -531,11 +535,10 @@ std::vector<int32_t> StringDictionary::getEquals(std::string pattern,
                 worker_results[worker_idx].push_back(string_id);
               }
             }
+            return arrow::Status::OK();
           });
     }
-    for (auto& worker : workers) {
-      worker.join();
-    }
+    ARROW_THROW_NOT_OK(workers->Finish());
     for (const auto& worker_result : worker_results) {
       result.insert(result.end(), worker_result.begin(), worker_result.end());
     }
@@ -730,19 +733,20 @@ std::vector<int32_t> StringDictionary::getRegexpLike(const std::string& pattern,
     return it->second;
   }
   std::vector<int32_t> result;
-  std::vector<std::thread> workers;
+  auto thread_pool = arrow::internal::GetCpuThreadPool();
+  auto workers = arrow::internal::TaskGroup::MakeThreaded(thread_pool);
   int worker_count = cpu_threads();
   CHECK_GT(worker_count, 0);
   std::vector<std::vector<int32_t>> worker_results(worker_count);
   CHECK_LE(generation, str_count_);
   for (int worker_idx = 0; worker_idx < worker_count; ++worker_idx) {
-    workers.emplace_back([&worker_results,
-                          &pattern,
-                          generation,
-                          escape,
-                          worker_idx,
-                          worker_count,
-                          this]() {
+    workers->Append([&worker_results,
+                     &pattern,
+                     generation,
+                     escape,
+                     worker_idx,
+                     worker_count,
+                     this]() {
       for (size_t string_id = worker_idx; string_id < generation;
            string_id += worker_count) {
         const auto str = getStringUnlocked(string_id);
@@ -750,11 +754,12 @@ std::vector<int32_t> StringDictionary::getRegexpLike(const std::string& pattern,
           worker_results[worker_idx].push_back(string_id);
         }
       }
+      return arrow::Status::OK();
     });
   }
-  for (auto& worker : workers) {
-    worker.join();
-  }
+
+  ARROW_THROW_NOT_OK(workers->Finish());
+
   for (const auto& worker_result : worker_results) {
     result.insert(result.end(), worker_result.begin(), worker_result.end());
   }

@@ -28,8 +28,10 @@
 #include <numeric>
 #include <thread>
 
+#include "ArrowUtil.h"
 #include "Utils/Threading.h"
-
+#include "arrow/util/task-group.h"
+#include "arrow/util/thread-pool.h"
 namespace {
 
 class NeedsOneToManyHash : public HashJoinFail {
@@ -812,56 +814,60 @@ void JoinHashTable::initHashTableOnCpu(
       CHECK(sd_outer_proxy);
     }
     int thread_count = cpu_threads();
-    std::vector<std::thread> init_cpu_buff_threads;
-    for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-      init_cpu_buff_threads.emplace_back(
-          [this, hash_entry_info, hash_join_invalid_val, thread_idx, thread_count] {
-            init_hash_join_buff(&(*cpu_hash_table_buff_)[0],
-                                hash_entry_info.getNormalizedHashEntryCount(),
-                                hash_join_invalid_val,
-                                thread_idx,
-                                thread_count);
-          });
+    auto thread_pool = arrow::internal::GetCpuThreadPool();
+    {
+      auto init_cpu_buff_threads = arrow::internal::TaskGroup::MakeThreaded(thread_pool);
+      for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+        init_cpu_buff_threads->Append(
+            [this, hash_entry_info, hash_join_invalid_val, thread_idx, thread_count] {
+              init_hash_join_buff(&(*cpu_hash_table_buff_)[0],
+                                  hash_entry_info.getNormalizedHashEntryCount(),
+                                  hash_join_invalid_val,
+                                  thread_idx,
+                                  thread_count);
+              return arrow::Status::OK();
+            });
+      }
+      ARROW_THROW_NOT_OK(init_cpu_buff_threads->Finish());
     }
-    for (auto& t : init_cpu_buff_threads) {
-      t.join();
-    }
-    init_cpu_buff_threads.clear();
     int err{0};
-    for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
-      init_cpu_buff_threads.emplace_back([this,
-                                          hash_join_invalid_val,
-                                          col_buff,
-                                          num_elements,
-                                          sd_inner_proxy,
-                                          sd_outer_proxy,
-                                          thread_idx,
-                                          thread_count,
-                                          &ti,
-                                          &err,
-                                          hash_entry_info] {
-        int partial_err =
-            fill_hash_join_buff_bucketized(&(*cpu_hash_table_buff_)[0],
-                                           hash_join_invalid_val,
-                                           {col_buff, num_elements},
-                                           {static_cast<size_t>(ti.get_size()),
-                                            col_range_.getIntMin(),
-                                            col_range_.getIntMax(),
-                                            inline_fixed_encoding_null_val(ti),
-                                            isBitwiseEq(),
-                                            col_range_.getIntMax() + 1,
-                                            get_join_column_type_kind(ti)},
-                                           sd_inner_proxy,
-                                           sd_outer_proxy,
-                                           thread_idx,
-                                           thread_count,
-                                           hash_entry_info.bucket_normalization);
-        __sync_val_compare_and_swap(&err, 0, partial_err);
-      });
+    {
+      auto init_cpu_buff_threads = arrow::internal::TaskGroup::MakeThreaded(thread_pool);
+      for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
+        init_cpu_buff_threads->Append([this,
+                                       hash_join_invalid_val,
+                                       col_buff,
+                                       num_elements,
+                                       sd_inner_proxy,
+                                       sd_outer_proxy,
+                                       thread_idx,
+                                       thread_count,
+                                       &ti,
+                                       &err,
+                                       hash_entry_info] {
+          int partial_err =
+              fill_hash_join_buff_bucketized(&(*cpu_hash_table_buff_)[0],
+                                             hash_join_invalid_val,
+                                             {col_buff, num_elements},
+                                             {static_cast<size_t>(ti.get_size()),
+                                              col_range_.getIntMin(),
+                                              col_range_.getIntMax(),
+                                              inline_fixed_encoding_null_val(ti),
+                                              isBitwiseEq(),
+                                              col_range_.getIntMax() + 1,
+                                              get_join_column_type_kind(ti)},
+                                             sd_inner_proxy,
+                                             sd_outer_proxy,
+                                             thread_idx,
+                                             thread_count,
+                                             hash_entry_info.bucket_normalization);
+          __sync_val_compare_and_swap(&err, 0, partial_err);
+          return arrow::Status::OK();
+        });
+      }
+      ARROW_THROW_NOT_OK(init_cpu_buff_threads->Finish());
     }
-    for (auto& t : init_cpu_buff_threads) {
-      t.join();
-    }
+
     if (err) {
       cpu_hash_table_buff_.reset();
       // Too many hash entries, need to retry with a 1:many table
