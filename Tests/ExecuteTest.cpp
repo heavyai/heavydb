@@ -538,6 +538,15 @@ TEST(Distributed50, FailOver) {
   run_ddl_statement("DROP TABLE IF EXISTS dist5;");
 }
 
+TEST(Errors, InvalidQueries) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_ANY_THROW(run_multiple_agg(
+        "SELECT * FROM test WHERE 1 = 2 AND ( 1 = 2 and 3 = 4 limit 100);", dt));
+    EXPECT_ANY_THROW(run_multiple_agg("SET x = y;", dt));
+  }
+}
+
 TEST(Create, StorageOptions) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
