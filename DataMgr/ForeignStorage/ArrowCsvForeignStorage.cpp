@@ -10,6 +10,7 @@
 #include <arrow/io/file.h>
 #include <arrow/util/task-group.h>
 #include <arrow/util/thread-pool.h>
+#include "arrow/csv/column-builder.h"
 
 #include "../DataMgr/StringNoneEncoder.h"
 #include "../QueryEngine/ArrowResultSet.h"
@@ -36,6 +37,45 @@ void ArrowCsvForeignStorage::append(
   printf("-- aaaaaapend!!!!\n");
   CHECK(false);
 }
+
+#if 0
+// There are two options how to deal with custom column builder:
+// 1. define a custom DataType and extend Converter::Make in order to create a custom converter.
+// https://github.com/apache/arrow/blob/2825452dfc883fde5723656001b2bb1fc9e9c029/cpp/src/arrow/csv/converter.cc#L409
+// On the pro side - there is no change in public API because convert_options_.column_types maps to DataTypes
+// The limitation is that it is still tied to arrow::Array* type for each block, e.g:
+//    Status Convert(const BlockParser& parser, int32_t col_index, std::shared_ptr<Array>* out);
+// while the Finish(std::shared_ptr<ChunkedArray>* out) can be dummy in the following case.
+// 2. define the column builder class itself and hook into
+// https://github.com/apache/arrow/blob/8b0318a11bba2aa2cf39bff245ff916a3283d372/cpp/src/arrow/csv/reader.cc#L179
+class TypedColumnBuilder : public arrow::csv::ColumnBuilder {
+ public:
+  TypedColumnBuilder(  // const std::shared_ptr<DataType>& type, int32_t col_index,
+      const arrow::csv::ConvertOptions& options,
+      arrow::MemoryPool* pool,
+      const std::shared_ptr<arrow::internal::TaskGroup>& task_group)
+      : ColumnBuilder(task_group),
+      // type_(type),
+      // col_index_(col_index),
+      options_(options)
+      , pool_(pool) {}
+
+  arrow::Status Init();
+
+  void Insert(int64_t block_index,
+              const std::shared_ptr<arrow::csv::BlockParser>& parser) override;
+  arrow::Status Finish(std::shared_ptr<arrow::ChunkedArray>* out) override;
+
+ protected:
+  // std::mutex mutex_;
+  // std::shared_ptr<DataType> type_;
+  // int32_t col_index_;
+  arrow::csv::ConvertOptions options_;
+  arrow::MemoryPool* pool_;
+
+  // std::shared_ptr<Converter> converter_;
+};
+#endif
 
 void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
                                   const SQLTypeInfo& sql_type,
@@ -188,7 +228,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
 
   auto ropt = arrow::csv::ReadOptions::Defaults();
   ropt.use_threads = true;
-  ropt.block_size = 1 * 1024 * 1024;
+  ropt.block_size = 2 * 1024 * 1024;
 
   auto copt = arrow::csv::ConvertOptions::Defaults();
   copt.check_utf8 = false;
