@@ -40,7 +40,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "Utils/Async.h"
+#include "Utils/Threading.h"
 
 bool g_gpus_present = false;
 

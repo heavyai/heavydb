@@ -38,7 +38,7 @@
 #endif  // HAVE_CUDA
 #include <future>
 
-#include "Utils/Async.h"
+#include "Utils/Threading.h"
 
 #define ARROW_RECORDBATCH_MAKE arrow::RecordBatch::Make
 

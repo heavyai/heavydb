@@ -19,7 +19,7 @@
 
 #include <future>
 
-#include "Utils/Async.h"
+#include "Utils/Threading.h"
 
 llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
                                     const CompilationOptions& co) {

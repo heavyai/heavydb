@@ -43,7 +43,7 @@
 #include <cmath>
 #include <numeric>
 
-#include "Utils/Async.h"
+#include "Utils/Threading.h"
 
 #ifndef __CUDACC__
 namespace {

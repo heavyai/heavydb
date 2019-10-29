@@ -34,7 +34,7 @@
 #include "../Shared/sql_type_to_string.h"
 #include "../Shared/thread_count.h"
 
-#include "Utils/Async.h"
+#include "Utils/Threading.h"
 
 extern bool g_enable_watchdog;
 

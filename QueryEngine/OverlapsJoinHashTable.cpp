@@ -23,7 +23,7 @@
 
 #include "Execute.h"
 
-#include "Utils/Async.h"
+#include "Utils/Threading.h"
 
 std::map<OverlapsJoinHashTable::HashTableCacheKey, double>
     OverlapsJoinHashTable::auto_tuner_cache_;

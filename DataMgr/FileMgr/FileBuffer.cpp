@@ -29,7 +29,7 @@
 #include "DataMgr/FileMgr/FileMgr.h"
 #include "Shared/File.h"
 
-#include "Utils/Async.h"
+#include "Utils/Threading.h"
 #define METADATA_PAGE_SIZE 4096
 
 using namespace std;

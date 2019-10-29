@@ -31,7 +31,7 @@
 
 #include <future>
 
-#include "Utils/Async.h"
+#include "Utils/Threading.h"
 
 std::unique_ptr<CudaMgr_Namespace::CudaMgr> g_cuda_mgr;  // for unit tests only
 

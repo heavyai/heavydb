@@ -24,7 +24,7 @@
 
 #include <future>
 
-#include "Utils/Async.h"
+#include "Utils/Threading.h"
 
 std::vector<std::pair<BaselineJoinHashTable::HashTableCacheKey,
                       BaselineJoinHashTable::HashTableCacheValue>>

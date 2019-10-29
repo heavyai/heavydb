@@ -72,7 +72,7 @@
 #include "Utils/ChunkAccessorTable.h"
 #include "gen-cpp/MapD.h"
 
-#include "Utils/Async.h"
+#include "Utils/Threading.h"
 
 size_t g_archive_read_buf_size = 1 << 20;
 

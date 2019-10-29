@@ -21,7 +21,7 @@
 
 #include <future>
 
-#include "Utils/Async.h"
+#include "Utils/Threading.h"
 
 InputTableInfoCache::InputTableInfoCache(Executor* executor) : executor_(executor) {}
 

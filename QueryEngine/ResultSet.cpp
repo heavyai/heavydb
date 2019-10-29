@@ -41,7 +41,7 @@
 #include <future>
 #include <numeric>
 
-#include "Utils/Async.h"
+#include "Utils/Threading.h"
 
 ResultSetStorage::ResultSetStorage(const std::vector<TargetInfo>& targets,
                                    const QueryMemoryDescriptor& query_mem_desc,
