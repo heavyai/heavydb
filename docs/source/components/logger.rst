@@ -19,7 +19,7 @@ For the developer, log entries are made in a syntax that is similar to ``std::os
     LOG(INFO) << "x = " << x;
 
 where ``INFO`` is one common example of the log "severity" level. Other severities are ``WARNING``, ``FATAL``,
-``DEBUG1``, etc.
+``DEBUG1``, etc. See `Severity`_.
 
 In addition, there are a number of ``CHECK`` macros which act like ``assert()`` but will report via the
 logging system upon failure, with an optional message, and subsequently call ``abort()``. Examples::
@@ -171,7 +171,7 @@ Field descriptions:
 
 | 1. Timestamp in local timezone with microsecond resolution.
 | 2. Single-character severity level. In same order as above severity levels:
-|    ``4`` ``3`` ``2`` ``1`` ``I`` ``W`` ``E`` ``F``
+|    ``F`` ``E`` ``W`` ``I`` ``1`` ``2`` ``3`` ``4``
 |    For instance the ``I`` implies that the above log entry is of ``INFO`` severity.
 | 3. The process id assigned by the operating system.
 | 4. Source filename:Line number.
@@ -190,7 +190,7 @@ Currently there are 2 channels: ``IR`` ``PTX``
 
 which log intermediate representation, and parallel thread execution code, respectively. Scripts may be
 used for other purposes that parse and analyze these logs, therefore using channels outside of the severity
-hierarchy are convenient so that the output is not interleaved with unrelated ``INFO`` or ``DEBUG`` log lines.
+hierarchy is convenient so that the output is not interleaved with unrelated ``INFO`` or ``DEBUG`` log lines.
 
 For example, ``LOG(IR) << "Foo = " << foo.getIr();`` will be activated if any only if ``IR`` is included
 in the ``--log-channels`` program option, which can accept multiple comma-delimited channel names. If activated,
@@ -255,3 +255,115 @@ The first 4 fields are same as in the above `Format`_ section.  Additional field
 #. ``names`` - List of optional value names in SQL-array format.
 #. ``values`` - List of optional values in SQL-array format, in same order as ``names``. Names and values are
    logged in this way so as to be readily imported into a SQL table for analysis.
+
+DEBUG_TIMER
+"""""""""""
+
+``DebugTimer`` objects can be instantiated in the code that measure and log the duration of their own lifetimes,
+and include the following features:
+
+* Globally accessible via a macro. E.g. ``auto timer = DEBUG_TIMER(__func__)``.
+* Single multi-line log entry is reported for nested timers.
+* Enabled with the ``--enable-debug-timer`` program option. Without it, the ``timer`` objects have no effect.
+* Include timers from spawned threads. Requires a call on the child thread informing the parent thread id:
+  ``DEBUG_TIMER_NEW_THREAD(parent_thread_id);``
+
+Example::
+
+    void foo() {
+      auto timer = DEBUG_TIMER(__func__);
+      ...
+      bar();
+      ...
+    }
+
+    void bar() {
+      auto timer = DEBUG_TIMER(__func__);
+      ...
+      bar2();
+      ...
+      timer.stop();  // Manually stop timer for bar().
+      ...
+    }
+
+    void bar2() {
+      auto timer = DEBUG_TIMER(__func__);
+      ...
+    }
+
+Upon the destruction of the ``timer`` object within ``foo()``, a log entry similar to the following will be made::
+
+    2019-10-17T15:22:53.981002 I 8980 foobar.cpp:70 DEBUG_TIMER thread_id(140719710320384)
+    19ms total duration for foo
+      17ms bar foobar.cpp:100
+        13ms bar2 foobar.cpp:130
+
+This is assuming that no other ``DEBUG_TIMER`` instance exists in the thread's call stack prior to ``foo()``.
+Accordingly, when ``bar()`` is called from ``foo()``, ``bar()``'s instance of ``timer`` will NOT cause its
+own log entry to be made, but instead will record its duration and relative depth in the call stack within
+a global data structure. Same with ``bar2()``.  Once the outer-most ``timer`` object destructs, the entire
+``DurationTree`` of recorded times are logged together into a single multi-line log entry, one line per
+``timer`` instance.
+
+There is also a ``DebugTimer::stop()`` method that manually stops the timer, and will log the entire
+``DurationTree`` if it is the base timer. The destructor in this case will have no further effect.
+
+To embed timers in a spawned child thread, call ``DEBUG_TIMER_NEW_THREAD(parent_thread_id);`` from the child
+thread. This will not start a timer, but will record the child-parent relationship so that subsequent
+``DEBUG_TIMER`` calls are stored in the correct node of the parent tree. An example of a resulting report::
+
+    2019-10-17T15:22:53.981002 I 8980 RelAlgExecutor.cpp:70 DEBUG_TIMER thread_id(140719710320384)
+    322ms total duration for executeRelAlgQuery
+      232ms executeWorkUnit RelAlgExecutor.cpp:1922
+        183ms compileWorkUnit NativeCodegen.cpp:1572
+          New thread(140718009964288)
+            2ms fetchChunks Execute.cpp:2028
+            0ms getQueryExecutionContext QueryMemoryDescriptor.cpp:695
+            45ms executePlanWithGroupBy Execute.cpp:2423
+              41ms launchGpuCode QueryExecutionContext.cpp:195
+              0ms reduceMultiDeviceResultSets Execute.cpp:865
+          End thread(140718009964288)
+
+.. note::
+
+    Any timer that is created in a thread when no other timers are active in the same or parent thread is
+    called a *base timer*. The timer stack is logged when the base timer destructs, or ``stop()`` is called,
+    after which memory used for tracking the timer trees are freed.  The performance cost of this should be
+    kept in mind when placing timers within the code.
+
+.. warning::
+
+    Non-base timers that end *after* their base timer ends will result in a **segmentation fault** (but only
+    when the ``--enable-debug-timer`` option is active). This is easily avoided by not interleaving timer
+    lifetimes with one another in the same block of code, and making sure that all child threads end prior
+    to the ending of any corresponding base timer.
+
+The high-level class relationships are:
+
+.. uml::
+    :align: center
+
+    @startuml
+    object thread_id
+    class DurationTree
+    note right: Each node of DurationTree is of type\n**boost::variant<Duration, DurationTree&>**\nto hold both Durations and\nDurationTrees of child threads.
+    class DurationTreeMap
+    note right: Global singleton:\nlogger::gDurationTreeMap
+    class Duration {
+      int depth_
+      Clock::time_point start_
+      Clock::time_point stop_
+    }
+    thread_id - DurationTree
+    DurationTreeMap -- (thread_id, DurationTree)
+    DurationTree o- DurationTree
+    DurationTree *- Duration
+    class DebugTimer {
+      ---
+      void stop()
+    }
+    note left: Instantiate with macro:\nauto timer = DEBUG_TIMER(name);
+    Duration <.. DebugTimer
+    @enduml
+
+There is a single global instance of ``DurationTreeMap`` that tracks a separate ``DurationTree`` for each thread.

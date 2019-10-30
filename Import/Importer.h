@@ -843,8 +843,9 @@ class ImportDriver : public QueryRunner::QueryRunner {
 
   void importGeoTable(const std::string& file_path,
                       const std::string& table_name,
-                      const bool compression = true,
-                      const bool create_table = true);
+                      const bool compression,
+                      const bool create_table,
+                      const bool explode_collections);
 };
 
 }  // namespace Importer_NS

@@ -978,6 +978,10 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE x + y = 49;", dt);
     c("SELECT COUNT(*) FROM test WHERE x + y + z = 150;", dt);
     c("SELECT COUNT(*) FROM test WHERE x + y + z + t = 1151;", dt);
+    c("SELECT COUNT(*) FROM test WHERE CAST(x as TINYINT) + CAST(y as TINYINT) < CAST(z "
+      "as TINYINT);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE CAST(y as TINYINT) / CAST(x as TINYINT) = 6", dt);
     c("SELECT SUM(x + y) FROM test WHERE x + y = 49;", dt);
     c("SELECT SUM(x + y + z) FROM test WHERE x + y = 49;", dt);
     c("SELECT SUM(x + y + z + t) FROM test WHERE x + y = 49;", dt);
@@ -1247,31 +1251,100 @@ TEST(Select, FilterAndSimpleAggregation) {
   }
 }
 
+TEST(Select, AggregateOnEmptyDecimalColumn) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (int p = 1; p <= 18; ++p) {
+      for (int s = 0; s <= p - 1; ++s) {
+        std::string decimal_prec("");
+        decimal_prec = "val DECIMAL(" + std::to_string(p) + "," + std::to_string(s) + ")";
+        std::string tbl_name = "D" + std::to_string(p) + "_" + std::to_string(s);
+        std::string drop_table("");
+        drop_table = "DROP TABLE IF EXISTS " + tbl_name + ";";
+        std::string create_stmt = "CREATE TABLE " + tbl_name + "( " + decimal_prec + ");";
+        run_ddl_statement(drop_table);
+        g_sqlite_comparator.query(drop_table);
+        run_ddl_statement(create_stmt);
+        g_sqlite_comparator.query(create_stmt);
+        std::string query("SELECT MIN(val), MAX(val), SUM(val), AVG(val) FROM ");
+        query += tbl_name + ";";
+        c(query, dt);
+      }
+    }
+  }
+}
+
+TEST(Select, AggregateConstantValueOnEmptyTable) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // tinyint: -126 / 126
+    c("SELECT MIN(-126), MAX(-126), SUM(-126), AVG(-126), MIN(126), MAX(126), SUM(126), "
+      "AVG(126) FROM "
+      "empty_test_table;",
+      dt);
+    // smallint: -32766 / 32766
+    c("SELECT MIN(-32766), MAX(-32766), SUM(-32766), AVG(-32766), MIN(32766), "
+      "MAX(32766), SUM(32766), AVG(32766) "
+      "FROM empty_test_table;",
+      dt);
+    // int: -2147483646 / 2147483646
+    c("SELECT MIN(-2147483646), MAX(-2147483646), SUM(-2147483646), AVG(-2147483646), "
+      "MIN(2147483646), "
+      "MAX(2147483646), SUM(2147483646), AVG(2147483646) FROM empty_test_table;",
+      dt);
+    // bigint: -9223372036854775806 / 9223372036854775806
+    c("SELECT MIN(-9223372036854775806), MAX(-9223372036854775806), "
+      "AVG(-9223372036854775806),"
+      "SUM(-9223372036854775806), MIN(9223372036854775806), MAX(9223372036854775806), "
+      "SUM(9223372036854775806), AVG(9223372036854775806) FROM empty_test_table;",
+      dt);
+    // float: -1.5 / 1.5
+    c("SELECT MIN(-1.5), MAX(-1.5), SUM(-1.5), AVG(-1.5), MIN(1.5), MAX(1.5), SUM(1.5), "
+      "AVG(1.5) FROM "
+      "empty_test_table;",
+      dt);
+    // double: -1.5055487897 / 1.5055487897
+    c("SELECT MIN(-1.5055487897), MAX(-1.5055487897), SUM(-1.5055487897), "
+      "AVG(-1.5055487897),"
+      "MIN(1.5055487897), MAX(1.5055487897), SUM(1.5055487897), AVG(1.5055487897) FROM "
+      "empty_test_table;",
+      dt);
+    // boolean: true / false
+    c("SELECT MIN(true), MAX(true), MIN(false), MAX(false) FROM empty_test_table;", dt);
+  }
+}
+
 TEST(Select, AggregateOnEmptyTable) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) from empty_test_table;", dt);
-    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d) from empty_test_table;", dt);
-    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d) from empty_test_table;", dt);
-    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) from empty_test_table;", dt);
-    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d) from "
+    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) FROM empty_test_table;", dt);
+    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d), MIN(b) FROM "
+      "empty_test_table;",
+      dt);
+    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d), MAX(b)  FROM "
+      "empty_test_table;",
+      dt);
+    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) FROM empty_test_table;", dt);
+    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d), COUNT(b) FROM "
       "empty_test_table;",
       dt);
     // skipped fragment
-    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) from empty_test_table "
-      "where id > 5;",
+    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) FROM empty_test_table "
+      "WHERE id > 5;",
       dt);
-    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d) from empty_test_table where "
+    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d), MIN(b) FROM "
+      "empty_test_table WHERE "
       "id > 5;",
       dt);
-    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d) from empty_test_table where "
+    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d), MAX(b) FROM "
+      "empty_test_table WHERE "
       "id > 5;",
       dt);
-    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) from empty_test_table where "
+    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) FROM empty_test_table WHERE "
       "id > 5;",
       dt);
-    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d) from "
-      "empty_test_table where id > 5;",
+    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d), COUNT(b) FROM "
+      "empty_test_table WHERE id > 5;",
       dt);
   }
 }
@@ -1511,12 +1584,6 @@ TEST(Select, FilterAndGroupBy) {
       "'2014-12-13 22:23:15' group by shared_dict,m;",
       dt);
     c("SELECT x, SUM(z) FROM test WHERE z IS NOT NULL GROUP BY x ORDER BY x;", dt);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT x, MIN(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT x, MAX(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
-                 std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT MIN(str) FROM test GROUP BY x;", dt),
                  std::runtime_error);
   }
@@ -5039,6 +5106,30 @@ void import_gpu_sort_test() {
   }
 }
 
+void import_random_test() {
+  const std::string table_name("random_test");
+  const std::string drop_random_test("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement(drop_random_test);
+  g_sqlite_comparator.query(drop_random_test);
+  std::string create_query("CREATE TABLE " + table_name +
+                           " (x1 int, x2 int, x3 int, x4 int, x5 int)");
+  run_ddl_statement(create_query + " WITH (FRAGMENT_SIZE = 256);");
+  g_sqlite_comparator.query(create_query + ";");
+
+  TestHelpers::ValuesGenerator gen(table_name);
+  constexpr double pi = 3.141592653589793;
+  for (size_t i = 0; i < 512; i++) {
+    const auto insert_query =
+        gen(static_cast<int32_t>((3 * i + 1) % 5),
+            static_cast<int32_t>(std::floor(10 * std::sin(i * pi / 64.0))),
+            static_cast<int32_t>(std::floor(10 * std::cos(i * pi / 45.0))),
+            static_cast<int32_t>(100000000 * std::floor(10 * std::sin(i * pi / 32.0))),
+            static_cast<int32_t>(std::floor(1000000000 * std::cos(i * pi / 32.0))));
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+}
+
 void import_query_rewrite_test() {
   const std::string drop_old_query_rewrite_test{
       "DROP TABLE IF EXISTS query_rewrite_test;"};
@@ -5523,7 +5614,7 @@ void import_empty_table_test() {
   g_sqlite_comparator.query(drop_table);
   std::string create_statement(
       "CREATE TABLE empty_test_table (id int, x bigint, y int, z smallint, t tinyint, "
-      "f float, d double);");
+      "f float, d double, b boolean);");
   run_ddl_statement(create_statement);
   g_sqlite_comparator.query(create_statement);
 }
@@ -5920,6 +6011,33 @@ TEST(Select, GpuSort) {
       dt);
     c("SELECT z, COUNT(*) AS val FROM gpu_sort_test GROUP BY z ORDER BY val DESC;", dt);
     c("SELECT t, COUNT(*) AS val FROM gpu_sort_test GROUP BY t ORDER BY val DESC;", dt);
+  }
+}
+
+TEST(Select, GroupByBaselineHash) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT cast(x1 as double) as key, COUNT(*), SUM(x2), MIN(x3), MAX(x4) FROM "
+      "random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT cast(x2 as double) as key, COUNT(*), SUM(x1), AVG(x3), MIN(x4) FROM "
+      "random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT cast(x3 as double) as key, COUNT(*), AVG(x2), MIN(x1), COUNT(x4) FROM "
+      "random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT x4 as key, COUNT(*), AVG(x1), MAX(x2), MAX(x3) FROM random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT x5 as key, COUNT(*), MAX(x1), MIN(x2), SUM(x3) FROM random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT x1, x2, x3, x4, COUNT(*), MIN(x5) FROM random_test "
+      "GROUP BY x1, x2, x3, x4 ORDER BY x1, x2, x3, x4;",
+      dt);
   }
 }
 
@@ -15686,6 +15804,74 @@ TEST(Select, GroupEmptyBlank) {
   }
 }
 
+TEST(Select, VariableLengthAggs) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // non-encoded strings:
+    c("SELECT x, COUNT(real_str) FROM test GROUP BY x ORDER BY x desc;", dt);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT x, MIN(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT x, MAX(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT x, SUM(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT x, AVG(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
+                 std::runtime_error);
+
+    // geometry:
+    {
+      std::string query("SELECT id, COUNT(poly) FROM geospatial_test GROUP BY id;");
+      auto result = run_multiple_agg(query, dt);
+      ASSERT_EQ(result->rowCount(), size_t(g_num_rows));
+    }
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT id, MIN(p) FROM geospatial_test GROUP BY id ORDER BY id DESC;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT id, MAX(l) FROM geospatial_test GROUP BY id ORDER BY id DESC;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT id, SUM(poly) FROM geospatial_test GROUP BY id ORDER BY id DESC;",
+            dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT id, AVG(mpoly) FROM geospatial_test GROUP BY id ORDER BY id DESC;",
+            dt),
+        std::runtime_error);
+
+    // arrays:
+    {
+      std::string query("SELECT x, COUNT(arr_i16) FROM array_test GROUP BY x;");
+      auto result = run_multiple_agg(query, dt);
+      ASSERT_EQ(result->rowCount(), size_t(g_array_test_row_count));
+    }
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT x, MIN(arr_i32) FROM array_test GROUP BY x ORDER BY x DESC;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT x, MAX(arr3_i64) FROM array_test GROUP BY x ORDER BY x DESC;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT x, SUM(arr3_float) FROM array_test GROUP BY x ORDER BY x DESC;", dt),
+        std::exception);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT x, AVG(arr_double) FROM array_test GROUP BY x ORDER BY x DESC;", dt),
+        std::exception);
+  }
+}
+
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,
@@ -16503,6 +16689,12 @@ int create_and_populate_tables(bool with_delete_support = true) {
     return -EEXIST;
   }
   try {
+    import_random_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'random_test'";
+    return -EEXIST;
+  }
+  try {
     import_query_rewrite_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'query_rewrite_test'";
@@ -16778,6 +16970,8 @@ void drop_tables() {
   g_sqlite_comparator.query(drop_test_x);
   const std::string drop_gpu_sort_test{"DROP TABLE gpu_sort_test;"};
   run_ddl_statement(drop_gpu_sort_test);
+  const std::string drop_random_test{"DROP TABLE random_test;"};
+  run_ddl_statement(drop_random_test);
   g_sqlite_comparator.query(drop_gpu_sort_test);
   const std::string drop_query_rewrite_test{"DROP TABLE query_rewrite_test;"};
   run_ddl_statement(drop_query_rewrite_test);

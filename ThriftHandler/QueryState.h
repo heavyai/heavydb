@@ -45,6 +45,9 @@
  *
  * Outline:
  *  - Consolidate information about current and past queries.
+ *  - DEPRECATION NOTICE:
+ *    Timer and Event-related logic is replaced by logger::DebugTimer.
+ *    For adding new timings, please see Logger.h instead.
  *  - Time and record code blocks, and save to stdlog.
  *
  * Classes:

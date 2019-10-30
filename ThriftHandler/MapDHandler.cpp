@@ -82,6 +82,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <algorithm>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/make_shared.hpp>
@@ -116,10 +117,12 @@ using namespace Lock_Namespace;
 #define INVALID_SESSION_ID ""
 
 #define THROW_MAPD_EXCEPTION(errstr) \
-  TMapDException ex;                 \
-  ex.error_msg = errstr;             \
-  LOG(ERROR) << ex.error_msg;        \
-  throw ex;
+  {                                  \
+    TMapDException ex;               \
+    ex.error_msg = errstr;           \
+    LOG(ERROR) << ex.error_msg;      \
+    throw ex;                        \
+  }
 
 namespace {
 
@@ -132,7 +135,42 @@ SessionMap::iterator get_session_from_map(const TSessionId& session,
   return session_it;
 }
 
+struct ForceDisconnect : public std::runtime_error {
+  ForceDisconnect(const std::string& cause) : std::runtime_error(cause) {}
+};
+
 }  // namespace
+
+template <>
+SessionMap::iterator MapDHandler::get_session_it_unsafe(
+    const TSessionId& session,
+    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+  auto session_it = get_session_from_map(session, sessions_);
+  try {
+    check_session_exp_unsafe(session_it);
+  } catch (const ForceDisconnect& e) {
+    read_lock.unlock();
+    mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+    auto session_it2 = get_session_from_map(session, sessions_);
+    disconnect_impl(session_it2);
+    THROW_MAPD_EXCEPTION(e.what());
+  }
+  return session_it;
+}
+
+template <>
+SessionMap::iterator MapDHandler::get_session_it_unsafe(
+    const TSessionId& session,
+    mapd_lock_guard<mapd_shared_mutex>& write_lock) {
+  auto session_it = get_session_from_map(session, sessions_);
+  try {
+    check_session_exp_unsafe(session_it);
+  } catch (const ForceDisconnect& e) {
+    disconnect_impl(session_it);
+    THROW_MAPD_EXCEPTION(e.what());
+  }
+  return session_it;
+}
 
 MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const std::vector<LeafHostInfo>& string_leaves,
@@ -424,7 +462,7 @@ void MapDHandler::connect_impl(TSessionId& session,
 void MapDHandler::disconnect(const TSessionId& session) {
   auto stdlog = STDLOG();
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
-  auto session_it = get_session_it_unsafe(session);
+  auto session_it = get_session_it_unsafe(session, write_lock);
   stdlog.setSessionInfo(session_it->second);
   const auto dbname = session_it->second->getCatalog().getCurrentDB().dbName;
   LOG(INFO) << "User " << session_it->second->get_currentUser().userName
@@ -448,7 +486,7 @@ void MapDHandler::disconnect_impl(const SessionMap::iterator& session_it) {
 void MapDHandler::switch_database(const TSessionId& session, const std::string& dbname) {
   auto stdlog = STDLOG(get_session_ptr(session));
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
-  auto session_it = get_session_it_unsafe(session);
+  auto session_it = get_session_it_unsafe(session, write_lock);
 
   std::string dbname2 = dbname;  // switchDatabase() may reset dbname given as argument
 
@@ -470,7 +508,7 @@ void MapDHandler::interrupt(const TSessionId& session) {
       leaf_aggregator_.interrupt(session);
     }
 
-    auto session_it = get_session_it_unsafe(session);
+    auto session_it = get_session_it_unsafe(session, read_lock);
     auto& cat = session_it->second.get()->getCatalog();
     const auto dbname = cat.getCurrentDB().dbName;
     auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
@@ -2084,7 +2122,7 @@ void MapDHandler::set_execution_mode(const TSessionId& session,
                                      const TExecuteMode::type mode) {
   auto stdlog = STDLOG(get_session_ptr(session));
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
-  auto session_it = get_session_it_unsafe(session);
+  auto session_it = get_session_it_unsafe(session, write_lock);
   if (leaf_aggregator_.leafCount() > 0) {
     leaf_aggregator_.set_execution_mode(session, mode);
     try {
@@ -2622,6 +2660,8 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
   }
   copy_params.sanitize_column_names = cp.sanitize_column_names;
   copy_params.geo_layer_name = cp.geo_layer_name;
+  copy_params.geo_assign_render_groups = cp.geo_assign_render_groups;
+  copy_params.geo_explode_collections = cp.geo_explode_collections;
   return copy_params;
 }
 
@@ -2686,6 +2726,8 @@ TCopyParams MapDHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp)
   copy_params.geo_coords_srid = cp.geo_coords_srid;
   copy_params.sanitize_column_names = cp.sanitize_column_names;
   copy_params.geo_layer_name = cp.geo_layer_name;
+  copy_params.geo_assign_render_groups = cp.geo_assign_render_groups;
+  copy_params.geo_explode_collections = cp.geo_explode_collections;
   return copy_params;
 }
 
@@ -4299,21 +4341,10 @@ void MapDHandler::check_session_exp_unsafe(const SessionMap::iterator& session_i
   time_t last_used_time = session_it->second->get_last_used_time();
   time_t start_time = session_it->second->get_start_time();
   if ((time(0) - last_used_time) > idle_session_duration_) {
-    disconnect_impl(
-        session_it);  // Already checked session existance in get_session_it_unsafe
-    THROW_MAPD_EXCEPTION("Idle Session Timeout. User should re-authenticate.")
+    throw ForceDisconnect("Idle Session Timeout. User should re-authenticate.");
   } else if ((time(0) - start_time) > max_session_duration_) {
-    disconnect_impl(
-        session_it);  // Already checked session existance in get_session_it_unsafe
-    THROW_MAPD_EXCEPTION("Maximum active Session Timeout. User should re-authenticate.")
+    throw ForceDisconnect("Maximum active Session Timeout. User should re-authenticate.");
   }
-}
-
-// NOTE: Only call get_session_it_unsafe() while holding a lock on sessions_mutex_.
-SessionMap::iterator MapDHandler::get_session_it_unsafe(const TSessionId& session) {
-  auto session_it = get_session_from_map(session, sessions_);
-  check_session_exp_unsafe(session_it);
-  return session_it;
 }
 
 std::shared_ptr<const Catalog_Namespace::SessionInfo> MapDHandler::get_const_session_ptr(
@@ -4323,7 +4354,7 @@ std::shared_ptr<const Catalog_Namespace::SessionInfo> MapDHandler::get_const_ses
 
 Catalog_Namespace::SessionInfo MapDHandler::get_session_copy(const TSessionId& session) {
   mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-  return *get_session_it_unsafe(session)->second;
+  return *get_session_it_unsafe(session, read_lock)->second;
 }
 
 std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::get_session_copy_ptr(
@@ -4335,7 +4366,7 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::get_session_copy_pt
   // a copy. We should eventually aim to merge both `get_const_session_ptr` and
   // `get_session_copy_ptr`.
   mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-  auto& session_info_ref = *get_session_it_unsafe(session)->second;
+  auto& session_info_ref = *get_session_it_unsafe(session, read_lock)->second;
   return std::make_shared<Catalog_Namespace::SessionInfo>(session_info_ref);
 }
 
@@ -4353,7 +4384,7 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::get_session_ptr(
     return {};
   }
   mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-  return get_session_it_unsafe(session_id)->second;
+  return get_session_it_unsafe(session_id, read_lock)->second;
 }
 
 void MapDHandler::check_table_load_privileges(
@@ -5635,46 +5666,133 @@ void MapDHandler::get_device_parameters(std::map<std::string, std::string>& _ret
   }
 }
 
-void MapDHandler::register_runtime_udf(
+ExtArgumentType mapfrom(const TExtArgumentType::type& t) {
+  switch (t) {
+    case TExtArgumentType::Int8:
+      return ExtArgumentType::Int8;
+    case TExtArgumentType::Int16:
+      return ExtArgumentType::Int16;
+    case TExtArgumentType::Int32:
+      return ExtArgumentType::Int32;
+    case TExtArgumentType::Int64:
+      return ExtArgumentType::Int64;
+    case TExtArgumentType::Float:
+      return ExtArgumentType::Float;
+    case TExtArgumentType::Double:
+      return ExtArgumentType::Double;
+    case TExtArgumentType::Void:
+      return ExtArgumentType::Void;
+    case TExtArgumentType::PInt8:
+      return ExtArgumentType::PInt8;
+    case TExtArgumentType::PInt16:
+      return ExtArgumentType::PInt16;
+    case TExtArgumentType::PInt32:
+      return ExtArgumentType::PInt32;
+    case TExtArgumentType::PInt64:
+      return ExtArgumentType::PInt64;
+    case TExtArgumentType::PFloat:
+      return ExtArgumentType::PFloat;
+    case TExtArgumentType::PDouble:
+      return ExtArgumentType::PDouble;
+    case TExtArgumentType::Bool:
+      return ExtArgumentType::Bool;
+    case TExtArgumentType::ArrayInt8:
+      return ExtArgumentType::ArrayInt8;
+    case TExtArgumentType::ArrayInt16:
+      return ExtArgumentType::ArrayInt16;
+    case TExtArgumentType::ArrayInt32:
+      return ExtArgumentType::ArrayInt32;
+    case TExtArgumentType::ArrayInt64:
+      return ExtArgumentType::ArrayInt64;
+    case TExtArgumentType::ArrayFloat:
+      return ExtArgumentType::ArrayFloat;
+    case TExtArgumentType::ArrayDouble:
+      return ExtArgumentType::ArrayDouble;
+    case TExtArgumentType::GeoPoint:
+      return ExtArgumentType::GeoPoint;
+    case TExtArgumentType::Cursor:
+      return ExtArgumentType::Cursor;
+  }
+  UNREACHABLE();
+  return ExtArgumentType{};
+}
+
+table_functions::OutputBufferSizeType mapfrom(const TOutputBufferSizeType::type& t) {
+  switch (t) {
+    case TOutputBufferSizeType::kUserSpecifiedConstantParameter:
+      return table_functions::OutputBufferSizeType::kUserSpecifiedConstantParameter;
+    case TOutputBufferSizeType::kUserSpecifiedRowMultiplier:
+      return table_functions::OutputBufferSizeType::kUserSpecifiedRowMultiplier;
+    case TOutputBufferSizeType::kConstant:
+      return table_functions::OutputBufferSizeType::kConstant;
+  }
+  UNREACHABLE();
+  return table_functions::OutputBufferSizeType{};
+}
+
+std::vector<ExtArgumentType> mapfrom(const std::vector<TExtArgumentType::type>& v) {
+  std::vector<ExtArgumentType> result;
+  std::transform(v.begin(),
+                 v.end(),
+                 std::back_inserter(result),
+                 [](TExtArgumentType::type c) -> ExtArgumentType { return mapfrom(c); });
+  return result;
+}
+
+void MapDHandler::register_runtime_extension_functions(
     const TSessionId& session,
-    const std::string& signatures,
+    const std::vector<TUserDefinedFunction>& udfs,
+    const std::vector<TUserDefinedTableFunction>& udtfs,
     const std::map<std::string, std::string>& device_ir_map) {
   const auto session_info = get_session_copy(session);
+  VLOG(1) << "register_runtime_extension_functions: " << udfs.size() << " "
+          << udtfs.size() << std::endl;
 
   if (!runtime_udf_registration_enabled_) {
-    THROW_MAPD_EXCEPTION("Runtime UDF registration is disabled.");
+    THROW_MAPD_EXCEPTION("Runtime extension functions registration is disabled.");
   }
 
   // TODO: add UDF registration permission scheme. Currently, UDFs are
-  // registered globally, that means that all users can use as well as overwrite UDFs
-  // that was created possibly by anoher user.
+  // registered globally, that means that all users can use as well as
+  // overwrite UDFs that was created possibly by anoher user.
 
-  VLOG(1) << "Registering runtime UDF with signatures:\n" << signatures;
   /* Changing a UDF implementation (but not the signature) requires
      cleaning code caches. Nuking executors does that but at the cost
      of loosing all of the caches. TODO: implement more refined code
      cache cleaning. */
   Executor::nukeCacheOfExecutors();
 
-  /* Parse IR strings and store it as LLVM module. */
-  for (auto i = device_ir_map.begin(); i != device_ir_map.end(); ++i) {
-    std::string device = i->first;
-    std::string ir = i->second;
-    if (device == "cpu") {
-      read_rt_udf_cpu_module(ir);
-    } else if (device == "gpu") {
-      read_rt_udf_gpu_module(ir);
-    } else {
-      THROW_MAPD_EXCEPTION(std::string("unsupported device name: ") + device);
-    }
+  /* Parse LLVM/NVVM IR strings and store it as LLVM module. */
+  auto it = device_ir_map.find(std::string{"cpu"});
+  if (it != device_ir_map.end()) {
+    read_rt_udf_cpu_module(it->second);
+  }
+  it = device_ir_map.find(std::string{"gpu"});
+  if (it != device_ir_map.end()) {
+    read_rt_udf_gpu_module(it->second);
   }
 
-  // Register UDFs with Calcite server
+  VLOG(1) << "Registering runtime UDTFs:\n";
+
+  for (auto it = udtfs.begin(); it != udtfs.end(); it++) {
+    VLOG(1) << "UDTF name=" << it->name << std::endl;
+    table_functions::TableFunctionsFactory::add(
+        it->name,
+        table_functions::TableFunctionOutputRowSizer{
+            mapfrom(it->sizerType), static_cast<size_t>(it->sizerArgPos)},
+        mapfrom(it->inputArgTypes),
+        mapfrom(it->outputArgTypes),
+        /*is_runtime =*/true);
+  }
+
+  /* Register extension functions with Calcite server */
   CHECK(calcite_);
-  calcite_->setRuntimeUserDefinedFunction(signatures);
+  calcite_->setRuntimeExtensionFunctions(udfs, udtfs);
+
   /* Update the extension function whitelist */
-  std::string whitelist = calcite_->getRuntimeUserDefinedFunctionWhitelist();
-  VLOG(1) << "Registering runtime UDF with Calcite using whitelist:\n" << whitelist;
+  std::string whitelist = calcite_->getRuntimeExtensionFunctionWhitelist();
+  VLOG(1) << "Registering runtime extension functions with CodeGen using whitelist:\n"
+          << whitelist;
   ExtensionFunctionsWhitelist::clearRTUdfs();
   ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
 }

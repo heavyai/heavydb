@@ -65,7 +65,9 @@ enum SQLTypes {
   kGEOMETRY = 23,
   kGEOGRAPHY = 24,
   kEVAL_CONTEXT_TYPE = 25,  // Placeholder Type for ANY
-  kSQLTYPE_LAST = 26
+  kVOID = 26,
+  kCURSOR = 27,
+  kSQLTYPE_LAST = 28
 };
 
 struct VarlenDatum {
@@ -834,8 +836,10 @@ std::string SQLTypeInfoCore<TYPE_FACET_PACK...>::type_name[kSQLTYPE_LAST] = {
     "MULTIPOLYGON",
     "TINYINT",
     "GEOMETRY",
-    "GEOGRAPHY"};
-
+    "GEOGRAPHY",
+    "EVAL_CONTEXT_TYPE",
+    "VOID",
+    "CURSOR"};
 template <template <class> class... TYPE_FACET_PACK>
 std::string SQLTypeInfoCore<TYPE_FACET_PACK...>::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
@@ -872,6 +876,12 @@ inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
                      encoding,
                      type_info.get_comp_param(),
                      type_info.get_subtype());
+}
+
+inline SQLTypeInfo get_nullable_logical_type_info(const SQLTypeInfo& type_info) {
+  SQLTypeInfo nullable_type_info = get_logical_type_info(type_info);
+  nullable_type_info.set_notnull(false);
+  return nullable_type_info;
 }
 
 template <class T>

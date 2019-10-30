@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+bool g_enable_debug_timer{false};
+
 #ifndef __CUDACC__
 
 #include "Logger.h"
@@ -28,6 +30,7 @@
 #include <boost/log/support/date_time.hpp>
 #include <boost/log/utility/setup.hpp>
 #include <boost/phoenix.hpp>
+#include <boost/variant.hpp>
 
 #include <atomic>
 #include <cstdlib>
@@ -51,11 +54,15 @@ BOOST_LOG_ATTRIBUTE_KEYWORD(severity, "Severity", Severity)
 BOOST_LOG_GLOBAL_LOGGER_DEFAULT(gChannelLogger, ChannelLogger)
 BOOST_LOG_GLOBAL_LOGGER_DEFAULT(gSeverityLogger, SeverityLogger)
 
+// Return last component of path
+std::string filename(char const* path) {
+  return boost::filesystem::path(path).filename().string();
+}
+
 LogOptions::LogOptions(char const* argv0) : options_("Logging") {
   // Log file base_name matches name of program.
-  std::string const base_name = argv0 == nullptr
-                                    ? std::string("omnisci_server")
-                                    : boost::filesystem::path(argv0).filename().string();
+  std::string const base_name =
+      argv0 == nullptr ? std::string("omnisci_server") : filename(argv0);
   file_name_pattern_ = base_name + file_name_pattern_;
   symlink_ = base_name + symlink_;
   std::string const channels = join(ChannelNames, " ");
@@ -158,13 +165,11 @@ sinks::text_file_backend::open_handler_type create_or_replace_symlink(
       fs::path const symlink_path = file_name.parent_path() / symlink;
       fs::remove(symlink_path, ec);
       if (ec) {
-        stream << fs::path(__FILE__).filename().native() << ':' << __LINE__ << ' '
-               << ec.message() << std::endl;
+        stream << filename(__FILE__) << ':' << __LINE__ << ' ' << ec.message() << '\n';
       }
       fs::create_symlink(file_name.filename(), symlink_path, ec);
       if (ec) {
-        stream << fs::path(__FILE__).filename().native() << ':' << __LINE__ << ' '
-               << ec.message() << std::endl;
+        stream << filename(__FILE__) << ':' << __LINE__ << ' ' << ec.message() << '\n';
       }
     }
   };
@@ -384,8 +389,200 @@ Logger::operator bool() const {
 }
 
 boost::log::record_ostream& Logger::stream(char const* file, int line) {
-  return *stream_ << boost::filesystem::path(file).filename().native() << ':' << line
-                  << ' ';
+  return *stream_ << filename(file) << ':' << line << ' ';
+}
+
+// DebugTimer-related classes and functions.
+
+using Clock = std::chrono::steady_clock;
+
+class DurationTree;
+
+class Duration {
+  DurationTree* const duration_tree_;
+  Clock::time_point const start_;
+  Clock::time_point stop_;
+
+ public:
+  int const depth_;
+  Severity const severity_;
+  char const* const file_;
+  int const line_;
+  char const* const name_;
+
+  Duration(DurationTree* duration_tree,
+           int depth,
+           Severity severity,
+           char const* file,
+           int line,
+           char const* name)
+      : duration_tree_(duration_tree)
+      , start_(Clock::now())
+      , depth_(depth)
+      , severity_(severity)
+      , file_(file)
+      , line_(line)
+      , name_(name) {}
+  bool stop();
+  template <typename Units = std::chrono::milliseconds>
+  typename Units::rep value() const {
+    return std::chrono::duration_cast<Units>(stop_ - start_).count();
+  }
+};
+
+using DurationTreeNode = boost::variant<Duration, DurationTree&>;
+
+class DurationTree {
+  std::deque<DurationTreeNode> durations_;
+  int current_depth_;  //< Depth of next DurationTreeNode.
+
+ public:
+  int const depth_;  //< Depth of tree within parent tree, 0 for base tree.
+  std::thread::id const thread_id_;
+  DurationTree(std::thread::id thread_id, int start_depth)
+      // Add +1 to current_depth_ for non-base DurationTrees for extra indentation.
+      : current_depth_(start_depth + static_cast<bool>(start_depth))
+      , depth_(start_depth)
+      , thread_id_(thread_id) {}
+  void pushDurationTree(DurationTree& duration_tree) {
+    durations_.emplace_back(duration_tree);
+  }
+  const Duration& baseDuration() const {
+    CHECK(!durations_.empty());
+    return boost::get<Duration>(durations_.front());
+  }
+  int currentDepth() const { return current_depth_; }
+  void decrementDepth() { --current_depth_; }
+  std::deque<DurationTreeNode> const& durations() const { return durations_; }
+  template <typename... Ts>
+  Duration* newDuration(Ts&&... args) {
+    durations_.emplace_back(Duration(this, current_depth_++, std::forward<Ts>(args)...));
+    return boost::get<Duration>(&durations_.back());
+  }
+};
+
+/// Set stop_, decrement DurationTree::current_depth_.
+/// Return true iff this Duration represents the base timer (see docs).
+bool Duration::stop() {
+  stop_ = Clock::now();
+  duration_tree_->decrementDepth();
+  return depth_ == 0;
+}
+
+using DurationTreeMap =
+    std::unordered_map<std::thread::id, std::unique_ptr<DurationTree>>;
+
+std::mutex gDurationTreeMapMutex;
+DurationTreeMap gDurationTreeMap;
+
+template <typename... Ts>
+Duration* newDuration(Severity severity, Ts&&... args) {
+  if (g_enable_debug_timer) {
+    auto const thread_id = std::this_thread::get_id();
+    std::lock_guard<std::mutex> lock_guard(gDurationTreeMapMutex);
+    auto& duration_tree_ptr = gDurationTreeMap[thread_id];
+    if (!duration_tree_ptr) {
+      duration_tree_ptr = std::make_unique<DurationTree>(thread_id, 0);
+    }
+    return duration_tree_ptr->newDuration(severity, std::forward<Ts>(args)...);
+  }
+  return nullptr;  // Inactive - don't measure or report timing.
+}
+
+std::ostream& operator<<(std::ostream& os, Duration const& duration) {
+  return os << std::setw(2 * duration.depth_) << ' ' << duration.value() << "ms "
+            << duration.name_ << ' ' << filename(duration.file_) << ':' << duration.line_;
+}
+
+std::ostream& operator<<(std::ostream& os, DurationTree const& duration_tree) {
+  os << std::setw(2 * duration_tree.depth_) << ' ' << "New thread("
+     << duration_tree.thread_id_ << ')';
+  for (auto const& duration_tree_node : duration_tree.durations()) {
+    os << '\n' << duration_tree_node;
+  }
+  return os << '\n'
+            << std::setw(2 * duration_tree.depth_) << ' ' << "End thread("
+            << duration_tree.thread_id_ << ')';
+}
+
+// Only called by logAndEraseDurationTree() on base tree
+boost::log::record_ostream& operator<<(boost::log::record_ostream& os,
+                                       DurationTreeMap::const_reference kv_pair) {
+  auto itr = kv_pair.second->durations().cbegin();
+  auto const end = kv_pair.second->durations().cend();
+  auto const& base_duration = boost::get<Duration>(*itr);
+  os << "DEBUG_TIMER thread_id(" << kv_pair.first << ")\n"
+     << base_duration.value() << "ms total duration for " << base_duration.name_;
+  for (++itr; itr != end; ++itr) {
+    os << '\n' << *itr;
+  }
+  return os;
+}
+
+// Depth-first search and erase all DurationTrees. Not thread-safe.
+struct EraseDurationTrees : boost::static_visitor<> {
+  void operator()(DurationTreeMap::const_iterator const& itr) const {
+    for (auto const& duration_tree_node : itr->second->durations()) {
+      apply_visitor(*this, duration_tree_node);
+    }
+    gDurationTreeMap.erase(itr);
+  }
+  void operator()(Duration const&) const {}
+  void operator()(DurationTree const& duration_tree) const {
+    for (auto const& duration_tree_node : duration_tree.durations()) {
+      apply_visitor(*this, duration_tree_node);
+    }
+    gDurationTreeMap.erase(duration_tree.thread_id_);
+  }
+};
+
+void logAndEraseDurationTree(std::thread::id const thread_id) {
+  std::lock_guard<std::mutex> lock_guard(gDurationTreeMapMutex);
+  DurationTreeMap::const_iterator const itr = gDurationTreeMap.find(thread_id);
+  CHECK(itr != gDurationTreeMap.cend());
+  auto const& base_duration = itr->second->baseDuration();
+  if (auto log = Logger(base_duration.severity_)) {
+    log.stream(base_duration.file_, base_duration.line_) << *itr;
+  }
+  EraseDurationTrees const tree_trimmer;
+  tree_trimmer(itr);
+}
+
+DebugTimer::DebugTimer(Severity severity, char const* file, int line, char const* name)
+    : duration_(newDuration(severity, file, line, name)) {}
+
+DebugTimer::~DebugTimer() {
+  stop();
+}
+
+void DebugTimer::stop() {
+  if (duration_) {
+    if (duration_->stop()) {
+      logAndEraseDurationTree(std::this_thread::get_id());
+    }
+    duration_ = nullptr;
+  }
+}
+
+/// Call this when a new thread is spawned that will have timers that need to be
+/// associated with timers on the parent thread.
+void debugTimerNewThread(std::thread::id parent_thread_id) {
+  if (g_enable_debug_timer) {
+    auto const thread_id = std::this_thread::get_id();
+    if (thread_id != parent_thread_id) {
+      std::lock_guard<std::mutex> lock_guard(gDurationTreeMapMutex);
+      auto parent_itr = gDurationTreeMap.find(parent_thread_id);
+      if (parent_itr != gDurationTreeMap.end()) {
+        auto& duration_tree_ptr = gDurationTreeMap[thread_id];
+        if (!duration_tree_ptr) {
+          auto const current_depth = parent_itr->second->currentDepth();
+          duration_tree_ptr =
+              std::make_unique<DurationTree>(thread_id, current_depth + 1);
+          parent_itr->second->pushDurationTree(*duration_tree_ptr);
+        }
+      }
+    }
+  }
 }
 
 }  // namespace logger

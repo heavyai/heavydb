@@ -19,6 +19,8 @@
 
 #include <gtest/gtest.h>
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/join.hpp>
+#include <boost/process/search_path.hpp>
 #include <boost/program_options.hpp>
 #include <boost/variant.hpp>
 #include <boost/variant/get.hpp>
@@ -36,7 +38,7 @@ using namespace TestHelpers;
 extern size_t g_leaf_count;
 extern bool g_test_rollback_dump_restore;
 
-const static std::string tar_ball_path = "/tmp/_Orz_.tgz";
+const static std::string tar_ball_path = "/tmp/_Orz__";
 
 namespace {
 bool g_hoist_literals{true};
@@ -51,48 +53,56 @@ std::shared_ptr<ResultSet> run_multiple_agg(const std::string& query_str) {
   return QR::get()->runSQL(query_str, ExecutorDeviceType::CPU, g_hoist_literals);
 }
 
+void clear() {
+  EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS s;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS t;"));
+  EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS x;"));
+  system(("rm -rf " + tar_ball_path).c_str());
+}
+
+static int nshard;
+static int nrow;
+
+void reset() {
+  clear();
+  // preformat shard key phrases
+  std::string phrase_shard_key = nshard > 1 ? ", SHARD KEY (i)" : "";
+  std::string phrase_shard_count =
+      nshard > 1 ? ", SHARD_COUNT = " + std::to_string(nshard) : "";
+  // create table s which has a encoded text column to be referenced by table t
+  EXPECT_NO_THROW(run_ddl_statement("CREATE TABLE s(i int, j int, s text" +
+                                    phrase_shard_key + ") WITH (FRAGMENT_SIZE=10" +
+                                    phrase_shard_count + ");"));
+  // create table t which has 3 encoded text columns:
+  //	 column s: to be domestically referenced by column t.t
+  //   column t: domestically references column t.s
+  //   column f: foreignly references column s.s
+  EXPECT_NO_THROW(run_ddl_statement(
+      "CREATE TABLE t(i int, j int, s text, d text, f text" + phrase_shard_key +
+      ", SHARED DICTIONARY (d) REFERENCES t(s)"    // domestic ref
+      + ", SHARED DICTIONARY (f) REFERENCES s(s)"  // foreign ref
+      + ") WITH (FRAGMENT_SIZE=10" + phrase_shard_count + ");"));
+  // insert nrow rows to tables s and t
+  TestHelpers::ValuesGenerator gen_s("s");
+  TestHelpers::ValuesGenerator gen_t("t");
+  // make dicts of s.s and t.s have different layouts
+  for (int i = 1 * nrow; i < 2 * nrow; ++i) {
+    const auto s = std::to_string(i);
+    run_multiple_agg(gen_s(i, i, s));
+  }
+  for (int i = 0 * nrow; i < 1 * nrow; ++i) {
+    const auto s = std::to_string(i);
+    run_multiple_agg(gen_t(i, i, s, s, s));
+  }
+}
 }  // namespace
 
 #define NROWS 100
 template <int NSHARDS, int NR = NROWS>
 class DumpRestoreTest : public ::testing::Test {
-  void clear() {
-    EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS s;"));
-    EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS t;"));
-    EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS x;"));
-    system(("rm -rf " + tar_ball_path).c_str());
-  }
   void SetUp() override {
-    clear();
-    // preformat shard key phrases
-    std::string phrase_shard_key = NSHARDS > 1 ? ", SHARD KEY (i)" : "";
-    std::string phrase_shard_count =
-        NSHARDS > 1 ? ", SHARD_COUNT = " + std::to_string(NSHARDS) : "";
-    // create table s which has a encoded text column to be referenced by table t
-    EXPECT_NO_THROW(run_ddl_statement("CREATE TABLE s(i int, j int, s text" +
-                                      phrase_shard_key + ") WITH (FRAGMENT_SIZE=10" +
-                                      phrase_shard_count + ");"));
-    // create table t which has 3 encoded text columns:
-    //	 column s: to be domestically referenced by column t.t
-    //   column t: domestically references column t.s
-    //   column f: foreignly references column s.s
-    EXPECT_NO_THROW(run_ddl_statement(
-        "CREATE TABLE t(i int, j int, s text, d text, f text" + phrase_shard_key +
-        ", SHARED DICTIONARY (d) REFERENCES t(s)"    // domestic ref
-        + ", SHARED DICTIONARY (f) REFERENCES s(s)"  // foreign ref
-        + ") WITH (FRAGMENT_SIZE=10" + phrase_shard_count + ");"));
-    // insert NR rows to tables s and t
-    TestHelpers::ValuesGenerator gen_s("s");
-    TestHelpers::ValuesGenerator gen_t("t");
-    // make dicts of s.s and t.s have different layouts
-    for (int i = 1 * NR; i < 2 * NR; ++i) {
-      const auto s = std::to_string(i);
-      run_multiple_agg(gen_s(i, i, s));
-    }
-    for (int i = 0 * NR; i < 1 * NR; ++i) {
-      const auto s = std::to_string(i);
-      run_multiple_agg(gen_t(i, i, s, s, s));
-    }
+    nshard = NSHARDS;
+    nrow = NR;
   }
 
   void TearDown() override { clear(); }
@@ -126,13 +136,21 @@ void check_table(const std::string& table, const bool alter, const int delta) {
   }
 }
 
-void dump_restore(const bool migrate, const bool alter, const bool rollback) {
+void dump_restore(const bool migrate,
+                  const bool alter,
+                  const bool rollback,
+                  const std::vector<std::string>& with_options) {
+  reset();
   // if set, alter pivot table t to make it have "been altered"
   if (alter) {
     EXPECT_NO_THROW(run_ddl_statement("ALTER TABLE t ADD COLUMN y int DEFAULT 77;"));
   }
+  const std::string with_options_clause =
+      with_options.size() ? (" WITH (" + boost::algorithm::join(with_options, ",") + ")")
+                          : "";
   // dump pivot table t
-  EXPECT_NO_THROW(run_ddl_statement("DUMP TABLE t TO '" + tar_ball_path + "';"));
+  EXPECT_NO_THROW(run_ddl_statement("DUMP TABLE t TO '" + tar_ball_path + "'" +
+                                    with_options_clause + ";"));
   // restore is to table t while migrate is to table x
   const std::string table = migrate ? "x" : "t";
   // increment column table.j by a delta if testing rollback restore
@@ -143,7 +161,8 @@ void dump_restore(const bool migrate, const bool alter, const bool rollback) {
         run_multiple_agg("UPDATE t SET j = j + " + std::to_string(delta) + ";"));
   }
   // rollback table restore/migrate?
-  const auto run_restore = "RESTORE TABLE " + table + " FROM '" + tar_ball_path + "';";
+  const auto run_restore = "RESTORE TABLE " + table + " FROM '" + tar_ball_path + "'" +
+                           with_options_clause + ";";
   // TODO: v1.0 simply throws to avoid accidentally overwrite target table.
   // Will add a REPLACE TABLE to explicitly replace target table.
   // After that, remove the first following if-block to pass test!!!
@@ -158,6 +177,17 @@ void dump_restore(const bool migrate, const bool alter, const bool rollback) {
     EXPECT_THROW(run_ddl_statement("DROP TABLE x;"), std::runtime_error);
   } else {
     EXPECT_NO_THROW(check_table(table, alter, delta));
+  }
+}
+
+void dump_restore(const bool migrate, const bool alter, const bool rollback) {
+  // test two compression modes only so as not to hold cit back too much
+  if (boost::process::search_path("lz4").string().empty()) {
+    dump_restore(migrate, alter, rollback, {});  // gzip
+    dump_restore(migrate, alter, rollback, {"compression='none'"});
+  } else {
+    dump_restore(migrate, alter, rollback, {});  // lz4
+    dump_restore(migrate, alter, rollback, {"compression='gzip'"});
   }
 }
 

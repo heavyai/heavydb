@@ -1274,7 +1274,7 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
   auto time_ms = measure<>::execution([&]() {
     // instanciate table fragmenter upon first use
     // assume only insert order fragmenter is supported
-    assert(td->fragType == Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
+    CHECK_EQ(td->fragType, Fragmenter_Namespace::FragmenterType::INSERT_ORDER);
     vector<Chunk> chunkVec;
     list<const ColumnDescriptor*> columnDescs;
     getAllColumnMetadataForTable(td, columnDescs, true, false, true);

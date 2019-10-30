@@ -49,13 +49,23 @@ public class ExtensionFunction {
     ArrayInt64,
     ArrayFloat,
     ArrayDouble,
-    GeoPoint
+    GeoPoint,
+    Cursor
   }
   ;
 
   ExtensionFunction(final List<ExtArgumentType> args, final ExtArgumentType ret) {
     this.args = args;
     this.ret = ret;
+    this.isRowUdf = true;
+  }
+
+  ExtensionFunction(final List<ExtArgumentType> args,
+          final ExtArgumentType ret,
+          final boolean row_udf) {
+    this.args = args;
+    this.ret = ret;
+    this.isRowUdf = row_udf;
   }
 
   public List<ExtArgumentType> getArgs() {
@@ -64,6 +74,14 @@ public class ExtensionFunction {
 
   public ExtArgumentType getRet() {
     return this.ret;
+  }
+
+  public boolean isRowUdf() {
+    return this.isRowUdf;
+  }
+
+  public boolean isTableUdf() {
+    return !this.isRowUdf();
   }
 
   public String toJson(final String name) {
@@ -100,6 +118,8 @@ public class ExtensionFunction {
         return "float";
       case Double:
         return "double";
+      case Void:
+        return "void";
       case PInt8:
         return "i8*";
       case PInt16:
@@ -126,6 +146,8 @@ public class ExtensionFunction {
         return "array_double";
       case GeoPoint:
         return "geo_point";
+      case Cursor:
+        return "cursor";
     }
     MAPDLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;
@@ -138,4 +160,5 @@ public class ExtensionFunction {
 
   private final List<ExtArgumentType> args;
   private final ExtArgumentType ret;
+  private final boolean isRowUdf;
 }

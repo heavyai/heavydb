@@ -91,7 +91,8 @@ class QueryMemoryDescriptor {
 
   QueryMemoryDescriptor(const Executor* executor,
                         const size_t entry_count,
-                        const QueryDescriptionType query_desc_type);
+                        const QueryDescriptionType query_desc_type,
+                        const bool is_table_function);
 
   QueryMemoryDescriptor(const QueryDescriptionType query_desc_type,
                         const int64_t min_val,
@@ -351,6 +352,7 @@ class QueryMemoryDescriptor {
   bool output_columnar_;
   bool render_output_;
   bool must_use_baseline_sort_;
+  bool is_table_function_;
 
   bool force_4byte_float_;
 

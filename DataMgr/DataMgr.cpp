@@ -345,9 +345,9 @@ AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
                                         const MemoryLevel memoryLevel,
                                         const int deviceId,
                                         const size_t numBytes) {
-  auto level = static_cast<size_t>(memoryLevel);
-  assert(level < levelSizes_.size());     // make sure we have a legit buffermgr
-  assert(deviceId < levelSizes_[level]);  // make sure we have a legit buffermgr
+  const auto level = static_cast<size_t>(memoryLevel);
+  CHECK_LT(level, levelSizes_.size());     // make sure we have a legit buffermgr
+  CHECK_LT(deviceId, levelSizes_[level]);  // make sure we have a legit buffermgr
   return bufferMgrs_[level][deviceId]->getBuffer(key, numBytes);
 }
 
@@ -374,8 +374,8 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix,
 AbstractBuffer* DataMgr::alloc(const MemoryLevel memoryLevel,
                                const int deviceId,
                                const size_t numBytes) {
-  int level = static_cast<int>(memoryLevel);
-  assert(deviceId < levelSizes_[level]);
+  const auto level = static_cast<int>(memoryLevel);
+  CHECK_LT(deviceId, levelSizes_[level]);
   return bufferMgrs_[level][deviceId]->alloc(numBytes);
 }
 

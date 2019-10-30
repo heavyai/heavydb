@@ -28,6 +28,10 @@
 #include <cstring>
 #include <list>
 #include <string>
+
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/process/search_path.hpp>
+
 #include "../Analyzer/Analyzer.h"
 #include "../Catalog/Catalog.h"
 #include "../Distributed/AggregatedResult.h"
@@ -1269,32 +1273,95 @@ class AddColumnStmt : public DDLStmt {
  * @type DumpTableStmt
  * @brief DUMP TABLE table TO archive_file_path
  */
-class DumpTableStmt : public DDLStmt {
+class DumpRestoreTableStmtBase : public DDLStmt {
  public:
-  DumpTableStmt(std::string* tab, std::string* path) : table(tab), path(path) {}
-  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  DumpRestoreTableStmtBase(std::string* tab,
+                           std::string* path,
+                           std::list<NameValueAssign*>* options,
+                           const bool is_restore)
+      : table(tab), path(path) {
+    auto options_deleter = [](std::list<NameValueAssign*>* options) {
+      for (auto option : *options) {
+        delete option;
+      }
+      delete options;
+    };
+    std::unique_ptr<std::list<NameValueAssign*>, decltype(options_deleter)> options_ptr(
+        options, options_deleter);
+    std::vector<std::string> allowed_compression_programs{"lz4", "gzip", "none"};
+    // specialize decompressor or break on osx bsdtar...
+    if (options) {
+      for (const auto option : *options) {
+        if (boost::iequals(*option->get_name(), "compression")) {
+          if (const auto str_literal =
+                  dynamic_cast<const StringLiteral*>(option->get_value())) {
+            compression = *str_literal->get_stringval();
+            const std::string lowercase_compression =
+                boost::algorithm::to_lower_copy(compression);
+            if (allowed_compression_programs.end() ==
+                std::find(allowed_compression_programs.begin(),
+                          allowed_compression_programs.end(),
+                          lowercase_compression)) {
+              throw std::runtime_error("Compression program " + compression +
+                                       " is not supported.");
+            }
+          } else {
+            throw std::runtime_error("Compression option must be a string.");
+          }
+        } else {
+          throw std::runtime_error("Invalid WITH option: " + *option->get_name());
+        }
+      }
+    }
+    // default lz4 compression, next gzip, or none.
+    if (compression.empty()) {
+      if (boost::process::search_path(compression = "lz4").string().empty()) {
+        if (boost::process::search_path(compression = "gzip").string().empty()) {
+          compression = "none";
+        }
+      }
+    }
+    if (boost::iequals(compression, "none")) {
+      compression.clear();
+    } else {
+      std::map<std::string, std::string> decompression{{"lz4", "unlz4"},
+                                                       {"gzip", "gunzip"}};
+      const auto use_program = is_restore ? decompression[compression] : compression;
+      const auto prog_path = boost::process::search_path(use_program);
+      if (prog_path.string().empty()) {
+        throw std::runtime_error("Compression program " + use_program + " is not found.");
+      }
+      compression = "--use-compress-program=" + use_program;
+    }
+  }
   const std::string* getTable() const { return table.get(); }
   const std::string* getPath() const { return path.get(); }
+  const std::string getCompression() const { return compression; }
 
- private:
+ protected:
   std::unique_ptr<std::string> table;
   std::unique_ptr<std::string> path;  // dump TO file path
+  std::string compression;
+};
+
+class DumpTableStmt : public DumpRestoreTableStmtBase {
+ public:
+  DumpTableStmt(std::string* tab, std::string* path, std::list<NameValueAssign*>* options)
+      : DumpRestoreTableStmtBase(tab, path, options, false) {}
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
 };
 
 /*
  * @type RestoreTableStmt
  * @brief RESTORE TABLE table FROM archive_file_path
  */
-class RestoreTableStmt : public DDLStmt {
+class RestoreTableStmt : public DumpRestoreTableStmtBase {
  public:
-  RestoreTableStmt(std::string* tab, std::string* path) : table(tab), path(path) {}
+  RestoreTableStmt(std::string* tab,
+                   std::string* path,
+                   std::list<NameValueAssign*>* options)
+      : DumpRestoreTableStmtBase(tab, path, options, true) {}
   void execute(const Catalog_Namespace::SessionInfo& session) override;
-  const std::string* getTable() const { return table.get(); }
-  const std::string* getPath() const { return path.get(); }
-
- private:
-  std::unique_ptr<std::string> table;
-  std::unique_ptr<std::string> path;  // restore FROM file path
 };
 
 /*

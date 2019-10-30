@@ -51,6 +51,9 @@
 
 #include <array>
 #include <sstream>
+#include <thread>
+
+extern bool g_enable_debug_timer;
 
 namespace logger {
 
@@ -275,6 +278,25 @@ class NullLogger {
   LOG(severity)
 
 #define VLOG(n) LOG(DEBUG##n)
+
+class Duration;
+
+class DebugTimer {
+  Duration* duration_;
+
+ public:
+  DebugTimer(Severity, char const* file, int line, char const* name);
+  ~DebugTimer();
+  void stop();
+};
+
+void debugTimerNewThread(std::thread::id parent_thread_id);
+
+// Typical usage: auto timer = DEBUG_TIMER(__func__);
+#define DEBUG_TIMER(name) logger::DebugTimer(logger::INFO, __FILE__, __LINE__, name)
+
+#define DEBUG_TIMER_NEW_THREAD(parent_thread_id) \
+  logger::debugTimerNewThread(parent_thread_id)
 
 }  // namespace logger
 

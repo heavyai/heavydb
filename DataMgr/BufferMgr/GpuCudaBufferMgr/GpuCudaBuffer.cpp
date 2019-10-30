@@ -61,7 +61,7 @@ void GpuCudaBuffer::writeData(int8_t* const src,
 
   } else if (src_buffer_type == GPU_LEVEL) {
     // std::cout << "Writing to GPU from source GPU" << std::endl;
-    assert(src_device_id >= 0);
+    CHECK_GE(src_device_id, 0);
     cuda_mgr_->copyDeviceToDevice(
         mem_ + offset, src, num_bytes, device_id_, src_device_id);
   } else {

@@ -192,7 +192,7 @@ ResultSetPtr TableFunctionExecutionContext::launchCpuCode(
 
   // initialize output memory
   QueryMemoryDescriptor query_mem_desc(
-      executor, elem_count, QueryDescriptionType::Projection);
+      executor, elem_count, QueryDescriptionType::Projection, /*is_table_function=*/true);
   query_mem_desc.setOutputColumnar(true);
 
   for (size_t i = 0; i < exe_unit.target_exprs.size(); i++) {
@@ -280,10 +280,13 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
 
   // initialize output memory
   QueryMemoryDescriptor query_mem_desc(
-      executor, elem_count, QueryDescriptionType::Projection);
+      executor, elem_count, QueryDescriptionType::Projection, /*is_table_function=*/true);
   query_mem_desc.setOutputColumnar(true);
-  query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});  // single 8 byte col, for now
 
+  for (size_t i = 0; i < exe_unit.target_exprs.size(); i++) {
+    // All outputs padded to 8 bytes
+    query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});
+  }
   const auto allocated_output_row_count = get_output_row_count(exe_unit, elem_count);
   auto query_buffers = std::make_unique<QueryMemoryInitializer>(
       exe_unit,
@@ -308,10 +311,10 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
   auto group_by_buffers_ptr = query_buffers->getGroupByBuffersPtr();
   CHECK(group_by_buffers_ptr);
 
-  const unsigned block_size_x = 1;  // executor->blockSize();
+  const unsigned block_size_x = executor->blockSize();
   const unsigned block_size_y = 1;
   const unsigned block_size_z = 1;
-  const unsigned grid_size_x = 1;  // executor->gridSize();
+  const unsigned grid_size_x = executor->gridSize();
   const unsigned grid_size_y = 1;
   const unsigned grid_size_z = 1;
 
@@ -353,7 +356,7 @@ ResultSetPtr TableFunctionExecutionContext::launchGpuCode(
       reinterpret_cast<int8_t*>(kernel_params[OUTPUT_ROW_COUNT]),
       sizeof(int64_t));
   if (new_output_row_count < 0) {
-    throw std::runtime_error("Table function did not properly set output row count.");
+    new_output_row_count = allocated_output_row_count;
   }
 
   // Update entry count, it may differ from allocated mem size

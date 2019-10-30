@@ -229,10 +229,12 @@ void DelimitedParserUtils::parseStringArray(const std::string& s,
   std::string row(s.c_str() + 1, s.length() - 2);
   row.push_back('\n');
   bool try_single_thread = false;
+  Importer_NS::CopyParams array_params = copy_params;
+  array_params.delimiter = copy_params.array_delim;
   get_row(row.c_str(),
           row.c_str() + row.length(),
           row.c_str() + row.length(),
-          copy_params,
+          array_params,
           nullptr,
           string_vec,
           try_single_thread);

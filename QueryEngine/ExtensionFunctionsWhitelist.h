@@ -39,6 +39,7 @@ enum class ExtArgumentType {
   Int64,
   Float,
   Double,
+  Void,
   PInt8,
   PInt16,
   PInt32,
@@ -52,7 +53,8 @@ enum class ExtArgumentType {
   ArrayInt64,
   ArrayFloat,
   ArrayDouble,
-  GeoPoint
+  GeoPoint,
+  Cursor
 };
 
 SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type);

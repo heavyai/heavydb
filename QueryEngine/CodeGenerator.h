@@ -102,6 +102,11 @@ class CodeGenerator {
       const CompilationOptions& co,
       const GPUTarget& gpu_target);
 
+  static void link_udf_module(const std::unique_ptr<llvm::Module>& udf_module,
+                              llvm::Module& module,
+                              CgenState* cgen_state,
+                              llvm::Linker::Flags flags = llvm::Linker::Flags::None);
+
   static bool prioritizeQuals(const RelAlgExecutionUnit& ra_exe_unit,
                               std::vector<Analyzer::Expr*>& primary_quals,
                               std::vector<Analyzer::Expr*>& deferred_quals);

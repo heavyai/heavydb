@@ -235,7 +235,6 @@ void copy_group_by_buffers_from_gpu(Data_Namespace::DataMgr* data_mgr,
   }
   const unsigned block_buffer_count{query_mem_desc.blocksShareMemory() ? 1 : grid_size_x};
   if (block_buffer_count == 1 && !prepend_index_buffer) {
-    CHECK_EQ(block_size_x, group_by_buffers.size());
     CHECK_EQ(coalesced_size(query_mem_desc, groups_buffer_size, block_buffer_count),
              groups_buffer_size);
     copy_from_gpu(data_mgr,

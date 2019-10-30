@@ -39,6 +39,8 @@ import org.apache.calcite.sql.util.ChainedSqlOperatorTable;
 import org.apache.calcite.sql.util.ListSqlOperatorTable;
 import org.apache.calcite.sql.util.ReflectiveSqlOperatorTable;
 import org.apache.calcite.sql.validate.SqlNameMatcher;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.lang.reflect.Field;
 import java.util.HashSet;
@@ -119,6 +121,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     // register our approx count distinct against std table
     // SqlStdOperatorTable.instance().register(new ApproxCountDistinct());
   }
+
+  final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDSqlOperatorTable.class);
 
   /**
    * Mock operator table for testing purposes. Contains the standard SQL operator
@@ -1436,18 +1440,34 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               null,
               null,
               OperandTypes.family(toSqlSignature(sig)),
-              SqlFunctionCategory.SYSTEM);
-      ret = toSqlTypeName(sig.getRet());
+              sig.isRowUdf() ? SqlFunctionCategory.SYSTEM
+                             : SqlFunctionCategory.USER_DEFINED_TABLE_FUNCTION);
+      isRowUdf = sig.isRowUdf();
+      if (isRowUdf) {
+        ret = toSqlTypeName(sig.getRet());
+      } else {
+        ret = null;
+      }
     }
 
     private static java.util.List<SqlTypeFamily> toSqlSignature(
             final ExtensionFunction sig) {
       java.util.List<SqlTypeFamily> sql_sig = new java.util.ArrayList<SqlTypeFamily>();
+      boolean isRowUdf = sig.isRowUdf();
       for (int arg_idx = 0; arg_idx < sig.getArgs().size(); ++arg_idx) {
         final ExtensionFunction.ExtArgumentType arg_type = sig.getArgs().get(arg_idx);
-        sql_sig.add(toSqlTypeName(arg_type).getFamily());
-        if (isPointerType(arg_type)) {
-          ++arg_idx;
+        if (isRowUdf) {
+          sql_sig.add(toSqlTypeName(arg_type).getFamily());
+          if (isPointerType(arg_type)) {
+            ++arg_idx;
+          }
+        } else {
+          if (isPointerType(arg_type)) {
+            /* TODO: eliminate using getValueType */
+            sql_sig.add(toSqlTypeName(getValueType(arg_type)).getFamily());
+          } else {
+            sql_sig.add(toSqlTypeName(arg_type).getFamily());
+          }
         }
       }
       return sql_sig;
@@ -1464,8 +1484,35 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
 
     @Override
     public RelDataType inferReturnType(SqlOperatorBinding opBinding) {
-      final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
-      return typeFactory.createTypeWithNullability(typeFactory.createSqlType(ret), true);
+      if (isRowUdf) {
+        final RelDataTypeFactory typeFactory = opBinding.getTypeFactory();
+        return typeFactory.createTypeWithNullability(
+                typeFactory.createSqlType(ret), true);
+      } else {
+        assert opBinding.getOperandCount() == 2;
+        return opBinding.getCursorOperand(0);
+      }
+    }
+
+    private static ExtensionFunction.ExtArgumentType getValueType(
+            final ExtensionFunction.ExtArgumentType type) {
+      switch (type) {
+        case PInt8:
+          return ExtensionFunction.ExtArgumentType.Int8;
+        case PInt16:
+          return ExtensionFunction.ExtArgumentType.Int16;
+        case PInt32:
+          return ExtensionFunction.ExtArgumentType.Int32;
+        case PInt64:
+          return ExtensionFunction.ExtArgumentType.Int64;
+        case PFloat:
+          return ExtensionFunction.ExtArgumentType.Float;
+        case PDouble:
+          return ExtensionFunction.ExtArgumentType.Double;
+      }
+      MAPDLOGGER.error("getValueType: no value for type " + type);
+      assert false;
+      return null;
     }
 
     private static SqlTypeName toSqlTypeName(
@@ -1500,11 +1547,14 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
           return SqlTypeName.ARRAY;
         case GeoPoint:
           return SqlTypeName.GEOMETRY;
+        case Cursor:
+          return SqlTypeName.CURSOR;
       }
+      MAPDLOGGER.error("toSqlTypeName: unknown type " + type);
       assert false;
       return null;
     }
-
+    private final boolean isRowUdf;
     private final SqlTypeName ret;
   }
 

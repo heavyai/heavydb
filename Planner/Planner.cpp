@@ -56,10 +56,10 @@ RootPlan* Optimizer::optimize() {
     case kUPDATE:
     case kDELETE:
       // should have been rejected by the Analyzer for now
-      assert(false);
+      UNREACHABLE();
       break;
     default:
-      assert(false);
+      UNREACHABLE();
   }
   plan = optimize_query();
   return new RootPlan(plan,
