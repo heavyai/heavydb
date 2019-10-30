@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
+#include <boost/process.hpp>
 #include <boost/process/search_path.hpp>
 #include <boost/program_options.hpp>
 #include <boost/variant.hpp>
@@ -57,7 +58,7 @@ void clear() {
   EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS s;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS t;"));
   EXPECT_NO_THROW(run_ddl_statement("DROP TABLE IF EXISTS x;"));
-  system(("rm -rf " + tar_ball_path).c_str());
+  CHECK_EQ(0, boost::process::system(("rm -rf " + tar_ball_path).c_str()));
 }
 
 static int nshard;

@@ -61,8 +61,6 @@ struct tuple_element<I, boost::tuples::cons<T, U>>
 namespace Catalog_Namespace {
 
 using cat_read_lock = read_lock<Catalog>;
-using cat_write_lock = write_lock<Catalog>;
-using cat_sqlite_lock = sqlite_lock<Catalog>;
 
 constexpr static char const* table_schema_filename = "_table.sql";
 constexpr static char const* table_oldinfo_filename = "_table.oldinfo";
@@ -208,9 +206,6 @@ void Catalog::dumpTable(const TableDescriptor* td,
   if (td->isView || td->persistenceLevel != Data_Namespace::MemoryLevel::DISK_LEVEL) {
     throw std::runtime_error("Dumping view or temporary table is not supported.");
   }
-  // grab catalog read lock only. no need table read or checkpoint lock
-  // because want to allow concurrent inserts while this dump proceeds.
-  cat_read_lock read_lock(this);
   // collect paths of files to archive
   const auto global_file_mgr = getDataMgr().getGlobalFileMgr();
   std::vector<std::string> file_paths;
@@ -230,31 +225,42 @@ void Catalog::dumpTable(const TableDescriptor* td,
     }
     file_paths.push_back(file_name);
   };
-  // - gen schema file
-  const auto schema_str = dumpSchema(td);
-  file_writer(table_schema_filename, "table schema", schema_str);
-  // - gen column-old-info file
-  const auto cds = getAllColumnMetadataForTable(td->tableId, true, true, true);
-  std::vector<std::string> column_oldinfo;
-  std::transform(cds.begin(),
-                 cds.end(),
-                 std::back_inserter(column_oldinfo),
-                 [this](const auto cd) -> std::string {
-                   return cd->columnName + ":" + std::to_string(cd->columnId) + ":" +
-                          getColumnDictDirectory(cd);
-                 });
-  const auto column_oldinfo_str = boost::algorithm::join(column_oldinfo, " ");
-  file_writer(table_oldinfo_filename, "table old info", column_oldinfo_str);
-  // - gen table epoch
-  const auto epoch = getTableEpoch(currentDB_.dbId, td->tableId);
-  file_writer(table_epoch_filename, "table epoch", std::to_string(epoch));
-  // - collect table data file paths ...
-  const auto data_file_dirs = getTableDataDirectories(td);
-  file_paths.insert(file_paths.end(), data_file_dirs.begin(), data_file_dirs.end());
-  // - collect table dict file paths ...
-  const auto dict_file_dirs = getTableDictDirectories(td);
-  file_paths.insert(file_paths.end(), dict_file_dirs.begin(), dict_file_dirs.end());
-  // run tar to archive the files
+  // grab table read lock for concurrent SELECT (but would block capped COPY or INSERT)
+  auto table_read_lock =
+      Lock_Namespace::TableLockMgr::getReadLockForTable(*this, td->tableName);
+
+  // grab catalog read lock only. no need table read or checkpoint lock
+  // because want to allow concurrent inserts while this dump proceeds.
+  const auto table_name = td->tableName;
+  {
+    cat_read_lock read_lock(this);
+    // - gen schema file
+    const auto schema_str = dumpSchema(td);
+    file_writer(table_schema_filename, "table schema", schema_str);
+    // - gen column-old-info file
+    const auto cds = getAllColumnMetadataForTable(td->tableId, true, true, true);
+    std::vector<std::string> column_oldinfo;
+    std::transform(cds.begin(),
+                   cds.end(),
+                   std::back_inserter(column_oldinfo),
+                   [&](const auto cd) -> std::string {
+                     return cd->columnName + ":" + std::to_string(cd->columnId) + ":" +
+                            getColumnDictDirectory(cd);
+                   });
+    const auto column_oldinfo_str = boost::algorithm::join(column_oldinfo, " ");
+    file_writer(table_oldinfo_filename, "table old info", column_oldinfo_str);
+    // - gen table epoch
+    const auto epoch = getTableEpoch(currentDB_.dbId, td->tableId);
+    file_writer(table_epoch_filename, "table epoch", std::to_string(epoch));
+    // - collect table data file paths ...
+    const auto data_file_dirs = getTableDataDirectories(td);
+    file_paths.insert(file_paths.end(), data_file_dirs.begin(), data_file_dirs.end());
+    // - collect table dict file paths ...
+    const auto dict_file_dirs = getTableDictDirectories(td);
+    file_paths.insert(file_paths.end(), dict_file_dirs.begin(), dict_file_dirs.end());
+    // tar takes time. release cat lock to yield the cat to concurrent CREATE statements.
+  }
+  // run tar to archive the files ... this may take a while !!
   run("tar " + compression + " -cvf \"" + archive_path + "\" " +
           boost::algorithm::join(file_paths, " "),
       abs_path(global_file_mgr));
@@ -451,11 +457,10 @@ void Catalog::restoreTable(const SessionInfo& session,
   auto checkpoint_lock =
       Lock_Namespace::getTableLock<mapd_shared_mutex, mapd_unique_lock>(
           *this, td->tableName, Lock_Namespace::LockType::CheckpointLock);
-  // grab table checkpoint lock before catalog lock, or may deadlock!
-  std::vector<Lock_Namespace::TableLock> table_locks;
-  std::map<std::string, bool> table_names{{td->tableName, true}};
-  Lock_Namespace::TableLockMgr::getTableLocks(*this, table_names, table_locks);
-  cat_read_lock read_lock(this);
+  // grab table read lock for concurrent SELECT
+  auto table_read_lock =
+      Lock_Namespace::TableLockMgr::getReadLockForTable(*this, td->tableName);
+  // untar takes time. no grab of cat lock to yield to concurrent CREATE stmts.
   const auto global_file_mgr = getDataMgr().getGlobalFileMgr();
   // dirs where src files are untarred and dst files are backed up
   constexpr static const auto temp_data_basename = "_data";
@@ -579,6 +584,8 @@ void Catalog::restoreTable(const SessionInfo& session,
              dict_file_dirs.end(),
              std::back_inserter(both_file_dirs));
   bool backup_completed = false;
+  // protect table schema and quickly swap table files
+  cat_read_lock read_lock(this);
   try {
     run("rm -rf " + temp_back_dir);
     run("mkdir -p " + temp_back_dir);
@@ -635,7 +642,8 @@ void Catalog::restoreTable(const SessionInfo& session,
   try {
     restoreTable(session, getMetadataForTable(table_name), archive_path, compression);
   } catch (...) {
-    Parser::parseDDL<Parser::DropTableStmt>("statement", "DROP TABLE " + table_name + ";")
+    Parser::parseDDL<Parser::DropTableStmt>("statement",
+                                            "DROP TABLE IF EXISTS " + table_name + ";")
         ->execute(session);
     throw;
   }
