@@ -115,6 +115,42 @@ double ST_X_Point(int8_t* p, int64_t psize, int32_t ic, int32_t isr, int32_t osr
 EXTENSION_NOINLINE
 double ST_Y_Point(int8_t* p, int64_t psize, int32_t ic, int32_t isr, int32_t osr);
 
+EXTENSION_NOINLINE
+double ST_Perimeter_Polygon(int8_t* poly,
+                            int64_t polysize,
+                            int32_t* poly_ring_sizes,
+                            int64_t poly_num_rings,
+                            int32_t ic,
+                            int32_t isr,
+                            int32_t osr);
+
+EXTENSION_NOINLINE
+double ST_Perimeter_Polygon_Geodesic(int8_t* poly,
+                                     int64_t polysize,
+                                     int32_t* poly_ring_sizes,
+                                     int64_t poly_num_rings,
+                                     int32_t ic,
+                                     int32_t isr,
+                                     int32_t osr);
+
+EXTENSION_NOINLINE
+double ST_Area_Polygon(int8_t* poly_coords,
+                       int64_t poly_coords_size,
+                       int32_t* poly_ring_sizes,
+                       int64_t poly_num_rings,
+                       int32_t ic,
+                       int32_t isr,
+                       int32_t osr);
+
+EXTENSION_NOINLINE
+double ST_Area_Polygon_Geodesic(int8_t* poly_coords,
+                                int64_t poly_coords_size,
+                                int32_t* poly_ring_sizes,
+                                int64_t poly_num_rings,
+                                int32_t ic,
+                                int32_t isr,
+                                int32_t osr);
+
 struct GeoPoint {
   int8_t* ptr;
   std::size_t sz;
@@ -123,6 +159,27 @@ struct GeoPoint {
   int32_t output_srid;
 
   DEVICE std::size_t getSize() const { return sz; }
+
+  DEVICE int32_t getCompression() const { return compression; }
+
+  DEVICE int32_t getInputSrid() const { return input_srid; }
+
+  DEVICE int32_t getOutputSrid() const { return output_srid; }
+};
+
+struct GeoPolygon {
+  int8_t* ptr_coords;
+  std::size_t coords_size;
+  int32_t* ring_sizes;
+  std::size_t num_rings;
+  int32_t compression;
+  int32_t input_srid;
+  int32_t output_srid;
+
+  DEVICE int32_t* getRingSizes() { return ring_sizes; }
+  DEVICE std::size_t getCoordsSize() const { return coords_size; }
+
+  DEVICE std::size_t getNumRings() const { return num_rings; }
 
   DEVICE int32_t getCompression() const { return compression; }
 
@@ -251,4 +308,37 @@ EXTENSION_NOINLINE
 double linestring_length(GeoLineString l) {
   return ST_Length_LineString(
       l.ptr, l.getSize(), l.getCompression(), l.getInputSrid(), l.getOutputSrid());
+}
+
+// Polygon udf
+
+EXTENSION_NOINLINE
+double polygon_area(GeoPolygon p) {
+  return ST_Area_Polygon(p.ptr_coords,
+                         p.getCoordsSize(),
+                         p.getRingSizes(),
+                         p.getNumRings(),
+                         p.getCompression(),
+                         p.getInputSrid(),
+                         p.getOutputSrid());
+}
+
+EXTENSION_NOINLINE
+int32_t polygon_compression(GeoPolygon p) {
+  return p.getCompression();
+}
+
+EXTENSION_NOINLINE
+int32_t polygon_input_srid(GeoPolygon p) {
+  return p.getInputSrid();
+}
+
+EXTENSION_NOINLINE
+int32_t polygon_output_srid(GeoPolygon p) {
+  return p.getOutputSrid();
+}
+
+EXTENSION_NOINLINE
+int32_t polygon_num_rings(GeoPolygon p) {
+  return p.getNumRings();
 }

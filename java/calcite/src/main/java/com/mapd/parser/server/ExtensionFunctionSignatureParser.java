@@ -186,6 +186,9 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("GeoLineString")) {
       return ExtensionFunction.ExtArgumentType.GeoLineString;
     }
+    if (type_name.equals("GeoPolygon")) {
+      return ExtensionFunction.ExtArgumentType.GeoPolygon;
+    }
 
     MAPDLOGGER.info(
             "ExtensionfunctionSignatureParser::deserializeType: unknown type_name=`"

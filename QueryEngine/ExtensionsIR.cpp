@@ -519,6 +519,81 @@ void CodeGenerator::codegenGeoLineStringArgs(const std::string& udf_func_name,
   output_args.push_back(alloc_mem);
 }
 
+llvm::StructType* CodeGenerator::createPolygonStructType(const std::string& udf_func_name,
+                                                         size_t param_num) {
+  llvm::Function* udf_func = cgen_state_->module_->getFunction(udf_func_name);
+  llvm::Module* module_for_lookup = cgen_state_->module_;
+
+  CHECK(udf_func);
+
+  llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
+  CHECK(param_num < udf_func_type->getNumParams());
+  llvm::Type* param_type = udf_func_type->getParamType(param_num);
+  CHECK(param_type->isPointerTy());
+  llvm::Type* struct_type = param_type->getPointerElementType();
+  CHECK(struct_type->isStructTy());
+  CHECK(struct_type->getStructNumElements() == 7);
+
+  llvm::StringRef struct_name = struct_type->getStructName();
+
+  llvm::StructType* polygon_type = module_for_lookup->getTypeByName(struct_name);
+  CHECK(polygon_type);
+
+  return (polygon_type);
+}
+
+void CodeGenerator::codegenGeoPolygonArgs(const std::string& udf_func_name,
+                                          size_t param_num,
+                                          llvm::Value* polygon_buf,
+                                          llvm::Value* polygon_size,
+                                          llvm::Value* ring_sizes_buf,
+                                          llvm::Value* num_rings,
+                                          llvm::Value* compression,
+                                          llvm::Value* input_srid,
+                                          llvm::Value* output_srid,
+                                          std::vector<llvm::Value*>& output_args) {
+  CHECK(polygon_buf);
+  CHECK(polygon_size);
+  CHECK(ring_sizes_buf);
+  CHECK(num_rings);
+  CHECK(compression);
+  CHECK(input_srid);
+  CHECK(output_srid);
+
+  auto polygon_abstraction = createPolygonStructType(udf_func_name, param_num);
+  auto alloc_mem = cgen_state_->ir_builder_.CreateAlloca(polygon_abstraction, nullptr);
+
+  auto polygon_buf_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(polygon_abstraction, alloc_mem, 0);
+  cgen_state_->ir_builder_.CreateStore(polygon_buf, polygon_buf_ptr);
+
+  auto polygon_size_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(polygon_abstraction, alloc_mem, 1);
+  cgen_state_->ir_builder_.CreateStore(polygon_size, polygon_size_ptr);
+
+  auto ring_sizes_buf_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(polygon_abstraction, alloc_mem, 2);
+  cgen_state_->ir_builder_.CreateStore(ring_sizes_buf, ring_sizes_buf_ptr);
+
+  auto ring_size_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(polygon_abstraction, alloc_mem, 3);
+  cgen_state_->ir_builder_.CreateStore(num_rings, ring_size_ptr);
+
+  auto polygon_compression_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(polygon_abstraction, alloc_mem, 4);
+  cgen_state_->ir_builder_.CreateStore(compression, polygon_compression_ptr);
+
+  auto input_srid_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(polygon_abstraction, alloc_mem, 5);
+  cgen_state_->ir_builder_.CreateStore(input_srid, input_srid_ptr);
+
+  auto output_srid_ptr =
+      cgen_state_->ir_builder_.CreateStructGEP(polygon_abstraction, alloc_mem, 6);
+  cgen_state_->ir_builder_.CreateStore(output_srid, output_srid_ptr);
+
+  output_args.push_back(alloc_mem);
+}
+
 // Generate CAST operations for arguments in `orig_arg_lvs` to the types required by
 // `ext_func_sig`.
 std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
@@ -673,30 +748,80 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
         case kLINESTRING:
           break;
         case kPOLYGON: {
-          k++;
-          // Ring Sizes
-          const auto elem_ti = SQLTypeInfo(SQLTypes::kARRAY,
-                                           0,
-                                           0,
-                                           false,
-                                           EncodingType::kENCODING_NONE,
-                                           0,
-                                           SQLTypes::kINT)
-                                   .get_elem_type();
-          const auto ptr_lv = cgen_state_->emitExternalCall(
-              "array_buff",
-              llvm::Type::getInt32PtrTy(cgen_state_->context_),
-              {orig_arg_lvs[k], posArg(arg)});
-          const auto len_lv = cgen_state_->emitExternalCall(
-              "array_size",
-              get_int_type(32, cgen_state_->context_),
-              {orig_arg_lvs[k],
-               posArg(arg),
-               cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))});
-          args.push_back(castArrayPointer(ptr_lv, elem_ti));
-          args.push_back(cgen_state_->ir_builder_.CreateZExt(
-              len_lv, get_int_type(64, cgen_state_->context_)));
-          j++;
+          if (ext_func_args[i] == ExtArgumentType::GeoPolygon) {
+            auto array_buf_arg = castArrayPointer(ptr_lv, elem_ti);
+            auto builder = cgen_state_->ir_builder_;
+            auto array_size_arg =
+                builder.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_));
+            int32_t compression = (arg_ti.get_compression() == kENCODING_GEOINT &&
+                                   arg_ti.get_comp_param() == 32)
+                                      ? 1
+                                      : 0;
+            auto compression_val = cgen_state_->llInt(compression);
+            auto input_srid_val = cgen_state_->llInt(arg_ti.get_input_srid());
+            auto output_srid_val = cgen_state_->llInt(arg_ti.get_output_srid());
+            k++;
+            // Ring Sizes
+            const auto elem_ti = SQLTypeInfo(SQLTypes::kARRAY,
+                                             0,
+                                             0,
+                                             false,
+                                             EncodingType::kENCODING_NONE,
+                                             0,
+                                             SQLTypes::kINT)
+                                     .get_elem_type();
+            const auto ptr_lv = cgen_state_->emitExternalCall(
+                "array_buff",
+                llvm::Type::getInt32PtrTy(cgen_state_->context_),
+                {orig_arg_lvs[k], posArg(arg)});
+            const auto len_lv = cgen_state_->emitExternalCall(
+                "array_size",
+                get_int_type(32, cgen_state_->context_),
+                {orig_arg_lvs[k],
+                 posArg(arg),
+                 cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))});
+            auto ring_size_buf_arg = castArrayPointer(ptr_lv, elem_ti);
+            auto ring_size_arg =
+                builder.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_));
+
+            codegenGeoPolygonArgs(ext_func_sig->getName(),
+                                  k - 1,
+                                  array_buf_arg,
+                                  array_size_arg,
+                                  ring_size_buf_arg,
+                                  ring_size_arg,
+                                  compression_val,
+                                  input_srid_val,
+                                  output_srid_val,
+                                  args);
+
+          } else {
+            k++;
+            // Ring Sizes
+            const auto elem_ti = SQLTypeInfo(SQLTypes::kARRAY,
+                                             0,
+                                             0,
+                                             false,
+                                             EncodingType::kENCODING_NONE,
+                                             0,
+                                             SQLTypes::kINT)
+                                     .get_elem_type();
+            const auto ptr_lv = cgen_state_->emitExternalCall(
+                "array_buff",
+                llvm::Type::getInt32PtrTy(cgen_state_->context_),
+                {orig_arg_lvs[k], posArg(arg)});
+            const auto len_lv = cgen_state_->emitExternalCall(
+                "array_size",
+                get_int_type(32, cgen_state_->context_),
+                {orig_arg_lvs[k],
+                 posArg(arg),
+                 cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))});
+
+            args.push_back(castArrayPointer(ptr_lv, elem_ti));
+            args.push_back(cgen_state_->ir_builder_.CreateZExt(
+                len_lv, get_int_type(64, cgen_state_->context_)));
+            j++;
+          }
           break;
         }
         case kMULTIPOLYGON: {

@@ -451,6 +451,20 @@ class CodeGenerator {
                                 llvm::Value* output_srid,
                                 std::vector<llvm::Value*>& output_args);
 
+  llvm::StructType* createPolygonStructType(const std::string& udf_func_name,
+                                            size_t param_num);
+
+  void codegenGeoPolygonArgs(const std::string& udf_func_name,
+                             size_t param_num,
+                             llvm::Value* polygon_buf,
+                             llvm::Value* polygon_size,
+                             llvm::Value* ring_sizes_buf,
+                             llvm::Value* num_rings,
+                             llvm::Value* compression,
+                             llvm::Value* input_srid,
+                             llvm::Value* output_srid,
+                             std::vector<llvm::Value*>& output_args);
+
   std::vector<llvm::Value*> codegenFunctionOperCastArgs(
       const Analyzer::FunctionOper*,
       const ExtensionFunction*,

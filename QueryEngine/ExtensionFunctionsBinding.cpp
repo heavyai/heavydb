@@ -185,8 +185,13 @@ static int match_arguments(const SQLTypeInfo& arg_type,
           sig_types[sig_pos + 3] == ExtArgumentType::Int64) {
         penalty_score += 1000;
         return 4;
+      } else if (stype == ExtArgumentType::GeoPolygon) {
+        penalty_score += 1000;
+        return 1;
       }
+
       break;
+
     case kMULTIPOLYGON:
       if (stype == ExtArgumentType::PInt8 && sig_pos + 5 < max_pos &&
           sig_types[sig_pos + 1] == ExtArgumentType::Int64 &&
@@ -365,6 +370,7 @@ bool is_ext_arg_type_geo(const ExtArgumentType ext_arg_type) {
   switch (ext_arg_type) {
     case ExtArgumentType::GeoPoint:
     case ExtArgumentType::GeoLineString:
+    case ExtArgumentType::GeoPolygon:
       return true;
 
     default:

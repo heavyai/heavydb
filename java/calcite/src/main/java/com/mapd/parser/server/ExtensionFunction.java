@@ -51,7 +51,8 @@ public class ExtensionFunction {
     ArrayDouble,
     GeoPoint,
     GeoLineString,
-    Cursor
+    Cursor,
+    GeoPolygon
   }
   ;
 
@@ -151,6 +152,8 @@ public class ExtensionFunction {
         return "cursor";
       case GeoLineString:
         return "geo_linestring";
+      case GeoPolygon:
+        return "geo_polygon";
     }
     MAPDLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;
