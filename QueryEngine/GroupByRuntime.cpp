@@ -281,12 +281,46 @@ bucketized_hash_join_idx(int64_t hash_buff,
   return -1;
 }
 
+extern "C" ALWAYS_INLINE DEVICE int64_t
+bucketized_hash_join_idx_payload(int64_t hash_buff,
+                                 int64_t const key,
+                                 int64_t const min_key,
+                                 int64_t const max_key,
+                                 int64_t bucket_normalization,
+                                 int64_t entry_size,
+                                 int32_t** entry_ptr) {
+  *entry_ptr =
+      SUFFIX(get_bucketized_hash_slot_payload)(reinterpret_cast<int32_t*>(hash_buff),
+                                               key,
+                                               min_key,
+                                               entry_size,
+                                               bucket_normalization);
+  if (key >= min_key && key <= max_key) {
+    return **entry_ptr;
+  }
+  return -1;
+}
+
 extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx(int64_t hash_buff,
                                                       const int64_t key,
                                                       const int64_t min_key,
                                                       const int64_t max_key) {
   if (key >= min_key && key <= max_key) {
     return *SUFFIX(get_hash_slot)(reinterpret_cast<int32_t*>(hash_buff), key, min_key);
+  }
+  return -1;
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_payload(int64_t hash_buff,
+                                                              const int64_t key,
+                                                              const int64_t min_key,
+                                                              const int64_t max_key,
+                                                              const int64_t entry_size,
+                                                              int32_t** entry_ptr) {
+  *entry_ptr = SUFFIX(get_hash_slot_payload)(
+      reinterpret_cast<int32_t*>(hash_buff), key, min_key, entry_size);
+  if (key >= min_key && key <= max_key) {
+    return **entry_ptr;
   }
   return -1;
 }
@@ -303,12 +337,44 @@ bucketized_hash_join_idx_nullable(int64_t hash_buff,
                          : -1;
 }
 
+extern "C" ALWAYS_INLINE DEVICE int64_t
+bucketized_hash_join_idx_nullable_payload(int64_t hash_buff,
+                                          const int64_t key,
+                                          const int64_t min_key,
+                                          const int64_t max_key,
+                                          const int64_t null_val,
+                                          const int64_t bucket_normalization,
+                                          const int64_t entry_size,
+                                          int32_t** entry_ptr) {
+  return key != null_val ? bucketized_hash_join_idx_payload(hash_buff,
+                                                            key,
+                                                            min_key,
+                                                            max_key,
+                                                            bucket_normalization,
+                                                            entry_size,
+                                                            entry_ptr)
+                         : -1;
+}
+
 extern "C" ALWAYS_INLINE DEVICE int64_t hash_join_idx_nullable(int64_t hash_buff,
                                                                const int64_t key,
                                                                const int64_t min_key,
                                                                const int64_t max_key,
                                                                const int64_t null_val) {
   return key != null_val ? hash_join_idx(hash_buff, key, min_key, max_key) : -1;
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t
+hash_join_idx_nullable_payload(int64_t hash_buff,
+                               const int64_t key,
+                               const int64_t min_key,
+                               const int64_t max_key,
+                               const int64_t null_val,
+                               const int64_t entry_size,
+                               int32_t** entry_ptr) {
+  return key != null_val ? hash_join_idx_payload(
+                               hash_buff, key, min_key, max_key, entry_size, entry_ptr)
+                         : -1;
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t
@@ -329,6 +395,32 @@ bucketized_hash_join_idx_bitwise(int64_t hash_buff,
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t
+bucketized_hash_join_idx_bitwise_payload(int64_t hash_buff,
+                                         const int64_t key,
+                                         const int64_t min_key,
+                                         const int64_t max_key,
+                                         const int64_t null_val,
+                                         const int64_t translated_val,
+                                         const int64_t bucket_normalization,
+                                         const int64_t entry_size,
+                                         int32_t** entry_ptr) {
+  return key != null_val ? bucketized_hash_join_idx_payload(hash_buff,
+                                                            key,
+                                                            min_key,
+                                                            max_key,
+                                                            bucket_normalization,
+                                                            entry_size,
+                                                            entry_ptr)
+                         : bucketized_hash_join_idx_payload(hash_buff,
+                                                            translated_val,
+                                                            min_key,
+                                                            translated_val,
+                                                            bucket_normalization,
+                                                            entry_size,
+                                                            entry_ptr);
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t
 hash_join_idx_bitwise(int64_t hash_buff,
                       const int64_t key,
                       const int64_t min_key,
@@ -338,6 +430,25 @@ hash_join_idx_bitwise(int64_t hash_buff,
   return key != null_val
              ? hash_join_idx(hash_buff, key, min_key, max_key)
              : hash_join_idx(hash_buff, translated_val, min_key, translated_val);
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t
+hash_join_idx_bitwise_payload(int64_t hash_buff,
+                              const int64_t key,
+                              const int64_t min_key,
+                              const int64_t max_key,
+                              const int64_t null_val,
+                              const int64_t translated_val,
+                              const int64_t entry_size,
+                              int32_t** entry_ptr) {
+  return key != null_val ? hash_join_idx_payload(
+                               hash_buff, key, min_key, max_key, entry_size, entry_ptr)
+                         : hash_join_idx_payload(hash_buff,
+                                                 translated_val,
+                                                 min_key,
+                                                 translated_val,
+                                                 entry_size,
+                                                 entry_ptr);
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t
@@ -360,6 +471,30 @@ hash_join_idx_sharded(int64_t hash_buff,
 }
 
 extern "C" ALWAYS_INLINE DEVICE int64_t
+hash_join_idx_sharded_payload(int64_t hash_buff,
+                              const int64_t key,
+                              const int64_t min_key,
+                              const int64_t max_key,
+                              const uint32_t entry_count_per_shard,
+                              const uint32_t num_shards,
+                              const uint32_t device_count,
+                              const int64_t entry_size,
+                              int32_t** entry_ptr) {
+  *entry_ptr =
+      SUFFIX(get_hash_slot_sharded_payload)(reinterpret_cast<int32_t*>(hash_buff),
+                                            key,
+                                            min_key,
+                                            entry_size,
+                                            entry_count_per_shard,
+                                            num_shards,
+                                            device_count);
+  if (key >= min_key && key <= max_key) {
+    return **entry_ptr;
+  }
+  return -1;
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t
 hash_join_idx_sharded_nullable(int64_t hash_buff,
                                const int64_t key,
                                const int64_t min_key,
@@ -375,6 +510,29 @@ hash_join_idx_sharded_nullable(int64_t hash_buff,
                                                  entry_count_per_shard,
                                                  num_shards,
                                                  device_count)
+                         : -1;
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t
+hash_join_idx_sharded_nullable_payload(int64_t hash_buff,
+                                       const int64_t key,
+                                       const int64_t min_key,
+                                       const int64_t max_key,
+                                       const uint32_t entry_count_per_shard,
+                                       const uint32_t num_shards,
+                                       const uint32_t device_count,
+                                       const int64_t null_val,
+                                       const int64_t entry_size,
+                                       int32_t** entry_ptr) {
+  return key != null_val ? hash_join_idx_sharded_payload(hash_buff,
+                                                         key,
+                                                         min_key,
+                                                         max_key,
+                                                         entry_count_per_shard,
+                                                         num_shards,
+                                                         device_count,
+                                                         entry_size,
+                                                         entry_ptr)
                          : -1;
 }
 
@@ -402,6 +560,38 @@ hash_join_idx_bitwise_sharded(int64_t hash_buff,
                                                  entry_count_per_shard,
                                                  num_shards,
                                                  device_count);
+}
+
+extern "C" ALWAYS_INLINE DEVICE int64_t
+hash_join_idx_bitwise_sharded_payload(int64_t hash_buff,
+                                      const int64_t key,
+                                      const int64_t min_key,
+                                      const int64_t max_key,
+                                      const uint32_t entry_count_per_shard,
+                                      const uint32_t num_shards,
+                                      const uint32_t device_count,
+                                      const int64_t null_val,
+                                      const int64_t translated_val,
+                                      const int64_t entry_size,
+                                      int32_t** entry_ptr) {
+  return key != null_val ? hash_join_idx_sharded_payload(hash_buff,
+                                                         key,
+                                                         min_key,
+                                                         max_key,
+                                                         entry_count_per_shard,
+                                                         num_shards,
+                                                         device_count,
+                                                         entry_size,
+                                                         entry_ptr)
+                         : hash_join_idx_sharded_payload(hash_buff,
+                                                         translated_val,
+                                                         min_key,
+                                                         translated_val,
+                                                         entry_count_per_shard,
+                                                         num_shards,
+                                                         device_count,
+                                                         entry_size,
+                                                         entry_ptr);
 }
 
 #define DEF_TRANSLATE_NULL_KEY(key_type)                                           \

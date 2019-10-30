@@ -36,10 +36,27 @@ extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_bucketized_hash_slot)(
   return buff + (key - min_key) / bucket_normalization;
 }
 
+extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_bucketized_hash_slot_payload)(
+    int32_t* buff,
+    const int64_t key,
+    const int64_t min_key,
+    const size_t entry_size,
+    const int64_t bucket_normalization) {
+  return buff + (key - min_key) / bucket_normalization * entry_size;
+}
+
 extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot)(int32_t* buff,
                                                                const int64_t key,
                                                                const int64_t min_key) {
   return buff + (key - min_key);
+}
+
+extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot_payload)(
+    int32_t* buff,
+    const int64_t key,
+    const int64_t min_key,
+    const size_t entry_size) {
+  return buff + (key - min_key) * entry_size;
 }
 
 extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_bucketized_hash_slot_sharded)(
@@ -57,6 +74,22 @@ extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_bucketized_hash_slot_sharded
   return shard_buffer + (key - min_key) / bucket_normalization / num_shards;
 }
 
+extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_bucketized_hash_slot_sharded_payload)(
+    int32_t* buff,
+    const int64_t key,
+    const int64_t min_key,
+    const int64_t entry_size,
+    const uint32_t entry_count_per_shard,
+    const uint32_t num_shards,
+    const uint32_t device_count,
+    const int64_t bucket_normalization) {
+  const uint32_t shard = SHARD_FOR_KEY(key, num_shards);
+  const uint32_t shard_buffer_index =
+      shard / device_count;  // shard sub-buffer index within `buff`
+  int32_t* shard_buffer = buff + shard_buffer_index * entry_count_per_shard * entry_size;
+  return shard_buffer + (key - min_key) / bucket_normalization / num_shards * entry_size;
+}
+
 extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot_sharded)(
     int32_t* buff,
     const int64_t key,
@@ -69,6 +102,21 @@ extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot_sharded)(
       shard / device_count;  // shard sub-buffer index within `buff`
   int32_t* shard_buffer = buff + shard_buffer_index * entry_count_per_shard;
   return shard_buffer + (key - min_key) / num_shards;
+}
+
+extern "C" ALWAYS_INLINE DEVICE int32_t* SUFFIX(get_hash_slot_sharded_payload)(
+    int32_t* buff,
+    const int64_t key,
+    const int64_t min_key,
+    const int64_t entry_size,
+    const uint32_t entry_count_per_shard,
+    const uint32_t num_shards,
+    const uint32_t device_count) {
+  const uint32_t shard = SHARD_FOR_KEY(key, num_shards);
+  const uint32_t shard_buffer_index =
+      shard / device_count;  // shard sub-buffer index within `buff`
+  int32_t* shard_buffer = buff + shard_buffer_index * entry_count_per_shard * entry_size;
+  return shard_buffer + (key - min_key) / num_shards * entry_size;
 }
 
 #endif  // QUERYENGINE_GROUPBYFASTIMPL_H

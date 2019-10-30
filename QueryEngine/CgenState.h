@@ -276,6 +276,7 @@ struct CgenState {
   const bool contains_left_deep_outer_join_;
   std::vector<llvm::Value*> outer_join_match_found_per_level_;
   std::unordered_map<int, llvm::Value*> scan_idx_to_hash_pos_;
+  std::unordered_map<InputColDescriptor, llvm::Value*> hashed_cols_;
   std::vector<std::unique_ptr<const InValuesBitmap>> in_values_bitmaps_;
   const std::vector<InputTableInfo>& query_infos_;
   bool needs_error_check_;

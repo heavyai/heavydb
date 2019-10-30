@@ -33,6 +33,7 @@
 #include "Descriptors/InputDescriptors.h"
 #include "Descriptors/RowSetMemoryOwner.h"
 #include "ExpressionRange.h"
+#include "HashJoinRuntime.h"
 #include "InputMetadata.h"
 #include "JoinHashTableInterface.h"
 
@@ -59,7 +60,8 @@ class JoinHashTable : public JoinHashTableInterface {
       const HashType preferred_hash_type,
       const int device_count,
       ColumnCacheMap& column_cache,
-      Executor* executor);
+      Executor* executor,
+      InputColDescriptorsByScanIdx& payload_cols_candidate);
 
   //! Make hash table from named tables and columns (such as for testing).
   static std::shared_ptr<JoinHashTable> getSyntheticInstance(
@@ -102,6 +104,21 @@ class JoinHashTable : public JoinHashTableInterface {
 
   HashType getHashType() const noexcept override { return hash_type_; }
 
+  PayloadType getPayloadType() const noexcept override { return payload_type_; }
+
+  size_t getPayloadSize() const noexcept override { return payload_size_; }
+
+  const InputColDescriptors& getPayloadColumns() const noexcept override {
+    return payload_cols_;
+  }
+
+  size_t getPayloadColumnOffset(const InputColDescriptor& col) const noexcept override;
+
+  llvm::Value* getPayloadColumnPtr(const InputColDescriptor& col) const
+      noexcept override {
+    return payload_ptrs_.at(col);
+  }
+
   size_t offsetBufferOff() const noexcept override;
 
   size_t countBufferOff() const noexcept override;
@@ -115,7 +132,8 @@ class JoinHashTable : public JoinHashTableInterface {
       const bool is_bw_eq,
       const int64_t sub_buff_size,
       Executor* executor,
-      const bool is_bucketized = false);
+      const bool is_bucketized = false,
+      const size_t payload_size = 1);
 
   static llvm::Value* codegenHashTableLoad(const size_t table_idx, Executor* executor);
 
@@ -131,25 +149,14 @@ class JoinHashTable : public JoinHashTableInterface {
  private:
   JoinHashTable(const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
                 const Analyzer::ColumnVar* col_var,
+                const InputColDescriptors& payload_cols,
                 const std::vector<InputTableInfo>& query_infos,
                 const Data_Namespace::MemoryLevel memory_level,
                 const HashType preferred_hash_type,
                 const ExpressionRange& col_range,
                 ColumnCacheMap& column_cache,
                 Executor* executor,
-                const int device_count)
-      : qual_bin_oper_(qual_bin_oper)
-      , col_var_(std::dynamic_pointer_cast<Analyzer::ColumnVar>(col_var->deep_copy()))
-      , query_infos_(query_infos)
-      , memory_level_(memory_level)
-      , hash_type_(preferred_hash_type)
-      , hash_entry_count_(0)
-      , col_range_(col_range)
-      , executor_(executor)
-      , column_cache_(column_cache)
-      , device_count_(device_count) {
-    CHECK(col_range.getType() == ExpressionRangeType::Integer);
-  }
+                const int device_count);
 
   std::pair<const int8_t*, size_t> getOneColumnFragment(
       const Analyzer::ColumnVar& hash_col,
@@ -168,6 +175,7 @@ class JoinHashTable : public JoinHashTableInterface {
       const Analyzer::Expr* outer_col,
       const Analyzer::ColumnVar* inner_col) const;
 
+  void tryReify(const int device_count, bool throw_out_of_memory);
   void reify(const int device_count);
   void reifyOneToOneForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
@@ -181,6 +189,7 @@ class JoinHashTable : public JoinHashTableInterface {
       const int8_t* col_buff,
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
+      const std::vector<PayloadColumn>& payload,
       const Data_Namespace::MemoryLevel effective_memory_level,
       const int device_id);
   void initOneToManyHashTable(
@@ -188,6 +197,7 @@ class JoinHashTable : public JoinHashTableInterface {
       const int8_t* col_buff,
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
+      const std::vector<PayloadColumn>& payload,
       const Data_Namespace::MemoryLevel effective_memory_level,
       const int device_id);
   void initHashTableOnCpuFromCache(
@@ -202,12 +212,14 @@ class JoinHashTable : public JoinHashTableInterface {
       const int8_t* col_buff,
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
+      const std::vector<PayloadColumn>& payload,
       const HashEntryInfo hash_entry_info,
       const int32_t hash_join_invalid_val);
   void initOneToManyHashTableOnCpu(
       const int8_t* col_buff,
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
+      const std::vector<PayloadColumn>& payload,
       const HashEntryInfo hash_entry_info,
       const int32_t hash_join_invalid_val);
 
@@ -229,6 +241,12 @@ class JoinHashTable : public JoinHashTableInterface {
       const int device_id,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
       ThrustAllocator& dev_buff_owner);
+  std::vector<PayloadColumn> fetchPayload(
+      const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+      const Data_Namespace::MemoryLevel effective_memory_level,
+      const int device_id,
+      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+      ThrustAllocator& dev_buff_owner);
 
   bool isBitwiseEq() const;
 
@@ -238,12 +256,21 @@ class JoinHashTable : public JoinHashTableInterface {
 
   size_t getComponentBufferSize() const noexcept;
 
+  llvm::Value* codegenPayload(const CompilationOptions& co, const size_t index);
+
   std::shared_ptr<Analyzer::BinOper> qual_bin_oper_;
   std::shared_ptr<Analyzer::ColumnVar> col_var_;
+  InputColDescriptors payload_cols_;
+
   const std::vector<InputTableInfo>& query_infos_;
   const Data_Namespace::MemoryLevel memory_level_;
   HashType hash_type_;
   size_t hash_entry_count_;
+  PayloadType payload_type_;
+  size_t payload_size_;
+  // Payload col -> <offset, size>
+  std::unordered_map<InputColDescriptor, std::pair<size_t, size_t>> payload_col_pos_;
+  std::unordered_map<InputColDescriptor, llvm::Value*> payload_ptrs_;
   std::shared_ptr<std::vector<int32_t>> cpu_hash_table_buff_;
   std::mutex cpu_hash_table_buff_mutex_;
 #ifdef HAVE_CUDA
@@ -265,11 +292,36 @@ class JoinHashTable : public JoinHashTableInterface {
     const size_t num_elements;
     const ChunkKey chunk_key;
     const SQLOps optype;
+    // Hash type is a part of a key but is not used in
+    // comparison operator. So we can find required
+    // hash table in a cache and then fix-up used hash
+    // type.
+    const HashType hash_type;
+    const JoinHashTableInterface::PayloadType payload_type;
+    // TODO(ilya): We should be able to re-use payload with different
+    // (extended) set of rows and different rows order.
+    const InputColDescriptors payload_rows;
 
     bool operator==(const struct JoinHashTableCacheKey& that) const {
-      return col_range == that.col_range && inner_col == that.inner_col &&
-             outer_col == that.outer_col && num_elements == that.num_elements &&
-             chunk_key == that.chunk_key && optype == that.optype;
+      if (col_range == that.col_range && inner_col == that.inner_col &&
+          outer_col == that.outer_col && num_elements == that.num_elements &&
+          chunk_key == that.chunk_key && optype == that.optype &&
+          payload_type == that.payload_type &&
+          payload_rows.size() == that.payload_rows.size()) {
+        auto it1 = payload_rows.begin();
+        auto it2 = that.payload_rows.begin();
+        while (it1 != payload_rows.end()) {
+          if (!(**it1 == **it2))
+            return false;
+
+          ++it1;
+          ++it2;
+        }
+
+        return true;
+      }
+
+      return false;
     }
   };
 
