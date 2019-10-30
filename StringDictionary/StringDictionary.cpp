@@ -33,8 +33,6 @@
 
 #include "QueryEngine/ArrowUtil.h"
 #include "Utils/Threading.h"
-#include "arrow/util/task-group.h"
-#include "arrow/util/thread-pool.h"
 
 namespace {
 const int SYSTEM_PAGE_SIZE = getpagesize();
@@ -461,8 +459,8 @@ std::vector<int32_t> StringDictionary::getLike(const std::string& pattern,
     return it->second;
   }
   std::vector<int32_t> result;
-  auto thread_pool = arrow::internal::GetCpuThreadPool();
-  auto workers = arrow::internal::TaskGroup::MakeThreaded(thread_pool);
+  auto thread_pool = utils::GetCpuThreadPool();
+  auto workers = utils::TaskGroup::MakeThreaded(thread_pool);
   int worker_count = cpu_threads();
   CHECK_GT(worker_count, 0);
   std::vector<std::vector<int32_t>> worker_results(worker_count);
@@ -519,8 +517,8 @@ std::vector<int32_t> StringDictionary::getEquals(std::string pattern,
       }
     }
   } else {
-    auto thread_pool = arrow::internal::GetCpuThreadPool();
-    auto workers = arrow::internal::TaskGroup::MakeThreaded(thread_pool);
+    auto thread_pool = utils::GetCpuThreadPool();
+    auto workers = utils::TaskGroup::MakeThreaded(thread_pool);
     int worker_count = cpu_threads();
     CHECK_GT(worker_count, 0);
     std::vector<std::vector<int32_t>> worker_results(worker_count);
@@ -733,8 +731,8 @@ std::vector<int32_t> StringDictionary::getRegexpLike(const std::string& pattern,
     return it->second;
   }
   std::vector<int32_t> result;
-  auto thread_pool = arrow::internal::GetCpuThreadPool();
-  auto workers = arrow::internal::TaskGroup::MakeThreaded(thread_pool);
+  auto thread_pool = utils::GetCpuThreadPool();
+  auto workers = utils::TaskGroup::MakeThreaded(thread_pool);
   int worker_count = cpu_threads();
   CHECK_GT(worker_count, 0);
   std::vector<std::vector<int32_t>> worker_results(worker_count);

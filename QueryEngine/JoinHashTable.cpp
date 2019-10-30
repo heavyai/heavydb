@@ -30,8 +30,6 @@
 
 #include "ArrowUtil.h"
 #include "Utils/Threading.h"
-#include "arrow/util/task-group.h"
-#include "arrow/util/thread-pool.h"
 namespace {
 
 class NeedsOneToManyHash : public HashJoinFail {
@@ -814,9 +812,9 @@ void JoinHashTable::initHashTableOnCpu(
       CHECK(sd_outer_proxy);
     }
     int thread_count = cpu_threads();
-    auto thread_pool = arrow::internal::GetCpuThreadPool();
+    auto thread_pool = utils::GetCpuThreadPool();
     {
-      auto init_cpu_buff_threads = arrow::internal::TaskGroup::MakeThreaded(thread_pool);
+      auto init_cpu_buff_threads = utils::TaskGroup::MakeThreaded(thread_pool);
       for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
         init_cpu_buff_threads->Append(
             [this, hash_entry_info, hash_join_invalid_val, thread_idx, thread_count] {
@@ -832,7 +830,7 @@ void JoinHashTable::initHashTableOnCpu(
     }
     int err{0};
     {
-      auto init_cpu_buff_threads = arrow::internal::TaskGroup::MakeThreaded(thread_pool);
+      auto init_cpu_buff_threads = utils::TaskGroup::MakeThreaded(thread_pool);
       for (int thread_idx = 0; thread_idx < thread_count; ++thread_idx) {
         init_cpu_buff_threads->Append([this,
                                        hash_join_invalid_val,
