@@ -216,20 +216,25 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , _was_geo_copy_from(false) {
   LOG(INFO) << "OmniSci Server " << MAPD_RELEASE;
   bool is_rendering_enabled = enable_rendering;
-  if (cpu_only) {
-    is_rendering_enabled = false;
-    executor_device_type_ = ExecutorDeviceType::CPU;
-    cpu_mode_only_ = true;
-  } else {
+
+  try {
+    if (cpu_only) {
+      is_rendering_enabled = false;
+      executor_device_type_ = ExecutorDeviceType::CPU;
+      cpu_mode_only_ = true;
+    } else {
 #ifdef HAVE_CUDA
-    executor_device_type_ = ExecutorDeviceType::GPU;
-    cpu_mode_only_ = false;
+      executor_device_type_ = ExecutorDeviceType::GPU;
+      cpu_mode_only_ = false;
 #else
-    executor_device_type_ = ExecutorDeviceType::CPU;
-    LOG(ERROR) << "This build isn't CUDA enabled, will run on CPU";
-    cpu_mode_only_ = true;
-    is_rendering_enabled = false;
+      executor_device_type_ = ExecutorDeviceType::CPU;
+      LOG(ERROR) << "This build isn't CUDA enabled, will run on CPU";
+      cpu_mode_only_ = true;
+      is_rendering_enabled = false;
 #endif
+    }
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to executor device type: " << e.what();
   }
 
   const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
@@ -239,34 +244,55 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
   if (is_rendering_enabled) {
     total_reserved += render_mem_bytes;
   }
-  data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
-                                              mapd_parameters,
-                                              !cpu_mode_only_,
-                                              num_gpus,
-                                              start_gpu,
-                                              total_reserved,
-                                              num_reader_threads));
+
+  try {
+    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
+                                                mapd_parameters,
+                                                !cpu_mode_only_,
+                                                num_gpus,
+                                                start_gpu,
+                                                total_reserved,
+                                                num_reader_threads));
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to initialize data manager: " << e.what();
+  }
 
   std::string udf_ast_filename("");
 
-  if (!udf_filename.empty()) {
-    UdfCompiler compiler(udf_filename);
-    int compile_result = compiler.compileUdf();
+  try {
+    if (!udf_filename.empty()) {
+      UdfCompiler compiler(udf_filename);
+      int compile_result = compiler.compileUdf();
 
-    if (compile_result == 0) {
-      udf_ast_filename = compiler.getAstFileName();
+      if (compile_result == 0) {
+        udf_ast_filename = compiler.getAstFileName();
+      }
     }
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to initialize UDF compiler: " << e.what();
   }
 
-  calcite_ =
-      std::make_shared<Calcite>(mapd_parameters, base_data_path_, udf_ast_filename);
-
-  ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
-  if (!udf_filename.empty()) {
-    ExtensionFunctionsWhitelist::addUdfs(calcite_->getUserDefinedFunctionWhitelist());
+  try {
+    calcite_ =
+        std::make_shared<Calcite>(mapd_parameters, base_data_path_, udf_ast_filename);
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to initialize Calcite server: " << e.what();
   }
 
-  table_functions::TableFunctionsFactory::init();
+  try {
+    ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
+    if (!udf_filename.empty()) {
+      ExtensionFunctionsWhitelist::addUdfs(calcite_->getUserDefinedFunctionWhitelist());
+    }
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to initialize extension functions: " << e.what();
+  }
+
+  try {
+    table_functions::TableFunctionsFactory::init();
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to initialize table functions factory: " << e.what();
+  }
 
   if (!data_mgr_->gpusPresent() && !cpu_mode_only_) {
     executor_device_type_ = ExecutorDeviceType::CPU;
@@ -282,13 +308,19 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       LOG(INFO) << "Started in CPU mode" << std::endl;
       break;
   }
-  SysCatalog::instance().init(base_data_path_,
-                              data_mgr_,
-                              authMetadata,
-                              calcite_,
-                              false,
-                              !db_leaves.empty(),
-                              string_leaves_);
+
+  try {
+    SysCatalog::instance().init(base_data_path_,
+                                data_mgr_,
+                                authMetadata,
+                                calcite_,
+                                false,
+                                !db_leaves.empty(),
+                                string_leaves_);
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to initialize system catalog: " << e.what();
+  }
+
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
 
