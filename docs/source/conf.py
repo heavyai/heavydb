@@ -207,3 +207,6 @@ todo_include_todos = True
 html_js_files=[
 #                'segment_analytics.js'
               ]
+
+# Favicon
+html_favicon = "img/favicon.webp"
