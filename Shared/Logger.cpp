@@ -441,7 +441,7 @@ class DurationTree {
   std::thread::id const thread_id_;
   DurationTree(std::thread::id thread_id, int start_depth)
       // Add +1 to current_depth_ for non-base DurationTrees for extra indentation.
-      : current_depth_(start_depth + static_cast<bool>(start_depth))
+      : current_depth_(start_depth + (start_depth == 0 ? 0 : 1))
       , depth_(start_depth)
       , thread_id_(thread_id) {}
   void pushDurationTree(DurationTree& duration_tree) {
