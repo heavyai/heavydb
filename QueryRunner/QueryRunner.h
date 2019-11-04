@@ -17,20 +17,18 @@
 #ifndef QUERY_RUNNER_H
 #define QUERY_RUNNER_H
 
-#include "../QueryEngine/CompilationOptions.h"
-#include "LeafAggregator.h"
-#include "ThriftHandler/QueryState.h"
-
-#include <Catalog/SessionInfo.h>
-#include <Catalog/SysCatalog.h>
-#include <Catalog/TableDescriptor.h>
-
 #include <fstream>
 #include <memory>
 #include <string>
 
+#include "Catalog/SessionInfo.h"
+#include "Catalog/SysCatalog.h"
+#include "Catalog/TableDescriptor.h"
+#include "LeafAggregator.h"
+#include "QueryEngine/CompilationOptions.h"
+#include "ThriftHandler/QueryState.h"
+
 namespace Catalog_Namespace {
-class SessionInfo;
 class Catalog;
 struct UserMetadata;
 }  // namespace Catalog_Namespace

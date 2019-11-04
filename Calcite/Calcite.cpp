@@ -561,15 +561,14 @@ Calcite::~Calcite() {
   close_calcite_server(false);
 }
 
-std::string Calcite::getRuntimeUserDefinedFunctionWhitelist() {
+std::string Calcite::getRuntimeExtensionFunctionWhitelist() {
   if (server_available_) {
     TPlanResult ret;
     std::string whitelist;
     auto clientP = getClient(remote_calcite_port_);
-    clientP.first->getRuntimeUserDefinedFunctionWhitelist(whitelist);
+    clientP.first->getRuntimeExtensionFunctionWhitelist(whitelist);
     clientP.second->close();
-    VLOG(1) << "Runtime user defined functions whitelist loaded from Calcite: "
-            << whitelist;
+    VLOG(1) << "Runtime extension functions whitelist loaded from Calcite: " << whitelist;
     return whitelist;
   } else {
     LOG(FATAL) << "Not routing to Calcite, server is not up";
@@ -579,10 +578,12 @@ std::string Calcite::getRuntimeUserDefinedFunctionWhitelist() {
   return "";
 }
 
-void Calcite::setRuntimeUserDefinedFunction(std::string udf_string) {
+void Calcite::setRuntimeExtensionFunctions(
+    const std::vector<TUserDefinedFunction>& udfs,
+    const std::vector<TUserDefinedTableFunction>& udtfs) {
   if (server_available_) {
     auto clientP = getClient(remote_calcite_port_);
-    clientP.first->setRuntimeUserDefinedFunction(udf_string);
+    clientP.first->setRuntimeExtensionFunctions(udfs, udtfs);
     clientP.second->close();
   } else {
     LOG(FATAL) << "Not routing to Calcite, server is not up";

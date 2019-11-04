@@ -111,12 +111,16 @@ std::vector<ssize_t> target_expr_proj_indices(const RelAlgExecutionUnit& ra_exe_
   return target_indices;
 }
 
-int8_t pick_baseline_key_component_width(const ExpressionRange& range) {
+int8_t pick_baseline_key_component_width(const ExpressionRange& range,
+                                         const size_t group_col_width) {
   if (range.getType() == ExpressionRangeType::Invalid) {
     return sizeof(int64_t);
   }
   switch (range.getType()) {
     case ExpressionRangeType::Integer:
+      if (group_col_width == sizeof(int64_t) && range.hasNulls()) {
+        return sizeof(int64_t);
+      }
       return range.getIntMax() < EMPTY_KEY_32 - 1 ? sizeof(int32_t) : sizeof(int64_t);
     case ExpressionRangeType::Float:
     case ExpressionRangeType::Double:
@@ -134,8 +138,9 @@ int8_t pick_baseline_key_width(const RelAlgExecutionUnit& ra_exe_unit,
   int8_t compact_width{4};
   for (const auto groupby_expr : ra_exe_unit.groupby_exprs) {
     const auto expr_range = getExpressionRange(groupby_expr.get(), query_infos, executor);
-    compact_width =
-        std::max(compact_width, pick_baseline_key_component_width(expr_range));
+    compact_width = std::max(compact_width,
+                             pick_baseline_key_component_width(
+                                 expr_range, groupby_expr->get_type_info().get_size()));
   }
   return compact_width;
 }
@@ -405,6 +410,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , output_columnar_(false)
     , render_output_(render_output)
     , must_use_baseline_sort_(must_use_baseline_sort)
+    , is_table_function_(false)
     , force_4byte_float_(false)
     , col_slot_context_(col_slot_context) {
   col_slot_context_.setAllUnsetSlotsPaddedSize(8);
@@ -481,11 +487,13 @@ QueryMemoryDescriptor::QueryMemoryDescriptor()
     , output_columnar_(false)
     , render_output_(false)
     , must_use_baseline_sort_(false)
+    , is_table_function_(false)
     , force_4byte_float_(false) {}
 
 QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
                                              const size_t entry_count,
-                                             const QueryDescriptionType query_desc_type)
+                                             const QueryDescriptionType query_desc_type,
+                                             const bool is_table_function)
     : executor_(executor)
     , allow_multifrag_(false)
     , query_desc_type_(query_desc_type)
@@ -503,6 +511,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , output_columnar_(false)
     , render_output_(false)
     , must_use_baseline_sort_(false)
+    , is_table_function_(is_table_function)
     , force_4byte_float_(false) {}
 
 QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_desc_type,
@@ -528,6 +537,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_de
     , output_columnar_(false)
     , render_output_(false)
     , must_use_baseline_sort_(false)
+    , is_table_function_(false)
     , force_4byte_float_(false) {}
 
 bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const {
@@ -610,6 +620,7 @@ std::unique_ptr<QueryExecutionContext> QueryMemoryDescriptor::getQueryExecutionC
     const bool output_columnar,
     const bool sort_on_gpu,
     RenderInfo* render_info) const {
+  auto timer = DEBUG_TIMER(__func__);
   if (frag_offsets.empty()) {
     return nullptr;
   }
@@ -982,7 +993,7 @@ bool QueryMemoryDescriptor::threadsShareMemory() const {
 }
 
 bool QueryMemoryDescriptor::blocksShareMemory() const {
-  if (g_cluster) {
+  if (g_cluster || is_table_function_) {
     return true;
   }
   if (!countDescriptorsLogicallyEmpty(count_distinct_descriptors_)) {

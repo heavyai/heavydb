@@ -184,11 +184,11 @@ void InsertOrderFragmenter::dropFragmentsToSize(const size_t maxRows) {
     vector<int> dropFragIds;
     size_t targetRows = maxRows * DROP_FRAGMENT_FACTOR;
     while (numTuples_ > targetRows) {
-      assert(fragmentInfoVec_.size() > 0);
+      CHECK_GT(fragmentInfoVec_.size(), size_t(0));
       size_t numFragTuples = fragmentInfoVec_[0].getPhysicalNumTuples();
       dropFragIds.push_back(fragmentInfoVec_[0].fragmentId);
       fragmentInfoVec_.pop_front();
-      assert(numTuples_ >= numFragTuples);
+      CHECK_GE(numTuples_, numFragTuples);
       numTuples_ -= numFragTuples;
     }
     deleteFragments(dropFragIds);
@@ -540,7 +540,7 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
     for (size_t i = 0; i < insertDataStruct.columnIds.size(); ++i) {
       int columnId = insertDataStruct.columnIds[i];
       auto colMapIt = columnMap_.find(columnId);
-      assert(colMapIt != columnMap_.end());
+      CHECK(colMapIt != columnMap_.end());
       currentFragment->shadowChunkMetadataMap[columnId] =
           colMapIt->second.appendData(dataCopy[i], numRowsToInsert, numRowsInserted);
       auto varLenColInfoIt = varLenColInfo_.find(columnId);

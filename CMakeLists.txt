@@ -36,8 +36,8 @@ set_property(CACHE MAPD_EDITION PROPERTY STRINGS "EE" "CE" "OS")
 add_definitions("-DMAPD_EDITION_${MAPD_EDITION}")
 string(TOLOWER "${MAPD_EDITION}" MAPD_EDITION_LOWER)
 
-set(MAPD_VERSION_MAJOR "4")
-set(MAPD_VERSION_MINOR "9")
+set(MAPD_VERSION_MAJOR "5")
+set(MAPD_VERSION_MINOR "1")
 set(MAPD_VERSION_PATCH "0")
 set(MAPD_VERSION_EXTRA "dev")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
@@ -80,6 +80,10 @@ if(PREFER_STATIC_LIBS)
 else()
   add_definitions("-DBOOST_LOG_DYN_LINK")
 endif()
+
+# Required for macOS with Boost 1.71.0+
+# See https://gitlab.kitware.com/cmake/cmake/issues/19714
+set(Boost_NO_BOOST_CMAKE 1)
 
 option(ENABLE_JAVA_REMOTE_DEBUG "Enable Java Remote Debug" OFF )
 if(ENABLE_JAVA_REMOTE_DEBUG)
@@ -191,7 +195,7 @@ if(APPLE OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
 else()
   message(FATAL_ERROR, "GCC v4.9 or clang v3.6 (or newer) is required")
 endif()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-local-typedefs -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8=1 -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-local-typedefs -fdiagnostics-color=auto -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8=1 -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
 endif()
@@ -376,6 +380,7 @@ endif()
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
+    DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
     OUTPUT
         ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/MapD.h
@@ -387,6 +392,7 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
@@ -401,7 +407,8 @@ add_library(mapd_thrift
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp)
+    ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp)
 
 target_compile_options(mapd_thrift PRIVATE -fPIC)
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
@@ -624,21 +631,7 @@ endif()
 # doxygen
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
-  configure_file(
-    ${CMAKE_SOURCE_DIR}/Doxyfile.in ${CMAKE_BINARY_DIR}/Doxyfile @ONLY)
-  add_custom_target(doxygen ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Generate API documentation with Doxygen"
-    VERBATIM
-    USES_TERMINAL
-  )
-  add_custom_target(doxygen_zip zip -r doxygen-${MAPD_GIT_HASH}.zip doxygen
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Generating .zip with API documentation from Doxygen"
-    VERBATIM
-    USES_TERMINAL
-  )
-  add_dependencies(doxygen_zip doxygen)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/docs/CMakeLists.txt)
 endif(DOXYGEN_FOUND)
 
 # Packaging

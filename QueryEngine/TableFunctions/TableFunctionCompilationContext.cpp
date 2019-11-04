@@ -24,6 +24,7 @@
 #include "QueryEngine/CodeGenerator.h"
 
 extern std::unique_ptr<llvm::Module> g_rt_module;
+extern std::unique_ptr<llvm::Module> rt_udf_cpu_module;
 
 namespace {
 
@@ -200,6 +201,17 @@ void TableFunctionCompilationContext::generateGpuKernel() {
 
 void TableFunctionCompilationContext::finalize(const CompilationOptions& co,
                                                Executor* executor) {
+  if (rt_udf_cpu_module != nullptr) {
+    /*
+      TODO 1: eliminate need for OverrideFromSrc
+      TODO 2: detect and link only the udf's that are needed
+     */
+    CodeGenerator::link_udf_module(rt_udf_cpu_module,
+                                   *module_,
+                                   cgen_state_.get(),
+                                   llvm::Linker::Flags::OverrideFromSrc);
+  }
+
   module_.release();
   // Add code to cache?
 

@@ -4,6 +4,7 @@ namespace py omnisci.mapd
 include "common.thrift"
 include "completion_hints.thrift"
 include "QueryEngine/serialized_result_set.thrift"
+include "QueryEngine/extension_functions.thrift"
 
 enum TExecuteMode {
   GPU = 1,
@@ -168,6 +169,8 @@ struct TCopyParams {
   20: bool sanitize_column_names=true
   21: string geo_layer_name
   22: string s3_endpoint
+  23: bool geo_assign_render_groups=true
+  24: bool geo_explode_collections=false
 }
 
 struct TCreateParams {
@@ -569,5 +572,5 @@ service MapD {
   TLicenseInfo get_license_claims(1: TSessionId session, 2: string nonce = "") throws (1: TMapDException e)
   # user-defined functions
   map<string, string> get_device_parameters(1: TSessionId session) throws (1: TMapDException e)
-  void register_runtime_udf(1: TSessionId session, 2: string signatures, 3: map<string, string> device_ir_map) throws (1: TMapDException e)
+  void register_runtime_extension_functions(1: TSessionId session, 2: list<extension_functions.TUserDefinedFunction> udfs, 3: list<extension_functions.TUserDefinedTableFunction> udtfs, 4: map<string, string> device_ir_map) throws (1: TMapDException e)
 }

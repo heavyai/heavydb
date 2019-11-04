@@ -1,0 +1,2 @@
+1,"field1","field2_part1,field2_part2",{"field1"|"field2_part1,field2_part2"}
+2,"""field1""","""field2_part1,field2_part2""",{"""field1"""|"""field2_part1,field2_part2"""}

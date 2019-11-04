@@ -276,8 +276,8 @@ std::vector<int64_t> init_agg_val_vec(
       if (query_mem_desc.getQueryDescriptionType() ==
               QueryDescriptionType::NonGroupedAggregate &&
           target.is_agg &&
-          (target.agg_kind == kMIN ||
-           target.agg_kind == kMAX)) {  // TODO(alex): fix SUM and AVG as well
+          (target.agg_kind == kMIN || target.agg_kind == kMAX ||
+           target.agg_kind == kSUM || target.agg_kind == kAVG)) {
         set_notnull(target, false);
       } else if (constrained_not_null(arg_expr, quals)) {
         set_notnull(target, true);

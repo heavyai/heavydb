@@ -57,9 +57,10 @@ SQLTypeInfo TableFunction::getOutputSQLType(const size_t idx) const {
 void TableFunctionsFactory::add(const std::string& name,
                                 const TableFunctionOutputRowSizer sizer,
                                 const std::vector<ExtArgumentType>& input_args,
-                                const std::vector<ExtArgumentType>& output_args) {
-  functions_.insert(
-      std::make_pair(name, TableFunction(name, sizer, input_args, output_args)));
+                                const std::vector<ExtArgumentType>& output_args,
+                                bool is_runtime) {
+  functions_.insert(std::make_pair(
+      name, TableFunction(name, sizer, input_args, output_args, is_runtime)));
 }
 
 std::once_flag init_flag;

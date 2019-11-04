@@ -96,7 +96,7 @@ void FileInfo::openExistingFile(std::vector<HeaderInfo>& headerVec,
       // headerSize doesn't include headerSize itself
       // We're tying ourself to headers of ints here
       size_t numHeaderElems = headerSize / sizeof(int);
-      assert(numHeaderElems >= 2);
+      CHECK_GE(numHeaderElems, size_t(2));
       // size_t chunkSize;
       // We don't want to read headerSize in our header - so start
       // reading 4 bytes past it

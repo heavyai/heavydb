@@ -25,6 +25,7 @@
 #define CALCITE_H
 
 #include "Shared/mapd_shared_ptr.h"
+#include "gen-cpp/extension_functions_types.h"
 
 #include <thrift/transport/TTransport.h>
 
@@ -86,8 +87,9 @@ class Calcite final {
   void updateMetadata(std::string catalog, std::string table);
   void close_calcite_server(bool log = true);
   ~Calcite();
-  std::string getRuntimeUserDefinedFunctionWhitelist();
-  void setRuntimeUserDefinedFunction(std::string udf_string);
+  std::string getRuntimeExtensionFunctionWhitelist();
+  void setRuntimeExtensionFunctions(const std::vector<TUserDefinedFunction>& udfs,
+                                    const std::vector<TUserDefinedTableFunction>& udtfs);
   std::string const getInternalSessionProxyUserName() { return kCalciteUserName; }
   std::string const getInternalSessionProxyPassword() { return kCalciteUserPassword; }
 

@@ -61,8 +61,6 @@ struct tuple_element<I, boost::tuples::cons<T, U>>
 namespace Catalog_Namespace {
 
 using cat_read_lock = read_lock<Catalog>;
-using cat_write_lock = write_lock<Catalog>;
-using cat_sqlite_lock = sqlite_lock<Catalog>;
 
 constexpr static char const* table_schema_filename = "_table.sql";
 constexpr static char const* table_oldinfo_filename = "_table.oldinfo";
@@ -99,9 +97,23 @@ inline std::string run(const std::string& cmd, const std::string& chdir = "") {
     LOG(ERROR) << "error code: " << ec.value() << " - " << ec.message();
     LOG(ERROR) << "stdout: " << output;
     LOG(ERROR) << "stderr: " << errors;
-    // circumvent tar warning on reading file that is "changed as we read it".
-    // this warning results from reading a table file under concurrent inserts
-    if (1 != rcode || errors.find("changed as we read") == std::string::npos) {
+#if defined(__APPLE__)
+    // osx bsdtar options "--use-compress-program" and "--fast-read" together
+    // run into pipe write error after tar extracts the first occurrence of a
+    // file and closes the read end while the decompression program still writes
+    // to the pipe. bsdtar doesn't handle this situation well like gnu tar does.
+    if (1 == rcode && cmd.find("--fast-read") &&
+        (errors.find("cannot write decoded block") != std::string::npos ||
+         errors.find("Broken pipe") != std::string::npos)) {
+      // ignore this error, or lose speed advantage of "--fast-read" on osx.
+      LOG(ERROR) << "tar error ignored on osx for --fast-read";
+    } else
+#endif
+        // circumvent tar warning on reading file that is "changed as we read it".
+        // this warning results from reading a table file under concurrent inserts
+        if (1 == rcode && errors.find("changed as we read") != std::string::npos) {
+      LOG(ERROR) << "tar error ignored under concurrent inserts";
+    } else {
       throw std::runtime_error("Failed to run command: " + cmd +
                                "\nexit code: " + std::to_string(rcode) + "\nerrors:\n" +
                                (rcode ? errors : ec.message()));
@@ -114,22 +126,26 @@ inline std::string run(const std::string& cmd, const std::string& chdir = "") {
   return output;
 }
 
-inline std::string simple_file_cat(const std::string& tgz_path,
-                                   const std::string& file_name) {
+inline std::string simple_file_cat(const std::string& archive_path,
+                                   const std::string& file_name,
+                                   const std::string& compression) {
 #if defined(__APPLE__)
   constexpr static auto opt_occurrence = " --fast-read ";
 #else
   constexpr static auto opt_occurrence = " --occurrence=1 ";
 #endif
-  run("tar -xvzf \"" + tgz_path + "\" " + opt_occurrence + file_name);
+  run("tar " + compression + " -xvf \"" + archive_path + "\" " + opt_occurrence +
+      file_name);
   const auto output = run("cat " + file_name);
   run("rm " + file_name);
   return output;
 }
 
-inline std::string get_table_schema(const std::string& tgz_path,
-                                    const std::string& table) {
-  const auto schema_str = simple_file_cat(tgz_path, table_schema_filename);
+inline std::string get_table_schema(const std::string& archive_path,
+                                    const std::string& table,
+                                    const std::string& compression) {
+  const auto schema_str =
+      simple_file_cat(archive_path, table_schema_filename, compression);
   std::regex regex("@T");
   return std::regex_replace(schema_str, regex, table);
 }
@@ -179,19 +195,18 @@ std::vector<std::string> Catalog::getTableDictDirectories(
 }
 
 // dump a table's schema, data files and dict files to a tgz ball
-void Catalog::dumpTable(const TableDescriptor* td, const std::string& tgz_path) const {
+void Catalog::dumpTable(const TableDescriptor* td,
+                        const std::string& archive_path,
+                        const std::string& compression) const {
   if (g_cluster) {
     throw std::runtime_error("DUMP/RESTORE is not supported yet on distributed setup.");
   }
-  if (boost::filesystem::exists(tgz_path)) {
-    throw std::runtime_error("Archive " + tgz_path + " already exists.");
+  if (boost::filesystem::exists(archive_path)) {
+    throw std::runtime_error("Archive " + archive_path + " already exists.");
   }
   if (td->isView || td->persistenceLevel != Data_Namespace::MemoryLevel::DISK_LEVEL) {
     throw std::runtime_error("Dumping view or temporary table is not supported.");
   }
-  // grab catalog read lock only. no need table read or checkpoint lock
-  // because want to allow concurrent inserts while this dump proceeds.
-  cat_read_lock read_lock(this);
   // collect paths of files to archive
   const auto global_file_mgr = getDataMgr().getGlobalFileMgr();
   std::vector<std::string> file_paths;
@@ -211,32 +226,44 @@ void Catalog::dumpTable(const TableDescriptor* td, const std::string& tgz_path) 
     }
     file_paths.push_back(file_name);
   };
-  // - gen schema file
-  const auto schema_str = dumpSchema(td);
-  file_writer(table_schema_filename, "table schema", schema_str);
-  // - gen column-old-info file
-  const auto cds = getAllColumnMetadataForTable(td->tableId, true, true, true);
-  std::vector<std::string> column_oldinfo;
-  std::transform(cds.begin(),
-                 cds.end(),
-                 std::back_inserter(column_oldinfo),
-                 [this](const auto cd) -> std::string {
-                   return cd->columnName + ":" + std::to_string(cd->columnId) + ":" +
-                          getColumnDictDirectory(cd);
-                 });
-  const auto column_oldinfo_str = boost::algorithm::join(column_oldinfo, " ");
-  file_writer(table_oldinfo_filename, "table old info", column_oldinfo_str);
-  // - gen table epoch
-  const auto epoch = getTableEpoch(currentDB_.dbId, td->tableId);
-  file_writer(table_epoch_filename, "table epoch", std::to_string(epoch));
-  // - collect table data file paths ...
-  const auto data_file_dirs = getTableDataDirectories(td);
-  file_paths.insert(file_paths.end(), data_file_dirs.begin(), data_file_dirs.end());
-  // - collect table dict file paths ...
-  const auto dict_file_dirs = getTableDictDirectories(td);
-  file_paths.insert(file_paths.end(), dict_file_dirs.begin(), dict_file_dirs.end());
-  // run tar to archive the files
-  run("tar -cvzf \"" + tgz_path + "\" " + boost::algorithm::join(file_paths, " "),
+  // grab table read lock for concurrent SELECT (but would block capped COPY or INSERT)
+  auto table_read_lock =
+      Lock_Namespace::TableLockMgr::getReadLockForTable(*this, td->tableName);
+
+  // grab catalog read lock only. no need table read or checkpoint lock
+  // because want to allow concurrent inserts while this dump proceeds.
+  const auto table_name = td->tableName;
+  {
+    cat_read_lock read_lock(this);
+    // - gen schema file
+    const auto schema_str = dumpSchema(td);
+    file_writer(table_schema_filename, "table schema", schema_str);
+    // - gen column-old-info file
+    const auto cds = getAllColumnMetadataForTable(td->tableId, true, true, true);
+    std::vector<std::string> column_oldinfo;
+    std::transform(cds.begin(),
+                   cds.end(),
+                   std::back_inserter(column_oldinfo),
+                   [&](const auto cd) -> std::string {
+                     return cd->columnName + ":" + std::to_string(cd->columnId) + ":" +
+                            getColumnDictDirectory(cd);
+                   });
+    const auto column_oldinfo_str = boost::algorithm::join(column_oldinfo, " ");
+    file_writer(table_oldinfo_filename, "table old info", column_oldinfo_str);
+    // - gen table epoch
+    const auto epoch = getTableEpoch(currentDB_.dbId, td->tableId);
+    file_writer(table_epoch_filename, "table epoch", std::to_string(epoch));
+    // - collect table data file paths ...
+    const auto data_file_dirs = getTableDataDirectories(td);
+    file_paths.insert(file_paths.end(), data_file_dirs.begin(), data_file_dirs.end());
+    // - collect table dict file paths ...
+    const auto dict_file_dirs = getTableDictDirectories(td);
+    file_paths.insert(file_paths.end(), dict_file_dirs.begin(), dict_file_dirs.end());
+    // tar takes time. release cat lock to yield the cat to concurrent CREATE statements.
+  }
+  // run tar to archive the files ... this may take a while !!
+  run("tar " + compression + " -cvf \"" + archive_path + "\" " +
+          boost::algorithm::join(file_paths, " "),
       abs_path(global_file_mgr));
 }
 
@@ -253,7 +280,16 @@ std::string Catalog::dumpSchema(const TableDescriptor* td) const {
     if (!(cd->isSystemCol || cd->isVirtualCol)) {
       const auto& ti = cd->columnType;
       os << comma << cd->columnName;
-      os << " " << ti.get_type_name();
+      // CHAR is perculiar... better dump it as TEXT(32) like \d does
+      if (ti.get_type() == SQLTypes::kCHAR) {
+        os << " "
+           << "TEXT";
+      } else if (ti.get_subtype() == SQLTypes::kCHAR) {
+        os << " "
+           << "TEXT[]";
+      } else {
+        os << " " << ti.get_type_name();
+      }
       os << (ti.get_notnull() ? " NOT NULL" : "");
       if (ti.is_string()) {
         if (ti.get_compression() == kENCODING_DICT) {
@@ -406,12 +442,13 @@ void Catalog::renameTableDirectories(const std::string& temp_data_dir,
 // Restore data and dict files of a table from a tgz ball.
 void Catalog::restoreTable(const SessionInfo& session,
                            const TableDescriptor* td,
-                           const std::string& tgz_path) {
+                           const std::string& archive_path,
+                           const std::string& compression) {
   if (g_cluster) {
     throw std::runtime_error("DUMP/RESTORE is not supported yet on distributed setup.");
   }
-  if (!boost::filesystem::exists(tgz_path)) {
-    throw std::runtime_error("Archive " + tgz_path + " does not exist.");
+  if (!boost::filesystem::exists(archive_path)) {
+    throw std::runtime_error("Archive " + archive_path + " does not exist.");
   }
   if (td->isView || td->persistenceLevel != Data_Namespace::MemoryLevel::DISK_LEVEL) {
     throw std::runtime_error("Restoring view or temporary table is not supported.");
@@ -421,11 +458,10 @@ void Catalog::restoreTable(const SessionInfo& session,
   auto checkpoint_lock =
       Lock_Namespace::getTableLock<mapd_shared_mutex, mapd_unique_lock>(
           *this, td->tableName, Lock_Namespace::LockType::CheckpointLock);
-  // grab table checkpoint lock before catalog lock, or may deadlock!
-  std::vector<Lock_Namespace::TableLock> table_locks;
-  std::map<std::string, bool> table_names{{td->tableName, true}};
-  Lock_Namespace::TableLockMgr::getTableLocks(*this, table_names, table_locks);
-  cat_read_lock read_lock(this);
+  // grab table read lock for concurrent SELECT
+  auto table_read_lock =
+      Lock_Namespace::TableLockMgr::getReadLockForTable(*this, td->tableName);
+  // untar takes time. no grab of cat lock to yield to concurrent CREATE stmts.
   const auto global_file_mgr = getDataMgr().getGlobalFileMgr();
   // dirs where src files are untarred and dst files are backed up
   constexpr static const auto temp_data_basename = "_data";
@@ -442,7 +478,7 @@ void Catalog::restoreTable(const SessionInfo& session,
   std::unique_ptr<decltype(tmp_files_cleaner), decltype(tmp_files_cleaner)> tfc(
       &tmp_files_cleaner, tmp_files_cleaner);
   // extract & parse schema
-  const auto schema_str = get_table_schema(tgz_path, td->tableName);
+  const auto schema_str = get_table_schema(archive_path, td->tableName, compression);
   const auto create_table_stmt =
       Parser::parseDDL<Parser::CreateTableStmt>("table schema", schema_str);
   // verify compatibility between source and destination schemas
@@ -474,7 +510,8 @@ void Catalog::restoreTable(const SessionInfo& session,
     }
   }
   // extract src table column ids (ALL columns incl. system/virtual/phy geo cols)
-  const auto all_src_oldinfo_str = simple_file_cat(tgz_path, table_oldinfo_filename);
+  const auto all_src_oldinfo_str =
+      simple_file_cat(archive_path, table_oldinfo_filename, compression);
   std::vector<std::string> src_oldinfo_strs;
   boost::algorithm::split(src_oldinfo_strs,
                           all_src_oldinfo_str,
@@ -530,7 +567,7 @@ void Catalog::restoreTable(const SessionInfo& session,
   // otherwise will corrupt table in case any bad thing happens in the middle.
   run("rm -rf " + temp_data_dir);
   run("mkdir -p " + temp_data_dir);
-  run("tar -xvzf \"" + tgz_path + "\"", temp_data_dir);
+  run("tar " + compression + " -xvf \"" + archive_path + "\"", temp_data_dir);
   // if table was ever altered after it was created, update column ids in chunk headers.
   if (was_table_altered) {
     const auto time_ms = measure<>::execution(
@@ -548,6 +585,8 @@ void Catalog::restoreTable(const SessionInfo& session,
              dict_file_dirs.end(),
              std::back_inserter(both_file_dirs));
   bool backup_completed = false;
+  // protect table schema and quickly swap table files
+  cat_read_lock read_lock(this);
   try {
     run("rm -rf " + temp_back_dir);
     run("mkdir -p " + temp_back_dir);
@@ -588,7 +627,7 @@ void Catalog::restoreTable(const SessionInfo& session,
     throw;
   }
   // set for reloading table from the restored/migrated files
-  const auto epoch = simple_file_cat(tgz_path, table_epoch_filename);
+  const auto epoch = simple_file_cat(archive_path, table_epoch_filename, compression);
   setTableEpoch(currentDB_.dbId, td->tableId, boost::lexical_cast<int>(epoch));
 }
 
@@ -596,14 +635,16 @@ void Catalog::restoreTable(const SessionInfo& session,
 // This actually creates the table and restores data/dict files from the tar ball.
 void Catalog::restoreTable(const SessionInfo& session,
                            const std::string& table_name,
-                           const std::string& tgz_path) {
+                           const std::string& archive_path,
+                           const std::string& compression) {
   // replace table name and drop foreign dict references
-  const auto schema_str = get_table_schema(tgz_path, table_name);
+  const auto schema_str = get_table_schema(archive_path, table_name, compression);
   Parser::parseDDL<Parser::CreateTableStmt>("table schema", schema_str)->execute(session);
   try {
-    restoreTable(session, getMetadataForTable(table_name), tgz_path);
+    restoreTable(session, getMetadataForTable(table_name), archive_path, compression);
   } catch (...) {
-    Parser::parseDDL<Parser::DropTableStmt>("statement", "DROP TABLE " + table_name + ";")
+    Parser::parseDDL<Parser::DropTableStmt>("statement",
+                                            "DROP TABLE IF EXISTS " + table_name + ";")
         ->execute(session);
     throw;
   }

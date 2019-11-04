@@ -202,3 +202,11 @@ highlight_language = 'cpp'
 
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = True
+
+# Javascript files to include
+html_js_files=[
+#                'segment_analytics.js'
+              ]
+
+# Favicon
+html_favicon = "img/favicon.webp"

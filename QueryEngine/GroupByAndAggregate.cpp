@@ -375,9 +375,13 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                    col_range_info_nosharding.has_nulls};
 
   // Non-grouped aggregates do not support accessing aggregated ranges
-  const auto keyless_info = !is_group_by
-                                ? KeylessInfo{false, -1, false}
-                                : getKeylessInfo(ra_exe_unit_.target_exprs, is_group_by);
+  // Keyless hash is currently only supported with single-column perfect hash
+  const auto keyless_info =
+      !(is_group_by &&
+        col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
+        ra_exe_unit_.groupby_exprs.size() == 1)
+          ? KeylessInfo{false, -1, false}
+          : getKeylessInfo(ra_exe_unit_.target_exprs, is_group_by);
 
   if (g_enable_watchdog &&
       ((col_range_info.hash_type_ == QueryDescriptionType::GroupByBaselineHash &&
@@ -636,10 +640,6 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
           break;
         case kCOUNT:
           if (arg_expr && !arg_expr->get_type_info().get_notnull()) {
-            const auto& arg_ti = arg_expr->get_type_info();
-            if (arg_ti.is_string() && arg_ti.get_compression() == kENCODING_NONE) {
-              break;
-            }
             auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
             if (expr_range_info.getType() == ExpressionRangeType::Invalid ||
                 expr_range_info.hasNulls()) {

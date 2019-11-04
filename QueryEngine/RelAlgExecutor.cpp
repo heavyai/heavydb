@@ -67,6 +67,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
                                                    const CompilationOptions& co,
                                                    const ExecutionOptions& eo,
                                                    RenderInfo* render_info) {
+  auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(executeRelAlgQuery);
   try {
     return executeRelAlgQueryNoRetry(query_ra, co, eo, render_info);
@@ -1057,6 +1058,18 @@ bool is_count_distinct(const Analyzer::Expr* expr) {
   return agg_expr && agg_expr->get_is_distinct();
 }
 
+bool is_agg(const Analyzer::Expr* expr) {
+  const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(expr);
+  if (agg_expr && agg_expr->get_contains_agg()) {
+    auto agg_type = agg_expr->get_aggtype();
+    if (agg_type == SQLAgg::kMIN || agg_type == SQLAgg::kMAX ||
+        agg_type == SQLAgg::kSUM || agg_type == SQLAgg::kAVG) {
+      return true;
+    }
+  }
+  return false;
+}
+
 std::vector<TargetMetaInfo> get_modify_manipulated_targets_meta(
     ModifyManipulationTarget const* manip_node,
     const std::vector<Analyzer::Expr*>& target_exprs) {
@@ -1086,7 +1099,9 @@ std::vector<TargetMetaInfo> get_targets_meta(
         ra_node->getFieldName(i),
         is_count_distinct(target_exprs[i])
             ? SQLTypeInfo(kBIGINT, false)
-            : get_logical_type_info(target_exprs[i]->get_type_info()),
+            : is_agg(target_exprs[i])
+                  ? get_nullable_logical_type_info(target_exprs[i]->get_type_info())
+                  : get_logical_type_info(target_exprs[i]->get_type_info()),
         target_exprs[i]->get_type_info());
   }
   return targets_meta;
@@ -1544,8 +1559,10 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
   if (eo.just_explain) {
     throw std::runtime_error("EXPLAIN not supported for LogicalValues");
   }
-  QueryMemoryDescriptor query_mem_desc(
-      executor_, 1, QueryDescriptionType::NonGroupedAggregate);
+  QueryMemoryDescriptor query_mem_desc(executor_,
+                                       1,
+                                       QueryDescriptionType::NonGroupedAggregate,
+                                       /*is_table_function=*/false);
 
   const auto& tuple_type = logical_values->getTupleType();
   for (size_t i = 0; i < tuple_type.size(); ++i) {
@@ -1918,6 +1935,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     const int64_t queue_time_ms,
     const ssize_t previous_count) {
   INJECT_TIMER(executeWorkUnit);
+  auto timer = DEBUG_TIMER(__func__);
 
   auto co = co_in;
   ColumnCacheMap column_cache;
