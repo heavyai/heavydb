@@ -37,7 +37,7 @@ OmniSci provides pre-built binaries for Linux for stable releases of the project
 
 - [Developer Documentation](https://omnisci.github.io/omniscidb/)
 - [Doxygen-generated Documentation](http://doxygen.omnisci.com/)
-- [Produc Documentation](https://docs.omnisci.com/latest/)
+- [Product Documentation](https://docs.omnisci.com/latest/)
 - [Release Notes](https://docs.omnisci.com/latest/7_0_release.html)
 - [Community Forum](https://community.omnisci.com)
 - [OmniSci Homepage](https://www.omnisci.com)
