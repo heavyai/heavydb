@@ -12,10 +12,10 @@ OmniSci provides pre-built binaries for Linux for stable releases of the project
 
 | Distro | Package type | CPU/GPU | Link | Docs |
 | --- | --- | --- | --- | --- |
-| CentOS | RPM | CPU | https://releases.omnisci.com/os/yum/stable/cpu | https://www.omnisci.com/docs/latest/4_centos7-yum-cpu-os-recipe.html |
-| CentOS | RPM | GPU | https://releases.omnisci.com/os/yum/stable/cuda | https://www.omnisci.com/docs/latest/4_centos7-yum-gpu-os-recipe.html |
-| Ubuntu | DEB | CPU | deb https://releases.omnisci.com/os/apt/ stable cpu | https://www.omnisci.com/docs/latest/4_ubuntu-apt-cpu-os-recipe.html |
-| Ubuntu | DEB | GPU | deb https://releases.omnisci.com/os/apt/ stable cuda | https://www.omnisci.com/docs/latest/4_ubuntu-apt-gpu-os-recipe.html |
+| CentOS | RPM | CPU | https://releases.omnisci.com/os/yum/stable/cpu | https://docs.omnisci.com/latest/4_centos7-yum-cpu-os-recipe.html |
+| CentOS | RPM | GPU | https://releases.omnisci.com/os/yum/stable/cuda | https://docs.omnisci.com/latest/4_centos7-yum-gpu-os-recipe.html |
+| Ubuntu | DEB | CPU | deb https://releases.omnisci.com/os/apt/ stable cpu | https://docs.omnisci.com/latest/4_ubuntu-apt-cpu-os-recipe.html |
+| Ubuntu | DEB | GPU | deb https://releases.omnisci.com/os/apt/ stable cuda | https://docs.omnisci.com/latest/4_ubuntu-apt-gpu-os-recipe.html |
 | * | tarball | CPU | https://releases.omnisci.com/os/tar/omnisci-os-latest-Linux-x86_64-cpu.tar.gz |  |
 | * | tarball | GPU | https://releases.omnisci.com/os/tar/omnisci-os-latest-Linux-x86_64-cuda.tar.gz |  |
 
@@ -35,13 +35,14 @@ OmniSci provides pre-built binaries for Linux for stable releases of the project
 
 # Links
 
-- [Documentation](https://www.omnisci.com/docs/latest/)
-- [Release Notes](https://www.omnisci.com/docs/latest/7_0_release.html)
+- [Developer Documentation](https://omnisci.github.io/omniscidb/)
+- [Doxygen-generated Documentation](http://doxygen.omnisci.com/)
+- [Produc Documentation](https://docs.omnisci.com/latest/)
+- [Release Notes](https://docs.omnisci.com/latest/7_0_release.html)
 - [Community Forum](https://community.omnisci.com)
 - [OmniSci Homepage](https://www.omnisci.com)
 - [OmniSci Blog](https://www.omnisci.com/blog/)
 - [OmniSci Downloads](https://www.omnisci.com/platform/downloads/)
-- [Doxygen-generated documentation](http://doxygen.omnisci.com/)
 
 # License
 
