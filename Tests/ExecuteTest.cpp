@@ -15649,6 +15649,20 @@ TEST(Select, EmptyString) {
 TEST(Select, MultiStepColumnarization) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    {
+      std::string query(
+          "SELECT T.x, MAX(T.y) FROM(SELECT x, log10(SUM(f)) as y FROM test GROUP BY x) "
+          "as T "
+          "GROUP BY T.x ORDER BY T.x;");
+      const auto result = run_multiple_agg(query, dt);
+      const auto first_row = result->getNextRow(true, true);
+      ASSERT_EQ(size_t(2), first_row.size());
+      ASSERT_EQ(int64_t(7), v<int64_t>(first_row[0]));
+      ASSERT_FLOAT_EQ(double(1.243038177490234), v<double>(first_row[1]));
+      const auto second_row = result->getNextRow(true, true);
+      ASSERT_EQ(int64_t(8), v<int64_t>(second_row[0]));
+      ASSERT_FLOAT_EQ(double(0.778151273727417), v<double>(second_row[1]));
+    }
     // single-column perfect hash, columnarization, and then a projection
     c("SELECT id, SUM(big_int) / SUM(float_not_null), MAX(small_int) / MAX(tiny_int), "
       "MIN(tiny_int) + MIN(small_int) FROM logical_size_test GROUP BY id ORDER BY id;",
