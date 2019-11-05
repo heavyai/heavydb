@@ -45,6 +45,8 @@ class UdfCompiler {
   void replaceExtn(std::string& s, const std::string& new_ext);
   int compileFromCommandLine(std::vector<const char*>& command_line);
   void readCompiledModules();
+  void readGpuCompiledModule();
+  void readCpuCompiledModule();
   int compileForGpu();
 
  private:
