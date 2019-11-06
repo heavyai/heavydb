@@ -12410,6 +12410,46 @@ TEST(Delete, JoinCacheInvalidationTest) {
   }
 }
 
+TEST(Delete, ScanLimitOptimization) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
+    return;
+  }
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("DROP TABLE IF EXISTS test_scan_limit;");
+    run_ddl_statement(
+        "CREATE TABLE test_scan_limit ( i int ) WITH (vacuum='delayed', "
+        "fragment_size=2)");
+    ScopeGuard drop_table = [] { run_ddl_statement("DROP TABLE test_scan_limit;"); };
+
+    run_multiple_agg("INSERT INTO test_scan_limit VALUES (0);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO test_scan_limit VALUES (1);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO test_scan_limit VALUES (2);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO test_scan_limit VALUES (3);", ExecutorDeviceType::CPU);
+
+    auto select_with_limit = [&dt](const size_t limit) {
+      std::string limit_str = "";
+      if (limit > 0) {
+        limit_str = "LIMIT " + std::to_string(limit);
+      }
+      const auto result =
+          run_multiple_agg("SELECT * FROM test_scan_limit " + limit_str, dt);
+      return result->rowCount();
+    };
+
+    ASSERT_EQ(size_t(4), select_with_limit(0));
+    ASSERT_EQ(size_t(2), select_with_limit(2));
+
+    run_multiple_agg("DELETE FROM test_scan_limit WHERE i < 2;", dt);
+
+    ASSERT_EQ(size_t(2), select_with_limit(0));
+    ASSERT_EQ(size_t(2), select_with_limit(3));
+    ASSERT_EQ(size_t(2), select_with_limit(2));
+    ASSERT_EQ(size_t(1), select_with_limit(1));
+  }
+}
+
 TEST(Delete, IntraFragment) {
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;

@@ -77,6 +77,19 @@ void QueryFragmentDescriptor::buildFragmentKernelMap(
   }
 }
 
+namespace {
+std::optional<size_t> compute_fragment_tuple_count(
+    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const ColumnDescriptor* deleted_cd) {
+  if (deleted_cd) {
+    return std::nullopt;
+  } else {
+    return fragment.getNumTuples();
+  }
+}
+
+}  // namespace
+
 void QueryFragmentDescriptor::buildFragmentPerKernelMap(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
@@ -91,6 +104,16 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
   outer_fragments_size_ = outer_fragments->size();
 
   const auto num_bytes_for_row = executor->getNumBytesForFetchedRow();
+
+  const ColumnDescriptor* deleted_cd{nullptr};
+  if (outer_table_id > 0) {
+    // Temporary tables will not have a table descriptor, but will also not have deleted
+    // rows.
+    const auto& catalog = executor->getCatalog();
+    const auto td = catalog->getMetadataForTable(outer_table_id);
+    CHECK(td);
+    deleted_cd = catalog->getDeletedColumnIfRowsDeleted(td);
+  }
 
   for (size_t i = 0; i < outer_fragments->size(); ++i) {
     const auto& fragment = (*outer_fragments)[i];
@@ -114,7 +137,8 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
       checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
     }
 
-    ExecutionKernel execution_kernel{device_id, {}, fragment.getNumTuples()};
+    ExecutionKernel execution_kernel{
+        device_id, {}, compute_fragment_tuple_count(fragment, deleted_cd)};
     for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
       const auto frag_ids =
           executor->getTableFragmentIndices(ra_exe_unit,
@@ -246,13 +270,19 @@ bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
 }  // namespace
 
 bool QueryFragmentDescriptor::terminateDispatchMaybe(
+    size_t& tuple_count,
     const RelAlgExecutionUnit& ra_exe_unit,
     const ExecutionKernel& kernel) const {
   const auto sample_query_limit =
       ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
-  if (is_sample_query(ra_exe_unit) && sample_query_limit > 0 &&
-      kernel.outer_tuple_count && *kernel.outer_tuple_count >= sample_query_limit) {
-    return true;
+  if (!kernel.outer_tuple_count) {
+    return false;
+  } else {
+    tuple_count += *kernel.outer_tuple_count;
+    if (is_sample_query(ra_exe_unit) && sample_query_limit > 0 &&
+        tuple_count >= sample_query_limit) {
+      return true;
+    }
   }
   return false;
 }
