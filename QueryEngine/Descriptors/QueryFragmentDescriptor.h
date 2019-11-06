@@ -26,6 +26,7 @@
 #include <deque>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <vector>
 
@@ -52,6 +53,12 @@ struct FragmentsPerTable {
 using FragmentsList = std::vector<FragmentsPerTable>;
 using TableFragments = std::deque<Fragmenter_Namespace::FragmentInfo>;
 
+struct ExecutionKernel {
+  int device_id;
+  FragmentsList fragments;
+  std::optional<size_t> outer_tuple_count;
+};
+
 class QueryFragmentDescriptor {
  public:
   QueryFragmentDescriptor(const RelAlgExecutionUnit& ra_exe_unit,
@@ -74,26 +81,23 @@ class QueryFragmentDescriptor {
 
   template <typename DISPATCH_FCN>
   void assignFragsToMultiDispatch(DISPATCH_FCN f) const {
-    for (const auto& kv : kernels_per_device_) {
-      CHECK_EQ(kv.second.size(), size_t(1));
-      const auto kernel_id = *kv.second.begin();
-      CHECK_LT(kernel_id, fragments_per_kernel_.size());
+    for (const auto& device_itr : execution_kernels_per_device_) {
+      const auto& execution_kernels = device_itr.second;
+      CHECK_EQ(execution_kernels.size(), size_t(1));
 
-      f(kv.first, fragments_per_kernel_[kernel_id], rowid_lookup_key_);
+      const auto& fragments_list = execution_kernels.front().fragments;
+      f(device_itr.first, fragments_list, rowid_lookup_key_);
     }
   }
 
   template <typename DISPATCH_FCN>
   void assignFragsToKernelDispatch(DISPATCH_FCN f,
                                    const RelAlgExecutionUnit& ra_exe_unit) const {
-    for (const auto& kv : kernels_per_device_) {
-      for (const auto& kernel_id : kv.second) {
-        CHECK_LT(kernel_id, fragments_per_kernel_.size());
+    for (const auto& device_itr : execution_kernels_per_device_) {
+      for (const auto& execution_kernel : device_itr.second) {
+        f(device_itr.first, execution_kernel.fragments, rowid_lookup_key_);
 
-        const auto frag_list = fragments_per_kernel_[kernel_id];
-        f(kv.first, frag_list, rowid_lookup_key_);
-
-        if (terminateDispatchMaybe(ra_exe_unit, kernel_id)) {
+        if (terminateDispatchMaybe(ra_exe_unit, execution_kernel)) {
           return;
         }
       }
@@ -101,7 +105,7 @@ class QueryFragmentDescriptor {
   }
 
   bool shouldCheckWorkUnitWatchdog() const {
-    return rowid_lookup_key_ < 0 && fragments_per_kernel_.size() > 0;
+    return rowid_lookup_key_ < 0 && !execution_kernels_per_device_.empty();
   }
 
  protected:
@@ -110,9 +114,7 @@ class QueryFragmentDescriptor {
 
   std::map<int, const TableFragments*> selected_tables_fragments_;
 
-  std::vector<FragmentsList> fragments_per_kernel_;
-  std::map<int, std::set<size_t>> kernels_per_device_;
-  std::vector<size_t> outer_fragment_tuple_sizes_;
+  std::map<int, std::vector<ExecutionKernel>> execution_kernels_per_device_;
 
   double gpu_input_mem_limit_percent_;
   std::map<size_t, size_t> tuple_count_per_device_;
@@ -131,16 +133,8 @@ class QueryFragmentDescriptor {
                                const bool enable_inner_join_fragment_skipping,
                                Executor* executor);
 
-  const size_t getOuterFragmentTupleSize(const size_t frag_index) const {
-    if (frag_index < outer_fragment_tuple_sizes_.size()) {
-      return outer_fragment_tuple_sizes_[frag_index];
-    } else {
-      return 0;
-    }
-  }
-
   bool terminateDispatchMaybe(const RelAlgExecutionUnit& ra_exe_unit,
-                              const size_t kernel_id) const;
+                              const ExecutionKernel& kernel) const;
 
   void checkDeviceMemoryUsage(const Fragmenter_Namespace::FragmentInfo& fragment,
                               const int device_id,
