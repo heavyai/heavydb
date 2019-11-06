@@ -1145,8 +1145,9 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
     // run warm up queries if any exists
     run_warmup_queries(
         g_mapd_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
-    if (prog_config_opts.exit_after_warmup)
+    if (prog_config_opts.exit_after_warmup) {
       g_running = false;
+    }
 
     mapd::shared_ptr<TServerTransport> httpServerTransport(httpServerSocket);
     mapd::shared_ptr<TTransportFactory> httpTransportFactory(
