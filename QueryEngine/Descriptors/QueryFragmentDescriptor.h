@@ -28,6 +28,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 #include "../CompilationOptions.h"
@@ -56,7 +57,8 @@ using TableFragments = std::deque<Fragmenter_Namespace::FragmentInfo>;
 struct ExecutionKernel {
   int device_id;
   FragmentsList fragments;
-  std::optional<size_t> outer_tuple_count;
+  std::optional<size_t> outer_tuple_count;  // only for fragments with an exact tuple
+                                            // count available in metadata
 };
 
 class QueryFragmentDescriptor {
@@ -79,6 +81,10 @@ class QueryFragmentDescriptor {
                               const bool enable_inner_join_fragment_skipping,
                               Executor* executor);
 
+  /**
+   * Dispatch multi-fragment kernels. Currently GPU only. Each GPU should have only one
+   * kernel, with multiple fragments in its fragments list.
+   */
   template <typename DISPATCH_FCN>
   void assignFragsToMultiDispatch(DISPATCH_FCN f) const {
     for (const auto& device_itr : execution_kernels_per_device_) {
@@ -90,15 +96,41 @@ class QueryFragmentDescriptor {
     }
   }
 
+  /**
+   * Dispatch one fragment for each device. Iterate the device map and dispatch one kernel
+   * for each device per iteration. This allows balanced dispatch as well as early
+   * termination if the number of rows passing the kernel can be computed at dispatch time
+   * and the scan limit is reached.
+   */
   template <typename DISPATCH_FCN>
   void assignFragsToKernelDispatch(DISPATCH_FCN f,
                                    const RelAlgExecutionUnit& ra_exe_unit) const {
-    for (const auto& device_itr : execution_kernels_per_device_) {
-      for (const auto& execution_kernel : device_itr.second) {
-        f(device_itr.first, execution_kernel.fragments, rowid_lookup_key_);
+    if (execution_kernels_per_device_.empty()) {
+      return;
+    }
 
-        if (terminateDispatchMaybe(ra_exe_unit, execution_kernel)) {
-          return;
+    size_t tuple_count = 0;
+
+    std::unordered_map<int, size_t> execution_kernel_index;
+    for (const auto& device_itr : execution_kernels_per_device_) {
+      CHECK(execution_kernel_index.insert(std::make_pair(device_itr.first, size_t(0)))
+                .second);
+    }
+
+    bool dispatch_finished = false;
+    while (!dispatch_finished) {
+      for (const auto& device_itr : execution_kernels_per_device_) {
+        auto& kernel_idx = execution_kernel_index[device_itr.first];
+
+        dispatch_finished = true;
+        if (kernel_idx < device_itr.second.size()) {
+          dispatch_finished = false;
+          const auto& execution_kernel = device_itr.second[kernel_idx++];
+          f(device_itr.first, execution_kernel.fragments, rowid_lookup_key_);
+
+          if (terminateDispatchMaybe(tuple_count, ra_exe_unit, execution_kernel)) {
+            return;
+          }
         }
       }
     }
@@ -133,7 +165,8 @@ class QueryFragmentDescriptor {
                                const bool enable_inner_join_fragment_skipping,
                                Executor* executor);
 
-  bool terminateDispatchMaybe(const RelAlgExecutionUnit& ra_exe_unit,
+  bool terminateDispatchMaybe(size_t& tuple_count,
+                              const RelAlgExecutionUnit& ra_exe_unit,
                               const ExecutionKernel& kernel) const;
 
   void checkDeviceMemoryUsage(const Fragmenter_Namespace::FragmentInfo& fragment,
