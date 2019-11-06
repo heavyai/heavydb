@@ -552,9 +552,7 @@ public class SQLImporter {
         sb.append(metaData.getColumnName(i)).append(" ");
         int col_type = metaData.getColumnType(i);
         if (col_type == java.sql.Types.OTHER) {
-          sb.append(vendor_types.find_gis_type(otherdb_conn,
-                  metaData.getColumnName(i),
-                  metaData.getColumnTypeName(i)));
+          sb.append(vendor_types.find_gis_type(otherdb_conn, metaData, i));
         } else {
           sb.append(getColType(metaData.getColumnType(i),
                   metaData.getPrecision(i),
