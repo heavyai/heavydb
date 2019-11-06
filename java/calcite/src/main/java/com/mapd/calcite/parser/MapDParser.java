@@ -218,10 +218,8 @@ public final class MapDParser {
           // only expand if it is correlated.
 
           if (expression.isA(EXISTS)) {
-            if (expression instanceof SqlCall) {
-              SqlCall call = (SqlCall) expression;
-              expression = call.getOperandList().get(0);
-            }
+            // always expand subquery by EXISTS clause
+            return true;
           }
 
           if (isCorrelated(expression)) {
