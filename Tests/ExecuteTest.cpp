@@ -13095,7 +13095,7 @@ TEST(Delete, Joins_ImplicitJoins) {
   }
 }
 
-TEST(Select, DISABLED_Exists) {
+TEST(Select, NonCorrelated_Exists) {
   // this test is disabled since non-correlated exists
   // is currently not supported in our engine
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
