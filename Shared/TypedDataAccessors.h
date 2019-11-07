@@ -122,11 +122,11 @@ inline bool set_string_index(void* ptr, const SQLTypeInfo& etype, int32_t sidx) 
   }
 }
 
-template <typename T>
+template <typename T, typename U>
 static void put_scalar(void* ndptr,
                        const SQLTypeInfo& etype,
                        const int esize,
-                       const T oval) {
+                       const U oval) {
   // round floating oval to nearest integer
   auto rval = oval;
   if (std::is_floating_point<T>::value) {
@@ -185,10 +185,10 @@ inline double decimal_to_double(const SQLTypeInfo& otype, int64_t oval) {
   return oval / pow(10, otype.get_scale());
 }
 
-template <typename T>
+template <typename T, typename U>
 inline void put_scalar(void* ndptr,
                        const SQLTypeInfo& ntype,
-                       const T oval,
+                       const U oval,
                        const std::string col_name,
                        const SQLTypeInfo* otype = nullptr) {
   const auto& etype = ntype.is_array() ? SQLTypeInfo(ntype.get_subtype(),
