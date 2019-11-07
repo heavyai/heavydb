@@ -220,9 +220,10 @@ WORK          TOK(WORK)
 
 <STATE_CREATE_AS>(.|\n|\r)+/[;] {
     int len = yyleng;
-    const std::string keyword = "with";
     std::string tmp(yytext, len);
-    if (boost::algorithm::ifind_first(tmp, keyword)) {
+    boost::regex keyword{"\\swith", boost::regex::icase};
+    boost::smatch what;
+    if (boost::regex_search(tmp, what, keyword)) {
       REJECT;
     } else {
       yylval.stringval = new std::string(yytext, len);
@@ -234,9 +235,10 @@ WORK          TOK(WORK)
 
 <STATE_INSERT_INTO>[( ]*([Ss][Ee][Ll][Ee][Cc][Tt]).+/[;] {
     int len = yyleng;
-    const std::string keyword = "values";
     std::string tmp(yytext, len);
-    if (boost::algorithm::ifind_first(tmp, keyword)) {
+    boost::regex keyword{"\\svalues", boost::regex::icase};
+    boost::smatch what;
+    if (boost::regex_search(tmp, what, keyword)) {
       REJECT;
     } else {
       yylval.stringval = new std::string(yytext, len);
