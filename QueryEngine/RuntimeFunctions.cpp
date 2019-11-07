@@ -323,7 +323,10 @@ extern "C" ALWAYS_INLINE int8_t bit_is_set(const int64_t bitset,
     return null_bool_val;
   }
   if (val < min_val || val > max_val) {
-    return false;
+    return 0;
+  }
+  if (!bitset) {
+    return 0;
   }
   const uint64_t bitmap_idx = val - min_val;
   return (reinterpret_cast<const int8_t*>(bitset))[bitmap_idx >> 3] &

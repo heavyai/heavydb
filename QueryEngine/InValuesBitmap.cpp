@@ -120,7 +120,6 @@ InValuesBitmap::~InValuesBitmap() {
 }
 
 llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) const {
-  CHECK(!bitsets_.empty());
   std::vector<std::shared_ptr<const Analyzer::Constant>> constants_owned;
   std::vector<const Analyzer::Constant*> constants;
   for (const auto bitset : bitsets_) {
@@ -132,13 +131,22 @@ llvm::Value* InValuesBitmap::codegen(llvm::Value* needle, Executor* executor) co
     constants_owned.push_back(bitset_handle_literal);
     constants.push_back(bitset_handle_literal.get());
   }
+  const auto needle_i64 = executor->cgen_state_->castToTypeIn(needle, 64);
+  const auto null_bool_val =
+      static_cast<int8_t>(inline_int_null_val(SQLTypeInfo(kBOOLEAN, false)));
+  if (bitsets_.empty()) {
+    return executor->cgen_state_->emitCall("bit_is_set",
+                                           {executor->cgen_state_->llInt(int64_t(0)),
+                                            needle_i64,
+                                            executor->cgen_state_->llInt(int64_t(0)),
+                                            executor->cgen_state_->llInt(int64_t(0)),
+                                            executor->cgen_state_->llInt(null_val_),
+                                            executor->cgen_state_->llInt(null_bool_val)});
+  }
   CodeGenerator code_generator(executor);
   const auto bitset_handle_lvs =
       code_generator.codegenHoistedConstants(constants, kENCODING_NONE, 0);
   CHECK_EQ(size_t(1), bitset_handle_lvs.size());
-  const auto needle_i64 = executor->cgen_state_->castToTypeIn(needle, 64);
-  const auto null_bool_val =
-      static_cast<int8_t>(inline_int_null_val(SQLTypeInfo(kBOOLEAN, false)));
   return executor->cgen_state_->emitCall(
       "bit_is_set",
       {executor->cgen_state_->castToTypeIn(bitset_handle_lvs.front(), 64),
