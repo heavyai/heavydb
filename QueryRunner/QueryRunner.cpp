@@ -36,7 +36,7 @@
 #include <csignal>
 #include <random>
 
-#define CALCITEPORT 36279
+#define CALCITEPORT 3279
 
 extern size_t g_leaf_count;
 extern bool g_enable_filter_push_down;

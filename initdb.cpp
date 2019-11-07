@@ -27,7 +27,7 @@
 #include "Shared/mapdpath.h"
 #include "boost/program_options.hpp"
 
-#define CALCITEPORT 36279
+#define CALCITEPORT 3279
 
 static const std::array<std::string, 3> SampleGeoFileNames{"us-states.json",
                                                            "us-counties.json",
