@@ -849,7 +849,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                   std::unique_lock<std::mutex> lock(temp_mutex_);
                   sidx = stringDict->getOrAdd(sval);
                 }
-                put_scalar<int32_t, int32_t>(data_ptr, lhs_type, sidx, cd->columnName);
+                put_scalar<int64_t>(data_ptr, lhs_type, sidx, cd->columnName);
                 tabulate_metadata(lhs_type,
                                   min_int64t_per_thread[c],
                                   max_int64t_per_thread[c],

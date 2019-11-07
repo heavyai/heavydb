@@ -787,6 +787,18 @@ TEST(Ctas, GeoTest) {
                                         {3}));
 }
 
+TEST(Ctas, CreateTableAsSelect_IfNotExists) {
+  run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS CTAS_TARGET;");
+  run_ddl_statement("CREATE TABLE CTAS_SOURCE(a INT);");
+  run_ddl_statement("CREATE TABLE CTAS_TARGET(a INT);");
+  ASSERT_THROW(
+      run_ddl_statement("CREATE TABLE CTAS_TARGET AS (SELECT * FROM CTAS_SOURCE);"),
+      std::runtime_error);
+  ASSERT_NO_THROW(run_ddl_statement(
+      "CREATE TABLE IF NOT EXISTS CTAS_TARGET AS (SELECT * FROM CTAS_SOURCE);"));
+}
+
 void runCtasTest(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
                  std::string create_ctas_sql,
                  int num_rows,

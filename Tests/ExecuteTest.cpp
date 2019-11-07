@@ -11156,6 +11156,29 @@ TEST(Update, DateUpdate) {
   }
 }
 
+TEST(Update, DateUpdateNull) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("Drop table IF EXISTS date_update;");
+    run_ddl_statement("create table date_update(a text, b date);");
+    run_multiple_agg("insert into date_update values('1', '2018-01-04');", dt);
+    run_multiple_agg("insert into date_update values('2', '2018-01-05');", dt);
+    run_multiple_agg("insert into date_update values(null, null);", dt);
+    run_ddl_statement("alter table date_update add column c date;");
+    run_multiple_agg("update date_update set c=b;", dt);
+    ASSERT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg(
+                  "select count(c) from date_update where c is not null;", dt)));
+    ASSERT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "select count(c) from date_update where c = '2018-01-04';", dt)));
+    ASSERT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "select count(c) from date_update where c = '2018-01-05';", dt)));
+  }
+}
+
 TEST(Update, FloatUpdate) {
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
