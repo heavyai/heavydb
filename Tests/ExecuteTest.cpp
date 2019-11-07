@@ -1498,6 +1498,16 @@ TEST(Select, FilterShortCircuit) {
       "AND t > 1002 AND t > 1003;",
       dt);
     c("SELECT COUNT(*) FROM test WHERE UNLIKELY(x IN (7, 8, 9, 10)) AND y > 42;", dt);
+    c("SELECT COUNT(*) FROM test WHERE (x / 2.0 > 3.500) AND (str LIKE 's__');", dt);
+    {
+      std::string query(
+          "SELECT COUNT(*) FROM test WHERE (MOD(x, 2) = 0) AND (str LIKE 's__') AND (x "
+          "in (7));");
+      const auto result = run_multiple_agg(query, dt);
+      const auto row = result->getNextRow(true, true);
+      ASSERT_EQ(size_t(1), row.size());
+      ASSERT_EQ(int64_t(0), v<int64_t>(row[0]));
+    }
   }
 }
 
