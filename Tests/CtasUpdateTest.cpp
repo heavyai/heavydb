@@ -683,6 +683,12 @@ TEST(Ctas, SyntaxCheck) {
   EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
   ddl = "DROP TABLE CTAS_TARGET;";
   run_ddl_statement(ddl);
+
+  ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE_WITH;";
+  run_ddl_statement(ddl);
+  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
+  ddl = "DROP TABLE CTAS_TARGET;";
+  run_ddl_statement(ddl);
 }
 
 TEST(Ctas, LiteralStringTest) {
