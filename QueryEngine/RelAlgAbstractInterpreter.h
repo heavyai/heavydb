@@ -1146,7 +1146,8 @@ class RelSort : public RelAlgNode {
   }
 
   bool operator==(const RelSort& that) const {
-    return limit_ == that.limit_ && offset_ == that.offset_ && hasEquivCollationOf(that);
+    return limit_ == that.limit_ && offset_ == that.offset_ &&
+           empty_result_ == that.empty_result_ && hasEquivCollationOf(that);
   }
 
   size_t collationCount() const { return collation_.size(); }
@@ -1160,6 +1161,10 @@ class RelSort : public RelAlgNode {
     collation_ = std::move(collation);
   }
 
+  void setEmptyResult(bool emptyResult) { empty_result_ = emptyResult; }
+
+  bool isEmptyResult() const { return empty_result_; }
+
   size_t getLimit() const { return limit_; }
 
   size_t getOffset() const { return offset_; }
@@ -1169,6 +1174,7 @@ class RelSort : public RelAlgNode {
         "(RelSort<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
     result += "limit: " + std::to_string(limit_) + " ";
     result += "offset: " + std::to_string(offset_) + " ";
+    result += "empty_result: " + std::to_string(empty_result_) + " ";
     result += "collation: [ ";
     for (const auto& sort_field : collation_) {
       result += sort_field.toString() + " ";
@@ -1185,6 +1191,7 @@ class RelSort : public RelAlgNode {
   std::vector<SortField> collation_;
   const size_t limit_;
   const size_t offset_;
+  bool empty_result_;
 
   bool hasEquivCollationOf(const RelSort& that) const;
 };

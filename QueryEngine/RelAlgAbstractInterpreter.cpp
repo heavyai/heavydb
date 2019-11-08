@@ -352,7 +352,9 @@ std::shared_ptr<RelAlgNode> RelCompound::deepCopy() const {
 }
 
 std::shared_ptr<RelAlgNode> RelSort::deepCopy() const {
-  return std::make_shared<RelSort>(collation_, limit_, offset_, inputs_[0]);
+  auto ret = std::make_shared<RelSort>(collation_, limit_, offset_, inputs_[0]);
+  ret->setEmptyResult(isEmptyResult());
+  return ret;
 }
 
 void RelTableFunction::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
@@ -1951,12 +1953,11 @@ class RelAlgAbstractInterpreter {
       collation.emplace_back(field_idx, sort_dir, null_pos);
     }
     auto limit = get_int_literal_field(sort_ra, "fetch", -1);
-    if (limit == 0) {
-      throw QueryNotSupported("LIMIT 0 not supported");
-    }
     const auto offset = get_int_literal_field(sort_ra, "offset", 0);
-    return std::make_shared<RelSort>(
+    auto ret = std::make_shared<RelSort>(
         collation, limit > 0 ? limit : 0, offset, inputs.front());
+    ret->setEmptyResult(limit == 0);
+    return ret;
   }
 
   std::shared_ptr<RelModify> dispatchModify(const rapidjson::Value& logical_modify_ra) {

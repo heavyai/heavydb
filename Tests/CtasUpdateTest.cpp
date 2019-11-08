@@ -727,6 +727,15 @@ TEST(Ctas, LiteralStringTest) {
   check(3, "bb");
 }
 
+TEST(Ctas, ValidationCheck) {
+  run_ddl_statement("DROP TABLE IF EXISTS ctas_source;");
+  run_ddl_statement("DROP TABLE IF EXISTS ctas_target;");
+  run_ddl_statement("CREATE TABLE ctas_source (id int, dd DECIMAL(17,2));");
+  run_multiple_agg("INSERT INTO ctas_source VALUES(1, 10000);", ExecutorDeviceType::CPU);
+  ASSERT_ANY_THROW(run_ddl_statement(
+      "CREATE TABLE ctas_target AS SELECT id, CEIL(dd*10000) FROM ctas_source;"));
+}
+
 TEST(Ctas, GeoTest) {
   std::string ddl = "DROP TABLE IF EXISTS CTAS_SOURCE;";
   run_ddl_statement(ddl);
@@ -778,7 +787,10 @@ TEST(Ctas, GeoTest) {
                                         {3}));
 }
 
-TEST_P(Ctas, CreateTableAsSelect) {
+void runCtasTest(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
+                 std::string create_ctas_sql,
+                 int num_rows,
+                 int num_rows_to_check) {
   run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE;");
   run_ddl_statement("DROP TABLE IF EXISTS CTAS_TARGET;");
 
@@ -798,10 +810,8 @@ TEST_P(Ctas, CreateTableAsSelect) {
 
   run_ddl_statement(create_sql);
 
-  size_t num_rows = 25;
-
   // fill source table
-  for (unsigned int row = 0; row < num_rows; row++) {
+  for (int row = 0; row < num_rows; row++) {
     std::string insert_sql = "INSERT INTO CTAS_SOURCE VALUES (" + std::to_string(row);
     for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
       auto tcd = columnDescriptors[col];
@@ -813,7 +823,6 @@ TEST_P(Ctas, CreateTableAsSelect) {
   }
 
   // execute CTAS
-  std::string create_ctas_sql = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
   LOG(INFO) << create_ctas_sql;
 
   run_ddl_statement(create_ctas_sql);
@@ -859,10 +868,10 @@ TEST_P(Ctas, CreateTableAsSelect) {
   LOG(INFO) << select_ctas_sql;
   auto select_ctas_result = run_multiple_agg(select_ctas_sql, ExecutorDeviceType::CPU);
 
-  ASSERT_EQ(num_rows, select_result->rowCount());
-  ASSERT_EQ(num_rows, select_ctas_result->rowCount());
+  ASSERT_EQ(static_cast<size_t>(num_rows), select_result->rowCount());
+  ASSERT_EQ(static_cast<size_t>(num_rows_to_check), select_ctas_result->rowCount());
 
-  for (unsigned int row = 0; row < num_rows; row++) {
+  for (int row = 0; row < num_rows_to_check; row++) {
     const auto select_crt_row = select_result->getNextRow(true, false);
     const auto select_ctas_crt_row = select_ctas_result->getNextRow(true, false);
 
@@ -881,6 +890,32 @@ TEST_P(Ctas, CreateTableAsSelect) {
       }
     }
   }
+}
+
+TEST_P(Ctas, CreateTableAsSelect) {
+  // execute CTAS
+  std::string create_ctas_sql = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
+  int num_rows = 25;
+  int num_rows_to_check = num_rows;
+  runCtasTest(columnDescriptors, create_ctas_sql, num_rows, num_rows_to_check);
+}
+
+TEST_P(Ctas, CreateTableAsSelectWithLimit) {
+  // execute CTAS
+  std::string create_ctas_sql =
+      "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE ORDER BY id LIMIT 20;";
+  int num_rows = 25;
+  int num_rows_to_check = 20;
+  runCtasTest(columnDescriptors, create_ctas_sql, num_rows, num_rows_to_check);
+}
+
+TEST_P(Ctas, CreateTableAsSelectWithZeroLimit) {
+  // execute CTAS
+  std::string create_ctas_sql =
+      "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE ORDER BY id LIMIT 0;";
+  int num_rows = 5;
+  int num_rows_to_check = 0;
+  runCtasTest(columnDescriptors, create_ctas_sql, num_rows, num_rows_to_check);
 }
 
 TEST(Itas, SyntaxCheck) {
