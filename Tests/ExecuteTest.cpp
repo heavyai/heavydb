@@ -1379,7 +1379,11 @@ TEST(Select, LimitAndOffset) {
       "total_y DESC, "
       "str LIMIT 1);",
       dt);
-    EXPECT_THROW(run_multiple_agg("SELECT * FROM test LIMIT 0;", dt), std::runtime_error);
+
+    {
+      const auto rows = run_multiple_agg("SELECT * FROM test LIMIT 0;", dt);
+      ASSERT_EQ(size_t(0), rows->rowCount());
+    }
   }
 }
 

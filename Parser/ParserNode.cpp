@@ -2612,6 +2612,35 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
     thread_start_idx[thread_id] = idx;
   };
 
+  auto single_threaded_convert_function = [&result_rows,
+                                           &value_converters,
+                                           &row_idx,
+                                           &num_rows_to_process,
+                                           &thread_start_idx,
+                                           &thread_end_idx](const int thread_id) {
+    const int num_cols = value_converters.size();
+    const size_t start = thread_start_idx[thread_id];
+    const size_t end = thread_end_idx[thread_id];
+    size_t idx = 0;
+    for (idx = start; idx < end; ++idx) {
+      const auto result_row = result_rows->getNextRow(false, false);
+      if (!result_row.empty()) {
+        size_t target_row = row_idx.fetch_add(1);
+
+        if (target_row >= num_rows_to_process) {
+          break;
+        }
+
+        for (unsigned int col = 0; col < num_cols; col++) {
+          const auto& mapd_variant = result_row[col];
+          value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
+        }
+      }
+    }
+
+    thread_start_idx[thread_id] = idx;
+  };
+
   if (can_go_parallel) {
     const size_t entryCount = result_rows->entryCount();
     for (size_t i = 0,
@@ -2675,7 +2704,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
         }
 
       } else {
-        convert_function(0);
+        single_threaded_convert_function(0);
       }
 
       // finalize the insert data
@@ -2777,6 +2806,13 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
         local_connector.query(query_state->createQueryStateProxy(), select_query_, true);
     const auto column_descriptors_for_create =
         local_connector.getColumnDescriptors(result, true);
+
+    // some validation as the QE might return some out of range column types
+    for (auto& cd : column_descriptors_for_create) {
+      if (cd.columnType.is_decimal() && cd.columnType.get_precision() > 18) {
+        throw std::runtime_error(cd.columnName + ": Precision too high, max 18.");
+      }
+    }
 
     TableDescriptor td;
     td.tableName = table_name_;

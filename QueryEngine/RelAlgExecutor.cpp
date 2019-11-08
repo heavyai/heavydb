@@ -1672,12 +1672,27 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     try {
       const auto source_work_unit = createSortInputWorkUnit(sort, eo.just_explain);
       is_desc = first_oe_is_desc(source_work_unit.exe_unit.sort_info.order_entries);
+      ExecutionOptions eoCopy = {
+          eo.output_columnar_hint,
+          eo.allow_multifrag,
+          eo.just_explain,
+          eo.allow_loop_joins,
+          eo.with_watchdog,
+          eo.jit_debug,
+          eo.just_validate || sort->isEmptyResult(),
+          eo.with_dynamic_watchdog,
+          eo.dynamic_watchdog_time_limit,
+          eo.find_push_down_candidates,
+          eo.just_calcite_explain,
+          eo.gpu_input_mem_limit_percent,
+      };
+
       groupby_exprs = source_work_unit.exe_unit.groupby_exprs;
       auto source_result = executeWorkUnit(source_work_unit,
                                            source->getOutputMetainfo(),
                                            is_aggregate,
                                            co,
-                                           eo,
+                                           eoCopy,
                                            render_info,
                                            queue_time_ms);
       if (render_info && render_info->isPotentialInSituRender()) {
