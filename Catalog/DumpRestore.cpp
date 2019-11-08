@@ -134,10 +134,14 @@ inline std::string simple_file_cat(const std::string& archive_path,
 #else
   constexpr static auto opt_occurrence = " --occurrence=1 ";
 #endif
+  boost::filesystem::path temp_dir =
+      boost::filesystem::temp_directory_path() / boost::filesystem::unique_path();
+  boost::filesystem::create_directories(temp_dir);
   run("tar " + compression + " -xvf \"" + archive_path + "\" " + opt_occurrence +
-      file_name);
-  const auto output = run("cat " + file_name);
-  run("rm " + file_name);
+          file_name,
+      temp_dir.string());
+  const auto output = run("cat " + (temp_dir / file_name).string());
+  boost::filesystem::remove_all(temp_dir);
   return output;
 }
 
