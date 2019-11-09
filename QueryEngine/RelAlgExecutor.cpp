@@ -1672,7 +1672,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     try {
       const auto source_work_unit = createSortInputWorkUnit(sort, eo.just_explain);
       is_desc = first_oe_is_desc(source_work_unit.exe_unit.sort_info.order_entries);
-      ExecutionOptions eoCopy = {
+      ExecutionOptions eo_copy = {
           eo.output_columnar_hint,
           eo.allow_multifrag,
           eo.just_explain,
@@ -1692,7 +1692,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
                                            source->getOutputMetainfo(),
                                            is_aggregate,
                                            co,
-                                           eoCopy,
+                                           eo_copy,
                                            render_info,
                                            queue_time_ms);
       if (render_info && render_info->isPotentialInSituRender()) {
