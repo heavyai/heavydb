@@ -576,8 +576,7 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
                                                   RelAlgExecutor* ra_executor);
 
 SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
-  CHECK(type_obj.IsObject() &&
-        (type_obj.MemberCount() >= 2 && type_obj.MemberCount() <= 4));
+  CHECK(type_obj.IsObject() && type_obj.MemberCount() >= 2);
   const auto type = to_sql_type(json_str(field(type_obj, "type")));
   const auto nullable = json_bool(field(type_obj, "nullable"));
   const auto precision_it = type_obj.FindMember("precision");
