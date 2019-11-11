@@ -432,7 +432,9 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       if (get_output_srid() > 0) {
         srid_string = ", " + std::to_string(get_output_srid());
       }
-      return type_name[(int)subtype] + "(" + type_name[(int)type] + srid_string + ")";
+      CHECK_LT(static_cast<int>(subtype), kSQLTYPE_LAST);
+      return type_name[static_cast<int>(subtype)] + "(" +
+             type_name[static_cast<int>(type)] + srid_string + ")";
     }
     std::string ps = "";
     if (type == kDECIMAL || type == kNUMERIC || subtype == kDECIMAL ||
@@ -444,14 +446,15 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     if (type == kARRAY) {
       auto elem_ti = get_elem_type();
       auto num_elems = (size > 0) ? std::to_string(size / elem_ti.get_size()) : "";
-      return type_name[(int)subtype] + ps + "[" + num_elems + "]";
+      CHECK_LT(static_cast<int>(subtype), kSQLTYPE_LAST);
+      return type_name[static_cast<int>(subtype)] + ps + "[" + num_elems + "]";
     }
-    return type_name[(int)type] + ps;
+    return type_name[static_cast<int>(type)] + ps;
   }
   inline std::string get_compression_name() const { return comp_name[(int)compression]; }
   inline std::string to_string() const {
     return concat("(",
-                  type_name[(int)type],
+                  type_name[static_cast<int>(type)],
                   ", ",
                   get_dimension(),
                   ", ",
@@ -463,7 +466,7 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
                   ", ",
                   get_comp_param(),
                   ", ",
-                  type_name[(int)subtype],
+                  type_name[static_cast<int>(subtype)],
                   ": ",
                   get_size(),
                   ": ",
