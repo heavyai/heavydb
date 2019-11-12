@@ -74,6 +74,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   Expr(const SQLTypeInfo& ti, bool has_agg = false)
       : type_info(ti), contains_agg(has_agg) {}
   virtual ~Expr() {}
+  std::shared_ptr<Analyzer::Expr> get_shared_ptr() { return shared_from_this(); }
   const SQLTypeInfo& get_type_info() const { return type_info; }
   void set_type_info(const SQLTypeInfo& ti) { type_info = ti; }
   bool get_contains_agg() const { return contains_agg; }
