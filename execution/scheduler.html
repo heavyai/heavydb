@@ -1,0 +1,494 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>7.3. DAG Execution / Translation &mdash; OmniSciDB  documentation</title>
+  
+
+  
+  
+    <link rel="shortcut icon" href="../_static/favicon.webp"/>
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script type="text/javascript" src="../_static/language_data.js"></script>
+        <script type="text/javascript" src="../_static/segment_analytics.js"></script>
+        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/theme_overrides.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="7.4. Code Generation" href="codegen.html" />
+    <link rel="prev" title="7.2. Interpreter / Optimizer" href="optimizer.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> OmniSciDB
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">System Architecture</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../overview/index.html">1. OmniSciDB at 30,000 Feet</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#high-level-diagram">1.1. High Level Diagram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#data-model">1.2. Data Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#data-flow">1.3. Data Flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#query-execution">1.4. Query Execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#simple-execution-model">1.5. Simple Execution Model</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart/getting_started.html">2. Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/deps.html">2.1. Server Dependencies</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#prebuilt-dependencies">2.1.1. Prebuilt Dependencies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#environment-variables">2.1.1.1. Environment Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-ubuntu">2.1.2. Building on Ubuntu</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#ubuntu-16-04">2.1.2.1. Ubuntu 16.04</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#ubuntu-18-04">2.1.2.2. Ubuntu 18.04</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-centos">2.1.3. Building on CentOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-macos">2.1.4. Building on macOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-arch-linux">2.1.5. Building on Arch Linux</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/build.html">2.2. Build OmniSciDB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/start.html">2.3. Start and Load Sample Data</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/start.html#starting-the-server">2.3.1. Starting the Server</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/start.html#starting-manually">2.3.1.1. Starting Manually</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/start.html#working-with-data">2.3.2. Working With Data</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../catalog/index.html">3. Catalog</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#high-level-overview">3.1. High Level Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#system-catalog-global">3.2. System Catalog (Global)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#users">3.2.1. Users</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#roles">3.2.2. Roles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#databases">3.2.3. Databases</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#permissions">3.2.4. Permissions</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#catalog-database-specific">3.3. Catalog (Database Specific)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#tables">3.3.1. Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#columns">3.3.2. Columns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#dictionaries">3.3.3. Dictionaries</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#sharded-tables">3.3.4. Sharded Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#views">3.3.5. Views</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#dashboards">3.3.6. Dashboards</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#migration">3.4. Migration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../data_model/index.html">4. Data Model</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/columnar_layout.html">4.1. Columnar Data Organization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#columns">4.1.1. Columns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#fragments">4.1.2. Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#chunks">4.1.3. Chunks</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/columnar_layout.html#example-for-chunk-physical-representations">4.1.3.1. Example for chunk physical representations</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/columnar_layout.html#chunkkey">4.1.3.2. ChunkKey</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/physical_layout.html">4.2. Physical Data Layout</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#directory-structure">4.2.1. Directory Structure</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/physical_layout.html#epoch">4.2.1.1. Epoch</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#data-multipages">4.2.2. Data Multipages</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/physical_layout.html#example-data-page">4.2.2.1. Example Data Page:</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#metadata-pages">4.2.3. Metadata Pages</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/memory_layout.html">4.3. Memory  Layout</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/api.html">4.4. External API</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/api.html#design">4.4.1. Design</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/api.html#protocols">4.4.2. Protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/types.html">4.5. Data Types</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#scalar-types">4.5.1. Scalar Types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#scalar-types-with-encoding">4.5.2. Scalar Types with Encoding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#variable-length-types">4.5.3. Variable Length Types</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../flow/data.html">5. Data Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../flow/data.html#input-data">5.1. Input Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../flow/data.html#output-data">5.2. Output Data</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../calcite/calcite_parser.html">6. Calcite Parser</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">7. Query Execution</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="overview.html">7.1. Overview</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#request-handler-mapdhandler">7.1.1. Request Handler (MapDHandler)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#apache-calcite">7.1.2. Apache Calcite</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#relational-algebra-executor">7.1.3. Relational Algebra Executor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#relational-algebra-abstract-interpreter-and-optimizer">7.1.4. Relational Algebra Abstract Interpreter and Optimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#relational-algebra-translator">7.1.5. Relational Algebra Translator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#executor">7.1.6. Executor</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="optimizer.html">7.2. Interpreter / Optimizer</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="optimizer.html#interpreter">7.2.1. Interpreter</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="optimizer.html#relalgnode">7.2.1.1. <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="optimizer.html#rex">7.2.1.2. <code class="docutils literal notranslate"><span class="pre">Rex</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="optimizer.html#omniscidb-specific-query-optimization">7.2.2. OmniSciDB Specific Query Optimization</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="optimizer.html#mark-noops">7.2.2.1. Mark Noops</a></li>
+<li class="toctree-l4"><a class="reference internal" href="optimizer.html#eliminate-identical-copies">7.2.2.2. Eliminate Identical Copies</a></li>
+<li class="toctree-l4"><a class="reference internal" href="optimizer.html#fold-filters">7.2.2.3. Fold Filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="optimizer.html#eliminate-dead-columns">7.2.2.4. Eliminate Dead Columns</a></li>
+<li class="toctree-l4"><a class="reference internal" href="optimizer.html#separate-window-function-expressions">7.2.2.5. Separate Window Function Expressions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="optimizer.html#coalesce-nodes">7.2.2.6. Coalesce Nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="optimizer.html#create-left-deep-join">7.2.2.7. Create Left Deep Join</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">7.3. DAG Execution / Translation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#determining-execution-order">7.3.1. Determining Execution Order</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#raexecutiondescriptor">7.3.2. <code class="docutils literal notranslate"><span class="pre">RaExecutionDescriptor</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="#query-step-translation">7.3.3. Query Step Translation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#query-step-execution">7.3.4. Query Step Execution</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#scalar-subqueries">7.3.4.1. Scalar Subqueries</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="codegen.html">7.4. Code Generation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="codegen.html#query-templates">7.4.1. Query Templates</a></li>
+<li class="toctree-l3"><a class="reference internal" href="codegen.html#codegenerator">7.4.2. <code class="docutils literal notranslate"><span class="pre">CodeGenerator</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="codegen.html#runtime-functions-and-extension-functions">7.4.3. Runtime Functions and Extension Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="codegen.html#llvm-optimization-passes">7.4.4. LLVM Optimization Passes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="codegen.html#native-codegen">7.4.5. Native Codegen</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="codegen.html#cpu-native-code-generation">7.4.5.1. CPU Native Code Generation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="codegen.html#gpu-native-code-generation">7.4.5.2. GPU Native Code Generation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="codegen.html#code-cache">7.4.5.3. Code Cache</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="kernels.html">7.5. Execution Kernels</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="kernels.html#query-fragment-descriptor">7.5.1. Query Fragment Descriptor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="kernels.html#dispatch-fragments">7.5.2. Dispatch Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="kernels.html#query-execution-context">7.5.3. Query Execution Context</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="kernels.html#cpu-execution">7.5.3.1. CPU execution</a></li>
+<li class="toctree-l4"><a class="reference internal" href="kernels.html#gpu-execution">7.5.3.2. GPU execution</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="results.html">7.6. Query Results</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="results.html#result-set-storage">7.6.1. Result Set Storage</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="results.html#logical-targets-and-physical-slots">7.6.1.1. Logical Targets and Physical Slots</a></li>
+<li class="toctree-l4"><a class="reference internal" href="results.html#storage-memory-layouts">7.6.1.2. Storage Memory Layouts</a></li>
+<li class="toctree-l4"><a class="reference internal" href="results.html#group-by-queries">7.6.1.3. Group by Queries</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="results.html#reductions">7.6.2. Reductions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="results.html#accessors-and-iterators">7.6.3. Accessors and Iterators</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption"><span class="caption-text">Additional Resources</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://doxygen.omnisci.com">Doxygen</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/omnisci/omniscidb">GitHub Repository</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary/index.html">Glossary of Terms</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Detailed Class Information</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../components/logger.html">Logger</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../components/logger.html#program-options">Program Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/logger.html#initialization-and-global-instances">Initialization and Global Instances</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/logger.html#usage">Usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#severity">Severity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#log-files">Log Files</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#format">Format</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#channel">Channel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#macros">Macros</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#log">LOG</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#check">CHECK</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#stdlog">STDLOG</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#debug-timer">DEBUG_TIMER</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../components/query_state.html">QueryState</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../components/query_state.html#classes">Classes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/query_state.html#example-usage">Example Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/query_state.html#summary">Summary</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">OmniSciDB</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="index.html">7. Query Execution</a> &raquo;</li>
+        
+      <li>7.3. DAG Execution / Translation</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/execution/scheduler.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="dag-execution-translation">
+<h1>7.3. DAG Execution / Translation<a class="headerlink" href="#dag-execution-translation" title="Permalink to this headline">¶</a></h1>
+<p>Once the relational algebra tree provided by Calcite has been interpreted (see <a class="reference internal" href="../calcite/calcite_parser.html"><span class="doc">Calcite Parser</span></a>) and optimized (see <a class="reference internal" href="optimizer.html"><span class="doc">Interpreter / Optimizer</span></a>) the tree is ordered and executed. Each remaining node in the tree (except for <code class="docutils literal notranslate"><span class="pre">RelTableScan</span></code> and <code class="docutils literal notranslate"><span class="pre">RelJoin</span></code>) forms a query step. Each step is executed in order, with the result from all previous steps available for subsequent steps. The relational algebra tree is a directed, ascyclic graph dictating the execution order of the query steps.</p>
+<div class="section" id="determining-execution-order">
+<h2>7.3.1. Determining Execution Order<a class="headerlink" href="#determining-execution-order" title="Permalink to this headline">¶</a></h2>
+<p>The DAG is built from the relational algebra tree by adding edges between nodes in the tree according to the inputs to each node, starting with the last node in the tree (i.e. the last query step to be executed).</p>
+<p>Once the DAG has been built, an execution ordering is determined using a topological sort over the DAG. The sort returns an ordered list of vertices according to the dependencies described by the DAG. For query execution, we walk the DAG according to the ordering.</p>
+<p>Consider the following example:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">SELECT</span> <span class="n">t1</span><span class="p">.</span><span class="n">x</span> <span class="k">FROM</span> <span class="n">dead_cols_test</span> <span class="n">t1</span> <span class="k">JOIN</span> <span class="p">(</span><span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">dead_cols_test</span><span class="p">)</span> <span class="n">t2</span> <span class="k">ON</span> <span class="n">t1</span><span class="p">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">t2</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>with the following Calcite plan:</p>
+<div class="highlight-cpp notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5</pre></div></td><td class="code"><div class="highlight"><pre><span></span>LogicalProject(x=[$0])
+  LogicalJoin(condition=[=($0, $3)], joinType=[inner])
+    EnumerableTableScan(table=[[mapd, dead_cols_test]])
+    LogicalProject(x=[$0], y=[$1], rowid=[$2])
+      EnumerableTableScan(table=[[mapd, dead_cols_test]])
+</pre></div>
+</td></tr></table></div>
+<p>The DAG for this query is as follows:</p>
+<div class="graphviz"><img src="../_images/graphviz-5c1564d08c29d6609228998eb499c78317d182a8.png" alt="digraph {
+   &quot;Project [1]&quot; -&gt; &quot;Join [2]&quot;;
+   &quot;Join [2]&quot; -&gt; &quot;Scan [3]&quot;;
+   &quot;Join [2]&quot; -&gt; &quot;Project [4]&quot;;
+   &quot;Project [4]&quot; -&gt; &quot;Scan [5]&quot;;
+}" class="graphviz" /></div>
+<p>(with the number in paranthesis corresponding to the line number in the calcite plan)</p>
+<p>The topological for the above graph produces the following ordering:</p>
+<div class="graphviz"><img src="../_images/graphviz-aa46695e6f22196e8921f50f5cce96fa54f504ad.png" alt="digraph {
+   &quot;Project [1]&quot; -&gt; &quot;Join [2]&quot;[label=&quot;4&quot;];
+   &quot;Join [2]&quot; -&gt; &quot;Scan [3]&quot;[label=&quot;3&quot;];
+   &quot;Join [2]&quot; -&gt; &quot;Project [4]&quot;[label=&quot;2&quot;];
+   &quot;Project [4]&quot; -&gt; &quot;Scan [5]&quot;[label=&quot;1&quot;];
+}" class="graphviz" /></div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The ordering will be applied per vertex, but for illustration purposes we have placed the ordering on the edges. The vertex ordering can be deduced from the above figure by moving the edge order up to the higher vertex in the graph (e.g. the first step to be executed will be <cite>Project [4]</cite>).</p>
+</div>
+<p>Finally, note that <cite>Scan</cite> and <cite>Join</cite> nodes are not executed, but are automatically rolled into the next node during work unit generation.</p>
+</div>
+<div class="section" id="raexecutiondescriptor">
+<h2>7.3.2. <code class="docutils literal notranslate"><span class="pre">RaExecutionDescriptor</span></code><a class="headerlink" href="#raexecutiondescriptor" title="Permalink to this headline">¶</a></h2>
+<p>After the ordering has been determined, query steps are wrapped in <code class="docutils literal notranslate"><span class="pre">RaExecutionDescriptor</span></code> objects. The <code class="docutils literal notranslate"><span class="pre">RaExecutionDescriptor</span></code> stores the relational algebra node for the query step, along with the query step result and any related output metadata. It is important that these objects do not go out of scope until the final <code class="docutils literal notranslate"><span class="pre">ResultSet</span></code> is returned to the client, as intermediate results may be required by subsequent query steps.</p>
+</div>
+<div class="section" id="query-step-translation">
+<h2>7.3.3. Query Step Translation<a class="headerlink" href="#query-step-translation" title="Permalink to this headline">¶</a></h2>
+<p>Each query step is packaged into a work unit for code generation and execution. The act of packaging a query step into code generation is called <cite>translation</cite> and is managed by the <code class="docutils literal notranslate"><span class="pre">RelAlgTranslator</span></code>. The translator converts a set of <cite>Rex</cite> expressions into an abstract syntax tree (AST) representation, which maps directly to the generated code for the <a class="reference internal" href="../glossary/index.html#term-kernel"><span class="xref std std-term">kernel</span></a>.</p>
+<p>The translated AST is stored in multiple vectors which logically separate the projected SQL expressions from group by targets, filters, etc. The <code class="docutils literal notranslate"><span class="pre">RelAlgExecutionUnit</span></code> stores analyzer expressions in the following members:</p>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">target_exprs</span></code>: Projected output expressions for the query step.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">groupby_exprs</span></code>: Columns being grouped. Note that all projection queries are considered group by queries with the group key being the identity function.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">quals</span></code>: Filter expressions.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">simple_quals</span></code>: Filter expressions involving a literal value (e.g. <cite>WHERE x = 10</cite>). These are separated for purposes of <cite>fragment skipping</cite>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">join_quals</span></code>: Join expressions.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">sort_info</span></code>: Columns used for sorting, along with related sort info (<cite>limit</cite>, <cite>offset</cite>, etc).</p></li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">quals</span></code>, <code class="docutils literal notranslate"><span class="pre">simple_quals</span></code>, and <code class="docutils literal notranslate"><span class="pre">join_quals</span></code> vectors together make up the set of all filter expressions. That is, a filter <a class="reference internal" href="../glossary/index.html#term-expression"><span class="xref std std-term">expression</span></a> comparing with a literal will be in <code class="docutils literal notranslate"><span class="pre">simple_quals</span></code> only, and will not be duplicated in the <code class="docutils literal notranslate"><span class="pre">quals</span></code> vector.</p>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">RelAlgExecutionUnit</span></code> is the primary member of the <code class="docutils literal notranslate"><span class="pre">WorkUnit</span></code> and contains all the information required to generate code for the query.</p>
+</div>
+<div class="section" id="query-step-execution">
+<h2>7.3.4. Query Step Execution<a class="headerlink" href="#query-step-execution" title="Permalink to this headline">¶</a></h2>
+<p>After translation, the <cite>work unit</cite> is passed to the <code class="docutils literal notranslate"><span class="pre">Executor</span></code> for native code generation and kernel execution. The <code class="docutils literal notranslate"><span class="pre">Executor</span></code> returns a <code class="docutils literal notranslate"><span class="pre">ResultSet</span></code> pointer. The <code class="docutils literal notranslate"><span class="pre">ResultSet</span></code> pointer is stored in the <code class="docutils literal notranslate"><span class="pre">ExecutionDescriptor</span></code> for the current step, and is also stored in the global temporary tables map. Intermediate results are referenced by negating the node ID of their parent query step.</p>
+<div class="section" id="scalar-subqueries">
+<h3>7.3.4.1. Scalar Subqueries<a class="headerlink" href="#scalar-subqueries" title="Permalink to this headline">¶</a></h3>
+<p>Scalar subqueries are subqueries which return a single literal value, e.g.:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">SELECT</span> <span class="n">x</span> <span class="k">FROM</span> <span class="n">test</span> <span class="k">WHERE</span> <span class="n">x</span> <span class="o">=</span> <span class="p">(</span><span class="k">SELECT</span> <span class="n">y</span> <span class="k">FROM</span> <span class="n">test2</span><span class="p">);</span>
+</pre></div>
+</div>
+<p>Scalar subqueries are identified during interpretation and split out prior to execution of the first query step. The subqueries are then executed as individual queries. The <code class="docutils literal notranslate"><span class="pre">ResultSet</span></code> for scalar subquery execution is expected to be a single row with a single column. During translation, a <code class="docutils literal notranslate"><span class="pre">RexSubQuery</span></code> expression is replaced with the result from the subquery, represented by a literal analyzer expression. The <code class="docutils literal notranslate"><span class="pre">subqueries_</span></code> member of the <code class="docutils literal notranslate"><span class="pre">RelAlgExecutor</span></code> manages scalar subquery results for use in future steps.</p>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="codegen.html" class="btn btn-neutral float-right" title="7.4. Code Generation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="optimizer.html" class="btn btn-neutral float-left" title="7.2. Interpreter / Optimizer" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019, OmniSci, Inc
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

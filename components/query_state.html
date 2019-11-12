@@ -1,0 +1,523 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>QueryState &mdash; OmniSciDB  documentation</title>
+  
+
+  
+  
+    <link rel="shortcut icon" href="../_static/favicon.webp"/>
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script type="text/javascript" src="../_static/language_data.js"></script>
+        <script type="text/javascript" src="../_static/segment_analytics.js"></script>
+        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/theme_overrides.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="prev" title="Logger" href="logger.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> OmniSciDB
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">System Architecture</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/index.html">1. OmniSciDB at 30,000 Feet</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#high-level-diagram">1.1. High Level Diagram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#data-model">1.2. Data Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#data-flow">1.3. Data Flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#query-execution">1.4. Query Execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#simple-execution-model">1.5. Simple Execution Model</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart/getting_started.html">2. Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/deps.html">2.1. Server Dependencies</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#prebuilt-dependencies">2.1.1. Prebuilt Dependencies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#environment-variables">2.1.1.1. Environment Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-ubuntu">2.1.2. Building on Ubuntu</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#ubuntu-16-04">2.1.2.1. Ubuntu 16.04</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#ubuntu-18-04">2.1.2.2. Ubuntu 18.04</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-centos">2.1.3. Building on CentOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-macos">2.1.4. Building on macOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-arch-linux">2.1.5. Building on Arch Linux</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/build.html">2.2. Build OmniSciDB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/start.html">2.3. Start and Load Sample Data</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/start.html#starting-the-server">2.3.1. Starting the Server</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/start.html#starting-manually">2.3.1.1. Starting Manually</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/start.html#working-with-data">2.3.2. Working With Data</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../catalog/index.html">3. Catalog</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#high-level-overview">3.1. High Level Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#system-catalog-global">3.2. System Catalog (Global)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#users">3.2.1. Users</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#roles">3.2.2. Roles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#databases">3.2.3. Databases</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#permissions">3.2.4. Permissions</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#catalog-database-specific">3.3. Catalog (Database Specific)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#tables">3.3.1. Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#columns">3.3.2. Columns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#dictionaries">3.3.3. Dictionaries</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#sharded-tables">3.3.4. Sharded Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#views">3.3.5. Views</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#dashboards">3.3.6. Dashboards</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#migration">3.4. Migration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../data_model/index.html">4. Data Model</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/columnar_layout.html">4.1. Columnar Data Organization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#columns">4.1.1. Columns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#fragments">4.1.2. Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#chunks">4.1.3. Chunks</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/columnar_layout.html#example-for-chunk-physical-representations">4.1.3.1. Example for chunk physical representations</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/columnar_layout.html#chunkkey">4.1.3.2. ChunkKey</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/physical_layout.html">4.2. Physical Data Layout</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#directory-structure">4.2.1. Directory Structure</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/physical_layout.html#epoch">4.2.1.1. Epoch</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#data-multipages">4.2.2. Data Multipages</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/physical_layout.html#example-data-page">4.2.2.1. Example Data Page:</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#metadata-pages">4.2.3. Metadata Pages</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/memory_layout.html">4.3. Memory  Layout</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/api.html">4.4. External API</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/api.html#design">4.4.1. Design</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/api.html#protocols">4.4.2. Protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/types.html">4.5. Data Types</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#scalar-types">4.5.1. Scalar Types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#scalar-types-with-encoding">4.5.2. Scalar Types with Encoding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#variable-length-types">4.5.3. Variable Length Types</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../flow/data.html">5. Data Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../flow/data.html#input-data">5.1. Input Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../flow/data.html#output-data">5.2. Output Data</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../calcite/calcite_parser.html">6. Calcite Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../execution/index.html">7. Query Execution</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../execution/overview.html">7.1. Overview</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#request-handler-mapdhandler">7.1.1. Request Handler (MapDHandler)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#apache-calcite">7.1.2. Apache Calcite</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-executor">7.1.3. Relational Algebra Executor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-abstract-interpreter-and-optimizer">7.1.4. Relational Algebra Abstract Interpreter and Optimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-translator">7.1.5. Relational Algebra Translator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#executor">7.1.6. Executor</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/optimizer.html">7.2. Interpreter / Optimizer</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/optimizer.html#interpreter">7.2.1. Interpreter</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#relalgnode">7.2.1.1. <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#rex">7.2.1.2. <code class="docutils literal notranslate"><span class="pre">Rex</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/optimizer.html#omniscidb-specific-query-optimization">7.2.2. OmniSciDB Specific Query Optimization</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#mark-noops">7.2.2.1. Mark Noops</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#eliminate-identical-copies">7.2.2.2. Eliminate Identical Copies</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#fold-filters">7.2.2.3. Fold Filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#eliminate-dead-columns">7.2.2.4. Eliminate Dead Columns</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#separate-window-function-expressions">7.2.2.5. Separate Window Function Expressions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#coalesce-nodes">7.2.2.6. Coalesce Nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#create-left-deep-join">7.2.2.7. Create Left Deep Join</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/scheduler.html">7.3. DAG Execution / Translation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#determining-execution-order">7.3.1. Determining Execution Order</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#raexecutiondescriptor">7.3.2. <code class="docutils literal notranslate"><span class="pre">RaExecutionDescriptor</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#query-step-translation">7.3.3. Query Step Translation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#query-step-execution">7.3.4. Query Step Execution</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/scheduler.html#scalar-subqueries">7.3.4.1. Scalar Subqueries</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/codegen.html">7.4. Code Generation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#query-templates">7.4.1. Query Templates</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#codegenerator">7.4.2. <code class="docutils literal notranslate"><span class="pre">CodeGenerator</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#runtime-functions-and-extension-functions">7.4.3. Runtime Functions and Extension Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#llvm-optimization-passes">7.4.4. LLVM Optimization Passes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#native-codegen">7.4.5. Native Codegen</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/codegen.html#cpu-native-code-generation">7.4.5.1. CPU Native Code Generation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/codegen.html#gpu-native-code-generation">7.4.5.2. GPU Native Code Generation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/codegen.html#code-cache">7.4.5.3. Code Cache</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/kernels.html">7.5. Execution Kernels</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/kernels.html#query-fragment-descriptor">7.5.1. Query Fragment Descriptor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/kernels.html#dispatch-fragments">7.5.2. Dispatch Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/kernels.html#query-execution-context">7.5.3. Query Execution Context</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/kernels.html#cpu-execution">7.5.3.1. CPU execution</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/kernels.html#gpu-execution">7.5.3.2. GPU execution</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/results.html">7.6. Query Results</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/results.html#result-set-storage">7.6.1. Result Set Storage</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/results.html#logical-targets-and-physical-slots">7.6.1.1. Logical Targets and Physical Slots</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/results.html#storage-memory-layouts">7.6.1.2. Storage Memory Layouts</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/results.html#group-by-queries">7.6.1.3. Group by Queries</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/results.html#reductions">7.6.2. Reductions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/results.html#accessors-and-iterators">7.6.3. Accessors and Iterators</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption"><span class="caption-text">Additional Resources</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://doxygen.omnisci.com">Doxygen</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/omnisci/omniscidb">GitHub Repository</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary/index.html">Glossary of Terms</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Detailed Class Information</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="logger.html">Logger</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="logger.html#program-options">Program Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="logger.html#initialization-and-global-instances">Initialization and Global Instances</a></li>
+<li class="toctree-l2"><a class="reference internal" href="logger.html#usage">Usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="logger.html#severity">Severity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="logger.html#log-files">Log Files</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="logger.html#format">Format</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="logger.html#channel">Channel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="logger.html#macros">Macros</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="logger.html#log">LOG</a></li>
+<li class="toctree-l4"><a class="reference internal" href="logger.html#check">CHECK</a></li>
+<li class="toctree-l4"><a class="reference internal" href="logger.html#stdlog">STDLOG</a></li>
+<li class="toctree-l4"><a class="reference internal" href="logger.html#debug-timer">DEBUG_TIMER</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">QueryState</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#classes">Classes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#example-usage">Example Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#summary">Summary</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">OmniSciDB</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>QueryState</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/components/query_state.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="querystate">
+<h1>QueryState<a class="headerlink" href="#querystate" title="Permalink to this headline">¶</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">#include</span> <span class="pre">&quot;ThriftHandler/QueryState.h&quot;</span></code></p>
+<p>QueryState is a set of C++ classes that:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Consolidates information about current and past SQL queries.</p></li>
+<li><p>Record execution time of blocks of C++ code, and log with call stack relationships.</p></li>
+</ul>
+</div></blockquote>
+<div class="section" id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Permalink to this headline">¶</a></h2>
+<div align="center" class="align-center"><img alt="QueryState Classes" src="../_images/classes.svg" /></div>
+<dl class="field-list simple">
+<dt class="field-odd">QueryStates</dt>
+<dd class="field-odd"><p>Manages and aggregates <code class="docutils literal notranslate"><span class="pre">QueryState</span></code> objects. E.g. <code class="docutils literal notranslate"><span class="pre">MapDHandler</span></code> has one <code class="docutils literal notranslate"><span class="pre">QueryStates</span></code> member
+variable.</p>
+</dd>
+<dt class="field-even">QueryState</dt>
+<dd class="field-even"><p>Manages the lifetime of a single query. Attributes/methods (e.g. <code class="docutils literal notranslate"><span class="pre">bool</span> <span class="pre">just_explain</span></code>) may be
+moved/added directly to this class as needed to model the state of SQL queries. As such, the development
+of this class can be considered ongoing, as a reflection of the ongoing development of the OmniSciDB itself.
+Timing of code blocks (i.e. function calls) are stored in a list of <code class="docutils literal notranslate"><span class="pre">Event</span></code>s.</p>
+</dd>
+<dt class="field-odd">Event</dt>
+<dd class="field-odd"><p>Records start and stop times for the lifetime of a corresponding <code class="docutils literal notranslate"><span class="pre">Timer</span></code> object. <code class="docutils literal notranslate"><span class="pre">Event</span></code>s can have
+parent/child relationships to model call-stack nesting.</p>
+</dd>
+<dt class="field-even">Timer</dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">Event</span></code>s and <code class="docutils literal notranslate"><span class="pre">Timer</span></code>s are created at the same time. A <code class="docutils literal notranslate"><span class="pre">Timer</span></code> object is typically instantiated
+with a <code class="docutils literal notranslate"><span class="pre">__func__</span></code> parameter, which shows up in the logs along with the duration between its construction
+and destruction.</p>
+</dd>
+<dt class="field-odd">QueryStateProxy</dt>
+<dd class="field-odd"><p>A light-weight object that can both create and be created by <code class="docutils literal notranslate"><span class="pre">Timer</span></code> objects so
+that call-stack relationships between parent/child <code class="docutils literal notranslate"><span class="pre">Event</span></code>s are recorded.</p>
+</dd>
+</dl>
+</div>
+<div class="section" id="example-usage">
+<h2>Example Usage<a class="headerlink" href="#example-usage" title="Permalink to this headline">¶</a></h2>
+<p>In <code class="docutils literal notranslate"><span class="pre">MapDHandler::sql_execute()</span></code>:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="c1">// session_ptr and query_str are already set or passed into the function.</span>
+
+<span class="k">auto</span> <span class="n">query_state</span> <span class="o">=</span> <span class="n">create_query_state</span><span class="p">(</span><span class="n">session_ptr</span><span class="p">,</span> <span class="n">query_str</span><span class="p">);</span> <span class="c1">// Line A</span>
+<span class="k">auto</span> <span class="n">stdlog</span> <span class="o">=</span> <span class="n">STDLOG</span><span class="p">(</span><span class="n">query_state</span><span class="p">);</span>                             <span class="c1">// Line B</span>
+<span class="p">...</span>
+<span class="n">foo</span><span class="p">(</span><span class="n">query_state</span><span class="o">-&gt;</span><span class="n">createQueryStateProxy</span><span class="p">());</span>                     <span class="c1">// Line C</span>
+</pre></div>
+</div>
+<p>In <code class="docutils literal notranslate"><span class="pre">foo(QueryStateProxy</span> <span class="pre">query_state_proxy)</span></code>:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span> <span class="n">timer</span> <span class="o">=</span> <span class="n">query_state_proxy</span><span class="p">.</span><span class="n">createTimer</span><span class="p">(</span><span class="n">__func__</span><span class="p">);</span>          <span class="c1">// Line D</span>
+<span class="p">...</span>
+<span class="n">bar</span><span class="p">(</span><span class="n">timer</span><span class="p">.</span><span class="n">createQueryStateProxy</span><span class="p">());</span>                            <span class="c1">// Line E</span>
+</pre></div>
+</div>
+<p>In <code class="docutils literal notranslate"><span class="pre">bar(QueryStateProxy</span> <span class="pre">query_state_proxy)</span></code>:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">auto</span> <span class="n">timer</span> <span class="o">=</span> <span class="n">query_state_proxy</span><span class="p">.</span><span class="n">createTimer</span><span class="p">(</span><span class="n">__func__</span><span class="p">);</span>          <span class="c1">// Line F</span>
+<span class="p">...</span>
+</pre></div>
+</div>
+<dl class="field-list">
+<dt class="field-odd">Line A</dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">auto</span> <span class="pre">query_state</span> <span class="pre">=</span> <span class="pre">create_query_state(session_ptr,</span> <span class="pre">query_str);</span> <span class="pre">//</span> <span class="pre">Line</span> <span class="pre">A</span></code></p>
+<p>Create a new <code class="docutils literal notranslate"><span class="pre">QueryState</span></code> in the <code class="docutils literal notranslate"><span class="pre">MapDHandler::query_states_</span></code> member variable for the current query.</p>
+</dd>
+<dt class="field-even">Line B</dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">auto</span> <span class="pre">stdlog</span> <span class="pre">=</span> <span class="pre">STDLOG(query_state);</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">//</span> <span class="pre">Line</span> <span class="pre">B</span></code></p>
+<p>Connects the <code class="docutils literal notranslate"><span class="pre">QueryState</span></code> object to the <code class="docutils literal notranslate"><span class="pre">stdlog</span></code> which will log the <code class="docutils literal notranslate"><span class="pre">QueryState</span></code> information during
+<code class="docutils literal notranslate"><span class="pre">stdlog</span></code>’s destructor.</p>
+</dd>
+<dt class="field-odd">Line C</dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">foo(query_state-&gt;createQueryStateProxy());</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">//</span> <span class="pre">Line</span> <span class="pre">C</span></code></p>
+<p>To pass <code class="docutils literal notranslate"><span class="pre">QueryState</span></code> to other functions, it is preferred to generate a light-weight <code class="docutils literal notranslate"><span class="pre">QueryStateProxy</span></code>
+object rather than pass the <code class="docutils literal notranslate"><span class="pre">QueryState</span></code> reference. This is because <code class="docutils literal notranslate"><span class="pre">Timer</span></code> objects also generate
+<code class="docutils literal notranslate"><span class="pre">QueryStateProxy</span></code> objects to pass to other functions in order to track nested timings. Thus to avoid having
+redundant versions of functions that accept both <code class="docutils literal notranslate"><span class="pre">QueryState</span></code> and <code class="docutils literal notranslate"><span class="pre">QueryStateProxy</span></code> types, it is preferred
+for members/functions to accept <code class="docutils literal notranslate"><span class="pre">QueryStateProxy</span></code>. The original <code class="docutils literal notranslate"><span class="pre">QueryState</span></code> reference is then available
+via <code class="docutils literal notranslate"><span class="pre">QueryStateProxy::getQueryState()</span></code>.</p>
+</dd>
+<dt class="field-even">Line D</dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">auto</span> <span class="pre">timer</span> <span class="pre">=</span> <span class="pre">query_state_proxy.createTimer(__func__);</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">//</span> <span class="pre">Line</span> <span class="pre">D</span></code></p>
+<p>The lifetime of <code class="docutils literal notranslate"><span class="pre">timer</span></code> is recorded and stored in the original <code class="docutils literal notranslate"><span class="pre">query_state</span></code> object from
+Line A, and will appear in the logs associated with <code class="docutils literal notranslate"><span class="pre">__func__</span> <span class="pre">=</span> <span class="pre">&quot;foo&quot;</span></code> in this case.</p>
+</dd>
+<dt class="field-odd">Line E</dt>
+<dd class="field-odd"><p><code class="docutils literal notranslate"><span class="pre">bar(timer.createQueryStateProxy());</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">//</span> <span class="pre">Line</span> <span class="pre">E</span></code></p>
+<p>Similar to Line C, this is how to create nested timings when invoking another function deeper
+in the call stack.</p>
+</dd>
+<dt class="field-even">Line F</dt>
+<dd class="field-even"><p><code class="docutils literal notranslate"><span class="pre">auto</span> <span class="pre">timer</span> <span class="pre">=</span> <span class="pre">query_state_proxy.createTimer(__func__);</span>&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160; <span class="pre">//</span> <span class="pre">Line</span> <span class="pre">F</span></code></p>
+<p>Similar to Line D, the created <code class="docutils literal notranslate"><span class="pre">timer</span></code> will show up nested under the previous <code class="docutils literal notranslate"><span class="pre">Timer</span></code> object.</p>
+</dd>
+</dl>
+<p>The two <code class="docutils literal notranslate"><span class="pre">timer</span></code> instances above directly result in the nested log lines:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">foo</span> <span class="mi">140038217238272</span> <span class="o">-</span> <span class="n">total</span> <span class="n">time</span> <span class="mi">578</span> <span class="n">ms</span>
+  <span class="n">bar</span> <span class="mi">140038217238272</span> <span class="o">-</span> <span class="n">total</span> <span class="n">time</span> <span class="mi">578</span> <span class="n">ms</span>
+</pre></div>
+</div>
+<p>(The long integer is the thread id.) Though only a couple examples were given here, each <code class="docutils literal notranslate"><span class="pre">Timer</span></code> object can
+spawn any number of <code class="docutils literal notranslate"><span class="pre">QueryStateProxy</span></code> instances, and vice-versa.</p>
+</div>
+<div class="section" id="summary">
+<h2>Summary<a class="headerlink" href="#summary" title="Permalink to this headline">¶</a></h2>
+<p>The above example demonstrates how to:</p>
+<ol class="arabic simple">
+<li><p>Create new <code class="docutils literal notranslate"><span class="pre">QueryState</span></code> objects and connect them with <code class="docutils literal notranslate"><span class="pre">SessionInfo</span></code> and <code class="docutils literal notranslate"><span class="pre">StdLog</span></code> instances.</p></li>
+<li><p>Create nested <code class="docutils literal notranslate"><span class="pre">Timer</span></code> objects using <code class="docutils literal notranslate"><span class="pre">QueryStateProxy</span></code> objects as intermediaries to model nested
+function calls.</p></li>
+</ol>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+      
+        <a href="logger.html" class="btn btn-neutral float-left" title="Logger" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019, OmniSci, Inc
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

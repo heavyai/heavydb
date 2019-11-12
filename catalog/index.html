@@ -1,0 +1,495 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>3. Catalog &mdash; OmniSciDB  documentation</title>
+  
+
+  
+  
+    <link rel="shortcut icon" href="../_static/favicon.webp"/>
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script type="text/javascript" src="../_static/language_data.js"></script>
+        <script type="text/javascript" src="../_static/segment_analytics.js"></script>
+        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/theme_overrides.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="4. Data Model" href="../data_model/index.html" />
+    <link rel="prev" title="2.3. Start and Load Sample Data" href="../quickstart/start.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> OmniSciDB
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">System Architecture</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../overview/index.html">1. OmniSciDB at 30,000 Feet</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#high-level-diagram">1.1. High Level Diagram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#data-model">1.2. Data Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#data-flow">1.3. Data Flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#query-execution">1.4. Query Execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#simple-execution-model">1.5. Simple Execution Model</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart/getting_started.html">2. Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/deps.html">2.1. Server Dependencies</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#prebuilt-dependencies">2.1.1. Prebuilt Dependencies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#environment-variables">2.1.1.1. Environment Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-ubuntu">2.1.2. Building on Ubuntu</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#ubuntu-16-04">2.1.2.1. Ubuntu 16.04</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#ubuntu-18-04">2.1.2.2. Ubuntu 18.04</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-centos">2.1.3. Building on CentOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-macos">2.1.4. Building on macOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-arch-linux">2.1.5. Building on Arch Linux</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/build.html">2.2. Build OmniSciDB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/start.html">2.3. Start and Load Sample Data</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/start.html#starting-the-server">2.3.1. Starting the Server</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/start.html#starting-manually">2.3.1.1. Starting Manually</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/start.html#working-with-data">2.3.2. Working With Data</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">3. Catalog</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#high-level-overview">3.1. High Level Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#system-catalog-global">3.2. System Catalog (Global)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#users">3.2.1. Users</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#roles">3.2.2. Roles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#databases">3.2.3. Databases</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#permissions">3.2.4. Permissions</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#catalog-database-specific">3.3. Catalog (Database Specific)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#tables">3.3.1. Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#columns">3.3.2. Columns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dictionaries">3.3.3. Dictionaries</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#sharded-tables">3.3.4. Sharded Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#views">3.3.5. Views</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dashboards">3.3.6. Dashboards</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#migration">3.4. Migration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../data_model/index.html">4. Data Model</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/columnar_layout.html">4.1. Columnar Data Organization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#columns">4.1.1. Columns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#fragments">4.1.2. Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#chunks">4.1.3. Chunks</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/columnar_layout.html#example-for-chunk-physical-representations">4.1.3.1. Example for chunk physical representations</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/columnar_layout.html#chunkkey">4.1.3.2. ChunkKey</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/physical_layout.html">4.2. Physical Data Layout</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#directory-structure">4.2.1. Directory Structure</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/physical_layout.html#epoch">4.2.1.1. Epoch</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#data-multipages">4.2.2. Data Multipages</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/physical_layout.html#example-data-page">4.2.2.1. Example Data Page:</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#metadata-pages">4.2.3. Metadata Pages</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/memory_layout.html">4.3. Memory  Layout</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/api.html">4.4. External API</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/api.html#design">4.4.1. Design</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/api.html#protocols">4.4.2. Protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/types.html">4.5. Data Types</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#scalar-types">4.5.1. Scalar Types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#scalar-types-with-encoding">4.5.2. Scalar Types with Encoding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#variable-length-types">4.5.3. Variable Length Types</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../flow/data.html">5. Data Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../flow/data.html#input-data">5.1. Input Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../flow/data.html#output-data">5.2. Output Data</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../calcite/calcite_parser.html">6. Calcite Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../execution/index.html">7. Query Execution</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../execution/overview.html">7.1. Overview</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#request-handler-mapdhandler">7.1.1. Request Handler (MapDHandler)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#apache-calcite">7.1.2. Apache Calcite</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-executor">7.1.3. Relational Algebra Executor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-abstract-interpreter-and-optimizer">7.1.4. Relational Algebra Abstract Interpreter and Optimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-translator">7.1.5. Relational Algebra Translator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#executor">7.1.6. Executor</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/optimizer.html">7.2. Interpreter / Optimizer</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/optimizer.html#interpreter">7.2.1. Interpreter</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#relalgnode">7.2.1.1. <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#rex">7.2.1.2. <code class="docutils literal notranslate"><span class="pre">Rex</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/optimizer.html#omniscidb-specific-query-optimization">7.2.2. OmniSciDB Specific Query Optimization</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#mark-noops">7.2.2.1. Mark Noops</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#eliminate-identical-copies">7.2.2.2. Eliminate Identical Copies</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#fold-filters">7.2.2.3. Fold Filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#eliminate-dead-columns">7.2.2.4. Eliminate Dead Columns</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#separate-window-function-expressions">7.2.2.5. Separate Window Function Expressions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#coalesce-nodes">7.2.2.6. Coalesce Nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#create-left-deep-join">7.2.2.7. Create Left Deep Join</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/scheduler.html">7.3. DAG Execution / Translation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#determining-execution-order">7.3.1. Determining Execution Order</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#raexecutiondescriptor">7.3.2. <code class="docutils literal notranslate"><span class="pre">RaExecutionDescriptor</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#query-step-translation">7.3.3. Query Step Translation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#query-step-execution">7.3.4. Query Step Execution</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/scheduler.html#scalar-subqueries">7.3.4.1. Scalar Subqueries</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/codegen.html">7.4. Code Generation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#query-templates">7.4.1. Query Templates</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#codegenerator">7.4.2. <code class="docutils literal notranslate"><span class="pre">CodeGenerator</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#runtime-functions-and-extension-functions">7.4.3. Runtime Functions and Extension Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#llvm-optimization-passes">7.4.4. LLVM Optimization Passes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#native-codegen">7.4.5. Native Codegen</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/codegen.html#cpu-native-code-generation">7.4.5.1. CPU Native Code Generation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/codegen.html#gpu-native-code-generation">7.4.5.2. GPU Native Code Generation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/codegen.html#code-cache">7.4.5.3. Code Cache</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/kernels.html">7.5. Execution Kernels</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/kernels.html#query-fragment-descriptor">7.5.1. Query Fragment Descriptor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/kernels.html#dispatch-fragments">7.5.2. Dispatch Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/kernels.html#query-execution-context">7.5.3. Query Execution Context</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/kernels.html#cpu-execution">7.5.3.1. CPU execution</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/kernels.html#gpu-execution">7.5.3.2. GPU execution</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/results.html">7.6. Query Results</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/results.html#result-set-storage">7.6.1. Result Set Storage</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/results.html#logical-targets-and-physical-slots">7.6.1.1. Logical Targets and Physical Slots</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/results.html#storage-memory-layouts">7.6.1.2. Storage Memory Layouts</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/results.html#group-by-queries">7.6.1.3. Group by Queries</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/results.html#reductions">7.6.2. Reductions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/results.html#accessors-and-iterators">7.6.3. Accessors and Iterators</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption"><span class="caption-text">Additional Resources</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://doxygen.omnisci.com">Doxygen</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/omnisci/omniscidb">GitHub Repository</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary/index.html">Glossary of Terms</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Detailed Class Information</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../components/logger.html">Logger</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../components/logger.html#program-options">Program Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/logger.html#initialization-and-global-instances">Initialization and Global Instances</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/logger.html#usage">Usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#severity">Severity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#log-files">Log Files</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#format">Format</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#channel">Channel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#macros">Macros</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#log">LOG</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#check">CHECK</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#stdlog">STDLOG</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#debug-timer">DEBUG_TIMER</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../components/query_state.html">QueryState</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../components/query_state.html#classes">Classes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/query_state.html#example-usage">Example Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/query_state.html#summary">Summary</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">OmniSciDB</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>3. Catalog</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/catalog/index.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="catalog">
+<h1>3. Catalog<a class="headerlink" href="#catalog" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="high-level-overview">
+<h2>3.1. High Level Overview<a class="headerlink" href="#high-level-overview" title="Permalink to this headline">¶</a></h2>
+<p>OmniSciDB stores database, table, and user information in a centralized <cite>Catalog</cite>. Each database has its own <cite>Catalog</cite>, with the top-level <em>System Catalog</em> (<cite>SysCatalog</cite>) managing catalogs across databases. Each catalog (including the system catalog) is backed by a <cite>SQLite</cite> database in the <cite>mapd_catalogs</cite> directory (a top-level directory in the OmniSciDB data directory). In addition to managing catalogs for individual databases, the <cite>SysCatalog</cite> manages users, roles, and higher-level object permissions.</p>
+<p>Both SysCatalog and Catalog classes are defined in files of the same name in the <cite>Catalog</cite> source directory. All catalog-related code lives inside the <code class="docutils literal notranslate"><span class="pre">Catalog_Namespace</span></code>.</p>
+<img alt="../_images/catalog_overview.png" src="../_images/catalog_overview.png" />
+</div>
+<div class="section" id="system-catalog-global">
+<h2>3.2. System Catalog (Global)<a class="headerlink" href="#system-catalog-global" title="Permalink to this headline">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">SysCatalog</span></code> is a singleton class responsible for managing top-level OmniSciDB server metadata, including:</p>
+<ul class="simple">
+<li><p>Users</p></li>
+<li><p>Roles</p></li>
+<li><p>Databases</p></li>
+<li><p>Permissions</p></li>
+</ul>
+<p>Data is persisted using a <em>SQLite</em> database at <cite>&lt;path_to_db/mapd_catalogs/omnisci_system_catalog&gt;</cite>. When the <cite>SysCatalog</cite> is created, the contents of the SQLite database is read and stored in memory. Subsequent reads only reference in-memory data structures. All writes are immediately flushed to SQLite.</p>
+<p>Below is a UML representation of the schema of the SQLite database backing the system catalog:</p>
+<a class="reference internal image-reference" href="../_images/syscat_schema.png"><img alt="../_images/syscat_schema.png" src="../_images/syscat_schema.png" style="height: 400px;" /></a>
+<div class="section" id="users">
+<h3>3.2.1. Users<a class="headerlink" href="#users" title="Permalink to this headline">¶</a></h3>
+<p>User accounts in OmniSciDB are global (that is, one user account can have access to multiple databases). The users login information is stored in the <code class="docutils literal notranslate"><span class="pre">mapd_users</span></code> system catalog table. When a user is authenticated, a <code class="docutils literal notranslate"><span class="pre">UserMetadata</span></code> struct is created to provide an in-memory representation of the user.</p>
+</div>
+<div class="section" id="roles">
+<h3>3.2.2. Roles<a class="headerlink" href="#roles" title="Permalink to this headline">¶</a></h3>
+<p>Roles are used to grant permissions to groups of users. Roles are stored in the <code class="docutils literal notranslate"><span class="pre">mapd_roles</span></code> table. Each user also has a role corresponding to the name of the user, e.g. adding a user <cite>Max</cite> will also add a corresponding role called <cite>Max</cite> automatically.</p>
+</div>
+<div class="section" id="databases">
+<h3>3.2.3. Databases<a class="headerlink" href="#databases" title="Permalink to this headline">¶</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">mapd_databases</span></code> table functions as a lookup table for mapping a database name (a string) to the internal database identifier (an integer).</p>
+</div>
+<div class="section" id="permissions">
+<h3>3.2.4. Permissions<a class="headerlink" href="#permissions" title="Permalink to this headline">¶</a></h3>
+<p>All system-level object privilege grants are stored and accessed from the <code class="docutils literal notranslate"><span class="pre">mapd_object_permissions</span></code> table. An object permission can be assigned to a role, and specifies what level of access a role has to various parts of the system. See <a class="reference external" href="https://docs.omnisci.com/latest/5_roles.html#ddl-roles-and-privileges">DB Object Privileges</a> for more information about interfacing with OmniSciDB’s security model.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">granteeMap_</span></code> in the <code class="docutils literal notranslate"><span class="pre">SysCatalog</span></code> class stores <code class="docutils literal notranslate"><span class="pre">Grantee</span></code> objects, representing object level permissions grants. The <code class="docutils literal notranslate"><span class="pre">granteeMap_</span></code> is built at startup.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">objectDescriptorMap_</span></code> in the <code class="docutils literal notranslate"><span class="pre">SysCatalog</span></code> class stores <code class="docutils literal notranslate"><span class="pre">ObjectRoleDescriptor``s,</span> <span class="pre">relating</span> <span class="pre">a</span> <span class="pre">role</span> <span class="pre">to</span> <span class="pre">a</span> <span class="pre">specific</span> <span class="pre">privilege</span> <span class="pre">grant.</span> <span class="pre">The</span>&#160; <span class="pre">``objectDescriptorMap_</span></code> is also built when  Together, the <code class="docutils literal notranslate"><span class="pre">granteeMap_</span></code> and <code class="docutils literal notranslate"><span class="pre">objectDescriptorMap_</span></code> are referenced when determining if a user has access to perform an action in the database.</p>
+</div>
+</div>
+<div class="section" id="catalog-database-specific">
+<h2>3.3. Catalog (Database Specific)<a class="headerlink" href="#catalog-database-specific" title="Permalink to this headline">¶</a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">Catalog</span></code> is the top-level metadata object for a database. When the OmniSciDB data directory is initialized, an initial “default” database is created. By default, OmniSciDB always has at least one catalog at startup. The <code class="docutils literal notranslate"><span class="pre">Catalog</span></code> maintains the following objects:</p>
+<ul class="simple">
+<li><p>Tables</p></li>
+<li><p>Columns</p></li>
+<li><p>Views</p></li>
+<li><p>Dashboards</p></li>
+<li><p>mapd_dictionaries</p></li>
+</ul>
+<p>Data is persisted using a <em>SQLite</em> database per catalog in the <cite>mapd_catalogs</cite> directory, with the name of the <em>SQLite</em> database file corresponding to the database name. Just like the <cite>SysCatalog</cite>, a <cite>Catalog</cite> loads all data from SQLite on creation and flushes writes to SQLite immediately.</p>
+<p>Below is a UML representation of the schema of the SQLite database backing a catalog:</p>
+<a class="reference internal image-reference" href="../_images/cat_schema.png"><img alt="../_images/cat_schema.png" src="../_images/cat_schema.png" style="height: 400px;" /></a>
+<div class="section" id="tables">
+<h3>3.3.1. Tables<a class="headerlink" href="#tables" title="Permalink to this headline">¶</a></h3>
+<p>Tables metadata for all tables in a given database is stored in the <code class="docutils literal notranslate"><span class="pre">mapd_tables</span></code> <em>SQLite</em> table and read by the <code class="docutils literal notranslate"><span class="pre">Catalog</span></code> at startup. Table metadata is stored in a <code class="docutils literal notranslate"><span class="pre">TableDescriptor</span></code> for access by other objects in the system. For a given table, the <code class="docutils literal notranslate"><span class="pre">TableDescriptor</span></code> both holds table metadata (id, fragment size, etc) and is responsible for instantiating the <code class="docutils literal notranslate"><span class="pre">Fragmenter</span></code> for the table. That is, the <code class="docutils literal notranslate"><span class="pre">TableDescriptor</span></code> is the primary interface to locating storage for a given table.</p>
+</div>
+<div class="section" id="columns">
+<h3>3.3.2. Columns<a class="headerlink" href="#columns" title="Permalink to this headline">¶</a></h3>
+<p>Column metadata is stored in the <code class="docutils literal notranslate"><span class="pre">mapd_columns</span></code> table. Each column is uniquely identified by an ID pair, mapping to a unique table ID and a unique column ID within that table. <code class="docutils literal notranslate"><span class="pre">ColumnDescriptor</span></code> objects pass column metadata (including the <cite>SQL Type</cite> of a column) throughout the system.</p>
+</div>
+<div class="section" id="dictionaries">
+<h3>3.3.3. Dictionaries<a class="headerlink" href="#dictionaries" title="Permalink to this headline">¶</a></h3>
+<p>Columns of type <cite>dictionary encoded string</cite> require a separate string dictionary. The string dictionary metadata is stored in the <code class="docutils literal notranslate"><span class="pre">mapd_dictionaries</span></code> SQLite table. <code class="docutils literal notranslate"><span class="pre">DictDescriptor</span></code> objects encapsulate string dictionary information. Like the <code class="docutils literal notranslate"><span class="pre">TabelDescriptor</span></code>, <code class="docutils literal notranslate"><span class="pre">DictDescriptor</span></code> is the primary interface for accessing physical string dictionary storage.</p>
+</div>
+<div class="section" id="sharded-tables">
+<h3>3.3.4. Sharded Tables<a class="headerlink" href="#sharded-tables" title="Permalink to this headline">¶</a></h3>
+<p>OmniSciDB supports <cite>sharded tables</cite> – that is, a table partitioned by a predefined column (called the <cite>shard key</cite>) into a pre-determined number of <cite>physical tables</cite>, more commonly referred to as <cite>shards</cite>. Sharding is used for increasing performance (by grouping like data on like devices) and for support complex queries in distributed mode (Enterprise Edition only). Internally, a sharded table is represented as a top-level <cite>logical</cite> table and several underlying <cite>physical</cite> tables (with the number of physical tables corresponding to the total shard count). This mapping is stored in the <code class="docutils literal notranslate"><span class="pre">mapd_logical_to_physical</span></code> <em>SQLite</em> table.</p>
+</div>
+<div class="section" id="views">
+<h3>3.3.5. Views<a class="headerlink" href="#views" title="Permalink to this headline">¶</a></h3>
+<p>Views in OmniSciDB are currently not materialized during creation. Instead, the definition for the view is stored in the <code class="docutils literal notranslate"><span class="pre">mapd_views</span></code> <em>SQLite</em> table, and the view is materialized lazily when the view is queried. By using lazy materialization, OmniSciDB fuse the query on the view with the underlying table(s) backing the view, reducing the number of intermediate projections required and/or the amount of data that must be loaded and processed. Views are represented by a <code class="docutils literal notranslate"><span class="pre">TableDescriptor</span></code> object with the <cite>isView</cite> boolean member set to <cite>true</cite>.</p>
+</div>
+<div class="section" id="dashboards">
+<h3>3.3.6. Dashboards<a class="headerlink" href="#dashboards" title="Permalink to this headline">¶</a></h3>
+<p>OmniSciDB holds the dashboard state for OmniSci Immerse (Enterprise Edition only), our web-based data exploration tool. Dashboards are serialized and stored in the <code class="docutils literal notranslate"><span class="pre">mapd_dashboards</span></code> table. Because dashboards are built over a database and typically contain many database objects, they are considered a top-level object in the OmniSciDB catalog and object permissions model.</p>
+</div>
+</div>
+<div class="section" id="migration">
+<h2>3.4. Migration<a class="headerlink" href="#migration" title="Permalink to this headline">¶</a></h2>
+<p>OmniSciDB includes a schema migration service for migrating user catalog information between versions. The schema migration service can also drive storage level migrations. The <code class="docutils literal notranslate"><span class="pre">mapd_version_history</span></code> table enables tracking whether or not a migration has been performed. When changing <cite>SysCatalog</cite> or <cite>Catalog</cite> <em>SQLite</em> schema, migrations must be used to ensure previous data directories work properly.</p>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="../data_model/index.html" class="btn btn-neutral float-right" title="4. Data Model" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../quickstart/start.html" class="btn btn-neutral float-left" title="2.3. Start and Load Sample Data" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019, OmniSci, Inc
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

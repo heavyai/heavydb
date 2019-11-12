@@ -1,0 +1,655 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>7.2. Interpreter / Optimizer &mdash; OmniSciDB  documentation</title>
+  
+
+  
+  
+    <link rel="shortcut icon" href="../_static/favicon.webp"/>
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script type="text/javascript" src="../_static/language_data.js"></script>
+        <script type="text/javascript" src="../_static/segment_analytics.js"></script>
+        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/theme_overrides.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="7.3. DAG Execution / Translation" href="scheduler.html" />
+    <link rel="prev" title="7.1. Overview" href="overview.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> OmniSciDB
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">System Architecture</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../overview/index.html">1. OmniSciDB at 30,000 Feet</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#high-level-diagram">1.1. High Level Diagram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#data-model">1.2. Data Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#data-flow">1.3. Data Flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#query-execution">1.4. Query Execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#simple-execution-model">1.5. Simple Execution Model</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart/getting_started.html">2. Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/deps.html">2.1. Server Dependencies</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#prebuilt-dependencies">2.1.1. Prebuilt Dependencies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#environment-variables">2.1.1.1. Environment Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-ubuntu">2.1.2. Building on Ubuntu</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#ubuntu-16-04">2.1.2.1. Ubuntu 16.04</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#ubuntu-18-04">2.1.2.2. Ubuntu 18.04</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-centos">2.1.3. Building on CentOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-macos">2.1.4. Building on macOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-arch-linux">2.1.5. Building on Arch Linux</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/build.html">2.2. Build OmniSciDB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/start.html">2.3. Start and Load Sample Data</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/start.html#starting-the-server">2.3.1. Starting the Server</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/start.html#starting-manually">2.3.1.1. Starting Manually</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/start.html#working-with-data">2.3.2. Working With Data</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../catalog/index.html">3. Catalog</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#high-level-overview">3.1. High Level Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#system-catalog-global">3.2. System Catalog (Global)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#users">3.2.1. Users</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#roles">3.2.2. Roles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#databases">3.2.3. Databases</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#permissions">3.2.4. Permissions</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#catalog-database-specific">3.3. Catalog (Database Specific)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#tables">3.3.1. Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#columns">3.3.2. Columns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#dictionaries">3.3.3. Dictionaries</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#sharded-tables">3.3.4. Sharded Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#views">3.3.5. Views</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#dashboards">3.3.6. Dashboards</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#migration">3.4. Migration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../data_model/index.html">4. Data Model</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/columnar_layout.html">4.1. Columnar Data Organization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#columns">4.1.1. Columns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#fragments">4.1.2. Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#chunks">4.1.3. Chunks</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/columnar_layout.html#example-for-chunk-physical-representations">4.1.3.1. Example for chunk physical representations</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/columnar_layout.html#chunkkey">4.1.3.2. ChunkKey</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/physical_layout.html">4.2. Physical Data Layout</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#directory-structure">4.2.1. Directory Structure</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/physical_layout.html#epoch">4.2.1.1. Epoch</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#data-multipages">4.2.2. Data Multipages</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/physical_layout.html#example-data-page">4.2.2.1. Example Data Page:</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#metadata-pages">4.2.3. Metadata Pages</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/memory_layout.html">4.3. Memory  Layout</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/api.html">4.4. External API</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/api.html#design">4.4.1. Design</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/api.html#protocols">4.4.2. Protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/types.html">4.5. Data Types</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#scalar-types">4.5.1. Scalar Types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#scalar-types-with-encoding">4.5.2. Scalar Types with Encoding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#variable-length-types">4.5.3. Variable Length Types</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../flow/data.html">5. Data Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../flow/data.html#input-data">5.1. Input Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../flow/data.html#output-data">5.2. Output Data</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../calcite/calcite_parser.html">6. Calcite Parser</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="index.html">7. Query Execution</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="overview.html">7.1. Overview</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#request-handler-mapdhandler">7.1.1. Request Handler (MapDHandler)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#apache-calcite">7.1.2. Apache Calcite</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#relational-algebra-executor">7.1.3. Relational Algebra Executor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#relational-algebra-abstract-interpreter-and-optimizer">7.1.4. Relational Algebra Abstract Interpreter and Optimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#relational-algebra-translator">7.1.5. Relational Algebra Translator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="overview.html#executor">7.1.6. Executor</a></li>
+</ul>
+</li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">7.2. Interpreter / Optimizer</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#interpreter">7.2.1. Interpreter</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#relalgnode">7.2.1.1. <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#rex">7.2.1.2. <code class="docutils literal notranslate"><span class="pre">Rex</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#omniscidb-specific-query-optimization">7.2.2. OmniSciDB Specific Query Optimization</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#mark-noops">7.2.2.1. Mark Noops</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#eliminate-identical-copies">7.2.2.2. Eliminate Identical Copies</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#fold-filters">7.2.2.3. Fold Filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#eliminate-dead-columns">7.2.2.4. Eliminate Dead Columns</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#separate-window-function-expressions">7.2.2.5. Separate Window Function Expressions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#coalesce-nodes">7.2.2.6. Coalesce Nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#create-left-deep-join">7.2.2.7. Create Left Deep Join</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="scheduler.html">7.3. DAG Execution / Translation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="scheduler.html#determining-execution-order">7.3.1. Determining Execution Order</a></li>
+<li class="toctree-l3"><a class="reference internal" href="scheduler.html#raexecutiondescriptor">7.3.2. <code class="docutils literal notranslate"><span class="pre">RaExecutionDescriptor</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="scheduler.html#query-step-translation">7.3.3. Query Step Translation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="scheduler.html#query-step-execution">7.3.4. Query Step Execution</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="scheduler.html#scalar-subqueries">7.3.4.1. Scalar Subqueries</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="codegen.html">7.4. Code Generation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="codegen.html#query-templates">7.4.1. Query Templates</a></li>
+<li class="toctree-l3"><a class="reference internal" href="codegen.html#codegenerator">7.4.2. <code class="docutils literal notranslate"><span class="pre">CodeGenerator</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="codegen.html#runtime-functions-and-extension-functions">7.4.3. Runtime Functions and Extension Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="codegen.html#llvm-optimization-passes">7.4.4. LLVM Optimization Passes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="codegen.html#native-codegen">7.4.5. Native Codegen</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="codegen.html#cpu-native-code-generation">7.4.5.1. CPU Native Code Generation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="codegen.html#gpu-native-code-generation">7.4.5.2. GPU Native Code Generation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="codegen.html#code-cache">7.4.5.3. Code Cache</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="kernels.html">7.5. Execution Kernels</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="kernels.html#query-fragment-descriptor">7.5.1. Query Fragment Descriptor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="kernels.html#dispatch-fragments">7.5.2. Dispatch Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="kernels.html#query-execution-context">7.5.3. Query Execution Context</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="kernels.html#cpu-execution">7.5.3.1. CPU execution</a></li>
+<li class="toctree-l4"><a class="reference internal" href="kernels.html#gpu-execution">7.5.3.2. GPU execution</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="results.html">7.6. Query Results</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="results.html#result-set-storage">7.6.1. Result Set Storage</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="results.html#logical-targets-and-physical-slots">7.6.1.1. Logical Targets and Physical Slots</a></li>
+<li class="toctree-l4"><a class="reference internal" href="results.html#storage-memory-layouts">7.6.1.2. Storage Memory Layouts</a></li>
+<li class="toctree-l4"><a class="reference internal" href="results.html#group-by-queries">7.6.1.3. Group by Queries</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="results.html#reductions">7.6.2. Reductions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="results.html#accessors-and-iterators">7.6.3. Accessors and Iterators</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption"><span class="caption-text">Additional Resources</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://doxygen.omnisci.com">Doxygen</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/omnisci/omniscidb">GitHub Repository</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary/index.html">Glossary of Terms</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Detailed Class Information</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../components/logger.html">Logger</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../components/logger.html#program-options">Program Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/logger.html#initialization-and-global-instances">Initialization and Global Instances</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/logger.html#usage">Usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#severity">Severity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#log-files">Log Files</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#format">Format</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#channel">Channel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#macros">Macros</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#log">LOG</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#check">CHECK</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#stdlog">STDLOG</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#debug-timer">DEBUG_TIMER</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../components/query_state.html">QueryState</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../components/query_state.html#classes">Classes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/query_state.html#example-usage">Example Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/query_state.html#summary">Summary</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">OmniSciDB</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="index.html">7. Query Execution</a> &raquo;</li>
+        
+      <li>7.2. Interpreter / Optimizer</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/execution/optimizer.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="interpreter-optimizer">
+<h1>7.2. Interpreter / Optimizer<a class="headerlink" href="#interpreter-optimizer" title="Permalink to this headline">¶</a></h1>
+<p>The <code class="docutils literal notranslate"><span class="pre">RelAlgAbstractInterpreter</span></code> and <code class="docutils literal notranslate"><span class="pre">RelAlgOptimizer</span></code> are responsible for deserializing the relational algebra tree returned from Calcite (see <a class="reference internal" href="../calcite/calcite_parser.html"><span class="doc">Calcite Parser</span></a>) and building a relational algebra tree using OmniSciDB specific data structures. The OmniSciDB RA Tree then passes through several optimization passes. The process of building the OmniSciDB tree and a description of the optimization passes currently employed follows.</p>
+<div class="section" id="interpreter">
+<h2>7.2.1. Interpreter<a class="headerlink" href="#interpreter" title="Permalink to this headline">¶</a></h2>
+<p>The class <code class="docutils literal notranslate"><span class="pre">RelAlgAbstractInterpreter</span></code> deserializes the JSON string containing the optimized relational algebra tree from Calcite. The interpreter file also includes a class hierarchy for defining relational algebra nodes (<code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code>) and relational algebra node expressions (<code class="docutils literal notranslate"><span class="pre">Rex</span></code>). The run method iterates the list of relational algebra nodes present in the JSON and calls a deserialization function for each node. The deserialization function returns a class derived from <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code> – the type of the class corresponds to the type of relational algebra node. A complete list of currently supported relational algebra nodes is available in the table below.</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 19%" />
+<col style="width: 21%" />
+<col style="width: 60%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Calcite Node Type</p></th>
+<th class="head"><p><code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code> Subclass</p></th>
+<th class="head"><p>Calcite Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>EnumerableTableScan</p></td>
+<td><p>RelScan</p></td>
+<td><p>Returns the contents of a table through
+sequential traversal.</p></td>
+</tr>
+<tr class="row-odd"><td><p>LogicalProject</p></td>
+<td><p>RelProject</p></td>
+<td><p>Computes a set of ‘select expressions’
+from its input relational <a class="reference internal" href="../glossary/index.html#term-expression"><span class="xref std std-term">expression</span></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p>LogicalFilter</p></td>
+<td><p>RelFilter</p></td>
+<td><p>Iterates over its input and returns
+elements for which condition evaluates to true.</p></td>
+</tr>
+<tr class="row-odd"><td><p>LogicalAggregate</p></td>
+<td><p>RelAggregate</p></td>
+<td><p>Eliminates duplicates and computes
+totals. It corresponds to the <cite>GROUP BY</cite> operator in a SQL query
+statement, together with the aggregate functions in the <cite>SELECT</cite>
+clause.</p></td>
+</tr>
+<tr class="row-even"><td><p>LogicalJoin</p></td>
+<td><p>RelJoin</p></td>
+<td><p>Combines two relational expressions
+according to some condition. Each output row has columns from
+the left and right inputs.</p></td>
+</tr>
+<tr class="row-odd"><td><p>LogicalSort</p></td>
+<td><p>RelSort</p></td>
+<td><p>Imposes a particular sort order on
+its input without otherwise changing its content. Also used to
+represent a <cite>LIMIT</cite> or <cite>OFFSET</cite>.</p></td>
+</tr>
+<tr class="row-even"><td><p>LogicalValues</p></td>
+<td><p>RelLogicalValues</p></td>
+<td><p>Relational expression whose value is a sequence of zero or more
+literal row values.</p></td>
+</tr>
+<tr class="row-odd"><td><p>LogicalTableModify</p></td>
+<td><p>RelModify</p></td>
+<td><p>Modifies a table. Expression occurs
+as a result of <cite>DELETE</cite>, or <cite>UPDATE</cite> SQL statements.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="section" id="relalgnode">
+<h3>7.2.1.1. <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code><a class="headerlink" href="#relalgnode" title="Permalink to this headline">¶</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code> base class stores the relationship between RA nodes in the RA tree. Additionally, the <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code> stores a pointer to its execution results after the step described by the node has been executed, as well as the final type information for the nodes targets. Derived classes may store additional information (e.g. the <code class="docutils literal notranslate"><span class="pre">RelScan</span></code> object contains a pointer to the <code class="docutils literal notranslate"><span class="pre">TableDescriptor</span></code> for the table being scanned).</p>
+</div>
+<div class="section" id="rex">
+<h3>7.2.1.2. <code class="docutils literal notranslate"><span class="pre">Rex</span></code><a class="headerlink" href="#rex" title="Permalink to this headline">¶</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">Rex</span></code> class is a pure virtual base class ensuring all <code class="docutils literal notranslate"><span class="pre">Rex</span></code> derived objects can be serialized to a string. <code class="docutils literal notranslate"><span class="pre">Rex</span></code> derived objects must implement the <cite>toString()</cite> method, but are otherwise free to include their own expression-specific member variables and methods. The main <code class="docutils literal notranslate"><span class="pre">Rex</span></code> objects are described in the table below.</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 23%" />
+<col style="width: 77%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Object Name</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>RexAbstractInput</p></td>
+<td><p>Placeholder for a <code class="docutils literal notranslate"><span class="pre">RexInput</span></code> object, resolved
+after all node objects have been created.</p></td>
+</tr>
+<tr class="row-odd"><td><p>RexInput</p></td>
+<td><p>Input expression. Directly references a source <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code>
+object.</p></td>
+</tr>
+<tr class="row-even"><td><p>RexLiteral</p></td>
+<td><p>Literal expression.</p></td>
+</tr>
+<tr class="row-odd"><td><p>RexAgg</p></td>
+<td><p>Aggregate expression.</p></td>
+</tr>
+<tr class="row-even"><td><p>RexOperator</p></td>
+<td><p>Unary or binary operator expression (e.g. <cite>CAST</cite> or <cite>AND</cite>).
+<code class="docutils literal notranslate"><span class="pre">RexOperator</span></code> will have one or more operands, which are
+owned by the operator object.</p></td>
+</tr>
+<tr class="row-odd"><td><p>RexCase</p></td>
+<td><p>Case expression. Stores operands for <cite>when</cite>, <cite>then</cite>, and
+<cite>else</cite> similarly to <code class="docutils literal notranslate"><span class="pre">RexOperator</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p>RexSubQuery</p></td>
+<td><p>Scalar subquery expression. <code class="docutils literal notranslate"><span class="pre">RexSubQuery</span></code> nodes are
+dispatched
+prior to all other nodes and the subquery result is replaced
+prior to step execution.</p></td>
+</tr>
+<tr class="row-odd"><td><p>RexFunctionOperator</p></td>
+<td><p>Function expression.</p></td>
+</tr>
+<tr class="row-even"><td><p>RexRef</p></td>
+<td><p>Synthetic expression node allowing a column in a group by to
+be referenced directly by the projection.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="section" id="omniscidb-specific-query-optimization">
+<h2>7.2.2. OmniSciDB Specific Query Optimization<a class="headerlink" href="#omniscidb-specific-query-optimization" title="Permalink to this headline">¶</a></h2>
+<p>Once all node objects have been built, the OmniSciDB relational algebra tree passes through several optimization phases. Each optimization is described below.</p>
+<div class="section" id="mark-noops">
+<h3>7.2.2.1. Mark Noops<a class="headerlink" href="#mark-noops" title="Permalink to this headline">¶</a></h3>
+<p>Aggregate RA nodes represent group by operations. In the case where a group by operation is repeated, subsequent aggregate nodes can be marked as a <cite>noop</cite>. If a node is marked as a <cite>noop</cite>, the result from the node immediately preceding the aggregate is simply forwarded during query execution. Below is an example SQL query which contains a <cite>noop</cite> node:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">SELECT</span> <span class="n">first_name</span> <span class="k">FROM</span> <span class="p">(</span><span class="k">SELECT</span> <span class="n">first_name</span> <span class="k">FROM</span> <span class="n">Users</span> <span class="k">GROUP</span> <span class="k">BY</span> <span class="n">first_name</span><span class="p">)</span> <span class="k">GROUP</span> <span class="k">BY</span> <span class="n">first_name</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>Calcite generates the following RA tree.</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span>Explanation
+LogicalAggregate(group=[{0}])
+  LogicalAggregate(group=[{0}])
+    LogicalProject(first_name=[$0])
+      EnumerableTableScan(table=[[mapd, Users]])
+</pre></div>
+</div>
+<p>The second aggregate node is clearly a duplicate of the first. Therefore, the second aggregate node is marked as a <cite>noop</cite> and the result from the first node (after the project) is forwarded.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The RA tree inspected by prefixing any <cite>SELECT</cite> query with <code class="docutils literal notranslate"><span class="pre">explain</span> <span class="pre">calcite</span></code>.</p>
+</div>
+</div>
+<div class="section" id="eliminate-identical-copies">
+<h3>7.2.2.2. Eliminate Identical Copies<a class="headerlink" href="#eliminate-identical-copies" title="Permalink to this headline">¶</a></h3>
+<p>Detects and removes project nodes which forward targets to other project nodes higher in the relational algebra tree. Eliminating identical copies reduces intermediate buffer use. But, more importantly, this optimization step prepares the RA tree for further manipulation in the steps below.</p>
+</div>
+<div class="section" id="fold-filters">
+<h3>7.2.2.3. Fold Filters<a class="headerlink" href="#fold-filters" title="Permalink to this headline">¶</a></h3>
+<p>Detects two identical filter nodes and folds the filters into a single filter node using the binary operator <cite>AND</cite>. Calcite typically folds most filters automatically during query operation. However, if an intermediate buffer is removed during the eliminate identical copies step, additional opportunities for filter folding may exist. Consider the following example:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">SELECT</span> <span class="n">x</span><span class="p">,</span> <span class="n">y</span> <span class="k">FROM</span> <span class="p">(</span><span class="k">SELECT</span> <span class="n">a</span><span class="p">.</span><span class="n">str</span> <span class="k">AS</span> <span class="n">str</span><span class="p">,</span> <span class="n">b</span><span class="p">.</span><span class="n">x</span> <span class="k">AS</span> <span class="n">x</span><span class="p">,</span> <span class="n">a</span><span class="p">.</span><span class="n">y</span> <span class="k">AS</span> <span class="n">y</span> <span class="k">FROM</span> <span class="n">test</span> <span class="n">a</span><span class="p">,</span> <span class="n">join_test</span> <span class="n">b</span> <span class="k">WHERE</span> <span class="n">a</span><span class="p">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">b</span><span class="p">.</span><span class="n">x</span><span class="p">)</span> <span class="k">WHERE</span> <span class="n">str</span> <span class="o">=</span> <span class="s1">&#39;foo&#39;</span> <span class="k">ORDER</span> <span class="k">BY</span> <span class="n">x</span> <span class="k">LIMIT</span> <span class="mi">1</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>The generated RA from Calcite is:</p>
+<div class="highlight-cpp notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5
+6
+7
+8</pre></div></td><td class="code"><div class="highlight"><pre><span></span>LogicalSort(sort0=[$0], dir0=[ASC], fetch=[1])
+LogicalProject(x=[$1], y=[$2])
+  LogicalFilter(condition=[=($0, &#39;foo&#39;)])
+    LogicalProject(str=[$10], x=[$35], y=[$1])
+      LogicalFilter(condition=[=($0, $35)])
+        LogicalJoin(condition=[true], joinType=[inner])
+          EnumerableTableScan(table=[[omnisci, test]])
+          EnumerableTableScan(table=[[omnisci, join_test]])
+</pre></div>
+</td></tr></table></div>
+<p>The project node on line 4 can be removed, with its projected targets pushed to the project node on line 2 (see <cite>eliminate identical copies</cite>). Once the project node on line 4 is removed, the filters on lines 3 and 5 can be folded.</p>
+</div>
+<div class="section" id="eliminate-dead-columns">
+<h3>7.2.2.4. Eliminate Dead Columns<a class="headerlink" href="#eliminate-dead-columns" title="Permalink to this headline">¶</a></h3>
+<p>Intermediate projection nodes may sometimes load more inputs than are actually required by subsequent nodes. In OmniSciDB, each projection node input is loaded into memory and projected through as an output <a class="reference internal" href="../glossary/index.html#term-target"><span class="xref std std-term">target</span></a>. The dead columns elimination step ensures that only columns that are be used in subsequent projections are loaded into memory. As an example, consider the following table and query:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">CREATE</span> <span class="k">TABLE</span> <span class="n">dead_cols_test</span> <span class="p">(</span><span class="n">x</span> <span class="nb">INT</span><span class="p">,</span> <span class="n">y</span> <span class="nb">FLOAT</span><span class="p">);</span>
+
+<span class="k">SELECT</span> <span class="n">t1</span><span class="p">.</span><span class="n">x</span> <span class="k">FROM</span> <span class="n">dead_cols_test</span> <span class="n">t1</span> <span class="k">JOIN</span> <span class="p">(</span><span class="k">SELECT</span> <span class="o">*</span> <span class="k">FROM</span> <span class="n">dead_cols_test</span><span class="p">)</span> <span class="n">t2</span> <span class="k">ON</span> <span class="n">t1</span><span class="p">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">t2</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>The Calcite generated plan is:</p>
+<div class="highlight-cpp notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5</pre></div></td><td class="code"><div class="highlight"><pre><span></span>LogicalProject(x=[$0])
+  LogicalJoin(condition=[=($0, $3)], joinType=[inner])
+    EnumerableTableScan(table=[[mapd, dead_cols_test]])
+    LogicalProject(x=[$0], y=[$1], rowid=[$2])
+      EnumerableTableScan(table=[[mapd, dead_cols_test]])
+</pre></div>
+</td></tr></table></div>
+<p>Note that the projection on line 4 is projecting the <cite>y</cite> column (as part of the <cite>select *</cite> expansion in the right hand side join condition). But, <cite>y</cite> is not used in a subsequent projection; therefore, we can eliminate <cite>y</cite> and avoid loading the column for <cite>y</cite> into the memory hierarchy.</p>
+</div>
+<div class="section" id="separate-window-function-expressions">
+<h3>7.2.2.5. Separate Window Function Expressions<a class="headerlink" href="#separate-window-function-expressions" title="Permalink to this headline">¶</a></h3>
+<p>OmniSciDB currently requires window function expressions to be top-level expressions on their corresponding RA node. To ensure window function expressions can be embedded in other expressions, we detect the presence of embedded window function expressions and “split” the expression, pushing the top-level expression up to a new projection node, replacing the window function expression in the top-level expression with an input expression, and finally replacing the existing top-level expression in the current projection node with the window function expression.</p>
+<p>For example, consider the simple expression <cite>LAG() - 1</cite>. The top level expression is a <code class="docutils literal notranslate"><span class="pre">BinaryOperator</span></code> (with the op type of <cite>-</cite>, left hand side <cite>LAG()</cite>, and right hand side <cite>1</cite>). We detect the presence of the embedded window function expression, make a copy of the binary operator expression, forward it to a new projection node, and replace the window function expression with an input. Now we have <code class="docutils literal notranslate"><span class="pre">BinaryOperator</span></code> with the op type <cite>-</cite>, the left hand side an input target from the previous projection, and the right hand side <cite>1</cite> as before. Finally, we replace the existing binary operator with the top-level window function expression on the existing project node.</p>
+</div>
+<div class="section" id="coalesce-nodes">
+<h3>7.2.2.6. Coalesce Nodes<a class="headerlink" href="#coalesce-nodes" title="Permalink to this headline">¶</a></h3>
+<p>Calcite generates canonical relational algebra. Sometimes, executing operations in the canonical order would involve redundant intermediate buffers. The use of intermediate buffers must be minimized to ensure the highest utilization of available compute and memory resources. Therefore, we walk the RA DAG looking for patterns to be coalesced into a synthetic node to be executed without intermediate buffers while preserving the observable effects.</p>
+<p>For example, we coalesce the <cite>Filter</cite>, <cite>Project</cite>, <cite>Aggregate</cite> chain into a single synthetic node, which we call <code class="docutils literal notranslate"><span class="pre">RelCompound</span></code>. The compound node evaluates the filter and the aggregate on the fly and avoids the intermediate buffers for <cite>Filter</cite> and <cite>Project</cite> outputs.
+Consider the following example:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">SELECT</span> <span class="n">A</span><span class="p">.</span><span class="n">x</span><span class="p">,</span> <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">test</span> <span class="k">JOIN</span> <span class="n">B</span> <span class="k">ON</span> <span class="n">A</span><span class="p">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">B</span><span class="p">.</span><span class="n">x</span> <span class="k">WHERE</span> <span class="n">A</span><span class="p">.</span><span class="n">y</span> <span class="o">&gt;</span> <span class="mi">41</span> <span class="k">GROUP</span> <span class="k">BY</span> <span class="n">A</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>The RA tree before and after the coalesce nodes optimization is depicted before (nodes before optimization are drawn with dashed lines). The Compound node now contains all information needed to evaluate the filter and (potentially grouped) aggregates using just the memory buffer required for the final result.</p>
+<img alt="../_images/dag_optimization.png" class="align-center" src="../_images/dag_optimization.png" />
+</div>
+<div class="section" id="create-left-deep-join">
+<h3>7.2.2.7. Create Left Deep Join<a class="headerlink" href="#create-left-deep-join" title="Permalink to this headline">¶</a></h3>
+<p>The <code class="docutils literal notranslate"><span class="pre">RelLeftDeepJoin</span></code> node is another synthetic node, similar to <code class="docutils literal notranslate"><span class="pre">RelCompound</span></code>, which allows multiple join loops to be nested in join loops to be nested in a single operator. Consider the following example:</p>
+<div class="highlight-sql notranslate"><div class="highlight"><pre><span></span><span class="k">SELECT</span> <span class="k">COUNT</span><span class="p">(</span><span class="o">*</span><span class="p">)</span> <span class="k">FROM</span> <span class="n">a</span> <span class="k">JOIN</span> <span class="n">b</span> <span class="k">ON</span> <span class="n">a</span><span class="p">.</span><span class="n">x</span> <span class="o">=</span> <span class="n">b</span><span class="p">.</span><span class="n">x</span> <span class="k">JOIN</span> <span class="k">c</span> <span class="k">ON</span> <span class="n">b</span><span class="p">.</span><span class="n">x</span> <span class="o">=</span> <span class="k">c</span><span class="p">.</span><span class="n">x</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>Calcite generates the following RA tree:</p>
+<div class="highlight-cpp notranslate"><table class="highlighttable"><tr><td class="linenos"><div class="linenodiv"><pre>1
+2
+3
+4
+5
+6
+7</pre></div></td><td class="code"><div class="highlight"><pre><span></span>LogicalAggregate(group=[{}], EXPR$0=[COUNT()])
+  LogicalProject($f0=[0])
+    LogicalJoin(condition=[=($2, $4)], joinType=[inner])
+      LogicalJoin(condition=[=($0, $2)], joinType=[inner])
+        EnumerableTableScan(table=[[omnisci, a]])
+        EnumerableTableScan(table=[[omnisci, b]])
+      EnumerableTableScan(table=[[omnisci, c]])
+</pre></div>
+</td></tr></table></div>
+<p>The join nodes on lines 3 and 4 can be coalesced into a single join node, as long as the join condition on line 4 is checked before line 3. The <code class="docutils literal notranslate"><span class="pre">RelLeftDeepJoin</span></code> node coalesces multiple join conditions into a single node, and dictates the ordering of the join conditions during code generation.</p>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="scheduler.html" class="btn btn-neutral float-right" title="7.3. DAG Execution / Translation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="overview.html" class="btn btn-neutral float-left" title="7.1. Overview" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019, OmniSci, Inc
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

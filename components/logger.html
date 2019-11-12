@@ -1,0 +1,750 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Logger &mdash; OmniSciDB  documentation</title>
+  
+
+  
+  
+    <link rel="shortcut icon" href="../_static/favicon.webp"/>
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script type="text/javascript" src="../_static/language_data.js"></script>
+        <script type="text/javascript" src="../_static/segment_analytics.js"></script>
+        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/theme_overrides.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="QueryState" href="query_state.html" />
+    <link rel="prev" title="Glossary of Terms" href="../glossary/index.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> OmniSciDB
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">System Architecture</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../overview/index.html">1. OmniSciDB at 30,000 Feet</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#high-level-diagram">1.1. High Level Diagram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#data-model">1.2. Data Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#data-flow">1.3. Data Flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#query-execution">1.4. Query Execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#simple-execution-model">1.5. Simple Execution Model</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../quickstart/getting_started.html">2. Getting Started</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/deps.html">2.1. Server Dependencies</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#prebuilt-dependencies">2.1.1. Prebuilt Dependencies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#environment-variables">2.1.1.1. Environment Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-ubuntu">2.1.2. Building on Ubuntu</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#ubuntu-16-04">2.1.2.1. Ubuntu 16.04</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/deps.html#ubuntu-18-04">2.1.2.2. Ubuntu 18.04</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-centos">2.1.3. Building on CentOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-macos">2.1.4. Building on macOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/deps.html#building-on-arch-linux">2.1.5. Building on Arch Linux</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/build.html">2.2. Build OmniSciDB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../quickstart/start.html">2.3. Start and Load Sample Data</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/start.html#starting-the-server">2.3.1. Starting the Server</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../quickstart/start.html#starting-manually">2.3.1.1. Starting Manually</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../quickstart/start.html#working-with-data">2.3.2. Working With Data</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../catalog/index.html">3. Catalog</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#high-level-overview">3.1. High Level Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#system-catalog-global">3.2. System Catalog (Global)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#users">3.2.1. Users</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#roles">3.2.2. Roles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#databases">3.2.3. Databases</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#permissions">3.2.4. Permissions</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#catalog-database-specific">3.3. Catalog (Database Specific)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#tables">3.3.1. Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#columns">3.3.2. Columns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#dictionaries">3.3.3. Dictionaries</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#sharded-tables">3.3.4. Sharded Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#views">3.3.5. Views</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#dashboards">3.3.6. Dashboards</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#migration">3.4. Migration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../data_model/index.html">4. Data Model</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/columnar_layout.html">4.1. Columnar Data Organization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#columns">4.1.1. Columns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#fragments">4.1.2. Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#chunks">4.1.3. Chunks</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/columnar_layout.html#example-for-chunk-physical-representations">4.1.3.1. Example for chunk physical representations</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/columnar_layout.html#chunkkey">4.1.3.2. ChunkKey</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/physical_layout.html">4.2. Physical Data Layout</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#directory-structure">4.2.1. Directory Structure</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/physical_layout.html#epoch">4.2.1.1. Epoch</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#data-multipages">4.2.2. Data Multipages</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/physical_layout.html#example-data-page">4.2.2.1. Example Data Page:</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#metadata-pages">4.2.3. Metadata Pages</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/memory_layout.html">4.3. Memory  Layout</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/api.html">4.4. External API</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/api.html#design">4.4.1. Design</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/api.html#protocols">4.4.2. Protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/types.html">4.5. Data Types</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#scalar-types">4.5.1. Scalar Types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#scalar-types-with-encoding">4.5.2. Scalar Types with Encoding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#variable-length-types">4.5.3. Variable Length Types</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../flow/data.html">5. Data Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../flow/data.html#input-data">5.1. Input Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../flow/data.html#output-data">5.2. Output Data</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../calcite/calcite_parser.html">6. Calcite Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../execution/index.html">7. Query Execution</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../execution/overview.html">7.1. Overview</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#request-handler-mapdhandler">7.1.1. Request Handler (MapDHandler)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#apache-calcite">7.1.2. Apache Calcite</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-executor">7.1.3. Relational Algebra Executor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-abstract-interpreter-and-optimizer">7.1.4. Relational Algebra Abstract Interpreter and Optimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-translator">7.1.5. Relational Algebra Translator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#executor">7.1.6. Executor</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/optimizer.html">7.2. Interpreter / Optimizer</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/optimizer.html#interpreter">7.2.1. Interpreter</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#relalgnode">7.2.1.1. <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#rex">7.2.1.2. <code class="docutils literal notranslate"><span class="pre">Rex</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/optimizer.html#omniscidb-specific-query-optimization">7.2.2. OmniSciDB Specific Query Optimization</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#mark-noops">7.2.2.1. Mark Noops</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#eliminate-identical-copies">7.2.2.2. Eliminate Identical Copies</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#fold-filters">7.2.2.3. Fold Filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#eliminate-dead-columns">7.2.2.4. Eliminate Dead Columns</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#separate-window-function-expressions">7.2.2.5. Separate Window Function Expressions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#coalesce-nodes">7.2.2.6. Coalesce Nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#create-left-deep-join">7.2.2.7. Create Left Deep Join</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/scheduler.html">7.3. DAG Execution / Translation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#determining-execution-order">7.3.1. Determining Execution Order</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#raexecutiondescriptor">7.3.2. <code class="docutils literal notranslate"><span class="pre">RaExecutionDescriptor</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#query-step-translation">7.3.3. Query Step Translation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#query-step-execution">7.3.4. Query Step Execution</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/scheduler.html#scalar-subqueries">7.3.4.1. Scalar Subqueries</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/codegen.html">7.4. Code Generation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#query-templates">7.4.1. Query Templates</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#codegenerator">7.4.2. <code class="docutils literal notranslate"><span class="pre">CodeGenerator</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#runtime-functions-and-extension-functions">7.4.3. Runtime Functions and Extension Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#llvm-optimization-passes">7.4.4. LLVM Optimization Passes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#native-codegen">7.4.5. Native Codegen</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/codegen.html#cpu-native-code-generation">7.4.5.1. CPU Native Code Generation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/codegen.html#gpu-native-code-generation">7.4.5.2. GPU Native Code Generation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/codegen.html#code-cache">7.4.5.3. Code Cache</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/kernels.html">7.5. Execution Kernels</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/kernels.html#query-fragment-descriptor">7.5.1. Query Fragment Descriptor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/kernels.html#dispatch-fragments">7.5.2. Dispatch Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/kernels.html#query-execution-context">7.5.3. Query Execution Context</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/kernels.html#cpu-execution">7.5.3.1. CPU execution</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/kernels.html#gpu-execution">7.5.3.2. GPU execution</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/results.html">7.6. Query Results</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/results.html#result-set-storage">7.6.1. Result Set Storage</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/results.html#logical-targets-and-physical-slots">7.6.1.1. Logical Targets and Physical Slots</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/results.html#storage-memory-layouts">7.6.1.2. Storage Memory Layouts</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/results.html#group-by-queries">7.6.1.3. Group by Queries</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/results.html#reductions">7.6.2. Reductions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/results.html#accessors-and-iterators">7.6.3. Accessors and Iterators</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption"><span class="caption-text">Additional Resources</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://doxygen.omnisci.com">Doxygen</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/omnisci/omniscidb">GitHub Repository</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary/index.html">Glossary of Terms</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Detailed Class Information</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Logger</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#program-options">Program Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#initialization-and-global-instances">Initialization and Global Instances</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#usage">Usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#severity">Severity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#log-files">Log Files</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#format">Format</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#channel">Channel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#macros">Macros</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#log">LOG</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#check">CHECK</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#stdlog">STDLOG</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#debug-timer">DEBUG_TIMER</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="query_state.html">QueryState</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="query_state.html#classes">Classes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="query_state.html#example-usage">Example Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="query_state.html#summary">Summary</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">OmniSciDB</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>Logger</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/components/logger.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="logger">
+<h1>Logger<a class="headerlink" href="#logger" title="Permalink to this headline">¶</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">#include</span> <span class="pre">&quot;Shared/Logger.h&quot;</span></code></p>
+<p>The OmniSci Logger is based on <a class="reference external" href="https://www.boost.org/libs/log/doc/html/index.html">Boost.Log</a> with a design goal of being largely, though not completely, backward
+compatible with <a class="reference external" href="https://github.com/google/glog">glog</a> in usage, but with additional control over the logging format and other features.</p>
+<p>For the database user, log settings are set in the same manner as other program options,
+which can be specified via the command line or config file. These include settings such as the directory
+where log files are written to, log file naming format, log severity level, etc. See <a class="reference internal" href="#program-options">Program Options</a>.</p>
+<p>For the developer, log entries are made in a syntax that is similar to <code class="docutils literal notranslate"><span class="pre">std::ostream</span></code>. Example:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">LOG</span><span class="p">(</span><span class="n">INFO</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;x = &quot;</span> <span class="o">&lt;&lt;</span> <span class="n">x</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>where <code class="docutils literal notranslate"><span class="pre">INFO</span></code> is one common example of the log “severity” level. Other severities are <code class="docutils literal notranslate"><span class="pre">WARNING</span></code>, <code class="docutils literal notranslate"><span class="pre">FATAL</span></code>,
+<code class="docutils literal notranslate"><span class="pre">DEBUG1</span></code>, etc. See <a class="reference internal" href="#severity">Severity</a>.</p>
+<p>In addition, there are a number of <code class="docutils literal notranslate"><span class="pre">CHECK</span></code> macros which act like <code class="docutils literal notranslate"><span class="pre">assert()</span></code> but will report via the
+logging system upon failure, with an optional message, and subsequently call <code class="docutils literal notranslate"><span class="pre">abort()</span></code>. Examples:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">CHECK</span><span class="p">(</span><span class="n">ptr</span><span class="p">);</span>
+<span class="n">CHECK_LT</span><span class="p">(</span><span class="mi">1u</span><span class="p">,</span> <span class="n">list</span><span class="p">.</span><span class="n">size</span><span class="p">())</span> <span class="o">&lt;&lt;</span> <span class="s">&quot;list must contain more than 1 element.&quot;</span><span class="p">;</span>
+</pre></div>
+</div>
+<p>If <code class="docutils literal notranslate"><span class="pre">ptr==nullptr</span></code> or <code class="docutils literal notranslate"><span class="pre">1u</span> <span class="pre">&gt;=</span> <span class="pre">list.size()</span></code> then the program will abort, and log a corresponding <code class="docutils literal notranslate"><span class="pre">FATAL</span></code> message.
+See <a class="reference internal" href="#check">CHECK</a>.</p>
+<div class="section" id="program-options">
+<h2>Program Options<a class="headerlink" href="#program-options" title="Permalink to this headline">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">omnisci_server</span> <span class="pre">--help</span></code> includes the logging options:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="nl">Logging</span><span class="p">:</span>
+<span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="n">directory</span> <span class="n">arg</span> <span class="p">(</span><span class="o">=</span><span class="s">&quot;mapd_log&quot;</span><span class="p">)</span>     <span class="n">Logging</span> <span class="n">directory</span><span class="p">.</span> <span class="n">May</span> <span class="n">be</span> <span class="n">relative</span> <span class="n">to</span>
+                                      <span class="n">data</span> <span class="n">directory</span><span class="p">,</span> <span class="n">or</span> <span class="n">absolute</span><span class="p">.</span>
+<span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="n">file</span><span class="o">-</span><span class="n">name</span> <span class="n">arg</span> <span class="p">(</span><span class="o">=</span><span class="n">omnisci_server</span><span class="p">.{</span><span class="n">SEVERITY</span><span class="p">}.</span><span class="o">%</span><span class="n">Y</span><span class="o">%</span><span class="n">m</span><span class="o">%</span><span class="n">d</span><span class="o">-%</span><span class="n">H</span><span class="o">%</span><span class="n">M</span><span class="o">%</span><span class="n">S</span><span class="p">.</span><span class="n">log</span><span class="p">)</span>
+                                      <span class="n">Log</span> <span class="n">file</span> <span class="n">name</span> <span class="n">relative</span> <span class="n">to</span>
+                                      <span class="n">log</span><span class="o">-</span><span class="n">directory</span><span class="p">.</span>
+<span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="n">symlink</span> <span class="n">arg</span> <span class="p">(</span><span class="o">=</span><span class="n">omnisci_server</span><span class="p">.{</span><span class="n">SEVERITY</span><span class="p">})</span>
+                                      <span class="n">Symlink</span> <span class="n">to</span> <span class="n">active</span> <span class="n">log</span><span class="p">.</span>
+<span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="n">severity</span> <span class="n">arg</span> <span class="p">(</span><span class="o">=</span><span class="n">INFO</span><span class="p">)</span>            <span class="n">Log</span> <span class="n">to</span> <span class="n">file</span> <span class="n">severity</span> <span class="nl">level</span><span class="p">:</span> <span class="n">INFO</span>
+                                      <span class="n">WARNING</span> <span class="n">ERROR</span> <span class="n">FATAL</span>
+<span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="n">severity</span><span class="o">-</span><span class="n">clog</span> <span class="n">arg</span> <span class="p">(</span><span class="o">=</span><span class="n">ERROR</span><span class="p">)</span>      <span class="n">Log</span> <span class="n">to</span> <span class="n">console</span> <span class="n">severity</span> <span class="nl">level</span><span class="p">:</span> <span class="n">INFO</span>
+                                      <span class="n">WARNING</span> <span class="n">ERROR</span> <span class="n">FATAL</span>
+<span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="n">channels</span> <span class="n">arg</span>                    <span class="n">Log</span> <span class="n">channel</span> <span class="n">debug</span> <span class="nl">info</span><span class="p">:</span> <span class="n">IR</span> <span class="n">PTX</span>
+<span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="k">auto</span><span class="o">-</span><span class="n">flush</span> <span class="n">arg</span> <span class="p">(</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>              <span class="n">Flush</span> <span class="n">logging</span> <span class="n">buffer</span> <span class="n">to</span> <span class="n">file</span> <span class="n">after</span> <span class="n">each</span>
+                                      <span class="n">message</span><span class="p">.</span>
+<span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="n">max</span><span class="o">-</span><span class="n">files</span> <span class="n">arg</span> <span class="p">(</span><span class="o">=</span><span class="mi">100</span><span class="p">)</span>             <span class="n">Maximum</span> <span class="n">number</span> <span class="n">of</span> <span class="n">log</span> <span class="n">files</span> <span class="n">to</span> <span class="n">keep</span><span class="p">.</span>
+<span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="n">min</span><span class="o">-</span><span class="n">free</span><span class="o">-</span><span class="n">space</span> <span class="n">arg</span> <span class="p">(</span><span class="o">=</span><span class="mi">20971520</span><span class="p">)</span>  <span class="n">Minimum</span> <span class="n">number</span> <span class="n">of</span> <span class="n">bytes</span> <span class="n">left</span> <span class="n">on</span> <span class="n">device</span>
+                                      <span class="n">before</span> <span class="n">oldest</span> <span class="n">log</span> <span class="n">files</span> <span class="n">are</span> <span class="n">deleted</span><span class="p">.</span>
+<span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="n">rotate</span><span class="o">-</span><span class="n">daily</span> <span class="n">arg</span> <span class="p">(</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>           <span class="n">Start</span> <span class="k">new</span> <span class="n">log</span> <span class="n">files</span> <span class="n">at</span> <span class="n">midnight</span><span class="p">.</span>
+<span class="o">--</span><span class="n">log</span><span class="o">-</span><span class="n">rotation</span><span class="o">-</span><span class="n">size</span> <span class="n">arg</span> <span class="p">(</span><span class="o">=</span><span class="mi">10485760</span><span class="p">)</span>   <span class="n">Maximum</span> <span class="n">file</span> <span class="n">size</span> <span class="n">in</span> <span class="n">bytes</span> <span class="n">before</span> <span class="k">new</span>
+                                      <span class="n">log</span> <span class="n">files</span> <span class="n">are</span> <span class="n">started</span><span class="p">.</span>
+</pre></div>
+</div>
+<p>The class <code class="docutils literal notranslate"><span class="pre">logger::LogOptions</span></code> manages the above values, and integrates into the <a class="reference external" href="https://www.boost.org/doc/html/program_options.html">Boost.Program_options</a>
+classes used by the OmniSciDB to process program options, from both the command line and/or a config file.</p>
+</div>
+<div class="section" id="initialization-and-global-instances">
+<h2>Initialization and Global Instances<a class="headerlink" href="#initialization-and-global-instances" title="Permalink to this headline">¶</a></h2>
+<p>To initialize the logging system, the function:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="k">namespace</span> <span class="n">logger</span> <span class="p">{</span>
+
+<span class="kt">void</span> <span class="n">init</span><span class="p">(</span><span class="n">LogOptions</span> <span class="k">const</span><span class="o">&amp;</span><span class="p">);</span>
+
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>must be invoked with the <code class="docutils literal notranslate"><span class="pre">logger::LogOptions</span></code> object to be applied. It is recommended to run this from
+<code class="docutils literal notranslate"><span class="pre">main()</span></code> as early as possible. This initializes two global logging objects, <code class="docutils literal notranslate"><span class="pre">gChannelLogger</span></code> and
+<code class="docutils literal notranslate"><span class="pre">gSeverityLogger</span></code>, that exist in the object file <code class="docutils literal notranslate"><span class="pre">Logger.o</span></code>, which should never be referenced
+directly. Instead, use the <code class="docutils literal notranslate"><span class="pre">LOG</span></code>/<code class="docutils literal notranslate"><span class="pre">CHECK</span></code> macros for all normal logging. This is mentioned here so that
+issues such as global variable construction/destruction can be considered. More specifically, due to the
+unpredictability of <a class="reference external" href="https://cryptopp.com/wiki/Static_Initialization_Order_Fiasco">static initialization order fiasco</a>, logging should never be done from other global
+constructors or destructors, directly or indirectly.</p>
+</div>
+<div class="section" id="usage">
+<h2>Usage<a class="headerlink" href="#usage" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="severity">
+<h3>Severity<a class="headerlink" href="#severity" title="Permalink to this headline">¶</a></h3>
+<p>There are currently 8 severity levels that can be used with the <code class="docutils literal notranslate"><span class="pre">LOG()</span></code> macro, in decreasing order of
+severity from most severe to least:</p>
+<table class="docutils align-default">
+<colgroup>
+<col style="width: 14%" />
+<col style="width: 86%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><strong>Severity</strong></p></td>
+<td><p><strong>When to Use</strong></p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">FATAL</span></code></p></td>
+<td><p>An unrecoverable error has occurred, and must be fixed in the software.
+This is the only severity which will result in a call to <code class="docutils literal notranslate"><span class="pre">abort()</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">ERROR</span></code></p></td>
+<td><p>A recoverable error has occurred, and must be fixed in the software.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">WARNING</span></code></p></td>
+<td><p>Something that “should not have” happened happened, but is not as demanding
+of an immediate fix as an <code class="docutils literal notranslate"><span class="pre">ERROR</span></code>. Example: A deprecated feature is still
+being used, even though the user was informed of its deprecation.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">INFO</span></code></p></td>
+<td><p>Significant and informative milestones in the execution of the program.
+One must balance logging useful and informative information, against
+logging too much useless and redundant information that drowns the signal
+out with noise.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DEBUG1</span></code></p></td>
+<td><p>More detailed information about the execution of the program than <code class="docutils literal notranslate"><span class="pre">INFO</span></code>
+that would be useful for debugging, but less detailed than the below debug
+levels. E.g. don’t log every row of a million-row table.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DEBUG2</span></code></p></td>
+<td><p>More detailed information than <code class="docutils literal notranslate"><span class="pre">DEBUG1</span></code>.</p></td>
+</tr>
+<tr class="row-even"><td><p><code class="docutils literal notranslate"><span class="pre">DEBUG3</span></code></p></td>
+<td><p>More detailed information than <code class="docutils literal notranslate"><span class="pre">DEBUG2</span></code>.</p></td>
+</tr>
+<tr class="row-odd"><td><p><code class="docutils literal notranslate"><span class="pre">DEBUG4</span></code></p></td>
+<td><p>More detailed information than <code class="docutils literal notranslate"><span class="pre">DEBUG3</span></code>.</p></td>
+</tr>
+</tbody>
+</table>
+<p>The program option <code class="docutils literal notranslate"><span class="pre">--log-severity</span></code> is set to exactly one of these, defaulting to <code class="docutils literal notranslate"><span class="pre">INFO</span></code>. All <code class="docutils literal notranslate"><span class="pre">LOG()</span></code>
+calls with a lesser severity are ignored and not logged. For example if <code class="docutils literal notranslate"><span class="pre">--log-severity=DEBUG1</span></code> then log
+calls <code class="docutils literal notranslate"><span class="pre">LOG(DEBUG1)</span></code>, <code class="docutils literal notranslate"><span class="pre">LOG(INFO)</span></code>, <code class="docutils literal notranslate"><span class="pre">LOG(WARNING)</span></code>, <code class="docutils literal notranslate"><span class="pre">LOG(ERROR)</span></code>, and <code class="docutils literal notranslate"><span class="pre">LOG(FATAL)</span></code> are active and
+will produce log entries when executed, and log calls <code class="docutils literal notranslate"><span class="pre">LOG(DEBUG4)</span></code>, <code class="docutils literal notranslate"><span class="pre">LOG(DEBUG3)</span></code>, and <code class="docutils literal notranslate"><span class="pre">LOG(DEBUG2)</span></code>
+are ignored. If a function is called in the input stream, e.g. <code class="docutils literal notranslate"><span class="pre">LOG(DEBUG2)</span> <span class="pre">&lt;&lt;</span> <span class="pre">f(x)</span></code>, then <code class="docutils literal notranslate"><span class="pre">f(x)</span></code> will
+be invoked if any only if <code class="docutils literal notranslate"><span class="pre">DEBUG2</span></code> is an active log severity.</p>
+<p>One guiding principle for deciding which of the debug levels to use is to consider it from the perspective of
+someone who is trying to diagnose/debug a problem. Running the database with <code class="docutils literal notranslate"><span class="pre">--log-severity=DEBUG4</span></code> will
+show ALL debug log lines, but more information must be searched through in order to find what is useful. Having
+a few different debug levels allows for some control over how verbose the logging is.</p>
+<p>Errors that are logged with <code class="docutils literal notranslate"><span class="pre">ERROR</span></code> and <code class="docutils literal notranslate"><span class="pre">FATAL</span></code> should be considered software errors, and not user errors.
+For example, if the user inputs a malformed SQL query, e.g. <code class="docutils literal notranslate"><span class="pre">SELEKT</span></code> instead of <code class="docutils literal notranslate"><span class="pre">SELECT</span></code>, then this
+should NOT be logged as an <code class="docutils literal notranslate"><span class="pre">ERROR</span></code>, but instead logged as an <code class="docutils literal notranslate"><span class="pre">INFO</span></code> with an appropriate response to
+the user. This would be considered correct behavior of the software. In contrast, anytime an <code class="docutils literal notranslate"><span class="pre">ERROR</span></code> or
+<code class="docutils literal notranslate"><span class="pre">FATAL</span></code> is logged, then it means there is a bug in the software that must be fixed.</p>
+<p>For backward compatibility, the flag <code class="docutils literal notranslate"><span class="pre">--verbose=on</span></code> is equivalent to <code class="docutils literal notranslate"><span class="pre">--log-severity=DEBUG1</span></code>. If both
+are provided, then the lesser severity is active.</p>
+</div>
+<div class="section" id="log-files">
+<h3>Log Files<a class="headerlink" href="#log-files" title="Permalink to this headline">¶</a></h3>
+<p>A separate log file is produced for <code class="docutils literal notranslate"><span class="pre">INFO</span></code>, <code class="docutils literal notranslate"><span class="pre">WARNING</span></code>, <code class="docutils literal notranslate"><span class="pre">ERROR</span></code>, and <code class="docutils literal notranslate"><span class="pre">FATAL</span></code> if the log severity is
+active.  If any of the <code class="docutils literal notranslate"><span class="pre">DEBUG</span></code> severities are active, they are included into the <code class="docutils literal notranslate"><span class="pre">INFO</span></code> log file.  Each log
+file redundantly includes all entries that are more severe than itself. For example if <code class="docutils literal notranslate"><span class="pre">--log-severity=DEBUG1</span></code>
+then the <code class="docutils literal notranslate"><span class="pre">INFO</span></code> log file will include all log calls <code class="docutils literal notranslate"><span class="pre">LOG(DEBUG1)</span></code>, <code class="docutils literal notranslate"><span class="pre">LOG(INFO)</span></code>, <code class="docutils literal notranslate"><span class="pre">LOG(WARNING)</span></code>,
+<code class="docutils literal notranslate"><span class="pre">LOG(ERROR)</span></code>, and <code class="docutils literal notranslate"><span class="pre">LOG(FATAL)</span></code>; the <code class="docutils literal notranslate"><span class="pre">WARNING</span></code> log file will include all log calls <code class="docutils literal notranslate"><span class="pre">LOG(WARNING)</span></code>,
+<code class="docutils literal notranslate"><span class="pre">LOG(ERROR)</span></code>, and <code class="docutils literal notranslate"><span class="pre">LOG(FATAL)</span></code>.</p>
+<p>The name of the log file by default includes the program name, severity, and timestamp of when its first entry
+was made. Example:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">omnisci_server</span><span class="p">.</span><span class="n">INFO</span><span class="mf">.20190918</span><span class="o">-</span><span class="mf">162525.</span><span class="n">log</span>
+</pre></div>
+</div>
+<p>This can be customized with the <code class="docutils literal notranslate"><span class="pre">--log-file-name</span></code> program option.</p>
+<p>New log files are started on each (re)start. A symbolic link without the timestamp and file extension
+suffix points to the latest version. Example:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">omnisci_server</span><span class="p">.</span><span class="n">INFO</span> <span class="o">-&gt;</span> <span class="n">omnisci_server</span><span class="p">.</span><span class="n">INFO</span><span class="mf">.20190918</span><span class="o">-</span><span class="mf">162525.</span><span class="n">log</span>
+</pre></div>
+</div>
+<div class="section" id="format">
+<h4>Format<a class="headerlink" href="#format" title="Permalink to this headline">¶</a></h4>
+<p>The general format of a log entry is:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">timestamp</span><span class="p">)</span> <span class="p">(</span><span class="n">severity</span><span class="p">)</span> <span class="p">(</span><span class="n">process_id</span><span class="p">)</span> <span class="p">(</span><span class="nl">filename</span><span class="p">:</span><span class="n">line_number</span><span class="p">)</span> <span class="p">(</span><span class="n">message</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Example:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="mi">2019</span><span class="o">-</span><span class="mi">09</span><span class="o">-</span><span class="mi">18</span><span class="nl">T16</span><span class="p">:</span><span class="mi">25</span><span class="o">:</span><span class="mf">25.659248</span> <span class="n">I</span> <span class="mi">26481</span> <span class="n">MapDHandler</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">181</span> <span class="n">OmniSci</span> <span class="n">Server</span> <span class="mf">4.9.0</span><span class="n">dev</span><span class="o">-</span><span class="mi">20190918</span><span class="o">-</span><span class="n">bd97353685</span>
+</pre></div>
+</div>
+<p>Field descriptions:</p>
+<div class="line-block">
+<div class="line">1. Timestamp in local timezone with microsecond resolution.</div>
+<div class="line">2. Single-character severity level. In same order as above severity levels:</div>
+<div class="line-block">
+<div class="line"><code class="docutils literal notranslate"><span class="pre">F</span></code> <code class="docutils literal notranslate"><span class="pre">E</span></code> <code class="docutils literal notranslate"><span class="pre">W</span></code> <code class="docutils literal notranslate"><span class="pre">I</span></code> <code class="docutils literal notranslate"><span class="pre">1</span></code> <code class="docutils literal notranslate"><span class="pre">2</span></code> <code class="docutils literal notranslate"><span class="pre">3</span></code> <code class="docutils literal notranslate"><span class="pre">4</span></code></div>
+<div class="line">For instance the <code class="docutils literal notranslate"><span class="pre">I</span></code> implies that the above log entry is of <code class="docutils literal notranslate"><span class="pre">INFO</span></code> severity.</div>
+</div>
+<div class="line">3. The process id assigned by the operating system.</div>
+<div class="line">4. Source filename:Line number.</div>
+<div class="line">5. Custom message sent to <code class="docutils literal notranslate"><span class="pre">LOG()</span></code> via the insertion <code class="docutils literal notranslate"><span class="pre">&lt;&lt;</span></code> operator.</div>
+</div>
+<p>Note that log entries can contain line breaks, thus not all log lines will begin with these fields if
+the message itself contains multiple lines.</p>
+</div>
+</div>
+<div class="section" id="channel">
+<h3>Channel<a class="headerlink" href="#channel" title="Permalink to this headline">¶</a></h3>
+<p>Channels are similar to severities, but exist outside of the severity hierarchy, have no ordering of their own,
+and can only be activated by explicitly including them in the <code class="docutils literal notranslate"><span class="pre">--log-channels</span></code> program option.</p>
+<p>Currently there are 2 channels: <code class="docutils literal notranslate"><span class="pre">IR</span></code> <code class="docutils literal notranslate"><span class="pre">PTX</span></code></p>
+<p>which log intermediate representation, and parallel thread execution code, respectively. Scripts may be
+used for other purposes that parse and analyze these logs, therefore using channels outside of the severity
+hierarchy is convenient so that the output is not interleaved with unrelated <code class="docutils literal notranslate"><span class="pre">INFO</span></code> or <code class="docutils literal notranslate"><span class="pre">DEBUG</span></code> log lines.</p>
+<p>For example, <code class="docutils literal notranslate"><span class="pre">LOG(IR)</span> <span class="pre">&lt;&lt;</span> <span class="pre">&quot;Foo</span> <span class="pre">=</span> <span class="pre">&quot;</span> <span class="pre">&lt;&lt;</span> <span class="pre">foo.getIr();</span></code> will be activated if any only if <code class="docutils literal notranslate"><span class="pre">IR</span></code> is included
+in the <code class="docutils literal notranslate"><span class="pre">--log-channels</span></code> program option, which can accept multiple comma-delimited channel names. If activated,
+the output will be logged to a file named after the channel, e.g. <code class="docutils literal notranslate"><span class="pre">omnisci_server.IR.20190918-162525.log</span></code>.</p>
+</div>
+<div class="section" id="macros">
+<h3>Macros<a class="headerlink" href="#macros" title="Permalink to this headline">¶</a></h3>
+<div class="section" id="log">
+<h4>LOG<a class="headerlink" href="#log" title="Permalink to this headline">¶</a></h4>
+<p>In addition to the <code class="docutils literal notranslate"><span class="pre">LOG()</span></code> macro, there are:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">LOG_IF(severity,</span> <span class="pre">condition)</span></code> - Same as <code class="docutils literal notranslate"><span class="pre">LOG(severity)</span></code> but first checks a boolean <code class="docutils literal notranslate"><span class="pre">condition</span></code> and logs
+only if evaluated to <code class="docutils literal notranslate"><span class="pre">true</span></code>.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">VLOG(n)</span></code> - Same as <code class="docutils literal notranslate"><span class="pre">LOG(DEBUGn)</span></code> for <code class="docutils literal notranslate"><span class="pre">n</span> <span class="pre">=</span> <span class="pre">1,</span> <span class="pre">2,</span> <span class="pre">3,</span> <span class="pre">4</span></code>.</p></li>
+</ul>
+</div></blockquote>
+</div>
+<div class="section" id="check">
+<h4>CHECK<a class="headerlink" href="#check" title="Permalink to this headline">¶</a></h4>
+<p>The <code class="docutils literal notranslate"><span class="pre">CHECK(condition)</span></code> macro evaluates <code class="docutils literal notranslate"><span class="pre">condition</span></code> as a boolean value. If true, then execution continues
+with nothing logged. Otherwise both the <code class="docutils literal notranslate"><span class="pre">condition</span></code> source code string is logged at <code class="docutils literal notranslate"><span class="pre">FATAL</span></code> severity,
+along with any optional <code class="docutils literal notranslate"><span class="pre">&lt;&lt;</span> <span class="pre">message</span></code>, before calling <code class="docutils literal notranslate"><span class="pre">abort()</span></code>. The program may then either exit, or
+optionally catch the <code class="docutils literal notranslate"><span class="pre">SIGABRT</span></code> signal.</p>
+<div class="line-block">
+<div class="line">Similarly there are 6 binary <code class="docutils literal notranslate"><span class="pre">CHECK</span></code> comparison macros:</div>
+<div class="line"><code class="docutils literal notranslate"><span class="pre">CHECK_EQ</span></code>, <code class="docutils literal notranslate"><span class="pre">CHECK_NE</span></code>, <code class="docutils literal notranslate"><span class="pre">CHECK_LT</span></code>, <code class="docutils literal notranslate"><span class="pre">CHECK_LE</span></code>, <code class="docutils literal notranslate"><span class="pre">CHECK_GT</span></code>, <code class="docutils literal notranslate"><span class="pre">CHECK_GE</span></code></div>
+<div class="line">which accept two parameters, and apply the comparison operators <code class="docutils literal notranslate"><span class="pre">==</span></code>, <code class="docutils literal notranslate"><span class="pre">!=</span></code>, <code class="docutils literal notranslate"><span class="pre">&lt;</span></code>, <code class="docutils literal notranslate"><span class="pre">&lt;=</span></code>, <code class="docutils literal notranslate"><span class="pre">&gt;</span></code>, <code class="docutils literal notranslate"><span class="pre">&gt;=</span></code>, respectively. For example, <code class="docutils literal notranslate"><span class="pre">CHECK_LT(1u,</span> <span class="pre">list.size())</span></code> will evaluate <code class="docutils literal notranslate"><span class="pre">1u</span> <span class="pre">&lt;</span> <span class="pre">list.size()</span></code>, and log and <code class="docutils literal notranslate"><span class="pre">abort()</span></code> if not true. The advantage of calling <code class="docutils literal notranslate"><span class="pre">CHECK_LT(1u,</span> <span class="pre">list.size())</span></code> over <code class="docutils literal notranslate"><span class="pre">CHECK(1u</span> <span class="pre">&lt;</span> <span class="pre">list.size())</span></code> is that the value of both operands will be logged if the test fails, which is not reported with <code class="docutils literal notranslate"><span class="pre">CHECK()</span></code>.</div>
+</div>
+</div>
+<div class="section" id="stdlog">
+<h4>STDLOG<a class="headerlink" href="#stdlog" title="Permalink to this headline">¶</a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">MapDHandler</span></code> uses a logging helper class <code class="docutils literal notranslate"><span class="pre">StdLog</span></code> for logging query-specific information in
+a standard format:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="p">(</span><span class="n">timestamp</span><span class="p">)</span> <span class="p">(</span><span class="n">severity</span><span class="p">)</span> <span class="p">(</span><span class="n">process_id</span><span class="p">)</span> <span class="p">(</span><span class="nl">filename</span><span class="p">:</span><span class="n">line_number</span><span class="p">)</span> <span class="n">stdlog</span> <span class="p">(</span><span class="n">function_name</span><span class="p">)</span> <span class="p">(</span><span class="n">match_id</span><span class="p">)</span>
+<span class="p">(</span><span class="n">time_ms</span><span class="p">)</span> <span class="p">(</span><span class="n">username</span><span class="p">)</span> <span class="p">(</span><span class="n">dbname</span><span class="p">)</span> <span class="p">(</span><span class="n">public_session_id</span><span class="p">)</span> <span class="p">(</span><span class="n">array</span> <span class="n">of</span> <span class="n">names</span><span class="p">)</span> <span class="p">(</span><span class="n">array</span> <span class="n">of</span> <span class="n">values</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>Since this contains timing information, it is logged at the end of query execution.  If the <code class="docutils literal notranslate"><span class="pre">DEBUG1</span></code> severity is
+active, then a corresponding <code class="docutils literal notranslate"><span class="pre">stdlog_begin</span></code> line is also logged at the start of the query, with the same format.</p>
+<p>Example usage is given in the <a class="reference external" href="query_state.html">QueryState</a> documentation.</p>
+<p>Example entries:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="mi">2019</span><span class="o">-</span><span class="mi">09</span><span class="o">-</span><span class="mi">20</span><span class="nl">T17</span><span class="p">:</span><span class="mi">15</span><span class="o">:</span><span class="mf">28.215590</span> <span class="mi">1</span> <span class="mi">13080</span> <span class="n">MapDHandler</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">846</span> <span class="n">stdlog_begin</span> <span class="n">sql_execute</span> <span class="mi">2</span> <span class="mi">0</span> <span class="n">omnisci</span> <span class="n">testuser</span> <span class="mi">528</span><span class="o">-</span><span class="n">dyM2</span> <span class="p">{</span><span class="s">&quot;query_str&quot;</span><span class="p">}</span> <span class="p">{</span><span class="s">&quot;SELECT * FROM omnisci_counties LIMIT 1;&quot;</span><span class="p">}</span>
+<span class="mi">2019</span><span class="o">-</span><span class="mi">09</span><span class="o">-</span><span class="mi">20</span><span class="nl">T17</span><span class="p">:</span><span class="mi">15</span><span class="o">:</span><span class="mf">28.924512</span> <span class="n">I</span> <span class="mi">13080</span> <span class="n">MapDHandler</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">846</span> <span class="n">stdlog</span> <span class="n">sql_execute</span> <span class="mi">2</span> <span class="mi">709</span> <span class="n">omnisci</span> <span class="n">testuser</span> <span class="mi">528</span><span class="o">-</span><span class="n">dyM2</span> <span class="p">{</span><span class="s">&quot;query_str&quot;</span><span class="p">,</span><span class="s">&quot;execution_time_ms&quot;</span><span class="p">,</span><span class="s">&quot;total_time_ms&quot;</span><span class="p">}</span> <span class="p">{</span><span class="s">&quot;SELECT * FROM omnisci_counties LIMIT 1;&quot;</span><span class="p">,</span><span class="s">&quot;708&quot;</span><span class="p">,</span><span class="s">&quot;709&quot;</span><span class="p">}</span>
+</pre></div>
+</div>
+<p>The first 4 fields are same as in the above <a class="reference internal" href="#format">Format</a> section.  Additional field descriptions:</p>
+<ol class="arabic simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">stdlog_begin</span></code>/<code class="docutils literal notranslate"><span class="pre">stdlog</span></code> -  logged when <code class="docutils literal notranslate"><span class="pre">StdLog</span></code> object is constructed/destructed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">function_name</span></code> - Name of function the <code class="docutils literal notranslate"><span class="pre">StdLog</span></code> object was constructed/destructed in.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">match_id</span></code> - Integer to uniquely match <code class="docutils literal notranslate"><span class="pre">stdlog_begin</span></code> and <code class="docutils literal notranslate"><span class="pre">stdlog</span></code> lines together.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">time_ms</span></code> - Time in milliseconds since constructor. For <code class="docutils literal notranslate"><span class="pre">stdlog_begin</span></code> it is always 0. For <code class="docutils literal notranslate"><span class="pre">stdlog</span></code>
+it is the time between the constructor and destructor, which is generally the duration of the function call.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">username</span></code> - Session username. Blank if not available.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">dbname</span></code> - Session database. Blank if not available.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">public_session_id</span></code> - Identifier for session. May be publicly accessible without compromising security.
+Blank if not available.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">names</span></code> - List of optional value names in SQL-array format.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">values</span></code> - List of optional values in SQL-array format, in same order as <code class="docutils literal notranslate"><span class="pre">names</span></code>. Names and values are
+logged in this way so as to be readily imported into a SQL table for analysis.</p></li>
+</ol>
+</div>
+<div class="section" id="debug-timer">
+<h4>DEBUG_TIMER<a class="headerlink" href="#debug-timer" title="Permalink to this headline">¶</a></h4>
+<p><code class="docutils literal notranslate"><span class="pre">DebugTimer</span></code> objects can be instantiated in the code that measure and log the duration of their own lifetimes,
+and include the following features:</p>
+<ul class="simple">
+<li><p>Globally accessible via a macro. E.g. <code class="docutils literal notranslate"><span class="pre">auto</span> <span class="pre">timer</span> <span class="pre">=</span> <span class="pre">DEBUG_TIMER(__func__)</span></code>.</p></li>
+<li><p>Single multi-line log entry is reported for nested timers.</p></li>
+<li><p>Enabled with the <code class="docutils literal notranslate"><span class="pre">--enable-debug-timer</span></code> program option. Without it, the <code class="docutils literal notranslate"><span class="pre">timer</span></code> objects have no effect.</p></li>
+<li><p>Include timers from spawned threads. Requires a call on the child thread informing the parent thread id:
+<code class="docutils literal notranslate"><span class="pre">DEBUG_TIMER_NEW_THREAD(parent_thread_id);</span></code></p></li>
+</ul>
+<p>Example:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="kt">void</span> <span class="nf">foo</span><span class="p">()</span> <span class="p">{</span>
+  <span class="k">auto</span> <span class="n">timer</span> <span class="o">=</span> <span class="n">DEBUG_TIMER</span><span class="p">(</span><span class="n">__func__</span><span class="p">);</span>
+  <span class="p">...</span>
+  <span class="n">bar</span><span class="p">();</span>
+  <span class="p">...</span>
+<span class="p">}</span>
+
+<span class="kt">void</span> <span class="nf">bar</span><span class="p">()</span> <span class="p">{</span>
+  <span class="k">auto</span> <span class="n">timer</span> <span class="o">=</span> <span class="n">DEBUG_TIMER</span><span class="p">(</span><span class="n">__func__</span><span class="p">);</span>
+  <span class="p">...</span>
+  <span class="n">bar2</span><span class="p">();</span>
+  <span class="p">...</span>
+  <span class="n">timer</span><span class="p">.</span><span class="n">stop</span><span class="p">();</span>  <span class="c1">// Manually stop timer for bar().</span>
+  <span class="p">...</span>
+<span class="p">}</span>
+
+<span class="kt">void</span> <span class="nf">bar2</span><span class="p">()</span> <span class="p">{</span>
+  <span class="k">auto</span> <span class="n">timer</span> <span class="o">=</span> <span class="n">DEBUG_TIMER</span><span class="p">(</span><span class="n">__func__</span><span class="p">);</span>
+  <span class="p">...</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>Upon the destruction of the <code class="docutils literal notranslate"><span class="pre">timer</span></code> object within <code class="docutils literal notranslate"><span class="pre">foo()</span></code>, a log entry similar to the following will be made:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="mi">2019</span><span class="o">-</span><span class="mi">10</span><span class="o">-</span><span class="mi">17</span><span class="nl">T15</span><span class="p">:</span><span class="mi">22</span><span class="o">:</span><span class="mf">53.981002</span> <span class="n">I</span> <span class="mi">8980</span> <span class="n">foobar</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">70</span> <span class="n">DEBUG_TIMER</span> <span class="n">thread_id</span><span class="p">(</span><span class="mi">140719710320384</span><span class="p">)</span>
+<span class="mi">19</span><span class="n">ms</span> <span class="n">total</span> <span class="n">duration</span> <span class="k">for</span> <span class="n">foo</span>
+  <span class="mi">17</span><span class="n">ms</span> <span class="n">bar</span> <span class="n">foobar</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">100</span>
+    <span class="mi">13</span><span class="n">ms</span> <span class="n">bar2</span> <span class="n">foobar</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">130</span>
+</pre></div>
+</div>
+<p>This is assuming that no other <code class="docutils literal notranslate"><span class="pre">DEBUG_TIMER</span></code> instance exists in the thread’s call stack prior to <code class="docutils literal notranslate"><span class="pre">foo()</span></code>.
+Accordingly, when <code class="docutils literal notranslate"><span class="pre">bar()</span></code> is called from <code class="docutils literal notranslate"><span class="pre">foo()</span></code>, <code class="docutils literal notranslate"><span class="pre">bar()</span></code>’s instance of <code class="docutils literal notranslate"><span class="pre">timer</span></code> will NOT cause its
+own log entry to be made, but instead will record its duration and relative depth in the call stack within
+a global data structure. Same with <code class="docutils literal notranslate"><span class="pre">bar2()</span></code>.  Once the outer-most <code class="docutils literal notranslate"><span class="pre">timer</span></code> object destructs, the entire
+<code class="docutils literal notranslate"><span class="pre">DurationTree</span></code> of recorded times are logged together into a single multi-line log entry, one line per
+<code class="docutils literal notranslate"><span class="pre">timer</span></code> instance.</p>
+<p>There is also a <code class="docutils literal notranslate"><span class="pre">DebugTimer::stop()</span></code> method that manually stops the timer, and will log the entire
+<code class="docutils literal notranslate"><span class="pre">DurationTree</span></code> if it is the base timer. The destructor in this case will have no further effect.</p>
+<p>To embed timers in a spawned child thread, call <code class="docutils literal notranslate"><span class="pre">DEBUG_TIMER_NEW_THREAD(parent_thread_id);</span></code> from the child
+thread. This will not start a timer, but will record the child-parent relationship so that subsequent
+<code class="docutils literal notranslate"><span class="pre">DEBUG_TIMER</span></code> calls are stored in the correct node of the parent tree. An example of a resulting report:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="mi">2019</span><span class="o">-</span><span class="mi">10</span><span class="o">-</span><span class="mi">17</span><span class="nl">T15</span><span class="p">:</span><span class="mi">22</span><span class="o">:</span><span class="mf">53.981002</span> <span class="n">I</span> <span class="mi">8980</span> <span class="n">RelAlgExecutor</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">70</span> <span class="n">DEBUG_TIMER</span> <span class="n">thread_id</span><span class="p">(</span><span class="mi">140719710320384</span><span class="p">)</span>
+<span class="mi">322</span><span class="n">ms</span> <span class="n">total</span> <span class="n">duration</span> <span class="k">for</span> <span class="n">executeRelAlgQuery</span>
+  <span class="mi">232</span><span class="n">ms</span> <span class="n">executeWorkUnit</span> <span class="n">RelAlgExecutor</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">1922</span>
+    <span class="mi">183</span><span class="n">ms</span> <span class="n">compileWorkUnit</span> <span class="n">NativeCodegen</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">1572</span>
+      <span class="n">New</span> <span class="kr">thread</span><span class="p">(</span><span class="mi">140718009964288</span><span class="p">)</span>
+        <span class="mi">2</span><span class="n">ms</span> <span class="n">fetchChunks</span> <span class="n">Execute</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">2028</span>
+        <span class="mi">0</span><span class="n">ms</span> <span class="n">getQueryExecutionContext</span> <span class="n">QueryMemoryDescriptor</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">695</span>
+        <span class="mi">45</span><span class="n">ms</span> <span class="n">executePlanWithGroupBy</span> <span class="n">Execute</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">2423</span>
+          <span class="mi">41</span><span class="n">ms</span> <span class="n">launchGpuCode</span> <span class="n">QueryExecutionContext</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">195</span>
+          <span class="mi">0</span><span class="n">ms</span> <span class="n">reduceMultiDeviceResultSets</span> <span class="n">Execute</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">865</span>
+      <span class="n">End</span> <span class="kr">thread</span><span class="p">(</span><span class="mi">140718009964288</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Any timer that is created in a thread when no other timers are active in the same or parent thread is
+called a <em>base timer</em>. The timer stack is logged when the base timer destructs, or <code class="docutils literal notranslate"><span class="pre">stop()</span></code> is called,
+after which memory used for tracking the timer trees are freed.  The performance cost of this should be
+kept in mind when placing timers within the code.</p>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>Non-base timers that end <em>after</em> their base timer ends will result in a <strong>segmentation fault</strong> (but only
+when the <code class="docutils literal notranslate"><span class="pre">--enable-debug-timer</span></code> option is active). This is easily avoided by not interleaving timer
+lifetimes with one another in the same block of code, and making sure that all child threads end prior
+to the ending of any corresponding base timer.</p>
+</div>
+<p>The high-level class relationships are:</p>
+<div class="figure align-center">
+</div>
+<p>There is a single global instance of <code class="docutils literal notranslate"><span class="pre">DurationTreeMap</span></code> that tracks a separate <code class="docutils literal notranslate"><span class="pre">DurationTree</span></code> for each thread.</p>
+</div>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="query_state.html" class="btn btn-neutral float-right" title="QueryState" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="../glossary/index.html" class="btn btn-neutral float-left" title="Glossary of Terms" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019, OmniSci, Inc
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>

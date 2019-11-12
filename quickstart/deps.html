@@ -1,0 +1,515 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>2.1. Server Dependencies &mdash; OmniSciDB  documentation</title>
+  
+
+  
+  
+    <link rel="shortcut icon" href="../_static/favicon.webp"/>
+  
+  
+  
+
+  
+  <script type="text/javascript" src="../_static/js/modernizr.min.js"></script>
+  
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script type="text/javascript" src="../_static/language_data.js"></script>
+        <script type="text/javascript" src="../_static/segment_analytics.js"></script>
+        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    
+    <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+    
+
+  
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/theme_overrides.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="2.2. Build OmniSciDB" href="build.html" />
+    <link rel="prev" title="2. Getting Started" href="getting_started.html" /> 
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> OmniSciDB
+          
+
+          
+          </a>
+
+          
+            
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <p class="caption"><span class="caption-text">System Architecture</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../overview/index.html">1. OmniSciDB at 30,000 Feet</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#high-level-diagram">1.1. High Level Diagram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#data-model">1.2. Data Model</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#data-flow">1.3. Data Flow</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#query-execution">1.4. Query Execution</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../overview/index.html#simple-execution-model">1.5. Simple Execution Model</a></li>
+</ul>
+</li>
+<li class="toctree-l1 current"><a class="reference internal" href="getting_started.html">2. Getting Started</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">2.1. Server Dependencies</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#prebuilt-dependencies">2.1.1. Prebuilt Dependencies</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#environment-variables">2.1.1.1. Environment Variables</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#building-on-ubuntu">2.1.2. Building on Ubuntu</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#ubuntu-16-04">2.1.2.1. Ubuntu 16.04</a></li>
+<li class="toctree-l4"><a class="reference internal" href="#ubuntu-18-04">2.1.2.2. Ubuntu 18.04</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#building-on-centos">2.1.3. Building on CentOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#building-on-macos">2.1.4. Building on macOS</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#building-on-arch-linux">2.1.5. Building on Arch Linux</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="build.html">2.2. Build OmniSciDB</a></li>
+<li class="toctree-l2"><a class="reference internal" href="start.html">2.3. Start and Load Sample Data</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="start.html#starting-the-server">2.3.1. Starting the Server</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="start.html#starting-manually">2.3.1.1. Starting Manually</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="start.html#working-with-data">2.3.2. Working With Data</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../catalog/index.html">3. Catalog</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#high-level-overview">3.1. High Level Overview</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#system-catalog-global">3.2. System Catalog (Global)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#users">3.2.1. Users</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#roles">3.2.2. Roles</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#databases">3.2.3. Databases</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#permissions">3.2.4. Permissions</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#catalog-database-specific">3.3. Catalog (Database Specific)</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#tables">3.3.1. Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#columns">3.3.2. Columns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#dictionaries">3.3.3. Dictionaries</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#sharded-tables">3.3.4. Sharded Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#views">3.3.5. Views</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#dashboards">3.3.6. Dashboards</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#migration">3.4. Migration</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../data_model/index.html">4. Data Model</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/columnar_layout.html">4.1. Columnar Data Organization</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#columns">4.1.1. Columns</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#fragments">4.1.2. Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/columnar_layout.html#chunks">4.1.3. Chunks</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/columnar_layout.html#example-for-chunk-physical-representations">4.1.3.1. Example for chunk physical representations</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/columnar_layout.html#chunkkey">4.1.3.2. ChunkKey</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/physical_layout.html">4.2. Physical Data Layout</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#directory-structure">4.2.1. Directory Structure</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/physical_layout.html#epoch">4.2.1.1. Epoch</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#data-multipages">4.2.2. Data Multipages</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../data_model/physical_layout.html#example-data-page">4.2.2.1. Example Data Page:</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/physical_layout.html#metadata-pages">4.2.3. Metadata Pages</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/memory_layout.html">4.3. Memory  Layout</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/api.html">4.4. External API</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/api.html#design">4.4.1. Design</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/api.html#protocols">4.4.2. Protocols</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../data_model/types.html">4.5. Data Types</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#scalar-types">4.5.1. Scalar Types</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#scalar-types-with-encoding">4.5.2. Scalar Types with Encoding</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../data_model/types.html#variable-length-types">4.5.3. Variable Length Types</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../flow/data.html">5. Data Flow</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../flow/data.html#input-data">5.1. Input Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../flow/data.html#output-data">5.2. Output Data</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../calcite/calcite_parser.html">6. Calcite Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../execution/index.html">7. Query Execution</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../execution/overview.html">7.1. Overview</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#request-handler-mapdhandler">7.1.1. Request Handler (MapDHandler)</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#apache-calcite">7.1.2. Apache Calcite</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-executor">7.1.3. Relational Algebra Executor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-abstract-interpreter-and-optimizer">7.1.4. Relational Algebra Abstract Interpreter and Optimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-translator">7.1.5. Relational Algebra Translator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#executor">7.1.6. Executor</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/optimizer.html">7.2. Interpreter / Optimizer</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/optimizer.html#interpreter">7.2.1. Interpreter</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#relalgnode">7.2.1.1. <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#rex">7.2.1.2. <code class="docutils literal notranslate"><span class="pre">Rex</span></code></a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/optimizer.html#omniscidb-specific-query-optimization">7.2.2. OmniSciDB Specific Query Optimization</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#mark-noops">7.2.2.1. Mark Noops</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#eliminate-identical-copies">7.2.2.2. Eliminate Identical Copies</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#fold-filters">7.2.2.3. Fold Filters</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#eliminate-dead-columns">7.2.2.4. Eliminate Dead Columns</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#separate-window-function-expressions">7.2.2.5. Separate Window Function Expressions</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#coalesce-nodes">7.2.2.6. Coalesce Nodes</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#create-left-deep-join">7.2.2.7. Create Left Deep Join</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/scheduler.html">7.3. DAG Execution / Translation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#determining-execution-order">7.3.1. Determining Execution Order</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#raexecutiondescriptor">7.3.2. <code class="docutils literal notranslate"><span class="pre">RaExecutionDescriptor</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#query-step-translation">7.3.3. Query Step Translation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/scheduler.html#query-step-execution">7.3.4. Query Step Execution</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/scheduler.html#scalar-subqueries">7.3.4.1. Scalar Subqueries</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/codegen.html">7.4. Code Generation</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#query-templates">7.4.1. Query Templates</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#codegenerator">7.4.2. <code class="docutils literal notranslate"><span class="pre">CodeGenerator</span></code></a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#runtime-functions-and-extension-functions">7.4.3. Runtime Functions and Extension Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#llvm-optimization-passes">7.4.4. LLVM Optimization Passes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/codegen.html#native-codegen">7.4.5. Native Codegen</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/codegen.html#cpu-native-code-generation">7.4.5.1. CPU Native Code Generation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/codegen.html#gpu-native-code-generation">7.4.5.2. GPU Native Code Generation</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/codegen.html#code-cache">7.4.5.3. Code Cache</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/kernels.html">7.5. Execution Kernels</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/kernels.html#query-fragment-descriptor">7.5.1. Query Fragment Descriptor</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/kernels.html#dispatch-fragments">7.5.2. Dispatch Fragments</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/kernels.html#query-execution-context">7.5.3. Query Execution Context</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/kernels.html#cpu-execution">7.5.3.1. CPU execution</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/kernels.html#gpu-execution">7.5.3.2. GPU execution</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../execution/results.html">7.6. Query Results</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/results.html#result-set-storage">7.6.1. Result Set Storage</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../execution/results.html#logical-targets-and-physical-slots">7.6.1.1. Logical Targets and Physical Slots</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/results.html#storage-memory-layouts">7.6.1.2. Storage Memory Layouts</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../execution/results.html#group-by-queries">7.6.1.3. Group by Queries</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/results.html#reductions">7.6.2. Reductions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/results.html#accessors-and-iterators">7.6.3. Accessors and Iterators</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p class="caption"><span class="caption-text">Additional Resources</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference external" href="https://doxygen.omnisci.com">Doxygen</a></li>
+<li class="toctree-l1"><a class="reference external" href="https://github.com/omnisci/omniscidb">GitHub Repository</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../glossary/index.html">Glossary of Terms</a></li>
+</ul>
+<p class="caption"><span class="caption-text">Detailed Class Information</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../components/logger.html">Logger</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../components/logger.html#program-options">Program Options</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/logger.html#initialization-and-global-instances">Initialization and Global Instances</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/logger.html#usage">Usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#severity">Severity</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#log-files">Log Files</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#format">Format</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#channel">Channel</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../components/logger.html#macros">Macros</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#log">LOG</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#check">CHECK</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#stdlog">STDLOG</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../components/logger.html#debug-timer">DEBUG_TIMER</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../components/query_state.html">QueryState</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../components/query_state.html#classes">Classes</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/query_state.html#example-usage">Example Usage</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../components/query_state.html#summary">Summary</a></li>
+</ul>
+</li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">OmniSciDB</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+          <li><a href="getting_started.html">2. Getting Started</a> &raquo;</li>
+        
+      <li>2.1. Server Dependencies</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/quickstart/deps.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="server-dependencies">
+<h1>2.1. Server Dependencies<a class="headerlink" href="#server-dependencies" title="Permalink to this headline">¶</a></h1>
+<p>Installation scripts are provided for building and installing OmniSciDB dependencies for most major linux operating systems and MacOS in the <cite>scripts</cite> directory. Prebuilt dependencies for CentOS 7 and Ubuntu 16.04, 18.04, 19.04, and  can also be downloaded from OmniSci using the included <cite>mapd-deps-prebuilt.sh</cite> script (see <cite>Prebuilt Dependencies</cite>, below).</p>
+<p>Dependencies for <code class="docutils literal notranslate"><span class="pre">omnisci_web_server</span></code> and other Go utils are in <cite>ThirdParty/go</cite>. See <cite>ThirdParty/go/src/mapd/vendor/README.md</cite> for instructions on how to add new deps.</p>
+<div class="section" id="prebuilt-dependencies">
+<h2>2.1.1. Prebuilt Dependencies<a class="headerlink" href="#prebuilt-dependencies" title="Permalink to this headline">¶</a></h2>
+<p>OmniSciDB requires a number of dependencies which are not provided in the common linux distribution packages. While the developer is welcome to install these dependencies themselves using the included dependency script for their respective OS in the <cite>scripts</cite> directory, OmniSci provides versioned, prebuilt dependencies which can be downloaded using the <cite>mapd-deps-prebuilt.sh</cite> script in the <cite>scripts</cite> directory. The prebuilt dependencies are only available for CentOS 7 and Ubuntu 16.04, 18.04, 19.04.</p>
+<p>First, use the <cite>scripts/mapd-deps-prebuilt.sh</cite> build script to download the prebuilt dependencies from OmniSci and install them. By default, the dependencies will be installed to the <cite>/usr/local/mapd-deps</cite> directory. The <cite>mapd-deps-prebuilt.sh</cite> script also sets up an <a class="reference external" href="http://modules.sf.net">environment module</a> in order to simplify managing the required environment variables. Log out and log back in after running the <cite>mapd-deps-prebuilt.sh</cite> script in order to activate the environment modules command, <code class="docutils literal notranslate"><span class="pre">module</span></code>.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">mapd-deps</span></code> environment module is disabled by default. To activate for your current session, run:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">module</span> <span class="n">load</span> <span class="n">mapd</span><span class="o">-</span><span class="n">deps</span>
+</pre></div>
+</div>
+<p>To disable the <cite>mapd-deps</cite> module:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">module</span> <span class="n">unload</span> <span class="n">mapd</span><span class="o">-</span><span class="n">deps</span>
+</pre></div>
+</div>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>The <cite>mapd-deps</cite> package contains newer versions of packages such as GCC and ncurses which might not be compatible with the rest of your environment. Make sure to disable the <cite>mapd-deps</cite> module before compiling other packages.</p>
+</div>
+<div class="section" id="environment-variables">
+<h3>2.1.1.1. Environment Variables<a class="headerlink" href="#environment-variables" title="Permalink to this headline">¶</a></h3>
+<p>The <cite>mapd-deps-prebuilt.sh</cite> script includes two files with the appropriate environment variables: <cite>mapd-deps-&lt;date&gt;.sh</cite> (for sourcing from your shell config) and <cite>mapd-deps-&lt;date&gt;.modulefile</cite> (for use with environment modules). These files are placed in mapd-deps install directory, usually <cite>/usr/local/mapd-deps/&lt;date&gt;</cite>. Either of these may be used to configure your environment: the <cite>.sh</cite> may be sourced in your shell config; the <cite>.modulefile</cite> needs to be moved to the modulespath.</p>
+</div>
+</div>
+<div class="section" id="building-on-ubuntu">
+<h2>2.1.2. Building on Ubuntu<a class="headerlink" href="#building-on-ubuntu" title="Permalink to this headline">¶</a></h2>
+<p>Most build dependencies required by OmniSciDB are available via APT. Certain dependencies such as Thrift, Blosc, and Folly must be built as they either do not exist in the default repositories or have outdated versions. A prebuilt package containing all these dependencies is provided for Ubuntu 18.04 (x86_64). The dependencies will be installed to <cite>/usr/local/mapd-deps/</cite> by default; see the Environment Variables section below for how to add these dependencies to your environment.</p>
+<p>These dependencies will be installed to a directory under <cite>/usr/local/mapd-deps</cite>. The <cite>mapd-deps-prebuilt.sh</cite> script above will generate a script named <cite>mapd-deps.sh</cite> containing the environment variables which need to be set. Simply source this file in your current session (or symlink it to <cite>/etc/profile.d/mapd-deps.sh</cite>) in order to activate it:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">source</span> /usr/local/mapd-deps/mapd-deps.sh
+</pre></div>
+</div>
+<p>To install:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span> scripts
+./mapd-deps-ubuntu.sh --compress
+</pre></div>
+</div>
+<div class="section" id="ubuntu-16-04">
+<h3>2.1.2.1. Ubuntu 16.04<a class="headerlink" href="#ubuntu-16-04" title="Permalink to this headline">¶</a></h3>
+<p>OmniSciDB requires a newer version of Boost than the version which is provided by Ubuntu 16.04. The <cite>scripts/mapd-deps-ubuntu1604.sh</cite> build script will compile and install a newer version of Boost into the <cite>/usr/local/mapd-deps/</cite> directory.</p>
+</div>
+<div class="section" id="ubuntu-18-04">
+<h3>2.1.2.2. Ubuntu 18.04<a class="headerlink" href="#ubuntu-18-04" title="Permalink to this headline">¶</a></h3>
+<p>Some installs of Ubuntu 18.04 may fail while building with a message similar to:</p>
+<p>..code-block:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="n">java</span><span class="p">.</span><span class="n">security</span><span class="p">.</span><span class="nl">InvalidAlgorithmParameterException</span><span class="p">:</span> <span class="n">the</span> <span class="n">trustAnchors</span> <span class="n">parameter</span> <span class="n">must</span> <span class="n">be</span> <span class="n">non</span><span class="o">-</span><span class="n">empty</span>
+</pre></div>
+</div>
+<p>This is a known issue in 18.04 which will be resolved in <a class="reference external" href="https://bugs.launchpad.net/ubuntu/+source/ca-certificates-java/+bug/1739631">Ubuntu 18.04.1</a>. To resolve on 18.04:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>sudo rm /etc/ssl/certs/java/cacerts
+sudo update-ca-certificates -f
+</pre></div>
+</div>
+<p>Recent versions of Ubuntu provide the NVIDIA CUDA Toolkit and drivers in the standard repositories. To install:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>sudo apt install -y <span class="se">\</span>
+    nvidia-cuda-toolkit
+</pre></div>
+</div>
+<p>Be sure to reboot after installing in order to activate the NVIDIA drivers.</p>
+</div>
+</div>
+<div class="section" id="building-on-centos">
+<h2>2.1.3. Building on CentOS<a class="headerlink" href="#building-on-centos" title="Permalink to this headline">¶</a></h2>
+<p>The <cite>scripts/mapd-deps-centos.sh</cite> script is used to build the dependencies for CentOS. Modify this script and run if you would like to change dependency versions or to build on alternative CPU architectures.</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="nb">cd</span> scripts
+module unload mapd-deps
+./mapd-deps-centos.sh --compress
+</pre></div>
+</div>
+</div>
+<div class="section" id="building-on-macos">
+<h2>2.1.4. Building on macOS<a class="headerlink" href="#building-on-macos" title="Permalink to this headline">¶</a></h2>
+<p>The <cite>scripts/mapd-deps-osx.sh</cite> is used to build the dependencies for macOS. Note that the macOS deps script will automatically install and/or update <a class="reference external" href="http://brew.sh/">Homebrew</a> and use that to install all dependencies. Please make sure macOS is completely up to date and <cite>Xcode</cite> is installed before running. <cite>Xcode</cite> can be installed from the App Store.</p>
+<p>Notes:
+* <cite>mapd-deps-osx.sh</cite> will automatically install CUDA via Homebrew and add the correct environment variables to <cite>~/.bash_profile</cite>.
+* <cite>mapd-deps-osx.sh</cite> will automatically install Java and Maven via Homebrew and add the correct environment variables to <cite>~/.bash_profile</cite>.</p>
+</div>
+<div class="section" id="building-on-arch-linux">
+<h2>2.1.5. Building on Arch Linux<a class="headerlink" href="#building-on-arch-linux" title="Permalink to this headline">¶</a></h2>
+<p><cite>scripts/mapd-deps-arch.sh</cite> is provided that will use <a class="reference external" href="https://aur.archlinux.org/packages/yay/">yay</a> to install packages from the <a class="reference external" href="https://wiki.archlinux.org/index.php/Arch_User_Repository">Arch User Repository</a>. Note that some dependencies may be installed using custom <cite>PKGBUILD</cite> scripts. See the <cite>scripts/arch</cite> directory for an up to date list of packages requiring a custom <cite>PKGBUILD</cite>. If you don’t have yay yet, install it first: <a class="reference external" href="https://github.com/Jguer/yay#installation">https://github.com/Jguer/yay#installation</a></p>
+<dl class="simple">
+<dt>..note::</dt><dd><p>Apache Arrow, while available in the AUR, requires a few custom build flags in order to be used with Core. A custom PKGBUILD for it is included.</p>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>packages aws-sdk-cpp and folly, while available in the AUR, are not supported while for building Core on Arch. If these packages are installed, support for them should be disabled when building Core. To do so, use the following options when running CMake:</p>
+<p><code class="docutils literal notranslate"><span class="pre">cmake</span> <span class="pre">-DENABLE_FOLLY=off</span> <span class="pre">-DENABLE_AWS_S3=off</span> <span class="pre">..</span></code></p>
+</div>
+<p>CUDA and the NVIDIA drivers may be installed using the following.</p>
+<p>..code-block:: shell</p>
+<blockquote>
+<div><dl class="simple">
+<dt>yay -S </dt><dd><p>linux-headers cuda nvidia</p>
+</dd>
+</dl>
+</div></blockquote>
+<p>Be sure to reboot after installing in order to activate the NVIDIA drivers.</p>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="build.html" class="btn btn-neutral float-right" title="2.2. Build OmniSciDB" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="getting_started.html" class="btn btn-neutral float-left" title="2. Getting Started" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2019, OmniSci, Inc
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script>
+
+  
+  
+    
+   
+
+</body>
+</html>
