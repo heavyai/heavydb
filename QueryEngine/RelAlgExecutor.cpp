@@ -1904,43 +1904,16 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
   return ra_exe_unit;
 }
 
-void build_render_targets(
-    RenderInfo& render_info,
-    const std::vector<Analyzer::Expr*>& work_unit_target_exprs,
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& owned_target_exprs,
-    const std::vector<TargetMetaInfo>& targets_meta) {
+void build_render_targets(RenderInfo& render_info,
+                          const std::vector<Analyzer::Expr*>& work_unit_target_exprs,
+                          const std::vector<TargetMetaInfo>& targets_meta) {
   CHECK_EQ(work_unit_target_exprs.size(), targets_meta.size());
   render_info.targets.clear();
   for (size_t i = 0; i < targets_meta.size(); ++i) {
-    // TODO(croot): find a better way to iterate through these or a better data
-    // structure for faster lookup to avoid the double for-loop. These vectors should
-    // be small tho and have no real impact on performance.
-    size_t j{0};
-    for (j = 0; j < owned_target_exprs.size(); ++j) {
-      if (owned_target_exprs[j].get() == work_unit_target_exprs[i]) {
-        break;
-      }
-    }
-    CHECK_LT(j, owned_target_exprs.size());
-
-    // validate that the types are aligned.
-    // TODO(croot): this validation may not be necessary if we can be assured that the
-    // meta info and the work_unit_target_exprs are aligned
-    const auto& meta_ti = targets_meta[i].get_physical_type_info();
-    const auto& expr_ti = owned_target_exprs[j]->get_type_info();
-
-    // NOTE: in the distributed case, the aggregator gets the logical type info from the
-    // leaf, and therefore the parts of the physical type info can be lost, so to relax
-    // the validation we'll check for the most likely logical type in case the physical
-    // type doesn't match.
-    CHECK(meta_ti == expr_ti ||
-          meta_ti == get_logical_type_for_expr(*owned_target_exprs[j]))
-        << targets_meta[i].get_resname() << " " << i << "," << j
-        << ", targets meta: " << meta_ti.get_type_name() << "("
-        << meta_ti.get_compression_name() << "), target_expr: " << expr_ti.get_type_name()
-        << "(" << expr_ti.get_compression_name() << ")";
     render_info.targets.emplace_back(std::make_shared<Analyzer::TargetEntry>(
-        targets_meta[i].get_resname(), owned_target_exprs[j], false));
+        targets_meta[i].get_resname(),
+        work_unit_target_exprs[i]->get_shared_ptr(),
+        false));
   }
 }
 
@@ -1996,10 +1969,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     ExecutionResult result(result_rows, aggregated_result.targets_meta);
     body->setOutputMetainfo(aggregated_result.targets_meta);
     if (render_info) {
-      build_render_targets(*render_info,
-                           work_unit.exe_unit.target_exprs,
-                           target_exprs_owned_,
-                           targets_meta);
+      build_render_targets(*render_info, work_unit.exe_unit.target_exprs, targets_meta);
     }
     return result;
   }
@@ -2086,8 +2056,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
 
   result.setQueueTime(queue_time_ms);
   if (render_info) {
-    build_render_targets(
-        *render_info, work_unit.exe_unit.target_exprs, target_exprs_owned_, targets_meta);
+    build_render_targets(*render_info, work_unit.exe_unit.target_exprs, targets_meta);
     if (render_info->isPotentialInSituRender()) {
       // return an empty result (with the same queue time, and zero render time)
       return {
