@@ -62,7 +62,7 @@ class BenchAnalyzer:
     def __init__(self, ref, sample, attribute):
         assert isinstance(ref, BenchmarkLoader)
         assert isinstance(sample, BenchmarkLoader)
-        self.__header_info = [ref.getRunTableName(), attribute]
+        self.__header_info = [ref.getFrontAttribute("query_group"), attribute]
         self.__label_name_ref = ref.fetchQueryNames()
         self.__label_name_sample = sample.fetchQueryNames()
         self.__missing_queries_ref = []
@@ -265,7 +265,7 @@ def main(argv):
     dir_artifact_ref = ""
     epsilon = 0.05
     query_attribute = (
-        "query_total_avg"
+        "query_exec_trimmed_avg"
     )  # default attribute to use for benchmark comparison
 
     to_print = False  # printing all the results, disabled by default

@@ -159,16 +159,29 @@ def calculate_query_times(**kwargs):
         execution_times(list): List of execution_time calculations
         results_iter_times(list): List of results_iter_time calculations
         connect_times(list): List of connect_time calculations
+        trim(float): Amount to trim from iterations set to gather trimmed
+                     values. Enter as deciman corresponding to percent to
+                     trim - ex: 0.15 to trim 15%.
 
       Returns:
         query_execution(dict): Query times
         False(bool): The query failed. Exception should be logged.
     """
+    trim_size = int(kwargs["trim"] * len(kwargs["total_times"]))
     return {
         "total_time_avg": round(numpy.mean(kwargs["total_times"]), 1),
         "total_time_min": round(numpy.min(kwargs["total_times"]), 1),
         "total_time_max": round(numpy.max(kwargs["total_times"]), 1),
         "total_time_85": round(numpy.percentile(kwargs["total_times"], 85), 1),
+        "total_time_trimmed_avg": round(
+            numpy.mean(
+                numpy.sort(kwargs["total_times"])[trim_size:-trim_size]
+            ),
+            1,
+        )
+        if trim_size
+        else round(numpy.mean(kwargs["total_times"]), 1),
+        "total_times": kwargs["total_times"],
         "execution_time_avg": round(numpy.mean(kwargs["execution_times"]), 1),
         "execution_time_min": round(numpy.min(kwargs["execution_times"]), 1),
         "execution_time_max": round(numpy.max(kwargs["execution_times"]), 1),
@@ -179,6 +192,21 @@ def calculate_query_times(**kwargs):
             numpy.percentile(kwargs["execution_times"], 25), 1
         ),
         "execution_time_std": round(numpy.std(kwargs["execution_times"]), 1),
+        "execution_time_trimmed_avg": round(
+            numpy.mean(
+                numpy.sort(kwargs["execution_times"])[trim_size:-trim_size]
+            )
+        )
+        if trim_size > 0
+        else round(numpy.mean(kwargs["execution_times"]), 1),
+        "execution_time_trimmed_max": round(
+            numpy.max(
+                numpy.sort(kwargs["execution_times"])[trim_size:-trim_size]
+            )
+        )
+        if trim_size > 0
+        else round(numpy.max(kwargs["execution_times"]), 1),
+        "execution_times": kwargs["execution_times"],
         "connect_time_avg": round(numpy.mean(kwargs["connect_times"]), 1),
         "connect_time_min": round(numpy.min(kwargs["connect_times"]), 1),
         "connect_time_max": round(numpy.max(kwargs["connect_times"]), 1),
@@ -668,7 +696,7 @@ def benchmark(input_arguments):
     query_list = []
     logging.debug("Queries dir: " + queries_dir)
     try:
-        for query_filename in os.listdir(queries_dir):
+        for query_filename in sorted(os.listdir(queries_dir)):
             logging.debug("Validating query filename: " + query_filename)
             if validate_query_file(query_filename=query_filename):
                 with open(
@@ -823,6 +851,7 @@ def benchmark(input_arguments):
             execution_times=execution_times,
             connect_times=connect_times,
             results_iter_times=results_iter_times,
+            trim=0.15,  # Trim top and bottom 15% for trimmed calculations
         )
 
         # Update query dict entry with all values
@@ -843,6 +872,7 @@ def benchmark(input_arguments):
                     "run_gpu_name": source_db_gpu_name,
                     "run_gpu_mem_mb": source_db_gpu_mem,
                     "run_table": source_table,
+                    "query_group": queries_dir.split("/")[-1],
                     "query_id": query_id,
                     "query_result_set_count": result_count,
                     "query_error_info": query_error_info,
@@ -858,6 +888,12 @@ def benchmark(input_arguments):
                     "query_exec_85": query_times["execution_time_85"],
                     "query_exec_25": query_times["execution_time_25"],
                     "query_exec_stdd": query_times["execution_time_std"],
+                    "query_exec_trimmed_avg": query_times[
+                        "execution_time_trimmed_avg"
+                    ],
+                    "query_exec_trimmed_max": query_times[
+                        "execution_time_trimmed_max"
+                    ],
                     # Render queries not supported yet
                     "query_render_first": None,
                     "query_render_avg": None,
@@ -872,6 +908,9 @@ def benchmark(input_arguments):
                     "query_total_max": query_times["total_time_max"],
                     "query_total_85": query_times["total_time_85"],
                     "query_total_all": query_total_elapsed_time,
+                    "query_total_trimmed_avg": query_times[
+                        "total_time_trimmed_avg"
+                    ],
                     "results_iter_count": iterations,
                     "results_iter_first": first_results_iter_time,
                     "results_iter_avg": query_times["results_iter_time_avg"],
@@ -880,7 +919,11 @@ def benchmark(input_arguments):
                     "results_iter_85": query_times["results_iter_time_85"],
                     "cpu_mem_usage_mb": first_cpu_mem_usage,
                     "gpu_mem_usage_mb": first_gpu_mem_usage,
-                }
+                },
+                "debug": {
+                    "query_exec_times": query_times["execution_times"],
+                    "query_total_times": query_times["total_times"],
+                },
             }
         )
         logging.debug(
@@ -894,10 +937,10 @@ def benchmark(input_arguments):
     logging.debug(
         "Removing failed queries from results going to destination db(s)"
     )
-    succesful_query_list = query_list
-    for index, query in enumerate(succesful_query_list):
-        if query["succeeded"] is False:
-            del succesful_query_list[index]
+    succesful_query_list = []
+    for query in query_list:
+        if query["succeeded"] is True:
+            succesful_query_list.append(query)
     # Create successful query results list for upload to destination(s)
     query_results = []
     for query in succesful_query_list:
