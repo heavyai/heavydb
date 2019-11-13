@@ -1536,7 +1536,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateFunction(
   if (func_resolve(rex_function->getName(),
                    "ST_GeomFromText"sv,
                    "ST_GeogFromText"sv,
-                   "ST_Point"sv)) {
+                   "ST_Point"sv,
+                   "ST_SetSRID"sv)) {
     return translateGeoConstructor(rex_function);
   }
 
