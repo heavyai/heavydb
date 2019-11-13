@@ -570,19 +570,27 @@ void legalize_nvvm_ir(llvm::Function* query_func) {
   clear_function_attributes(query_func);
   verify_function_ir(query_func);
 
-  std::vector<llvm::Instruction*> unsupported_intrinsics;
+  std::vector<llvm::Instruction*> stackrestore_intrinsics;
+  std::vector<llvm::Instruction*> stacksave_intrinsics;
   for (auto& BB : *query_func) {
     for (llvm::Instruction& I : BB) {
       if (const llvm::IntrinsicInst* II = llvm::dyn_cast<llvm::IntrinsicInst>(&I)) {
-        if (II->getIntrinsicID() == llvm::Intrinsic::stacksave ||
-            II->getIntrinsicID() == llvm::Intrinsic::stackrestore) {
-          unsupported_intrinsics.push_back(&I);
+        if (II->getIntrinsicID() == llvm::Intrinsic::stacksave) {
+          stacksave_intrinsics.push_back(&I);
+        } else if (II->getIntrinsicID() == llvm::Intrinsic::stackrestore) {
+          stackrestore_intrinsics.push_back(&I);
         }
       }
     }
   }
 
-  for (auto& II : unsupported_intrinsics) {
+  // stacksave and stackrestore intrinsics appear together, and
+  // stackrestore uses stacksaved result as its argument
+  // so it should be removed first.
+  for (auto& II : stackrestore_intrinsics) {
+    II->eraseFromParent();
+  }
+  for (auto& II : stacksave_intrinsics) {
     II->eraseFromParent();
   }
 }
