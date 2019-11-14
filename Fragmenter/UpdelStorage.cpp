@@ -206,7 +206,7 @@ struct FixedLenArrayChunkConverter : public ChunkToInsertDataConverter {
 };
 
 struct ArrayChunkConverter : public FixedLenArrayChunkConverter {
-  StringOffsetT* index_buffer_addr_;
+  ArrayOffsetT* index_buffer_addr_;
 
   ArrayChunkConverter(const size_t num_rows, const Chunk_NS::Chunk* chunk)
       : FixedLenArrayChunkConverter(num_rows, chunk) {
@@ -218,11 +218,12 @@ struct ArrayChunkConverter : public FixedLenArrayChunkConverter {
   ~ArrayChunkConverter() override {}
 
   void convertToColumnarFormat(size_t row, size_t indexInFragment) override {
-    size_t src_value_size =
-        index_buffer_addr_[indexInFragment + 1] - index_buffer_addr_[indexInFragment];
+    auto startIndex = index_buffer_addr_[indexInFragment];
+    auto endIndex = index_buffer_addr_[indexInFragment + 1];
+    size_t src_value_size = std::abs(endIndex) - std::abs(startIndex);
     auto src_value_ptr = data_buffer_addr_ + index_buffer_addr_[indexInFragment];
-    (*column_data_)[row] =
-        ArrayDatum(src_value_size, (int8_t*)src_value_ptr, DoNothingDeleter());
+    (*column_data_)[row] = ArrayDatum(
+        src_value_size, (int8_t*)src_value_ptr, endIndex < 0, DoNothingDeleter());
   }
 };
 

@@ -1184,6 +1184,16 @@ TEST(Update, InvalidArrayAssignment) {
       run_multiple_agg("UPDATE arr set ia = ARRAY[];", ExecutorDeviceType::CPU));
 }
 
+TEST(Update, NullArrayAssignment) {
+  run_ddl_statement("DROP TABLE IF EXISTS arr;");
+  run_ddl_statement("CREATE TABLE arr (id int, ia int[]);");
+  run_multiple_agg("INSERT INTO arr VALUES(1, ARRAY[1]); ", ExecutorDeviceType::CPU);
+  run_ddl_statement("alter table arr add column da double[];");
+
+  ASSERT_NO_THROW(
+      run_multiple_agg("update arr set ia = array[1,2];", ExecutorDeviceType::CPU));
+}
+
 TEST_P(Update, UpdateColumnByColumn) {
   // disable if varlen update is not enabled
   if (!is_feature_enabled<VarlenUpdates>()) {
