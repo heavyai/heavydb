@@ -1,0 +1,25 @@
+select
+    flight_year,
+    flight_mmonth,
+    flight_dayofmonth,
+    flight_dayofweek,
+    deptime,
+    crsdeptime,
+    uniquecarrier,
+    carrier_name,
+    cancellationcode,
+    plane_manufacturer,
+    plane_model,
+    plane_status,
+    tailnum,
+    origin,
+    dest,
+    origin_name,
+    origin_city,
+    dest_name,
+    dest_city,
+    origin_lat,
+    origin_lon,
+    dest_lat
+from ##TAB## 
+limit 499999;
