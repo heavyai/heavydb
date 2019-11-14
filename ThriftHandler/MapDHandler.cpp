@@ -973,6 +973,8 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
           std::string("Exception: invalid device_id or unavailable GPU with this ID"));
     }
   }
+  _return.execution_time_ms = 0;
+
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
@@ -983,11 +985,13 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
       std::string query_ra;
       TableMap table_map;
       OptionalTableMap tableNames(table_map);
-      query_ra = parse_to_ra(query_state->createQueryStateProxy(),
-                             query_str,
-                             {},
-                             tableNames,
-                             mapd_parameters_);
+      _return.execution_time_ms += measure<>::execution([&]() {
+        query_ra = parse_to_ra(query_state->createQueryStateProxy(),
+                               query_str,
+                               {},
+                               tableNames,
+                               mapd_parameters_);
+      });
 
       // COPY_TO/SELECT: get read ExecutorOuterLock >> TableReadLock for each table  (note
       // for update/delete this would be a table write lock)
@@ -4563,7 +4567,15 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                         mapd_parameters_,
                                         nullptr);
   RelAlgExecutor ra_executor(executor.get(), cat);
-  const auto result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
+  ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                                     ExecutorDeviceType::CPU,
+                                                     QueryMemoryDescriptor(),
+                                                     nullptr,
+                                                     nullptr),
+                         {}};
+  _return.execution_time_ms += measure<>::execution(
+      [&]() { result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr); });
+  _return.execution_time_ms -= result.getRows()->getQueueTime();
   const auto rs = result.getRows();
   const auto converter =
       std::make_unique<ArrowResultSetConverter>(rs,
@@ -4572,16 +4584,22 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                                 device_id,
                                                 getTargetNames(result.getTargetsMeta()),
                                                 first_n);
-  const auto copy = converter->getArrowResult();
-  _return.sm_handle = std::string(copy.sm_handle.begin(), copy.sm_handle.end());
-  _return.sm_size = copy.sm_size;
-  _return.df_handle = std::string(copy.df_handle.begin(), copy.df_handle.end());
+  ArrowResult arrow_result;
+
+  _return.arrow_conversion_time_ms +=
+      measure<>::execution([&] { arrow_result = converter->getArrowResult(); });
+  _return.sm_handle =
+      std::string(arrow_result.sm_handle.begin(), arrow_result.sm_handle.end());
+  _return.sm_size = arrow_result.sm_size;
+  _return.df_handle =
+      std::string(arrow_result.df_handle.begin(), arrow_result.df_handle.end());
   if (device_type == ExecutorDeviceType::GPU) {
     std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
     CHECK(!ipc_handle_to_dev_ptr_.count(_return.df_handle));
-    ipc_handle_to_dev_ptr_.insert(std::make_pair(_return.df_handle, copy.df_dev_ptr));
+    ipc_handle_to_dev_ptr_.insert(
+        std::make_pair(_return.df_handle, arrow_result.df_dev_ptr));
   }
-  _return.df_size = copy.df_size;
+  _return.df_size = arrow_result.df_size;
 }
 
 void MapDHandler::execute_root_plan(TQueryResult& _return,

@@ -135,6 +135,8 @@ struct TDataFrame {
   2: i64 sm_size
   3: binary df_handle
   4: i64 df_size
+  5: i64 execution_time_ms
+  6: i64 arrow_conversion_time_ms
 }
 
 struct TDBInfo {
