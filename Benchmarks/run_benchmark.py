@@ -14,6 +14,50 @@ from argparse import ArgumentParser
 # For usage info, run: `./<script_name>.py --help`
 
 
+def verify_destinations(**kwargs):
+    """
+      Verify script output destination(s)
+
+      Kwargs:
+        destinations (list): List of destinations
+        dest_db_server (str): DB output destination server
+        output_file_json (str): Location of .json file output
+        output_file_jenkins (str): Location of .json jenkins file output
+
+      Returns:
+        True(bool): Destination(s) is/are valid
+        False(bool): Destination(s) is/are not valid
+    """
+    if "mapd_db" in kwargs["destinations"]:
+        valid_destination_set = True
+        if kwargs["dest_db_server"] is None:
+            # If dest_server is not set for mapd_db, then exit
+            logging.error(
+                '"dest_server" is required when destination = "mapd_db"'
+            )
+    if "file_json" in kwargs["destinations"]:
+        valid_destination_set = True
+        if kwargs["output_file_json"] is None:
+            # If output_file_json is not set for file_json, then exit
+            logging.error(
+                '"output_file_json" is required when destination = "file_json"'
+            )
+    if "output" in kwargs["destinations"]:
+        valid_destination_set = True
+    if "jenkins_bench" in kwargs["destinations"]:
+        valid_destination_set = True
+        if kwargs["output_file_jenkins"] is None:
+            # If output_file_jenkins is not set for jenkins_bench, then exit
+            logging.error(
+                '"output_file_jenkins" is required '
+                + 'when destination = "jenkins_bench"'
+            )
+    if not valid_destination_set:
+        return False
+    else:
+        return True
+
+
 def get_connection(**kwargs):
     """
       Connects to the db using pymapd
@@ -43,6 +87,234 @@ def get_connection(**kwargs):
         return con
     except (pymapd.exceptions.OperationalError, pymapd.exceptions.Error):
         logging.exception("Error connecting to database.")
+        return False
+
+
+def get_run_vars(**kwargs):
+    """
+      Gets/sets run-specific vars such as time, uid, etc.
+
+      Kwargs:
+        con(class 'pymapd.connection.Connection'): Mapd connection
+
+      Returns:
+        run_vars(dict):::
+            run_guid(str): Run GUID
+            run_timestamp(datetime): Run timestamp
+            run_connection(str): Connection string
+            run_driver(str): Run driver
+            run_version(str): Version of DB
+            run_version_short(str): Shortened version of DB
+            conn_machine_name(str): Name of run machine
+    """
+    run_guid = str(uuid.uuid4())
+    logging.debug("Run guid: " + run_guid)
+    run_timestamp = datetime.datetime.now()
+    run_connection = str(kwargs["con"])
+    logging.debug("Connection string: " + run_connection)
+    run_driver = ""  # TODO
+    run_version = kwargs["con"]._client.get_version()
+    if "-" in run_version:
+        run_version_short = run_version.split("-")[0]
+    else:
+        run_version_short = run_version
+    conn_machine_name = re.search(r"@(.*?):", run_connection).group(1)
+    run_vars = {
+        "run_guid": run_guid,
+        "run_timestamp": run_timestamp,
+        "run_connection": run_connection,
+        "run_driver": run_driver,
+        "run_version": run_version,
+        "run_version_short": run_version_short,
+        "conn_machine_name": conn_machine_name,
+    }
+    return run_vars
+
+
+def get_gpu_info(**kwargs):
+    """
+      Gets run machine GPU info
+
+      Kwargs:
+        gpu_name(str): GPU name from input param
+        no_gather_conn_gpu_info(bool): Gather GPU info fields
+        con(class 'pymapd.connection.Connection'): Mapd connection
+        conn_machine_name(str): Name of run machine
+        no_gather_nvml_gpu_info(bool): Do not gather GPU info using nvml
+        gather_nvml_gpu_info(bool): Gather GPU info using nvml
+        gpu_count(int): Number of GPUs on run machine
+
+      Returns:
+        gpu_info(dict):::
+            conn_gpu_count(int): Number of GPUs gathered from pymapd con
+            source_db_gpu_count(int): Number of GPUs on run machine
+            source_db_gpu_mem(str): Amount of GPU mem on run machine
+            source_db_gpu_driver_ver(str): GPU driver version
+            source_db_gpu_name(str): GPU name
+    """
+    # Set GPU info fields
+    conn_gpu_count = None
+    source_db_gpu_count = None
+    source_db_gpu_mem = None
+    source_db_gpu_driver_ver = ""
+    source_db_gpu_name = ""
+    if kwargs["no_gather_conn_gpu_info"]:
+        logging.debug(
+            "--no-gather-conn-gpu-info passed, "
+            + "using blank values for source database GPU info fields "
+            + "[run_gpu_count, run_gpu_mem_mb] "
+        )
+    else:
+        logging.debug(
+            "Gathering source database GPU info fields "
+            + "[run_gpu_count, run_gpu_mem_mb] "
+            + "using pymapd connection info. "
+        )
+        conn_hardware_info = kwargs["con"]._client.get_hardware_info(
+            kwargs["con"]._session
+        )
+        conn_gpu_count = conn_hardware_info.hardware_info[0].num_gpu_allocated
+    if conn_gpu_count == 0 or conn_gpu_count is None:
+        no_gather_nvml_gpu_info = True
+        if conn_gpu_count == 0:
+            logging.warning(
+                "0 GPUs detected from connection info, "
+                + "using blank values for source database GPU info fields "
+                + "If running against cpu-only server, make sure to set "
+                + "--no-gather-nvml-gpu-info and --no-gather-conn-gpu-info."
+            )
+    else:
+        no_gather_nvml_gpu_info = kwargs["no_gather_nvml_gpu_info"]
+        source_db_gpu_count = conn_gpu_count
+        try:
+            source_db_gpu_mem = int(
+                conn_hardware_info.hardware_info[0].gpu_info[0].memory
+                / 1000000
+            )
+        except IndexError:
+            logging.error("GPU memory info not available from connection.")
+    if no_gather_nvml_gpu_info:
+        logging.debug(
+            "--no-gather-nvml-gpu-info passed, "
+            + "using blank values for source database GPU info fields "
+            + "[gpu_driver_ver, run_gpu_name] "
+        )
+    elif (
+        kwargs["conn_machine_name"] == "localhost"
+        or kwargs["gather_nvml_gpu_info"]
+    ):
+        logging.debug(
+            "Gathering source database GPU info fields "
+            + "[gpu_driver_ver, run_gpu_name] "
+            + "from local GPU using pynvml. "
+        )
+        import pynvml
+
+        pynvml.nvmlInit()
+        source_db_gpu_driver_ver = pynvml.nvmlSystemGetDriverVersion().decode()
+        for i in range(source_db_gpu_count):
+            handle = pynvml.nvmlDeviceGetHandleByIndex(i)
+            # Assume all cards are the same, overwrite name value
+            source_db_gpu_name = pynvml.nvmlDeviceGetName(handle).decode()
+        pynvml.nvmlShutdown()
+    # If gpu_count argument passed in, override gathered value
+    if kwargs["gpu_count"]:
+        source_db_gpu_count = kwargs["gpu_count"]
+    if kwargs["gpu_name"]:
+        source_db_gpu_name = kwargs["gpu_name"]
+    gpu_info = {
+        "conn_gpu_count": conn_gpu_count,
+        "source_db_gpu_count": source_db_gpu_count,
+        "source_db_gpu_mem": source_db_gpu_mem,
+        "source_db_gpu_driver_ver": source_db_gpu_driver_ver,
+        "source_db_gpu_name": source_db_gpu_name,
+    }
+    return gpu_info
+
+
+def get_machine_info(**kwargs):
+    """
+      Gets run machine GPU info
+
+      Kwargs:
+        conn_machine_name(str): Name of machine from pymapd con
+        machine_name(str): Name of machine if passed in
+        machine_uname(str): Uname of machine if passed in
+
+      Returns:
+        machine_info(dict):::
+            run_machine_name(str): Run machine name
+            run_machine_uname(str): Run machine uname
+    """
+    # Set machine names, using local info if connected to localhost
+    if kwargs["conn_machine_name"] == "localhost":
+        local_uname = os.uname()
+    # If --machine-name passed in, override pymapd con value
+    if kwargs["machine_name"]:
+        run_machine_name = kwargs["machine_name"]
+    else:
+        if kwargs["conn_machine_name"] == "localhost":
+            run_machine_name = local_uname.nodename.split(".")[0]
+        else:
+            run_machine_name = kwargs["conn_machine_name"]
+    # If --machine-uname passed in, override pymapd con value
+    if kwargs["machine_uname"]:
+        run_machine_uname = kwargs["machine_uname"]
+    else:
+        if kwargs["conn_machine_name"] == "localhost":
+            run_machine_uname = " ".join(local_uname)
+        else:
+            run_machine_uname = ""
+    machine_info = {
+        "run_machine_name": run_machine_name,
+        "run_machine_uname": run_machine_uname,
+    }
+    return machine_info
+
+
+def read_query_files(**kwargs):
+    """
+      Gets run machine GPU info
+
+      Kwargs:
+        queries_dir(str): Directory with query files
+        source_table(str): Table to run query against
+
+      Returns:
+        query_list(dict):::
+            query_group(str): Query group, usually matches table name
+            queries(list)
+                query(dict):::
+                    name(str): Name of query
+                    mapdql(str): Query syntax to run
+        False(bool): Unable to find queries dir
+    """
+    # Read query files contents and write to query_list
+    query_list = {"query_group": "", "queries": []}
+    query_group = kwargs["queries_dir"].split("/")[-1]
+    query_list.update(query_group=query_group)
+    logging.debug("Queries dir: " + kwargs["queries_dir"])
+    try:
+        for query_filename in sorted(os.listdir(kwargs["queries_dir"])):
+            logging.debug("Validating query filename: " + query_filename)
+            if validate_query_file(query_filename=query_filename):
+                with open(
+                    kwargs["queries_dir"] + "/" + query_filename, "r"
+                ) as query_filepath:
+                    logging.debug(
+                        "Reading query with filename: " + query_filename
+                    )
+                    query_mapdql = query_filepath.read().replace("\n", " ")
+                    query_mapdql = query_mapdql.replace(
+                        "##TAB##", kwargs["source_table"]
+                    )
+                    query_list["queries"].append(
+                        {"name": query_filename, "mapdql": query_mapdql}
+                    )
+        logging.info("Read all query files")
+        return query_list
+    except FileNotFoundError:
+        logging.exception("Could not find queries directory.")
         return False
 
 
@@ -116,7 +388,6 @@ def execute_query(**kwargs):
     query_elapsed_time = (timeit.default_timer() - start_time) * 1000
     execution_time = query_result._result.execution_time_ms
     connect_time = round((query_elapsed_time - execution_time), 1)
-
     # Iterate through each result from the query
     logging.debug(
         "Counting results from query"
@@ -131,7 +402,6 @@ def execute_query(**kwargs):
     results_iter_time = round(
         ((timeit.default_timer() - start_time) * 1000), 1
     )
-
     query_execution = {
         "result_count": result_count,
         "execution_time": execution_time,
@@ -277,6 +547,190 @@ def get_mem_usage(**kwargs):
     return ramusage
 
 
+def run_query(**kwargs):
+    """
+      Takes query name, syntax, and iteration count and calls the
+        execute_query function for each iteration. Reports total, iteration,
+        and exec timings, memory usage, and failure status.
+
+      Kwargs:
+        query(dict):::
+            name(str): Name of query
+            mapdql(str): Query syntax to run
+        iterations(int): Number of iterations of each query to run
+        trim(float): Trim decimal to remove from top and bottom of results
+        con(class 'pymapd.connection.Connection'): Mapd connection
+
+      Returns:
+        query_results(dict):::
+            query_name(str): Name of query
+            query_mapdql(str): Query to run
+            query_id(str): Query ID
+            query_succeeded(bool): Query succeeded
+            query_error_info(str): Query error info
+            result_count(int): Number of results returned
+            initial_iteration_results(dict):::
+                first_execution_time(float): Execution time for first query
+                    iteration
+                first_connect_time(float):  Connect time for first query
+                    iteration
+                first_results_iter_time(float): Results iteration time for
+                    first query iteration
+                first_total_time(float): Total time for first iteration
+                first_cpu_mem_usage(float): CPU memory usage for first query
+                    iteration
+                first_gpu_mem_usage(float): GPU memory usage for first query
+                    iteration
+            noninitial_iteration_results(list):::
+                execution_time(float): Time (in ms) that pymapd reports
+                    backend spent on query.
+                connect_time(float): Time (in ms) for overhead of query,
+                    calculated by subtracting backend execution time from
+                    time spent on the execution function.
+                results_iter_time(float): Time (in ms) it took to for
+                    pymapd.fetchone() to iterate through all of the results.
+                total_time(float): Time (in ms) from adding all above times.
+            query_total_elapsed_time(int): Total elapsed time for query
+        False(bool): The query failed. Exception should be logged.
+    """
+    logging.info(
+        "Running query: "
+        + kwargs["query"]["name"]
+        + " iterations: "
+        + str(kwargs["iterations"])
+    )
+    query_id = kwargs["query"]["name"].rsplit(".")[
+        0
+    ]  # Query ID = filename without extention
+    query_results = {
+        "query_name": kwargs["query"]["name"],
+        "query_mapdql": kwargs["query"]["mapdql"],
+        "query_id": query_id,
+        "query_succeeded": True,
+        "query_error_info": "",
+        "initial_iteration_results": {},
+        "noninitial_iteration_results": [],
+        "query_total_elapsed_time": 0,
+    }
+    query_total_start_time = timeit.default_timer()
+    # Run iterations of query
+    for iteration in range(kwargs["iterations"]):
+        # Gather memory before running query iteration
+        logging.debug("Getting pre-query memory usage on CPU")
+        pre_query_cpu_mem_usage = get_mem_usage(
+            con=kwargs["con"], mem_type="cpu"
+        )
+        logging.debug("Getting pre-query memory usage on GPU")
+        pre_query_gpu_mem_usage = get_mem_usage(
+            con=kwargs["con"], mem_type="gpu"
+        )
+        # Run query iteration
+        logging.debug(
+            "Running iteration "
+            + str(iteration)
+            + " of query "
+            + kwargs["query"]["name"]
+        )
+        query_result = execute_query(
+            query_name=kwargs["query"]["name"],
+            query_mapdql=kwargs["query"]["mapdql"],
+            iteration=iteration,
+            con=kwargs["con"],
+        )
+        # Gather memory after running query iteration
+        logging.debug("Getting post-query memory usage on CPU")
+        post_query_cpu_mem_usage = get_mem_usage(
+            con=kwargs["con"], mem_type="cpu"
+        )
+        logging.debug("Getting post-query memory usage on GPU")
+        post_query_gpu_mem_usage = get_mem_usage(
+            con=kwargs["con"], mem_type="gpu"
+        )
+        # Calculate total (post minus pre) memory usage after query iteration
+        query_cpu_mem_usage = round(
+            post_query_cpu_mem_usage["usedram"]
+            - pre_query_cpu_mem_usage["usedram"],
+            1,
+        )
+        query_gpu_mem_usage = round(
+            post_query_gpu_mem_usage["usedram"]
+            - pre_query_gpu_mem_usage["usedram"],
+            1,
+        )
+        if query_result:
+            query_results.update(
+                query_error_info=""  # TODO - interpret query error info
+            )
+            # Assign first query iteration times
+            if iteration == 0:
+                first_execution_time = round(query_result["execution_time"], 1)
+                first_connect_time = round(query_result["connect_time"], 1)
+                first_results_iter_time = round(
+                    query_result["results_iter_time"], 1
+                )
+                first_total_time = (
+                    first_execution_time
+                    + first_connect_time
+                    + first_results_iter_time
+                )
+                query_results.update(
+                    initial_iteration_results={
+                        "first_execution_time": first_execution_time,
+                        "first_connect_time": first_connect_time,
+                        "first_results_iter_time": first_results_iter_time,
+                        "first_total_time": first_total_time,
+                        "first_cpu_mem_usage": query_cpu_mem_usage,
+                        "first_gpu_mem_usage": query_gpu_mem_usage,
+                    }
+                )
+            else:
+                # Put noninitial iterations into query_result list
+                query_results["noninitial_iteration_results"].append(
+                    query_result
+                )
+                # Verify no change in memory for noninitial iterations
+                if query_cpu_mem_usage != 0.0:
+                    logging.error(
+                        (
+                            "Noninitial iteration ({0}) of query ({1}) "
+                            + "shows non-zero CPU memory usage: {2}"
+                        ).format(
+                            iteration,
+                            kwargs["query"]["name"],
+                            query_cpu_mem_usage,
+                        )
+                    )
+                if query_gpu_mem_usage != 0.0:
+                    logging.error(
+                        (
+                            "Noninitial iteration ({0}) of query ({1}) "
+                            + "shows non-zero GPU memory usage: {2}"
+                        ).format(
+                            iteration,
+                            kwargs["query"]["name"],
+                            query_gpu_mem_usage,
+                        )
+                    )
+        else:
+            logging.warning(
+                "Error detected during execution of query: "
+                + kwargs["query"]["name"]
+                + ". This query will be skipped and "
+                + "times will not reported"
+            )
+            query_results.update(query_succeeded=False)
+            break
+    # Calculate time for all iterations to run
+    query_total_elapsed_time = round(
+        ((timeit.default_timer() - query_total_start_time) * 1000), 1
+    )
+    query_results.update(query_total_elapsed_time=query_total_elapsed_time)
+    logging.info(
+        "Completed all iterations of query " + kwargs["query"]["name"]
+    )
+    return query_results
+
+
 def json_format_handler(x):
     # Function to allow json to deal with datetime and numpy int
     if isinstance(x, datetime.datetime):
@@ -284,6 +738,375 @@ def json_format_handler(x):
     if isinstance(x, numpy.int64):
         return int(x)
     raise TypeError("Unknown type")
+
+
+def create_results_dataset(**kwargs):
+    """
+      Create results dataset
+
+      Kwargs:
+        run_guid(str): Run GUID
+        run_timestamp(datetime): Run timestamp
+        run_connection(str): Connection string
+        run_machine_name(str): Run machine name
+        run_machine_uname(str): Run machine uname
+        run_driver(str): Run driver
+        run_version(str): Version of DB
+        run_version_short(str): Shortened version of DB
+        label(str): Run label
+        source_db_gpu_count(int): Number of GPUs on run machine
+        source_db_gpu_driver_ver(str): GPU driver version
+        source_db_gpu_name(str): GPU name
+        source_db_gpu_mem(str): Amount of GPU mem on run machine
+        source_table(str): Table to run query against
+        trim(float): Trim decimal to remove from top and bottom of results
+        iterations(int): Number of iterations of each query to run
+        query_group(str): Query group, usually matches table name
+        query_results(dict):::
+            query_name(str): Name of query
+            query_mapdql(str): Query to run
+            query_id(str): Query ID
+            query_succeeded(bool): Query succeeded
+            query_error_info(str): Query error info
+            result_count(int): Number of results returned
+            initial_iteration_results(dict):::
+                first_execution_time(float): Execution time for first query
+                    iteration
+                first_connect_time(float):  Connect time for first query
+                    iteration
+                first_results_iter_time(float): Results iteration time for
+                    first query iteration
+                first_total_time(float): Total time for first iteration
+                first_cpu_mem_usage(float): CPU memory usage for first query
+                    iteration
+                first_gpu_mem_usage(float): GPU memory usage for first query
+                    iteration
+            noninitial_iteration_results(list):::
+                execution_time(float): Time (in ms) that pymapd reports
+                    backend spent on query.
+                connect_time(float): Time (in ms) for overhead of query,
+                    calculated by subtracting backend execution time from
+                    time spent on the execution function.
+                results_iter_time(float): Time (in ms) it took to for
+                    pymapd.fetchone() to iterate through all of the results.
+                total_time(float): Time (in ms) from adding all above times.
+            query_total_elapsed_time(int): Total elapsed time for query
+
+      Returns:
+        results_dataset(list):::
+            result_dataset(dict): Query results dataset
+    """
+    results_dataset = []
+    for query_results in kwargs["queries_results"]:
+        if query_results["query_succeeded"]:
+            # Aggregate iteration values
+            execution_times, connect_times, results_iter_times, total_times = (
+                [],
+                [],
+                [],
+                [],
+            )
+            for noninitial_result in query_results[
+                "noninitial_iteration_results"
+            ]:
+                execution_times.append(noninitial_result["execution_time"])
+                connect_times.append(noninitial_result["connect_time"])
+                results_iter_times.append(
+                    noninitial_result["results_iter_time"]
+                )
+                total_times.append(noninitial_result["total_time"])
+                # Overwrite result count, same for each iteration
+                result_count = noninitial_result["result_count"]
+            # Calculate query times
+            logging.debug(
+                "Calculating times from query " + query_results["query_id"]
+            )
+            query_times = calculate_query_times(
+                total_times=total_times,
+                execution_times=execution_times,
+                connect_times=connect_times,
+                results_iter_times=results_iter_times,
+                trim=kwargs[
+                    "trim"
+                ],  # Trim top and bottom n% for trimmed calculations
+            )
+            result_dataset = {
+                "name": query_results["query_name"],
+                "mapdql": query_results["query_mapdql"],
+                "succeeded": True,
+                "results": {
+                    "run_guid": kwargs["run_guid"],
+                    "run_timestamp": kwargs["run_timestamp"],
+                    "run_connection": kwargs["run_connection"],
+                    "run_machine_name": kwargs["run_machine_name"],
+                    "run_machine_uname": kwargs["run_machine_uname"],
+                    "run_driver": kwargs["run_driver"],
+                    "run_version": kwargs["run_version"],
+                    "run_version_short": kwargs["run_version_short"],
+                    "run_label": kwargs["label"],
+                    "run_gpu_count": kwargs["source_db_gpu_count"],
+                    "run_gpu_driver_ver": kwargs["source_db_gpu_driver_ver"],
+                    "run_gpu_name": kwargs["source_db_gpu_name"],
+                    "run_gpu_mem_mb": kwargs["source_db_gpu_mem"],
+                    "run_table": kwargs["source_table"],
+                    "query_group": kwargs["query_group"],
+                    "query_id": query_results["query_id"],
+                    "query_result_set_count": result_count,
+                    "query_error_info": query_results["query_error_info"],
+                    "query_conn_first": query_results[
+                        "initial_iteration_results"
+                    ]["first_connect_time"],
+                    "query_conn_avg": query_times["connect_time_avg"],
+                    "query_conn_min": query_times["connect_time_min"],
+                    "query_conn_max": query_times["connect_time_max"],
+                    "query_conn_85": query_times["connect_time_85"],
+                    "query_exec_first": query_results[
+                        "initial_iteration_results"
+                    ]["first_execution_time"],
+                    "query_exec_avg": query_times["execution_time_avg"],
+                    "query_exec_min": query_times["execution_time_min"],
+                    "query_exec_max": query_times["execution_time_max"],
+                    "query_exec_85": query_times["execution_time_85"],
+                    "query_exec_25": query_times["execution_time_25"],
+                    "query_exec_stdd": query_times["execution_time_std"],
+                    "query_exec_trimmed_avg": query_times[
+                        "execution_time_trimmed_avg"
+                    ],
+                    "query_exec_trimmed_max": query_times[
+                        "execution_time_trimmed_max"
+                    ],
+                    # Render queries not supported yet
+                    "query_render_first": None,
+                    "query_render_avg": None,
+                    "query_render_min": None,
+                    "query_render_max": None,
+                    "query_render_85": None,
+                    "query_render_25": None,
+                    "query_render_stdd": None,
+                    "query_total_first": query_results[
+                        "initial_iteration_results"
+                    ]["first_total_time"],
+                    "query_total_avg": query_times["total_time_avg"],
+                    "query_total_min": query_times["total_time_min"],
+                    "query_total_max": query_times["total_time_max"],
+                    "query_total_85": query_times["total_time_85"],
+                    "query_total_all": query_results[
+                        "query_total_elapsed_time"
+                    ],
+                    "query_total_trimmed_avg": query_times[
+                        "total_time_trimmed_avg"
+                    ],
+                    "results_iter_count": kwargs["iterations"],
+                    "results_iter_first": query_results[
+                        "initial_iteration_results"
+                    ]["first_results_iter_time"],
+                    "results_iter_avg": query_times["results_iter_time_avg"],
+                    "results_iter_min": query_times["results_iter_time_min"],
+                    "results_iter_max": query_times["results_iter_time_max"],
+                    "results_iter_85": query_times["results_iter_time_85"],
+                    "cpu_mem_usage_mb": query_results[
+                        "initial_iteration_results"
+                    ]["first_cpu_mem_usage"],
+                    "gpu_mem_usage_mb": query_results[
+                        "initial_iteration_results"
+                    ]["first_gpu_mem_usage"],
+                },
+                "debug": {
+                    "query_exec_times": query_times["execution_times"],
+                    "query_total_times": query_times["total_times"],
+                },
+            }
+        elif not query_results["query_succeeded"]:
+            result_dataset = {
+                "name": query_results["query_name"],
+                "mapdql": query_results["query_mapdql"],
+                "succeeded": False,
+            }
+        results_dataset.append(result_dataset)
+    logging.debug("All values set for query " + query_results["query_id"])
+    return results_dataset
+
+
+def send_results_db(**kwargs):
+    """
+      Send results dataset to a database using pymapd
+
+      Kwargs:
+        results_dataset(list):::
+            result_dataset(dict): Query results dataset
+        table(str): Results destination table name
+        db_user(str): Results destination user name
+        db_passwd(str): Results destination password
+        db_server(str): Results destination server address
+        db_port(int): Results destination server port
+        db_name(str): Results destination database name
+        table_schema_file(str): Path to destination database schema file
+
+      Returns:
+        True(bool): Sending results to destination database succeeded
+        False(bool): Sending results to destination database failed. Exception
+            should be logged.
+    """
+    # Create dataframe from list of query results
+    logging.debug("Converting results list to pandas dataframe")
+    results_df = DataFrame(kwargs["results_dataset"])
+    # Establish connection to destination db
+    logging.debug("Connecting to destination db")
+    dest_con = get_connection(
+        db_user=kwargs["db_user"],
+        db_passwd=kwargs["db_passwd"],
+        db_server=kwargs["db_server"],
+        db_port=kwargs["db_port"],
+        db_name=kwargs["db_name"],
+    )
+    if not dest_con:
+        logging.exception("Could not connect to destination db.")
+        return False
+    # Load results into db, creating table if it does not exist
+    tables = dest_con.get_tables()
+    if kwargs["table"] not in tables:
+        logging.info("Destination table does not exist. Creating.")
+        try:
+            with open(kwargs["table_schema_file"], "r") as table_schema:
+                logging.debug(
+                    "Reading table_schema_file: " + kwargs["table_schema_file"]
+                )
+                create_table_sql = table_schema.read().replace("\n", " ")
+                create_table_sql = create_table_sql.replace(
+                    "##TAB##", kwargs["table"]
+                )
+        except FileNotFoundError:
+            logging.exception("Could not find destination table_schema_file.")
+            return False
+        try:
+            logging.debug("Executing create destination table query")
+            dest_con.execute(create_table_sql)
+            logging.debug("Destination table created.")
+        except (pymapd.exceptions.ProgrammingError, pymapd.exceptions.Error):
+            logging.exception("Error running destination table creation")
+            return False
+    logging.info("Loading results into destination db")
+    try:
+        dest_con.load_table_columnar(
+            kwargs["table"],
+            results_df,
+            preserve_index=False,
+            chunk_size_bytes=0,
+            col_names_from_schema=True,
+        )
+    except (pymapd.exceptions.ProgrammingError, pymapd.exceptions.Error):
+        logging.exception("Error loading results into destination db")
+        dest_con.close()
+        return False
+    dest_con.close()
+    return True
+
+
+def send_results_file_json(**kwargs):
+    """
+      Send results dataset to a local json file
+
+      Kwargs:
+        results_dataset_json(str): Json-formatted query results dataset
+        output_file_json (str): Location of .json file output
+
+      Returns:
+        True(bool): Sending results to json file succeeded
+        False(bool): Sending results to json file failed. Exception
+            should be logged.
+    """
+    try:
+        logging.debug("Opening json output file for writing")
+        with open(kwargs["output_file_json"], "w") as file_json_open:
+            logging.info(
+                "Writing to output json file: " + kwargs["output_file_json"]
+            )
+            file_json_open.write(kwargs["results_dataset_json"])
+        return True
+    except IOError:
+        logging.exception("Error writing results to json output file")
+        return False
+
+
+def send_results_jenkins_bench(**kwargs):
+    """
+      Send results dataset to a local json file formatted for use with jenkins
+        benchmark plugin: https://github.com/jenkinsci/benchmark-plugin
+
+      Kwargs:
+        results_dataset(list):::
+            result_dataset(dict): Query results dataset
+        thresholds_name(str): Name to use for Jenkins result field
+        thresholds_field(str): Field to use for query threshold in jenkins
+        output_tag_jenkins(str): Jenkins benchmark result tag, for different
+            sets from same table
+        output_file_jenkins (str): Location of .json jenkins file output
+
+      Returns:
+        True(bool): Sending results to json file succeeded
+        False(bool): Sending results to json file failed. Exception
+            should be logged.
+    """
+    jenkins_bench_results = []
+    for result_dataset in kwargs["results_dataset"]:
+        logging.debug("Constructing output for jenkins benchmark plugin")
+        jenkins_bench_results.append(
+            {
+                "name": result_dataset["query_id"],
+                "description": "",
+                "parameters": [],
+                "results": [
+                    {
+                        "name": result_dataset["query_id"]
+                        + "_"
+                        + kwargs["thresholds_name"],
+                        "description": "",
+                        "unit": "ms",
+                        "dblValue": result_dataset[kwargs["thresholds_field"]],
+                    }
+                ],
+            }
+        )
+    jenkins_bench_json = json.dumps(
+        {
+            "groups": [
+                {
+                    "name": result_dataset["run_table"]
+                    + kwargs["output_tag_jenkins"],
+                    "description": "Source table: "
+                    + result_dataset["run_table"],
+                    "tests": jenkins_bench_results,
+                }
+            ]
+        }
+    )
+    try:
+        logging.debug("Opening jenkins_bench json output file for writing")
+        with open(kwargs["output_file_jenkins"], "w") as file_jenkins_open:
+            logging.info(
+                "Writing to jenkins_bench json file: "
+                + kwargs["output_file_jenkins"]
+            )
+            file_jenkins_open.write(jenkins_bench_json)
+        return True
+    except IOError:
+        logging.exception("Error writing results to jenkins json output file")
+        return False
+
+
+def send_results_output(**kwargs):
+    """
+      Send results dataset script output
+
+      Kwargs:
+        results_dataset_json(str): Json-formatted query results dataset
+
+      Returns:
+        True(bool): Sending results to output succeeded
+    """
+    logging.info("Printing query results to output")
+    print(kwargs["results_dataset_json"])
+    return True
 
 
 def process_arguments(input_arguments):
@@ -409,8 +1232,8 @@ def process_arguments(input_arguments):
         + "[gpu_driver_ver, run_gpu_name] "
         + "from local GPU using pynvml. "
         + 'Defaults to True when source server is "localhost". '
-        + "Only use when benchmarking against same machine that this script is "
-        + "run from.",
+        + "Only use when benchmarking against same machine that this script "
+        + "is run from.",
     )
     optional.add_argument(
         "-m",
@@ -481,10 +1304,10 @@ def process_arguments(input_arguments):
         "--dest-table-schema-file",
         dest="dest_table_schema_file",
         default="results_table_schemas/query-results.sql",
-        help="Destination table schema file. This must be an executable CREATE "
-        + "TABLE statement that matches the output of this script. It is "
-        + "required when creating the results table. Default location is in "
-        + '"./results_table_schemas/query-results.sql"',
+        help="Destination table schema file. This must be an executable "
+        + "CREATE TABLE statement that matches the output of this script. It "
+        + "is required when creating the results table. Default location is "
+        + 'in "./results_table_schemas/query-results.sql"',
     )
     optional.add_argument(
         "-j",
@@ -513,13 +1336,10 @@ def process_arguments(input_arguments):
 
 
 def benchmark(input_arguments):
+    # Set input args to vars
     args = process_arguments(input_arguments)
-    if args.verbose:
-        logging.basicConfig(level=logging.DEBUG)
-    elif args.quiet:
-        logging.basicConfig(level=logging.WARNING)
-    else:
-        logging.basicConfig(level=logging.INFO)
+    verbose = args.verbose
+    quiet = args.quiet
     source_db_user = args.user
     source_db_passwd = args.passwd
     source_db_server = args.server
@@ -527,64 +1347,53 @@ def benchmark(input_arguments):
     source_db_name = args.name
     source_table = args.table
     label = args.label
-    if args.queries_dir:
-        queries_dir = args.queries_dir
+    queries_dir = args.queries_dir
+    iterations = args.iterations
+    gpu_count = args.gpu_count
+    gpu_name = args.gpu_name
+    no_gather_conn_gpu_info = args.no_gather_conn_gpu_info
+    no_gather_nvml_gpu_info = args.no_gather_nvml_gpu_info
+    gather_nvml_gpu_info = args.gather_nvml_gpu_info
+    machine_name = args.machine_name
+    machine_uname = args.machine_uname
+    destinations = args.destination
+    dest_db_user = args.dest_user
+    dest_db_passwd = args.dest_passwd
+    dest_db_server = args.dest_server
+    dest_db_port = args.dest_port
+    dest_db_name = args.dest_name
+    dest_table = args.dest_table
+    dest_table_schema_file = args.dest_table_schema_file
+    output_file_json = args.output_file_json
+    output_file_jenkins = args.output_file_jenkins
+    output_tag_jenkins = args.output_tag_jenkins
+
+    # Hard-coded vars
+    trim = 0.15
+    jenkins_thresholds_name = "average"
+    jenkins_thresholds_field = "query_exec_avg"
+
+    # Set logging output level
+    if verbose:
+        logging.basicConfig(level=logging.DEBUG)
+    elif quiet:
+        logging.basicConfig(level=logging.WARNING)
     else:
-        queries_dir = os.path.join(os.path.dirname(__file__), "queries")
-    iterations = int(args.iterations)
+        logging.basicConfig(level=logging.INFO)
+
+    # Input validation
     if (iterations > 1) is not True:
         # Need > 1 iteration as first iteration is dropped from calculations
         logging.error("Iterations must be greater than 1")
         exit(1)
-    gpu_count = args.gpu_count
-    gpu_name = args.gpu_name
-    no_gather_conn_gpu_info = args.no_gather_conn_gpu_info
-    gather_nvml_gpu_info = args.gather_nvml_gpu_info
-    no_gather_nvml_gpu_info = args.no_gather_nvml_gpu_info
-    machine_name = args.machine_name
-    machine_uname = args.machine_uname
-    destinations = args.destination.split(",")
-    if "mapd_db" in destinations:
-        valid_destination_set = True
-        dest_db_user = args.dest_user
-        dest_db_passwd = args.dest_passwd
-        if args.dest_server is None:
-            # If dest_server is not set for mapd_db, then exit
-            logging.error(
-                '"dest_server" is required when destination = "mapd_db"'
-            )
-            exit(1)
-        else:
-            dest_db_server = args.dest_server
-        dest_db_port = args.dest_port
-        dest_db_name = args.dest_name
-        dest_table = args.dest_table
-        dest_table_schema_file = args.dest_table_schema_file
-    if "file_json" in destinations:
-        valid_destination_set = True
-        if args.output_file_json is None:
-            # If output_file_json is not set for file_json, then exit
-            logging.error(
-                '"output_file_json" is required when destination = "file_json"'
-            )
-            exit(1)
-        else:
-            output_file_json = args.output_file_json
-    if "output" in destinations:
-        valid_destination_set = True
-    if "jenkins_bench" in destinations:
-        valid_destination_set = True
-        if args.output_file_jenkins is None:
-            # If output_file_jenkins is not set for jenkins_bench, then exit
-            logging.error(
-                '"output_file_jenkins" is required '
-                + 'when destination = "jenkins_bench"'
-            )
-            exit(1)
-        else:
-            output_file_jenkins = args.output_file_jenkins
-    output_tag_jenkins = args.output_tag_jenkins
-    if not valid_destination_set:
+    if verify_destinations(
+        destinations=destinations,
+        dest_db_server=dest_db_server,
+        output_file_json=output_file_json,
+        output_file_jenkins=output_file_jenkins,
+    ):
+        logging.debug("Destination(s) have been verified.")
+    else:
         logging.error("No valid destination(s) have been set. Exiting.")
         exit(1)
 
@@ -598,459 +1407,113 @@ def benchmark(input_arguments):
     )
     if not con:
         exit(1)  # Exit if cannot connect to db
-
-    # Set run vars
-    run_guid = str(uuid.uuid4())
-    logging.debug("Run guid: " + run_guid)
-    run_timestamp = datetime.datetime.now()
-    run_connection = str(con)
-    logging.debug("Connection string: " + run_connection)
-    run_driver = ""  # TODO
-    run_version = con._client.get_version()
-    if "-" in run_version:
-        run_version_short = run_version.split("-")[0]
-    else:
-        run_version_short = run_version
-    conn_machine_name = re.search(r"@(.*?):", run_connection).group(1)
-    # Set GPU info fields
-    conn_gpu_count = None
-    source_db_gpu_count = None
-    source_db_gpu_mem = None
-    source_db_gpu_driver_ver = ""
-    source_db_gpu_name = ""
-    if no_gather_conn_gpu_info:
-        logging.debug(
-            "--no-gather-conn-gpu-info passed, "
-            + "using blank values for source database GPU info fields "
-            + "[run_gpu_count, run_gpu_mem_mb] "
-        )
-    else:
-        logging.debug(
-            "Gathering source database GPU info fields "
-            + "[run_gpu_count, run_gpu_mem_mb] "
-            + "using pymapd connection info. "
-        )
-        conn_hardware_info = con._client.get_hardware_info(con._session)
-        conn_gpu_count = conn_hardware_info.hardware_info[0].num_gpu_allocated
-    if conn_gpu_count == 0 or conn_gpu_count is None:
-        no_gather_nvml_gpu_info = True
-        if conn_gpu_count == 0:
-            logging.warning(
-                "0 GPUs detected from connection info, "
-                + "using blank values for source database GPU info fields "
-                + "If running against cpu-only server, make sure to set "
-                + "--no-gather-nvml-gpu-info and --no-gather-conn-gpu-info."
-            )
-    else:
-        source_db_gpu_count = conn_gpu_count
-        try:
-            source_db_gpu_mem = int(
-                conn_hardware_info.hardware_info[0].gpu_info[0].memory
-                / 1000000
-            )
-        except IndexError:
-            logging.error("GPU memory info not available from connection.")
-    if no_gather_nvml_gpu_info:
-        logging.debug(
-            "--no-gather-nvml-gpu-info passed, "
-            + "using blank values for source database GPU info fields "
-            + "[gpu_driver_ver, run_gpu_name] "
-        )
-    elif conn_machine_name == "localhost" or gather_nvml_gpu_info:
-        logging.debug(
-            "Gathering source database GPU info fields "
-            + "[gpu_driver_ver, run_gpu_name] "
-            + "from local GPU using pynvml. "
-        )
-        import pynvml
-
-        pynvml.nvmlInit()
-        source_db_gpu_driver_ver = pynvml.nvmlSystemGetDriverVersion().decode()
-        for i in range(source_db_gpu_count):
-            handle = pynvml.nvmlDeviceGetHandleByIndex(i)
-            # Assume all cards are the same, overwrite name value
-            source_db_gpu_name = pynvml.nvmlDeviceGetName(handle).decode()
-        pynvml.nvmlShutdown()
-    # If gpu_count argument passed in, override gathered value
-    if gpu_count:
-        source_db_gpu_count = gpu_count
-    # Set machine names, using local info if connected to localhost
-    if conn_machine_name == "localhost":
-        local_uname = os.uname()
-    if machine_name:
-        run_machine_name = machine_name
-    else:
-        if conn_machine_name == "localhost":
-            run_machine_name = local_uname.nodename.split(".")[0]
-        else:
-            run_machine_name = conn_machine_name
-    if machine_uname:
-        run_machine_uname = machine_uname
-    else:
-        if conn_machine_name == "localhost":
-            run_machine_uname = " ".join(local_uname)
-        else:
-            run_machine_uname = ""
-
-    # Read query files contents and write to query_list
-    query_list = []
-    logging.debug("Queries dir: " + queries_dir)
-    try:
-        for query_filename in sorted(os.listdir(queries_dir)):
-            logging.debug("Validating query filename: " + query_filename)
-            if validate_query_file(query_filename=query_filename):
-                with open(
-                    queries_dir + "/" + query_filename, "r"
-                ) as query_filepath:
-                    logging.debug(
-                        "Reading query with filename: " + query_filename
-                    )
-                    query_mapdql = query_filepath.read().replace("\n", " ")
-                    query_mapdql = query_mapdql.replace(
-                        "##TAB##", source_table
-                    )
-                    query_list.append(
-                        {"name": query_filename, "mapdql": query_mapdql}
-                    )
-        logging.info("Read all query files")
-    except FileNotFoundError:
-        logging.exception("Could not find queries directory.")
-        exit(1)  # Exit if cannot get queries dir
-
+    # Set run-specific variables (time, uid, etc.)
+    run_vars = get_run_vars(con=con)
+    # Set GPU info depending on availability
+    gpu_info = get_gpu_info(
+        gpu_name=gpu_name,
+        no_gather_conn_gpu_info=no_gather_conn_gpu_info,
+        con=con,
+        conn_machine_name=run_vars["conn_machine_name"],
+        no_gather_nvml_gpu_info=no_gather_nvml_gpu_info,
+        gather_nvml_gpu_info=gather_nvml_gpu_info,
+        gpu_count=gpu_count,
+    )
+    # Set run machine info
+    machine_info = get_machine_info(
+        conn_machine_name=run_vars["conn_machine_name"],
+        machine_name=machine_name,
+        machine_uname=machine_uname,
+    )
+    # Read queries from files, set to queries dir in PWD if not passed in
+    if not queries_dir:
+        queries_dir = os.path.join(os.path.dirname(__file__), "queries")
+    query_list = read_query_files(
+        queries_dir=queries_dir, source_table=source_table
+    )
+    if not query_list:
+        exit(1)
     # Run queries
-    for query in query_list:
-        # Set additional query vars
-        # Query ID = filename without extention
-        query_id = query["name"].rsplit(".")[0]
-
-        # Run iterations of query
-        query_results = []
-        logging.info(
-            "Running query: "
-            + query["name"]
-            + " iterations: "
-            + str(iterations)
+    queries_results = []
+    for query in query_list["queries"]:
+        query_result = run_query(
+            query=query, iterations=iterations, trim=trim, con=con
         )
-        query_total_start_time = timeit.default_timer()
-        for iteration in range(iterations):
-            # Gather memory before running query iteration
-            logging.debug("Getting pre-query memory usage on CPU")
-            pre_query_cpu_mem_usage = get_mem_usage(con=con, mem_type="cpu")
-            logging.debug("Getting pre-query memory usage on GPU")
-            pre_query_gpu_mem_usage = get_mem_usage(con=con, mem_type="gpu")
-            # Run query iteration
-            logging.debug(
-                "Running iteration "
-                + str(iteration)
-                + " of query "
-                + query["name"]
-            )
-            query_result = execute_query(
-                query_name=query["name"],
-                query_mapdql=query["mapdql"],
-                iteration=iteration,
-                con=con,
-            )
-            # Gather memory after running query iteration
-            logging.debug("Getting post-query memory usage on CPU")
-            post_query_cpu_mem_usage = get_mem_usage(con=con, mem_type="cpu")
-            logging.debug("Getting post-query memory usage on GPU")
-            post_query_gpu_mem_usage = get_mem_usage(con=con, mem_type="gpu")
-            # Calculate total (post minus pre) memory usage after query iteration
-            query_cpu_mem_usage = round(
-                post_query_cpu_mem_usage["usedram"]
-                - pre_query_cpu_mem_usage["usedram"],
-                1,
-            )
-            query_gpu_mem_usage = round(
-                post_query_gpu_mem_usage["usedram"]
-                - pre_query_gpu_mem_usage["usedram"],
-                1,
-            )
-            if query_result:
-                query.update({"succeeded": True})
-                query_error_info = ""  # TODO - interpret query error info
-                # Assign first query iteration times
-                if iteration == 0:
-                    first_execution_time = round(
-                        query_result["execution_time"], 1
-                    )
-                    first_connect_time = round(query_result["connect_time"], 1)
-                    first_results_iter_time = round(
-                        query_result["results_iter_time"], 1
-                    )
-                    first_total_time = (
-                        first_execution_time
-                        + first_connect_time
-                        + first_results_iter_time
-                    )
-                    first_cpu_mem_usage = query_cpu_mem_usage
-                    first_gpu_mem_usage = query_gpu_mem_usage
-                else:
-                    # Put noninitial iterations into query_result list
-                    query_results.append(query_result)
-                    # Verify no change in memory for noninitial iterations
-                    if query_cpu_mem_usage != 0.0:
-                        logging.error(
-                            (
-                                "Noninitial iteration ({0}) of query ({1}) "
-                                + "shows non-zero CPU memory usage: {2}"
-                            ).format(
-                                iteration, query["name"], query_cpu_mem_usage
-                            )
-                        )
-                    if query_gpu_mem_usage != 0.0:
-                        logging.error(
-                            (
-                                "Noninitial iteration ({0}) of query ({1}) "
-                                + "shows non-zero GPU memory usage: {2}"
-                            ).format(
-                                iteration, query["name"], query_gpu_mem_usage
-                            )
-                        )
-            else:
-                query.update({"succeeded": False})
-                logging.warning(
-                    "Error detected during execution of query: "
-                    + query["name"]
-                    + ". This query will be skipped and "
-                    + "times will not reported"
-                )
-            if query["succeeded"] is False:
-                # Do not run any more iterations of the failed query
-                break
-        if query["succeeded"] is False:
-            # Do not calculate results for the failed query, move on to the next
-            continue
-
-        # Calculate time for all iterations to run
-        query_total_elapsed_time = round(
-            ((timeit.default_timer() - query_total_start_time) * 1000), 1
-        )
-        logging.info("Completed all iterations of query " + query["name"])
-
-        # Aggregate iteration values
-        execution_times, connect_times, results_iter_times, total_times = (
-            [],
-            [],
-            [],
-            [],
-        )
-        for query_result in query_results:
-            execution_times.append(query_result["execution_time"])
-            connect_times.append(query_result["connect_time"])
-            results_iter_times.append(query_result["results_iter_time"])
-            total_times.append(query_result["total_time"])
-            # Overwrite result count, since should be the same for each iteration
-            result_count = query_result["result_count"]
-
-        # Calculate query times
-        logging.debug("Calculating times from query " + query["name"])
-        query_times = calculate_query_times(
-            total_times=total_times,
-            execution_times=execution_times,
-            connect_times=connect_times,
-            results_iter_times=results_iter_times,
-            trim=0.15,  # Trim top and bottom 15% for trimmed calculations
-        )
-
-        # Update query dict entry with all values
-        query.update(
-            {
-                "results": {
-                    "run_guid": run_guid,
-                    "run_timestamp": run_timestamp,
-                    "run_connection": run_connection,
-                    "run_machine_name": run_machine_name,
-                    "run_machine_uname": run_machine_uname,
-                    "run_driver": run_driver,
-                    "run_version": run_version,
-                    "run_version_short": run_version_short,
-                    "run_label": label,
-                    "run_gpu_count": source_db_gpu_count,
-                    "run_gpu_driver_ver": source_db_gpu_driver_ver,
-                    "run_gpu_name": source_db_gpu_name,
-                    "run_gpu_mem_mb": source_db_gpu_mem,
-                    "run_table": source_table,
-                    "query_group": queries_dir.split("/")[-1],
-                    "query_id": query_id,
-                    "query_result_set_count": result_count,
-                    "query_error_info": query_error_info,
-                    "query_conn_first": first_connect_time,
-                    "query_conn_avg": query_times["connect_time_avg"],
-                    "query_conn_min": query_times["connect_time_min"],
-                    "query_conn_max": query_times["connect_time_max"],
-                    "query_conn_85": query_times["connect_time_85"],
-                    "query_exec_first": first_execution_time,
-                    "query_exec_avg": query_times["execution_time_avg"],
-                    "query_exec_min": query_times["execution_time_min"],
-                    "query_exec_max": query_times["execution_time_max"],
-                    "query_exec_85": query_times["execution_time_85"],
-                    "query_exec_25": query_times["execution_time_25"],
-                    "query_exec_stdd": query_times["execution_time_std"],
-                    "query_exec_trimmed_avg": query_times[
-                        "execution_time_trimmed_avg"
-                    ],
-                    "query_exec_trimmed_max": query_times[
-                        "execution_time_trimmed_max"
-                    ],
-                    # Render queries not supported yet
-                    "query_render_first": None,
-                    "query_render_avg": None,
-                    "query_render_min": None,
-                    "query_render_max": None,
-                    "query_render_85": None,
-                    "query_render_25": None,
-                    "query_render_stdd": None,
-                    "query_total_first": first_total_time,
-                    "query_total_avg": query_times["total_time_avg"],
-                    "query_total_min": query_times["total_time_min"],
-                    "query_total_max": query_times["total_time_max"],
-                    "query_total_85": query_times["total_time_85"],
-                    "query_total_all": query_total_elapsed_time,
-                    "query_total_trimmed_avg": query_times[
-                        "total_time_trimmed_avg"
-                    ],
-                    "results_iter_count": iterations,
-                    "results_iter_first": first_results_iter_time,
-                    "results_iter_avg": query_times["results_iter_time_avg"],
-                    "results_iter_min": query_times["results_iter_time_min"],
-                    "results_iter_max": query_times["results_iter_time_max"],
-                    "results_iter_85": query_times["results_iter_time_85"],
-                    "cpu_mem_usage_mb": first_cpu_mem_usage,
-                    "gpu_mem_usage_mb": first_gpu_mem_usage,
-                },
-                "debug": {
-                    "query_exec_times": query_times["execution_times"],
-                    "query_total_times": query_times["total_times"],
-                },
-            }
-        )
-        logging.debug(
-            "All values set for query " + query["name"] + ": " + str(query)
-        )
+        queries_results.append(query_result)
+    logging.info("Completed all queries.")
     logging.debug("Closing source db connection.")
     con.close()
-    logging.info("Completed all queries.")
-
-    # Create list of successful queries
-    logging.debug(
-        "Removing failed queries from results going to destination db(s)"
+    # Generate results dataset
+    results_dataset = create_results_dataset(
+        run_guid=run_vars["run_guid"],
+        run_timestamp=run_vars["run_timestamp"],
+        run_connection=run_vars["run_connection"],
+        run_machine_name=machine_info["run_machine_name"],
+        run_machine_uname=machine_info["run_machine_uname"],
+        run_driver=run_vars["run_driver"],
+        run_version=run_vars["run_version"],
+        run_version_short=run_vars["run_version_short"],
+        label=label,
+        source_db_gpu_count=gpu_info["source_db_gpu_count"],
+        source_db_gpu_driver_ver=gpu_info["source_db_gpu_driver_ver"],
+        source_db_gpu_name=gpu_info["source_db_gpu_name"],
+        source_db_gpu_mem=gpu_info["source_db_gpu_mem"],
+        source_table=source_table,
+        trim=trim,
+        iterations=iterations,
+        query_group=query_list["query_group"],
+        queries_results=queries_results,
     )
-    succesful_query_list = []
-    for query in query_list:
-        if query["succeeded"] is True:
-            succesful_query_list.append(query)
-    # Create successful query results list for upload to destination(s)
-    query_results = []
-    for query in succesful_query_list:
-        query_results.append(query["results"])
-    # Convert query list to json for outputs
-    query_list_json = json.dumps(
-        query_list, default=json_format_handler, indent=2
+    results_dataset_json = json.dumps(
+        results_dataset, default=json_format_handler, indent=2
     )
-
-    # Send results
+    successful_results_dataset = [
+        x for x in results_dataset if x["succeeded"] is not False
+    ]
+    successful_results_dataset_results = []
+    for results_dataset_entry in successful_results_dataset:
+        successful_results_dataset_results.append(
+            results_dataset_entry["results"]
+        )
+    # Send results to destination(s)
+    sent_destination = True
     if "mapd_db" in destinations:
-        # Create dataframe from list of query results
-        logging.debug("Converting results list to pandas dataframe")
-        results_df = DataFrame(query_results)
-        # Establish connection to destination mapd db
-        logging.debug("Connecting to destination mapd db")
-        dest_con = get_connection(
+        if not send_results_db(
+            results_dataset=successful_results_dataset_results,
+            table=dest_table,
             db_user=dest_db_user,
             db_passwd=dest_db_passwd,
             db_server=dest_db_server,
             db_port=dest_db_port,
             db_name=dest_db_name,
-        )
-        if not dest_con:
-            exit(1)  # Exit if cannot connect to destination db
-        # Load results into db, creating table if it does not exist
-        tables = dest_con.get_tables()
-        if dest_table not in tables:
-            logging.info("Destination table does not exist. Creating.")
-            try:
-                with open(dest_table_schema_file, "r") as table_schema:
-                    logging.debug(
-                        "Reading table_schema_file: " + dest_table_schema_file
-                    )
-                    create_table_sql = table_schema.read().replace("\n", " ")
-                    create_table_sql = create_table_sql.replace(
-                        "##TAB##", dest_table
-                    )
-            except FileNotFoundError:
-                logging.exception("Could not find table_schema_file.")
-                exit(1)
-            try:
-                logging.debug("Executing create destination table query")
-                res = dest_con.execute(create_table_sql)
-                logging.debug("Destination table created.")
-            except (
-                pymapd.exceptions.ProgrammingError,
-                pymapd.exceptions.Error,
-            ):
-                logging.exception("Error running table creation")
-                exit(1)
-        logging.info("Loading results into destination db")
-        dest_con.load_table_columnar(
-            dest_table,
-            results_df,
-            preserve_index=False,
-            chunk_size_bytes=0,
-            col_names_from_schema=True,
-        )
-        dest_con.close()
+            table_schema_file=dest_table_schema_file,
+        ):
+            sent_destination = False
     if "file_json" in destinations:
-        # Write to json file
-        logging.debug("Opening json output file for writing")
-        file_json_open = open(output_file_json, "w")
-        logging.info("Writing to output json file: " + output_file_json)
-        file_json_open.write(query_list_json)
+        if not send_results_file_json(
+            results_dataset_json=results_dataset_json,
+            output_file_json=output_file_json,
+        ):
+            sent_destination = False
     if "jenkins_bench" in destinations:
-        # Write output to file formatted for jenkins benchmark plugin
-        # https://github.com/jenkinsci/benchmark-plugin
-        jenkins_bench_results = []
-        for query_result in query_results:
-            logging.debug("Constructing output for jenkins benchmark plugin")
-            jenkins_bench_results.append(
-                {
-                    "name": query_result["query_id"],
-                    "description": "",
-                    "parameters": [],
-                    "results": [
-                        {
-                            "name": query_result["query_id"] + " average",
-                            "description": "",
-                            "unit": "ms",
-                            "dblValue": query_result["query_exec_avg"],
-                        }
-                    ],
-                }
-            )
-        jenkins_bench_json = json.dumps(
-            {
-                "groups": [
-                    {
-                        "name": source_table + output_tag_jenkins,
-                        "description": "Source table: " + source_table,
-                        "tests": jenkins_bench_results,
-                    }
-                ]
-            }
-        )
-        # Write to json file
-        logging.debug("Opening jenkins_bench json output file for writing")
-        file_jenkins_open = open(output_file_jenkins, "w")
-        logging.info(
-            "Writing to jenkins_bench json file: " + output_file_jenkins
-        )
-        file_jenkins_open.write(jenkins_bench_json)
+        if not send_results_jenkins_bench(
+            results_dataset=successful_results_dataset_results,
+            thresholds_name=jenkins_thresholds_name,
+            thresholds_field=jenkins_thresholds_field,
+            output_tag_jenkins=output_tag_jenkins,
+            output_file_jenkins=output_file_jenkins,
+        ):
+            sent_destination = False
     if "output" in destinations:
-        logging.info("Printing query results to output")
-        print(query_list_json)
-
-    logging.info("Succesfully loaded query results info into destination(s)")
+        if not send_results_output(results_dataset_json=results_dataset_json):
+            sent_destination = False
+    if not sent_destination:
+        logging.error("Sending results to one or more destinations failed")
+        exit(1)
+    else:
+        logging.info(
+            "Succesfully loaded query results info into destination(s)"
+        )
 
 
 if __name__ == "__main__":
