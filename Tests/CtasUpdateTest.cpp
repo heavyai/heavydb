@@ -1171,6 +1171,19 @@ TEST_P(Itas, InsertIntoTableFromSelectSharded) {
                ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
 }
 
+TEST(Update, InvalidArrayAssignment) {
+  run_ddl_statement("DROP TABLE IF EXISTS arr;");
+  run_ddl_statement("CREATE TABLE arr (id int, ia int[]);");
+  run_multiple_agg("INSERT INTO arr VALUES(0 , null); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO arr VALUES(1 , ARRAY[]); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO arr VALUES(2 , ARRAY[1]); ", ExecutorDeviceType::CPU);
+
+  ASSERT_ANY_THROW(
+      run_multiple_agg("UPDATE arr set ia = NULL;", ExecutorDeviceType::CPU));
+  ASSERT_ANY_THROW(
+      run_multiple_agg("UPDATE arr set ia = ARRAY[];", ExecutorDeviceType::CPU));
+}
+
 TEST_P(Update, UpdateColumnByColumn) {
   // disable if varlen update is not enabled
   if (!is_feature_enabled<VarlenUpdates>()) {
