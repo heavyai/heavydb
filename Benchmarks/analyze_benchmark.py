@@ -18,8 +18,14 @@ class BenchmarkLoader:
         assert bench_filename in self.filename_list
 
         with open(self.dir_name + bench_filename) as json_file:
-            self.data = sorted(
+            # only load those queries that were successful
+            filtered_input_data = filter(
+                lambda experiment: experiment["succeeded"] is True,
                 json.load(json_file),
+            )
+            # sort queries based on their IDs
+            self.data = sorted(
+                filtered_input_data,
                 key=lambda experiment: experiment["results"]["query_id"],
             )
 
