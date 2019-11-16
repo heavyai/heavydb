@@ -17,7 +17,12 @@
 #include "MapDServer.h"
 #include "ThriftHandler/MapDHandler.h"
 
+#ifdef HAVE_THRIFT_THREADFACTORY
+#include <thrift/concurrency/ThreadFactory.h>
+#else
 #include <thrift/concurrency/PlatformThreadFactory.h>
+#endif
+
 #include <thrift/concurrency/ThreadManager.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/protocol/TJSONProtocol.h>
