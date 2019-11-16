@@ -119,10 +119,9 @@ class QueryFragmentDescriptor {
 
     bool dispatch_finished = false;
     while (!dispatch_finished) {
+      dispatch_finished = true;
       for (const auto& device_itr : execution_kernels_per_device_) {
         auto& kernel_idx = execution_kernel_index[device_itr.first];
-
-        dispatch_finished = true;
         if (kernel_idx < device_itr.second.size()) {
           dispatch_finished = false;
           const auto& execution_kernel = device_itr.second[kernel_idx++];
