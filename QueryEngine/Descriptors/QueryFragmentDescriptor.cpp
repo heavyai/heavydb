@@ -107,7 +107,7 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
 
   const ColumnDescriptor* deleted_cd{nullptr};
   if (outer_table_id > 0) {
-    // Temporary tables will not have a table descriptor, but will also not have deleted
+    // Temporary tables will not have a table descriptor and will also not have deleted
     // rows.
     const auto& catalog = executor->getCatalog();
     const auto td = catalog->getMetadataForTable(outer_table_id);
