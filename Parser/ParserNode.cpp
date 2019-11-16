@@ -2623,18 +2623,16 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
     const size_t end = thread_end_idx[thread_id];
     size_t idx = 0;
     for (idx = start; idx < end; ++idx) {
+      size_t target_row = row_idx.fetch_add(1);
+
+      if (target_row >= num_rows_to_process) {
+        break;
+      }
       const auto result_row = result_rows->getNextRow(false, false);
-      if (!result_row.empty()) {
-        size_t target_row = row_idx.fetch_add(1);
-
-        if (target_row >= num_rows_to_process) {
-          break;
-        }
-
-        for (unsigned int col = 0; col < num_cols; col++) {
-          const auto& mapd_variant = result_row[col];
-          value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
-        }
+      CHECK(!result_row.empty());
+      for (unsigned int col = 0; col < num_cols; col++) {
+        const auto& mapd_variant = result_row[col];
+        value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
       }
     }
 
