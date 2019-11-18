@@ -56,4 +56,4 @@ CREATE TABLE ##TAB##
     origin_merc_y FLOAT,
     dest_merc_x FLOAT,
     dest_merc_y FLOAT
-  ) with (fragment_size = 2000000);
+  ) with (fragment_size = ##FRAGMENT_SIZE##);
