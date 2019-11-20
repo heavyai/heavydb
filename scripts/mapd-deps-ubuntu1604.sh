@@ -56,7 +56,7 @@ sudo apt install -y \
     autoconf-archive \
     automake \
     bison \
-    flex-old \
+    flex \
     libpng-dev \
     rsync \
     unzip \
