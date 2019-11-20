@@ -236,6 +236,14 @@ optional.add_argument(
     help="Absolute path of jenkins benchmark .json output file "
     + '(required if destination = "jenkins_bench")',
 )
+optional.add_argument(
+    "--fragment-size",
+    dest="fragment_size",
+    default="32000000",
+    help="Fragment size to be used to create table. File specified in -c"
+    + " is modified to replace ##FRAGMENT_SIZE## with value specified for"
+    + " this parameter."
+)
 args = parser.parse_args()
 if args.verbose:
     logging.basicConfig(level=logging.DEBUG)
@@ -361,6 +369,9 @@ if not no_drop_table_before:
             create_table_sql = table_schema.read().replace("\n", " ")
             create_table_sql = create_table_sql.replace(
                 "##TAB##", import_table_name
+            )
+            create_table_sql = create_table_sql.replace(
+                "##FRAGMENT_SIZE##", args.fragment_size
             )
     except FileNotFoundError:
         logging.exception("Could not find table_schema_file.")
