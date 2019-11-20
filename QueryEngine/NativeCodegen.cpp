@@ -386,7 +386,6 @@ declare i64* @init_shared_mem_nop(i64*, i32);
 declare i64* @init_shared_mem_dynamic(i64*, i32);
 declare i64* @alloc_shared_mem_dynamic();
 declare void @set_shared_mem_to_identity(i64*, i32, i64);
-declare void @write_back(i64*, i64*, i32);
 declare void @write_back_smem_nop(i64*, i64*, i32);
 declare void @write_back_nop(i64*, i64*, i32);
 declare void @agg_from_smem_to_gmem_nop(i64*, i64*, i32);

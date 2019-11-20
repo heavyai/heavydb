@@ -485,12 +485,8 @@ llvm::Function* query_group_by_template_impl(
   CHECK(func_init_shared_mem);
 
   auto func_write_back = gpu_smem_context.isSharedMemoryUsed()
-                             ? mod->getFunction("write_back")
+                             ? mod->getFunction("write_back_smem_nop")
                              : mod->getFunction("write_back_nop");
-
-  if (gpu_smem_context.isSharedMemoryUsed()) {
-    func_write_back = mod->getFunction("write_back_smem_nop");
-  }
   CHECK(func_write_back);
 
   auto i32_type = IntegerType::get(mod->getContext(), 32);

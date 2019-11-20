@@ -940,12 +940,6 @@ extern "C" __attribute__((noinline)) const int64_t* init_shared_mem_dynamic(
   return nullptr;
 }
 
-extern "C" __attribute__((noinline)) void write_back(int64_t* dest,
-                                                     int64_t* src,
-                                                     const int32_t sz) {
-  write_back_nop(dest, src, sz);
-}
-
 extern "C" __attribute__((noinline)) void write_back_smem_nop(int64_t* dest,
                                                               int64_t* src,
                                                               const int32_t sz) {

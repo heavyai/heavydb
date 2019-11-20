@@ -82,13 +82,6 @@ extern "C" __device__ const int64_t* init_shared_mem_dynamic(
   return groups_buffer_smem;
 }
 
-extern "C" __device__ void write_back(int64_t* dest, int64_t* src, const int32_t sz) {
-  __syncthreads();
-  if (threadIdx.x == 0) {
-    memcpy(dest, src, sz);
-  }
-}
-
 extern "C" __device__ void write_back_smem_nop(int64_t* dest,
                                                int64_t* src,
                                                const int32_t sz) {}
