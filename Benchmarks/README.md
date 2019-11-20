@@ -156,6 +156,16 @@ Example 2:
 python ./run-benchmark.py -u user -p password -s mapd-server.example.com -n mapd_db -t flights_2008_10k -l TestLabel -d /home/mapd/queries/flights -i 10 -g 4 -e mapd_db,file_json -U dest_user -P password -S mapd-dest-server.mapd.com -N mapd_dest_db -T benchmark_results -j /home/mapd/benchmark_results/example.json
 ```
 
+#### Data sources
+
+Current list of data sources and availability:
+
+Dataset|Source
+---|---
+Flights|https://omnisci-benchmark-data-us-west-2.s3-us-west-2.amazonaws.com/flights.csv.tar.gz
+Taxis|https://tech.marksblogg.com/billion-nyc-taxi-rides-redshift.html
+TPC-H|http://www.tpc.org/tpch/
+
 #### Comparing results
 
 The python script `analyze-benchmark.py` can be used to compare results between benchmark runs. To use the script, results for each benchmark run must be stored in .json format using `file_json` DESTINATION. Two directories can be passed to the script: "sample" (`-s`) containing .json test results from the base sample set; and another, "reference" (`-r`) with the results to use for comparison.
