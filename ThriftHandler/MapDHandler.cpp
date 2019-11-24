@@ -1777,10 +1777,10 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
     THROW_MAPD_EXCEPTION("Table " + table_name + " doesn't exist");
   }
   if (td->isView) {
+    auto query_state = create_query_state(session_copy, td->viewSQL);
+    stdlog.setQueryState(query_state);
     try {
       if (hasTableAccessPrivileges(td, session)) {
-        auto query_state = create_query_state(session_copy, td->viewSQL);
-        stdlog.setQueryState(query_state);
         const auto query_ra = parse_to_ra(query_state->createQueryStateProxy(),
                                           query_state->getQueryStr(),
                                           {},
@@ -1803,10 +1803,12 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
       } else {
         THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
       }
-    } catch (std::exception& e) {
-      TColumnType tColumnType;
-      tColumnType.col_name = "BROKEN_VIEW_PLEASE_FIX";
-      _return.row_desc.push_back(tColumnType);
+    } catch (const std::exception& e) {
+      THROW_MAPD_EXCEPTION("View query has failed with an error: '" +
+                           std::string(e.what()) +
+                           "'.\nThe view must be dropped and re-created to "
+                           "resolve the error. \nQuery:\n" +
+                           query_state->getQueryStr());
     }
   } else {
     try {
