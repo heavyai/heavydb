@@ -364,7 +364,8 @@ std::string const MapDHandler::createInMemoryCalciteSession(
                                             calcite_->getInternalSessionProxyUserName(),
                                             calcite_->getInternalSessionProxyPassword(),
                                             true,
-                                            -1);
+                                            -1,
+                                            true);
   const auto emplace_ret =
       sessions_.emplace(session_id,
                         std::make_shared<Catalog_Namespace::SessionInfo>(

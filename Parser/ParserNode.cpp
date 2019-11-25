@@ -4450,6 +4450,14 @@ void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   catalog.dropTable(td);
 }
 
+static void checkStringLiteral(const std::string& option_name,
+                               const std::unique_ptr<NameValueAssign>& p) {
+  CHECK(p);
+  if (!dynamic_cast<const StringLiteral*>(p->get_value())) {
+    throw std::runtime_error(option_name + " option must be a string literal.");
+  }
+}
+
 void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error(
@@ -4463,9 +4471,7 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!name_value_list.empty()) {
     for (auto& p : name_value_list) {
       if (boost::iequals(*p->get_name(), "owner")) {
-        if (!dynamic_cast<const StringLiteral*>(p->get_value())) {
-          throw std::runtime_error("Owner name must be a string literal.");
-        }
+        checkStringLiteral("Owner name", p);
         const std::string* str =
             static_cast<const StringLiteral*>(p->get_value())->get_stringval();
         Catalog_Namespace::UserMetadata user;
@@ -4502,43 +4508,48 @@ void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   SysCatalog::instance().dropDatabase(db);
 }
 
+static bool readBooleanLiteral(const std::string& option_name,
+                               const std::unique_ptr<NameValueAssign>& p) {
+  CHECK(p);
+  const std::string* str =
+      static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+  if (boost::iequals(*str, "true")) {
+    return true;
+  } else if (boost::iequals(*str, "false")) {
+    return false;
+  } else {
+    throw std::runtime_error("Value to " + option_name + " must be TRUE or FALSE.");
+  }
+}
+
 void CreateUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   std::string passwd;
   bool is_super = false;
   std::string default_db;
+  bool can_login = true;
   for (auto& p : name_value_list) {
     if (boost::iequals(*p->get_name(), "password")) {
-      if (!dynamic_cast<const StringLiteral*>(p->get_value())) {
-        throw std::runtime_error("Password must be a string literal.");
-      }
+      checkStringLiteral("Password", p);
       passwd = *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
     } else if (boost::iequals(*p->get_name(), "is_super")) {
-      if (!dynamic_cast<const StringLiteral*>(p->get_value())) {
-        throw std::runtime_error("IS_SUPER option must be a string literal.");
-      }
-      const std::string* str =
-          static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-      if (boost::iequals(*str, "true")) {
-        is_super = true;
-      } else if (boost::iequals(*str, "false")) {
-        is_super = false;
-      } else {
-        throw std::runtime_error("Value to IS_SUPER must be TRUE or FALSE.");
-      }
+      checkStringLiteral("IS_SUPER", p);
+      is_super = readBooleanLiteral("IS_SUPER", p);
     } else if (boost::iequals(*p->get_name(), "default_db")) {
-      if (!dynamic_cast<const StringLiteral*>(p->get_value())) {
-        throw std::runtime_error("DEFAULT_DB option must be a string literal.");
-      }
+      checkStringLiteral("DEFAULT_DB", p);
       default_db = *static_cast<const StringLiteral*>(p->get_value())->get_stringval();
+    } else if (boost::iequals(*p->get_name(), "can_login")) {
+      checkStringLiteral("CAN_LOGIN", p);
+      can_login = readBooleanLiteral("can_login", p);
     } else {
       throw std::runtime_error("Invalid CREATE USER option " + *p->get_name() +
-                               ".  Should be PASSWORD, IS_SUPER, or DEFAULT_DB.");
+                               ". Should be PASSWORD, IS_SUPER, CAN_LOGIN"
+                               " or DEFAULT_DB.");
     }
   }
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("Only super user can create new users.");
   }
-  SysCatalog::instance().createUser(*user_name, passwd, is_super, default_db);
+  SysCatalog::instance().createUser(*user_name, passwd, is_super, default_db, can_login);
 }
 
 void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -4547,27 +4558,16 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   bool is_super = false;
   bool* is_superp = nullptr;
   const std::string* default_db = nullptr;
+  bool can_login = true;
+  bool* can_loginp = nullptr;
   for (auto& p : name_value_list) {
     if (boost::iequals(*p->get_name(), "password")) {
-      if (!dynamic_cast<const StringLiteral*>(p->get_value())) {
-        throw std::runtime_error("Password must be a string literal.");
-      }
+      checkStringLiteral("Password", p);
       passwd = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
     } else if (boost::iequals(*p->get_name(), "is_super")) {
-      if (!dynamic_cast<const StringLiteral*>(p->get_value())) {
-        throw std::runtime_error("IS_SUPER option must be a string literal.");
-      }
-      const std::string* str =
-          static_cast<const StringLiteral*>(p->get_value())->get_stringval();
-      if (boost::iequals(*str, "true")) {
-        is_super = true;
-        is_superp = &is_super;
-      } else if (boost::iequals(*str, "false")) {
-        is_super = false;
-        is_superp = &is_super;
-      } else {
-        throw std::runtime_error("Value to IS_SUPER must be TRUE or FALSE.");
-      }
+      checkStringLiteral("IS_SUPER", p);
+      is_super = readBooleanLiteral("IS_SUPER", p);
+      is_superp = &is_super;
     } else if (boost::iequals(*p->get_name(), "default_db")) {
       if (dynamic_cast<const StringLiteral*>(p->get_value())) {
         default_db = static_cast<const StringLiteral*>(p->get_value())->get_stringval();
@@ -4578,9 +4578,14 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         throw std::runtime_error(
             "DEFAULT_DB option must be either a string literal or a NULL literal.");
       }
+    } else if (boost::iequals(*p->get_name(), "can_login")) {
+      checkStringLiteral("CAN_LOGIN", p);
+      can_login = readBooleanLiteral("CAN_LOGIN", p);
+      can_loginp = &can_login;
     } else {
       throw std::runtime_error("Invalid ALTER USER option " + *p->get_name() +
-                               ". Should be PASSWORD, DEFAULT_DB or IS_SUPER.");
+                               ". Should be PASSWORD, DEFAULT_DB, CAN_LOGIN"
+                               " or IS_SUPER.");
     }
   }
 
@@ -4592,14 +4597,15 @@ void AlterUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     if (session.get_currentUser().userId != user.userId) {
       throw std::runtime_error("Only super user can change another user's attributes.");
-    } else if (is_superp) {
+    } else if (is_superp || can_loginp) {
       throw std::runtime_error(
           "A user can only update their own password or default database.");
     }
   }
 
-  if (passwd || is_superp || default_db) {
-    SysCatalog::instance().alterUser(user.userId, passwd, is_superp, default_db);
+  if (passwd || is_superp || default_db || can_loginp) {
+    SysCatalog::instance().alterUser(
+        user.userId, passwd, is_superp, default_db, can_loginp);
   }
 }
 

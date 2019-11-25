@@ -48,19 +48,19 @@ inline void run_ddl_statement(const std::string& query) {
 struct Users {
   void setup_users() {
     if (!sys_cat.getMetadataForUser("Chelsea", user)) {
-      sys_cat.createUser("Chelsea", "password", true, "");
+      sys_cat.createUser("Chelsea", "password", true, "", true);
       CHECK(sys_cat.getMetadataForUser("Chelsea", user));
     }
     if (!sys_cat.getMetadataForUser("Arsenal", user)) {
-      sys_cat.createUser("Arsenal", "password", false, "");
+      sys_cat.createUser("Arsenal", "password", false, "", true);
       CHECK(sys_cat.getMetadataForUser("Arsenal", user));
     }
     if (!sys_cat.getMetadataForUser("Juventus", user)) {
-      sys_cat.createUser("Juventus", "password", false, "");
+      sys_cat.createUser("Juventus", "password", false, "", true);
       CHECK(sys_cat.getMetadataForUser("Juventus", user));
     }
     if (!sys_cat.getMetadataForUser("Bayern", user)) {
-      sys_cat.createUser("Bayern", "password", false, "");
+      sys_cat.createUser("Bayern", "password", false, "", true);
       CHECK(sys_cat.getMetadataForUser("Bayern", user));
     }
   }
@@ -2432,6 +2432,36 @@ TEST(SysCatalog, RecursiveRolesUserMetaData) {
   ASSERT_NO_THROW(sys_cat.login(db_europa, user_arsenal, "password"s, user_meta, false));
   const auto nuser_list2 = sys_cat.getAllUserMetadata(db.dbId);
   compare_user_lists(expected.user_europa, nuser_list2);
+}
+
+TEST(Login, Deactivation) {
+  // SysCatalog::login doesn't accept constants
+  std::string database = OMNISCI_DEFAULT_DB;
+  std::string active_user = "active_user";
+  std::string deactivated_user = "deactivated_user";
+
+  run_ddl_statement(
+      "CREATE USER active_user(password = 'password', is_super = 'false', "
+      "can_login = 'true');");
+  run_ddl_statement(
+      "CREATE USER deactivated_user(password = 'password', is_super = 'false', "
+      "can_login = 'false');");
+  run_ddl_statement("GRANT ACCESS ON DATABASE " + database +
+                    " TO active_user, deactivated_user");
+
+  Catalog_Namespace::UserMetadata user_meta;
+  ASSERT_NO_THROW(sys_cat.login(database, active_user, "password", user_meta, true));
+  ASSERT_THROW(sys_cat.login(database, deactivated_user, "password", user_meta, true),
+               std::runtime_error);
+
+  run_ddl_statement("ALTER USER active_user(can_login='false');");
+  run_ddl_statement("ALTER USER deactivated_user(can_login='true');");
+  ASSERT_NO_THROW(sys_cat.login(database, deactivated_user, "password", user_meta, true));
+  ASSERT_THROW(sys_cat.login(database, active_user, "password", user_meta, true),
+               std::runtime_error);
+
+  run_ddl_statement("DROP USER active_user;");
+  run_ddl_statement("DROP USER deactivated_user;");
 }
 
 int main(int argc, char* argv[]) {

@@ -163,9 +163,9 @@ void SysCatalog::initDB() {
     sqliteConnector_->query(
         "CREATE TABLE mapd_users (userid integer primary key, name text unique, "
         "passwd_hash text, issuper boolean, default_db integer references "
-        "mapd_databases)");
+        "mapd_databases, can_login boolean)");
     sqliteConnector_->query_with_text_params(
-        "INSERT INTO mapd_users VALUES (?, ?, ?, 1, NULL)",
+        "INSERT INTO mapd_users VALUES (?, ?, ?, 1, NULL, 1)",
         std::vector<std::string>{OMNISCI_ROOT_USER_ID_STR,
                                  OMNISCI_ROOT_USER,
                                  hash_with_bcrypt(OMNISCI_ROOT_PASSWD_DEFAULT)});
@@ -202,6 +202,7 @@ void SysCatalog::checkAndExecuteMigrations() {
   updateUserSchema();  // must come before updatePasswordsToHashes()
   updatePasswordsToHashes();
   updateBlankPasswordsToRandom();  // must come after updatePasswordsToHashes()
+  updateSupportUserDeactivation();
 }
 
 void SysCatalog::updateUserSchema() {
@@ -476,6 +477,7 @@ void SysCatalog::migratePrivileges() {
 }
 
 void SysCatalog::updatePasswordsToHashes() {
+  sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     sqliteConnector_->query(
@@ -535,6 +537,7 @@ void SysCatalog::updateBlankPasswordsToRandom() {
     return;
   }
 
+  sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     sqliteConnector_->query(
@@ -566,6 +569,33 @@ void SysCatalog::updateBlankPasswordsToRandom() {
                                  UPDATE_BLANK_PASSWORDS_TO_RANDOM});
   } catch (const std::exception& e) {
     LOG(ERROR) << "Failed to fix blank passwords: " << e.what();
+    sqliteConnector_->query("ROLLBACK TRANSACTION");
+    throw;
+  }
+  sqliteConnector_->query("END TRANSACTION");
+}
+
+void SysCatalog::updateSupportUserDeactivation() {
+  const std::string UPDATE_SUPPORT_USER_DEACTIVATION = "update_support_user_deactivation";
+  sys_sqlite_lock sqlite_lock(this);
+  // check to see if the new column already exists
+  sqliteConnector_->query("PRAGMA TABLE_INFO(mapd_users)");
+  for (size_t i = 0; i < sqliteConnector_->getNumRows(); i++) {
+    const auto& col_name = sqliteConnector_->getData<std::string>(i, 1);
+    if (col_name == "can_login") {
+      return;  // new column already exists
+    }
+  }
+  sqliteConnector_->query("BEGIN TRANSACTION");
+  try {
+    sqliteConnector_->query("ALTER TABLE mapd_users ADD COLUMN can_login BOOLEAN");
+    sqliteConnector_->query("UPDATE mapd_users SET can_login = true");
+    sqliteConnector_->query_with_text_params(
+        "INSERT INTO mapd_version_history(version, migration_history) values(?,?)",
+        std::vector<std::string>{std::to_string(MAPD_VERSION),
+                                 UPDATE_SUPPORT_USER_DEACTIVATION});
+  } catch (const std::exception& e) {
+    LOG(ERROR) << "Failed to add support for user deactivation: " << e.what();
     sqliteConnector_->query("ROLLBACK TRANSACTION");
     throw;
   }
@@ -672,7 +702,7 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
                                            const std::string& password,
                                            UserMetadata& user_meta,
                                            bool check_password) {
-  // NOTE: The dbname isn't const because getMetadataWithDefault() can
+  // NOTE: The dbname isn't const because getMetadataWithDefaultDB() can
   // reset it. The username isn't const because SamlServer's
   // login()/authenticate_user() can reset it.
 
@@ -685,11 +715,11 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
     }
   }
   // we should have a user and user_meta by now
-
+  if (!user_meta.can_login) {
+    throw std::runtime_error("Unauthorized Access: User " + username + " is deactivated");
+  }
   Catalog_Namespace::DBMetadata db_meta;
-
-  getMetadataWithDefault(dbname, username, db_meta, user_meta);
-
+  getMetadataWithDefaultDB(dbname, username, db_meta, user_meta);
   return Catalog::get(
       basePath_, db_meta, dataMgr_, string_dict_hosts_, calciteMgr_, false);
 }
@@ -708,7 +738,7 @@ std::shared_ptr<Catalog> SysCatalog::switchDatabase(std::string& dbname,
   DBMetadata db_meta;
   UserMetadata user_meta;
 
-  getMetadataWithDefault(dbname, username, db_meta, user_meta);
+  getMetadataWithDefaultDB(dbname, username, db_meta, user_meta);
 
   // NOTE(max): register database in Catalog that early to allow ldap
   // and saml create default user and role privileges on databases
@@ -736,7 +766,8 @@ void SysCatalog::check_for_session_encryption(const std::string& pki_cert,
 void SysCatalog::createUser(const string& name,
                             const string& passwd,
                             bool issuper,
-                            const std::string& dbname) {
+                            const std::string& dbname,
+                            bool can_login) {
   sys_write_lock write_lock(this);
   sys_sqlite_lock sqlite_lock(this);
 
@@ -760,17 +791,22 @@ void SysCatalog::createUser(const string& name,
       vals = {name,
               hash_with_bcrypt(passwd),
               std::to_string(issuper),
-              std::to_string(db.dbId)};
+              std::to_string(db.dbId),
+              std::to_string(can_login)};
       sqliteConnector_->query_with_text_params(
-          "INSERT INTO mapd_users (name, passwd_hash, issuper, default_db) VALUES (?, ?, "
-          "?, ?)",
+          "INSERT INTO mapd_users (name, passwd_hash, issuper, default_db, can_login) "
+          "VALUES (?, ?, ?, ?, ?)",
           vals);
     } else {
-      vals = {name, hash_with_bcrypt(passwd), std::to_string(issuper)};
+      vals = {name,
+              hash_with_bcrypt(passwd),
+              std::to_string(issuper),
+              std::to_string(can_login)};
       sqliteConnector_->query_with_text_params(
-          "INSERT INTO mapd_users (name, passwd_hash, issuper) VALUES (?, ?, ?)", vals);
+          "INSERT INTO mapd_users (name, passwd_hash, issuper, can_login) "
+          "VALUES (?, ?, ?, ?)",
+          vals);
     }
-
     createRole_unsafe(name, true);
   } catch (const std::exception& e) {
     sqliteConnector_->query("ROLLBACK TRANSACTION");
@@ -819,23 +855,21 @@ auto append_with_commas = [](string& s, const string& t) {
 void SysCatalog::alterUser(const int32_t userid,
                            const string* passwd,
                            bool* issuper,
-                           const string* dbname) {
+                           const string* dbname,
+                           bool* can_login) {
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
     string sql;
     std::vector<std::string> values;
-
     if (passwd != nullptr) {
       append_with_commas(sql, "passwd_hash = ?");
       values.push_back(hash_with_bcrypt(*passwd));
     }
-
     if (issuper != nullptr) {
       append_with_commas(sql, "issuper = ?");
       values.push_back(std::to_string(*issuper));
     }
-
     if (dbname != nullptr) {
       if (!dbname->empty()) {
         append_with_commas(sql, "default_db = ?");
@@ -847,6 +881,10 @@ void SysCatalog::alterUser(const int32_t userid,
       } else {
         append_with_commas(sql, "default_db = NULL");
       }
+    }
+    if (can_login != nullptr) {
+      append_with_commas(sql, "can_login = ?");
+      values.push_back(std::to_string(*can_login));
     }
 
     sql = "UPDATE mapd_users SET " + sql + " WHERE userid = ?";
@@ -1140,43 +1178,38 @@ bool SysCatalog::checkPasswordForUserImpl(const std::string& passwd,
   return true;
 }
 
+static bool parseUserMetadataFromSQLite(const std::unique_ptr<SqliteConnector>& conn,
+                                        UserMetadata& user) {
+  int numRows = conn->getNumRows();
+  if (numRows == 0) {
+    return false;
+  }
+  user.userId = conn->getData<int>(0, 0);
+  user.userName = conn->getData<string>(0, 1);
+  user.passwd_hash = conn->getData<string>(0, 2);
+  user.isSuper = conn->getData<bool>(0, 3);
+  user.defaultDbId = conn->isNull(0, 4) ? -1 : conn->getData<int>(0, 4);
+  user.can_login = conn->getData<bool>(0, 5);
+  return true;
+}
+
 bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
   LOG(INFO) << "getMetadataForUser " << name;
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
-      "SELECT userid, name, passwd_hash, issuper, default_db FROM mapd_users WHERE name "
-      "= ?",
+      "SELECT userid, name, passwd_hash, issuper, default_db, can_login FROM mapd_users "
+      "WHERE name = ?",
       name);
-  int numRows = sqliteConnector_->getNumRows();
-  if (numRows == 0) {
-    return false;
-  }
-  user.userId = sqliteConnector_->getData<int>(0, 0);
-  user.userName = sqliteConnector_->getData<string>(0, 1);
-  user.passwd_hash = sqliteConnector_->getData<string>(0, 2);
-  user.isSuper = sqliteConnector_->getData<bool>(0, 3);
-  user.defaultDbId =
-      sqliteConnector_->isNull(0, 4) ? -1 : sqliteConnector_->getData<int>(0, 4);
-  return true;
+  return parseUserMetadataFromSQLite(sqliteConnector_, user);
 }
 
 bool SysCatalog::getMetadataForUserById(const int32_t idIn, UserMetadata& user) {
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
-      "SELECT userid, name, passwd_hash, issuper, default_db FROM mapd_users WHERE "
-      "userid = ?",
+      "SELECT userid, name, passwd_hash, issuper, default_db, can_login FROM mapd_users "
+      "WHERE userid = ?",
       std::to_string(idIn));
-  int numRows = sqliteConnector_->getNumRows();
-  if (numRows == 0) {
-    return false;
-  }
-  user.userId = sqliteConnector_->getData<int>(0, 0);
-  user.userName = sqliteConnector_->getData<string>(0, 1);
-  user.passwd_hash = sqliteConnector_->getData<string>(0, 2);
-  user.isSuper = sqliteConnector_->getData<bool>(0, 3);
-  user.defaultDbId =
-      sqliteConnector_->isNull(0, 4) ? -1 : sqliteConnector_->getData<int>(0, 4);
-  return true;
+  return parseUserMetadataFromSQLite(sqliteConnector_, user);
 }
 
 list<DBMetadata> SysCatalog::getAllDBMetadata() {
@@ -1198,7 +1231,7 @@ namespace {
 
 auto get_users(std::unique_ptr<SqliteConnector>& sqliteConnector,
                const int32_t dbId = -1) {
-  sqliteConnector->query("SELECT userid, name, issuper FROM mapd_users");
+  sqliteConnector->query("SELECT userid, name, issuper, can_login FROM mapd_users");
   int numRows = sqliteConnector->getNumRows();
   list<UserMetadata> user_list;
   const bool return_all_users = dbId == -1;
@@ -1209,16 +1242,19 @@ auto get_users(std::unique_ptr<SqliteConnector>& sqliteConnector,
     }
     return true;
   };
-  auto add_user = [&user_list, &has_any_privilege](
-                      const int32_t id, const std::string& name, const bool super) {
+  auto add_user = [&user_list, &has_any_privilege](const int32_t id,
+                                                   const std::string& name,
+                                                   const bool super,
+                                                   const bool can_login) {
     if (has_any_privilege(name)) {
-      user_list.emplace_back(id, name, "", super, -1);
+      user_list.emplace_back(id, name, "", super, -1, can_login);
     };
   };
   for (int r = 0; r < numRows; ++r) {
     add_user(sqliteConnector->getData<int>(r, 0),
              sqliteConnector->getData<string>(r, 1),
-             sqliteConnector->getData<bool>(r, 2));
+             sqliteConnector->getData<bool>(r, 2),
+             sqliteConnector->getData<bool>(r, 3));
   }
   return user_list;
 }
@@ -1237,10 +1273,10 @@ list<UserMetadata> SysCatalog::getAllUserMetadata() {
   return get_users(sqliteConnector_);
 }
 
-void SysCatalog::getMetadataWithDefault(std::string& dbname,
-                                        const std::string& username,
-                                        Catalog_Namespace::DBMetadata& db_meta,
-                                        UserMetadata& user_meta) {
+void SysCatalog::getMetadataWithDefaultDB(std::string& dbname,
+                                          const std::string& username,
+                                          Catalog_Namespace::DBMetadata& db_meta,
+                                          UserMetadata& user_meta) {
   if (!getMetadataForUser(username, user_meta)) {
     throw std::runtime_error("Invalid credentials.");
   }
@@ -2150,9 +2186,10 @@ void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
                                             bool* is_super) {
   UserMetadata user_meta;
   if (!getMetadataForUser(user_name, user_meta)) {
-    createUser(user_name, generate_random_string(72), is_super ? *is_super : false, "");
+    createUser(
+        user_name, generate_random_string(72), is_super ? *is_super : false, "", true);
   } else if (is_super && *is_super != user_meta.isSuper) {
-    alterUser(user_meta.userId, nullptr, is_super, nullptr);
+    alterUser(user_meta.userId, nullptr, is_super, nullptr, nullptr);
   }
   std::vector<std::string> current_roles = {};
   auto* user_rl = getUserGrantee(user_name);
