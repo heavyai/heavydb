@@ -13235,6 +13235,70 @@ TEST(Select, Correlated_Exists) {
   }
 }
 
+TEST(Select, Correlated_In) {
+  // table creation
+  const std::string drop_lookup_tbl_ddl = "DROP TABLE IF EXISTS lookup";
+  const std::string drop_facts_tbl_ddl = "DROP TABLE IF EXISTS facts";
+  const std::string create_lookup_tbl_ddl = "CREATE TABLE lookup (id int, val int)";
+  const std::string create_facts_tbl_ddl = "CREATE TABLE facts (id int, val int)";
+
+  run_ddl_statement(drop_lookup_tbl_ddl);
+  run_ddl_statement(drop_facts_tbl_ddl);
+  run_ddl_statement(create_lookup_tbl_ddl);
+  run_ddl_statement(create_facts_tbl_ddl);
+
+  g_sqlite_comparator.query(drop_lookup_tbl_ddl);
+  g_sqlite_comparator.query(drop_facts_tbl_ddl);
+  g_sqlite_comparator.query(create_lookup_tbl_ddl);
+  g_sqlite_comparator.query(create_facts_tbl_ddl);
+
+  std::vector<std::string> lookup_tuples = {"(1,1)", "(2,2)", "(3,3)", "(4,4)"};
+
+  std::vector<std::string> facts_tuples = {
+      "(1,1)",
+      "(1,2)",
+      "(1,3)",
+      "(1,4)",
+      "(2,1)",
+      "(2,2)",
+      "(2,3)",
+      "(2,4)",
+  };
+
+  // create lookup
+  for (std::string tuple : lookup_tuples) {
+    std::stringstream insert_tuple_str;
+    insert_tuple_str << "INSERT INTO lookup VALUES " << tuple << ";";
+    run_multiple_agg(insert_tuple_str.str(), ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_tuple_str.str());
+  }
+
+  // create facts
+  for (std::string tuple : facts_tuples) {
+    std::stringstream insert_tuple_str;
+    insert_tuple_str << "INSERT INTO facts VALUES " << tuple << ";";
+    run_multiple_agg(insert_tuple_str.str(), ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_tuple_str.str());
+  }
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    c("SELECT f.val FROM facts f WHERE f.val IN (SELECT l.val FROM lookup l WHERE f.id = "
+      "l.id) AND f.val > 3",
+      dt);
+    c("SELECT f.val FROM facts f WHERE f.val IN (SELECT l.val FROM lookup l WHERE f.id "
+      "<> l.id) AND f.val > 3",
+      dt);
+    c("SELECT f.id FROM facts f WHERE f.id IN (SELECT l.id FROM lookup l WHERE f.val <> "
+      "l.val) AND f.val < 2",
+      dt);
+    c("SELECT f.id FROM facts f WHERE f.id IN (SELECT l.id FROM lookup l WHERE f.val = "
+      "l.val) AND f.val < 2",
+      dt);
+  }
+}
+
 TEST(Create, Delete) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();

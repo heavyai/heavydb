@@ -121,6 +121,7 @@ public final class MapDParser {
   private static final EnumSet<SqlKind> EXISTS = EnumSet.of(SqlKind.EXISTS);
   private static final EnumSet<SqlKind> DELETE = EnumSet.of(SqlKind.DELETE);
   private static final EnumSet<SqlKind> UPDATE = EnumSet.of(SqlKind.UPDATE);
+  private static final EnumSet<SqlKind> IN = EnumSet.of(SqlKind.IN);
 
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDParser.class);
 
@@ -214,12 +215,36 @@ public final class MapDParser {
         }
 
         // special handling of sub-queries
-        if (expression.isA(SCALAR) || expression.isA(EXISTS)) {
+        if (expression.isA(SCALAR) || expression.isA(EXISTS) || expression.isA(IN)) {
           // only expand if it is correlated.
 
           if (expression.isA(EXISTS)) {
             // always expand subquery by EXISTS clause
             return true;
+          }
+
+          if (expression.isA(IN)) {
+            // expand subquery by IN clause
+            // but correlated subquery by NOT_IN clause is not available
+            // currently due to a lack of supporting in Calcite
+            if (expression instanceof SqlCall) {
+              SqlCall call = (SqlCall) expression;
+              if (call.getOperandList().size() == 2) {
+                // if IN clause is correlated, its second operand of corresponding
+                // expression is SELECT clause which indicates a correlated subquery.
+                // Here, an expression "f.val IN (SELECT ...)" has two operands.
+                // Since we have interest in its subquery, so try to check whether
+                // the second operand, i.e., call.getOperandList().get(1)
+                // is a type of SqlSelect and also is correlated.
+                // Note that the second operand of non-correlated IN clause
+                // does not have SqlSelect as its second operand
+                if (call.getOperandList().get(1) instanceof SqlSelect) {
+                  expression = call.getOperandList().get(1);
+                } else {
+                  return false;
+                }
+              }
+            }
           }
 
           if (isCorrelated(expression)) {

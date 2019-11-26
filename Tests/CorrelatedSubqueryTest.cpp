@@ -1300,6 +1300,60 @@ TEST(Select, JoinCorrelation_withMultipleExists) {
   ASSERT_EQ(static_cast<uint32_t>(0), numResultRows);
 }
 
+TEST(Select, JoinCorrelation_InClause) {
+  int factsCount = 13;
+  int lookupCount = 5;
+  setupTest("int", factsCount, lookupCount);
+
+  std::string sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE fact.val IN (SELECT l.val "
+      "FROM test_lookup l WHERE fact.id = l.id) AND fact.val > 3;";
+  auto results1 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  uint32_t numResultRows = results1->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(1), numResultRows);
+  const auto select_crt_row = results1->getNextRow(true, false);
+  auto id = getIntValue(select_crt_row[0]);
+  auto val = getIntValue(select_crt_row[1]);
+  ASSERT_EQ(id, 4);
+  ASSERT_EQ(val, 4);
+
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE fact.val IN (SELECT l.val "
+      "FROM test_lookup l WHERE fact.id = l.id);";
+  auto results2 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  uint32_t numResultRows2 = results2->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(lookupCount), numResultRows2);
+
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE fact.val IN (SELECT l.val "
+      "FROM test_lookup l WHERE fact.id <> l.id);";
+  auto results3 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  uint32_t numResultRows3 = results3->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(0), numResultRows3);
+
+  // a query having more than one correlated IN clauses
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE fact.val IN (SELECT l.val "
+      "FROM test_lookup l WHERE fact.id = l.id) AND fact.val > 1 AND fact.val IN (SELECT "
+      "l2.val FROM test_lookup l2 WHERE fact.id = l2.id);";
+  auto results4 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  uint32_t numResultRows4 = results4->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(3), numResultRows4);
+
+  sql =
+      "SELECT fact.id, fact.val FROM test_facts fact WHERE fact.val IN (SELECT l.val "
+      "FROM test_lookup l WHERE fact.id = l.id) AND fact.val > 1 AND fact.val IN (SELECT "
+      "l2.val FROM test_lookup l2 WHERE fact.id = l2.id) AND fact.id > 3;";
+  auto results5 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  uint32_t numResultRows5 = results5->rowCount();
+  ASSERT_EQ(static_cast<uint32_t>(1), numResultRows5);
+  const auto select_crt_row5 = results5->getNextRow(true, false);
+  id = getIntValue(select_crt_row5[0]);
+  val = getIntValue(select_crt_row5[1]);
+  ASSERT_EQ(id, 4);
+  ASSERT_EQ(val, 4);
+}
+
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);
   TestHelpers::init_logger_stderr_only(argc, argv);
