@@ -1325,13 +1325,13 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
     const auto storage_idx = getStorageIndex(entry_buff_idx);
     if (target_info.sql_type.is_string()) {
       CHECK(target_info.sql_type.get_compression() == kENCODING_NONE);
-      CHECK_LT(static_cast<size_t>(storage_idx.first), serialized_varlen_buffer_.size());
+      CHECK_LT(storage_idx.first, serialized_varlen_buffer_.size());
       const auto& varlen_buffer_for_storage =
           serialized_varlen_buffer_[storage_idx.first];
       CHECK_LT(static_cast<size_t>(varlen_ptr), varlen_buffer_for_storage.size());
       return varlen_buffer_for_storage[varlen_ptr];
     } else if (target_info.sql_type.get_type() == kARRAY) {
-      CHECK_LT(static_cast<size_t>(storage_idx.first), serialized_varlen_buffer_.size());
+      CHECK_LT(storage_idx.first, serialized_varlen_buffer_.size());
       const auto& varlen_buffer = serialized_varlen_buffer_[storage_idx.first];
       CHECK_LT(static_cast<size_t>(varlen_ptr), varlen_buffer.size());
 
@@ -1351,7 +1351,7 @@ TargetValue ResultSet::makeVarlenTargetValue(const int8_t* ptr1,
     const auto& col_lazy_fetch = lazy_fetch_info_[target_logical_idx];
     if (col_lazy_fetch.is_lazily_fetched) {
       const auto storage_idx = getStorageIndex(entry_buff_idx);
-      CHECK_LT(static_cast<size_t>(storage_idx.first), col_buffers_.size());
+      CHECK_LT(storage_idx.first, col_buffers_.size());
       auto& frag_col_buffers =
           getColumnFrag(storage_idx.first, target_logical_idx, varlen_ptr);
       bool is_end{false};
@@ -1525,7 +1525,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
 
   auto getFragColBuffers = [&]() -> decltype(auto) {
     const auto storage_idx = getStorageIndex(entry_buff_idx);
-    CHECK_LT(static_cast<size_t>(storage_idx.first), col_buffers_.size());
+    CHECK_LT(storage_idx.first, col_buffers_.size());
     auto global_idx = getCoordsDataPtr(geo_target_ptr);
     return getColumnFrag(storage_idx.first, target_logical_idx, global_idx);
   };
@@ -1541,7 +1541,7 @@ TargetValue ResultSet::makeGeoTargetValue(const int8_t* geo_target_ptr,
 
   auto getSeparateVarlenStorage = [&]() -> decltype(auto) {
     const auto storage_idx = getStorageIndex(entry_buff_idx);
-    CHECK_LT(static_cast<size_t>(storage_idx.first), serialized_varlen_buffer_.size());
+    CHECK_LT(storage_idx.first, serialized_varlen_buffer_.size());
     const auto& varlen_buffer = serialized_varlen_buffer_[storage_idx.first];
     return varlen_buffer;
   };
@@ -1772,7 +1772,7 @@ TargetValue ResultSet::makeTargetValue(const int8_t* ptr,
     if (col_lazy_fetch.is_lazily_fetched) {
       CHECK_GE(ival, 0);
       const auto storage_idx = getStorageIndex(entry_buff_idx);
-      CHECK_LT(static_cast<size_t>(storage_idx.first), col_buffers_.size());
+      CHECK_LT(storage_idx.first, col_buffers_.size());
       auto& frag_col_buffers = getColumnFrag(storage_idx.first, target_logical_idx, ival);
       ival = lazy_decode(
           col_lazy_fetch, frag_col_buffers[col_lazy_fetch.local_col_id], ival);
