@@ -66,7 +66,7 @@ stages involved in executing a query.
 .. _Calcite: https://calcite.apache.org/
 .. _Bison: https://www.gnu.org/software/bison/
 
-Simple Execution Model
+Simplified Execution Model
 ======================
 
 .. uml::
