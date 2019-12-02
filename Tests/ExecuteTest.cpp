@@ -1825,10 +1825,10 @@ TEST(Select, CountDistinct) {
     SKIP_NO_GPU();
     c("SELECT COUNT(distinct x) FROM test;", dt);
     c("SELECT COUNT(distinct b) FROM test;", dt);
-    SKIP_ON_AGGREGATOR(c("SELECT COUNT(distinct f) FROM test;",
-                         dt));  // Exception: Cannot use a fast path for COUNT distinct
-    SKIP_ON_AGGREGATOR(c("SELECT COUNT(distinct d) FROM test;",
-                         dt));  // Exception: Cannot use a fast path for COUNT distinct
+    THROW_ON_AGGREGATOR(c("SELECT COUNT(distinct f) FROM test;",
+                          dt));  // Exception: Cannot use a fast path for COUNT distinct
+    THROW_ON_AGGREGATOR(c("SELECT COUNT(distinct d) FROM test;",
+                          dt));  // Exception: Cannot use a fast path for COUNT distinct
     c("SELECT COUNT(distinct str) FROM test;", dt);
     c("SELECT COUNT(distinct ss) FROM test;", dt);
     c("SELECT COUNT(distinct x + 1) FROM test;", dt);
@@ -1843,7 +1843,7 @@ TEST(Select, CountDistinct) {
       "str;",
       dt);
     c("SELECT AVG(z), COUNT(distinct x) AS dx FROM test GROUP BY y HAVING dx > 1;", dt);
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT z, str, COUNT(distinct f) FROM test GROUP BY z, str ORDER BY str DESC;",
           dt));  // Exception: Cannot use a fast path for COUNT distinct
     c("SELECT COUNT(distinct x * (50000 - 1)) FROM test;", dt);
@@ -2441,11 +2441,11 @@ TEST(Select, Strings) {
     c("SELECT COUNT(*) FROM test WHERE str = 'foo' OR str = 'bar';", dt);
     // The following tests throw Cast from dictionary-encoded string to none-encoded not
     // supported for distributed queries in distributed mode
-    SKIP_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE str = real_str;", dt));
+    THROW_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE str = real_str;", dt));
     c("SELECT COUNT(*) FROM test WHERE str <> str;", dt);
-    SKIP_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE ss <> str;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE ss = str;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE LENGTH(str) = 3;", dt));
+    THROW_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE ss <> str;", dt));
+    THROW_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE ss = str;", dt));
+    THROW_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test WHERE LENGTH(str) = 3;", dt));
     c("SELECT fixed_str, COUNT(*) FROM test GROUP BY fixed_str HAVING COUNT(*) > 5 ORDER "
       "BY fixed_str;",
       dt);
@@ -2454,7 +2454,7 @@ TEST(Select, Strings) {
       "fixed_str;",
       dt);
     c("SELECT COUNT(*) FROM emp WHERE ename LIKE 'D%%' OR ename = 'Julia';", dt);
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         ASSERT_EQ(2 * g_num_rows,
                   v<int64_t>(run_simple_agg(
                       "SELECT COUNT(*) FROM test WHERE CHAR_LENGTH(str) = 3;",
@@ -6740,18 +6740,20 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
     c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x;", dt);
     c("SELECT a.y, z FROM test a JOIN test_inner b ON a.x = b.x order by a.y;", dt);
     c("SELECT COUNT(*) FROM test a JOIN join_test b ON a.str = b.dup_str;", dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT COUNT(*) FROM test_inner_x a JOIN test_x b ON a.x = b.x;", dt));
+    THROW_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test_inner_x a JOIN test_x b ON a.x = b.x;",
+          dt));  // test_x must be replicated
     c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str ORDER BY a.x;", dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x ORDER BY a.x;", dt));
+    THROW_ON_AGGREGATOR(
+        c("SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x ORDER BY a.x;",
+          dt));  // test_x must be replicated
     c("SELECT a.x FROM test a JOIN join_test b ON a.str = b.dup_str GROUP BY a.x ORDER "
       "BY a.x;",
       dt);
-    SKIP_ON_AGGREGATOR(c(
+    THROW_ON_AGGREGATOR(c(
         "SELECT a.x FROM test_inner_x a JOIN test_x b ON a.x = b.x GROUP BY a.x ORDER BY "
         "a.x;",
-        dt));
+        dt));            // test_x must be replicated
     SKIP_ON_AGGREGATOR(  // no guarantee of equivalent rowid as sqlite
         c("SELECT COUNT(*) FROM test JOIN test_inner ON test.x = test_inner.x AND "
           "test.rowid "
@@ -6773,6 +6775,16 @@ TEST(Select, Joins_InnerJoin_TwoTables) {
       "ON ((t1.fixed_null_str = "
       "t2.fixed_null_str) OR (t1.fixed_null_str IS NULL AND t2.fixed_null_str IS "
       "NULL));",
+      dt);
+    c("SELECT t1.x, t1.y, t1.sum1, t2.sum2, Sum(Cast(t1.sum1 AS FLOAT)) / "
+      "Sum(Cast(t2.sum2 AS FLOAT)) calc FROM (SELECT x, y, Sum(t) sum1 FROM test GROUP "
+      "BY 1, 2) t1 INNER JOIN (SELECT y, Sum(x) sum2 FROM test_inner GROUP BY 1) t2 ON "
+      "t1.y = t2.y GROUP BY 1, 2, 3, 4;",
+      dt);
+    c("SELECT t1.x, t1.y, t1.sum1, t2.sum2, Sum(Cast(t1.sum1 AS FLOAT)) / "
+      "Sum(Cast(t2.sum2 AS FLOAT)) calc FROM (SELECT x, y, Sum(t) sum1 FROM test GROUP "
+      "BY 1, 2) t1 INNER JOIN (SELECT y, Sum(x) sum2 FROM test GROUP BY 1) t2 ON "
+      "t1.y = t2.y GROUP BY 1, 2, 3, 4;",
       dt);
   }
 }
@@ -7075,7 +7087,7 @@ TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
           "JOIN "
           "join_test c ON b.x = c.x JOIN "
           "test_inner d ON b.x = d.x ORDER BY a.x, b.str;",
-          dt));
+          dt));  // test must be replicated
     SKIP_ON_AGGREGATOR(c(
         "SELECT a.f, b.y, c.x from test AS a JOIN join_test AS b ON 40*a.f-1 = b.y JOIN "
         "test_inner AS c ON b.x = c.x;",
@@ -7116,13 +7128,13 @@ TEST(Select, Joins_InnerJoin_Filters) {
       "c.str = a.str WHERE c.str = "
       "'foo';",
       dt);
-    SKIP_ON_AGGREGATOR(
+    THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test t1 JOIN test t2 ON t1.x = t2.x WHERE t1.y > t2.y;",
-          dt));
-    SKIP_ON_AGGREGATOR(
+          dt));  // test must be replicated
+    THROW_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test t1 JOIN test t2 ON t1.x = t2.x WHERE t1.null_str = "
           "t2.null_str;",
-          dt));
+          dt));  // test must be replicated
   }
 }
 
@@ -7491,9 +7503,9 @@ TEST(Select, Joins_TimeAndDate) {
     SKIP_NO_GPU();
 
     // Inner joins
-    SKIP_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test a, test b WHERE a.m = b.m;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test a, test b WHERE a.n = b.n;", dt));
-    SKIP_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;", dt));
+    THROW_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test a, test b WHERE a.m = b.m;", dt));
+    THROW_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test a, test b WHERE a.n = b.n;", dt));
+    THROW_ON_AGGREGATOR(c("SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;", dt));
 
     c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.m = b.ts;", dt);
     c("SELECT COUNT(*) FROM test a, test_inner b WHERE a.o = b.dt;", dt);
@@ -13146,11 +13158,10 @@ TEST(Delete, Joins_ImplicitJoins) {
         c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.y = b.y;", dt));
     SKIP_ON_AGGREGATOR(
         c("SELECT COUNT(*) FROM test a, test b WHERE a.x = b.x AND a.str = b.str;", dt));
-    SKIP_ON_AGGREGATOR(c(
-        "SELECT COUNT(*) FROM test, test_inner WHERE (test.x = test_inner.x AND test.y = "
-        "42 AND test_inner.str = 'foo') "
-        "OR (test.x = test_inner.x AND test.y = 43 AND test_inner.str = 'foo');",
-        dt));
+    c("SELECT COUNT(*) FROM test, test_inner WHERE (test.x = test_inner.x AND test.y = "
+      "42 AND test_inner.str = 'foo') "
+      "OR (test.x = test_inner.x AND test.y = 43 AND test_inner.str = 'foo');",
+      dt);
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x = test_inner.x OR test.x = "
       "test_inner.x;",
       dt);

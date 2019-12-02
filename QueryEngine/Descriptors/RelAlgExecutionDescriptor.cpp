@@ -280,7 +280,19 @@ size_t RaExecutionSequence::stepsToNextReduction() const {
     if (joins_.count(vert)) {
       auto join_node = dynamic_cast<const RelLeftDeepInnerJoin*>(node);
       CHECK(join_node);
-      return ++steps_to_next_reduction;
+      if (crt_vertex < ordering_.size() - 1) {
+        // Force the parent node of the RelLeftDeepInnerJoin to run on the aggregator.
+        // Note that crt_vertex has already been incremented once above for the join node
+        // -- increment it again to account for the parent node of the join
+        ++steps_to_next_reduction;
+        ++crt_vertex;
+        continue;
+      } else {
+        CHECK_EQ(crt_vertex, ordering_.size() - 1);
+        // If the join node parent is the last node in the tree, run all remaining steps
+        // on the aggregator
+        return ++steps_to_next_reduction;
+      }
     }
     if (auto sort = dynamic_cast<const RelSort*>(node)) {
       CHECK_EQ(sort->inputCount(), size_t(1));
