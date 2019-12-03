@@ -193,6 +193,18 @@ void RelAlgExecutor::cleanupPostExecution() {
   executor_->lit_str_dict_proxy_ = nullptr;
 }
 
+namespace {
+
+inline void check_sort_node_source_constraint(const RelSort* sort) {
+  CHECK_EQ(size_t(1), sort->inputCount());
+  const auto source = sort->getInput(0);
+  if (dynamic_cast<const RelSort*>(source)) {
+    throw std::runtime_error("Sort node not supported as input to another sort");
+  }
+}
+
+}  // namespace
+
 FirstStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
     const RaExecutionSequence& seq,
     const size_t step_idx,
@@ -210,6 +222,7 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
   };
 
   if (sort) {
+    check_sort_node_source_constraint(sort);
     const auto source_work_unit = createSortInputWorkUnit(sort, eo.just_explain);
     shard_count = GroupByAndAggregate::shard_count_for_top_groups(
         source_work_unit.exe_unit, *executor_->getCatalog());
@@ -1650,11 +1663,8 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
                                             const ExecutionOptions& eo,
                                             RenderInfo* render_info,
                                             const int64_t queue_time_ms) {
-  CHECK_EQ(size_t(1), sort->inputCount());
+  check_sort_node_source_constraint(sort);
   const auto source = sort->getInput(0);
-  if (dynamic_cast<const RelSort*>(source)) {
-    throw std::runtime_error("Sort node not supported as input to another sort");
-  }
   const bool is_aggregate = node_is_aggregate(source);
   auto it = leaf_results_.find(sort->getId());
   if (it != leaf_results_.end()) {

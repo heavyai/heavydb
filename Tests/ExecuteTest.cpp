@@ -7555,6 +7555,10 @@ TEST(Select, Joins_ComplexQueries) {
       "SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR "
       "0;",
       dt);
+    EXPECT_ANY_THROW(
+        c("SELECT * FROM (SELECT test.x, test.y, d, f FROM test JOIN test_inner ON "
+          "test.x = test_inner.x ORDER BY f ASC LIMIT 4) ORDER BY d DESC;",
+          dt));
   }
 }
 
