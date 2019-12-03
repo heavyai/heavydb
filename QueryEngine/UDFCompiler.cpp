@@ -134,6 +134,15 @@ bool on_search_path(const std::string file) {
 }
 }  // namespace
 
+UdfClangDriver::UdfClangDriver()
+    : clang_path(llvm::sys::findProgramByName("clang++").get().c_str())
+    , diag_options(new DiagnosticOptions())
+    , diag_client(new TextDiagnosticPrinter(llvm::errs(), diag_options.get()))
+    , diag_id(new clang::DiagnosticIDs())
+    , diags(diag_id, diag_options.get(), diag_client)
+    , diag_client_owner(diags.takeClient())
+    , the_driver(clang_path.c_str(), llvm::sys::getDefaultTargetTriple(), diags) {}
+
 std::string UdfCompiler::removeFileExtension(const std::string& path) {
   if (path == "." || path == "..") {
     return path;
@@ -177,38 +186,24 @@ std::string UdfCompiler::genCpuIrFilename(const char* udf_fileName) {
 }
 
 int UdfCompiler::compileFromCommandLine(std::vector<const char*>& command_line) {
-  auto a_path = llvm::sys::findProgramByName("clang++");
-  auto clang_path = a_path.get();
+  UdfClangDriver compiler_driver;
+  auto the_driver(compiler_driver.getClangDriver());
 
-  llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_options(
-      new DiagnosticOptions());
-
-  clang::DiagnosticConsumer* diag_client =
-      new TextDiagnosticPrinter(llvm::errs(), diag_options.get());
-
-  llvm::IntrusiveRefCntPtr<clang::DiagnosticIDs> diag_id(new clang::DiagnosticIDs());
-  clang::DiagnosticsEngine diags(diag_id, diag_options.get(), diag_client);
-
-  std::unique_ptr<clang::DiagnosticConsumer> diag_client_owner(diags.takeClient());
-
-  clang::driver::Driver the_driver(
-      clang_path.c_str(), llvm::sys::getDefaultTargetTriple(), diags);
-
-  the_driver.CCPrintOptions = 0;
+  the_driver->CCPrintOptions = 0;
   std::unique_ptr<driver::Compilation> compilation(
-      the_driver.BuildCompilation(command_line));
+      the_driver->BuildCompilation(command_line));
 
   if (!compilation) {
     LOG(FATAL) << "failed to build compilation object!\n";
   }
 
   llvm::SmallVector<std::pair<int, const driver::Command*>, 10> failing_commands;
-  int res = the_driver.ExecuteCompilation(*compilation, failing_commands);
+  int res = the_driver->ExecuteCompilation(*compilation, failing_commands);
 
   if (res < 0) {
     for (const std::pair<int, const driver::Command*>& p : failing_commands) {
       if (p.first) {
-        the_driver.generateCompilationDiagnostics(*compilation, *p.second);
+        the_driver->generateCompilationDiagnostics(*compilation, *p.second);
       }
     }
   }
@@ -263,12 +258,18 @@ int UdfCompiler::compileToCpuByteCode(const char* udf_file_name) {
 }
 
 int UdfCompiler::parseToAst(const char* file_name) {
-  int num_args = 3;
+  UdfClangDriver the_driver;
+  std::string resource_path = the_driver.getClangDriver()->ResourceDir;
+  std::string include_option =
+      std::string("-I") + resource_path + std::string("/include");
+
   const char arg0[] = "astparser";
   const char* arg1 = file_name;
   const char arg2[] = "--";
-  const char* arg_vector[3] = {arg0, arg1, arg2};
+  const char* arg3 = include_option.c_str();
+  const char* arg_vector[] = {arg0, arg1, arg2, arg3};
 
+  int num_args = sizeof(arg_vector) / sizeof(arg_vector[0]);
   CommonOptionsParser op(num_args, arg_vector, ToolingSampleCategory);
   ClangTool tool(op.getCompilations(), op.getSourcePathList());
 

@@ -25,8 +25,28 @@
 #ifndef UDF_COMPILER_H
 #define UDF_COMPILER_H
 
+#include <clang/Driver/Compilation.h>
+#include <clang/Driver/Driver.h>
+#include <clang/Frontend/CompilerInstance.h>
 #include <string>
 #include <vector>
+
+class UdfClangDriver {
+ public:
+  UdfClangDriver();
+
+  std::string getClangPath() { return clang_path; }
+  clang::driver::Driver* getClangDriver() { return &the_driver; }
+
+ private:
+  std::string clang_path;
+  llvm::IntrusiveRefCntPtr<clang::DiagnosticOptions> diag_options;
+  clang::DiagnosticConsumer* diag_client;
+  llvm::IntrusiveRefCntPtr<clang::DiagnosticIDs> diag_id;
+  clang::DiagnosticsEngine diags;
+  std::unique_ptr<clang::DiagnosticConsumer> diag_client_owner;
+  clang::driver::Driver the_driver;
+};
 
 class UdfCompiler {
  public:
