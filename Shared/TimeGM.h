@@ -31,9 +31,9 @@
 
 class TimeGM {
  public:
-  time_t my_timegm(const struct tm* tm);
-  time_t my_timegm(const struct tm* tm, const time_t fsc, const int32_t dimen);
-  time_t my_timegm_days(const struct tm* tm);
+  time_t my_timegm(tm const* tm);
+  time_t my_timegm(tm const* tm, const time_t fsc, const int32_t dimen);
+  time_t my_timegm_days(tm const* tm);
   time_t parse_fractional_seconds(uint64_t sfrac,
                                   const int32_t ntotal,
                                   const int32_t dimen);
@@ -47,6 +47,10 @@ class TimeGM {
   }
 
  private:
+  time_t get_overflow_underflow_safe_epoch(tm const* tm,
+                                           const time_t fsc,
+                                           const int32_t dimen);
+
   /* Number of days per month (except for February in leap years). */
   const int monoff[12] = {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
   int is_leap_year(int year);
