@@ -467,6 +467,10 @@ class Executor {
 
   static const size_t high_scan_limit{32000000};
 
+  int8_t warpSize() const;
+  unsigned gridSize() const;
+  unsigned blockSize() const;
+
  private:
   void clearMetaInfoCache();
 
@@ -899,10 +903,6 @@ class Executor {
       const CompilationOptions&);
   std::string generatePTX(const std::string&) const;
   void initializeNVPTXBackend() const;
-
-  int8_t warpSize() const;
-  unsigned gridSize() const;
-  unsigned blockSize() const;
 
   int64_t deviceCycles(int milliseconds) const;
 
