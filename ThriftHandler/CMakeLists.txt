@@ -6,7 +6,12 @@ if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   include_directories(${CMAKE_SOURCE_DIR} "${CMAKE_CURRENT_SOURCE_DIR}/ee")
   list(APPEND THRIFT_HANDLER_SOURCES ee/MapDRenderHandler.cpp ee/MapDDistributedHandler.cpp ee/HAHandler.cpp ee/KafkaMgr.cpp ee/DistributedValidate.cpp)
   if(ENABLE_RENDERING)
-    list(APPEND THRIFT_HANDLER_SOURCES ee/Rendering/SQLSelectedTablesBuilder.cpp ee/Rendering/ProjHitTestColSqlBuilder.cpp)
+    list(APPEND THRIFT_HANDLER_SOURCES
+         ee/Rendering/SQLSelectedTablesBuilder.cpp
+         ee/Rendering/ProjHitTestColSqlBuilder.cpp
+         ee/Rendering/RenderQueryRunner.cpp
+         ee/Rendering/RenderQueryRunnerAgg.cpp
+         ee/Rendering/RenderQueryRunnerLeaf.cpp)
   endif()
 elseif("${MAPD_EDITION_LOWER}" STREQUAL "ce")
   include_directories(${CMAKE_SOURCE_DIR} "${CMAKE_CURRENT_SOURCE_DIR}/ee")
