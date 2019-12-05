@@ -2534,7 +2534,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
         }
       }
 
-      if (!source_cd->columnType.is_string() &&
+      if (!source_cd->columnType.is_string() && !source_cd->columnType.is_geometry() &&
           source_cd->columnType.get_size() > target_cd->columnType.get_size()) {
         throw std::runtime_error("Source '" + source_cd->columnName + " " +
                                  source_cd->columnType.get_type_name() +
