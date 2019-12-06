@@ -215,7 +215,8 @@ StandardCommand(Help, {
   std::cout << "\\t [regex] List all tables, optionally matching regex.\n";
   std::cout << "\\v [regex] List all views, optionally matching regex.\n";
   std::cout << "\\d <table> List all columns of a table or a view.\n";
-  std::cout << "\\c <database> <user> <password>.\n";
+  std::cout
+      << "\\c <database> <user> <password> Connect to database as different user.\n";
   std::cout
       << "\\db [database|...] Switch database. Use ... to switch to your default.\n";
   std::cout << "\\dash List all dashboards accessible by user.\n";
