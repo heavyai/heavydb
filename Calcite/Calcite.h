@@ -126,7 +126,7 @@ class Calcite final {
   std::string ssl_key_file_;
   std::string ssl_keystore_;
   std::string ssl_keystore_password_;
-  std::string ssl_cert_file_;
+  std::string ssl_ca_file_;
   std::once_flag shutdown_once_flag_;
 };
 

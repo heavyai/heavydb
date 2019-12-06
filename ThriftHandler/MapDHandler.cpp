@@ -449,6 +449,8 @@ void MapDHandler::connect(TSessionId& session,
                          " is not allowed to access database " + dbname2 + ".");
   }
   connect_impl(session, passwd, dbname2, user_meta, cat, stdlog);
+  // if pki auth session will come back encrypted with user pubkey
+  SysCatalog::instance().check_for_session_encryption(passwd, session);
 }
 
 void MapDHandler::connect_impl(TSessionId& session,

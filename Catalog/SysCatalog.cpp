@@ -120,6 +120,7 @@ void SysCatalog::init(const std::string& basePath,
     authMetadata_ = &authMetadata;
     ldap_server_.reset(new LdapServer(*authMetadata_));
     rest_server_.reset(new RestServer(*authMetadata_));
+    pki_server_.reset(new PkiServer(*authMetadata_));
     calciteMgr_ = calcite;
     string_dict_hosts_ = string_dict_hosts;
     aggregator_ = aggregator;
@@ -676,7 +677,6 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
   // login()/authenticate_user() can reset it.
 
   sys_write_lock write_lock(this);
-
   if (check_password) {
     loginImpl(username, password, user_meta);
   } else {  // not checking for password so user must exist
@@ -723,6 +723,14 @@ std::shared_ptr<Catalog> SysCatalog::switchDatabase(std::string& dbname,
   }
 
   return cat;
+}
+
+void SysCatalog::check_for_session_encryption(const std::string& pki_cert,
+                                              std::string& session) {
+  if (!pki_server_->inUse()) {
+    return;
+  }
+  pki_server_->encrypt_session(pki_cert, session);
 }
 
 void SysCatalog::createUser(const string& name,

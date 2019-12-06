@@ -701,10 +701,22 @@ void MapDProgramOptions::fillAdvancedOptions() {
                                "to CPU after execution. When disabled, pre-flight "
                                "count queries are used to size "
                                "the output buffer for projection queries.");
+
   developer_desc.add_options()("ssl-cert",
                                po::value<std::string>(&mapd_parameters.ssl_cert_file)
                                    ->default_value(std::string("")),
                                "SSL Validated public certficate.");
+
+  developer_desc.add_options()(
+      "pki-db-client-auth",
+      po::value<bool>(&authMetadata.pki_db_client_auth)->default_value(false),
+      "Use client PKI authentication to the database.");
+
+  developer_desc.add_options()(
+      "ssl-transport-client-auth",
+      po::value<bool>(&mapd_parameters.ssl_transport_client_auth)->default_value(false),
+      "SSL Use client PKI authentication at the transport layer.");
+
   developer_desc.add_options()("ssl-private-key",
                                po::value<std::string>(&mapd_parameters.ssl_key_file)
                                    ->default_value(std::string("")),
@@ -714,21 +726,38 @@ void MapDProgramOptions::fillAdvancedOptions() {
   developer_desc.add_options()("ssl-trust-store",
                                po::value<std::string>(&mapd_parameters.ssl_trust_store)
                                    ->default_value(std::string("")),
-                               "SSL Validated public cert as a java trust store.");
-  developer_desc.add_options()("ssl-trust-password",
-                               po::value<std::string>(&mapd_parameters.ssl_trust_password)
-                                   ->default_value(std::string("")),
-                               "SSL java trust store password.");
+                               "SSL public CA certifcates (java trust store) to validate "
+                               "TLS connections (passed through to the Calcite server).");
+
+  developer_desc.add_options()(
+      "ssl-trust-password",
+      po::value<std::string>(&mapd_parameters.ssl_trust_password)
+          ->default_value(std::string("")),
+      "SSL password for java trust store provided via --ssl-trust-store parameter.");
+
+  developer_desc.add_options()(
+      "ssl-trust-ca",
+      po::value<std::string>(&mapd_parameters.ssl_trust_ca_file)
+          ->default_value(std::string("")),
+      "SSL public CA certificates to validate TLS connection(as a client).");
+
+  developer_desc.add_options()(
+      "ssl-trust-ca-server",
+      po::value<std::string>(&authMetadata.ca_file_name)->default_value(std::string("")),
+      "SSL public CA certificates to validate TLS connection(as a server).");
 
   developer_desc.add_options()("ssl-keystore",
                                po::value<std::string>(&mapd_parameters.ssl_keystore)
                                    ->default_value(std::string("")),
-                               "SSL server credentials as a java key store.");
+                               "SSL server credentials as a java key store (passed "
+                               "through to the Calcite server).");
+
   developer_desc.add_options()(
       "ssl-keystore-password",
       po::value<std::string>(&mapd_parameters.ssl_keystore_password)
           ->default_value(std::string("")),
-      "SSL server keystore password.");
+      "SSL password for java keystore, provide by via --ssl-keystore.");
+
   developer_desc.add_options()(
       "udf",
       po::value<std::string>(&udf_file_name),
@@ -866,6 +895,9 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
     if (!trim_and_check_file_exists(mapd_parameters.ssl_cert_file, "ssl cert file")) {
       return 1;
     }
+    if (!trim_and_check_file_exists(authMetadata.ca_file_name, "ca file name")) {
+      return 1;
+    }
     if (!trim_and_check_file_exists(mapd_parameters.ssl_trust_store, "ssl trust store")) {
       return 1;
     }
@@ -875,13 +907,16 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
     if (!trim_and_check_file_exists(mapd_parameters.ssl_key_file, "ssl key file")) {
       return 1;
     }
+    if (!trim_and_check_file_exists(mapd_parameters.ssl_trust_ca_file, "ssl ca file")) {
+      return 1;
+    }
 
     if (vm.count("help")) {
-      std::cout << "Usage: omnisci_server <data directory path> [-p <port number>] "
+      std::cerr << "Usage: omnisci_server <data directory path> [-p <port number>] "
                    "[--http-port <http port number>] [--flush-log] [--version|-v]"
                 << std::endl
                 << std::endl;
-      std::cout << help_desc << std::endl;
+      std::cerr << help_desc << std::endl;
       return 0;
     }
     if (vm.count("dev-options")) {
@@ -1106,7 +1141,11 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
         prog_config_opts.mapd_parameters.ssl_cert_file.c_str());
     sslSocketFactory->loadPrivateKey(
         prog_config_opts.mapd_parameters.ssl_key_file.c_str());
-    sslSocketFactory->authenticate(false);
+    if (prog_config_opts.mapd_parameters.ssl_transport_client_auth) {
+      sslSocketFactory->authenticate(true);
+    } else {
+      sslSocketFactory->authenticate(false);
+    }
     sslSocketFactory->ciphers("ALL:!ADH:!LOW:!EXP:!MD5:@STRENGTH");
     serverSocket = mapd::shared_ptr<TServerSocket>(new TSSLServerSocket(
         prog_config_opts.mapd_parameters.omnisci_server_port, sslSocketFactory));

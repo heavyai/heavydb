@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2019 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,24 +14,26 @@
  * limitations under the License.
  */
 
-#ifndef AUTHMETADATA_H
-#define AUTHMETADATA_H
+/*
+ * File:   PkiServer.h
+ *
+ */
+
+#pragma once
+
+#include "Catalog/AuthMetadata.h"
 
 #include <string>
-struct AuthMetadata {
-  AuthMetadata() {}
-  int32_t port;
-  std::string uri;
-  std::string distinguishedName;
-  std::string ldapQueryUrl;
-  std::string ldapRoleRegex;
-  std::string ldapSuperUserRole;
-  std::string domainComp;
-  std::string restUrl;
-  std::string restToken;
-  bool pki_db_client_auth = false;
-  std::string ca_file_name;
-  bool allowLocalAuthFallback;
-};
 
-#endif /* AUTHMETADATA_H */
+class PkiServer {
+ public:
+  PkiServer() {}
+  PkiServer(const AuthMetadata& authMetadata) {}
+  bool validate_certificate(const std::string& pki_cert, std::string& common_name) {
+    return false;
+  }
+  bool encrypt_session(const std::string& pki_cert, std::string& session) {
+    return false;
+  }
+  bool inUse() { return false; }
+};

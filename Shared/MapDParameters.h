@@ -46,6 +46,8 @@ struct MapDParameters {
   std::string ssl_trust_password = "";
   std::string ssl_keystore = "";
   std::string ssl_keystore_password = "";  // pass phrae for java jks trust store.
+  std::string ssl_trust_ca_file = "";
+  bool ssl_transport_client_auth = false;
   bool aggregator = false;
   bool enable_calcite_view_optimize =
       true;  // allow calcite to optimize the relalgebra for a view query

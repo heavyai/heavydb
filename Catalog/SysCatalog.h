@@ -45,6 +45,7 @@
 #include "LdapServer.h"
 #include "LinkDescriptor.h"
 #include "ObjectRoleDescriptor.h"
+#include "PkiServer.h"
 #include "RestServer.h"
 
 #include "../DataMgr/DataMgr.h"
@@ -253,6 +254,7 @@ class SysCatalog : private CommonFileOperations {
                                   bool* issuper);
   std::unordered_map<std::string, std::vector<std::string>> getGranteesOfSharedDashboards(
       const std::vector<std::string>& dashboard_ids);
+  void check_for_session_encryption(const std::string& pki_cert, std::string& session);
 
  private:
   typedef std::map<std::string, Grantee*> GranteeMap;
@@ -339,6 +341,7 @@ class SysCatalog : private CommonFileOperations {
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
   std::unique_ptr<LdapServer> ldap_server_;
   std::unique_ptr<RestServer> rest_server_;
+  std::unique_ptr<PkiServer> pki_server_;
   const AuthMetadata* authMetadata_;
   std::shared_ptr<Calcite> calciteMgr_;
   std::vector<LeafHostInfo> string_dict_hosts_;

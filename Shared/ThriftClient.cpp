@@ -22,6 +22,25 @@
 using namespace ::apache::thrift::transport;
 using Decision = AccessManager::Decision;
 
+void check_standard_ca(std::string& ca_cert_file) {
+  if (ca_cert_file.empty()) {
+    static std::list<std::string> v_known_ca_paths({
+        "/etc/ssl/certs/ca-certificates.crt",
+        "/etc/pki/tls/certs/ca-bundle.crt",
+        "/usr/share/ssl/certs/ca-bundle.crt",
+        "/usr/local/share/certs/ca-root.crt",
+        "/etc/ssl/cert.pem",
+        "/etc/ssl/ca-bundle.pem",
+    });
+    for (const auto& known_ca_path : v_known_ca_paths) {
+      if (boost::filesystem::exists(known_ca_path)) {
+        ca_cert_file = known_ca_path;
+        break;
+      }
+    }
+  }
+}
+
 class InsecureAccessManager : public AccessManager {
  public:
   Decision verify(const sockaddr_storage& sa) throw() override {
@@ -221,23 +240,8 @@ mapd::shared_ptr<TTransport> ThriftClientConnection::open_http_client_transport(
     const std::string& trust_cert_fileX,
     bool use_https,
     bool skip_verify) {
-  std::string trust_cert_file{trust_cert_fileX};
-  if (trust_cert_file_.empty()) {
-    static std::list<std::string> v_known_ca_paths({
-        "/etc/ssl/certs/ca-certificates.crt",
-        "/etc/pki/tls/certs/ca-bundle.crt",
-        "/usr/share/ssl/certs/ca-bundle.crt",
-        "/usr/local/share/certs/ca-root.crt",
-        "/etc/ssl/cert.pem",
-        "/etc/ssl/ca-bundle.pem",
-    });
-    for (const auto& known_ca_path : v_known_ca_paths) {
-      if (boost::filesystem::exists(known_ca_path)) {
-        trust_cert_file = known_ca_path;
-        break;
-      }
-    }
-  }
+  trust_cert_file_ = trust_cert_fileX;
+  check_standard_ca(trust_cert_file_);
 
   if (!factory_) {
     factory_ =
@@ -252,7 +256,7 @@ mapd::shared_ptr<TTransport> ThriftClientConnection::open_http_client_transport(
           mapd::shared_ptr<InsecureAccessManager>(new InsecureAccessManager()));
     }
     if (!using_X509_store_) {
-      factory_->loadTrustedCertificates(trust_cert_file.c_str());
+      factory_->loadTrustedCertificates(trust_cert_file_.c_str());
     }
     socket = factory_->createSocket(server_host, port);
     // transport = mapd::shared_ptr<TTransport>(new THttpClient(socket,
