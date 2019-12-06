@@ -749,8 +749,8 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
   std::vector<std::pair<void*, void*>> native_functions;
   std::vector<std::tuple<void*, GpuCompilationContext*>> cached_functions;
 
-  const auto ptx =
-      generatePTX(cuda_llir, gpu_target.nvptx_target_machine, gpu_target.cgen_state);
+  const auto ptx = generatePTX(
+      cuda_llir, gpu_target.nvptx_target_machine, gpu_target.cgen_state->context_);
 
   LOG(PTX) << "PTX for the GPU:\n" << ptx << "\nEnd of PTX";
 
@@ -844,12 +844,12 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
 
 std::string CodeGenerator::generatePTX(const std::string& cuda_llir,
                                        llvm::TargetMachine* nvptx_target_machine,
-                                       CgenState* cgen_state) {
+                                       llvm::LLVMContext& context) {
   auto mem_buff = llvm::MemoryBuffer::getMemBuffer(cuda_llir, "", false);
 
   llvm::SMDiagnostic err;
 
-  auto module = llvm::parseIR(mem_buff->getMemBufferRef(), err, cgen_state->context_);
+  auto module = llvm::parseIR(mem_buff->getMemBufferRef(), err, context);
   if (!module) {
     LOG(FATAL) << err.getMessage().str();
   }
@@ -889,7 +889,7 @@ std::unique_ptr<llvm::TargetMachine> CodeGenerator::initializeNVPTXBackend() {
 
 std::string Executor::generatePTX(const std::string& cuda_llir) const {
   return CodeGenerator::generatePTX(
-      cuda_llir, nvptx_target_machine_.get(), cgen_state_.get());
+      cuda_llir, nvptx_target_machine_.get(), cgen_state_->context_);
 }
 
 void Executor::initializeNVPTXBackend() const {
