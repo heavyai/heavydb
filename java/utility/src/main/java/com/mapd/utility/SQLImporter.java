@@ -69,7 +69,6 @@ class MutuallyExlusiveOptionsException extends ParseException {
     return new MutuallyExlusiveOptionsException(sb.toString());
   }
 }
-
 class SQLImporter_args {
   private Options options = new Options();
 
@@ -585,16 +584,17 @@ public class SQLImporter {
       boolean load_trust_store = cmd.hasOption("https");
       SockTransportProperties skT = null;
       if (cmd.hasOption("https")) {
-        skT = new SockTransportProperties(load_trust_store & !cmd.hasOption("insecure"));
+        skT = SockTransportProperties.getEncryptedClientDefaultTrustStore(
+                !cmd.hasOption("insecure"));
         transport = skT.openHttpsClientTransport(server, port);
         transport.open();
         protocol = new TJSONProtocol(transport);
       } else if (cmd.hasOption("http")) {
-        skT = new SockTransportProperties(load_trust_store);
+        skT = SockTransportProperties.getUnencryptedClient();
         transport = skT.openHttpClientTransport(server, port);
         protocol = new TJSONProtocol(transport);
       } else {
-        skT = new SockTransportProperties(load_trust_store);
+        skT = SockTransportProperties.getUnencryptedClient();
         transport = skT.openClientTransport(server, port);
         transport.open();
         protocol = new TBinaryProtocol(transport);

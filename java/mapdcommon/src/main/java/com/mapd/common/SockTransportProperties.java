@@ -112,11 +112,6 @@ public class SockTransportProperties {
             true);
   }
 
-  // TODO for simplicity this constructor should be removed
-  public SockTransportProperties(boolean validate_server_name) throws Exception {
-    this(TransportType.encryptedClientDefaultTrustStore, validate_server_name);
-  }
-
   /** private constructors called from public static methods */
   private SockTransportProperties(TransportType tT,
           String store_name,
