@@ -164,7 +164,7 @@ popd
 install_rdkafka
 
 # glslang (with spirv-tools)
-VERS=7.11.3113 # 2/8/19
+VERS=7.12.3352 # 8/20/19
 rm -rf glslang
 mkdir -p glslang
 pushd glslang
@@ -185,7 +185,7 @@ popd # glslang-$VERS
 popd # glslang
 
 # spirv-cross
-VERS=2019-04-26
+VERS=2019-09-04
 rm -rf spirv-cross
 mkdir -p spirv-cross
 pushd spirv-cross
@@ -197,6 +197,7 @@ pushd build
 cmake \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
     -DCMAKE_INSTALL_PREFIX=$PREFIX \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=on \
     -DSPIRV_CROSS_ENABLE_TESTS=off \
     ..
 make -j $(nproc)

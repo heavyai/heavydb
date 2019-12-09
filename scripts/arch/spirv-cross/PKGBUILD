@@ -1,5 +1,5 @@
 pkgname='SPIRV-Cross'
-_tag='2019-04-26'
+_tag='2019-09-04'
 pkgver=${_tag//-/.} # pkgver cannot contain hyphens.
 _srcdir=$pkgname-$_tag
 pkgrel=1
@@ -16,6 +16,7 @@ build(){
   cd build
   cmake \
     -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DCMAKE_POSITION_INDEPENDENT_CODE=on \
     -DSPIRV_CROSS_ENABLE_TESTS=OFF \
     "../$_srcdir"
   make
