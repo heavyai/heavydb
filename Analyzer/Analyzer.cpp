@@ -127,6 +127,10 @@ std::shared_ptr<Analyzer::Expr> KeyForStringExpr::deep_copy() const {
   return makeExpr<KeyForStringExpr>(arg->deep_copy());
 }
 
+std::shared_ptr<Analyzer::Expr> LowerExpr::deep_copy() const {
+  return makeExpr<LowerExpr>(arg->deep_copy());
+}
+
 std::shared_ptr<Analyzer::Expr> CardinalityExpr::deep_copy() const {
   return makeExpr<CardinalityExpr>(arg->deep_copy());
 }
@@ -199,6 +203,10 @@ std::shared_ptr<Analyzer::Expr> WindowFunction::deep_copy() const {
 ExpressionPtr ArrayExpr::deep_copy() const {
   return makeExpr<Analyzer::ArrayExpr>(
       type_info, contained_expressions_, expr_index_, local_alloc_);
+}
+
+std::shared_ptr<Analyzer::Expr> GeoExpr::deep_copy() const {
+  return makeExpr<GeoExpr>(type_info, args_);
 }
 
 SQLTypeInfo BinOper::analyze_type_info(SQLOps op,
@@ -1496,6 +1504,20 @@ void KeyForStringExpr::group_predicates(std::list<const Expr*>& scan_predicates,
   }
 }
 
+void LowerExpr::group_predicates(std::list<const Expr*>& scan_predicates,
+                                 std::list<const Expr*>& join_predicates,
+                                 std::list<const Expr*>& const_predicates) const {
+  std::set<int> rte_idx_set;
+  arg->collect_rte_idx(rte_idx_set);
+  if (rte_idx_set.size() > 1) {
+    join_predicates.push_back(this);
+  } else if (rte_idx_set.size() == 1) {
+    scan_predicates.push_back(this);
+  } else {
+    const_predicates.push_back(this);
+  }
+}
+
 void CardinalityExpr::group_predicates(std::list<const Expr*>& scan_predicates,
                                        std::list<const Expr*>& join_predicates,
                                        std::list<const Expr*>& const_predicates) const {
@@ -2046,6 +2068,14 @@ bool KeyForStringExpr::operator==(const Expr& rhs) const {
   return true;
 }
 
+bool LowerExpr::operator==(const Expr& rhs) const {
+  if (typeid(rhs) != typeid(LowerExpr)) {
+    return false;
+  }
+
+  return *arg == *dynamic_cast<const LowerExpr&>(rhs).get_arg();
+}
+
 bool CardinalityExpr::operator==(const Expr& rhs) const {
   if (typeid(rhs) != typeid(CardinalityExpr)) {
     return false;
@@ -2237,6 +2267,17 @@ bool ArrayExpr::operator==(Expr const& rhs) const {
   return true;
 }
 
+bool GeoExpr::operator==(const Expr& rhs) const {
+  const auto rhs_geo = dynamic_cast<const GeoExpr*>(&rhs);
+  if (!rhs_geo) {
+    return false;
+  }
+  if (args_.size() != rhs_geo->args_.size()) {
+    return false;
+  }
+  return expr_list_match(args_, rhs_geo->args_);
+}
+
 std::string ColumnVar::toString() const {
   return "(ColumnVar table: " + std::to_string(table_id) +
          " column: " + std::to_string(column_id) + " rte: " + std::to_string(rte_idx) +
@@ -2426,6 +2467,10 @@ std::string KeyForStringExpr::toString() const {
   return str;
 }
 
+std::string LowerExpr::toString() const {
+  return "LOWER(" + arg->toString() + ") ";
+}
+
 std::string CardinalityExpr::toString() const {
   std::string str{"CARDINALITY("};
   str += arg->toString();
@@ -2560,6 +2605,15 @@ std::string ArrayExpr::toString() const {
   return str;
 }
 
+std::string GeoExpr::toString() const {
+  // TODO: generate ST_GeomFromText(wkt)
+  std::string result = "Geo(";
+  for (const auto& arg : args_) {
+    result += " " + arg->toString();
+  }
+  return result + ") ";
+}
+
 std::string TargetEntry::toString() const {
   std::string str{"(" + resname + " "};
   str += expr->toString();
@@ -2637,6 +2691,15 @@ void KeyForStringExpr::find_expr(bool (*f)(const Expr*),
     return;
   }
   arg->find_expr(f, expr_list);
+}
+
+void LowerExpr::find_expr(bool (*f)(const Expr*),
+                          std::list<const Expr*>& expr_list) const {
+  if (f(this)) {
+    add_unique(expr_list);
+  } else {
+    arg->find_expr(f, expr_list);
+  }
 }
 
 void CardinalityExpr::find_expr(bool (*f)(const Expr*),

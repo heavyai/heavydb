@@ -17,7 +17,12 @@
 #include "MapDServer.h"
 #include "ThriftHandler/MapDHandler.h"
 
+#ifdef HAVE_THRIFT_THREADFACTORY
+#include <thrift/concurrency/ThreadFactory.h>
+#else
 #include <thrift/concurrency/PlatformThreadFactory.h>
+#endif
+
 #include <thrift/concurrency/ThreadManager.h>
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/protocol/TJSONProtocol.h>
@@ -39,9 +44,12 @@
 #include "Shared/scope.h"
 
 #include <boost/algorithm/string.hpp>
+#include <boost/algorithm/string/trim.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/locale/generator.hpp>
 #include <boost/make_shared.hpp>
 #include <boost/program_options.hpp>
+
 #include <csignal>
 #include <sstream>
 #include <thread>
@@ -69,6 +77,8 @@ extern bool g_skip_intermediate_count;
 extern bool g_enable_bump_allocator;
 extern size_t g_max_memory_allocation_size;
 extern size_t g_min_memory_allocation_size;
+extern bool g_enable_experimental_string_functions;
+extern bool g_enable_table_functions;
 
 bool g_enable_thrift_logs{false};
 
@@ -215,14 +225,26 @@ void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler,
         TQueryResult ret;
         std::string single_query;
         while (std::getline(query_file, single_query)) {
+          boost::algorithm::trim(single_query);
           if (single_query.length() == 0) {
             continue;
           }
-          if (single_query.compare("}") == 0) {
+          if (single_query[0] == '}') {
             single_query.clear();
             break;
           }
-          g_warmup_handler->sql_execute(ret, sessionId, single_query, true, "", -1, -1);
+          if (single_query.find(';') == single_query.npos) {
+            std::string multiline_query;
+            std::getline(query_file, multiline_query, ';');
+            single_query += multiline_query;
+          }
+
+          try {
+            g_warmup_handler->sql_execute(ret, sessionId, single_query, true, "", -1, -1);
+          } catch (...) {
+            LOG(WARNING) << "Exception while executing '" << single_query
+                         << "', ignoring";
+          }
           single_query.clear();
         }
 
@@ -297,6 +319,10 @@ class MapDProgramOptions {
    */
   std::string db_query_file = {""};
   /**
+   * exit after warmup
+   */
+  bool exit_after_warmup = false;
+  /**
    * Inactive session tolerance in mins (60 mins)
    */
   int idle_session_duration = kMinsPerHour;
@@ -325,9 +351,6 @@ class MapDProgramOptions {
   std::string getNodeIds();
   std::vector<std::string> getNodeIdsArray();
   static const std::string nodeIds_token;
-  void overrideFrom(LeafHostInfo& host,
-                    const std::vector<LeafHostInfo>& hosts,
-                    rapidjson::Document& cluster_json);
 
   boost::optional<int> parse_command_line(int argc, char const* const* argv);
   void validate();
@@ -337,6 +360,9 @@ class MapDProgramOptions {
 };
 
 void MapDProgramOptions::init_logging() {
+  if (verbose_logging && logger::Severity::DEBUG1 < log_options_.severity_) {
+    log_options_.severity_ = logger::Severity::DEBUG1;
+  }
   log_options_.set_base_path(base_path);
   logger::init(log_options_);
 }
@@ -398,6 +424,10 @@ void MapDProgramOptions::fillOptions() {
   help_desc.add_options()("db-query-list",
                           po::value<std::string>(&db_query_file),
                           "Path to file containing OmniSci warmup queries.");
+  help_desc.add_options()(
+      "exit-after-warmup",
+      po::value<bool>(&exit_after_warmup)->default_value(false)->implicit_value(true),
+      "Exit after OmniSci warmup queries.");
   help_desc.add_options()("dynamic-watchdog-time-limit",
                           po::value<unsigned>(&dynamic_watchdog_time_limit)
                               ->default_value(dynamic_watchdog_time_limit)
@@ -559,6 +589,11 @@ void MapDProgramOptions::fillOptions() {
       "to the `register_runtime_udf` endpoint. For use with the Python Remote Backend "
       "Compiler server, packaged separately.");
   help_desc.add_options()("version,v", "Print Version Number.");
+  help_desc.add_options()("enable-experimental-string-functions",
+                          po::value<bool>(&g_enable_experimental_string_functions)
+                              ->default_value(g_enable_experimental_string_functions)
+                              ->implicit_value(true),
+                          "Enable experimental string functions.");
 
   help_desc.add(log_options_.get_options());
 }
@@ -595,11 +630,22 @@ void MapDProgramOptions::fillAdvancedOptions() {
           ->default_value(g_enable_smem_group_by)
           ->implicit_value(true),
       "Enable using GPU shared memory for some GROUP BY queries.");
+  developer_desc.add_options()("enable-direct-columnarization",
+                               po::value<bool>(&g_enable_direct_columnarization)
+                                   ->default_value(g_enable_direct_columnarization)
+                                   ->implicit_value(true),
+                               "Enables/disables a more optimized columnarization method "
+                               "for intermediate steps in multi-step queries.");
   developer_desc.add_options()("enable-window-functions",
                                po::value<bool>(&g_enable_window_functions)
                                    ->default_value(g_enable_window_functions)
                                    ->implicit_value(true),
                                "Enable experimental window function support.");
+  developer_desc.add_options()("enable-table-functions",
+                               po::value<bool>(&g_enable_table_functions)
+                                   ->default_value(g_enable_table_functions)
+                                   ->implicit_value(true),
+                               "Enable experimental table functions support.");
   developer_desc.add_options()(
       "jit-debug-ir",
       po::value<bool>(&jit_debug)->default_value(jit_debug)->implicit_value(true),
@@ -782,15 +828,9 @@ void MapDProgramOptions::validate() {
       }
     }
   }
-  if (license_path.length() == 0) {
-    license_path = base_path + "/omnisci.license";
-  }
 
   // add all parameters to be displayed on startup
   LOG(INFO) << "OmniSci started with data directory at '" << base_path << "'";
-  if (vm.count("license-path")) {
-    LOG(INFO) << "License key path set to '" << license_path << "'";
-  }
   LOG(INFO) << " Watchdog is set to " << enable_watchdog;
   LOG(INFO) << " Dynamic Watchdog is set to " << enable_dynamic_watchdog;
   if (enable_dynamic_watchdog) {
@@ -882,83 +922,6 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
     std::cerr << "hll-precision-bits must be between 1 and 16." << std::endl;
     return 1;
   }
-
-  boost::algorithm::trim_if(base_path, boost::is_any_of("\"'"));
-  const auto data_path = boost::filesystem::path(base_path) / "mapd_data";
-  if (!boost::filesystem::exists(data_path)) {
-    std::cerr << "OmniSci data directory does not exist at '" << base_path
-              << "'. Run initdb " << base_path << std::endl;
-    return 1;
-  }
-
-  const auto lock_file = boost::filesystem::path(base_path) / "omnisci_server_pid.lck";
-  auto pid = std::to_string(getpid());
-  int pid_fd = open(lock_file.c_str(), O_RDWR | O_CREAT, 0644);
-  if (pid_fd == -1) {
-    auto err = std::string("Failed to open PID file ") + std::string(lock_file.c_str()) +
-               std::string(". ") + strerror(errno) + ".";
-    std::cerr << err << std::endl;
-    return 1;
-  }
-  if (lockf(pid_fd, F_TLOCK, 0) == -1) {
-    auto err = std::string("Another OmniSci Server is using data directory ") +
-               base_path + std::string(".");
-    std::cerr << err << std::endl;
-    close(pid_fd);
-    return 1;
-  }
-  if (ftruncate(pid_fd, 0) == -1) {
-    auto err = std::string("Failed to truncate PID file ") +
-               std::string(lock_file.c_str()) + std::string(". ") + strerror(errno) +
-               std::string(".");
-    std::cerr << err << std::endl;
-    close(pid_fd);
-    return 1;
-  }
-  if (write(pid_fd, pid.c_str(), pid.length()) == -1) {
-    auto err = std::string("Failed to write PID file ") + std::string(lock_file.c_str()) +
-               ". " + strerror(errno) + ".";
-    std::cerr << err << std::endl;
-    close(pid_fd);
-    return 1;
-  }
-
-  if (verbose_logging && logger::Severity::DEBUG1 < log_options_.severity_) {
-    log_options_.severity_ = logger::Severity::DEBUG1;
-  }
-  log_options_.set_base_path(base_path);
-  logger::init(log_options_);
-
-  boost::algorithm::trim_if(db_query_file, boost::is_any_of("\"'"));
-  if (db_query_file.length() > 0 && !boost::filesystem::exists(db_query_file)) {
-    LOG(ERROR) << "File containing DB queries " << db_query_file << " does not exist.";
-    return 1;
-  }
-  const auto db_file =
-      boost::filesystem::path(base_path) / "mapd_catalogs" / OMNISCI_SYSTEM_CATALOG;
-  if (!boost::filesystem::exists(db_file)) {
-    {  // check old system catalog existsense
-      const auto db_file = boost::filesystem::path(base_path) / "mapd_catalogs/mapd";
-      if (!boost::filesystem::exists(db_file)) {
-        LOG(ERROR) << "OmniSci system catalog " << OMNISCI_SYSTEM_CATALOG
-                   << " does not exist.";
-        return 1;
-      }
-    }
-  }
-  // add all parameters to be displayed on startup
-  LOG(INFO) << "OmniSci started with data directory at '" << base_path << "'";
-  LOG(INFO) << " Watchdog is set to " << enable_watchdog;
-  LOG(INFO) << " Dynamic Watchdog is set to " << enable_dynamic_watchdog;
-  if (enable_dynamic_watchdog) {
-    LOG(INFO) << " Dynamic Watchdog timeout is set to " << dynamic_watchdog_time_limit;
-  }
-
-  LOG(INFO) << " Debug Timer is set to " << g_enable_debug_timer;
-
-  LOG(INFO) << " Maximum Idle session duration " << idle_session_duration;
-
-  LOG(INFO) << " Maximum active session duration " << max_session_duration;
 
   if (!g_from_table_reordering) {
     LOG(INFO) << " From clause table reordering is disabled";
@@ -1080,7 +1043,7 @@ void heartbeat() {
   }
 }
 
-int startMapdServer(MapDProgramOptions& prog_config_opts) {
+int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server = true) {
   // try to enforce an orderly shutdown even after a signal
   register_signal_handlers();
 
@@ -1108,31 +1071,42 @@ int startMapdServer(MapDProgramOptions& prog_config_opts) {
     apache::thrift::GlobalOutput.setOutputFunction([](const char* msg) {});
   }
 
-  g_mapd_handler =
-      mapd::make_shared<MapDHandler>(prog_config_opts.db_leaves,
-                                     prog_config_opts.string_leaves,
-                                     prog_config_opts.base_path,
-                                     prog_config_opts.cpu_only,
-                                     prog_config_opts.allow_multifrag,
-                                     prog_config_opts.jit_debug,
-                                     prog_config_opts.intel_jit_profile,
-                                     prog_config_opts.read_only,
-                                     prog_config_opts.allow_loop_joins,
-                                     prog_config_opts.enable_rendering,
-                                     prog_config_opts.enable_auto_clear_render_mem,
-                                     prog_config_opts.render_oom_retry_threshold,
-                                     prog_config_opts.render_mem_bytes,
-                                     prog_config_opts.num_gpus,
-                                     prog_config_opts.start_gpu,
-                                     prog_config_opts.reserved_gpu_mem,
-                                     prog_config_opts.num_reader_threads,
-                                     prog_config_opts.authMetadata,
-                                     prog_config_opts.mapd_parameters,
-                                     prog_config_opts.enable_legacy_syntax,
-                                     prog_config_opts.idle_session_duration,
-                                     prog_config_opts.max_session_duration,
-                                     prog_config_opts.enable_runtime_udf,
-                                     prog_config_opts.udf_file_name);
+  if (g_enable_experimental_string_functions) {
+    // Use the locale setting of the server by default. The generate parameter can be
+    // updated appropriately if a locale override option is ever supported.
+    boost::locale::generator generator;
+    std::locale::global(generator.generate(""));
+  }
+
+  try {
+    g_mapd_handler =
+        mapd::make_shared<MapDHandler>(prog_config_opts.db_leaves,
+                                       prog_config_opts.string_leaves,
+                                       prog_config_opts.base_path,
+                                       prog_config_opts.cpu_only,
+                                       prog_config_opts.allow_multifrag,
+                                       prog_config_opts.jit_debug,
+                                       prog_config_opts.intel_jit_profile,
+                                       prog_config_opts.read_only,
+                                       prog_config_opts.allow_loop_joins,
+                                       prog_config_opts.enable_rendering,
+                                       prog_config_opts.enable_auto_clear_render_mem,
+                                       prog_config_opts.render_oom_retry_threshold,
+                                       prog_config_opts.render_mem_bytes,
+                                       prog_config_opts.num_gpus,
+                                       prog_config_opts.start_gpu,
+                                       prog_config_opts.reserved_gpu_mem,
+                                       prog_config_opts.num_reader_threads,
+                                       prog_config_opts.authMetadata,
+                                       prog_config_opts.mapd_parameters,
+                                       prog_config_opts.enable_legacy_syntax,
+                                       prog_config_opts.idle_session_duration,
+                                       prog_config_opts.max_session_duration,
+                                       prog_config_opts.enable_runtime_udf,
+                                       prog_config_opts.udf_file_name);
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to initialize service handler: " << e.what();
+  }
 
   mapd::shared_ptr<TServerSocket> serverSocket;
   mapd::shared_ptr<TServerSocket> httpServerSocket;
@@ -1182,29 +1156,35 @@ int startMapdServer(MapDProgramOptions& prog_config_opts) {
       g_thrift_buf_server = &bufServer;
     }
 
+    std::thread bufThread(start_server,
+                          std::ref(bufServer),
+                          prog_config_opts.mapd_parameters.omnisci_server_port);
+
+    // run warm up queries if any exists
+    run_warmup_queries(
+        g_mapd_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
+    if (prog_config_opts.exit_after_warmup) {
+      g_running = false;
+    }
+
     mapd::shared_ptr<TServerTransport> httpServerTransport(httpServerSocket);
     mapd::shared_ptr<TTransportFactory> httpTransportFactory(
         new THttpServerTransportFactory());
     mapd::shared_ptr<TProtocolFactory> httpProtocolFactory(new TJSONProtocolFactory());
     TThreadedServer httpServer(
         processor, httpServerTransport, httpTransportFactory, httpProtocolFactory);
-    {
-      mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
-      g_thrift_http_server = &httpServer;
+    if (start_http_server) {
+      {
+        mapd_lock_guard<mapd_shared_mutex> write_lock(g_thrift_mutex);
+        g_thrift_http_server = &httpServer;
+      }
+      std::thread httpThread(
+          start_server, std::ref(httpServer), prog_config_opts.http_port);
+      bufThread.join();
+      httpThread.join();
+    } else {
+      bufThread.join();
     }
-
-    std::thread bufThread(start_server,
-                          std::ref(bufServer),
-                          prog_config_opts.mapd_parameters.omnisci_server_port);
-    std::thread httpThread(
-        start_server, std::ref(httpServer), prog_config_opts.http_port);
-
-    // run warm up queries if any exists
-    run_warmup_queries(
-        g_mapd_handler, prog_config_opts.base_path, prog_config_opts.db_query_file);
-
-    bufThread.join();
-    httpThread.join();
   } else {  // running ha server
     LOG(FATAL) << "No High Availability module available, please contact OmniSci support";
   }
@@ -1221,7 +1201,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts) {
   }
 }
 
-const std::string MapDProgramOptions::nodeIds_token = {"nodeIds"};
+const std::string MapDProgramOptions::nodeIds_token = {"node_id"};
 
 int main(int argc, char** argv) {
   bool has_clust_topo = false;
@@ -1235,8 +1215,8 @@ int main(int argc, char** argv) {
 
     if (!has_clust_topo) {
       prog_config_opts.validate_base_path();
-      prog_config_opts.validate();
       prog_config_opts.init_logging();
+      prog_config_opts.validate();
       return (startMapdServer(prog_config_opts));
     }
   } catch (std::runtime_error& e) {

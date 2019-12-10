@@ -26,18 +26,10 @@
 #include "MapDServer.h"
 #include "QueryEngine/UDFCompiler.h"
 #include "TokenCompletionHints.h"
+
 #ifdef HAVE_PROFILER
 #include <gperftools/heap-profiler.h>
 #endif  // HAVE_PROFILER
-#include <thrift/concurrency/PlatformThreadFactory.h>
-#include <thrift/concurrency/ThreadManager.h>
-#include <thrift/protocol/TBinaryProtocol.h>
-#include <thrift/protocol/TJSONProtocol.h>
-#include <thrift/server/TThreadedServer.h>
-#include <thrift/transport/TBufferTransports.h>
-#include <thrift/transport/THttpServer.h>
-#include <thrift/transport/TServerSocket.h>
-#include <thrift/transport/TTransportException.h>
 
 #include "MapDRelease.h"
 
@@ -63,6 +55,7 @@
 #include "QueryEngine/GpuMemUtils.h"
 #include "QueryEngine/JoinFilterPushDown.h"
 #include "QueryEngine/JsonAccessors.h"
+#include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "QueryEngine/TableOptimizer.h"
 #include "QueryEngine/ThriftSerializers.h"
 #include "Shared/SQLTypeUtilities.h"
@@ -81,6 +74,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <algorithm>
 #include <boost/algorithm/string.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/make_shared.hpp>
@@ -115,10 +109,12 @@ using namespace Lock_Namespace;
 #define INVALID_SESSION_ID ""
 
 #define THROW_MAPD_EXCEPTION(errstr) \
-  TMapDException ex;                 \
-  ex.error_msg = errstr;             \
-  LOG(ERROR) << ex.error_msg;        \
-  throw ex;
+  {                                  \
+    TMapDException ex;               \
+    ex.error_msg = errstr;           \
+    LOG(ERROR) << ex.error_msg;      \
+    throw ex;                        \
+  }
 
 namespace {
 
@@ -131,7 +127,42 @@ SessionMap::iterator get_session_from_map(const TSessionId& session,
   return session_it;
 }
 
+struct ForceDisconnect : public std::runtime_error {
+  ForceDisconnect(const std::string& cause) : std::runtime_error(cause) {}
+};
+
 }  // namespace
+
+template <>
+SessionMap::iterator MapDHandler::get_session_it_unsafe(
+    const TSessionId& session,
+    mapd_shared_lock<mapd_shared_mutex>& read_lock) {
+  auto session_it = get_session_from_map(session, sessions_);
+  try {
+    check_session_exp_unsafe(session_it);
+  } catch (const ForceDisconnect& e) {
+    read_lock.unlock();
+    mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+    auto session_it2 = get_session_from_map(session, sessions_);
+    disconnect_impl(session_it2);
+    THROW_MAPD_EXCEPTION(e.what());
+  }
+  return session_it;
+}
+
+template <>
+SessionMap::iterator MapDHandler::get_session_it_unsafe(
+    const TSessionId& session,
+    mapd_lock_guard<mapd_shared_mutex>& write_lock) {
+  auto session_it = get_session_from_map(session, sessions_);
+  try {
+    check_session_exp_unsafe(session_it);
+  } catch (const ForceDisconnect& e) {
+    disconnect_impl(session_it);
+    THROW_MAPD_EXCEPTION(e.what());
+  }
+  return session_it;
+}
 
 MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const std::vector<LeafHostInfo>& string_leaves,
@@ -177,20 +208,25 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , _was_geo_copy_from(false) {
   LOG(INFO) << "OmniSci Server " << MAPD_RELEASE;
   bool is_rendering_enabled = enable_rendering;
-  if (cpu_only) {
-    is_rendering_enabled = false;
-    executor_device_type_ = ExecutorDeviceType::CPU;
-    cpu_mode_only_ = true;
-  } else {
+
+  try {
+    if (cpu_only) {
+      is_rendering_enabled = false;
+      executor_device_type_ = ExecutorDeviceType::CPU;
+      cpu_mode_only_ = true;
+    } else {
 #ifdef HAVE_CUDA
-    executor_device_type_ = ExecutorDeviceType::GPU;
-    cpu_mode_only_ = false;
+      executor_device_type_ = ExecutorDeviceType::GPU;
+      cpu_mode_only_ = false;
 #else
-    executor_device_type_ = ExecutorDeviceType::CPU;
-    LOG(ERROR) << "This build isn't CUDA enabled, will run on CPU";
-    cpu_mode_only_ = true;
-    is_rendering_enabled = false;
+      executor_device_type_ = ExecutorDeviceType::CPU;
+      LOG(ERROR) << "This build isn't CUDA enabled, will run on CPU";
+      cpu_mode_only_ = true;
+      is_rendering_enabled = false;
 #endif
+    }
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to executor device type: " << e.what();
   }
 
   const auto data_path = boost::filesystem::path(base_data_path_) / "mapd_data";
@@ -200,33 +236,54 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
   if (is_rendering_enabled) {
     total_reserved += render_mem_bytes;
   }
-  data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
-                                              mapd_parameters,
-                                              !cpu_mode_only_,
-                                              num_gpus,
-                                              start_gpu,
-                                              total_reserved,
-                                              num_reader_threads));
+
+  try {
+    data_mgr_.reset(new Data_Namespace::DataMgr(data_path.string(),
+                                                mapd_parameters,
+                                                !cpu_mode_only_,
+                                                num_gpus,
+                                                start_gpu,
+                                                total_reserved,
+                                                num_reader_threads));
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to initialize data manager: " << e.what();
+  }
 
   std::string udf_ast_filename("");
 
-  if (!udf_filename.empty()) {
-    UdfCompiler compiler(udf_filename);
-    int compile_result = compiler.compileUdf();
+  try {
+    if (!udf_filename.empty()) {
+      UdfCompiler compiler(udf_filename);
+      int compile_result = compiler.compileUdf();
 
-    if (compile_result == 0) {
-      udf_ast_filename = compiler.getAstFileName();
+      if (compile_result == 0) {
+        udf_ast_filename = compiler.getAstFileName();
+      }
     }
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to initialize UDF compiler: " << e.what();
   }
 
-  std::string calcite_session_prefix = "calcite-" + generate_random_string(64);
+  try {
+    calcite_ =
+        std::make_shared<Calcite>(mapd_parameters, base_data_path_, udf_ast_filename);
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to initialize Calcite server: " << e.what();
+  }
 
-  calcite_ = std::make_shared<Calcite>(
-      mapd_parameters, base_data_path_, calcite_session_prefix, udf_ast_filename);
+  try {
+    ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
+    if (!udf_filename.empty()) {
+      ExtensionFunctionsWhitelist::addUdfs(calcite_->getUserDefinedFunctionWhitelist());
+    }
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to initialize extension functions: " << e.what();
+  }
 
-  ExtensionFunctionsWhitelist::add(calcite_->getExtensionFunctionWhitelist());
-  if (!udf_filename.empty()) {
-    ExtensionFunctionsWhitelist::addUdfs(calcite_->getUserDefinedFunctionWhitelist());
+  try {
+    table_functions::TableFunctionsFactory::init();
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to initialize table functions factory: " << e.what();
   }
 
   if (!data_mgr_->gpusPresent() && !cpu_mode_only_) {
@@ -243,13 +300,19 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
       LOG(INFO) << "Started in CPU mode" << std::endl;
       break;
   }
-  SysCatalog::instance().init(base_data_path_,
-                              data_mgr_,
-                              authMetadata,
-                              calcite_,
-                              false,
-                              !db_leaves.empty(),
-                              string_leaves_);
+
+  try {
+    SysCatalog::instance().init(base_data_path_,
+                                data_mgr_,
+                                authMetadata,
+                                calcite_,
+                                false,
+                                !db_leaves.empty(),
+                                string_leaves_);
+  } catch (const std::exception& e) {
+    LOG(FATAL) << "Failed to initialize system catalog: " << e.what();
+  }
+
   import_path_ = boost::filesystem::path(base_data_path_) / "mapd_import";
   start_time_ = std::time(nullptr);
 
@@ -285,6 +348,45 @@ void MapDHandler::check_read_only(const std::string& str) {
   }
 }
 
+std::string const MapDHandler::createInMemoryCalciteSession(
+    const std::shared_ptr<Catalog_Namespace::Catalog>& catalog_ptr) {
+  // We would create an in memory session for calcite with super user privileges which
+  // would be used for getting all tables metadata when a user runs the query. The
+  // session would be under the name of a proxy user/password which would only persist
+  // till server's lifetime or execution of calcite query(in memory) whichever is the
+  // earliest.
+  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+  std::string session_id;
+  do {
+    session_id = generate_random_string(64);
+  } while (sessions_.find(session_id) != sessions_.end());
+  Catalog_Namespace::UserMetadata user_meta(-1,
+                                            calcite_->getInternalSessionProxyUserName(),
+                                            calcite_->getInternalSessionProxyPassword(),
+                                            true,
+                                            -1);
+  const auto emplace_ret =
+      sessions_.emplace(session_id,
+                        std::make_shared<Catalog_Namespace::SessionInfo>(
+                            catalog_ptr, user_meta, executor_device_type_, session_id));
+  CHECK(emplace_ret.second);
+  return session_id;
+}
+
+bool MapDHandler::isInMemoryCalciteSession(
+    const Catalog_Namespace::UserMetadata user_meta) {
+  return user_meta.userName == calcite_->getInternalSessionProxyUserName() &&
+         user_meta.userId == -1 && user_meta.defaultDbId == -1 &&
+         user_meta.isSuper.load();
+}
+
+void MapDHandler::removeInMemoryCalciteSession(const std::string& session_id) {
+  // Remove InMemory calcite Session.
+  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+  const auto it = sessions_.find(session_id);
+  CHECK(it != sessions_.end());
+  sessions_.erase(it);
+}
 // internal connection for connections with no password
 void MapDHandler::internal_connect(TSessionId& session,
                                    const std::string& username,
@@ -313,6 +415,7 @@ void MapDHandler::internal_connect(TSessionId& session,
   }
   connect_impl(session, std::string(""), dbname2, user_meta, cat, stdlog);
 }
+
 void MapDHandler::krb5_connect(TKrb5Session& session,
                                const std::string& inputToken,
                                const std::string& dbname) {
@@ -383,7 +486,7 @@ void MapDHandler::connect_impl(TSessionId& session,
 void MapDHandler::disconnect(const TSessionId& session) {
   auto stdlog = STDLOG();
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
-  auto session_it = get_session_it_unsafe(session);
+  auto session_it = get_session_it_unsafe(session, write_lock);
   stdlog.setSessionInfo(session_it->second);
   const auto dbname = session_it->second->getCatalog().getCurrentDB().dbName;
   LOG(INFO) << "User " << session_it->second->get_currentUser().userName
@@ -407,7 +510,7 @@ void MapDHandler::disconnect_impl(const SessionMap::iterator& session_it) {
 void MapDHandler::switch_database(const TSessionId& session, const std::string& dbname) {
   auto stdlog = STDLOG(get_session_ptr(session));
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
-  auto session_it = get_session_it_unsafe(session);
+  auto session_it = get_session_it_unsafe(session, write_lock);
 
   std::string dbname2 = dbname;  // switchDatabase() may reset dbname given as argument
 
@@ -429,7 +532,7 @@ void MapDHandler::interrupt(const TSessionId& session) {
       leaf_aggregator_.interrupt(session);
     }
 
-    auto session_it = get_session_it_unsafe(session);
+    auto session_it = get_session_it_unsafe(session, read_lock);
     auto& cat = session_it->second.get()->getCatalog();
     const auto dbname = cat.getCurrentDB().dbName;
     auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
@@ -778,7 +881,7 @@ void MapDHandler::sql_execute(TQueryResult& _return,
       try {
         agg_handler_->cluster_execute(_return,
                                       query_state->createQueryStateProxy(),
-                                      query_state->get_query_str(),
+                                      query_state->getQueryStr(),
                                       column_format,
                                       nonce,
                                       first_n,
@@ -862,6 +965,8 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
           std::string("Exception: invalid device_id or unavailable GPU with this ID"));
     }
   }
+  _return.execution_time_ms = 0;
+
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
@@ -872,11 +977,13 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
       std::string query_ra;
       TableMap table_map;
       OptionalTableMap tableNames(table_map);
-      query_ra = parse_to_ra(query_state->createQueryStateProxy(),
-                             query_str,
-                             {},
-                             tableNames,
-                             mapd_parameters_);
+      _return.execution_time_ms += measure<>::execution([&]() {
+        query_ra = parse_to_ra(query_state->createQueryStateProxy(),
+                               query_str,
+                               {},
+                               tableNames,
+                               mapd_parameters_);
+      });
 
       // COPY_TO/SELECT: get read ExecutorOuterLock >> TableReadLock for each table  (note
       // for update/delete this would be a table write lock)
@@ -1154,7 +1261,7 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                    QueryStateProxy query_state_proxy) {
   try {
     const auto query_ra = parse_to_ra(query_state_proxy,
-                                      query_state_proxy.getQueryState().get_query_str(),
+                                      query_state_proxy.getQueryState().getQueryStr(),
                                       {},
                                       boost::none,
                                       mapd_parameters_);
@@ -1198,6 +1305,26 @@ void MapDHandler::get_roles(std::vector<std::string>& roles, const TSessionId& s
   }
 }
 
+bool MapDHandler::has_role(const TSessionId& sessionId,
+                           const std::string& granteeName,
+                           const std::string& roleName) {
+  const auto stdlog = STDLOG(get_session_ptr(sessionId));
+  const auto session_ptr = stdlog.getConstSessionInfo();
+  const auto current_user = session_ptr->get_currentUser();
+  if (!current_user.isSuper) {
+    if (const auto* user = SysCatalog::instance().getUserGrantee(granteeName);
+        user && current_user.userName != granteeName) {
+      THROW_MAPD_EXCEPTION("Only super users can check other user's roles.");
+    } else if (!SysCatalog::instance().isRoleGrantedToGrantee(
+                   current_user.userName, granteeName, true)) {
+      THROW_MAPD_EXCEPTION(
+          "Only super users can check roles assignment that have not been directly "
+          "granted to a user.");
+    }
+  }
+  return SysCatalog::instance().isRoleGrantedToGrantee(granteeName, roleName, false);
+}
+
 static TDBObject serialize_db_object(const std::string& roleName,
                                      const DBObject& inObject) {
   TDBObject outObject;
@@ -1206,7 +1333,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
   const auto ap = inObject.getPrivileges();
   switch (inObject.getObjectKey().permissionType) {
     case DatabaseDBObjectType:
-      outObject.objectType = TDBObjectType::DatabaseDBObjectType;
+      outObject.privilegeObjectType = TDBObjectType::DatabaseDBObjectType;
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::CREATE_DATABASE));
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::DROP_DATABASE));
       outObject.privs.push_back(ap.hasPermission(DatabasePrivileges::VIEW_SQL_EDITOR));
@@ -1214,7 +1341,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
 
       break;
     case TableDBObjectType:
-      outObject.objectType = TDBObjectType::TableDBObjectType;
+      outObject.privilegeObjectType = TDBObjectType::TableDBObjectType;
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::CREATE_TABLE));
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::DROP_TABLE));
       outObject.privs.push_back(ap.hasPermission(TablePrivileges::SELECT_FROM_TABLE));
@@ -1226,7 +1353,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
 
       break;
     case DashboardDBObjectType:
-      outObject.objectType = TDBObjectType::DashboardDBObjectType;
+      outObject.privilegeObjectType = TDBObjectType::DashboardDBObjectType;
       outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::CREATE_DASHBOARD));
       outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::DELETE_DASHBOARD));
       outObject.privs.push_back(ap.hasPermission(DashboardPrivileges::VIEW_DASHBOARD));
@@ -1234,7 +1361,7 @@ static TDBObject serialize_db_object(const std::string& roleName,
 
       break;
     case ViewDBObjectType:
-      outObject.objectType = TDBObjectType::ViewDBObjectType;
+      outObject.privilegeObjectType = TDBObjectType::ViewDBObjectType;
       outObject.privs.push_back(ap.hasPermission(ViewPrivileges::CREATE_VIEW));
       outObject.privs.push_back(ap.hasPermission(ViewPrivileges::DROP_VIEW));
       outObject.privs.push_back(ap.hasPermission(ViewPrivileges::SELECT_FROM_VIEW));
@@ -1246,6 +1373,9 @@ static TDBObject serialize_db_object(const std::string& roleName,
     default:
       CHECK(false);
   }
+  const int type_val = static_cast<int>(inObject.getType());
+  CHECK(type_val >= 0 && type_val < 5);
+  outObject.objectType = static_cast<TDBObjectType::type>(type_val);
   return outObject;
 }
 
@@ -1329,16 +1459,15 @@ bool MapDHandler::has_object_privilege(const TSessionId& sessionId,
   auto session_ptr = stdlog.getConstSessionInfo();
   auto const& cat = session_ptr->getCatalog();
   auto const& current_user = session_ptr->get_currentUser();
-  if (!current_user.isSuper && !current_user.isReallySuper &&
-      !SysCatalog::instance().isRoleGrantedToGrantee(
-          current_user.userName, granteeName, false)) {
+  if (!current_user.isSuper && !SysCatalog::instance().isRoleGrantedToGrantee(
+                                   current_user.userName, granteeName, false)) {
     THROW_MAPD_EXCEPTION(
         "Users except superusers can only check privileges for self or roles granted to "
         "them.")
   }
   Catalog_Namespace::UserMetadata user_meta;
   if (SysCatalog::instance().getMetadataForUser(granteeName, user_meta) &&
-      (user_meta.isSuper || user_meta.isReallySuper)) {
+      user_meta.isSuper) {
     return true;
   }
   Grantee* grnt = SysCatalog::instance().getGrantee(granteeName);
@@ -1648,14 +1777,12 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
     THROW_MAPD_EXCEPTION("Table " + table_name + " doesn't exist");
   }
   if (td->isView) {
+    auto query_state = create_query_state(session_copy, td->viewSQL);
+    stdlog.setQueryState(query_state);
     try {
       if (hasTableAccessPrivileges(td, session)) {
-        // Due to this line, query_state and stdlog have separate session_infos.
-        session_copy->make_superuser();
-        auto query_state = create_query_state(session_copy, td->viewSQL);
-        stdlog.setQueryState(query_state);
         const auto query_ra = parse_to_ra(query_state->createQueryStateProxy(),
-                                          query_state->get_query_str(),
+                                          query_state->getQueryStr(),
                                           {},
                                           boost::none,
                                           mapd_parameters_);
@@ -1676,10 +1803,12 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
       } else {
         THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
       }
-    } catch (std::exception& e) {
-      TColumnType tColumnType;
-      tColumnType.col_name = "BROKEN_VIEW_PLEASE_FIX";
-      _return.row_desc.push_back(tColumnType);
+    } catch (const std::exception& e) {
+      THROW_MAPD_EXCEPTION("View query has failed with an error: '" +
+                           std::string(e.what()) +
+                           "'.\nThe view must be dropped and re-created to "
+                           "resolve the error. \nQuery:\n" +
+                           query_state->getQueryStr());
     }
   } else {
     try {
@@ -2023,7 +2152,7 @@ void MapDHandler::set_execution_mode(const TSessionId& session,
                                      const TExecuteMode::type mode) {
   auto stdlog = STDLOG(get_session_ptr(session));
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
-  auto session_it = get_session_it_unsafe(session);
+  auto session_it = get_session_it_unsafe(session, write_lock);
   if (leaf_aggregator_.leafCount() > 0) {
     leaf_aggregator_.set_execution_mode(session, mode);
     try {
@@ -2561,6 +2690,8 @@ Importer_NS::CopyParams MapDHandler::thrift_to_copyparams(const TCopyParams& cp)
   }
   copy_params.sanitize_column_names = cp.sanitize_column_names;
   copy_params.geo_layer_name = cp.geo_layer_name;
+  copy_params.geo_assign_render_groups = cp.geo_assign_render_groups;
+  copy_params.geo_explode_collections = cp.geo_explode_collections;
   return copy_params;
 }
 
@@ -2625,6 +2756,8 @@ TCopyParams MapDHandler::copyparams_to_thrift(const Importer_NS::CopyParams& cp)
   copy_params.geo_coords_srid = cp.geo_coords_srid;
   copy_params.sanitize_column_names = cp.sanitize_column_names;
   copy_params.geo_layer_name = cp.geo_layer_name;
+  copy_params.geo_assign_render_groups = cp.geo_assign_render_groups;
+  copy_params.geo_explode_collections = cp.geo_explode_collections;
   return copy_params;
 }
 
@@ -4229,7 +4362,8 @@ void MapDHandler::get_heap_profile(std::string& profile, const TSessionId& sessi
 
 // NOTE: Only call check_session_exp_unsafe() when you hold a lock on sessions_mutex_.
 void MapDHandler::check_session_exp_unsafe(const SessionMap::iterator& session_it) {
-  if (session_it->second.use_count() > 2) {
+  if (session_it->second.use_count() > 2 ||
+      isInMemoryCalciteSession(session_it->second->get_currentUser())) {
     // SessionInfo is being used in more than one active operation. Original copy + one
     // stored in StdLog. Skip the checks.
     return;
@@ -4237,31 +4371,10 @@ void MapDHandler::check_session_exp_unsafe(const SessionMap::iterator& session_i
   time_t last_used_time = session_it->second->get_last_used_time();
   time_t start_time = session_it->second->get_start_time();
   if ((time(0) - last_used_time) > idle_session_duration_) {
-    disconnect_impl(
-        session_it);  // Already checked session existance in get_session_it_unsafe
-    THROW_MAPD_EXCEPTION("Idle Session Timeout. User should re-authenticate.")
+    throw ForceDisconnect("Idle Session Timeout. User should re-authenticate.");
   } else if ((time(0) - start_time) > max_session_duration_) {
-    disconnect_impl(
-        session_it);  // Already checked session existance in get_session_it_unsafe
-    THROW_MAPD_EXCEPTION("Maximum active Session Timeout. User should re-authenticate.")
+    throw ForceDisconnect("Maximum active Session Timeout. User should re-authenticate.");
   }
-}
-
-// NOTE: Only call get_session_it_unsafe() while holding a lock on sessions_mutex_.
-SessionMap::iterator MapDHandler::get_session_it_unsafe(const TSessionId& session) {
-  SessionMap::iterator session_it;
-  const auto calcite_session_prefix = calcite_->get_session_prefix();
-  const auto prefix_length = calcite_session_prefix.size();
-  if (prefix_length && 0 == session.compare(0, prefix_length, calcite_session_prefix)) {
-    session_it = get_session_from_map(session.substr(prefix_length + 1), sessions_);
-    check_session_exp_unsafe(session_it);
-    session_it->second->make_superuser();
-  } else {
-    session_it = get_session_from_map(session, sessions_);
-    check_session_exp_unsafe(session_it);
-    session_it->second->reset_superuser();
-  }
-  return session_it;
 }
 
 std::shared_ptr<const Catalog_Namespace::SessionInfo> MapDHandler::get_const_session_ptr(
@@ -4271,7 +4384,7 @@ std::shared_ptr<const Catalog_Namespace::SessionInfo> MapDHandler::get_const_ses
 
 Catalog_Namespace::SessionInfo MapDHandler::get_session_copy(const TSessionId& session) {
   mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-  return *get_session_it_unsafe(session)->second;
+  return *get_session_it_unsafe(session, read_lock)->second;
 }
 
 std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::get_session_copy_ptr(
@@ -4283,7 +4396,7 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::get_session_copy_pt
   // a copy. We should eventually aim to merge both `get_const_session_ptr` and
   // `get_session_copy_ptr`.
   mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-  auto& session_info_ref = *get_session_it_unsafe(session)->second;
+  auto& session_info_ref = *get_session_it_unsafe(session, read_lock)->second;
   return std::make_shared<Catalog_Namespace::SessionInfo>(session_info_ref);
 }
 
@@ -4301,7 +4414,7 @@ std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::get_session_ptr(
     return {};
   }
   mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
-  return get_session_it_unsafe(session_id)->second;
+  return get_session_it_unsafe(session_id, read_lock)->second;
 }
 
 void MapDHandler::check_table_load_privileges(
@@ -4448,7 +4561,15 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                         mapd_parameters_,
                                         nullptr);
   RelAlgExecutor ra_executor(executor.get(), cat);
-  const auto result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
+  ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                                     ExecutorDeviceType::CPU,
+                                                     QueryMemoryDescriptor(),
+                                                     nullptr,
+                                                     nullptr),
+                         {}};
+  _return.execution_time_ms += measure<>::execution(
+      [&]() { result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr); });
+  _return.execution_time_ms -= result.getRows()->getQueueTime();
   const auto rs = result.getRows();
   const auto converter =
       std::make_unique<ArrowResultSetConverter>(rs,
@@ -4457,16 +4578,22 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                                 device_id,
                                                 getTargetNames(result.getTargetsMeta()),
                                                 first_n);
-  const auto copy = converter->getArrowResult();
-  _return.sm_handle = std::string(copy.sm_handle.begin(), copy.sm_handle.end());
-  _return.sm_size = copy.sm_size;
-  _return.df_handle = std::string(copy.df_handle.begin(), copy.df_handle.end());
+  ArrowResult arrow_result;
+
+  _return.arrow_conversion_time_ms +=
+      measure<>::execution([&] { arrow_result = converter->getArrowResult(); });
+  _return.sm_handle =
+      std::string(arrow_result.sm_handle.begin(), arrow_result.sm_handle.end());
+  _return.sm_size = arrow_result.sm_size;
+  _return.df_handle =
+      std::string(arrow_result.df_handle.begin(), arrow_result.df_handle.end());
   if (device_type == ExecutorDeviceType::GPU) {
     std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
     CHECK(!ipc_handle_to_dev_ptr_.count(_return.df_handle));
-    ipc_handle_to_dev_ptr_.insert(std::make_pair(_return.df_handle, copy.df_dev_ptr));
+    ipc_handle_to_dev_ptr_.insert(
+        std::make_pair(_return.df_handle, arrow_result.df_dev_ptr));
   }
-  _return.df_size = copy.df_size;
+  _return.df_size = arrow_result.df_size;
 }
 
 void MapDHandler::execute_root_plan(TQueryResult& _return,
@@ -4753,7 +4880,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
 
   _return.nonce = nonce;
   _return.execution_time_ms = 0;
-  auto const& query_str = query_state_proxy.getQueryState().get_query_str();
+  auto const& query_str = query_state_proxy.getQueryState().getQueryStr();
   auto session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
   // Call to DistributedValidate() below may change cat.
   auto& cat = session_ptr->getCatalog();
@@ -5161,7 +5288,7 @@ void MapDHandler::execute_rel_alg_with_filter_push_down(
   // deriving the new relational algebra plan with respect to the pushed down filters
   _return.execution_time_ms += measure<>::execution([&]() {
     query_ra = parse_to_ra(query_state_proxy,
-                           query_state_proxy.getQueryState().get_query_str(),
+                           query_state_proxy.getQueryState().getQueryStr(),
                            filter_push_down_info,
                            boost::none,
                            mapd_parameters_);
@@ -5215,12 +5342,28 @@ std::string MapDHandler::parse_to_ra(
   ParserWrapper pw{query_str};
   const std::string actual_query{pw.isSelectExplain() ? pw.actual_query : query_str};
   if (pw.isCalcitePathPermissable()) {
-    auto result = calcite_->process(timer.createQueryStateProxy(),
-                                    legacy_syntax_ ? pg_shim(actual_query) : actual_query,
-                                    filter_push_down_info,
-                                    legacy_syntax_,
-                                    pw.isCalciteExplain(),
-                                    mapd_parameters.enable_calcite_view_optimize);
+    TPlanResult result;
+    auto session_cleanup_handler = [&](const auto& session_id) {
+      removeInMemoryCalciteSession(session_id);
+    };
+    auto process_calcite_request = [&] {
+      const auto& in_memory_session_id = createInMemoryCalciteSession(
+          query_state_proxy.getQueryState().getConstSessionInfo()->get_catalog_ptr());
+      try {
+        result = calcite_->process(timer.createQueryStateProxy(),
+                                   legacy_syntax_ ? pg_shim(actual_query) : actual_query,
+                                   filter_push_down_info,
+                                   legacy_syntax_,
+                                   pw.isCalciteExplain(),
+                                   mapd_parameters.enable_calcite_view_optimize,
+                                   in_memory_session_id);
+        session_cleanup_handler(in_memory_session_id);
+      } catch (std::exception&) {
+        session_cleanup_handler(in_memory_session_id);
+        throw;
+      }
+    };
+    process_calcite_request();
     if (tableNames) {
       for (const auto& table : result.resolved_accessed_objects.tables_selected_from) {
         (tableNames.value())[table] = false;
@@ -5558,53 +5701,142 @@ void MapDHandler::emergency_shutdown() {
 
 extern std::map<std::string, std::string> get_device_parameters();
 
-void MapDHandler::get_device_parameters(std::map<std::string, std::string>& _return) {
+void MapDHandler::get_device_parameters(std::map<std::string, std::string>& _return,
+                                        const TSessionId& session) {
+  const auto session_info = get_session_copy(session);
   auto params = ::get_device_parameters();
   for (auto item : params) {
     _return.insert(item);
   }
 }
 
-void MapDHandler::register_runtime_udf(
+ExtArgumentType mapfrom(const TExtArgumentType::type& t) {
+  switch (t) {
+    case TExtArgumentType::Int8:
+      return ExtArgumentType::Int8;
+    case TExtArgumentType::Int16:
+      return ExtArgumentType::Int16;
+    case TExtArgumentType::Int32:
+      return ExtArgumentType::Int32;
+    case TExtArgumentType::Int64:
+      return ExtArgumentType::Int64;
+    case TExtArgumentType::Float:
+      return ExtArgumentType::Float;
+    case TExtArgumentType::Double:
+      return ExtArgumentType::Double;
+    case TExtArgumentType::Void:
+      return ExtArgumentType::Void;
+    case TExtArgumentType::PInt8:
+      return ExtArgumentType::PInt8;
+    case TExtArgumentType::PInt16:
+      return ExtArgumentType::PInt16;
+    case TExtArgumentType::PInt32:
+      return ExtArgumentType::PInt32;
+    case TExtArgumentType::PInt64:
+      return ExtArgumentType::PInt64;
+    case TExtArgumentType::PFloat:
+      return ExtArgumentType::PFloat;
+    case TExtArgumentType::PDouble:
+      return ExtArgumentType::PDouble;
+    case TExtArgumentType::Bool:
+      return ExtArgumentType::Bool;
+    case TExtArgumentType::ArrayInt8:
+      return ExtArgumentType::ArrayInt8;
+    case TExtArgumentType::ArrayInt16:
+      return ExtArgumentType::ArrayInt16;
+    case TExtArgumentType::ArrayInt32:
+      return ExtArgumentType::ArrayInt32;
+    case TExtArgumentType::ArrayInt64:
+      return ExtArgumentType::ArrayInt64;
+    case TExtArgumentType::ArrayFloat:
+      return ExtArgumentType::ArrayFloat;
+    case TExtArgumentType::ArrayDouble:
+      return ExtArgumentType::ArrayDouble;
+    case TExtArgumentType::GeoPoint:
+      return ExtArgumentType::GeoPoint;
+    case TExtArgumentType::Cursor:
+      return ExtArgumentType::Cursor;
+  }
+  UNREACHABLE();
+  return ExtArgumentType{};
+}
+
+table_functions::OutputBufferSizeType mapfrom(const TOutputBufferSizeType::type& t) {
+  switch (t) {
+    case TOutputBufferSizeType::kUserSpecifiedConstantParameter:
+      return table_functions::OutputBufferSizeType::kUserSpecifiedConstantParameter;
+    case TOutputBufferSizeType::kUserSpecifiedRowMultiplier:
+      return table_functions::OutputBufferSizeType::kUserSpecifiedRowMultiplier;
+    case TOutputBufferSizeType::kConstant:
+      return table_functions::OutputBufferSizeType::kConstant;
+  }
+  UNREACHABLE();
+  return table_functions::OutputBufferSizeType{};
+}
+
+std::vector<ExtArgumentType> mapfrom(const std::vector<TExtArgumentType::type>& v) {
+  std::vector<ExtArgumentType> result;
+  std::transform(v.begin(),
+                 v.end(),
+                 std::back_inserter(result),
+                 [](TExtArgumentType::type c) -> ExtArgumentType { return mapfrom(c); });
+  return result;
+}
+
+void MapDHandler::register_runtime_extension_functions(
     const TSessionId& session,
-    const std::string& signatures,
+    const std::vector<TUserDefinedFunction>& udfs,
+    const std::vector<TUserDefinedTableFunction>& udtfs,
     const std::map<std::string, std::string>& device_ir_map) {
   const auto session_info = get_session_copy(session);
+  VLOG(1) << "register_runtime_extension_functions: " << udfs.size() << " "
+          << udtfs.size() << std::endl;
 
   if (!runtime_udf_registration_enabled_) {
-    THROW_MAPD_EXCEPTION("Runtime UDF registration is disabled.");
+    THROW_MAPD_EXCEPTION("Runtime extension functions registration is disabled.");
   }
 
   // TODO: add UDF registration permission scheme. Currently, UDFs are
-  // registered globally, that means that all users can use as well as overwrite UDFs
-  // that was created possibly by anoher user.
+  // registered globally, that means that all users can use as well as
+  // overwrite UDFs that was created possibly by anoher user.
 
-  VLOG(1) << "Registering runtime UDF with signatures:\n" << signatures;
   /* Changing a UDF implementation (but not the signature) requires
      cleaning code caches. Nuking executors does that but at the cost
      of loosing all of the caches. TODO: implement more refined code
      cache cleaning. */
   Executor::nukeCacheOfExecutors();
 
-  /* Parse IR strings and store it as LLVM module. */
-  for (auto i = device_ir_map.begin(); i != device_ir_map.end(); ++i) {
-    std::string device = i->first;
-    std::string ir = i->second;
-    if (device == "cpu") {
-      read_rt_udf_cpu_module(ir);
-    } else if (device == "gpu") {
-      read_rt_udf_gpu_module(ir);
-    } else {
-      THROW_MAPD_EXCEPTION(std::string("unsupported device name: ") + device);
-    }
+  /* Parse LLVM/NVVM IR strings and store it as LLVM module. */
+  auto it = device_ir_map.find(std::string{"cpu"});
+  if (it != device_ir_map.end()) {
+    read_rt_udf_cpu_module(it->second);
+  }
+  it = device_ir_map.find(std::string{"gpu"});
+  if (it != device_ir_map.end()) {
+    read_rt_udf_gpu_module(it->second);
   }
 
-  // Register UDFs with Calcite server
+  VLOG(1) << "Registering runtime UDTFs:\n";
+
+  for (auto it = udtfs.begin(); it != udtfs.end(); it++) {
+    VLOG(1) << "UDTF name=" << it->name << std::endl;
+    table_functions::TableFunctionsFactory::add(
+        it->name,
+        table_functions::TableFunctionOutputRowSizer{
+            mapfrom(it->sizerType), static_cast<size_t>(it->sizerArgPos)},
+        mapfrom(it->inputArgTypes),
+        mapfrom(it->outputArgTypes),
+        /*is_runtime =*/true);
+  }
+
+  /* Register extension functions with Calcite server */
   CHECK(calcite_);
-  calcite_->setRuntimeUserDefinedFunction(signatures);
+  calcite_->setRuntimeExtensionFunctions(udfs, udtfs);
+
   /* Update the extension function whitelist */
-  std::string whitelist = calcite_->getRuntimeUserDefinedFunctionWhitelist();
-  VLOG(1) << "Registering runtime UDF with Calcite using whitelist:\n" << whitelist;
+  std::string whitelist = calcite_->getRuntimeExtensionFunctionWhitelist();
+  VLOG(1) << "Registering runtime extension functions with CodeGen using whitelist:\n"
+          << whitelist;
   ExtensionFunctionsWhitelist::clearRTUdfs();
   ExtensionFunctionsWhitelist::addRTUdfs(whitelist);
 }

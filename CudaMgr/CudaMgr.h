@@ -13,19 +13,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#ifndef CUDAMGR_H
-#define CUDAMGR_H
+#pragma once
 
 #include <cstdlib>
 #include <mutex>
 #include <string>
 #include <vector>
+
+#include "Shared/uuid.h"
+
 #ifdef HAVE_CUDA
 #include <cuda.h>
 #else
-#include "../Shared/nocuda.h"
+#include "Shared/nocuda.h"
 #endif  // HAVE_CUDA
+
+namespace omnisci {
+struct DeviceIdentifier {
+  const int index;    //!< index into device group (currently num_gpus - start_gpu)
+  const int cuda_id;  //!< Cuda ID for device (ignores start_gpu)
+  const UUID uuid;    //!< UUID for device (hardware invariant)
+};
+
+using DeviceGroup = std::vector<DeviceIdentifier>;
+}  // namespace omnisci
 
 namespace CudaMgr_Namespace {
 
@@ -51,6 +62,7 @@ class CudaErrorException : public std::runtime_error {
 
 struct DeviceProperties {
   CUdevice device;
+  omnisci::UUID uuid;
   int computeMajor;
   int computeMinor;
   size_t globalMem;
@@ -79,6 +91,8 @@ class CudaMgr {
 
   void synchronizeDevices() const;
   int getDeviceCount() const { return device_count_; }
+  int getStartGpu() const { return start_gpu_; }
+  const omnisci::DeviceGroup& getDeviceGroup() const { return device_group_; }
 
   void copyHostToDevice(int8_t* device_ptr,
                         const int8_t* host_ptr,
@@ -104,7 +118,6 @@ class CudaMgr {
                     const size_t num_bytes,
                     const int device_num);
 
-  int getStartGpu() const { return start_gpu_; }
   size_t getMaxSharedMemoryForAll() const { return max_shared_memory_for_all_; }
 
   const std::vector<DeviceProperties>& getAllDeviceProperties() const {
@@ -155,6 +168,7 @@ class CudaMgr {
  private:
 #ifdef HAVE_CUDA
   void fillDeviceProperties();
+  void initDeviceGroup();
   void createDeviceContexts();
   size_t computeMaxSharedMemoryForAll() const;
   void checkError(CUresult cu_result) const;
@@ -165,11 +179,10 @@ class CudaMgr {
   int start_gpu_;
   size_t max_shared_memory_for_all_;
   std::vector<DeviceProperties> device_properties_;
+  omnisci::DeviceGroup device_group_;
   std::vector<CUcontext> device_contexts_;
 
   mutable std::mutex device_cleanup_mutex_;
 };
 
 }  // Namespace CudaMgr_Namespace
-
-#endif  // CUDAMGR_H

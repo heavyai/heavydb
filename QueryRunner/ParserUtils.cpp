@@ -47,9 +47,9 @@ Planner::RootPlan* QueryRunner::parsePlanLegacy(const std::string& query_str) {
 
 Planner::RootPlan* QueryRunner::parsePlanCalcite(QueryStateProxy query_state_proxy) {
   auto const& query_state = query_state_proxy.getQueryState();
-  ParserWrapper pw{query_state.get_query_str()};
+  ParserWrapper pw{query_state.getQueryStr()};
   if (pw.isOtherExplain() || pw.is_ddl || pw.is_update_dml) {
-    return parsePlanLegacy(query_state.get_query_str());
+    return parsePlanLegacy(query_state.getQueryStr());
   }
 
   const auto& cat = query_state.getConstSessionInfo()->getCatalog();
@@ -57,7 +57,7 @@ Planner::RootPlan* QueryRunner::parsePlanCalcite(QueryStateProxy query_state_pro
   const auto query_ra =
       calcite_mgr
           ->process(query_state_proxy,
-                    pg_shim(query_state.get_query_str()),
+                    pg_shim(query_state.getQueryStr()),
                     {},
                     true,
                     false,

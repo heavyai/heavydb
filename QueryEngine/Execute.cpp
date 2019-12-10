@@ -38,6 +38,9 @@
 #include "RuntimeFunctions.h"
 #include "SpeculativeTopN.h"
 
+#include "TableFunctions/TableFunctionCompilationContext.h"
+#include "TableFunctions/TableFunctionExecutionContext.h"
+
 #include "CudaMgr/CudaMgr.h"
 #include "DataMgr/BufferMgr/BufferMgr.h"
 #include "Parser/ParserNode.h"
@@ -65,7 +68,6 @@
 #include <set>
 #include <thread>
 
-bool g_enable_debug_timer{false};
 bool g_enable_watchdog{false};
 bool g_enable_dynamic_watchdog{false};
 unsigned g_dynamic_watchdog_time_limit{10000};
@@ -89,12 +91,15 @@ bool g_strip_join_covered_quals{false};
 size_t g_constrained_by_in_threshold{10};
 size_t g_big_group_threshold{20000};
 bool g_enable_window_functions{true};
+bool g_enable_table_functions{false};
 size_t g_max_memory_allocation_size{2000000000};  // set to max slab size
 size_t g_min_memory_allocation_size{
     256};  // minimum memory allocation required for projection query output buffer
            // without pre-flight count
 bool g_enable_bump_allocator{false};
 double g_bump_allocator_step_reduction{0.75};
+bool g_enable_direct_columnarization{true};
+extern bool g_enable_experimental_string_functions;
 
 int const Executor::max_gpu_count;
 
@@ -227,6 +232,10 @@ const ColumnDescriptor* Executor::getPhysicalColumnDescriptor(
 
 const Catalog_Namespace::Catalog* Executor::getCatalog() const {
   return catalog_;
+}
+
+void Executor::setCatalog(const Catalog_Namespace::Catalog* catalog) {
+  catalog_ = catalog;
 }
 
 const std::shared_ptr<RowSetMemoryOwner> Executor::getRowSetMemoryOwner() const {
@@ -470,8 +479,12 @@ std::vector<int8_t> Executor::serializeLiterals(
       case 6: {
         const auto p = boost::get<std::pair<std::string, int>>(&lit);
         CHECK(p);
-        const auto str_id = getStringDictionaryProxy(p->second, row_set_mem_owner_, true)
-                                ->getIdOfString(p->first);
+        const auto str_id =
+            g_enable_experimental_string_functions
+                ? getStringDictionaryProxy(p->second, row_set_mem_owner_, true)
+                      ->getOrAddTransient(p->first)
+                : getStringDictionaryProxy(p->second, row_set_mem_owner_, true)
+                      ->getIdOfString(p->first);
         memcpy(&serialized[off - lit_bytes], &str_id, lit_bytes);
         break;
       }
@@ -803,8 +816,11 @@ ResultSetPtr Executor::resultsUnion(ExecutionDispatch& execution_dispatch) {
     for (const auto target_expr : ra_exe_unit.target_exprs) {
       targets.push_back(get_target_info(target_expr, g_bigint_count));
     }
-    return std::make_shared<ResultSet>(
-        targets, ExecutorDeviceType::CPU, QueryMemoryDescriptor(), nullptr, nullptr);
+    return std::make_shared<ResultSet>(targets,
+                                       ExecutorDeviceType::CPU,
+                                       QueryMemoryDescriptor(),
+                                       row_set_mem_owner_,
+                                       this);
   }
   using IndexedResultSet = std::pair<ResultSetPtr, std::vector<size_t>>;
   std::sort(results_per_device.begin(),
@@ -846,6 +862,7 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
     std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& results_per_device,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
     const QueryMemoryDescriptor& query_mem_desc) const {
+  auto timer = DEBUG_TIMER(__func__);
   std::shared_ptr<ResultSet> reduced_results;
 
   const auto& first = results_per_device.front().first;
@@ -887,15 +904,11 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
     reduced_results = first;
   }
 
-#ifdef WITH_REDUCTION_JIT
   const auto& this_result_set = results_per_device[0].first;
   ResultSetReductionJIT reduction_jit(this_result_set->getQueryMemDesc(),
                                       this_result_set->getTargetInfos(),
                                       this_result_set->getTargetInitVals());
   const auto reduction_code = reduction_jit.codegen();
-#else
-  ReductionCode reduction_code{};
-#endif  // WITH_REDUCTION_JIT
   for (size_t i = 1; i < results_per_device.size(); ++i) {
     reduced_results->getStorage()->reduce(
         *(results_per_device[i].first->getStorage()), {}, reduction_code);
@@ -1194,7 +1207,10 @@ ResultSetPtr Executor::executeWorkUnitImpl(
       plan_state_->target_exprs_.push_back(target_expr);
     }
 
-    auto dispatch = [&execution_dispatch, &column_fetcher, &eo](
+    auto dispatch = [&execution_dispatch,
+                     &column_fetcher,
+                     &eo,
+                     parent_thread_id = std::this_thread::get_id()](
                         const ExecutorDeviceType chosen_device_type,
                         int chosen_device_id,
                         const QueryCompilationDescriptor& query_comp_desc,
@@ -1202,6 +1218,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                         const FragmentsList& frag_list,
                         const ExecutorDispatchMode kernel_dispatch_mode,
                         const int64_t rowid_lookup_key) {
+      DEBUG_TIMER_NEW_THREAD(parent_thread_id);
       INJECT_TIMER(execution_dispatch_run);
       execution_dispatch.run(chosen_device_type,
                              chosen_device_id,
@@ -1286,7 +1303,7 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                                           const CompilationOptions& co,
                                           const ExecutionOptions& eo,
                                           const Catalog_Namespace::Catalog& cat,
-                                          PerFragmentCB& cb) {
+                                          PerFragmentCallBack& cb) {
   const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
   ColumnCacheMap column_cache;
 
@@ -1324,6 +1341,32 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
     const auto fragment_results = all_fragment_results[fragment_index];
     cb(fragment_results.first, outer_fragments[fragment_index]);
   }
+}
+
+ResultSetPtr Executor::executeTableFunction(
+    const TableFunctionExecutionUnit exe_unit,
+    const std::vector<InputTableInfo>& table_infos,
+    const CompilationOptions& co,
+    const ExecutionOptions& eo,
+    const Catalog_Namespace::Catalog& cat) {
+  INJECT_TIMER(Exec_executeTableFunction);
+  nukeOldState(false, table_infos, nullptr);
+
+  ColumnCacheMap column_cache;  // Note: if we add retries to the table function
+                                // framework, we may want to move this up a level
+
+  ColumnFetcher column_fetcher(this, column_cache);
+  TableFunctionCompilationContext compilation_context;
+  compilation_context.compile(exe_unit, co, this);
+
+  TableFunctionExecutionContext exe_context(getRowSetMemoryOwner());
+  CHECK_EQ(table_infos.size(), size_t(1));
+  return exe_context.execute(exe_unit,
+                             table_infos.front(),
+                             &compilation_context,
+                             column_fetcher,
+                             co.device_type_,
+                             this);
 }
 
 ResultSetPtr Executor::executeExplain(const QueryCompilationDescriptor& query_comp_desc) {
@@ -1467,6 +1510,7 @@ ResultSetPtr Executor::collectAllDeviceResults(
     const QueryMemoryDescriptor& query_mem_desc,
     const ExecutorDeviceType device_type,
     std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner) {
+  auto timer = DEBUG_TIMER(__func__);
   auto& result_per_device = execution_dispatch.getFragmentResults();
   if (result_per_device.empty() && query_mem_desc.getQueryDescriptionType() ==
                                        QueryDescriptionType::NonGroupedAggregate) {
@@ -1977,6 +2021,7 @@ Executor::FetchResult Executor::fetchChunks(
     const Catalog_Namespace::Catalog& cat,
     std::list<ChunkIter>& chunk_iterators,
     std::list<std::shared_ptr<Chunk_NS::Chunk>>& chunks) {
+  auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(fetchChunks);
   const auto& col_global_ids = ra_exe_unit.input_col_descs;
   std::vector<std::vector<size_t>> selected_fragments_crossjoin;
@@ -2228,6 +2273,7 @@ int32_t Executor::executePlanWithoutGroupBy(
     const uint32_t num_tables,
     RenderInfo* render_info) {
   INJECT_TIMER(executePlanWithoutGroupBy);
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(!results);
   if (col_buffers.empty()) {
     return 0;
@@ -2370,6 +2416,7 @@ int32_t Executor::executePlanWithGroupBy(
     const uint32_t start_rowid,
     const uint32_t num_tables,
     RenderInfo* render_info) {
+  auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(executePlanWithGroupBy);
   CHECK(!results);
   if (col_buffers.empty()) {
@@ -2812,13 +2859,13 @@ void Executor::executeSimpleInsert(const Planner::RootPlan* root_plan) {
 
 void Executor::nukeOldState(const bool allow_lazy_fetch,
                             const std::vector<InputTableInfo>& query_infos,
-                            const RelAlgExecutionUnit& ra_exe_unit) {
+                            const RelAlgExecutionUnit* ra_exe_unit) {
   const bool contains_left_deep_outer_join =
-      std::find_if(ra_exe_unit.join_quals.begin(),
-                   ra_exe_unit.join_quals.end(),
-                   [](const JoinCondition& join_condition) {
-                     return join_condition.type == JoinType::LEFT;
-                   }) != ra_exe_unit.join_quals.end();
+      ra_exe_unit && std::find_if(ra_exe_unit->join_quals.begin(),
+                                  ra_exe_unit->join_quals.end(),
+                                  [](const JoinCondition& join_condition) {
+                                    return join_condition.type == JoinType::LEFT;
+                                  }) != ra_exe_unit->join_quals.end();
   cgen_state_.reset(new CgenState(query_infos, contains_left_deep_outer_join));
   plan_state_.reset(
       new PlanState(allow_lazy_fetch && !contains_left_deep_outer_join, this));
@@ -3192,6 +3239,73 @@ std::pair<bool, int64_t> Executor::skipFragmentInnerJoins(
     }
   }
   return skip_frag;
+}
+
+AggregatedColRange Executor::computeColRangesCache(
+    const std::unordered_set<PhysicalInput>& phys_inputs) {
+  AggregatedColRange agg_col_range_cache;
+  CHECK(catalog_);
+  std::unordered_set<int> phys_table_ids;
+  for (const auto& phys_input : phys_inputs) {
+    phys_table_ids.insert(phys_input.table_id);
+  }
+  std::vector<InputTableInfo> query_infos;
+  for (const int table_id : phys_table_ids) {
+    query_infos.emplace_back(InputTableInfo{table_id, getTableInfo(table_id)});
+  }
+  for (const auto& phys_input : phys_inputs) {
+    const auto cd =
+        catalog_->getMetadataForColumn(phys_input.table_id, phys_input.col_id);
+    CHECK(cd);
+    if (ExpressionRange::typeSupportsRange(cd->columnType)) {
+      const auto col_var = boost::make_unique<Analyzer::ColumnVar>(
+          cd->columnType, phys_input.table_id, phys_input.col_id, 0);
+      const auto col_range = getLeafColumnRange(col_var.get(), query_infos, this, false);
+      agg_col_range_cache.setColRange(phys_input, col_range);
+    }
+  }
+  return agg_col_range_cache;
+}
+
+StringDictionaryGenerations Executor::computeStringDictionaryGenerations(
+    const std::unordered_set<PhysicalInput>& phys_inputs) {
+  StringDictionaryGenerations string_dictionary_generations;
+  CHECK(catalog_);
+  for (const auto& phys_input : phys_inputs) {
+    const auto cd =
+        catalog_->getMetadataForColumn(phys_input.table_id, phys_input.col_id);
+    CHECK(cd);
+    const auto& col_ti =
+        cd->columnType.is_array() ? cd->columnType.get_elem_type() : cd->columnType;
+    if (col_ti.is_string() && col_ti.get_compression() == kENCODING_DICT) {
+      const int dict_id = col_ti.get_comp_param();
+      const auto dd = catalog_->getMetadataForDict(dict_id);
+      CHECK(dd && dd->stringDict);
+      string_dictionary_generations.setGeneration(dict_id,
+                                                  dd->stringDict->storageEntryCount());
+    }
+  }
+  return string_dictionary_generations;
+}
+
+TableGenerations Executor::computeTableGenerations(
+    std::unordered_set<int> phys_table_ids) {
+  TableGenerations table_generations;
+  for (const int table_id : phys_table_ids) {
+    const auto table_info = getTableInfo(table_id);
+    table_generations.setGeneration(
+        table_id, TableGeneration{table_info.getPhysicalNumTuples(), 0});
+  }
+  return table_generations;
+}
+
+void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
+                            const std::unordered_set<int>& phys_table_ids) {
+  CHECK(catalog_);
+  row_set_mem_owner_ = std::make_shared<RowSetMemoryOwner>();
+  agg_col_range_cache_ = computeColRangesCache(phys_inputs);
+  string_dictionary_generations_ = computeStringDictionaryGenerations(phys_inputs);
+  table_generations_ = computeTableGenerations(phys_table_ids);
 }
 
 std::map<std::pair<int, ::QueryRenderer::QueryRenderManager*>, std::shared_ptr<Executor>>

@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-#include "ExtensionFunctionsWhitelist.h"
-#include <iostream>
-#include "JsonAccessors.h"
-
-#include "../Shared/StringTransform.h"
+#include "QueryEngine/ExtensionFunctionsWhitelist.h"
 
 #include <boost/algorithm/string/join.hpp>
+#include <iostream>
+
+#include "QueryEngine/JsonAccessors.h"
+#include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
+#include "Shared/StringTransform.h"
 
 // Get the list of all type specializations for the given function name.
 std::vector<ExtensionFunction>* ExtensionFunctionsWhitelist::get(
@@ -129,6 +130,8 @@ std::string serialize_type(const ExtArgumentType type) {
       return "float";
     case ExtArgumentType::Double:
       return "double";
+    case ExtArgumentType::Void:
+      return "void";
     case ExtArgumentType::PInt8:
       return "i8*";
     case ExtArgumentType::PInt16:
@@ -153,6 +156,14 @@ std::string serialize_type(const ExtArgumentType type) {
       return "array_float";
     case ExtArgumentType::ArrayDouble:
       return "array_double";
+    case ExtArgumentType::GeoPoint:
+      return "geo_point";
+    case ExtArgumentType::GeoLineString:
+      return "geo_linestring";
+    case ExtArgumentType::GeoPolygon:
+      return "geo_polygon";
+    case ExtArgumentType::Cursor:
+      return "cursor";
     default:
       CHECK(false);
   }
@@ -230,12 +241,19 @@ std::string ExtensionFunction::toString() const {
 }
 
 // Converts the extension function signatures to their LLVM representation.
-std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations() {
+std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
+    const std::unordered_set<std::string>& udf_decls) {
   std::vector<std::string> declarations;
   for (const auto& kv : functions_) {
     const auto& signatures = kv.second;
     CHECK(!signatures.empty());
     for (const auto& signature : kv.second) {
+      // If there is a udf function declaration matching an extension function signature
+      // do not emit a duplicate declaration.
+      if (!udf_decls.empty() && udf_decls.find(signature.getName()) != udf_decls.end()) {
+        continue;
+      }
+
       std::string decl_prefix{"declare " + serialize_type(signature.getRet()) + " @" +
                               signature.getName()};
       std::vector<std::string> arg_strs;
@@ -245,6 +263,21 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations() {
       declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") +
                              ");");
     }
+  }
+
+  for (const auto& kv : table_functions::TableFunctionsFactory::functions_) {
+    if (kv.second.isRuntime()) {
+      // Runtime UDTFs are defined in LLVM/NVVM IR module
+      continue;
+    }
+    std::string decl_prefix{"declare " + serialize_type(ExtArgumentType::Int32) + " @" +
+                            kv.first};
+    std::vector<std::string> arg_strs;
+    for (const auto arg : kv.second.getArgs()) {
+      arg_strs.push_back(serialize_type(arg));
+    }
+    declarations.push_back(decl_prefix + "(" + boost::algorithm::join(arg_strs, ", ") +
+                           ");");
   }
   return declarations;
 }
@@ -272,6 +305,9 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "double") {
     return ExtArgumentType::Double;
+  }
+  if (type_name == "void") {
+    return ExtArgumentType::Void;
   }
   if (type_name == "i8*") {
     return ExtArgumentType::PInt8;
@@ -308,6 +344,18 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "array_double") {
     return ExtArgumentType::ArrayDouble;
+  }
+  if (type_name == "geo_point") {
+    return ExtArgumentType::GeoPoint;
+  }
+  if (type_name == "geo_linestring") {
+    return ExtArgumentType::GeoLineString;
+  }
+  if (type_name == "geo_polygon") {
+    return ExtArgumentType::GeoPolygon;
+  }
+  if (type_name == "cursor") {
+    return ExtArgumentType::Cursor;
   }
 
   CHECK(false);

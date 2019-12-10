@@ -480,6 +480,13 @@ void c_arrow(const std::string& query_string, const ExecutorDeviceType device_ty
     EXP;                        \
   }
 
+#define THROW_ON_AGGREGATOR(EXP) \
+  if (!g_aggregator) {           \
+    EXP;                         \
+  } else {                       \
+    EXPECT_ANY_THROW(EXP);       \
+  }
+
 bool validate_statement_syntax(const std::string& stmt) {
   SQLParser parser;
   list<std::unique_ptr<Parser::Stmt>> parse_trees;
@@ -529,6 +536,15 @@ TEST(Distributed50, FailOver) {
   ASSERT_EQ(3, v<int64_t>(run_simple_agg("SELECT count(*) FROM dist5;", dt)));
 
   run_ddl_statement("DROP TABLE IF EXISTS dist5;");
+}
+
+TEST(Errors, InvalidQueries) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    EXPECT_ANY_THROW(run_multiple_agg(
+        "SELECT * FROM test WHERE 1 = 2 AND ( 1 = 2 and 3 = 4 limit 100);", dt));
+    EXPECT_ANY_THROW(run_multiple_agg("SET x = y;", dt));
+  }
 }
 
 TEST(Create, StorageOptions) {
@@ -971,6 +987,10 @@ TEST(Select, FilterAndSimpleAggregation) {
     c("SELECT COUNT(*) FROM test WHERE x + y = 49;", dt);
     c("SELECT COUNT(*) FROM test WHERE x + y + z = 150;", dt);
     c("SELECT COUNT(*) FROM test WHERE x + y + z + t = 1151;", dt);
+    c("SELECT COUNT(*) FROM test WHERE CAST(x as TINYINT) + CAST(y as TINYINT) < CAST(z "
+      "as TINYINT);",
+      dt);
+    c("SELECT COUNT(*) FROM test WHERE CAST(y as TINYINT) / CAST(x as TINYINT) = 6", dt);
     c("SELECT SUM(x + y) FROM test WHERE x + y = 49;", dt);
     c("SELECT SUM(x + y + z) FROM test WHERE x + y = 49;", dt);
     c("SELECT SUM(x + y + z + t) FROM test WHERE x + y = 49;", dt);
@@ -1240,31 +1260,100 @@ TEST(Select, FilterAndSimpleAggregation) {
   }
 }
 
+TEST(Select, AggregateOnEmptyDecimalColumn) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    for (int p = 1; p <= 18; ++p) {
+      for (int s = 0; s <= p - 1; ++s) {
+        std::string decimal_prec("");
+        decimal_prec = "val DECIMAL(" + std::to_string(p) + "," + std::to_string(s) + ")";
+        std::string tbl_name = "D" + std::to_string(p) + "_" + std::to_string(s);
+        std::string drop_table("");
+        drop_table = "DROP TABLE IF EXISTS " + tbl_name + ";";
+        std::string create_stmt = "CREATE TABLE " + tbl_name + "( " + decimal_prec + ");";
+        run_ddl_statement(drop_table);
+        g_sqlite_comparator.query(drop_table);
+        run_ddl_statement(create_stmt);
+        g_sqlite_comparator.query(create_stmt);
+        std::string query("SELECT MIN(val), MAX(val), SUM(val), AVG(val) FROM ");
+        query += tbl_name + ";";
+        c(query, dt);
+      }
+    }
+  }
+}
+
+TEST(Select, AggregateConstantValueOnEmptyTable) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // tinyint: -126 / 126
+    c("SELECT MIN(-126), MAX(-126), SUM(-126), AVG(-126), MIN(126), MAX(126), SUM(126), "
+      "AVG(126) FROM "
+      "empty_test_table;",
+      dt);
+    // smallint: -32766 / 32766
+    c("SELECT MIN(-32766), MAX(-32766), SUM(-32766), AVG(-32766), MIN(32766), "
+      "MAX(32766), SUM(32766), AVG(32766) "
+      "FROM empty_test_table;",
+      dt);
+    // int: -2147483646 / 2147483646
+    c("SELECT MIN(-2147483646), MAX(-2147483646), SUM(-2147483646), AVG(-2147483646), "
+      "MIN(2147483646), "
+      "MAX(2147483646), SUM(2147483646), AVG(2147483646) FROM empty_test_table;",
+      dt);
+    // bigint: -9223372036854775806 / 9223372036854775806
+    c("SELECT MIN(-9223372036854775806), MAX(-9223372036854775806), "
+      "AVG(-9223372036854775806),"
+      "SUM(-9223372036854775806), MIN(9223372036854775806), MAX(9223372036854775806), "
+      "SUM(9223372036854775806), AVG(9223372036854775806) FROM empty_test_table;",
+      dt);
+    // float: -1.5 / 1.5
+    c("SELECT MIN(-1.5), MAX(-1.5), SUM(-1.5), AVG(-1.5), MIN(1.5), MAX(1.5), SUM(1.5), "
+      "AVG(1.5) FROM "
+      "empty_test_table;",
+      dt);
+    // double: -1.5055487897 / 1.5055487897
+    c("SELECT MIN(-1.5055487897), MAX(-1.5055487897), SUM(-1.5055487897), "
+      "AVG(-1.5055487897),"
+      "MIN(1.5055487897), MAX(1.5055487897), SUM(1.5055487897), AVG(1.5055487897) FROM "
+      "empty_test_table;",
+      dt);
+    // boolean: true / false
+    c("SELECT MIN(true), MAX(true), MIN(false), MAX(false) FROM empty_test_table;", dt);
+  }
+}
+
 TEST(Select, AggregateOnEmptyTable) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) from empty_test_table;", dt);
-    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d) from empty_test_table;", dt);
-    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d) from empty_test_table;", dt);
-    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) from empty_test_table;", dt);
-    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d) from "
+    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) FROM empty_test_table;", dt);
+    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d), MIN(b) FROM "
+      "empty_test_table;",
+      dt);
+    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d), MAX(b)  FROM "
+      "empty_test_table;",
+      dt);
+    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) FROM empty_test_table;", dt);
+    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d), COUNT(b) FROM "
       "empty_test_table;",
       dt);
     // skipped fragment
-    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) from empty_test_table "
-      "where id > 5;",
+    c("SELECT AVG(x), AVG(y), AVG(z), AVG(t), AVG(f), AVG(d) FROM empty_test_table "
+      "WHERE id > 5;",
       dt);
-    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d) from empty_test_table where "
+    c("SELECT MIN(x), MIN(y), MIN(z), MIN(t), MIN(f), MIN(d), MIN(b) FROM "
+      "empty_test_table WHERE "
       "id > 5;",
       dt);
-    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d) from empty_test_table where "
+    c("SELECT MAX(x), MAX(y), MAX(z), MAX(t), MAX(f), MAX(d), MAX(b) FROM "
+      "empty_test_table WHERE "
       "id > 5;",
       dt);
-    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) from empty_test_table where "
+    c("SELECT SUM(x), SUM(y), SUM(z), SUM(t), SUM(f), SUM(d) FROM empty_test_table WHERE "
       "id > 5;",
       dt);
-    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d) from "
-      "empty_test_table where id > 5;",
+    c("SELECT COUNT(x), COUNT(y), COUNT(z), COUNT(t), COUNT(f), COUNT(d), COUNT(b) FROM "
+      "empty_test_table WHERE id > 5;",
       dt);
   }
 }
@@ -1290,7 +1379,11 @@ TEST(Select, LimitAndOffset) {
       "total_y DESC, "
       "str LIMIT 1);",
       dt);
-    EXPECT_THROW(run_multiple_agg("SELECT * FROM test LIMIT 0;", dt), std::runtime_error);
+
+    {
+      const auto rows = run_multiple_agg("SELECT * FROM test LIMIT 0;", dt);
+      ASSERT_EQ(size_t(0), rows->rowCount());
+    }
   }
 }
 
@@ -1405,6 +1498,16 @@ TEST(Select, FilterShortCircuit) {
       "AND t > 1002 AND t > 1003;",
       dt);
     c("SELECT COUNT(*) FROM test WHERE UNLIKELY(x IN (7, 8, 9, 10)) AND y > 42;", dt);
+    c("SELECT COUNT(*) FROM test WHERE (x / 2.0 > 3.500) AND (str LIKE 's__');", dt);
+    {
+      std::string query(
+          "SELECT COUNT(*) FROM test WHERE (MOD(x, 2) = 0) AND (str LIKE 's__') AND (x "
+          "in (7));");
+      const auto result = run_multiple_agg(query, dt);
+      const auto row = result->getNextRow(true, true);
+      ASSERT_EQ(size_t(1), row.size());
+      ASSERT_EQ(int64_t(0), v<int64_t>(row[0]));
+    }
   }
 }
 
@@ -1504,12 +1607,6 @@ TEST(Select, FilterAndGroupBy) {
       "'2014-12-13 22:23:15' group by shared_dict,m;",
       dt);
     c("SELECT x, SUM(z) FROM test WHERE z IS NOT NULL GROUP BY x ORDER BY x;", dt);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT x, MIN(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
-                 std::runtime_error);
-    EXPECT_THROW(run_multiple_agg(
-                     "SELECT x, MAX(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
-                 std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT MIN(str) FROM test GROUP BY x;", dt),
                  std::runtime_error);
   }
@@ -2260,6 +2357,34 @@ TEST(Select, Case) {
     c("SELECT CASE WHEN x BETWEEN 1 AND 7 THEN '1' WHEN x BETWEEN 8 AND 10 THEN '2' ELSE "
       "real_str END AS c FROM test WHERE y IN (43) ORDER BY c ASC;",
       dt);
+    c("SELECT ROUND(a.numerator / a.denominator, 2) FROM (SELECT SUM(CASE WHEN y > 42 "
+      "THEN 1.0 ELSE 0.0 END) as numerator, SUM(CASE WHEN dd > 0 THEN 1 ELSE -1 END) as "
+      "denominator, y FROM test GROUP BY y ORDER BY y) a",
+      dt);
+    c("SELECT ROUND((numerator / denominator) * 100, 2) FROM (SELECT "
+      "SUM(CASE WHEN a.x > 0 THEN "
+      "1 ELSE 0 END) as numerator, SUM(CASE WHEN a.dd < 0 "
+      "THEN 0.5 ELSE -0.5 END) as denominator "
+      "FROM test a, test_inner b where a.x = b.x) test_sub",
+      dt);
+    EXPECT_EQ(
+        int64_t(-1),
+        v<int64_t>(run_simple_agg("SELECT ROUND(numerator / denominator, 2) FROM (SELECT "
+                                  "SUM(CASE WHEN a.x > 0 THEN "
+                                  "1 ELSE 0 END) as numerator, SUM(CASE WHEN a.dd < 0 "
+                                  "THEN 1 ELSE -1 END) as denominator "
+                                  "FROM test a, test_inner b where a.x = b.x) test_sub",
+                                  dt)));
+    EXPECT_EQ(
+        double(100),
+        v<double>(run_simple_agg(
+            "SELECT CEIL((a.numerator / a.denominator) * 100) as c FROM (SELECT SUM(CASE "
+            "WHEN "
+            "y > 42 "
+            "THEN 1.0 ELSE 0.0 END) as numerator, SUM(CASE WHEN dd > 0 THEN 1 ELSE "
+            "-1 END) as "
+            "denominator, y FROM test GROUP BY y ORDER BY y) a GROUP BY c HAVING c > 0",
+            dt)));
 
     const auto constrained_by_in_threshold_state = g_constrained_by_in_threshold;
     g_constrained_by_in_threshold = 0;
@@ -2400,6 +2525,7 @@ TEST(Select, Strings) {
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE str REGEXP 'ba.' or str REGEXP 'fo.';",
                   dt)));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT LENGTH(NULL) FROM test;", dt));
   }
 }
 
@@ -4903,9 +5029,6 @@ namespace Importer_NS {
 ArrayDatum StringToArray(const std::string& s,
                          const SQLTypeInfo& ti,
                          const CopyParams& copy_params);
-bool parseStringArray(const std::string& s,
-                      const CopyParams& copy_params,
-                      std::vector<std::string>& string_vec);
 
 }  // namespace Importer_NS
 
@@ -5030,6 +5153,30 @@ void import_gpu_sort_test() {
   }
   for (size_t i = 0; i < 6; ++i) {
     const auto insert_query = gen(16000, 16000, 16000, 127);
+    run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_query);
+  }
+}
+
+void import_random_test() {
+  const std::string table_name("random_test");
+  const std::string drop_random_test("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement(drop_random_test);
+  g_sqlite_comparator.query(drop_random_test);
+  std::string create_query("CREATE TABLE " + table_name +
+                           " (x1 int, x2 int, x3 int, x4 int, x5 int)");
+  run_ddl_statement(create_query + " WITH (FRAGMENT_SIZE = 256);");
+  g_sqlite_comparator.query(create_query + ";");
+
+  TestHelpers::ValuesGenerator gen(table_name);
+  constexpr double pi = 3.141592653589793;
+  for (size_t i = 0; i < 512; i++) {
+    const auto insert_query =
+        gen(static_cast<int32_t>((3 * i + 1) % 5),
+            static_cast<int32_t>(std::floor(10 * std::sin(i * pi / 64.0))),
+            static_cast<int32_t>(std::floor(10 * std::cos(i * pi / 45.0))),
+            static_cast<int32_t>(100000000 * std::floor(10 * std::sin(i * pi / 32.0))),
+            static_cast<int32_t>(std::floor(1000000000 * std::cos(i * pi / 32.0))));
     run_multiple_agg(insert_query, ExecutorDeviceType::CPU);
     g_sqlite_comparator.query(insert_query);
   }
@@ -5519,7 +5666,7 @@ void import_empty_table_test() {
   g_sqlite_comparator.query(drop_table);
   std::string create_statement(
       "CREATE TABLE empty_test_table (id int, x bigint, y int, z smallint, t tinyint, "
-      "f float, d double);");
+      "f float, d double, b boolean);");
   run_ddl_statement(create_statement);
   g_sqlite_comparator.query(create_statement);
 }
@@ -5919,6 +6066,51 @@ TEST(Select, GpuSort) {
   }
 }
 
+TEST(Select, GroupByBaselineHash) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT cast(x1 as double) as key, COUNT(*), SUM(x2), MIN(x3), MAX(x4) FROM "
+      "random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT cast(x2 as double) as key, COUNT(*), SUM(x1), AVG(x3), MIN(x4) FROM "
+      "random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT cast(x3 as double) as key, COUNT(*), AVG(x2), MIN(x1), COUNT(x4) FROM "
+      "random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT x4 as key, COUNT(*), AVG(x1), MAX(x2), MAX(x3) FROM random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT x5 as key, COUNT(*), MAX(x1), MIN(x2), SUM(x3) FROM random_test"
+      " GROUP BY key ORDER BY key;",
+      dt);
+    c("SELECT x1, x2, x3, x4, COUNT(*), MIN(x5) FROM random_test "
+      "GROUP BY x1, x2, x3, x4 ORDER BY x1, x2, x3, x4;",
+      dt);
+    {
+      std::string query(
+          "SELECT x, COUNT(*) from (SELECT ofd - 2 as x FROM test) GROUP BY x ORDER BY "
+          "x ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
+    {
+      std::string query(
+          "SELECT x, COUNT(*) from (SELECT cast(ofd - 2 as bigint) as x FROM test) GROUP "
+          "BY x ORDER BY x ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
+    {
+      std::string query(
+          "SELECT x, COUNT(*) from (SELECT ofq - 2 as x FROM test) GROUP BY x ORDER BY "
+          "x ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
+  }
+}
+
 TEST(Select, GroupByConstrainedByInQueryRewrite) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -6194,10 +6386,9 @@ TEST(Select, Subqueries) {
     c("SELECT str, SUM(y) AS n FROM test WHERE x > (SELECT COUNT(*) FROM test) - 14 "
       "GROUP BY str ORDER BY str ASC;",
       dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) AS inner_x WHERE test.x "
-          "= inner_x.x;",
-          dt));
+    c("SELECT COUNT(*) FROM test, (SELECT x FROM test_inner) AS inner_x WHERE test.x = "
+      "inner_x.x;",
+      dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test WHERE y > 42);", dt);
     c("SELECT COUNT(*) FROM test WHERE x IN (SELECT x FROM test GROUP BY x ORDER BY "
       "COUNT(*) DESC LIMIT 1);",
@@ -6640,7 +6831,6 @@ TEST(Select, AggregationOnAsymmetricShards) {
 }
 
 TEST(Select, Joins_InnerJoin_Sharded) {
-  SKIP_ALL_ON_AGGREGATOR();
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -6668,60 +6858,79 @@ TEST(Select, Joins_InnerJoin_Sharded) {
       "and st2.s <> 'foo' ORDER BY st1.i;",
       dt);
 
-    // Non-sharded inner join (single frag)
-    c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;", dt);
-    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;", dt);
-    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > -1 "
-      "ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 "
-      "ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.j, st1.s, st2.j, st2.s FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE "
-      "st2.j > 0 ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j "
-      "= st2.j WHERE st2.i > 0 ORDER "
-      "BY st1.i;",
-      dt);
-    c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j "
-      "= st2.j WHERE st2.j > 0 ORDER "
-      "BY st1.i;",
-      dt);
-    c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE "
-      "st2.j > 0 ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE "
-      "st2.j > 0 and st1.s <> 'foo' "
-      "and st2.s <> 'foo' ORDER BY st1.i;",
-      dt);
-    // Non-sharded inner join (multi frag)
-    c("SELECT st1.i, st3.i FROM st1 INNER JOIN st3 ON st1.j = st3.j ORDER BY st1.i;", dt);
-    c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j ORDER BY st1.i;", dt);
-    c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE st3.j > -1 "
-      "ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE st3.j > 0 "
-      "ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.j, st1.s, st3.j, st3.s FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE "
-      "st3.j > 0 ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.i, st1.j, st1.s, st3.i, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j "
-      "= st3.j WHERE st3.i > 0 ORDER "
-      "BY st1.i;",
-      dt);
-    c("SELECT st1.i, st1.j, st1.s, st3.i, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j "
-      "= st3.j WHERE st3.j > 0 ORDER "
-      "BY st1.i;",
-      dt);
-    c("SELECT st1.j, st1.s, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE "
-      "st3.j > 0 ORDER BY st1.i;",
-      dt);
-    c("SELECT st1.j, st1.s, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE "
-      "st3.j > 0 and st1.s <> 'foo' "
-      "and st3.s <> 'foo' ORDER BY st1.i;",
-      dt);
+    SKIP_ON_AGGREGATOR({
+      // Non-sharded inner join (single frag)
+      c("SELECT st1.i, st2.i FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > -1 "
+        "ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j WHERE st2.j > 0 "
+        "ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st1.s, st2.j, st2.s FROM st1 INNER JOIN st2 ON st1.j = st2.j "
+        "WHERE "
+        "st2.j > 0 ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON "
+        "st1.j "
+        "= st2.j WHERE st2.i > 0 ORDER "
+        "BY st1.i;",
+        dt);
+      c("SELECT st1.i, st1.j, st1.s, st2.i, st2.s, st2.j FROM st1 INNER JOIN st2 ON "
+        "st1.j "
+        "= st2.j WHERE st2.j > 0 ORDER "
+        "BY st1.i;",
+        dt);
+      c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j "
+        "WHERE "
+        "st2.j > 0 ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st1.s, st2.s, st2.j FROM st1 INNER JOIN st2 ON st1.j = st2.j "
+        "WHERE "
+        "st2.j > 0 and st1.s <> 'foo' "
+        "and st2.s <> 'foo' ORDER BY st1.i;",
+        dt);
+    });
+
+    SKIP_ON_AGGREGATOR({
+      // Non-sharded inner join (multi frag)
+      c("SELECT st1.i, st3.i FROM st1 INNER JOIN st3 ON st1.j = st3.j ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE st3.j > -1 "
+        "ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j WHERE st3.j > 0 "
+        "ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st1.s, st3.j, st3.s FROM st1 INNER JOIN st3 ON st1.j = st3.j "
+        "WHERE "
+        "st3.j > 0 ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.i, st1.j, st1.s, st3.i, st3.s, st3.j FROM st1 INNER JOIN st3 ON "
+        "st1.j "
+        "= st3.j WHERE st3.i > 0 ORDER "
+        "BY st1.i;",
+        dt);
+      c("SELECT st1.i, st1.j, st1.s, st3.i, st3.s, st3.j FROM st1 INNER JOIN st3 ON "
+        "st1.j "
+        "= st3.j WHERE st3.j > 0 ORDER "
+        "BY st1.i;",
+        dt);
+      c("SELECT st1.j, st1.s, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j "
+        "WHERE "
+        "st3.j > 0 ORDER BY st1.i;",
+        dt);
+      c("SELECT st1.j, st1.s, st3.s, st3.j FROM st1 INNER JOIN st3 ON st1.j = st3.j "
+        "WHERE "
+        "st3.j > 0 and st1.s <> 'foo' "
+        "and st3.s <> 'foo' ORDER BY st1.i;",
+        dt);
+    });
   }
 }
 
@@ -6797,10 +7006,11 @@ TEST(Select, Joins_Negative_ShardKey) {
 }
 
 TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
-  SKIP_ALL_ON_AGGREGATOR();
-
-  auto save_watchdog = g_enable_watchdog;
+  const auto save_watchdog = g_enable_watchdog;
   g_enable_watchdog = false;
+  ScopeGuard reset_watchdog_state = [&save_watchdog] {
+    g_enable_watchdog = save_watchdog;
+  };
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -6860,16 +7070,17 @@ TEST(Select, Joins_InnerJoin_AtLeastThreeTables) {
       "hash_join_test c ON a.x = c.x JOIN "
       "join_test d ON a.x > d.x;",
       dt);
-    c("SELECT a.x, b.str, c.str, d.y FROM hash_join_test a JOIN test b ON a.x = b.x JOIN "
-      "join_test c ON b.x = c.x JOIN "
-      "test_inner d ON b.x = d.x ORDER BY a.x, b.str;",
-      dt);
-    c("SELECT a.f, b.y, c.x from test AS a JOIN join_test AS b ON 40*a.f-1 = b.y JOIN "
-      "test_inner AS c ON b.x = c.x;",
-      dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT a.x, b.str, c.str, d.y FROM hash_join_test a JOIN test b ON a.x = b.x "
+          "JOIN "
+          "join_test c ON b.x = c.x JOIN "
+          "test_inner d ON b.x = d.x ORDER BY a.x, b.str;",
+          dt));
+    SKIP_ON_AGGREGATOR(c(
+        "SELECT a.f, b.y, c.x from test AS a JOIN join_test AS b ON 40*a.f-1 = b.y JOIN "
+        "test_inner AS c ON b.x = c.x;",
+        dt));
   }
-
-  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Select, Joins_InnerJoin_Filters) {
@@ -6916,9 +7127,10 @@ TEST(Select, Joins_InnerJoin_Filters) {
 }
 
 TEST(Select, Joins_LeftOuterJoin) {
-  SKIP_ALL_ON_AGGREGATOR();
-  auto save_watchdog = g_enable_watchdog;
-  g_enable_watchdog = false;
+  const auto save_watchdog = g_enable_watchdog;
+  ScopeGuard reset_watchdog_state = [&save_watchdog] {
+    g_enable_watchdog = save_watchdog;
+  };
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -6933,21 +7145,26 @@ TEST(Select, Joins_LeftOuterJoin) {
       "test_inner.x GROUP BY key1 HAVING "
       "key1 IS NOT NULL;",
       dt);
-    c("SELECT COUNT(*) FROM test_inner a LEFT JOIN test b ON a.x = b.x;", dt);
-    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, "
-      "b.str;",
-      dt);
-    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, "
-      "b.str;",
-      dt);
-    c("SELECT COUNT(*) FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x;", dt);
+    THROW_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test_inner a LEFT JOIN test b ON a.x = b.x;", dt));
+    THROW_ON_AGGREGATOR(c(
+        "SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, "
+        "b.str;",
+        dt));
+    THROW_ON_AGGREGATOR(c(
+        "SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x ORDER BY a.x, "
+        "b.str;",
+        dt));
+    THROW_ON_AGGREGATOR(c(
+        "SELECT COUNT(*) FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x;", dt));
     c("SELECT COUNT(*) FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str;",
       dt);
     c("SELECT COUNT(*) FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str;",
       dt);
-    c("SELECT a.x, b.str FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x ORDER "
-      "BY a.x, b.str IS NULL, b.str;",
-      dt);
+    THROW_ON_AGGREGATOR(c(
+        "SELECT a.x, b.str FROM test_inner a LEFT OUTER JOIN test_x b ON a.x = b.x ORDER "
+        "BY a.x, b.str IS NULL, b.str;",
+        dt));
     c("SELECT a.x, b.str FROM test a LEFT OUTER JOIN join_test b ON a.str = b.dup_str "
       "ORDER BY a.x, b.str IS NULL, "
       "b.str;",
@@ -6956,12 +7173,14 @@ TEST(Select, Joins_LeftOuterJoin) {
       "ORDER BY a.x, b.str IS NULL, "
       "b.str;",
       dt);
-    c("SELECT COUNT(*) FROM test_inner_x a LEFT JOIN test_x b ON a.x = b.x;", dt);
+    THROW_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test_inner_x a LEFT JOIN test_x b ON a.x = b.x;", dt));
     c("SELECT COUNT(*) FROM test a LEFT JOIN join_test b ON a.str = b.dup_str;", dt);
     c("SELECT COUNT(*) FROM test a LEFT JOIN join_test b ON a.str = b.dup_str;", dt);
-    c("SELECT a.x, b.str FROM test_inner_x a LEFT JOIN test_x b ON a.x = b.x ORDER BY "
-      "a.x, b.str IS NULL, b.str;",
-      dt);
+    THROW_ON_AGGREGATOR(c(
+        "SELECT a.x, b.str FROM test_inner_x a LEFT JOIN test_x b ON a.x = b.x ORDER BY "
+        "a.x, b.str IS NULL, b.str;",
+        dt));
     c("SELECT a.x, b.str FROM test a LEFT JOIN join_test b ON a.str = b.dup_str ORDER BY "
       "a.x, b.str IS NULL, b.str;",
       dt);
@@ -6994,17 +7213,20 @@ TEST(Select, Joins_LeftOuterJoin) {
     c("SELECT a.x FROM test a LEFT OUTER JOIN test_inner b ON TRUE ORDER BY a.x ASC;",
       "SELECT a.x FROM test a LEFT OUTER JOIN test_inner b ON 1 ORDER BY a.x ASC;",
       dt);
-    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON "
-      "test.x > test_inner.x LEFT "
-      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
-      "hash_join_test.x ORDER BY "
-      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
-      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON "
-      "test.x > test_inner.x LEFT "
-      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
-      "hash_join_test.x ORDER BY "
-      "test_inner.y ASC, hash_join_test.x ASC;",
-      dt);
+    THROW_ON_AGGREGATOR(
+        c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN "
+          "test_inner ON "
+          "test.x > test_inner.x LEFT "
+          "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
+          "hash_join_test.x ORDER BY "
+          "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+          "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN "
+          "test_inner ON "
+          "test.x > test_inner.x LEFT "
+          "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
+          "hash_join_test.x ORDER BY "
+          "test_inner.y ASC, hash_join_test.x ASC;",
+          dt));
     c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON "
       "test.x = test_inner.x LEFT "
       "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, "
@@ -7016,17 +7238,20 @@ TEST(Select, Joins_LeftOuterJoin) {
       "hash_join_test.x ORDER BY "
       "test_inner.y ASC, hash_join_test.x ASC;",
       dt);
-    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON "
-      "test.x > test_inner.x INNER "
-      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
-      "hash_join_test.x ORDER BY "
-      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
-      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON "
-      "test.x > test_inner.x INNER "
-      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
-      "hash_join_test.x ORDER BY "
-      "test_inner.y ASC, hash_join_test.x ASC;",
-      dt);
+    THROW_ON_AGGREGATOR(
+        c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN "
+          "test_inner ON "
+          "test.x > test_inner.x INNER "
+          "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
+          "hash_join_test.x ORDER BY "
+          "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+          "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN "
+          "test_inner ON "
+          "test.x > test_inner.x INNER "
+          "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
+          "hash_join_test.x ORDER BY "
+          "test_inner.y ASC, hash_join_test.x ASC;",
+          dt));
     c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test LEFT JOIN test_inner ON "
       "test.x = test_inner.x INNER "
       "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, "
@@ -7038,17 +7263,18 @@ TEST(Select, Joins_LeftOuterJoin) {
       "hash_join_test.x ORDER BY "
       "test_inner.y ASC, hash_join_test.x ASC;",
       dt);
-    c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner "
-      "ON test.x > test_inner.x LEFT "
-      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
-      "hash_join_test.x ORDER BY "
-      "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
-      "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner "
-      "ON test.x > test_inner.x LEFT "
-      "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
-      "hash_join_test.x ORDER BY "
-      "test_inner.y ASC, hash_join_test.x ASC;",
-      dt);
+    THROW_ON_AGGREGATOR(c(
+        "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner "
+        "ON test.x > test_inner.x LEFT "
+        "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
+        "hash_join_test.x ORDER BY "
+        "test_inner.y ASC NULLS FIRST, hash_join_test.x ASC NULLS FIRST;",
+        "SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner "
+        "ON test.x > test_inner.x LEFT "
+        "JOIN hash_join_test ON test.str <> hash_join_test.str GROUP BY test_inner.y, "
+        "hash_join_test.x ORDER BY "
+        "test_inner.y ASC, hash_join_test.x ASC;",
+        dt));
     c("SELECT test_inner.y, hash_join_test.x, COUNT(*) FROM test INNER JOIN test_inner "
       "ON test.x = test_inner.x LEFT "
       "JOIN hash_join_test ON test.str = hash_join_test.str GROUP BY test_inner.y, "
@@ -7064,12 +7290,9 @@ TEST(Select, Joins_LeftOuterJoin) {
       "test.x = test_inner.x;",
       dt);
   }
-  g_enable_watchdog = save_watchdog;
 }
 
 TEST(Select, Joins_LeftJoin_Filters) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT test.x, test_inner.x FROM test LEFT OUTER JOIN test_inner ON test.x = "
@@ -7100,13 +7323,18 @@ TEST(Select, Joins_LeftJoin_Filters) {
       "ON a.x = b.x ORDER BY a.x, "
       "b.str;",
       dt);
-    c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7;", dt);
-    c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7 "
-      "ORDER BY a.x, b.str;",
-      dt);
-    c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x WHERE a.x = 7;",
-      dt);
-    c("SELECT a.x FROM join_test a LEFT JOIN test b ON a.x = b.x WHERE a.x = 7;", dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7;",
+          dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT a.x, b.str FROM join_test a LEFT JOIN test b ON a.x = b.x AND a.x = 7 "
+          "ORDER BY a.x, b.str;",
+          dt));
+    THROW_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM join_test a LEFT JOIN test b ON a.x = b.x WHERE a.x = 7;",
+          dt));
+    THROW_ON_AGGREGATOR(c(
+        "SELECT a.x FROM join_test a LEFT JOIN test b ON a.x = b.x WHERE a.x = 7;", dt));
   }
 }
 
@@ -7226,12 +7454,11 @@ TEST(Select, Joins_CoalesceColumns) {
 TEST(Select, Joins_ComplexQueries) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    SKIP_ON_AGGREGATOR(
-        c("SELECT COUNT(*) FROM test a JOIN (SELECT * FROM test WHERE y < 43) b ON a.x = "
-          "b.x "
-          "JOIN join_test c ON a.x = c.x "
-          "WHERE a.fixed_str = 'foo';",
-          dt));
+    c("SELECT COUNT(*) FROM test a JOIN (SELECT * FROM test WHERE y < 43) b ON a.x = "
+      "b.x "
+      "JOIN join_test c ON a.x = c.x "
+      "WHERE a.fixed_str = 'foo';",
+      dt);
     c("SELECT * FROM (SELECT a.y, b.str FROM test a JOIN join_test b ON a.x = b.x) ORDER "
       "BY y, str;",
       dt);
@@ -7251,12 +7478,11 @@ TEST(Select, Joins_ComplexQueries) {
       "c on "
       "c.fixed_str=a.fixed_str GROUP BY key0, key1 ORDER BY key0,key1;",
       dt);
-    SKIP_ON_AGGREGATOR(
-        c("SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR "
-          "false;",
-          "SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR "
-          "0;",
-          dt));
+    c("SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR "
+      "false;",
+      "SELECT COUNT(*) FROM test a JOIN (SELECT str FROM test) b ON a.str = b.str OR "
+      "0;",
+      dt);
   }
 }
 
@@ -7316,22 +7542,25 @@ TEST(Select, Joins_TimeAndDate) {
 }
 
 TEST(Select, Joins_OneOuterExpression) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x - 1 = test_inner.x;", dt);
-    c("SELECT COUNT(*) FROM test_inner, test WHERE test.x - 1 = test_inner.x;", dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test_inner, test WHERE test.x - 1 = test_inner.x;", dt));
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 0 = test_inner.x;", dt);
-    c("SELECT COUNT(*) FROM test_inner, test WHERE test.x + 0 = test_inner.x;", dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test_inner, test WHERE test.x + 0 = test_inner.x;", dt));
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 1 = test_inner.x;", dt);
-    c("SELECT COUNT(*) FROM test_inner, test WHERE test.x + 1 = test_inner.x;", dt);
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o;",
-      "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;",
-      dt);
-    c("SELECT COUNT(*) FROM test b, test a WHERE a.o + INTERVAL '0' DAY = b.o;",
-      "SELECT COUNT(*) FROM test b, test a WHERE a.o = b.o;",
-      dt);
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test_inner, test WHERE test.x + 1 = test_inner.x;", dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o;",
+          "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o;",
+          dt));
+    SKIP_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test b, test a WHERE a.o + INTERVAL '0' DAY = b.o;",
+          "SELECT COUNT(*) FROM test b, test a WHERE a.o = b.o;",
+          dt));
   }
 }
 
@@ -7483,8 +7712,6 @@ TEST_F(JoinTest, EmptyJoinTables) {
 }
 
 TEST(Select, Joins_MultipleOuterExpressions) {
-  SKIP_ALL_ON_AGGREGATOR();
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x - 1 = test_inner.x AND "
@@ -7504,14 +7731,18 @@ TEST(Select, Joins_MultipleOuterExpressions) {
     c("SELECT COUNT(*) FROM test, test_inner WHERE test.x + 0 = test_inner.x AND "
       "test_inner.str = test.str;",
       dt);
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o AND a.str "
-      "= b.str;",
-      "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.str = b.str;",
-      dt);
-    c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o AND a.x = "
-      "b.x;",
-      "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.x = b.x;",
-      dt);
+    THROW_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o AND "
+          "a.str "
+          "= b.str;",
+          "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.str = b.str;",
+          dt));
+    THROW_ON_AGGREGATOR(
+        c("SELECT COUNT(*) FROM test a, test b WHERE a.o + INTERVAL '0' DAY = b.o AND "
+          "a.x = "
+          "b.x;",
+          "SELECT COUNT(*) FROM test a, test b WHERE a.o = b.o AND a.x = b.x;",
+          dt));
   }
 }
 
@@ -10925,6 +11156,29 @@ TEST(Update, DateUpdate) {
   }
 }
 
+TEST(Update, DateUpdateNull) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("Drop table IF EXISTS date_update;");
+    run_ddl_statement("create table date_update(a text, b date);");
+    run_multiple_agg("insert into date_update values('1', '2018-01-04');", dt);
+    run_multiple_agg("insert into date_update values('2', '2018-01-05');", dt);
+    run_multiple_agg("insert into date_update values(null, null);", dt);
+    run_ddl_statement("alter table date_update add column c date;");
+    run_multiple_agg("update date_update set c=b;", dt);
+    ASSERT_EQ(int64_t(2),
+              v<int64_t>(run_simple_agg(
+                  "select count(c) from date_update where c is not null;", dt)));
+    ASSERT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "select count(c) from date_update where c = '2018-01-04';", dt)));
+    ASSERT_EQ(int64_t(1),
+              v<int64_t>(run_simple_agg(
+                  "select count(c) from date_update where c = '2018-01-05';", dt)));
+  }
+}
+
 TEST(Update, FloatUpdate) {
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
@@ -12189,6 +12443,46 @@ TEST(Delete, JoinCacheInvalidationTest) {
   }
 }
 
+TEST(Delete, ScanLimitOptimization) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
+    return;
+  }
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("DROP TABLE IF EXISTS test_scan_limit;");
+    run_ddl_statement(
+        "CREATE TABLE test_scan_limit ( i int ) WITH (vacuum='delayed', "
+        "fragment_size=2)");
+    ScopeGuard drop_table = [] { run_ddl_statement("DROP TABLE test_scan_limit;"); };
+
+    run_multiple_agg("INSERT INTO test_scan_limit VALUES (0);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO test_scan_limit VALUES (1);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO test_scan_limit VALUES (2);", ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO test_scan_limit VALUES (3);", ExecutorDeviceType::CPU);
+
+    auto select_with_limit = [&dt](const size_t limit) {
+      std::string limit_str = "";
+      if (limit > 0) {
+        limit_str = "LIMIT " + std::to_string(limit);
+      }
+      const auto result =
+          run_multiple_agg("SELECT * FROM test_scan_limit " + limit_str, dt);
+      return result->rowCount();
+    };
+
+    ASSERT_EQ(size_t(4), select_with_limit(0));
+    ASSERT_EQ(size_t(2), select_with_limit(2));
+
+    run_multiple_agg("DELETE FROM test_scan_limit WHERE i < 2;", dt);
+
+    ASSERT_EQ(size_t(2), select_with_limit(0));
+    ASSERT_EQ(size_t(2), select_with_limit(3));
+    ASSERT_EQ(size_t(2), select_with_limit(2));
+    ASSERT_EQ(size_t(1), select_with_limit(1));
+  }
+}
+
 TEST(Delete, IntraFragment) {
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
@@ -12878,6 +13172,58 @@ TEST(Delete, Joins_ImplicitJoins) {
   }
 }
 
+TEST(Select, NonCorrelated_Exists) {
+  // this test is disabled since non-correlated exists
+  // is currently not supported in our engine
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    c("SELECT ename FROM emp WHERE EXISTS (SELECT dname FROM dept WHERE deptno > 40) "
+      "ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp WHERE EXISTS (SELECT dname FROM dept WHERE deptno < 20) "
+      "ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp WHERE NOT EXISTS (SELECT dname FROM dept WHERE deptno > 40) "
+      "ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp WHERE NOT EXISTS (SELECT dname FROM dept WHERE deptno < 20) "
+      "ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp WHERE EXISTS (SELECT * FROM dept WHERE deptno > 40) "
+      "ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp WHERE NOT EXISTS (SELECT * FROM dept WHERE deptno < 20) "
+      "ORDER BY ename;",
+      dt);
+  }
+}
+
+TEST(Select, Correlated_Exists) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    c("SELECT ename FROM emp E WHERE EXISTS (SELECT D.dname FROM dept D WHERE "
+      "D.deptno > 40 and E.deptno = D.deptno) ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp E WHERE EXISTS (SELECT D.dname FROM dept D WHERE "
+      "D.deptno < 20 and E.deptno = D.deptno) ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp E WHERE NOT EXISTS (SELECT D.dname FROM dept D WHERE "
+      "D.deptno > 40 and E.deptno = D.deptno) ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp E WHERE NOT EXISTS (SELECT D.dname FROM dept D WHERE "
+      "D.deptno < 20 and E.deptno = D.deptno) ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp E WHERE EXISTS (SELECT * from dept D WHERE "
+      "D.deptno > 40 and E.deptno = D.deptno) ORDER BY ename;",
+      dt);
+    c("SELECT ename FROM emp E WHERE NOT EXISTS (SELECT * from dept D WHERE "
+      "D.deptno > 40 and E.deptno = D.deptno) ORDER BY ename;",
+      dt);
+  }
+}
+
 TEST(Create, Delete) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -12890,8 +13236,8 @@ TEST(Create, Delete) {
     ASSERT_EQ(int64_t(3),
               v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM vacuum_test;", dt)));
     run_multiple_agg("insert into vacuum_test values(3, '3');", dt);
-    SKIP_ON_AGGREGATOR(run_multiple_agg("insert into vacuum_test values(4, '4');", dt));
-    SKIP_ON_AGGREGATOR(run_multiple_agg("delete from vacuum_test where i1 = 4;", dt));
+    run_multiple_agg("insert into vacuum_test values(4, '4');", dt);
+    run_multiple_agg("delete from vacuum_test where i1 = 4;", dt);
     ASSERT_EQ(int64_t(6),
               v<int64_t>(run_simple_agg("SELECT SUM(i1) FROM vacuum_test;", dt)));
     run_ddl_statement("drop table vacuum_test;");
@@ -12922,6 +13268,12 @@ TEST(Select, Deleted) {
 TEST(Select, GeoSpatial_Basics) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    ASSERT_EQ(static_cast<int64_t>(g_num_rows),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM geospatial_test where p IS NOT NULL;", dt)));
+    ASSERT_EQ(static_cast<int64_t>(0),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM geospatial_test where poly IS NULL;", dt)));
     ASSERT_EQ(
         static_cast<int64_t>(g_num_rows),
         v<int64_t>(run_simple_agg(
@@ -13169,6 +13521,26 @@ TEST(Select, GeoSpatial_Projection) {
                                    "ST_Distance(ST_GeomFromText('POINT(0 0)'), p) < 1;",
                                    dt,
                                    false))));
+    ASSERT_EQ(
+        "POINT (2 2)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            "SELECT ST_GeomFromText('POINT(2 2)') FROM geospatial_test WHERE id = 2;",
+            dt,
+            false))));
+    ASSERT_EQ(
+        "POINT (2 2)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            "SELECT ST_Point(2,2) FROM geospatial_test WHERE id = 2;", dt, false))));
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+        "POINT (2 2)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            "SELECT ST_Point(id,id) FROM geospatial_test WHERE id = 2;", dt, false)))));
+    SKIP_ON_AGGREGATOR(ASSERT_EQ(
+        "POINT (2 2)",
+        boost::get<std::string>(v<NullableString>(run_simple_agg(
+            "SELECT ST_SetSRID(ST_Point(id,id),4326) FROM geospatial_test WHERE id = 2;",
+            dt,
+            false)))));
 
     // ST_Distance
     ASSERT_NEAR(static_cast<double>(2.0),
@@ -14631,7 +15003,7 @@ TEST(Select, Sample) {
       ASSERT_TRUE(valid_row_ids.find(val) != valid_row_ids.end())
           << "Last sample rowid value " << val << " is invalid";
     };
-    SKIP_ON_AGGREGATOR({
+    {
       const auto rows = run_multiple_agg(
           "SELECT AVG(d), AVG(f), str, SAMPLE(rowid) FROM test WHERE d > 2.4 GROUP "
           "BY str;",
@@ -14647,15 +15019,15 @@ TEST(Select, Sample) {
       ASSERT_TRUE(str_ptr);
       ASSERT_EQ("baz", boost::get<std::string>(*str_ptr));
       const auto rowid = v<int64_t>(crt_row[3]);
-      check_sample_rowid(rowid);
-    });
-    SKIP_ON_AGGREGATOR({
+      SKIP_ON_AGGREGATOR(check_sample_rowid(rowid));
+    };
+    {
       const auto rows = run_multiple_agg("SELECT SAMPLE(str) FROM test WHERE x > 8;", dt);
       const auto crt_row = rows->getNextRow(true, true);
       ASSERT_EQ(size_t(1), crt_row.size());
       const auto nullable_str = v<NullableString>(crt_row[0]);
       ASSERT_FALSE(boost::get<void*>(nullable_str));
-    });
+    };
     {
       const auto rows = run_multiple_agg(
           "SELECT x, SAMPLE(fixed_str), SUM(t) FROM test GROUP BY x ORDER BY x DESC;",
@@ -15360,6 +15732,21 @@ TEST(Select, EmptyString) {
 TEST(Select, MultiStepColumnarization) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    {
+      std::string query(
+          "SELECT T.x, MAX(T.y) FROM(SELECT x, log10(SUM(f)) as y FROM test GROUP BY x) "
+          "as T "
+          "GROUP BY T.x ORDER BY T.x;");
+      const auto result = run_multiple_agg(query, dt);
+      const auto first_row = result->getNextRow(true, true);
+      ASSERT_EQ(size_t(2), first_row.size());
+      ASSERT_EQ(int64_t(7), v<int64_t>(first_row[0]));
+      ASSERT_FLOAT_EQ(double(1.243038177490234), v<double>(first_row[1]));
+      const auto second_row = result->getNextRow(true, true);
+      ASSERT_EQ(int64_t(8), v<int64_t>(second_row[0]));
+      ASSERT_FLOAT_EQ(double(0.778151273727417), v<double>(second_row[1]));
+    }
+    // single-column perfect hash, columnarization, and then a projection
     c("SELECT id, SUM(big_int) / SUM(float_not_null), MAX(small_int) / MAX(tiny_int), "
       "MIN(tiny_int) + MIN(small_int) FROM logical_size_test GROUP BY id ORDER BY id;",
       dt);
@@ -15383,6 +15770,70 @@ TEST(Select, MultiStepColumnarization) {
       ASSERT_TRUE((int64_t(79) == v<int64_t>(first_row[1])) ||
                   ((int64_t(76) == v<int64_t>(first_row[1]))));
       ASSERT_EQ(int64_t(2252), v<int64_t>(first_row[2]));
+    }
+    // multi-column perfect hash, columnarization, and then a projection
+    c("SELECT id, small_int, MAX(float_not_null) + MAX(double_not_null), MAX(id_null), "
+      "MAX(small_int_null), MAX(tiny_int), MAX(tiny_int_null), MAX(float_null), "
+      "MAX(double_null), "
+      "MIN(id_null), MIN(small_int_null), MIN(tiny_int), MIN(tiny_int_null), "
+      "MIN(float_null), MIN(double_null), "
+      "COUNT(id_null), COUNT(small_int_null), COUNT(tiny_int), COUNT(tiny_int_null), "
+      "COUNT(float_null), COUNT(double_null) "
+      "FROM logical_size_test GROUP BY id, small_int ORDER BY id, small_int;",
+      dt);
+
+    c("SELECT small_int, tiny_int, id, SUM(float_not_null) "
+      "/ (case when COUNT(big_int) = 0 then 1 else COUNT(big_int) end) FROM "
+      "logical_size_test GROUP BY small_int, tiny_int, id ORDER BY id, tiny_int, "
+      "small_int;",
+      dt);
+    {
+      std::string query(
+          "SELECT x, fixed_str, COUNT(*), SUM(t), SUM(dd), SUM(dd_notnull), MAX(ofd), "
+          "MAX(ufd), COUNT(ofq), COUNT(ufq) FROM test GROUP BY x, fixed_str ORDER BY x, "
+          "fixed_str ASC");
+      c(query + " NULLS FIRST;", query + ";", dt);
+    }
+    {
+      std::string query(
+          "SELECT DATE_TRUNC(MONTH, o) AS month_, DATE_TRUNC(DAY, m) AS day_, COUNT(*), "
+          "SUM(x) + SUM(y), SAMPLE(t) FROM test GROUP BY month_, day_ ORDER BY month_, "
+          "day_ LIMIT 1;");
+      const auto result = run_multiple_agg(query, dt);
+      const auto first_row = result->getNextRow(true, true);
+      ASSERT_EQ(size_t(5), first_row.size());
+      ASSERT_EQ(int64_t(936144000), v<int64_t>(first_row[0]));
+      ASSERT_EQ(int64_t(1418428800), v<int64_t>(first_row[1]));
+      ASSERT_EQ(int64_t(10), v<int64_t>(first_row[2]));
+      ASSERT_EQ(int64_t(490), v<int64_t>(first_row[3]));
+      ASSERT_EQ(int64_t(1001), v<int64_t>(first_row[4]));
+    }
+    // baseline hash, columnarization, and then a projection
+    c("SELECT cast (id as double) as key0, count(*) as cnt, big_int as key1 from "
+      "logical_size_test group by key0, key1 having cnt < 4 order by key0, key1;",
+      dt);
+    c("SELECT cast (id as float) as key0, COUNT(*), SUM(float_not_null) + "
+      "SUM(double_not_null), MAX(tiny_int_null), MIN(tiny_int) as min0, "
+      "AVG(big_int) FROM logical_size_test GROUP BY key0 ORDER BY min0;",
+      dt);
+    {
+      std::string query(
+          "SELECT CAST(x as float) as key0, DATE_TRUNC(microsecond, m_6) as key1, dd as "
+          "key2, EXTRACT(epoch from m) as key3, fixed_str as key4, COUNT(*), (SUM(y) + "
+          "SUM(t)) / AVG(z), SAMPLE(f) + SAMPLE(d) FROM test GROUP BY key0, key1, key2, "
+          "key3, key4 ORDER BY key2 LIMIT 1;");
+      const auto result = run_multiple_agg(query, dt);
+      const auto first_row = result->getNextRow(true, true);
+      ASSERT_EQ(size_t(8), first_row.size());
+      ASSERT_NEAR(float(7), v<float>(first_row[0]), 0.01);
+      ASSERT_EQ(int64_t(931701773874533), v<int64_t>(first_row[1]));
+      ASSERT_NEAR(double(111.1), v<double>(first_row[2]), 0.01);
+      ASSERT_EQ(int64_t(1418509395), v<int64_t>(first_row[3]));
+      ASSERT_EQ(std::string("foo"),
+                boost::get<std::string>(v<NullableString>(first_row[4])));
+      ASSERT_EQ(int64_t(10), v<int64_t>(first_row[5]));
+      ASSERT_NEAR(double(103.267), v<double>(first_row[6]), 0.01);
+      ASSERT_NEAR(double(3.3), v<double>(first_row[7]), 0.01);
     }
   }
 }
@@ -15503,6 +15954,74 @@ TEST(Select, GroupEmptyBlank) {
     }
 
     c("select t1 from blank_test group by t1 order by t1;", dt);
+  }
+}
+
+TEST(Select, VariableLengthAggs) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    // non-encoded strings:
+    c("SELECT x, COUNT(real_str) FROM test GROUP BY x ORDER BY x desc;", dt);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT x, MIN(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT x, MAX(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT x, SUM(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
+                 std::runtime_error);
+    EXPECT_THROW(run_multiple_agg(
+                     "SELECT x, AVG(real_str) FROM test GROUP BY x ORDER BY x DESC;", dt),
+                 std::runtime_error);
+
+    // geometry:
+    {
+      std::string query("SELECT id, COUNT(poly) FROM geospatial_test GROUP BY id;");
+      auto result = run_multiple_agg(query, dt);
+      ASSERT_EQ(result->rowCount(), size_t(g_num_rows));
+    }
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT id, MIN(p) FROM geospatial_test GROUP BY id ORDER BY id DESC;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT id, MAX(l) FROM geospatial_test GROUP BY id ORDER BY id DESC;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT id, SUM(poly) FROM geospatial_test GROUP BY id ORDER BY id DESC;",
+            dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT id, AVG(mpoly) FROM geospatial_test GROUP BY id ORDER BY id DESC;",
+            dt),
+        std::runtime_error);
+
+    // arrays:
+    {
+      std::string query("SELECT x, COUNT(arr_i16) FROM array_test GROUP BY x;");
+      auto result = run_multiple_agg(query, dt);
+      ASSERT_EQ(result->rowCount(), size_t(g_array_test_row_count));
+    }
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT x, MIN(arr_i32) FROM array_test GROUP BY x ORDER BY x DESC;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT x, MAX(arr3_i64) FROM array_test GROUP BY x ORDER BY x DESC;", dt),
+        std::runtime_error);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT x, SUM(arr3_float) FROM array_test GROUP BY x ORDER BY x DESC;", dt),
+        std::exception);
+    EXPECT_THROW(
+        run_multiple_agg(
+            "SELECT x, AVG(arr_double) FROM array_test GROUP BY x ORDER BY x DESC;", dt),
+        std::exception);
   }
 }
 
@@ -16251,31 +16770,30 @@ int create_and_populate_tables(bool with_delete_support = true) {
     return -EEXIST;
   }
   import_array_test("array_test_inner");
-  if (!g_aggregator) {
-    try {
-      size_t num_shards = choose_shard_count();
-      // check if the oversubscriptions to GPU for multiple Shard is correctly
-      // functional or not.
-      const size_t num_oversubscription = 10;
+  try {
+    size_t num_shards = choose_shard_count();
+    // check if the oversubscriptions to GPU for multiple Shard is correctly
+    // functional or not.
+    const size_t single_node_shard_multiplier = 10;
 
-      ShardInfo shard_info{(num_shards) ? "i" : "", num_shards};
-      size_t fragment_size = 2;
-      bool delete_support = false;
+    ShardInfo shard_info{(num_shards) ? "i" : "", num_shards};
+    size_t fragment_size = 2;
+    bool delete_support = false;
 
-      create_sharded_join_table("st1",
-                                fragment_size,
-                                num_oversubscription * num_shards,
-                                shard_info,
-                                delete_support);
-      create_sharded_join_table(
-          "st2", fragment_size, num_shards * fragment_size, shard_info, delete_support);
-      create_sharded_join_table(
-          "st3", fragment_size, 8 * num_shards, shard_info, delete_support);
+    create_sharded_join_table(
+        "st1",
+        fragment_size,
+        g_aggregator ? num_shards : single_node_shard_multiplier * num_shards,
+        shard_info,
+        delete_support);
+    create_sharded_join_table(
+        "st2", fragment_size, num_shards * fragment_size, shard_info, delete_support);
+    create_sharded_join_table(
+        "st3", fragment_size, 8 * num_shards, shard_info, delete_support);
 
-    } catch (...) {
-      LOG(ERROR) << "Failed to (re-)create table 'array_test_inner'";
-      return -EEXIST;
-    }
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'array_test_inner'";
+    return -EEXIST;
   }
   try {
     const std::string drop_old_unnest_join_test{"DROP TABLE IF EXISTS unnest_join_test;"};
@@ -16321,6 +16839,12 @@ int create_and_populate_tables(bool with_delete_support = true) {
     import_gpu_sort_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'gpu_sort_test'";
+    return -EEXIST;
+  }
+  try {
+    import_random_test();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'random_test'";
     return -EEXIST;
   }
   try {
@@ -16599,6 +17123,8 @@ void drop_tables() {
   g_sqlite_comparator.query(drop_test_x);
   const std::string drop_gpu_sort_test{"DROP TABLE gpu_sort_test;"};
   run_ddl_statement(drop_gpu_sort_test);
+  const std::string drop_random_test{"DROP TABLE random_test;"};
+  run_ddl_statement(drop_random_test);
   g_sqlite_comparator.query(drop_gpu_sort_test);
   const std::string drop_query_rewrite_test{"DROP TABLE query_rewrite_test;"};
   run_ddl_statement(drop_query_rewrite_test);

@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 
-#include "CudaMgr.h"
+#include "CudaMgr/CudaMgr.h"
+
 #include <algorithm>
 #include <cassert>
 #include <iostream>
 #include <stdexcept>
+
 #include "Shared/Logger.h"
 
 namespace CudaMgr_Namespace {
@@ -36,8 +38,16 @@ CudaMgr::CudaMgr(const int num_gpus, const int start_gpu)
     CHECK_EQ(start_gpu_, 0);
   }
   fillDeviceProperties();
+  initDeviceGroup();
   createDeviceContexts();
   printDeviceProperties();
+}
+
+void CudaMgr::initDeviceGroup() {
+  for (int device_id = 0; device_id < device_count_; device_id++) {
+    device_group_.push_back(
+        {device_id, device_id + start_gpu_, device_properties_[device_id].uuid});
+  }
 }
 
 CudaMgr::~CudaMgr() {
@@ -139,6 +149,9 @@ void CudaMgr::fillDeviceProperties() {
   for (int device_num = 0; device_num < device_count_; ++device_num) {
     checkError(
         cuDeviceGet(&device_properties_[device_num].device, device_num + start_gpu_));
+    CUuuid cuda_uuid;
+    checkError(cuDeviceGetUuid(&cuda_uuid, device_properties_[device_num].device));
+    device_properties_[device_num].uuid = omnisci::UUID(cuda_uuid.bytes);
     checkError(cuDeviceGetAttribute(&device_properties_[device_num].computeMajor,
                                     CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR,
                                     device_properties_[device_num].device));
@@ -305,6 +318,7 @@ void CudaMgr::printDeviceProperties() const {
   LOG(INFO) << "Using " << device_count_ << " Gpus.";
   for (int d = 0; d < device_count_; ++d) {
     VLOG(1) << "Device: " << device_properties_[d].device;
+    VLOG(1) << "UUID: " << device_properties_[d].uuid;
     VLOG(1) << "Clock (khz): " << device_properties_[d].clockKhz;
     VLOG(1) << "Compute Major: " << device_properties_[d].computeMajor;
     VLOG(1) << "Compute Minor: " << device_properties_[d].computeMinor;

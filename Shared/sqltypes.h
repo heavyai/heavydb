@@ -25,6 +25,7 @@
 #define SQLTYPES_H
 
 #include "ConfigResolve.h"
+#include "StringTransform.h"
 
 #include <cassert>
 #include <cfloat>
@@ -64,7 +65,9 @@ enum SQLTypes {
   kGEOMETRY = 23,
   kGEOGRAPHY = 24,
   kEVAL_CONTEXT_TYPE = 25,  // Placeholder Type for ANY
-  kSQLTYPE_LAST = 26
+  kVOID = 26,
+  kCURSOR = 27,
+  kSQLTYPE_LAST = 28
 };
 
 struct VarlenDatum {
@@ -429,7 +432,9 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
       if (get_output_srid() > 0) {
         srid_string = ", " + std::to_string(get_output_srid());
       }
-      return type_name[(int)subtype] + "(" + type_name[(int)type] + srid_string + ")";
+      CHECK_LT(static_cast<int>(subtype), kSQLTYPE_LAST);
+      return type_name[static_cast<int>(subtype)] + "(" +
+             type_name[static_cast<int>(type)] + srid_string + ")";
     }
     std::string ps = "";
     if (type == kDECIMAL || type == kNUMERIC || subtype == kDECIMAL ||
@@ -441,11 +446,33 @@ class SQLTypeInfoCore : public TYPE_FACET_PACK<SQLTypeInfoCore<TYPE_FACET_PACK..
     if (type == kARRAY) {
       auto elem_ti = get_elem_type();
       auto num_elems = (size > 0) ? std::to_string(size / elem_ti.get_size()) : "";
-      return type_name[(int)subtype] + ps + "[" + num_elems + "]";
+      CHECK_LT(static_cast<int>(subtype), kSQLTYPE_LAST);
+      return type_name[static_cast<int>(subtype)] + ps + "[" + num_elems + "]";
     }
-    return type_name[(int)type] + ps;
+    return type_name[static_cast<int>(type)] + ps;
   }
   inline std::string get_compression_name() const { return comp_name[(int)compression]; }
+  inline std::string to_string() const {
+    return concat("(",
+                  type_name[static_cast<int>(type)],
+                  ", ",
+                  get_dimension(),
+                  ", ",
+                  get_scale(),
+                  ", ",
+                  get_notnull() ? "not nullable" : "nullable",
+                  ", ",
+                  get_compression_name(),
+                  ", ",
+                  get_comp_param(),
+                  ", ",
+                  type_name[static_cast<int>(subtype)],
+                  ": ",
+                  get_size(),
+                  ": ",
+                  get_elem_type().get_size(),
+                  ")");
+  }
 #endif
   inline bool is_string() const { return IS_STRING(type); }
   inline bool is_string_array() const { return (type == kARRAY) && IS_STRING(subtype); }
@@ -812,8 +839,10 @@ std::string SQLTypeInfoCore<TYPE_FACET_PACK...>::type_name[kSQLTYPE_LAST] = {
     "MULTIPOLYGON",
     "TINYINT",
     "GEOMETRY",
-    "GEOGRAPHY"};
-
+    "GEOGRAPHY",
+    "EVAL_CONTEXT_TYPE",
+    "VOID",
+    "CURSOR"};
 template <template <class> class... TYPE_FACET_PACK>
 std::string SQLTypeInfoCore<TYPE_FACET_PACK...>::comp_name[kENCODING_LAST] =
     {"NONE", "FIXED", "RL", "DIFF", "DICT", "SPARSE", "COMPRESSED", "DAYS"};
@@ -850,6 +879,12 @@ inline SQLTypeInfo get_logical_type_info(const SQLTypeInfo& type_info) {
                      encoding,
                      type_info.get_comp_param(),
                      type_info.get_subtype());
+}
+
+inline SQLTypeInfo get_nullable_logical_type_info(const SQLTypeInfo& type_info) {
+  SQLTypeInfo nullable_type_info = get_logical_type_info(type_info);
+  nullable_type_info.set_notnull(false);
+  return nullable_type_info;
 }
 
 template <class T>

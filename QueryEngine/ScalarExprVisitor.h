@@ -64,6 +64,10 @@ class ScalarExprVisitor {
     if (key_for_string) {
       return visitKeyForString(key_for_string);
     }
+    const auto lower = dynamic_cast<const Analyzer::LowerExpr*>(expr);
+    if (lower) {
+      return visitLower(lower);
+    }
     const auto cardinality = dynamic_cast<const Analyzer::CardinalityExpr*>(expr);
     if (cardinality) {
       return visitCardinality(cardinality);
@@ -104,6 +108,10 @@ class ScalarExprVisitor {
     const auto array = dynamic_cast<const Analyzer::ArrayExpr*>(expr);
     if (array) {
       return visitArrayOper(array);
+    }
+    const auto geo_expr = dynamic_cast<const Analyzer::GeoExpr*>(expr);
+    if (geo_expr) {
+      return visitGeoExpr(geo_expr);
     }
     const auto datediff = dynamic_cast<const Analyzer::DatediffExpr*>(expr);
     if (datediff) {
@@ -177,6 +185,10 @@ class ScalarExprVisitor {
     return result;
   }
 
+  virtual T visitLower(const Analyzer::LowerExpr* lower_expr) const {
+    return visit(lower_expr->get_arg());
+  }
+
   virtual T visitCardinality(const Analyzer::CardinalityExpr* cardinality) const {
     T result = defaultResult();
     result = aggregateResult(result, visit(cardinality->get_arg()));
@@ -235,6 +247,14 @@ class ScalarExprVisitor {
     T result = defaultResult();
     for (size_t i = 0; i < array_expr->getElementCount(); ++i) {
       result = aggregateResult(result, visit(array_expr->getElement(i)));
+    }
+    return result;
+  }
+
+  virtual T visitGeoExpr(const Analyzer::GeoExpr* geo_expr) const {
+    T result = defaultResult();
+    for (const auto& arg : geo_expr->getArgs()) {
+      result = aggregateResult(result, visit(arg.get()));
     }
     return result;
   }

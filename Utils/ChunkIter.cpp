@@ -228,7 +228,12 @@ DEVICE void ChunkIter_get_nth(ChunkIter* it, int n, ArrayDatum* result, bool* is
     int8_t* current_pos = it->start_pos + n * it->skip_size;
     result->length = static_cast<size_t>(it->skip_size);
     result->pointer = current_pos;
-    result->is_null = it->type_info.is_null_fixlen_array(result->pointer, result->length);
+    bool is_null = false;
+    if (!it->type_info.get_notnull()) {
+      // Nulls can only be recognized when iterating over a !notnull-typed chunk
+      is_null = it->type_info.is_null_fixlen_array(result->pointer, result->length);
+    }
+    result->is_null = is_null;
   } else {
     int8_t* current_pos = it->start_pos + n * sizeof(ArrayOffsetT);
     int8_t* next_pos = current_pos + sizeof(ArrayOffsetT);

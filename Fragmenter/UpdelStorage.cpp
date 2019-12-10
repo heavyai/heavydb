@@ -25,6 +25,7 @@
 #include "DataMgr/DataMgr.h"
 #include "DataMgr/FixedLengthArrayNoneEncoder.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "QueryEngine/Execute.h"
 #include "QueryEngine/TargetValue.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/DateConverters.h"
@@ -32,6 +33,8 @@
 #include "Shared/TypedDataAccessors.h"
 #include "Shared/thread_count.h"
 #include "TargetValueConvertersFactories.h"
+
+extern bool g_enable_experimental_string_functions;
 
 namespace Fragmenter_Namespace {
 
@@ -203,7 +206,7 @@ struct FixedLenArrayChunkConverter : public ChunkToInsertDataConverter {
 };
 
 struct ArrayChunkConverter : public FixedLenArrayChunkConverter {
-  StringOffsetT* index_buffer_addr_;
+  ArrayOffsetT* index_buffer_addr_;
 
   ArrayChunkConverter(const size_t num_rows, const Chunk_NS::Chunk* chunk)
       : FixedLenArrayChunkConverter(num_rows, chunk) {
@@ -215,11 +218,12 @@ struct ArrayChunkConverter : public FixedLenArrayChunkConverter {
   ~ArrayChunkConverter() override {}
 
   void convertToColumnarFormat(size_t row, size_t indexInFragment) override {
-    size_t src_value_size =
-        index_buffer_addr_[indexInFragment + 1] - index_buffer_addr_[indexInFragment];
+    auto startIndex = index_buffer_addr_[indexInFragment];
+    auto endIndex = index_buffer_addr_[indexInFragment + 1];
+    size_t src_value_size = std::abs(endIndex) - std::abs(startIndex);
     auto src_value_ptr = data_buffer_addr_ + index_buffer_addr_[indexInFragment];
-    (*column_data_)[row] =
-        ArrayDatum(src_value_size, (int8_t*)src_value_ptr, DoNothingDeleter());
+    (*column_data_)[row] = ArrayDatum(
+        src_value_size, (int8_t*)src_value_ptr, endIndex < 0, DoNothingDeleter());
   }
 };
 
@@ -308,7 +312,8 @@ void InsertOrderFragmenter::updateColumns(
   updelRoll.logicalTableId = catalog->getLogicalTableId(td->tableId);
   updelRoll.memoryLevel = memoryLevel;
 
-  size_t num_rows = sourceDataProvider.count();
+  size_t num_entries = sourceDataProvider.getEntryCount();
+  size_t num_rows = sourceDataProvider.getRowCount();
 
   if (0 == num_rows) {
     // bail out early
@@ -323,6 +328,11 @@ void InsertOrderFragmenter::updateColumns(
   std::vector<std::unique_ptr<TargetValueConverter>> sourceDataConverters(
       columnDescriptors.size());
   std::vector<std::unique_ptr<ChunkToInsertDataConverter>> chunkConverters;
+  std::shared_ptr<Executor> executor;
+
+  if (g_enable_experimental_string_functions) {
+    executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+  }
 
   std::shared_ptr<Chunk_NS::Chunk> deletedChunk;
   for (size_t indexOfChunk = 0; indexOfChunk < chunks.size(); indexOfChunk++) {
@@ -346,13 +356,20 @@ void InsertOrderFragmenter::updateColumns(
       auto sourceDataMetaInfo = sourceMetaInfo[indexOfTargetColumn];
       auto targetDescriptor = columnDescriptors[indexOfTargetColumn];
 
-      ConverterCreateParameter param{num_rows,
-                                     *catalog,
-                                     sourceDataMetaInfo,
-                                     targetDescriptor,
-                                     targetDescriptor->columnType,
-                                     !targetDescriptor->columnType.get_notnull(),
-                                     sourceDataProvider.getLiteralDictionary()};
+      ConverterCreateParameter param{
+          num_rows,
+          *catalog,
+          sourceDataMetaInfo,
+          targetDescriptor,
+          targetDescriptor->columnType,
+          !targetDescriptor->columnType.get_notnull(),
+          sourceDataProvider.getLiteralDictionary(),
+          g_enable_experimental_string_functions
+              ? executor->getStringDictionaryProxy(
+                    sourceDataMetaInfo.get_type_info().get_comp_param(),
+                    executor->getRowSetMemoryOwner(),
+                    true)
+              : nullptr};
       auto converter = factory.create(param);
       sourceDataConverters[indexOfTargetColumn] = std::move(converter);
 
@@ -482,13 +499,21 @@ void InsertOrderFragmenter::updateColumns(
   bool* deletedChunkBuffer =
       reinterpret_cast<bool*>(deletedChunk->get_buffer()->getMemoryPtr());
 
+  std::atomic<size_t> row_idx{0};
+
   auto row_converter = [&sourceDataProvider,
                         &sourceDataConverters,
                         &indexOffFragmentOffsetColumn,
                         &chunkConverters,
-                        &deletedChunkBuffer](size_t indexOfRow) -> void {
+                        &deletedChunkBuffer,
+                        &row_idx](size_t indexOfEntry) -> void {
     // convert the source data
-    const auto row = sourceDataProvider.getEntryAt(indexOfRow);
+    const auto row = sourceDataProvider.getEntryAt(indexOfEntry);
+    if (row.empty()) {
+      return;
+    }
+
+    size_t indexOfRow = row_idx.fetch_add(1);
 
     for (size_t col = 0; col < sourceDataConverters.size(); col++) {
       if (sourceDataConverters[col]) {
@@ -517,8 +542,8 @@ void InsertOrderFragmenter::updateColumns(
     std::vector<std::future<void>> worker_threads;
     for (size_t i = 0,
                 start_entry = 0,
-                stride = (num_rows + num_worker_threads - 1) / num_worker_threads;
-         i < num_worker_threads && start_entry < num_rows;
+                stride = (num_entries + num_worker_threads - 1) / num_worker_threads;
+         i < num_worker_threads && start_entry < num_entries;
          ++i, start_entry += stride) {
       const auto end_entry = std::min(start_entry + stride, num_rows);
       worker_threads.push_back(std::async(
@@ -537,8 +562,8 @@ void InsertOrderFragmenter::updateColumns(
     }
 
   } else {
-    for (size_t indexOfRow = 0; indexOfRow < num_rows; indexOfRow++) {
-      row_converter(indexOfRow);
+    for (size_t entryIdx = 0; entryIdx < num_entries; entryIdx++) {
+      row_converter(entryIdx);
     }
   }
 
@@ -825,7 +850,7 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
                   std::unique_lock<std::mutex> lock(temp_mutex_);
                   sidx = stringDict->getOrAdd(sval);
                 }
-                put_scalar<int32_t>(data_ptr, lhs_type, sidx, cd->columnName);
+                put_scalar<int64_t>(data_ptr, lhs_type, sidx, cd->columnName);
                 tabulate_metadata(lhs_type,
                                   min_int64t_per_thread[c],
                                   max_int64t_per_thread[c],

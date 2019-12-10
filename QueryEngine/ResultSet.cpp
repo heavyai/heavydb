@@ -453,7 +453,7 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
     const QueryMemoryDescriptor& query_mem_desc) {
   auto query_mem_desc_copy = query_mem_desc;
   query_mem_desc_copy.resetGroupColWidths(
-      std::vector<int8_t>(query_mem_desc_copy.groupColWidthsSize(), 8));
+      std::vector<int8_t>(query_mem_desc_copy.getGroupbyColCount(), 8));
   if (query_mem_desc.didOutputColumnar()) {
     return query_mem_desc_copy;
   }
@@ -591,7 +591,7 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   topPermutation(permutation_, top_n, compare);
 }
 
-std::pair<ssize_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) const {
+std::pair<size_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) const {
   size_t fixedup_entry_idx = entry_idx;
   auto entry_count = storage_->query_mem_desc_.getEntryCount();
   const bool is_rowwise_layout = !storage_->query_mem_desc_.didOutputColumnar();
@@ -608,18 +608,18 @@ std::pair<ssize_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) co
     }
     fixedup_entry_idx -= entry_count;
   }
-  CHECK(false);
-  return {-1, entry_idx};
+  UNREACHABLE() << "entry_idx = " << entry_idx << ", query_mem_desc_.getEntryCount() = "
+                << query_mem_desc_.getEntryCount();
+  return {};
 }
 
 ResultSet::StorageLookupResult ResultSet::findStorage(const size_t entry_idx) const {
-  ssize_t stg_idx{-1};
-  size_t fixedup_entry_idx{entry_idx};
+  size_t stg_idx;
+  size_t fixedup_entry_idx;
   std::tie(stg_idx, fixedup_entry_idx) = getStorageIndex(entry_idx);
-  CHECK_LE(ssize_t(0), stg_idx);
   return {stg_idx ? appended_storage_[stg_idx - 1].get() : storage_.get(),
           fixedup_entry_idx,
-          static_cast<size_t>(stg_idx)};
+          stg_idx};
 }
 
 template <typename BUFFER_ITERATOR_TYPE>
@@ -874,6 +874,31 @@ bool use_parallel_algorithms(const ResultSet& rows) {
   return can_use_parallel_algorithms(rows) && rows.entryCount() >= 20000;
 }
 
+/**
+ * Determines if it is possible to directly form a ColumnarResults class from this
+ * result set, bypassing the default columnarization.
+ *
+ * NOTE: If there exists a permutation vector (i.e., in some ORDER BY queries), it
+ * becomes equivalent to the row-wise columnarization.
+ */
+bool ResultSet::isDirectColumnarConversionPossible() const {
+  if (!g_enable_direct_columnarization) {
+    return false;
+  } else if (query_mem_desc_.didOutputColumnar()) {
+    return permutation_.empty() && (query_mem_desc_.getQueryDescriptionType() ==
+                                        QueryDescriptionType::Projection ||
+                                    (query_mem_desc_.getQueryDescriptionType() ==
+                                         QueryDescriptionType::GroupByPerfectHash ||
+                                     query_mem_desc_.getQueryDescriptionType() ==
+                                         QueryDescriptionType::GroupByBaselineHash));
+  } else {
+    return permutation_.empty() && (query_mem_desc_.getQueryDescriptionType() ==
+                                        QueryDescriptionType::GroupByPerfectHash ||
+                                    query_mem_desc_.getQueryDescriptionType() ==
+                                        QueryDescriptionType::GroupByBaselineHash);
+  }
+}
+
 // returns a bitmap (and total number) of all single slot targets
 std::tuple<std::vector<bool>, size_t> ResultSet::getSingleSlotTargetBitmap() const {
   std::vector<bool> target_bitmap(targets_.size(), true);
@@ -889,6 +914,32 @@ std::tuple<std::vector<bool>, size_t> ResultSet::getSingleSlotTargetBitmap() con
     }
   }
   return std::make_tuple(std::move(target_bitmap), num_single_slot_targets);
+}
+
+/**
+ * This function returns a bitmap and population count of it, where it denotes
+ * all supported single-column targets suitable for direct columnarization.
+ *
+ * The final goal is to remove the need for such selection, but at the moment for any
+ * target that doesn't qualify for direct columnarization, we use the traditional
+ * result set's iteration to handle it (e.g., count distinct, approximate count distinct)
+ */
+std::tuple<std::vector<bool>, size_t> ResultSet::getSupportedSingleSlotTargetBitmap()
+    const {
+  CHECK(isDirectColumnarConversionPossible());
+  auto [single_slot_targets, num_single_slot_targets] = getSingleSlotTargetBitmap();
+
+  for (size_t target_idx = 0; target_idx < single_slot_targets.size(); target_idx++) {
+    const auto& target = targets_[target_idx];
+    if (single_slot_targets[target_idx] &&
+        (is_distinct_target(target) ||
+         (target.is_agg && target.agg_kind == kSAMPLE && target.sql_type == kFLOAT))) {
+      single_slot_targets[target_idx] = false;
+      num_single_slot_targets--;
+    }
+  }
+  CHECK_GE(num_single_slot_targets, size_t(0));
+  return std::make_tuple(std::move(single_slot_targets), num_single_slot_targets);
 }
 
 // returns the starting slot index for all targets in the result set

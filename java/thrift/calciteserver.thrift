@@ -1,6 +1,7 @@
 namespace java com.mapd.thrift.calciteserver
 
 include "completion_hints.thrift"
+include "QueryEngine/extension_functions.thrift"
 
 exception InvalidParseRequest {
   1: i32 whatUp,
@@ -38,8 +39,8 @@ service CalciteServer {
                        7:bool isexplain 8:bool isViewOptimize) throws (1:InvalidParseRequest parseErr),
    string getExtensionFunctionWhitelist()
    string getUserDefinedFunctionWhitelist()
-   string getRuntimeUserDefinedFunctionWhitelist()
-   void setRuntimeUserDefinedFunction(1: string udf_string)
+   string getRuntimeExtensionFunctionWhitelist()
+   void setRuntimeExtensionFunctions(1: list<extension_functions.TUserDefinedFunction> udfs, 2: list<extension_functions.TUserDefinedTableFunction> udtfs)
    void updateMetadata(1: string catalog, 2:string table),
    list<completion_hints.TCompletionHint> getCompletionHints(1:string user, 2:string passwd, 3:string catalog,
     4:list<string> visible_tables, 5:string sql, 6:i32 cursor)

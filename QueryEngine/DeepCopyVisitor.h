@@ -75,6 +75,10 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
     return makeExpr<Analyzer::KeyForStringExpr>(visit(expr->get_arg()));
   }
 
+  RetType visitLower(const Analyzer::LowerExpr* expr) const override {
+    return makeExpr<Analyzer::LowerExpr>(visit(expr->get_arg()));
+  }
+
   RetType visitCardinality(const Analyzer::CardinalityExpr* cardinality) const override {
     return makeExpr<Analyzer::CardinalityExpr>(visit(cardinality->get_arg()));
   }
@@ -130,6 +134,15 @@ class DeepCopyVisitor : public ScalarExprVisitor<std::shared_ptr<Analyzer::Expr>
     const auto& type_info = array_expr->get_type_info();
     return makeExpr<Analyzer::ArrayExpr>(
         type_info, args_copy, array_expr->getExprIndex(), array_expr->isLocalAlloc());
+  }
+
+  RetType visitGeoExpr(const Analyzer::GeoExpr* geo_expr) const override {
+    std::vector<std::shared_ptr<Analyzer::Expr>> args_copy;
+    for (const auto& arg : geo_expr->getArgs()) {
+      args_copy.push_back(visit(arg.get()));
+    }
+    const auto& type_info = geo_expr->get_type_info();
+    return makeExpr<Analyzer::GeoExpr>(type_info, args_copy);
   }
 
   RetType visitWindowFunction(

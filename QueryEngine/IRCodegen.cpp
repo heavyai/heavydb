@@ -42,16 +42,20 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   }
   auto constant = dynamic_cast<const Analyzer::Constant*>(expr);
   if (constant) {
+    const auto& ti = constant->get_type_info();
+    if (ti.get_type() == kNULLT) {
+      throw std::runtime_error(
+          "NULL type literals are not currently supported in this context.");
+    }
     if (constant->get_is_null()) {
-      const auto& ti = constant->get_type_info();
       return {ti.is_fp()
                   ? static_cast<llvm::Value*>(executor_->cgen_state_->inlineFpNull(ti))
                   : static_cast<llvm::Value*>(executor_->cgen_state_->inlineIntNull(ti))};
     }
     // The dictionary encoding case should be handled by the parent expression
     // (cast, for now), here is too late to know the dictionary id
-    CHECK_NE(kENCODING_DICT, constant->get_type_info().get_compression());
-    return {codegen(constant, constant->get_type_info().get_compression(), 0, co)};
+    CHECK_NE(kENCODING_DICT, ti.get_compression());
+    return {codegen(constant, ti.get_compression(), 0, co)};
   }
   auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);
   if (case_expr) {
@@ -80,6 +84,10 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   auto keyforstring_expr = dynamic_cast<const Analyzer::KeyForStringExpr*>(expr);
   if (keyforstring_expr) {
     return {codegen(keyforstring_expr, co)};
+  }
+  auto lower_expr = dynamic_cast<const Analyzer::LowerExpr*>(expr);
+  if (lower_expr) {
+    return {codegen(lower_expr, co)};
   }
   auto cardinality_expr = dynamic_cast<const Analyzer::CardinalityExpr*>(expr);
   if (cardinality_expr) {
@@ -114,6 +122,10 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
   auto array_oper_expr = dynamic_cast<const Analyzer::ArrayExpr*>(expr);
   if (array_oper_expr) {
     return {codegenArrayExpr(array_oper_expr, co)};
+  }
+  auto geo_expr = dynamic_cast<const Analyzer::GeoExpr*>(expr);
+  if (geo_expr) {
+    return {codegenGeoExpr(geo_expr, co)};
   }
   auto function_oper_expr = dynamic_cast<const Analyzer::FunctionOper*>(expr);
   if (function_oper_expr) {

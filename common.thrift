@@ -50,3 +50,4 @@ struct TTypeInfo {
   7: i32 comp_param,
   8: optional i32 size=-1
 }
+

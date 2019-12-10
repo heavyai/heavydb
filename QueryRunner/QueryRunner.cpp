@@ -24,6 +24,7 @@
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
 #include "QueryEngine/RelAlgExecutor.h"
+#include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "Shared/ConfigResolve.h"
 #include "Shared/Logger.h"
 #include "Shared/MapDParameters.h"
@@ -35,7 +36,7 @@
 #include <csignal>
 #include <random>
 
-#define CALCITEPORT 36279
+#define CALCITEPORT 3279
 
 extern size_t g_leaf_count;
 extern bool g_enable_filter_push_down;
@@ -50,6 +51,7 @@ std::shared_ptr<Calcite> g_calcite = nullptr;
 void calcite_shutdown_handler() {
   if (g_calcite) {
     g_calcite->close_calcite_server();
+    g_calcite.reset();
   }
 }
 
@@ -131,11 +133,13 @@ QueryRunner::QueryRunner(const char* db_path,
 
   register_signal_handler();
   logger::set_once_fatal_func(&calcite_shutdown_handler);
-  g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024, "", udf_filename);
+  g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024, udf_filename);
   ExtensionFunctionsWhitelist::add(g_calcite->getExtensionFunctionWhitelist());
   if (!udf_filename.empty()) {
     ExtensionFunctionsWhitelist::addUdfs(g_calcite->getUserDefinedFunctionWhitelist());
   }
+
+  table_functions::TableFunctionsFactory::init();
 
   if (std::is_same<CudaBuildSelector, PreprocessorFalse>::value) {
     uses_gpus = false;
@@ -364,7 +368,7 @@ ExecutionResult run_select_query_with_filter_push_down(
   auto calcite_mgr = cat.getCalciteMgr();
   const auto query_ra = calcite_mgr
                             ->process(query_state_proxy,
-                                      pg_shim(query_state.get_query_str()),
+                                      pg_shim(query_state.getQueryStr()),
                                       {},
                                       true,
                                       false,
@@ -385,7 +389,7 @@ ExecutionResult run_select_query_with_filter_push_down(
     }
     const auto new_query_ra = calcite_mgr
                                   ->process(query_state_proxy,
-                                            pg_shim(query_state.get_query_str()),
+                                            pg_shim(query_state.getQueryStr()),
                                             filter_push_down_info,
                                             true,
                                             false,
@@ -456,6 +460,11 @@ ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
                             .plan_result;
   RelAlgExecutor ra_executor(executor.get(), cat);
   return ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
+}
+
+void QueryRunner::reset() {
+  qr_instance_.reset(nullptr);
+  calcite_shutdown_handler();
 }
 
 }  // namespace QueryRunner

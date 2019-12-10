@@ -1146,7 +1146,8 @@ class RelSort : public RelAlgNode {
   }
 
   bool operator==(const RelSort& that) const {
-    return limit_ == that.limit_ && offset_ == that.offset_ && hasEquivCollationOf(that);
+    return limit_ == that.limit_ && offset_ == that.offset_ &&
+           empty_result_ == that.empty_result_ && hasEquivCollationOf(that);
   }
 
   size_t collationCount() const { return collation_.size(); }
@@ -1160,6 +1161,10 @@ class RelSort : public RelAlgNode {
     collation_ = std::move(collation);
   }
 
+  void setEmptyResult(bool emptyResult) { empty_result_ = emptyResult; }
+
+  bool isEmptyResult() const { return empty_result_; }
+
   size_t getLimit() const { return limit_; }
 
   size_t getOffset() const { return offset_; }
@@ -1169,6 +1174,7 @@ class RelSort : public RelAlgNode {
         "(RelSort<" + std::to_string(reinterpret_cast<uint64_t>(this)) + ">(";
     result += "limit: " + std::to_string(limit_) + " ";
     result += "offset: " + std::to_string(offset_) + " ";
+    result += "empty_result: " + std::to_string(empty_result_) + " ";
     result += "collation: [ ";
     for (const auto& sort_field : collation_) {
       result += sort_field.toString() + " ";
@@ -1185,6 +1191,7 @@ class RelSort : public RelAlgNode {
   std::vector<SortField> collation_;
   const size_t limit_;
   const size_t offset_;
+  bool empty_result_;
 
   bool hasEquivCollationOf(const RelSort& that) const;
 };
@@ -1283,14 +1290,14 @@ class RelModify : public RelAlgNode {
     CHECK(previous_project_node != nullptr);
 
     previous_project_node->setUpdateViaSelectFlag();
-    previous_project_node->injectOffsetInFragmentExpr();
+    // remove the offset column in the projection for update handling
+    target_column_list_.pop_back();
+
     previous_project_node->setModifiedTableDescriptor(table_descriptor_);
     previous_project_node->setTargetColumns(target_column_list_);
 
-    int target_update_column_expr_start =
-        (int)(previous_project_node->getFields().size() - target_column_list_.size() - 1);
-    int target_update_column_expr_end =
-        (int)(previous_project_node->getFields().size() - 2);
+    int target_update_column_expr_start = 0;
+    int target_update_column_expr_end = (int)(target_column_list_.size() - 1);
     CHECK(target_update_column_expr_start >= 0);
     CHECK(target_update_column_expr_end >= 0);
 
@@ -1354,6 +1361,86 @@ class RelModify : public RelAlgNode {
   bool flattened_;
   ModifyOperation operation_;
   TargetColumnList target_column_list_;
+};
+
+class RelTableFunction : public RelAlgNode {
+ public:
+  RelTableFunction(const std::string& function_name,
+                   std::shared_ptr<const RelAlgNode> input,
+                   std::vector<std::string>& fields,
+                   std::vector<const Rex*> col_inputs,
+                   std::vector<std::unique_ptr<const RexScalar>>& table_func_inputs,
+                   std::vector<std::unique_ptr<const RexScalar>>& target_exprs)
+      : function_name_(function_name)
+      , fields_(fields)
+      , col_inputs_(col_inputs)
+      , table_func_inputs_(std::move(table_func_inputs))
+      , target_exprs_(std::move(target_exprs)) {
+    inputs_.emplace_back(input);
+  }
+
+  void replaceInput(std::shared_ptr<const RelAlgNode> old_input,
+                    std::shared_ptr<const RelAlgNode> input) override;
+
+  std::string getFunctionName() const { return function_name_; }
+
+  size_t size() const override { return target_exprs_.size(); }
+
+  size_t getTableFuncInputsSize() const { return table_func_inputs_.size(); }
+
+  size_t getColInputsSize() const { return col_inputs_.size(); }
+
+  const RexScalar* getTableFuncInputAt(const size_t idx) const {
+    CHECK_LT(idx, table_func_inputs_.size());
+    return table_func_inputs_[idx].get();
+  }
+
+  const RexScalar* getTableFuncInputAtAndRelease(const size_t idx) {
+    CHECK_LT(idx, table_func_inputs_.size());
+    return table_func_inputs_[idx].release();
+  }
+
+  void setTableFuncInputs(std::vector<std::unique_ptr<const RexScalar>>& exprs) {
+    table_func_inputs_ = std::move(exprs);
+  }
+
+  std::string getFieldName(const size_t idx) const {
+    CHECK_LT(idx, fields_.size());
+    return fields_[idx];
+  }
+
+  std::shared_ptr<RelAlgNode> deepCopy() const override;
+
+  std::string toString() const override {
+    std::string result = "RelTableFunction<" +
+                         std::to_string(reinterpret_cast<uint64_t>(this)) + ">(" +
+                         function_name_ + " ";
+
+    result += "targets: " + std::to_string(target_exprs_.size());
+    result += "inputs: [";
+    for (size_t i = 0; i < target_exprs_.size(); ++i) {
+      result += target_exprs_[i]->toString();
+      if (i < target_exprs_.size() - 1) {
+        result += ", ";
+      }
+    }
+    result += "]";
+
+    return result;
+  }
+
+ private:
+  std::string function_name_;
+  std::vector<std::string> fields_;
+
+  std::vector<const Rex*>
+      col_inputs_;  // owned by `table_func_inputs_`, but allows picking out the specific
+                    // input columns vs other table function inputs (e.g. literals)
+  std::vector<std::unique_ptr<const RexScalar>> table_func_inputs_;
+
+  std::vector<std::unique_ptr<const RexScalar>>
+      target_exprs_;  // Note: these should all be RexRef but are stored as RexScalar for
+                      // consistency
 };
 
 class RelLogicalValues : public RelAlgNode {

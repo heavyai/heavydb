@@ -19,7 +19,6 @@ yay -S \
     gdal \
     git \
     glbinding \
-    glslang \
     go \
     google-glog \
     jdk-openjdk \
@@ -47,6 +46,11 @@ rmdir $ARROW_PKG_DIR
 
 # Install SPIRV-Cross
 pushd arch/spirv-cross
+makepkg -cis
+popd
+
+# Install glslang
+pushd arch/glslang
 makepkg -cis
 popd
 

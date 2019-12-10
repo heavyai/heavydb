@@ -16,8 +16,12 @@
 
 #pragma once
 
-#include "../GroupByAndAggregate.h"
-#include "../JoinFilterPushDown.h"
+#include <boost/graph/adjacency_list.hpp>
+
+#include "QueryEngine/Descriptors/QueryMemoryDescriptor.h"
+#include "QueryEngine/JoinFilterPushDown.h"
+#include "QueryEngine/ResultSet.h"
+#include "Shared/TargetInfo.h"
 
 class ResultSet;
 
@@ -87,6 +91,68 @@ class RaExecutionDesc {
   ExecutionResult result_;
 };
 
-std::vector<RaExecutionDesc> get_execution_descriptors(const RelAlgNode*);
-std::vector<RaExecutionDesc> get_execution_descriptors(
-    const std::vector<const RelAlgNode*>&);
+using DAG = boost::
+    adjacency_list<boost::setS, boost::vecS, boost::bidirectionalS, const RelAlgNode*>;
+using Vertex = DAG::vertex_descriptor;
+
+/**
+ * @brief A container for relational algebra descriptors defining the execution order
+ * for a relational algebra query.
+ * Holds the relational algebra descriptors for executing a relational algebra query. Each
+ * descriptor holds both a top-level relational algebra node and a ResultSet ptr holding
+ * the results from the execution of the accompany node(s). The sequence can be generated
+ * on initialization or lazily with calls to the next() operator.
+ */
+class RaExecutionSequence {
+ public:
+  RaExecutionSequence(const RelAlgNode*, const bool build_sequence = true);
+  RaExecutionSequence(std::unique_ptr<RaExecutionDesc> exec_desc);
+
+  /**
+   * Return the next execution descriptor in the sequence. If no more execution
+   * descriptors exist, returns nullptr.
+   */
+  RaExecutionDesc* next();
+
+  /**
+   * Returns the index of the next execution descriptor in the graph. If after_reduction
+   * is true, returns the index of the first execution descriptor after the next global
+   * reduction. Returns -1 if no execution descriptors remain in the graph.
+   */
+  ssize_t nextStepId(const bool after_reduction) const;
+
+  bool executionFinished() const;
+
+  RaExecutionDesc* getDescriptor(size_t idx) const {
+    CHECK_LT(idx, descs_.size());
+    return descs_[idx].get();
+  }
+
+  size_t size() const { return descs_.size(); }
+  bool empty() const { return descs_.empty(); }
+
+  size_t totalDescriptorsCount() const;
+
+ private:
+  DAG graph_;
+
+  std::unordered_set<Vertex> joins_;
+  std::vector<Vertex> ordering_;  // reverse order topological sort of graph_
+  size_t current_vertex_ = 0;
+  size_t scan_count_ = 0;
+
+  /**
+   * Starting from the current vertex, iterate the graph counting the number of execution
+   * descriptors remaining before the next required reduction step. The current vertex is
+   * counted as the first step before a reduction is required; i.e. a return value of 0
+   * indicates no additional steps in the graph can be executed without a global
+   * reduction, and a return value of 2 indicates the current vertex and both subsequent
+   * vertices can be executed before a global reduction is needed.
+   */
+  size_t stepsToNextReduction() const;
+
+  // The execution descriptors hold the pointers to their results. We need to push them
+  // back into this vector as they are created, so we don't lose the intermediate results
+  // later.
+  std::vector<std::unique_ptr<RaExecutionDesc>> descs_;
+};

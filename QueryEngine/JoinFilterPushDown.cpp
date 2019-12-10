@@ -152,7 +152,7 @@ std::vector<PushedDownFilterInfo> RelAlgExecutor::selectFiltersToBePushedDown(
 }
 
 ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
-    std::vector<RaExecutionDesc>& ed_list,
+    const RaExecutionSequence& seq,
     const CompilationOptions& co,
     const ExecutionOptions& eo,
     RenderInfo* render_info,
@@ -160,7 +160,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
   // we currently do not fully support filter push down with
   // multi-step execution and/or with subqueries
   // TODO(Saman): add proper caching to enable filter push down for all cases
-  if (ed_list.size() > 1 || !subqueries_.empty()) {
+  if (seq.size() > 1 || !subqueries_.empty()) {
     if (eo.just_calcite_explain) {
       return ExecutionResult(std::vector<PushedDownFilterInfo>{},
                              eo.find_push_down_candidates);
@@ -182,19 +182,25 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryWithFilterPushDown(
     for (auto subquery : subqueries_) {
       // Execute the subquery and cache the result.
       RelAlgExecutor ra_executor(executor_, cat_);
-      auto result = ra_executor.executeRelAlgSubQuery(subquery.get(), co, eo_modified);
+      const auto subquery_ra = subquery->getRelAlg();
+      CHECK(subquery_ra);
+      RaExecutionSequence subquery_seq(subquery_ra);
+      auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, nullptr, 0);
       subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
     }
-    return executeRelAlgSeq(ed_list, co, eo_modified, render_info, queue_time_ms);
+    return executeRelAlgSeq(seq, co, eo_modified, render_info, queue_time_ms);
   } else {
     // Dispatch the subqueries first
     for (auto subquery : subqueries_) {
       // Execute the subquery and cache the result.
       RelAlgExecutor ra_executor(executor_, cat_);
-      auto result = ra_executor.executeRelAlgSubQuery(subquery.get(), co, eo);
+      const auto subquery_ra = subquery->getRelAlg();
+      CHECK(subquery_ra);
+      RaExecutionSequence subquery_seq(subquery_ra);
+      auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, nullptr, 0);
       subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
     }
-    return executeRelAlgSeq(ed_list, co, eo, render_info, queue_time_ms);
+    return executeRelAlgSeq(seq, co, eo, render_info, queue_time_ms);
   }
 }
 /**

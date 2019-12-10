@@ -302,6 +302,7 @@ int main(int argc, char** argv) {
 
   if (!setup()) {
     // No GPUs detected, bypass the test
+    QR::reset();
     return 0;
   }
 

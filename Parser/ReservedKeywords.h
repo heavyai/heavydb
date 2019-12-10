@@ -27,6 +27,7 @@ static std::set<std::string> reserved_keywords{
     "ACCESS",
     "ADD",  // legacy
     "AMMSC",
+    "ARCHIVE",
     "ASC",
     "CONTINUE",
     "COPY",
@@ -35,6 +36,7 @@ static std::set<std::string> reserved_keywords{
     "DATETIME",
     "DATE_TRUNC",
     "DESC",
+    "DUMP",
     "EDIT",
     "EDITOR",
     "FIRST",
@@ -55,6 +57,7 @@ static std::set<std::string> reserved_keywords{
     "PRIVILEGES",
     "PUBLIC",
     "RENAME",
+    "RESTORE",
     "ROLE",   // permissions
     "ROWID",  // hidden column name
     "SCHEMA",

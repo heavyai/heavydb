@@ -71,18 +71,18 @@ namespace Catalog_Namespace {
  */
 struct UserMetadata {
   UserMetadata(int32_t u, const std::string& n, const std::string& p, bool s, int32_t d)
-      : userId(u)
-      , userName(n)
-      , passwd_hash(p)
-      , isSuper(s)
-      , isReallySuper(s)
-      , defaultDbId(d) {}
+      : userId(u), userName(n), passwd_hash(p), isSuper(s), defaultDbId(d) {}
   UserMetadata() {}
+  UserMetadata(UserMetadata const& user_meta)
+      : UserMetadata(user_meta.userId,
+                     user_meta.userName,
+                     user_meta.passwd_hash,
+                     user_meta.isSuper.load(),
+                     user_meta.defaultDbId) {}
   int32_t userId;
   std::string userName;
   std::string passwd_hash;
-  bool isSuper;
-  bool isReallySuper;
+  std::atomic<bool> isSuper;
   int32_t defaultDbId;
 };
 

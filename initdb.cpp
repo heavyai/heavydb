@@ -27,7 +27,7 @@
 #include "Shared/mapdpath.h"
 #include "boost/program_options.hpp"
 
-#define CALCITEPORT 36279
+#define CALCITEPORT 3279
 
 static const std::array<std::string, 3> SampleGeoFileNames{"us-states.json",
                                                            "us-counties.json",
@@ -171,7 +171,7 @@ int main(int argc, char* argv[]) {
               file_path.string());
         }
 
-        import_driver.importGeoTable(file_path.string(), table_name);
+        import_driver.importGeoTable(file_path.string(), table_name, true, true, false);
       }
     }
 

@@ -25,17 +25,10 @@
 #define MAPDHANDLER_H
 
 #include "LeafAggregator.h"
+
 #ifdef HAVE_PROFILER
 #include <gperftools/heap-profiler.h>
 #endif  // HAVE_PROFILER
-#include <thrift/concurrency/PlatformThreadFactory.h>
-#include <thrift/concurrency/ThreadManager.h>
-#include <thrift/protocol/TBinaryProtocol.h>
-#include <thrift/protocol/TJSONProtocol.h>
-#include <thrift/server/TThreadedServer.h>
-#include <thrift/transport/TBufferTransports.h>
-#include <thrift/transport/THttpServer.h>
-#include <thrift/transport/TServerSocket.h>
 
 #include "MapDRelease.h"
 
@@ -100,6 +93,7 @@
 #include <typeinfo>
 #include <unordered_map>
 #include "gen-cpp/MapD.h"
+#include "gen-cpp/extension_functions_types.h"
 
 using namespace std::string_literals;
 
@@ -384,6 +378,9 @@ class MapDHandler : public MapDIf {
                   const int32_t table_id) override;
   // DB Object Privileges
   void get_roles(std::vector<std::string>& _return, const TSessionId& session) override;
+  bool has_role(const TSessionId& sessionId,
+                const std::string& granteeName,
+                const std::string& roleName) override;
   bool has_object_privilege(const TSessionId& sessionId,
                             const std::string& granteeName,
                             const std::string& objectName,
@@ -415,15 +412,19 @@ class MapDHandler : public MapDIf {
     Returns a mapping of device (CPU, GPU) parameters (name, LLVM IR
     triplet, features, etc)
    */
-  void get_device_parameters(std::map<std::string, std::string>& _return) override;
+  void get_device_parameters(std::map<std::string, std::string>& _return,
+                             const TSessionId& session) override;
+
   /*
-    Register UDFs with given signatures. The UDF implementations are
-    given in a mapping of a device and the corresponding LLVM IR
-    string.
+    Register Runtime Extension Functions (UDFs, UDTFs) with given
+    signatures. The extension functions implementations are given in a
+    mapping of a device and the corresponding LLVM/NVVM IR string.
    */
-  void register_runtime_udf(
+
+  void register_runtime_extension_functions(
       const TSessionId& session,
-      const std::string& signatures,
+      const std::vector<TUserDefinedFunction>& udfs,
+      const std::vector<TUserDefinedTableFunction>& udtfs,
       const std::map<std::string, std::string>& device_ir_map) override;
 
   // end of sync block for HAHandler and mapd.thrift
@@ -506,7 +507,9 @@ class MapDHandler : public MapDIf {
       const TSessionId& session);
   std::shared_ptr<Catalog_Namespace::SessionInfo> get_session_ptr(
       const TSessionId& session_id);
-  SessionMap::iterator get_session_it_unsafe(const TSessionId& session);
+  template <typename SESSION_MAP_LOCK>
+  SessionMap::iterator get_session_it_unsafe(const TSessionId& session,
+                                             SESSION_MAP_LOCK& lock);
   static void value_to_thrift_column(const TargetValue& tv,
                                      const SQLTypeInfo& ti,
                                      TColumn& column);
@@ -713,28 +716,31 @@ class MapDHandler : public MapDIf {
   template <typename STMT_TYPE>
   void invalidate_sessions(std::string& name, STMT_TYPE* stmt) {
     using namespace Parser;
-
-    auto is_match = [&name](const std::string& session_name) {
-      return boost::iequals(name, session_name);
+    auto is_match = [&](auto session_it) {
+      if (ShouldInvalidateSessionsByDB<STMT_TYPE>()) {
+        return boost::iequals(name,
+                              session_it->second->getCatalog().getCurrentDB().dbName);
+      } else if (ShouldInvalidateSessionsByUser<STMT_TYPE>()) {
+        return boost::iequals(name, session_it->second->get_currentUser().userName);
+      }
+      return false;
     };
-    if (ShouldInvalidateSessionsByDB<STMT_TYPE>()) {
+    auto check_and_remove_sessions = [&]() {
       for (auto it = sessions_.begin(); it != sessions_.end();) {
-        if (is_match(it->second.get()->getCatalog().getCurrentDB().dbName)) {
+        if (is_match(it)) {
           it = sessions_.erase(it);
         } else {
           ++it;
         }
       }
-    } else if (ShouldInvalidateSessionsByUser<STMT_TYPE>()) {
-      for (auto it = sessions_.begin(); it != sessions_.end();) {
-        if (is_match(it->second.get()->get_currentUser().userName)) {
-          it = sessions_.erase(it);
-        } else {
-          ++it;
-        }
-      }
-    }
+    };
+    check_and_remove_sessions();
   }
+
+  std::string const createInMemoryCalciteSession(
+      const std::shared_ptr<Catalog_Namespace::Catalog>& catalog_ptr);
+  bool isInMemoryCalciteSession(const Catalog_Namespace::UserMetadata user_meta);
+  void removeInMemoryCalciteSession(const std::string& session_id);
 };
 
 #endif /* MAPDHANDLER_H */

@@ -39,6 +39,7 @@
 #include "../Chunk/Chunk.h"
 #include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Planner/Planner.h"
+#include "../Shared/Logger.h"
 #include "../Shared/MapDParameters.h"
 #include "../Shared/measure.h"
 #include "../Shared/thread_count.h"
@@ -86,8 +87,10 @@ extern bool g_strip_join_covered_quals;
 extern size_t g_constrained_by_in_threshold;
 extern size_t g_big_group_threshold;
 extern bool g_enable_window_functions;
+extern bool g_enable_table_functions;
 extern size_t g_max_memory_allocation_size;
 extern double g_bump_allocator_step_reduction;
+extern bool g_enable_direct_columnarization;
 
 class QueryCompilationDescriptor;
 using QueryCompilationDescriptorOwned = std::unique_ptr<QueryCompilationDescriptor>;
@@ -296,11 +299,11 @@ class UpdateLogForFragment : public RowDataProvider {
   std::vector<TargetValue> getEntryAt(const size_t index) const override;
   std::vector<TargetValue> getTranslatedEntryAt(const size_t index) const override;
 
-  size_t count() const override;
+  size_t const getRowCount() const override;
   StringDictionaryProxy* getLiteralDictionary() const override {
     return rs_->getRowSetMemOwner()->getLiteralStringDictProxy();
   }
-  size_t const getEntryCount() const;
+  size_t const getEntryCount() const override;
   size_t const getFragmentIndex() const;
   FragmentInfoType const& getFragmentInfo() const;
   decltype(FragmentInfoType::physicalTableId) const getPhysicalTableId() const {
@@ -320,8 +323,7 @@ class UpdateLogForFragment : public RowDataProvider {
   std::shared_ptr<ResultSet> rs_;
 };
 
-using PerFragmentCB =
-    std::function<void(ResultSetPtr, const Fragmenter_Namespace::FragmentInfo&)>;
+using LLVMValueVector = std::vector<llvm::Value*>;
 
 class QueryCompilationDescriptor;
 
@@ -441,6 +443,7 @@ class Executor {
                                                       int) const;
 
   const Catalog_Namespace::Catalog* getCatalog() const;
+  void setCatalog(const Catalog_Namespace::Catalog* catalog);
 
   const std::shared_ptr<RowSetMemoryOwner> getRowSetMemoryOwner() const;
 
@@ -463,6 +466,10 @@ class Executor {
   void resetInterrupt();
 
   static const size_t high_scan_limit{32000000};
+
+  int8_t warpSize() const;
+  unsigned gridSize() const;
+  unsigned blockSize() const;
 
  private:
   void clearMetaInfoCache();
@@ -607,12 +614,16 @@ class Executor {
                                ColumnCacheMap& column_cache);
 
   void executeUpdate(const RelAlgExecutionUnit& ra_exe_unit,
-                     const InputTableInfo& table_info,
+                     const std::vector<InputTableInfo>& table_infos,
                      const CompilationOptions& co,
                      const ExecutionOptions& eo,
                      const Catalog_Namespace::Catalog& cat,
                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                     const UpdateLogForFragment::Callback& cb) __attribute__((hot));
+                     const UpdateLogForFragment::Callback& cb,
+                     const bool is_agg = false);
+
+  using PerFragmentCallBack =
+      std::function<void(ResultSetPtr, const Fragmenter_Namespace::FragmentInfo&)>;
 
   /**
    * @brief Compiles and dispatches a work unit per fragment processing results with the
@@ -624,9 +635,20 @@ class Executor {
                                   const CompilationOptions& co,
                                   const ExecutionOptions& eo,
                                   const Catalog_Namespace::Catalog& cat,
-                                  PerFragmentCB& cb);
+                                  PerFragmentCallBack& cb);
 
   ResultSetPtr executeExplain(const QueryCompilationDescriptor&);
+
+  /**
+   * @brief Compiles and dispatches a table function; that is, a function that takes as
+   * input one or more columns and returns a ResultSet, which can be parsed by subsequent
+   * execution steps
+   */
+  ResultSetPtr executeTableFunction(const TableFunctionExecutionUnit exe_unit,
+                                    const std::vector<InputTableInfo>& table_infos,
+                                    const CompilationOptions& co,
+                                    const ExecutionOptions& eo,
+                                    const Catalog_Namespace::Catalog& cat);
 
   // TODO(alex): remove
   ExecutorDeviceType getDeviceTypeForTargets(
@@ -759,7 +781,7 @@ class Executor {
                              CodeCache&);
 
  private:
-  static ResultSetPtr resultsUnion(ExecutionDispatch& execution_dispatch);
+  ResultSetPtr resultsUnion(ExecutionDispatch& execution_dispatch);
   std::vector<int64_t> getJoinHashTablePtrs(const ExecutorDeviceType device_type,
                                             const int device_id);
   ResultSetPtr reduceMultiDeviceResults(
@@ -865,7 +887,7 @@ class Executor {
       ColumnCacheMap& column_cache);
   void nukeOldState(const bool allow_lazy_fetch,
                     const std::vector<InputTableInfo>& query_infos,
-                    const RelAlgExecutionUnit& ra_exe_unit);
+                    const RelAlgExecutionUnit* ra_exe_unit);
 
   std::vector<std::pair<void*, void*>> optimizeAndCodegenCPU(
       llvm::Function*,
@@ -881,10 +903,6 @@ class Executor {
       const CompilationOptions&);
   std::string generatePTX(const std::string&) const;
   void initializeNVPTXBackend() const;
-
-  int8_t warpSize() const;
-  unsigned gridSize() const;
-  unsigned blockSize() const;
 
   int64_t deviceCycles(int milliseconds) const;
 
@@ -921,6 +939,17 @@ class Executor {
       const std::vector<uint64_t>& frag_offsets,
       const size_t frag_idx);
 
+  AggregatedColRange computeColRangesCache(
+      const std::unordered_set<PhysicalInput>& phys_inputs);
+  StringDictionaryGenerations computeStringDictionaryGenerations(
+      const std::unordered_set<PhysicalInput>& phys_inputs);
+  TableGenerations computeTableGenerations(std::unordered_set<int> phys_table_ids);
+
+ public:
+  void setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs,
+                    const std::unordered_set<int>& phys_table_ids);
+
+ private:
   std::vector<std::pair<void*, void*>> getCodeFromCache(const CodeCacheKey&,
                                                         const CodeCache&);
 
@@ -1033,6 +1062,8 @@ class Executor {
   friend class PendingExecutionClosure;
   friend class RelAlgExecutor;
   friend class TableOptimizer;
+  friend class TableFunctionCompilationContext;
+  friend class TableFunctionExecutionContext;
   friend struct TargetExprCodegenBuilder;
   friend struct TargetExprCodegen;
 

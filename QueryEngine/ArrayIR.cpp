@@ -135,10 +135,10 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
 
   for (size_t i = 0; i < array_expr->getElementCount(); i++) {
     auto* element = argument_list[i];
-    auto* element_ptr =
-        ir_builder.CreateGEP(array_type,
-                             casted_allocated_target_buffer,
-                             {cgen_state_->llInt(0), cgen_state_->llInt(i)});
+    auto* element_ptr = ir_builder.CreateGEP(
+        array_type,
+        casted_allocated_target_buffer,
+        std::vector<llvm::Value*>{cgen_state_->llInt(0), cgen_state_->llInt(i)});
 
     if (is_member_of_typeset<kTINYINT,
                              kSMALLINT,

@@ -375,9 +375,13 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
                    col_range_info_nosharding.has_nulls};
 
   // Non-grouped aggregates do not support accessing aggregated ranges
-  const auto keyless_info = !is_group_by
-                                ? KeylessInfo{false, -1, false}
-                                : getKeylessInfo(ra_exe_unit_.target_exprs, is_group_by);
+  // Keyless hash is currently only supported with single-column perfect hash
+  const auto keyless_info =
+      !(is_group_by &&
+        col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
+        ra_exe_unit_.groupby_exprs.size() == 1)
+          ? KeylessInfo{false, -1, false}
+          : getKeylessInfo(ra_exe_unit_.target_exprs, is_group_by);
 
   if (g_enable_watchdog &&
       ((col_range_info.hash_type_ == QueryDescriptionType::GroupByBaselineHash &&
@@ -636,10 +640,6 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
           break;
         case kCOUNT:
           if (arg_expr && !arg_expr->get_type_info().get_notnull()) {
-            const auto& arg_ti = arg_expr->get_type_info();
-            if (arg_ti.is_string() && arg_ti.get_compression() == kENCODING_NONE) {
-              break;
-            }
             auto expr_range_info = getExpressionRange(arg_expr, query_infos_, executor_);
             if (expr_range_info.getType() == ExpressionRangeType::Invalid ||
                 expr_range_info.hasNulls()) {
@@ -724,7 +724,8 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
               getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
           // NULL sentinel and init value for kMAX are identical, which results in
           // ambiguity in detecting empty keys in presence of nulls.
-          if (expr_range_info.hasNulls()) {
+          if (expr_range_info.getType() == ExpressionRangeType::Invalid ||
+              expr_range_info.hasNulls()) {
             break;
           }
           auto init_min = get_agg_initial_val(agg_info.agg_kind,
@@ -1151,7 +1152,7 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenGroupBy(
   llvm::Value* key_size_lv = nullptr;
 
   if (!query_mem_desc.isSingleColumnGroupByWithPerfectHash()) {
-    key_size_lv = LL_INT(static_cast<int32_t>(query_mem_desc.groupColWidthsSize()));
+    key_size_lv = LL_INT(static_cast<int32_t>(query_mem_desc.getGroupbyColCount()));
     if (query_mem_desc.getQueryDescriptionType() ==
         QueryDescriptionType::GroupByPerfectHash) {
       group_key =
@@ -1786,6 +1787,12 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
               bool const fetch_columns) -> std::vector<llvm::Value*> {
         const auto target_lvs =
             code_generator.codegen(selected_target_expr, fetch_columns, co);
+        const auto geo_expr = dynamic_cast<const Analyzer::GeoExpr*>(target_expr);
+        if (geo_expr) {
+          CHECK_EQ(2 * static_cast<size_t>(target_ti.get_physical_coord_cols()),
+                   target_lvs.size());
+          return target_lvs;
+        }
         CHECK_EQ(static_cast<size_t>(target_ti.get_physical_coord_cols()),
                  target_lvs.size());
 

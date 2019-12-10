@@ -65,40 +65,36 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                      const ExecutionOptions& eo,
                                      RenderInfo* render_info);
 
-  ExecutionResult executeRelAlgQueryWithFilterPushDown(
-      std::vector<RaExecutionDesc>& ed_list,
-      const CompilationOptions& co,
-      const ExecutionOptions& eo,
-      RenderInfo* render_info,
-      const int64_t queue_time_ms);
-
-  FirstStepExecutionResult executeRelAlgQuerySingleStep(const RaExecutionDesc& exec_desc,
-                                                        const CompilationOptions& co,
-                                                        const ExecutionOptions& eo,
-                                                        RenderInfo* render_info);
+  ExecutionResult executeRelAlgQueryWithFilterPushDown(const RaExecutionSequence& seq,
+                                                       const CompilationOptions& co,
+                                                       const ExecutionOptions& eo,
+                                                       RenderInfo* render_info,
+                                                       const int64_t queue_time_ms);
 
   void prepareLeafExecution(
       const AggregatedColRange& agg_col_range,
       const StringDictionaryGenerations& string_dictionary_generations,
       const TableGenerations& table_generations);
 
-  ExecutionResult executeRelAlgSubQuery(const RexSubQuery* subquery,
-                                        const CompilationOptions& co,
-                                        const ExecutionOptions& eo);
-
-  ExecutionResult executeRelAlgSeq(std::vector<RaExecutionDesc>& ed_list,
+  ExecutionResult executeRelAlgSeq(const RaExecutionSequence& seq,
                                    const CompilationOptions& co,
                                    const ExecutionOptions& eo,
                                    RenderInfo* render_info,
                                    const int64_t queue_time_ms,
                                    const bool with_existing_temp_tables = false);
 
-  ExecutionResult executeRelAlgSubSeq(std::vector<RaExecutionDesc>::iterator start_desc,
-                                      std::vector<RaExecutionDesc>::iterator end_desc,
+  ExecutionResult executeRelAlgSubSeq(const RaExecutionSequence& seq,
+                                      const std::pair<size_t, size_t> interval,
                                       const CompilationOptions& co,
                                       const ExecutionOptions& eo,
                                       RenderInfo* render_info,
                                       const int64_t queue_time_ms);
+
+  FirstStepExecutionResult executeRelAlgQuerySingleStep(const RaExecutionSequence& seq,
+                                                        const size_t step_idx,
+                                                        const CompilationOptions& co,
+                                                        const ExecutionOptions& eo,
+                                                        RenderInfo* render_info);
 
   void addLeafResult(const unsigned id, const AggregatedResult& result) {
     const auto it_ok = leaf_results_.emplace(id, result);
@@ -131,8 +127,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                             const ExecutionOptions& eo,
                                             RenderInfo* render_info);
 
-  void executeRelAlgStep(const size_t step_idx,
-                         std::vector<RaExecutionDesc>::iterator exec_desc_itr,
+  void executeRelAlgStep(const RaExecutionSequence& seq,
+                         const size_t step_idx,
                          const CompilationOptions&,
                          const ExecutionOptions&,
                          RenderInfo*,
@@ -179,6 +175,11 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                  const int64_t queue_time_ms,
                                  const ssize_t previous_count);
 
+  ExecutionResult executeTableFunction(const RelTableFunction*,
+                                       const CompilationOptions&,
+                                       const ExecutionOptions&,
+                                       const int64_t queue_time_ms);
+
   // Computes the window function results to be used by the query.
   void computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
                      const CompilationOptions& co,
@@ -219,6 +220,11 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
     std::unique_ptr<QueryRewriter> query_rewriter;
     const std::vector<size_t> input_permutation;
     const std::vector<size_t> left_deep_join_input_sizes;
+  };
+
+  struct TableFunctionWorkUnit {
+    TableFunctionExecutionUnit exe_unit;
+    const RelAlgNode* body;
   };
 
   WorkUnit createSortInputWorkUnit(const RelSort*, const bool just_explain);
@@ -293,6 +299,9 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                 const bool just_explain);
 
   WorkUnit createJoinWorkUnit(const RelJoin*, const SortInfo&, const bool just_explain);
+
+  TableFunctionWorkUnit createTableFunctionWorkUnit(const RelTableFunction* table_func,
+                                                    const bool just_explain);
 
   void addTemporaryTable(const int table_id, const ResultSetPtr& result) {
     CHECK_LT(size_t(0), result->colCount());

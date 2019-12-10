@@ -42,4 +42,5 @@ ExtensionFunction bind_function(std::string name,
 ExtensionFunction bind_function(const Analyzer::FunctionOper* function_oper);
 
 bool is_ext_arg_type_array(const ExtArgumentType ext_arg_type);
+bool is_ext_arg_type_geo(const ExtArgumentType ext_arg_type);
 #endif  // QUERYENGINE_EXTENSIONFUNCTIONSBINDING_H

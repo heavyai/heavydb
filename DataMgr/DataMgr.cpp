@@ -345,9 +345,9 @@ AbstractBuffer* DataMgr::getChunkBuffer(const ChunkKey& key,
                                         const MemoryLevel memoryLevel,
                                         const int deviceId,
                                         const size_t numBytes) {
-  auto level = static_cast<size_t>(memoryLevel);
-  assert(level < levelSizes_.size());     // make sure we have a legit buffermgr
-  assert(deviceId < levelSizes_[level]);  // make sure we have a legit buffermgr
+  const auto level = static_cast<size_t>(memoryLevel);
+  CHECK_LT(level, levelSizes_.size());     // make sure we have a legit buffermgr
+  CHECK_LT(deviceId, levelSizes_[level]);  // make sure we have a legit buffermgr
   return bufferMgrs_[level][deviceId]->getBuffer(key, numBytes);
 }
 
@@ -374,8 +374,8 @@ void DataMgr::deleteChunksWithPrefix(const ChunkKey& keyPrefix,
 AbstractBuffer* DataMgr::alloc(const MemoryLevel memoryLevel,
                                const int deviceId,
                                const size_t numBytes) {
-  int level = static_cast<int>(memoryLevel);
-  assert(deviceId < levelSizes_[level]);
+  const auto level = static_cast<int>(memoryLevel);
+  CHECK_LT(deviceId, levelSizes_[level]);
   return bufferMgrs_[level][deviceId]->alloc(numBytes);
 }
 
@@ -432,6 +432,12 @@ void DataMgr::setTableEpoch(const int db_id, const int tb_id, const int start_ep
 
 size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {
   return dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->getTableEpoch(db_id, tb_id);
+}
+
+GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
+  auto global_file_mgr = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
+  CHECK(global_file_mgr);
+  return global_file_mgr;
 }
 
 }  // namespace Data_Namespace

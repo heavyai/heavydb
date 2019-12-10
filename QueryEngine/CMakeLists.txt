@@ -44,6 +44,7 @@ set(query_engine_source_files
     ExtensionFunctions.ast
     ExtensionsIR.cpp
     FromTableReordering.cpp
+    GeoIR.cpp
     GpuInterrupt.cpp
     GpuMemUtils.cpp
     InPlaceSort.cpp
@@ -78,6 +79,9 @@ set(query_engine_source_files
     ResultSet.cpp
     ResultSetIteration.cpp
     ResultSetReduction.cpp
+    ResultSetReductionCodegen.cpp
+    ResultSetReductionInterpreter.cpp
+    ResultSetReductionInterpreterStubs.cpp
     ResultSetReductionJIT.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/LoopControlFlow/JoinLoop.cpp
     ResultSetSort.cpp
@@ -88,6 +92,9 @@ set(query_engine_source_files
     SpeculativeTopN.cpp
     StreamingTopN.cpp
     StringDictionaryGenerations.cpp
+    TableFunctions/TableFunctionCompilationContext.cpp
+    TableFunctions/TableFunctionExecutionContext.cpp
+    TableFunctions/TableFunctionsFactory.cpp
     TableGenerations.cpp
     TableOptimizer.cpp
     TargetExprBuilder.cpp
@@ -96,6 +103,7 @@ set(query_engine_source_files
     StringOpsIR.cpp
     RegexpFunctions.cpp
     JoinHashTable.cpp
+    JoinHashTableInterface.cpp
     HashJoinRuntime.cpp
     WindowContext.cpp
     WindowExpressionRewrite.cpp
@@ -244,7 +252,7 @@ add_custom_command(
     )
 
 add_custom_command(
-    DEPENDS cuda_mapd_rt.cu GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp
+    DEPENDS cuda_mapd_rt.cu GpuInitGroups.cu GroupByRuntime.cpp TopKRuntime.cpp DateTruncate.cpp DateAdd.cpp ExtractFromTime.cpp ArrayOps.cpp StringFunctions.cpp RegexpFunctions.cpp ${CMAKE_SOURCE_DIR}/Utils/ChunkIter.cpp ${CMAKE_SOURCE_DIR}/Utils/StringLike.cpp ${CMAKE_SOURCE_DIR}/Utils/Regexp.cpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctionsGeo.hpp ${CMAKE_CURRENT_SOURCE_DIR}/TableFunctions/TableFunctions.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.o
     COMMAND nvcc
     ARGS

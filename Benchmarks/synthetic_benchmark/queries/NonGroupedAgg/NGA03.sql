@@ -1,0 +1,9 @@
+select
+  MAX(x10),
+  MAX(y10),
+  MAX(z10),
+  MAX(x100),
+  MAX(y100),
+  MAX(z100)
+from
+  ##TAB##

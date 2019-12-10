@@ -51,6 +51,7 @@ struct HashEntryInfo;
 
 class JoinHashTable : public JoinHashTableInterface {
  public:
+  //! Make hash table from an in-flight SQL query's parse tree etc.
   static std::shared_ptr<JoinHashTable> getInstance(
       const std::shared_ptr<Analyzer::BinOper> qual_bin_oper,
       const std::vector<InputTableInfo>& query_infos,
@@ -60,26 +61,31 @@ class JoinHashTable : public JoinHashTableInterface {
       ColumnCacheMap& column_cache,
       Executor* executor);
 
+  //! Make hash table from named tables and columns (such as for testing).
+  static std::shared_ptr<JoinHashTable> getSyntheticInstance(
+      std::string_view table1,
+      std::string_view column1,
+      std::string_view table2,
+      std::string_view column2,
+      const Data_Namespace::MemoryLevel memory_level,
+      const HashType preferred_hash_type,
+      const int device_count,
+      ColumnCacheMap& column_cache,
+      Executor* executor);
+
   int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
-                            const int device_id) noexcept override {
-    if (device_type == ExecutorDeviceType::CPU && !cpu_hash_table_buff_) {
-      return 0;
-    }
-#ifdef HAVE_CUDA
-    CHECK_LT(static_cast<size_t>(device_id), gpu_hash_table_buff_.size());
-    if (device_type == ExecutorDeviceType::CPU) {
-      return reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0]);
-    } else {
-      return gpu_hash_table_buff_[device_id]
-                 ? reinterpret_cast<CUdeviceptr>(
-                       gpu_hash_table_buff_[device_id]->getMemoryPtr())
-                 : reinterpret_cast<CUdeviceptr>(nullptr);
-    }
-#else
-    CHECK(device_type == ExecutorDeviceType::CPU);
-    return reinterpret_cast<int64_t>(&(*cpu_hash_table_buff_)[0]);
-#endif
-  }
+                            const int device_id) const noexcept override;
+
+  size_t getJoinHashBufferSize(const ExecutorDeviceType device_type,
+                               const int device_id) const noexcept override;
+
+  std::string toString(const ExecutorDeviceType device_type,
+                       const int device_id,
+                       bool raw = false) const noexcept override;
+
+  std::set<DecodedJoinHashBufferEntry> decodeJoinHashBuffer(
+      const ExecutorDeviceType device_type,
+      const int device_id) const noexcept override;
 
   llvm::Value* codegenSlot(const CompilationOptions&, const size_t) override;
 
@@ -272,16 +278,6 @@ class JoinHashTable : public JoinHashTableInterface {
       join_hash_table_cache_;
   static std::mutex join_hash_table_cache_mutex_;
 };
-
-inline std::string get_table_name_by_id(const int table_id,
-                                        const Catalog_Namespace::Catalog& cat) {
-  if (table_id >= 1) {
-    const auto td = cat.getMetadataForTable(table_id);
-    CHECK(td);
-    return td->tableName;
-  }
-  return "$TEMPORARY_TABLE" + std::to_string(-table_id);
-}
 
 // TODO(alex): Functions below need to be moved to a separate translation unit, they don't
 // belong here.

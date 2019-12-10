@@ -52,7 +52,7 @@ ChunkMetadata StringNoneEncoder::appendData(const std::vector<std::string>* srcD
                                             const int start_idx,
                                             const size_t numAppendElems,
                                             const bool replicating) {
-  assert(index_buf != nullptr);  // index_buf must be set before this.
+  CHECK(index_buf);  // index_buf must be set before this.
   size_t index_size = numAppendElems * sizeof(StringOffsetT);
   if (num_elems_ == 0) {
     index_size += sizeof(StringOffsetT);  // plus one for the initial offset of 0.
@@ -71,7 +71,7 @@ ChunkMetadata StringNoneEncoder::appendData(const std::vector<std::string>* srcD
                     sizeof(StringOffsetT),
                     index_buf->size() - sizeof(StringOffsetT),
                     Data_Namespace::CPU_LEVEL);
-    assert(last_offset >= 0);
+    CHECK_GE(last_offset, 0);
   }
   size_t data_size = 0;
   for (size_t n = start_idx; n < start_idx + numAppendElems; n++) {

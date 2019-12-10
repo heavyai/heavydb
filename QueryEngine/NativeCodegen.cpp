@@ -68,6 +68,7 @@ std::unique_ptr<llvm::Module> udf_cpu_module;
 std::unique_ptr<llvm::Module> rt_udf_gpu_module;
 std::unique_ptr<llvm::Module> rt_udf_cpu_module;
 
+extern std::unique_ptr<llvm::Module> g_rt_module;
 namespace {
 
 #if defined(HAVE_CUDA) || !defined(WITH_JIT_DEBUG)
@@ -281,6 +282,52 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenCPU(
   addCodeToCache(key, std::move(cache), module, cpu_code_cache_);
 
   return {std::make_pair(native_code, nullptr)};
+}
+
+void CodeGenerator::link_udf_module(const std::unique_ptr<llvm::Module>& udf_module,
+                                    llvm::Module& module,
+                                    CgenState* cgen_state,
+                                    llvm::Linker::Flags flags) {
+  // throw a runtime error if the target module contains functions
+  // with the same name as in module of UDF functions.
+  for (auto& f : *udf_module.get()) {
+    auto func = module.getFunction(f.getName());
+    if (!(func == nullptr) && !f.isDeclaration() && flags == llvm::Linker::Flags::None) {
+      LOG(ERROR) << "  Attempt to overwrite " << f.getName().str() << " in "
+                 << module.getModuleIdentifier() << " from `"
+                 << udf_module->getModuleIdentifier() << "`" << std::endl;
+      throw std::runtime_error(
+          "link_udf_module: *** attempt to overwrite a runtime function with a UDF "
+          "function ***");
+    } else {
+      LOG(INFO) << "  Adding " << f.getName().str() << " to "
+                << module.getModuleIdentifier() << " from `"
+                << udf_module->getModuleIdentifier() << "`" << std::endl;
+    }
+  }
+
+  std::unique_ptr<llvm::Module> udf_module_copy;
+
+  udf_module_copy = llvm::CloneModule(
+#if LLVM_VERSION_MAJOR >= 7
+      *udf_module.get(),
+#else
+      udf_module.get(),
+#endif
+      cgen_state->vmap_);
+
+  udf_module_copy->setDataLayout(module.getDataLayout());
+  udf_module_copy->setTargetTriple(module.getTargetTriple());
+
+  // Initialize linker with module for RuntimeFunctions.bc
+  llvm::Linker ld(module);
+  bool link_error = false;
+
+  link_error = ld.linkInModule(std::move(udf_module_copy), flags);
+
+  if (link_error) {
+    throw std::runtime_error("link_udf_module: *** error linking module ***");
+  }
 }
 
 namespace {
@@ -511,8 +558,8 @@ declare i64* @get_bin_from_k_heap_double(i64*, i32, i32, i32, i1, i1, i1, double
     gen_translate_null_key_sigs();
 
 #ifdef HAVE_CUDA
-std::string extension_function_decls() {
-  const auto decls = ExtensionFunctionsWhitelist::getLLVMDeclarations();
+std::string extension_function_decls(const std::unordered_set<std::string>& udf_decls) {
+  const auto decls = ExtensionFunctionsWhitelist::getLLVMDeclarations(udf_decls);
   return boost::algorithm::join(decls, "\n");
 }
 
@@ -523,69 +570,31 @@ void legalize_nvvm_ir(llvm::Function* query_func) {
   clear_function_attributes(query_func);
   verify_function_ir(query_func);
 
-  std::vector<llvm::Instruction*> unsupported_intrinsics;
+  std::vector<llvm::Instruction*> stackrestore_intrinsics;
+  std::vector<llvm::Instruction*> stacksave_intrinsics;
   for (auto& BB : *query_func) {
     for (llvm::Instruction& I : BB) {
       if (const llvm::IntrinsicInst* II = llvm::dyn_cast<llvm::IntrinsicInst>(&I)) {
-        if (II->getIntrinsicID() == llvm::Intrinsic::stacksave ||
-            II->getIntrinsicID() == llvm::Intrinsic::stackrestore) {
-          unsupported_intrinsics.push_back(&I);
+        if (II->getIntrinsicID() == llvm::Intrinsic::stacksave) {
+          stacksave_intrinsics.push_back(&I);
+        } else if (II->getIntrinsicID() == llvm::Intrinsic::stackrestore) {
+          stackrestore_intrinsics.push_back(&I);
         }
       }
     }
   }
 
-  for (auto& II : unsupported_intrinsics) {
+  // stacksave and stackrestore intrinsics appear together, and
+  // stackrestore uses stacksaved result as its argument
+  // so it should be removed first.
+  for (auto& II : stackrestore_intrinsics) {
+    II->eraseFromParent();
+  }
+  for (auto& II : stacksave_intrinsics) {
     II->eraseFromParent();
   }
 }
 #endif  // HAVE_CUDA
-
-void link_udf_module(const std::unique_ptr<llvm::Module>& udf_module,
-                     llvm::Module& module,
-                     CgenState* cgen_state,
-                     llvm::Linker::Flags flags = llvm::Linker::Flags::None) {
-  // throw a runtime error if the target module contains functions
-  // with the same name as in module of UDF functions.
-  for (auto& f : *udf_module.get()) {
-    auto func = module.getFunction(f.getName());
-    if (!(func == nullptr)) {
-      LOG(FATAL) << "  Attempt to overwrite " << f.getName().str() << " in "
-                 << module.getModuleIdentifier() << " from `"
-                 << udf_module->getModuleIdentifier() << "`" << std::endl;
-      throw std::runtime_error(
-          "link_udf_module: *** attempt to overwrite a runtime function with a UDF "
-          "function ***");
-    } else {
-      LOG(INFO) << "  Adding " << f.getName().str() << " to "
-                << module.getModuleIdentifier() << " from `"
-                << udf_module->getModuleIdentifier() << "`" << std::endl;
-    }
-  }
-
-  std::unique_ptr<llvm::Module> udf_module_copy;
-
-  udf_module_copy = llvm::CloneModule(
-#if LLVM_VERSION_MAJOR >= 7
-      *udf_module.get(),
-#else
-      udf_module.get(),
-#endif
-      cgen_state->vmap_);
-
-  udf_module_copy->setDataLayout(module.getDataLayout());
-  udf_module_copy->setTargetTriple(module.getTargetTriple());
-
-  // Initialize linker with module for RuntimeFunctions.bc
-  llvm::Linker ld(module);
-  bool link_error = false;
-
-  link_error = ld.linkInModule(std::move(udf_module_copy), flags);
-
-  if (link_error) {
-    throw std::runtime_error("link_udf_module: *** error linking module ***");
-  }
-}
 
 }  // namespace
 
@@ -687,6 +696,7 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
 
   // Prevent the udf function(s) from being removed the way the runtime functions are
 
+  std::unordered_set<std::string> udf_declarations;
   if (is_udf_module_present()) {
     for (auto& f : udf_gpu_module->getFunctionList()) {
       llvm::Function* udf_function = module->getFunction(f.getName());
@@ -694,6 +704,12 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
       if (udf_function) {
         legalize_nvvm_ir(udf_function);
         roots.insert(udf_function);
+
+        // If we have a udf that declares a external function
+        // note it so we can avoid duplicate declarations
+        if (f.isDeclaration()) {
+          udf_declarations.insert(f.getName().str());
+        }
       }
     }
   }
@@ -704,6 +720,12 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
       if (udf_function) {
         legalize_nvvm_ir(udf_function);
         roots.insert(udf_function);
+
+        // If we have a udf that declares a external function
+        // note it so we can avoid duplicate declarations
+        if (f.isDeclaration()) {
+          udf_declarations.insert(f.getName().str());
+        }
       }
     }
   }
@@ -720,12 +742,13 @@ CodeGenerator::GPUCode CodeGenerator::generateNativeGPUCode(
   }
   module->print(os, nullptr);
   os.flush();
+
   for (auto& pFn : rt_funcs) {
     module->getFunctionList().push_back(pFn);
   }
   module->eraseNamedMetadata(md);
 
-  auto cuda_llir = cuda_rt_decls + extension_function_decls() + ss.str();
+  auto cuda_llir = cuda_rt_decls + extension_function_decls(udf_declarations) + ss.str();
 
   std::vector<std::pair<void*, void*>> native_functions;
   std::vector<std::tuple<void*, GpuCompilationContext*>> cached_functions;
@@ -885,6 +908,21 @@ void Executor::initializeNVPTXBackend() const {
   nvptx_target_machine_ = CodeGenerator::initializeNVPTXBackend();
 }
 
+// A small number of runtime functions don't get through CgenState::emitCall. List them
+// explicitly here and always clone their implementation from the runtime module.
+bool CodeGenerator::alwaysCloneRuntimeFunction(const llvm::Function* func) {
+  return func->getName() == "query_stub_hoisted_literals" ||
+         func->getName() == "multifrag_query_hoisted_literals" ||
+         func->getName() == "query_stub" || func->getName() == "multifrag_query" ||
+         func->getName() == "fixed_width_int_decode" ||
+         func->getName() == "fixed_width_unsigned_decode" ||
+         func->getName() == "diff_fixed_width_int_decode" ||
+         func->getName() == "fixed_width_double_decode" ||
+         func->getName() == "fixed_width_float_decode" ||
+         func->getName() == "fixed_width_small_date_decode" ||
+         func->getName() == "record_error_code";
+}
+
 llvm::Module* read_template_module(llvm::LLVMContext& context) {
   llvm::SMDiagnostic err;
 
@@ -928,23 +966,6 @@ void bind_pos_placeholders(const std::string& pos_fn_name,
       break;
     }
   }
-}
-
-std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
-                                                     llvm::Function* query_func,
-                                                     llvm::LLVMContext& context) {
-  auto max_col_local_id = num_columns - 1;
-  auto& fetch_bb = query_func->front();
-  llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
-  fetch_ir_builder.SetInsertPoint(&*fetch_bb.begin());
-  auto& byte_stream_arg = *query_func->args().begin();
-  std::vector<llvm::Value*> col_heads;
-  for (int col_id = 0; col_id <= max_col_local_id; ++col_id) {
-    col_heads.emplace_back(fetch_ir_builder.CreateLoad(fetch_ir_builder.CreateGEP(
-        &byte_stream_arg,
-        llvm::ConstantInt::get(llvm::Type::getInt32Ty(context), col_id))));
-  }
-  return col_heads;
 }
 
 void set_row_func_argnames(llvm::Function* row_func,
@@ -1042,7 +1063,11 @@ std::pair<llvm::Function*, std::vector<llvm::Value*>> create_row_function(
 
   // Generate the function signature and column head fetches s.t.
   // double indirection isn't needed in the inner loop
-  auto col_heads = generate_column_heads_load(in_col_count, query_func, context);
+  auto& fetch_bb = query_func->front();
+  llvm::IRBuilder<> fetch_ir_builder(&fetch_bb);
+  fetch_ir_builder.SetInsertPoint(&*fetch_bb.begin());
+  auto col_heads = generate_column_heads_load(
+      in_col_count, query_func->args().begin(), fetch_ir_builder, context);
   CHECK_EQ(in_col_count, col_heads.size());
 
   // column buffer arguments
@@ -1539,25 +1564,6 @@ std::vector<llvm::Value*> Executor::inlineHoistedLiterals() {
   return hoisted_literals;
 }
 
-namespace {
-
-// A small number of runtime functions don't get through CgenState::emitCall. List them
-// explicitly here and always clone their implementation from the runtime module.
-bool always_clone_runtime_function(const llvm::Function* func) {
-  return func->getName() == "query_stub_hoisted_literals" ||
-         func->getName() == "multifrag_query_hoisted_literals" ||
-         func->getName() == "query_stub" || func->getName() == "multifrag_query" ||
-         func->getName() == "fixed_width_int_decode" ||
-         func->getName() == "fixed_width_unsigned_decode" ||
-         func->getName() == "diff_fixed_width_int_decode" ||
-         func->getName() == "fixed_width_double_decode" ||
-         func->getName() == "fixed_width_float_decode" ||
-         func->getName() == "fixed_width_small_date_decode" ||
-         func->getName() == "record_error_code";
-}
-
-}  // namespace
-
 std::tuple<Executor::CompilationResult, std::unique_ptr<QueryMemoryDescriptor>>
 Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                           const RelAlgExecutionUnit& ra_exe_unit,
@@ -1571,7 +1577,8 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                           const bool has_cardinality_estimation,
                           ColumnCacheMap& column_cache,
                           RenderInfo* render_info) {
-  nukeOldState(allow_lazy_fetch, query_infos, ra_exe_unit);
+  auto timer = DEBUG_TIMER(__func__);
+  nukeOldState(allow_lazy_fetch, query_infos, &ra_exe_unit);
 
   GroupByAndAggregate group_by_and_aggregate(
       this, co.device_type_, ra_exe_unit, query_infos, row_set_mem_owner);
@@ -1622,15 +1629,16 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
         }
         return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
                 func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage ||
-                always_clone_runtime_function(func));
+                CodeGenerator::alwaysCloneRuntimeFunction(func));
       });
 
   if (co.device_type_ == ExecutorDeviceType::CPU) {
     if (is_udf_module_present(true)) {
-      link_udf_module(udf_cpu_module, *rt_module_copy, cgen_state_.get());
+      CodeGenerator::link_udf_module(udf_cpu_module, *rt_module_copy, cgen_state_.get());
     }
     if (is_rt_udf_module_present(true)) {
-      link_udf_module(rt_udf_cpu_module, *rt_module_copy, cgen_state_.get());
+      CodeGenerator::link_udf_module(
+          rt_udf_cpu_module, *rt_module_copy, cgen_state_.get());
     }
   } else {
     rt_module_copy->setDataLayout(get_gpu_data_layout());
@@ -1643,10 +1651,11 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
         throw QueryMustRunOnCpu();
       }
 
-      link_udf_module(udf_gpu_module, *rt_module_copy, cgen_state_.get());
+      CodeGenerator::link_udf_module(udf_gpu_module, *rt_module_copy, cgen_state_.get());
     }
     if (is_rt_udf_module_present()) {
-      link_udf_module(rt_udf_gpu_module, *rt_module_copy, cgen_state_.get());
+      CodeGenerator::link_udf_module(
+          rt_udf_gpu_module, *rt_module_copy, cgen_state_.get());
     }
   }
 
@@ -1879,4 +1888,37 @@ bool Executor::compileBody(const RelAlgExecutionUnit& ra_exe_unit,
 
   CHECK(filter_lv->getType()->isIntegerTy(1));
   return group_by_and_aggregate.codegen(filter_lv, sc_false, query_mem_desc, co);
+}
+
+std::unique_ptr<llvm::Module> runtime_module_shallow_copy(CgenState* cgen_state) {
+  return llvm::CloneModule(
+#if LLVM_VERSION_MAJOR >= 7
+      *g_rt_module.get(),
+#else
+      g_rt_module.get(),
+#endif
+      cgen_state->vmap_,
+      [](const llvm::GlobalValue* gv) {
+        auto func = llvm::dyn_cast<llvm::Function>(gv);
+        if (!func) {
+          return true;
+        }
+        return (func->getLinkage() == llvm::GlobalValue::LinkageTypes::PrivateLinkage ||
+                func->getLinkage() == llvm::GlobalValue::LinkageTypes::InternalLinkage);
+      });
+}
+
+std::vector<llvm::Value*> generate_column_heads_load(const int num_columns,
+                                                     llvm::Value* byte_stream_arg,
+                                                     llvm::IRBuilder<>& ir_builder,
+                                                     llvm::LLVMContext& ctx) {
+  CHECK(byte_stream_arg);
+  const auto max_col_local_id = num_columns - 1;
+
+  std::vector<llvm::Value*> col_heads;
+  for (int col_id = 0; col_id <= max_col_local_id; ++col_id) {
+    col_heads.emplace_back(ir_builder.CreateLoad(ir_builder.CreateGEP(
+        byte_stream_arg, llvm::ConstantInt::get(llvm::Type::getInt32Ty(ctx), col_id))));
+  }
+  return col_heads;
 }

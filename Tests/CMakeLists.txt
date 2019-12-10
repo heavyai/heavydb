@@ -9,6 +9,7 @@ add_executable(ExecuteTest ExecuteTest.cpp ClusterTester.cpp)
 add_executable(RunQueryLoop RunQueryLoop.cpp)
 add_executable(StringDictionaryTest StringDictionaryTest.cpp)
 add_executable(StringTransformTest StringTransformTest.cpp)
+add_executable(StringFunctionsTest StringFunctionsTest.cpp)
 add_executable(PlanTest PlanTest.cpp)
 add_executable(ProfileTest ProfileTest.cpp)
 add_executable(ExperimentalTest ExperimentalTest.cpp)
@@ -39,6 +40,7 @@ if(ENABLE_CUDA)
   set(PROF_LIBRARIES ${CMAKE_CURRENT_BINARY_DIR}/libProfileUtils.so)
 endif()
 
+add_executable(DumpRestoreTest DumpRestoreTest.cpp)
 add_executable(ResultSetTest ResultSetTest.cpp ResultSetTestUtils.cpp)
 add_executable(FromTableReorderingTest FromTableReorderingTest.cpp)
 add_executable(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest.cpp ResultSetTestUtils.cpp)
@@ -50,6 +52,7 @@ add_executable(AlterColumnTest AlterColumnTest.cpp)
 add_executable(UpdelStorageTest UpdelStorageTest.cpp)
 add_executable(ComputeMetadataTest ComputeMetadataTest.cpp)
 add_executable(BumpAllocatorTest BumpAllocatorTest.cpp)
+add_executable(TableFunctionsTest TableFunctionsTest.cpp)
 add_executable(TopKTest TopKTest.cpp)
 add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
 add_executable(OmniSQLCommandTest OmniSQLCommandTest.cpp)
@@ -57,6 +60,7 @@ add_executable(OmniSQLUtilitiesTest OmniSQLUtilitiesTest.cpp)
 add_executable(DBObjectPrivilegesTest DBObjectPrivilegesTest.cpp)
 add_executable(GeoTypesTest Shared/GeoTypesTest.cpp)
 add_executable(CtasUpdateTest CtasUpdateTest.cpp)
+add_executable(CorrelatedSubqueryTest CorrelatedSubqueryTest.cpp)
 add_executable(CtasIntegrationTest CtasIntegrationTest.cpp)
 add_executable(DateTimeUtilsTest Shared/DateTimeUtilsTest.cpp)
 add_executable(UpdateMetadataTest UpdateMetadataTest.cpp)
@@ -75,11 +79,18 @@ target_link_libraries(ResultSetBaselineRadixSortTest gtest QueryEngine ${MAPD_RE
 target_link_libraries(UtilTest Utils gtest Shared ${Boost_LIBRARIES})
 target_link_libraries(StringDictionaryTest StringDictionary gtest Shared ${Boost_LIBRARIES})
 target_link_libraries(StringTransformTest Shared gtest ${Boost_LIBRARIES})
+target_link_libraries(StringFunctionsTest gtest QueryRunner ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${LLVM_LINKER_FLAGS}
+    ${CURSES_LIBRARIES} ${LOCALE_LINK_FLAG})
 target_link_libraries(TokenCompletionHintsTest token_completion_hints gtest mapd_thrift Shared ${Boost_LIBRARIES})
-set(EXECUTE_TEST_LIBS gtest QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${Boost_LIBRARIES})
+if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")  # work around linker on centos
+  set(EXECUTE_TEST_LIBS gtest QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${Boost_LIBRARIES} ${MAPD_LIBRARIES})
+else()
+  set(EXECUTE_TEST_LIBS gtest QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${Boost_LIBRARIES})
+endif()
 list(APPEND EXECUTE_TEST_LIBS Calcite)
 list(APPEND EXECUTE_TEST_LIBS Calcite mapd_thrift ${PROFILER_LIBS})
 
+target_link_libraries(DumpRestoreTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS} CsvImport QueryRunner QueryState)
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)
@@ -89,16 +100,18 @@ target_link_libraries(PlanTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UpdelStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ComputeMetadataTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(BumpAllocatorTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UpdateMetadataTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StoragePerfTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
-target_link_libraries(OmniSQLCommandTest gtest ${EXECUTE_TEST_LIBS})
+target_link_libraries(OmniSQLCommandTest gtest ${Boost_LIBRARIES} mapd_thrift)
 target_link_libraries(OmniSQLUtilitiesTest gtest ${Boost_LIBRARIES})
 target_link_libraries(ExperimentalTest gtest Shared)
 target_link_libraries(DBObjectPrivilegesTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(GeoTypesTest gtest Shared ${GDAL_LIBRARIES} ${GDALExtra_LIBRARIES} ${LibAwsS3_SUPPORT_LIBRARIES} ${CMAKE_DL_LIBS})
 target_link_libraries(CtasUpdateTest gtest ${EXECUTE_TEST_LIBS})
+target_link_libraries(CorrelatedSubqueryTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CtasIntegrationTest gtest Shared mapd_thrift ThriftClient ${LLVM_LINKER_FLAGS})
 target_link_libraries(DateTimeUtilsTest gtest Shared ${LLVM_LINKER_FLAGS})
 target_link_libraries(CalciteOptimizeTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
@@ -108,6 +121,7 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
 endif()
 
 set(TEST_ARGS "--gtest_output=xml:../")
+add_test(DumpRestoreTest DumpRestoreTest ${TEST_ARGS})
 add_test(PlanTest PlanTest ${TEST_ARGS})
 add_test(UpdelStorageTest UpdelStorageTest ${TEST_ARGS})
 add_test(ImportTest ImportTest ${TEST_ARGS})
@@ -123,9 +137,11 @@ add_test(ResultSetBaselineRadixSortTest ResultSetBaselineRadixSortTest ${TEST_AR
 add_test(RunQueryLoop RunQueryLoop ${TEST_ARGS})
 add_test(StringDictionaryTest StringDictionaryTest ${TEST_ARGS})
 add_test(StringTransformTest StringTransformTest ${TEST_ARGS})
+add_test(StringFunctionsTest StringFunctionsTest ${TEST_ARGS})
 add_test(StorageTest StorageTest ${TEST_ARGS})
 add_test(ComputeMetadataTest ComputeMetadataTest ${TEST_ARGS})
 add_test(BumpAllocatorTest BumpAllocatorTest ${TEST_ARGS})
+add_test(TableFunctionsTest TableFunctionsTest ${TEST_ARGS})
 add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
 add_test(TokenCompletionHintsTest TokenCompletionHintsTest ${TEST_ARGS})
@@ -134,6 +150,7 @@ add_test(OmniSQLUtilitiesTest OmniSQLUtilitiesTest ${TEST_ARGS})
 add_test(DBObjectPrivilegesTest DBObjectPrivilegesTest ${TEST_ARGS})
 add_test(GeoTypesTest GeoTypesTest ${TEST_ARGS})
 add_test(CtasUpdateTest CtasUpdateTest ${TEST_ARGS})
+add_test(CorrelatedSubqueryTest CorrelatedSubqueryTest ${TEST_ARGS})
 add_test(DateTimeUtilsTest DateTimeUtilsTest ${TEST_ARGS})
 add_test(UpdateMetadataTest UpdateMetadataTest ${TEST_ARGS})
 add_test(CalciteOptimizeTest CalciteOptimizeTest ${TEST_ARGS})
@@ -155,6 +172,7 @@ if("${S3CLIENT_CONF}" MATCHES "AWS_REGION=([^\n]+)")
 endif()
 
 set(SANITY_TESTS
+  DumpRestoreTest
   PlanTest
   ExecuteTest
   CodeGeneratorTest
@@ -168,6 +186,7 @@ set(SANITY_TESTS
   UpdelStorageTest
   ComputeMetadataTest
   BumpAllocatorTest
+  TableFunctionsTest
   TopKTest
   TokenCompletionHintsTest
   OmniSQLCommandTest
@@ -175,10 +194,12 @@ set(SANITY_TESTS
   DBObjectPrivilegesTest
   GeoTypesTest
   CtasUpdateTest
+  CorrelatedSubqueryTest
   DateTimeUtilsTest
   UpdateMetadataTest
   CalciteOptimizeTest
   JoinHashTableTest
+  StringFunctionsTest
 )
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")

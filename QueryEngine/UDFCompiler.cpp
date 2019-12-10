@@ -293,15 +293,25 @@ UdfCompiler::UdfCompiler(const std::string& file_name)
   replaceExtn(udf_ast_file_name_, "ast");
 }
 
-void UdfCompiler::readCompiledModules() {
+void UdfCompiler::readCpuCompiledModule() {
   std::string cpu_ir_file(genCpuIrFilename(udf_file_name_.c_str()));
-  std::string gpu_ir_file(genGpuIrFilename(udf_file_name_.c_str()));
 
   VLOG(1) << "UDFCompiler cpu bc file = " << cpu_ir_file << std::endl;
-  VLOG(1) << "UDFCompiler gpu bc file = " << gpu_ir_file << std::endl;
 
   read_udf_cpu_module(cpu_ir_file);
+}
+
+void UdfCompiler::readGpuCompiledModule() {
+  std::string gpu_ir_file(genGpuIrFilename(udf_file_name_.c_str()));
+
+  VLOG(1) << "UDFCompiler gpu bc file = " << gpu_ir_file << std::endl;
+
   read_udf_gpu_module(gpu_ir_file);
+}
+
+void UdfCompiler::readCompiledModules() {
+  readCpuCompiledModule();
+  readGpuCompiledModule();
 }
 
 int UdfCompiler::compileForGpu() {
@@ -335,17 +345,22 @@ int UdfCompiler::compileUdf() {
       // Compile udf file to generate cpu and gpu bytecode files
 
       int cpu_compile_result = compileToCpuByteCode(udf_file_name_.c_str());
+#ifdef HAVE_CUDA
       int gpu_compile_result = 1;
+#endif
 
       if (cpu_compile_result == 0) {
+        readCpuCompiledModule();
+#ifdef HAVE_CUDA
         gpu_compile_result = compileForGpu();
 
         if (gpu_compile_result == 0) {
-          readCompiledModules();
+          readGpuCompiledModule();
         } else {
           LOG(FATAL) << "Unable to compile UDF file for gpu" << std::endl;
           return 1;
         }
+#endif
       } else {
         LOG(FATAL) << "Unable to compile UDF file for cpu" << std::endl;
         return 1;

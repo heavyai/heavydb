@@ -30,6 +30,7 @@ ALTER         TOK(ALTER)
 ADD           TOK(ADD)
 AND           TOK(AND)
 ANY           { yylval.qualval = kANY; TOK(ANY) }
+ARCHIVE       TOK(ARCHIVE)
 ARRAY         TOK(ARRAY)
 <STATE_CREATE>AS    { BEGIN STATE_CREATE_AS; return SQLParser::AS; }
 AS            TOK(AS)
@@ -66,6 +67,7 @@ DICTIONARY    TOK(DICTIONARY)
 DISTINCT      TOK(DISTINCT)
 DOUBLE        TOK(DOUBLE)
 DROP          TOK(DROP)
+DUMP          TOK(DUMP)
 EDIT          TOK(EDIT)
 EDITOR        TOK(EDITOR)
 ELSE          TOK(ELSE)
@@ -122,6 +124,7 @@ PUBLIC        TOK(PUBLIC)
 REAL          TOK(REAL)
 REFERENCES		TOK(REFERENCES)
 RENAME        TOK(RENAME)
+RESTORE       TOK(RESTORE)
 REVOKE        TOK(REVOKE)
 ROLE          TOK(ROLE)
 ROLLBACK      TOK(ROLLBACK)
@@ -206,7 +209,7 @@ WORK          TOK(WORK)
 -?"."[0-9]*[eE][+-]?[0-9]+	{ yylval.doubleval = atof(yytext); TOK(DOUBLE) }
 
 	/* strings */
-<STATE_CREATE_AS>.+[ \n\t\r]+/([Ww][Ii][Tt]) {
+<STATE_CREATE_AS>(.|\n|\r)+[ \n\t\r]+/([Ww][Ii][Tt]) {
     int len = yyleng;
     yylval.stringval = new std::string(yytext, len);
     boost::trim(*yylval.stringval);
@@ -215,11 +218,12 @@ WORK          TOK(WORK)
     return SQLParser::SELECTSTRING;
   }
 
-<STATE_CREATE_AS>.+/[;] {
+<STATE_CREATE_AS>(.|\n|\r)+/[;] {
     int len = yyleng;
-    const std::string keyword = "with";
     std::string tmp(yytext, len);
-    if (boost::algorithm::ifind_first(tmp, keyword)) {
+    boost::regex keyword{"\\swith", boost::regex::icase};
+    boost::smatch what;
+    if (boost::regex_search(tmp, what, keyword)) {
       REJECT;
     } else {
       yylval.stringval = new std::string(yytext, len);
@@ -231,9 +235,10 @@ WORK          TOK(WORK)
 
 <STATE_INSERT_INTO>[( ]*([Ss][Ee][Ll][Ee][Cc][Tt]).+/[;] {
     int len = yyleng;
-    const std::string keyword = "values";
     std::string tmp(yytext, len);
-    if (boost::algorithm::ifind_first(tmp, keyword)) {
+    boost::regex keyword{"\\svalues", boost::regex::icase};
+    boost::smatch what;
+    if (boost::regex_search(tmp, what, keyword)) {
       REJECT;
     } else {
       yylval.stringval = new std::string(yytext, len);

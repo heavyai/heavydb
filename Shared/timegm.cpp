@@ -92,7 +92,7 @@ time_t TimeGM::parse_meridians(const time_t& timeval,
 /*
  * Code adapted from Python 2.4.1 sources (Lib/calendar.py).
  */
-time_t TimeGM::my_timegm_days(const struct tm* tm) {
+time_t TimeGM::my_timegm_days(tm const* tm) {
   int32_t year;
   time_t days;
   year = 1900 + tm->tm_year;
@@ -105,7 +105,7 @@ time_t TimeGM::my_timegm_days(const struct tm* tm) {
   return days;
 }
 
-time_t TimeGM::my_timegm(const struct tm* tm) {
+time_t TimeGM::my_timegm(tm const* tm) {
   time_t days;
   time_t hours;
   time_t minutes;
@@ -121,11 +121,25 @@ time_t TimeGM::my_timegm(const struct tm* tm) {
   return seconds;
 }
 
-time_t TimeGM::my_timegm(const struct tm* tm, const time_t fsc, const int32_t dimen) {
-  time_t sec;
+time_t TimeGM::get_overflow_underflow_safe_epoch(tm const* tm,
+                                                 const time_t fsc,
+                                                 const int32_t dimen) {
+  const time_t epoch_seconds = my_timegm(tm);
+  const time_t epoch_scaled = epoch_seconds * static_cast<int64_t>(pow(10, dimen));
+  if (epoch_seconds &&
+      epoch_seconds != epoch_scaled / static_cast<int64_t>(pow(10, dimen))) {
+    throw std::runtime_error("Value out of range for TIMESTAMP(" + std::to_string(dimen) +
+                             ").");
+  }
+  const time_t epoch_total = epoch_scaled + fsc;
+  if ((epoch_seconds > 0 && epoch_total < 0) || (epoch_seconds < 0 && epoch_total > 0)) {
+    throw std::runtime_error("Value out of range for TIMESTAMP(" + std::to_string(dimen) +
+                             ").");
+  }
 
-  sec = my_timegm(tm) * static_cast<int64_t>(pow(10, dimen));
-  sec += fsc;
+  return epoch_total;
+}
 
-  return sec;
+time_t TimeGM::my_timegm(tm const* tm, const time_t fsc, const int32_t dimen) {
+  return get_overflow_underflow_safe_epoch(tm, fsc, dimen);
 }

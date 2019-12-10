@@ -65,6 +65,7 @@
 
 size_t g_leaf_count{0};
 bool g_use_date_in_days_default_encoding{true};
+extern bool g_enable_experimental_string_functions;
 
 using namespace Lock_Namespace;
 using Catalog_Namespace::SysCatalog;
@@ -888,6 +889,17 @@ bool expr_is_null(const Analyzer::Expr* expr) {
   return const_expr && const_expr->get_is_null();
 }
 
+bool bool_from_string_literal(const Parser::StringLiteral* str_literal) {
+  const std::string* s = str_literal->get_stringval();
+  if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
+    return true;
+  } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
+    return false;
+  } else {
+    throw std::runtime_error("Invalid string for boolean " + *s);
+  }
+}
+
 }  // namespace
 
 std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
@@ -1699,7 +1711,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
     auto e = v->analyze(catalog, query);
     const ColumnDescriptor* cd =
         catalog.getMetadataForColumn(query.get_result_table_id(), *it);
-    assert(cd != nullptr);
+    CHECK(cd);
     if (cd->columnType.get_notnull()) {
       auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
       if (c != nullptr && c->get_is_null()) {
@@ -2130,24 +2142,12 @@ void get_table_definitions(TableDescriptor& td,
 
 }  // namespace
 
-void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
-  auto& catalog = session.getCatalog();
-  // check access privileges
-  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
-                                       AccessPrivileges::CREATE_TABLE)) {
-    throw std::runtime_error("Table " + *table_ +
-                             " will not be created. User has no create privileges.");
-  }
-
-  if (catalog.getMetadataForTable(*table_) != nullptr) {
-    if (if_not_exists_) {
-      return;
-    }
-    throw std::runtime_error("Table " + *table_ + " already exists.");
-  }
-  std::list<ColumnDescriptor> columns;
+void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& session,
+                                    TableDescriptor& td,
+                                    std::list<ColumnDescriptor>& columns,
+                                    std::vector<SharedDictionaryDef>& shared_dict_defs) {
   std::unordered_set<std::string> uc_col_names;
-  std::vector<SharedDictionaryDef> shared_dict_defs;
+  const auto& catalog = session.getCatalog();
   const ShardKeyDef* shard_key_def{nullptr};
   for (auto& e : table_element_list_) {
     if (dynamic_cast<SharedDictionaryDef*>(e.get())) {
@@ -2184,9 +2184,7 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     columns.push_back(cd);
   }
 
-  TableDescriptor td;
   td.tableName = *table_;
-  td.userId = session.get_currentUser().userId;
   td.nColumns = columns.size();
   td.isView = false;
   td.fragmenter = nullptr;
@@ -2216,6 +2214,31 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("SHARD_COUNT needs to be specified with SHARD_KEY.");
   }
   td.keyMetainfo = serialize_key_metainfo(shard_key_def, shared_dict_defs);
+}
+
+void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.getCatalog();
+  // check access privileges
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                       AccessPrivileges::CREATE_TABLE)) {
+    throw std::runtime_error("Table " + *table_ +
+                             " will not be created. User has no create privileges.");
+  }
+
+  if (catalog.getMetadataForTable(*table_) != nullptr) {
+    if (if_not_exists_) {
+      return;
+    }
+    throw std::runtime_error("Table " + *table_ + " already exists.");
+  }
+  TableDescriptor td;
+  std::list<ColumnDescriptor> columns;
+  std::unordered_set<std::string> uc_col_names;
+  std::vector<SharedDictionaryDef> shared_dict_defs;
+
+  executeDryRun(session, td, columns, shared_dict_defs);
+  td.userId = session.get_currentUser().userId;
+
   catalog.createShardedTable(td, columns, shared_dict_defs);
   // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o
   // privileges
@@ -2589,6 +2612,33 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
     thread_start_idx[thread_id] = idx;
   };
 
+  auto single_threaded_convert_function = [&result_rows,
+                                           &value_converters,
+                                           &row_idx,
+                                           &num_rows_to_process,
+                                           &thread_start_idx,
+                                           &thread_end_idx](const int thread_id) {
+    const int num_cols = value_converters.size();
+    const size_t start = thread_start_idx[thread_id];
+    const size_t end = thread_end_idx[thread_id];
+    size_t idx = 0;
+    for (idx = start; idx < end; ++idx) {
+      size_t target_row = row_idx.fetch_add(1);
+
+      if (target_row >= num_rows_to_process) {
+        break;
+      }
+      const auto result_row = result_rows->getNextRow(false, false);
+      CHECK(!result_row.empty());
+      for (unsigned int col = 0; col < num_cols; col++) {
+        const auto& mapd_variant = result_row[col];
+        value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
+      }
+    }
+
+    thread_start_idx[thread_id] = idx;
+  };
+
   if (can_go_parallel) {
     const size_t entryCount = result_rows->entryCount();
     for (size_t i = 0,
@@ -2606,6 +2656,12 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
     thread_end_idx[0] = result_rows->entryCount();
   }
 
+  std::shared_ptr<Executor> executor;
+
+  if (g_enable_experimental_string_functions) {
+    executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
+  }
+
   while (start_row < num_rows) {
     try {
       value_converters.clear();
@@ -2621,7 +2677,13 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
             targetDescriptor,
             targetDescriptor->columnType,
             !targetDescriptor->columnType.get_notnull(),
-            result_rows->getRowSetMemOwner()->getLiteralStringDictProxy()};
+            result_rows->getRowSetMemOwner()->getLiteralStringDictProxy(),
+            g_enable_experimental_string_functions
+                ? executor->getStringDictionaryProxy(
+                      sourceDataMetaInfo.get_type_info().get_comp_param(),
+                      result_rows->getRowSetMemOwner(),
+                      true)
+                : nullptr};
         auto converter = factory.create(param);
         value_converters.push_back(std::move(converter));
       }
@@ -2640,7 +2702,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
         }
 
       } else {
-        convert_function(0);
+        single_threaded_convert_function(0);
       }
 
       // finalize the insert data
@@ -2732,6 +2794,9 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
     }
 
     if (catalog.getMetadataForTable(table_name_) != nullptr) {
+      if (if_not_exists_) {
+        return;
+      }
       throw std::runtime_error("Table " + table_name_ +
                                " already exists and no data was loaded.");
     }
@@ -2742,6 +2807,13 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
         local_connector.query(query_state->createQueryStateProxy(), select_query_, true);
     const auto column_descriptors_for_create =
         local_connector.getColumnDescriptors(result, true);
+
+    // some validation as the QE might return some out of range column types
+    for (auto& cd : column_descriptors_for_create) {
+      if (cd.columnType.is_decimal() && cd.columnType.get_precision() > 18) {
+        throw std::runtime_error(cd.columnName + ": Precision too high, max 18.");
+      }
+    }
 
     TableDescriptor td;
     td.tableName = table_name_;
@@ -3440,14 +3512,9 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         if (str_literal == nullptr) {
           throw std::runtime_error("Header option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.has_header = Importer_NS::ImportHeaderRow::HAS_HEADER;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.has_header = Importer_NS::ImportHeaderRow::NO_HEADER;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
+        copy_params.has_header = bool_from_string_literal(str_literal)
+                                     ? Importer_NS::ImportHeaderRow::HAS_HEADER
+                                     : Importer_NS::ImportHeaderRow::NO_HEADER;
 #ifdef ENABLE_IMPORT_PARQUET
       } else if (boost::iequals(*p->get_name(), "parquet")) {
         const StringLiteral* str_literal =
@@ -3455,14 +3522,10 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         if (str_literal == nullptr) {
           throw std::runtime_error("Parquet option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
+        if (bool_from_string_literal(str_literal)) {
           // not sure a parquet "table" type is proper, but to make code
           // look consistent in some places, let's set "table" type too
           copy_params.file_type = Importer_NS::FileType::PARQUET;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
         }
 #endif  // ENABLE_IMPORT_PARQUET
       } else if (boost::iequals(*p->get_name(), "s3_access_key")) {
@@ -3526,28 +3589,14 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         if (str_literal == nullptr) {
           throw std::runtime_error("Quoted option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.quoted = true;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.quoted = false;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
+        copy_params.quoted = bool_from_string_literal(str_literal);
       } else if (boost::iequals(*p->get_name(), "plain_text")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
           throw std::runtime_error("plain_text option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.plain_text = true;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.plain_text = false;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
+        copy_params.plain_text = bool_from_string_literal(str_literal);
       } else if (boost::iequals(*p->get_name(), "array_marker")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -3574,28 +3623,16 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
         if (str_literal == nullptr) {
           throw std::runtime_error("Lonlat option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.lonlat = true;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.lonlat = false;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
+        copy_params.lonlat = bool_from_string_literal(str_literal);
       } else if (boost::iequals(*p->get_name(), "geo")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
         if (str_literal == nullptr) {
           throw std::runtime_error("Geo option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.file_type = Importer_NS::FileType::POLYGON;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.file_type = Importer_NS::FileType::DELIMITED;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
+        copy_params.file_type = bool_from_string_literal(str_literal)
+                                    ? Importer_NS::FileType::POLYGON
+                                    : Importer_NS::FileType::DELIMITED;
       } else if (boost::iequals(*p->get_name(), "geo_coords_type")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -3674,6 +3711,20 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
           throw std::runtime_error("PARTITIONS option not supported for non-geo COPY: " +
                                    *p->get_name());
         }
+      } else if (boost::iequals(*p->get_name(), "geo_assign_render_groups")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("geo_assign_render_groups option must be a boolean.");
+        }
+        copy_params.geo_assign_render_groups = bool_from_string_literal(str_literal);
+      } else if (boost::iequals(*p->get_name(), "geo_explode_collections")) {
+        const StringLiteral* str_literal =
+            dynamic_cast<const StringLiteral*>(p->get_value());
+        if (str_literal == nullptr) {
+          throw std::runtime_error("geo_explode_collections option must be a boolean.");
+        }
+        copy_params.geo_explode_collections = bool_from_string_literal(str_literal);
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
@@ -4122,14 +4173,9 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         if (str_literal == nullptr) {
           throw std::runtime_error("Header option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.has_header = Importer_NS::ImportHeaderRow::HAS_HEADER;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.has_header = Importer_NS::ImportHeaderRow::NO_HEADER;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
+        copy_params.has_header = bool_from_string_literal(str_literal)
+                                     ? Importer_NS::ImportHeaderRow::HAS_HEADER
+                                     : Importer_NS::ImportHeaderRow::NO_HEADER;
       } else if (boost::iequals(*p->get_name(), "quote")) {
         const StringLiteral* str_literal =
             dynamic_cast<const StringLiteral*>(p->get_value());
@@ -4163,28 +4209,7 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
         if (str_literal == nullptr) {
           throw std::runtime_error("Quoted option must be a boolean.");
         }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.quoted = true;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.quoted = false;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
-      } else if (boost::iequals(*p->get_name(), "header")) {
-        const StringLiteral* str_literal =
-            dynamic_cast<const StringLiteral*>(p->get_value());
-        if (str_literal == nullptr) {
-          throw std::runtime_error("Header option must be a boolean.");
-        }
-        const std::string* s = str_literal->get_stringval();
-        if (*s == "t" || *s == "true" || *s == "T" || *s == "True") {
-          copy_params.has_header = Importer_NS::ImportHeaderRow::HAS_HEADER;
-        } else if (*s == "f" || *s == "false" || *s == "F" || *s == "False") {
-          copy_params.has_header = Importer_NS::ImportHeaderRow::NO_HEADER;
-        } else {
-          throw std::runtime_error("Invalid string for boolean " + *s);
-        }
+        copy_params.quoted = bool_from_string_literal(str_literal);
       } else {
         throw std::runtime_error("Invalid option for COPY: " + *p->get_name());
       }
@@ -4584,6 +4609,43 @@ void DropUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   SysCatalog::instance().dropUser(*user_name);
 }
+
+void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  // check access privileges
+  if (!session.checkDBAccessPrivileges(
+          DBObjectType::TableDBObjectType, AccessPrivileges::SELECT_FROM_TABLE, *table)) {
+    throw std::runtime_error("Table " + *table +
+                             " will not be dumped. User has no select privileges.");
+  }
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                       AccessPrivileges::CREATE_TABLE)) {
+    throw std::runtime_error("Table " + *table +
+                             " will not be dumped. User has no create privileges.");
+  }
+  auto& catalog = session.getCatalog();
+  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+  catalog.dumpTable(td, *path, compression);
+}
+
+void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.getCatalog();
+  const TableDescriptor* td = catalog.getMetadataForTable(*table, false);
+  if (td) {
+    // TODO: v1.0 simply throws to avoid accidentally overwrite target table.
+    // Will add a REPLACE TABLE to explictly replace target table.
+    // catalog.restoreTable(session, td, *path, compression);
+    throw std::runtime_error("Table " + *table + " exists.");
+  } else {
+    // check access privileges
+    if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                         AccessPrivileges::CREATE_TABLE)) {
+      throw std::runtime_error("Table " + *table +
+                               " will not be restored. User has no create privileges.");
+    }
+    catalog.restoreTable(session, *table, *path, compression);
+  }
+}
+
 }  // namespace Parser
 
 // this is a non-clustered version of MapDHandler::prepare_columnar_loader,

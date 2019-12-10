@@ -104,7 +104,8 @@ struct DictionaryConverterFactory {
         target_null_value,
         NULL_INT,
         param.can_be_null,
-        param.literals_dictionary);
+        param.literals_dictionary,
+        param.source_dictionary_proxy);
   }
 
   std::unique_ptr<TargetValueConverter> operator()(ConverterCreateParameter param) {

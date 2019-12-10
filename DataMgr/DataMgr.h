@@ -37,7 +37,8 @@
 
 namespace File_Namespace {
 class FileBuffer;
-}
+class GlobalFileMgr;
+}  // namespace File_Namespace
 
 namespace CudaMgr_Namespace {
 class CudaMgr;
@@ -114,6 +115,7 @@ class DataMgr {
   size_t getTableEpoch(const int db_id, const int tb_id);
 
   CudaMgr_Namespace::CudaMgr* getCudaMgr() const { return cudaMgr_.get(); }
+  File_Namespace::GlobalFileMgr* getGlobalFileMgr() const;
 
   // database_id, table_id, column_id, fragment_id
   std::vector<int> levelSizes_;

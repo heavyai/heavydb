@@ -139,6 +139,8 @@ class ExpressionRange {
 
   bool operator==(const ExpressionRange& other) const;
 
+  static bool typeSupportsRange(const SQLTypeInfo& ti);
+
  private:
   ExpressionRange(const int64_t int_min_in,
                   const int64_t int_max_in,

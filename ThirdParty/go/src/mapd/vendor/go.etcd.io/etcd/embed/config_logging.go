@@ -159,7 +159,7 @@ func (cfg *Config) setupLogging() error {
 			copied := logutil.AddOutputPaths(logutil.DefaultZapLoggerConfig, outputPaths, errOutputPaths)
 
 			if cfg.Debug {
-				copied.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+				copied.Level = zap.NewAtomicLevelAt(zap.ErrorLevel)
 				grpc.EnableTracing = true
 			}
 			if cfg.ZapLoggerBuilder == nil {

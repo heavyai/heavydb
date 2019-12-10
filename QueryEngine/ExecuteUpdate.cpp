@@ -36,8 +36,8 @@ std::vector<TargetValue> UpdateLogForFragment::getTranslatedEntryAt(
   return rs_->getRowAt(index);
 }
 
-size_t UpdateLogForFragment::count() const {
-  return getEntryCount();
+size_t const UpdateLogForFragment::getRowCount() const {
+  return rs_->rowCount();
 }
 
 UpdateLogForFragment::FragmentInfoType const& UpdateLogForFragment::getFragmentInfo()
@@ -58,12 +58,13 @@ SQLTypeInfo UpdateLogForFragment::getColumnType(const size_t col_idx) const {
 }
 
 void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
-                             const InputTableInfo& table_info,
+                             const std::vector<InputTableInfo>& table_infos,
                              const CompilationOptions& co,
                              const ExecutionOptions& eo,
                              const Catalog_Namespace::Catalog& cat,
                              std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
-                             const UpdateLogForFragment::Callback& cb) {
+                             const UpdateLogForFragment::Callback& cb,
+                             const bool is_agg) {
   CHECK(cb);
   const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
   ColumnCacheMap column_cache;
@@ -76,53 +77,45 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
                                   nullptr);
   const auto count_all_exe_unit = create_count_all_execution_unit(ra_exe_unit, count);
 
-  std::vector<InputTableInfo> table_infos{table_info};
-  ExecutionDispatch execution_dispatch(
-      this, count_all_exe_unit, table_infos, cat, row_set_mem_owner, nullptr);
   ColumnFetcher column_fetcher(this, column_cache);
-  const auto execution_descriptors =
-      execution_dispatch.compile(0, 8, co, eo, column_fetcher, false);
-  CHECK_EQ(size_t(1), ra_exe_unit.input_descs.size());
+  CHECK_GT(ra_exe_unit.input_descs.size(), size_t(0));
   const auto table_id = ra_exe_unit.input_descs[0].getTableId();
-  const auto& outer_fragments = table_info.info.fragments;
-  for (size_t fragment_index = 0; fragment_index < outer_fragments.size();
-       ++fragment_index) {
-    // We may want to consider in the future allowing this to execute on devices other
-    // than CPU
-    execution_dispatch.run(
-        co.device_type_,
-        0,
-        eo,
-        column_fetcher,
-        *std::get<QueryCompilationDescriptorOwned>(execution_descriptors),
-        *std::get<QueryMemoryDescriptorOwned>(execution_descriptors),
-        {{table_id, {fragment_index}}},
-        ExecutorDispatchMode::KernelPerFragment,
-        -1);
+  const auto& outer_fragments = table_infos.front().info.fragments;
+
+  std::vector<FragmentsPerTable> fragments = {{0, {0}}};
+  for (size_t tab_idx = 1; tab_idx < ra_exe_unit.input_descs.size(); tab_idx++) {
+    int table_id = ra_exe_unit.input_descs[tab_idx].getTableId();
+    CHECK_EQ(table_infos[tab_idx].table_id, table_id);
+    const auto& fragmentsPerTable = table_infos[tab_idx].info.fragments;
+    FragmentsPerTable entry = {table_id, {}};
+    for (size_t innerFragId = 0; innerFragId < fragmentsPerTable.size(); innerFragId++) {
+      entry.fragment_ids.push_back(innerFragId);
+    }
+    fragments.push_back(entry);
   }
-  // Further optimization possible here to skip fragments
-  CHECK_EQ(outer_fragments.size(), execution_dispatch.getFragmentResults().size());
+
   // There could be benefit to multithread this once we see where the bottle necks really
   // are
   for (size_t fragment_index = 0; fragment_index < outer_fragments.size();
        ++fragment_index) {
-    const auto& fragment_results =
-        execution_dispatch.getFragmentResults()[fragment_index];
-    const auto count_result_set = fragment_results.first;
-    CHECK(count_result_set);
-    const auto count_row = count_result_set->getNextRow(false, false);
-    CHECK_EQ(size_t(1), count_row.size());
-    const auto& count_tv = count_row.front();
-    const auto count_scalar_tv = boost::get<ScalarTargetValue>(&count_tv);
-    CHECK(count_scalar_tv);
-    const auto count_ptr = boost::get<int64_t>(count_scalar_tv);
-    CHECK(count_ptr);
     ExecutionDispatch current_fragment_execution_dispatch(
         this, ra_exe_unit, table_infos, cat, row_set_mem_owner, nullptr);
+
+    const int64_t crt_fragment_tuple_count =
+        outer_fragments[fragment_index].getNumTuples();
+    int64_t max_groups_buffer_entry_guess = crt_fragment_tuple_count;
+    if (is_agg) {
+      max_groups_buffer_entry_guess =
+          std::min(2 * max_groups_buffer_entry_guess, static_cast<int64_t>(100'000'000));
+    }
+
     const auto execution_descriptors = current_fragment_execution_dispatch.compile(
-        *count_ptr, 8, co, eo, column_fetcher, false);
+        max_groups_buffer_entry_guess, 8, co, eo, column_fetcher, true);
     // We may want to consider in the future allowing this to execute on devices other
     // than CPU
+
+    fragments[0] = {table_id, {fragment_index}};
+
     current_fragment_execution_dispatch.run(
         co.device_type_,
         0,
@@ -130,7 +123,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
         column_fetcher,
         *std::get<QueryCompilationDescriptorOwned>(execution_descriptors),
         *std::get<QueryMemoryDescriptorOwned>(execution_descriptors),
-        {FragmentsPerTable{table_id, {fragment_index}}},
+        fragments,
         ExecutorDispatchMode::KernelPerFragment,
         -1);
     const auto& proj_fragment_results =

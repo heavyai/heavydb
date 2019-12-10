@@ -58,6 +58,11 @@ class ExtensionFunctionSignatureParser {
 
   static Map<String, ExtensionFunction> parseFromString(final String udf_string)
           throws IOException {
+    return parseFromString(udf_string, true);
+  }
+
+  static Map<String, ExtensionFunction> parseFromString(
+          final String udf_string, final boolean is_row_func) throws IOException {
     StringReader stringReader = new StringReader(udf_string);
     BufferedReader bufferedReader = new BufferedReader(stringReader);
     String line;
@@ -69,12 +74,11 @@ class ExtensionFunctionSignatureParser {
         final String name = m.group(1);
         final String ret = m.group(2);
         final String cs_param_list = m.group(3);
-        sigs.put(name, toSignature(ret, cs_param_list));
+        sigs.put(name, toSignature(ret, cs_param_list, is_row_func));
       }
     }
     return sigs;
   }
-
   static String signaturesToJson(final Map<String, ExtensionFunction> sigs) {
     List<String> json_sigs = new ArrayList<String>();
     if (sigs != null) {
@@ -87,6 +91,11 @@ class ExtensionFunctionSignatureParser {
 
   private static ExtensionFunction toSignature(
           final String ret, final String cs_param_list) {
+    return toSignature(ret, cs_param_list, true);
+  }
+
+  private static ExtensionFunction toSignature(
+          final String ret, final String cs_param_list, final boolean is_row_func) {
     String[] params = cs_param_list.split(",");
     List<ExtensionFunction.ExtArgumentType> args =
             new ArrayList<ExtensionFunction.ExtArgumentType>();
@@ -96,9 +105,8 @@ class ExtensionFunctionSignatureParser {
         args.add(arg_type);
       }
     }
-    return new ExtensionFunction(args, deserializeType(ret));
+    return new ExtensionFunction(args, deserializeType(ret), is_row_func);
   }
-
   private static ExtensionFunction.ExtArgumentType deserializeType(
           final String type_name) {
     final String const_prefix = "const ";
@@ -110,8 +118,9 @@ class ExtensionFunctionSignatureParser {
     if (type_name.startsWith(std_namespace_prefix)) {
       return deserializeType(type_name.substring(std_namespace_prefix.length()));
     }
+
     if (type_name.equals("bool") || type_name.equals("_Bool")) {
-      return ExtensionFunction.ExtArgumentType.Bool;
+      return ExtensionFunction.ExtArgumentType.Int8; // bool is mapped to int8
     }
     if (type_name.equals("int8_t") || type_name.equals("char")
             || type_name.equals("int8")) {
@@ -146,6 +155,9 @@ class ExtensionFunctionSignatureParser {
       return pointerType(deserializeType(type_name.substring(0, type_name.length() - 1)));
     }
 
+    if (type_name.equals("Array<bool>")) {
+      return ExtensionFunction.ExtArgumentType.ArrayInt8;
+    }
     if (type_name.equals("Array<int8_t>") || type_name.equals("Array<char>")) {
       return ExtensionFunction.ExtArgumentType.ArrayInt8;
     }
@@ -165,6 +177,22 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("Array<double>")) {
       return ExtensionFunction.ExtArgumentType.ArrayDouble;
     }
+    if (type_name.equals("Cursor")) {
+      return ExtensionFunction.ExtArgumentType.Cursor;
+    }
+    if (type_name.equals("GeoPoint")) {
+      return ExtensionFunction.ExtArgumentType.GeoPoint;
+    }
+    if (type_name.equals("GeoLineString")) {
+      return ExtensionFunction.ExtArgumentType.GeoLineString;
+    }
+    if (type_name.equals("GeoPolygon")) {
+      return ExtensionFunction.ExtArgumentType.GeoPolygon;
+    }
+
+    MAPDLOGGER.info(
+            "ExtensionfunctionSignatureParser::deserializeType: unknown type_name=`"
+            + type_name + "`");
     assert false;
     return null;
   }
@@ -172,6 +200,7 @@ class ExtensionFunctionSignatureParser {
   private static ExtensionFunction.ExtArgumentType pointerType(
           final ExtensionFunction.ExtArgumentType targetType) {
     switch (targetType) {
+      case Bool:
       case Int8:
         return ExtensionFunction.ExtArgumentType.PInt8;
       case Int16:

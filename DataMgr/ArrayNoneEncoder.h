@@ -69,7 +69,7 @@ class ArrayNoneEncoder : public Encoder {
                            const size_t numAppendElems,
                            const SQLTypeInfo&,
                            const bool replicating = false) override {
-    assert(false);  // should never be called for arrays
+    UNREACHABLE();  // should never be called for arrays
     return ChunkMetadata{};
   }
 
@@ -77,7 +77,7 @@ class ArrayNoneEncoder : public Encoder {
                            const int start_idx,
                            const size_t numAppendElems,
                            const bool replicating) {
-    assert(index_buf != nullptr);  // index_buf must be set before this.
+    CHECK(index_buf != nullptr);  // index_buf must be set before this.
     size_t index_size = numAppendElems * sizeof(ArrayOffsetT);
     if (num_elems_ == 0) {
       index_size += sizeof(ArrayOffsetT);  // plus one for the initial offset
@@ -105,7 +105,7 @@ class ArrayNoneEncoder : public Encoder {
                       sizeof(ArrayOffsetT),
                       index_buf->size() - sizeof(ArrayOffsetT),
                       Data_Namespace::CPU_LEVEL);
-      assert(last_offset != -1);
+      CHECK(last_offset != -1);
       // If the loaded offset is negative it means the last value was a NULL array,
       // convert to a valid last offset
       if (last_offset < 0) {
@@ -450,7 +450,7 @@ class ArrayNoneEncoder : public Encoder {
       case kCHAR:
       case kVARCHAR:
       case kTEXT: {
-        assert(buffer_->sql_type.get_compression() == kENCODING_DICT);
+        CHECK_EQ(buffer_->sql_type.get_compression(), kENCODING_DICT);
         if (!initialized) {
           elem_min.intval = 1;
           elem_max.intval = 0;
@@ -474,7 +474,7 @@ class ArrayNoneEncoder : public Encoder {
         break;
       }
       default:
-        assert(false);
+        UNREACHABLE();
     }
   };
 

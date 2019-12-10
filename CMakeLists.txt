@@ -36,8 +36,8 @@ set_property(CACHE MAPD_EDITION PROPERTY STRINGS "EE" "CE" "OS")
 add_definitions("-DMAPD_EDITION_${MAPD_EDITION}")
 string(TOLOWER "${MAPD_EDITION}" MAPD_EDITION_LOWER)
 
-set(MAPD_VERSION_MAJOR "4")
-set(MAPD_VERSION_MINOR "9")
+set(MAPD_VERSION_MAJOR "5")
+set(MAPD_VERSION_MINOR "1")
 set(MAPD_VERSION_PATCH "0")
 set(MAPD_VERSION_EXTRA "dev")
 set(MAPD_VERSION_RAW "${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}${MAPD_VERSION_EXTRA}")
@@ -71,9 +71,19 @@ if(PREFER_STATIC_LIBS)
   endif()
 
   set(CUDA_USE_STATIC_CUDA_RUNTIME ON CACHE STRING "Use static CUDA runtime")
+
+  # On ppc, build failures occur for targets that depend on locale related functions due to unresolved symbols that are
+  # present in the stdc++ library. Add the library flag to these targets to be used in resolving these symbols.
+  if(CMAKE_SYSTEM_PROCESSOR STREQUAL "ppc64le")
+    set(LOCALE_LINK_FLAG "-lstdc++")
+  endif()
 else()
   add_definitions("-DBOOST_LOG_DYN_LINK")
 endif()
+
+# Required for macOS with Boost 1.71.0+
+# See https://gitlab.kitware.com/cmake/cmake/issues/19714
+set(Boost_NO_BOOST_CMAKE 1)
 
 option(ENABLE_JAVA_REMOTE_DEBUG "Enable Java Remote Debug" OFF )
 if(ENABLE_JAVA_REMOTE_DEBUG)
@@ -149,6 +159,11 @@ if("${Thrift_VERSION}" VERSION_LESS "0.11.0")
 else()
   add_definitions("-DHAVE_THRIFT_STD_SHAREDPTR")
 endif()
+if("${Thrift_VERSION}" VERSION_LESS "0.13.0")
+  add_definitions("-DHAVE_THRIFT_PLATFORMTHREADFACTORY")
+else()
+  add_definitions("-DHAVE_THRIFT_THREADFACTORY")
+endif()
 
 find_package(Git)
 find_package(Glog REQUIRED)
@@ -181,11 +196,11 @@ set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 if(APPLE OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang"
     AND (CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 3.6 OR CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL 3.6))
     OR ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 4.9))
-  find_package( Boost COMPONENTS log log_setup filesystem program_options regex system thread timer REQUIRED )
+  find_package( Boost COMPONENTS log log_setup filesystem program_options regex system thread timer locale REQUIRED )
 else()
   message(FATAL_ERROR, "GCC v4.9 or clang v3.6 (or newer) is required")
 endif()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-local-typedefs -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8=1 -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-unused-local-typedefs -fdiagnostics-color=auto -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_1=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_2=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_4=1 -D__GCC_HAVE_SYNC_COMPARE_AND_SWAP_8=1 -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS")
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-register")
 endif()
@@ -247,11 +262,6 @@ endif()
 
 option(ENABLE_DECODERS_BOUNDS_CHECKING "Enable bounds checking for column decoding" OFF)
 
-option(ENABLE_REDUCTION_JIT "Enable JIT for result set reduction" OFF)
-if( ENABLE_REDUCTION_JIT )
-  add_definitions("-DWITH_REDUCTION_JIT")
-endif()
-
 if(ENABLE_STANDALONE_CALCITE)
   add_definitions("-DSTANDALONE_CALCITE")
 endif()
@@ -273,7 +283,11 @@ if(ENABLE_LLVM_DBG)
   list(APPEND LLVM_INC_FLAGS "${LLVM_BUILD_DIR}/include")
 endif()
 
-string(REPLACE "\n" " " LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
+if(NOT "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")  # work around linker on centos
+  string(REPLACE "\n" " " LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS} ${CURSES_LIBRARIES}")
+else()
+  string(REPLACE "\n" " " LLVM_LINKER_FLAGS "${LLVM_LIB_FLAGS} ${LLVM_LD_FLAGS}")
+endif()
 string(STRIP "${LLVM_LINKER_FLAGS}" LLVM_LINKER_FLAGS)
 include_directories(${Boost_INCLUDE_DIR}
                     "/usr/local/include"
@@ -366,6 +380,7 @@ endif()
 add_custom_command(
     DEPENDS ${CMAKE_SOURCE_DIR}/mapd.thrift
     DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/serialized_result_set.thrift
+    DEPENDS ${CMAKE_SOURCE_DIR}/QueryEngine/extension_functions.thrift
     OUTPUT
         ${CMAKE_BINARY_DIR}/gen-cpp/MapD.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/MapD.h
@@ -377,6 +392,7 @@ add_custom_command(
         ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
         ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
+        ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp
     COMMAND ${Thrift_EXECUTABLE}
     ARGS -gen cpp -r -o ${CMAKE_BINARY_DIR} ${CMAKE_SOURCE_DIR}/mapd.thrift)
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/gen-cpp/)
@@ -391,7 +407,8 @@ add_library(mapd_thrift
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_constants.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/serialized_result_set_types.cpp
     ${CMAKE_BINARY_DIR}/gen-cpp/common_constants.cpp
-    ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp)
+    ${CMAKE_BINARY_DIR}/gen-cpp/common_types.cpp
+    ${CMAKE_BINARY_DIR}/gen-cpp/extension_functions_types.cpp)
 
 target_compile_options(mapd_thrift PRIVATE -fPIC)
 target_link_libraries(mapd_thrift ${Thrift_LIBRARIES})
@@ -581,7 +598,7 @@ add_custom_target(rerun_cmake ALL
   )
 add_dependencies(omnisci_server rerun_cmake)
 
-target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
+target_link_libraries(omnisci_server mapd_thrift thrift_handler ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${PROFILER_LIBS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES} ${LOCALE_LINK_FLAG})
 
 target_link_libraries(initdb mapd_thrift DataMgr ${MAPD_LIBRARIES} ${Boost_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${ZLIB_LIBRARIES})
 
@@ -614,21 +631,7 @@ endif()
 # doxygen
 find_package(Doxygen)
 if(DOXYGEN_FOUND)
-  configure_file(
-    ${CMAKE_SOURCE_DIR}/Doxyfile.in ${CMAKE_BINARY_DIR}/Doxyfile @ONLY)
-  add_custom_target(doxygen ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Generate API documentation with Doxygen"
-    VERBATIM
-    USES_TERMINAL
-  )
-  add_custom_target(doxygen_zip zip -r doxygen-${MAPD_GIT_HASH}.zip doxygen
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    COMMENT "Generating .zip with API documentation from Doxygen"
-    VERBATIM
-    USES_TERMINAL
-  )
-  add_dependencies(doxygen_zip doxygen)
+  include(${CMAKE_CURRENT_SOURCE_DIR}/docs/CMakeLists.txt)
 endif(DOXYGEN_FOUND)
 
 # Packaging
@@ -843,3 +846,15 @@ set(CPACK_PACKAGE_FILE_NAME "${CMAKE_PROJECT_NAME}-${MAPD_EDITION_LOWER}-${CPACK
 set(CPACK_GENERATOR "STGZ")
 
 include(CPack)
+
+if(DOXYGEN_FOUND)
+  add_custom_target(sphinx
+    COMMAND python3 -m venv sphinx-env
+    COMMAND . sphinx-env/bin/activate && pip install -r requirements.txt
+    COMMAND rm -rf build
+    COMMAND . sphinx-env/bin/activate && make html SPHINXOPTS="-D version=${MAPD_VERSION_MAJOR}.${MAPD_VERSION_MINOR}.${MAPD_VERSION_PATCH}"
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}/docs
+    )
+
+  add_dependencies(sphinx doxygen)
+endif(DOXYGEN_FOUND)

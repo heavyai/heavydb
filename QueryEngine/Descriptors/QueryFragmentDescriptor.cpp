@@ -77,6 +77,19 @@ void QueryFragmentDescriptor::buildFragmentKernelMap(
   }
 }
 
+namespace {
+std::optional<size_t> compute_fragment_tuple_count(
+    const Fragmenter_Namespace::FragmentInfo& fragment,
+    const ColumnDescriptor* deleted_cd) {
+  if (deleted_cd) {
+    return std::nullopt;
+  } else {
+    return fragment.getNumTuples();
+  }
+}
+
+}  // namespace
+
 void QueryFragmentDescriptor::buildFragmentPerKernelMap(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<uint64_t>& frag_offsets,
@@ -92,6 +105,16 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
 
   const auto num_bytes_for_row = executor->getNumBytesForFetchedRow();
 
+  const ColumnDescriptor* deleted_cd{nullptr};
+  if (outer_table_id > 0) {
+    // Temporary tables will not have a table descriptor and will also not have deleted
+    // rows.
+    const auto& catalog = executor->getCatalog();
+    const auto td = catalog->getMetadataForTable(outer_table_id);
+    CHECK(td);
+    deleted_cd = catalog->getDeletedColumnIfRowsDeleted(td);
+  }
+
   for (size_t i = 0; i < outer_fragments->size(); ++i) {
     const auto& fragment = (*outer_fragments)[i];
     const auto skip_frag = executor->skipFragment(
@@ -99,8 +122,6 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
     if (skip_frag.first) {
       continue;
     }
-    // NOTE: Using kernel index instead of frag index now
-    outer_fragment_tuple_sizes_.push_back(fragment.getNumTuples());
     rowid_lookup_key_ = std::max(rowid_lookup_key_, skip_frag.second);
     const int chosen_device_count =
         device_type == ExecutorDeviceType::CPU ? 1 : device_count;
@@ -115,13 +136,9 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
     if (device_type == ExecutorDeviceType::GPU) {
       checkDeviceMemoryUsage(fragment, device_id, num_bytes_for_row);
     }
-    // Since we may have skipped fragments, the fragments_per_kernel_ vector may be
-    // smaller than the outer_fragments size
-    CHECK_LE(fragments_per_kernel_.size(), i);
-    fragments_per_kernel_.emplace_back(FragmentsList{});
-    const auto kernel_id = fragments_per_kernel_.size() - 1;
-    CHECK(kernels_per_device_[device_id].insert(kernel_id).second);
 
+    ExecutionKernel execution_kernel{
+        device_id, {}, compute_fragment_tuple_count(fragment, deleted_cd)};
     for (size_t j = 0; j < ra_exe_unit.input_descs.size(); ++j) {
       const auto frag_ids =
           executor->getTableFragmentIndices(ra_exe_unit,
@@ -134,8 +151,17 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
       auto table_frags_it = selected_tables_fragments_.find(table_id);
       CHECK(table_frags_it != selected_tables_fragments_.end());
 
-      fragments_per_kernel_[kernel_id].emplace_back(
-          FragmentsPerTable{table_id, frag_ids});
+      execution_kernel.fragments.emplace_back(FragmentsPerTable{table_id, frag_ids});
+    }
+
+    if (execution_kernels_per_device_.find(device_id) ==
+        execution_kernels_per_device_.end()) {
+      CHECK(execution_kernels_per_device_
+                .insert(std::make_pair(device_id,
+                                       std::vector<ExecutionKernel>{execution_kernel}))
+                .second);
+    } else {
+      execution_kernels_per_device_[device_id].emplace_back(execution_kernel);
     }
   }
 }
@@ -196,19 +222,25 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
                                             selected_tables_fragments_,
                                             inner_table_id_to_join_condition);
 
-      if (kernels_per_device_.find(device_id) == kernels_per_device_.end()) {
-        fragments_per_kernel_.emplace_back(FragmentsList{});
-        kernels_per_device_.insert(std::make_pair(
-            device_id, std::set<size_t>({fragments_per_kernel_.size() - 1})));
+      if (execution_kernels_per_device_.find(device_id) ==
+          execution_kernels_per_device_.end()) {
+        std::vector<ExecutionKernel> kernels{
+            ExecutionKernel{device_id, FragmentsList{}, std::nullopt}};
+        CHECK(execution_kernels_per_device_.insert(std::make_pair(device_id, kernels))
+                  .second);
       }
-      const auto kernel_id = *kernels_per_device_[device_id].begin();
-      CHECK_LT(kernel_id, fragments_per_kernel_.size());
-      if (fragments_per_kernel_[kernel_id].size() < j + 1) {
-        fragments_per_kernel_[kernel_id].emplace_back(
-            FragmentsPerTable{table_id, frag_ids});
+
+      // Multifrag kernels only have one execution kernel per device. Grab the execution
+      // kernel object and push back into its fragments list.
+      CHECK_EQ(execution_kernels_per_device_[device_id].size(), size_t(1));
+      auto& execution_kernel = execution_kernels_per_device_[device_id].front();
+
+      auto& kernel_frag_list = execution_kernel.fragments;
+      if (kernel_frag_list.size() < j + 1) {
+        kernel_frag_list.emplace_back(FragmentsPerTable{table_id, frag_ids});
       } else {
-        CHECK_EQ(fragments_per_kernel_[kernel_id][j].table_id, table_id);
-        auto& curr_frag_ids = fragments_per_kernel_[kernel_id][j].fragment_ids;
+        CHECK_EQ(kernel_frag_list[j].table_id, table_id);
+        auto& curr_frag_ids = kernel_frag_list[j].fragment_ids;
         for (const int frag_id : frag_ids) {
           if (std::find(curr_frag_ids.begin(), curr_frag_ids.end(), frag_id) ==
               curr_frag_ids.end()) {
@@ -238,13 +270,19 @@ bool is_sample_query(const RelAlgExecutionUnit& ra_exe_unit) {
 }  // namespace
 
 bool QueryFragmentDescriptor::terminateDispatchMaybe(
+    size_t& tuple_count,
     const RelAlgExecutionUnit& ra_exe_unit,
-    const size_t kernel_id) const {
+    const ExecutionKernel& kernel) const {
   const auto sample_query_limit =
       ra_exe_unit.sort_info.limit + ra_exe_unit.sort_info.offset;
-  if (is_sample_query(ra_exe_unit) && sample_query_limit > 0 &&
-      getOuterFragmentTupleSize(kernel_id) >= sample_query_limit) {
-    return true;
+  if (!kernel.outer_tuple_count) {
+    return false;
+  } else {
+    tuple_count += *kernel.outer_tuple_count;
+    if (is_sample_query(ra_exe_unit) && sample_query_limit > 0 &&
+        tuple_count >= sample_query_limit) {
+      return true;
+    }
   }
   return false;
 }

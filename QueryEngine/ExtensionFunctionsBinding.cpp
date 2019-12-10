@@ -151,16 +151,21 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         return 1;
       }
       break;
-    case kLINESTRING:
+
     case kPOINT:
+    case kLINESTRING:
       if ((stype == ExtArgumentType::PInt8 || stype == ExtArgumentType::PInt16 ||
            stype == ExtArgumentType::PInt32 || stype == ExtArgumentType::PInt64 ||
            stype == ExtArgumentType::PFloat || stype == ExtArgumentType::PDouble) &&
           sig_pos < max_pos && sig_types[sig_pos + 1] == ExtArgumentType::Int64) {
         penalty_score += 1000;
         return 2;
+      } else if (stype == ExtArgumentType::GeoPoint ||
+                 stype == ExtArgumentType::GeoLineString) {
+        penalty_score += 1000;
+        return 1;
       }
-
+      break;
     case kARRAY:
       if ((stype == ExtArgumentType::PInt8 || stype == ExtArgumentType::PInt16 ||
            stype == ExtArgumentType::PInt32 || stype == ExtArgumentType::PInt64 ||
@@ -180,8 +185,13 @@ static int match_arguments(const SQLTypeInfo& arg_type,
           sig_types[sig_pos + 3] == ExtArgumentType::Int64) {
         penalty_score += 1000;
         return 4;
+      } else if (stype == ExtArgumentType::GeoPolygon) {
+        penalty_score += 1000;
+        return 1;
       }
+
       break;
+
     case kMULTIPOLYGON:
       if (stype == ExtArgumentType::PInt8 && sig_pos + 5 < max_pos &&
           sig_types[sig_pos + 1] == ExtArgumentType::Int64 &&
@@ -225,6 +235,8 @@ static int match_arguments(const SQLTypeInfo& arg_type,
          kGEOMETRY
          kGEOGRAPHY
          kEVAL_CONTEXT_TYPE
+         kVOID
+         kCURSOR
       */
     default:
       throw std::runtime_error(std::string(__FILE__) + "#" + std::to_string(__LINE__) +
@@ -347,6 +359,18 @@ bool is_ext_arg_type_array(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ArrayInt64:
     case ExtArgumentType::ArrayFloat:
     case ExtArgumentType::ArrayDouble:
+      return true;
+
+    default:
+      return false;
+  }
+}
+
+bool is_ext_arg_type_geo(const ExtArgumentType ext_arg_type) {
+  switch (ext_arg_type) {
+    case ExtArgumentType::GeoPoint:
+    case ExtArgumentType::GeoLineString:
+    case ExtArgumentType::GeoPolygon:
       return true;
 
     default:

@@ -37,6 +37,8 @@
 
 using QR = QueryRunner::QueryRunner;
 
+using namespace TestHelpers;
+
 class TestColumnDescriptor {
  public:
   virtual std::string get_column_definition() = 0;
@@ -648,7 +650,7 @@ TEST(Ctas, SyntaxCheck) {
   run_ddl_statement("CREATE TABLE CTAS_SOURCE (id int);");
   run_ddl_statement("CREATE TABLE CTAS_SOURCE_WITH (id int);");
 
-  std::string ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
+  std::string ddl = "CREATE TABLE CTAS_TARGET AS SELECT \n * \r FROM CTAS_SOURCE;";
   run_ddl_statement(ddl);
   EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
   ddl = "DROP TABLE CTAS_TARGET;";
@@ -660,7 +662,9 @@ TEST(Ctas, SyntaxCheck) {
   ddl = "DROP TABLE CTAS_TARGET;";
   run_ddl_statement(ddl);
 
-  ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE WITH( FRAGMENT_SIZE=3 );";
+  ddl =
+      "CREATE TABLE CTAS_TARGET AS SELECT * \n FROM \r CTAS_SOURCE WITH( FRAGMENT_SIZE=3 "
+      ");";
   run_ddl_statement(ddl);
   EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
   ddl = "DROP TABLE CTAS_TARGET;";
@@ -675,6 +679,12 @@ TEST(Ctas, SyntaxCheck) {
   ddl =
       "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE_WITH WITH( MAX_CHUNK_SIZE=3 "
       ");";
+  run_ddl_statement(ddl);
+  EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
+  ddl = "DROP TABLE CTAS_TARGET;";
+  run_ddl_statement(ddl);
+
+  ddl = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE_WITH;";
   run_ddl_statement(ddl);
   EXPECT_THROW(run_ddl_statement(ddl), std::runtime_error);
   ddl = "DROP TABLE CTAS_TARGET;";
@@ -717,7 +727,82 @@ TEST(Ctas, LiteralStringTest) {
   check(3, "bb");
 }
 
-TEST_P(Ctas, CreateTableAsSelect) {
+TEST(Ctas, ValidationCheck) {
+  run_ddl_statement("DROP TABLE IF EXISTS ctas_source;");
+  run_ddl_statement("DROP TABLE IF EXISTS ctas_target;");
+  run_ddl_statement("CREATE TABLE ctas_source (id int, dd DECIMAL(17,2));");
+  run_multiple_agg("INSERT INTO ctas_source VALUES(1, 10000);", ExecutorDeviceType::CPU);
+  ASSERT_ANY_THROW(run_ddl_statement(
+      "CREATE TABLE ctas_target AS SELECT id, CEIL(dd*10000) FROM ctas_source;"));
+}
+
+TEST(Ctas, GeoTest) {
+  std::string ddl = "DROP TABLE IF EXISTS CTAS_SOURCE;";
+  run_ddl_statement(ddl);
+  ddl = "DROP TABLE IF EXISTS CTAS_TARGET;";
+  run_ddl_statement(ddl);
+
+  run_ddl_statement(
+      "CREATE TABLE CTAS_SOURCE ("
+      "pu GEOMETRY(POINT, 4326) ENCODING NONE, "
+      "pc GEOMETRY(POINT, 4326) ENCODING COMPRESSED(32), "
+      "lc GEOMETRY(LINESTRING, 4326), "
+      "poly GEOMETRY(POLYGON), "
+      "mpoly GEOMETRY(MULTIPOLYGON, 4326)"
+      ");");
+
+  run_multiple_agg(
+      "INSERT INTO CTAS_SOURCE VALUES("
+      "'POINT (-118.480499954187 34.2662998541567)', "
+      "'POINT (-118.480499954187 34.2662998541567)', "
+      "'LINESTRING (-118.480499954187 34.2662998541567, "
+      "             -117.480499954187 35.2662998541567)', "
+      "'POLYGON ((-118.480499954187 34.2662998541567, "
+      "           -117.480499954187 35.2662998541567, "
+      "           -110.480499954187 45.2662998541567))', "
+      "'MULTIPOLYGON (((-118.480499954187 34.2662998541567, "
+      "                 -117.480499954187 35.2662998541567, "
+      "                 -110.480499954187 45.2662998541567)))' "
+      "); ",
+      ExecutorDeviceType::CPU);
+
+  ddl = "CREATE TABLE CTAS_TARGET AS select * FROM CTAS_SOURCE;";
+  run_ddl_statement(ddl);
+
+  const auto rows =
+      run_multiple_agg("SELECT * FROM CTAS_TARGET;", ExecutorDeviceType::CPU);
+  rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+  const auto row = rows->getNextRow(false, false);
+  CHECK_EQ(row.size(), size_t(5));
+  compare_geo_target(row[0], GeoPointTargetValue({-118.480499954187, 34.2662998541567}));
+  compare_geo_target(
+      row[1], GeoPointTargetValue({-118.480499954187, 34.2662998541567}), 0.01);
+  compare_geo_target(row[3],
+                     GeoPolyTargetValue({-118.480499954187,
+                                         34.2662998541567,
+                                         -117.480499954187,
+                                         35.2662998541567,
+                                         -110.480499954187,
+                                         45.2662998541567},
+                                        {3}));
+}
+
+TEST(Ctas, CreateTableAsSelect_IfNotExists) {
+  run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE;");
+  run_ddl_statement("DROP TABLE IF EXISTS CTAS_TARGET;");
+  run_ddl_statement("CREATE TABLE CTAS_SOURCE(a INT);");
+  run_ddl_statement("CREATE TABLE CTAS_TARGET(a INT);");
+  ASSERT_THROW(
+      run_ddl_statement("CREATE TABLE CTAS_TARGET AS (SELECT * FROM CTAS_SOURCE);"),
+      std::runtime_error);
+  ASSERT_NO_THROW(run_ddl_statement(
+      "CREATE TABLE IF NOT EXISTS CTAS_TARGET AS (SELECT * FROM CTAS_SOURCE);"));
+}
+
+void runCtasTest(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
+                 std::string create_ctas_sql,
+                 int num_rows,
+                 int num_rows_to_check) {
   run_ddl_statement("DROP TABLE IF EXISTS CTAS_SOURCE;");
   run_ddl_statement("DROP TABLE IF EXISTS CTAS_TARGET;");
 
@@ -737,10 +822,8 @@ TEST_P(Ctas, CreateTableAsSelect) {
 
   run_ddl_statement(create_sql);
 
-  size_t num_rows = 25;
-
   // fill source table
-  for (unsigned int row = 0; row < num_rows; row++) {
+  for (int row = 0; row < num_rows; row++) {
     std::string insert_sql = "INSERT INTO CTAS_SOURCE VALUES (" + std::to_string(row);
     for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
       auto tcd = columnDescriptors[col];
@@ -752,7 +835,6 @@ TEST_P(Ctas, CreateTableAsSelect) {
   }
 
   // execute CTAS
-  std::string create_ctas_sql = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
   LOG(INFO) << create_ctas_sql;
 
   run_ddl_statement(create_ctas_sql);
@@ -798,10 +880,10 @@ TEST_P(Ctas, CreateTableAsSelect) {
   LOG(INFO) << select_ctas_sql;
   auto select_ctas_result = run_multiple_agg(select_ctas_sql, ExecutorDeviceType::CPU);
 
-  ASSERT_EQ(num_rows, select_result->rowCount());
-  ASSERT_EQ(num_rows, select_ctas_result->rowCount());
+  ASSERT_EQ(static_cast<size_t>(num_rows), select_result->rowCount());
+  ASSERT_EQ(static_cast<size_t>(num_rows_to_check), select_ctas_result->rowCount());
 
-  for (unsigned int row = 0; row < num_rows; row++) {
+  for (int row = 0; row < num_rows_to_check; row++) {
     const auto select_crt_row = select_result->getNextRow(true, false);
     const auto select_ctas_crt_row = select_ctas_result->getNextRow(true, false);
 
@@ -820,6 +902,32 @@ TEST_P(Ctas, CreateTableAsSelect) {
       }
     }
   }
+}
+
+TEST_P(Ctas, CreateTableAsSelect) {
+  // execute CTAS
+  std::string create_ctas_sql = "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE;";
+  int num_rows = 25;
+  int num_rows_to_check = num_rows;
+  runCtasTest(columnDescriptors, create_ctas_sql, num_rows, num_rows_to_check);
+}
+
+TEST_P(Ctas, CreateTableAsSelectWithLimit) {
+  // execute CTAS
+  std::string create_ctas_sql =
+      "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE ORDER BY id LIMIT 20;";
+  int num_rows = 25;
+  int num_rows_to_check = 20;
+  runCtasTest(columnDescriptors, create_ctas_sql, num_rows, num_rows_to_check);
+}
+
+TEST_P(Ctas, CreateTableAsSelectWithZeroLimit) {
+  // execute CTAS
+  std::string create_ctas_sql =
+      "CREATE TABLE CTAS_TARGET AS SELECT * FROM CTAS_SOURCE ORDER BY id LIMIT 0;";
+  int num_rows = 5;
+  int num_rows_to_check = 0;
+  runCtasTest(columnDescriptors, create_ctas_sql, num_rows, num_rows_to_check);
 }
 
 TEST(Itas, SyntaxCheck) {
@@ -1061,6 +1169,29 @@ TEST_P(Itas, InsertIntoTableFromSelectReplicated) {
 TEST_P(Itas, InsertIntoTableFromSelectSharded) {
   itasTestBody(columnDescriptors,
                ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
+}
+
+TEST(Update, InvalidArrayAssignment) {
+  run_ddl_statement("DROP TABLE IF EXISTS arr;");
+  run_ddl_statement("CREATE TABLE arr (id int, ia int[]);");
+  run_multiple_agg("INSERT INTO arr VALUES(0 , null); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO arr VALUES(1 , ARRAY[]); ", ExecutorDeviceType::CPU);
+  run_multiple_agg("INSERT INTO arr VALUES(2 , ARRAY[1]); ", ExecutorDeviceType::CPU);
+
+  ASSERT_ANY_THROW(
+      run_multiple_agg("UPDATE arr set ia = NULL;", ExecutorDeviceType::CPU));
+  ASSERT_ANY_THROW(
+      run_multiple_agg("UPDATE arr set ia = ARRAY[];", ExecutorDeviceType::CPU));
+}
+
+TEST(Update, NullArrayAssignment) {
+  run_ddl_statement("DROP TABLE IF EXISTS arr;");
+  run_ddl_statement("CREATE TABLE arr (id int, ia int[]);");
+  run_multiple_agg("INSERT INTO arr VALUES(1, ARRAY[1]); ", ExecutorDeviceType::CPU);
+  run_ddl_statement("alter table arr add column da double[];");
+
+  ASSERT_NO_THROW(
+      run_multiple_agg("update arr set ia = array[1,2];", ExecutorDeviceType::CPU));
 }
 
 TEST_P(Update, UpdateColumnByColumn) {

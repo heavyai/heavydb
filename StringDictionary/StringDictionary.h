@@ -81,10 +81,29 @@ class StringDictionary {
 
   bool checkpoint() noexcept;
 
-  static void populate_string_ids(std::vector<int32_t>& dest_ids,
-                                  StringDictionary* dest_dict,
-                                  const std::vector<int32_t>& source_ids,
-                                  const StringDictionary* source_dict);
+  /**
+   * @brief Populates provided \p dest_ids vector with string ids corresponding to given
+   * source strings
+   *
+   * Given a vector of source string ids and corresponding source dictionary, this method
+   * populates a vector of destination string ids by either returning the string id of
+   * matching strings in the destination dictionary or creating new entries in the
+   * dictionary. Source string ids can also be transient if they were created by a
+   * function (e.g LOWER/UPPER functions). A map of transient string ids to string values
+   * is provided in order to handle this use case.
+   *
+   * @param dest_ids - vector of destination string ids to be populated
+   * @param dest_dict - destination dictionary
+   * @param source_ids - vector of source string ids for which destination ids are needed
+   * @param source_dict - source dictionary
+   * @param transient_mapping - map of transient source string ids to string values
+   */
+  static void populate_string_ids(
+      std::vector<int32_t>& dest_ids,
+      StringDictionary* dest_dict,
+      const std::vector<int32_t>& source_ids,
+      const StringDictionary* source_dict,
+      const std::map<int32_t, std::string> transient_mapping = {});
 
   static void populate_string_array_ids(
       std::vector<std::vector<int32_t>>& dest_array_ids,
