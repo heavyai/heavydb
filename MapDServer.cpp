@@ -912,8 +912,9 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
   if (!llvm_opts.empty()) {
     std::vector<const char*> argv;
     argv.push_back("llc");
-    for (auto& opt : llvm_opts)
+    for (auto& opt : llvm_opts) {
       argv.push_back(opt.c_str());
+    }
     bool ok = llvm::cl::ParseCommandLineOptions(argv.size(), argv.data());
     CHECK(ok);
   }
