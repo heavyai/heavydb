@@ -257,8 +257,8 @@ class CodeGenerator {
                                           const bool nullable);
 
   llvm::Value* codegenCastBetweenTimestamps(llvm::Value* ts_lv,
-                                            const int operand_dimen,
-                                            const int target_dimen,
+                                            const SQLTypeInfo& operand_dimen,
+                                            const SQLTypeInfo& target_dimen,
                                             const bool nullable);
 
   llvm::Value* codegenCastFromString(llvm::Value* operand_lv,

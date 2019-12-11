@@ -45,9 +45,8 @@ static const std::map<std::pair<int32_t, DatetruncField>, int64_t>
 
 namespace DateTimeUtils {
 
-// Tag helpers for precision scaling up/down.
-struct ScaleUpType {};
-struct ScaleDownType {};
+// Enum helpers for precision scaling up/down.
+enum ScalingType { ScaleUp, ScaleDown };
 
 constexpr inline int64_t get_timestamp_precision_scale(const int32_t dimen) {
   switch (dimen) {
@@ -167,20 +166,24 @@ const inline int64_t get_datetrunc_high_precision_scale(const DatetruncField& fi
   return -1;
 }
 
-template <typename ScaleType>
-constexpr inline int64_t get_datetime_scaled_epoch(const int64_t epoch,
+constexpr inline int64_t get_datetime_scaled_epoch(const ScalingType direction,
+                                                   const int64_t epoch,
                                                    const int32_t dimen) {
-  if constexpr (std::is_same_v<ScaleType, ScaleUpType>) {
-    const auto scaled_epoch = epoch * get_timestamp_precision_scale(dimen);
-    if (epoch && epoch != scaled_epoch / get_timestamp_precision_scale(dimen)) {
-      throw std::runtime_error(
-          "Value Overflow/underflow detected while scaling DateTime precision.");
+  switch (direction) {
+    case ScaleUp: {
+      const auto scaled_epoch = epoch * get_timestamp_precision_scale(dimen);
+      if (epoch && epoch != scaled_epoch / get_timestamp_precision_scale(dimen)) {
+        throw std::runtime_error(
+            "Value Overflow/underflow detected while scaling DateTime precision.");
+      }
+      return scaled_epoch;
     }
-    return scaled_epoch;
-  } else {
-    static_assert(std::is_same_v<ScaleType, ScaleDownType>);
-    return epoch / get_timestamp_precision_scale(dimen);
+    case ScaleDown:
+      return epoch / get_timestamp_precision_scale(dimen);
+    default:
+      abort();
   }
+  return std::numeric_limits<int64_t>::min();
 }
 
 }  // namespace DateTimeUtils

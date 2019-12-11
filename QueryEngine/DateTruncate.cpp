@@ -329,36 +329,6 @@ DateTruncateHighPrecisionToDateNullable(const int64_t timeval,
   return DateTruncateHighPrecisionToDate(timeval, scale);
 }
 
-extern "C" DEVICE int64_t DateTruncateAlterPrecisionScaleUp(const int64_t timeval,
-                                                            const int64_t scale) {
-  return timeval * scale;
-}
-
-extern "C" DEVICE int64_t
-DateTruncateAlterPrecisionScaleUpNullable(const int64_t timeval,
-                                          const int64_t scale,
-                                          const int64_t null_val) {
-  if (timeval == null_val) {
-    return null_val;
-  }
-  return DateTruncateAlterPrecisionScaleUp(timeval, scale);
-}
-
-extern "C" DEVICE int64_t DateTruncateAlterPrecisionScaleDown(const int64_t timeval,
-                                                              const int64_t scale) {
-  return timeval / scale;
-}
-
-extern "C" DEVICE int64_t
-DateTruncateAlterPrecisionScaleDownNullable(const int64_t timeval,
-                                            const int64_t scale,
-                                            const int64_t null_val) {
-  if (timeval == null_val) {
-    return null_val;
-  }
-  return DateTruncateAlterPrecisionScaleDown(timeval, scale);
-}
-
 extern "C" DEVICE int64_t DateDiff(const DatetruncField datepart,
                                    const int64_t startdate,
                                    const int64_t enddate) {

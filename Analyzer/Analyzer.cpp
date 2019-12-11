@@ -1101,12 +1101,15 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
              new_type_info.get_type() == kTIMESTAMP) {
     const auto dimen = (type_info.get_type() == kDATE) ? 0 : type_info.get_dimension();
     if (dimen != new_type_info.get_dimension()) {
-      constval.bigintval =
-          dimen < new_type_info.get_dimension()
-              ? DateTimeUtils::get_datetime_scaled_epoch<DateTimeUtils::ScaleUpType>(
-                    constval.bigintval, new_type_info.get_dimension() - dimen)
-              : DateTimeUtils::get_datetime_scaled_epoch<DateTimeUtils::ScaleDownType>(
-                    constval.bigintval, dimen - new_type_info.get_dimension());
+      constval.bigintval = dimen < new_type_info.get_dimension()
+                               ? DateTimeUtils::get_datetime_scaled_epoch(
+                                     DateTimeUtils::ScalingType::ScaleUp,
+                                     constval.bigintval,
+                                     new_type_info.get_dimension() - dimen)
+                               : DateTimeUtils::get_datetime_scaled_epoch(
+                                     DateTimeUtils::ScalingType::ScaleDown,
+                                     constval.bigintval,
+                                     dimen - new_type_info.get_dimension());
     }
     type_info = new_type_info;
   } else if (new_type_info.is_array() && type_info.is_array()) {

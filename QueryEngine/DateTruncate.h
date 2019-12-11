@@ -64,10 +64,4 @@ extern "C" NEVER_INLINE DEVICE int64_t DateTruncate(DatetruncField field,
 extern "C" DEVICE int64_t DateTruncateHighPrecisionToDate(const int64_t timeval,
                                                           const int64_t scale);
 
-extern "C" DEVICE int64_t DateTruncateAlterPrecisionScaleUp(const int64_t timeval,
-                                                            const int64_t scale);
-
-extern "C" DEVICE int64_t DateTruncateAlterPrecisionScaleDown(const int64_t timeval,
-                                                              const int64_t scale);
-
 #endif  // QUERYENGINE_DATETRUNCATE_H

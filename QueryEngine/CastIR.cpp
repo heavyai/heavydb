@@ -89,7 +89,7 @@ llvm::Value* CodeGenerator::codegenCast(llvm::Value* operand_lv,
           (operand_ti.is_timestamp()) ? operand_ti.get_dimension() : 0;
       if (operand_dimen != ti.get_dimension()) {
         return codegenCastBetweenTimestamps(
-            operand_lv, operand_dimen, ti.get_dimension(), !ti.get_notnull());
+            operand_lv, operand_ti, ti, !ti.get_notnull());
       }
     }
     if (ti.is_integer() || ti.is_decimal() || ti.is_time()) {
@@ -134,31 +134,33 @@ llvm::Value* CodeGenerator::codegenCastTimestampToDate(llvm::Value* ts_lv,
 }
 
 llvm::Value* CodeGenerator::codegenCastBetweenTimestamps(llvm::Value* ts_lv,
-                                                         const int operand_dimen,
-                                                         const int target_dimen,
+                                                         const SQLTypeInfo& operand_ti,
+                                                         const SQLTypeInfo& target_ti,
                                                          const bool nullable) {
+  const auto operand_dimen = operand_ti.get_dimension();
+  const auto target_dimen = target_ti.get_dimension();
   if (operand_dimen == target_dimen) {
     return ts_lv;
   }
   CHECK(ts_lv->getType()->isIntegerTy(64));
-  static const std::string sup_fname{"DateTruncateAlterPrecisionScaleUp"};
-  static const std::string sdn_fname{"DateTruncateAlterPrecisionScaleDown"};
-  static const std::string sup_null_fname{"DateTruncateAlterPrecisionScaleUpNullable"};
-  static const std::string sdn_null_fname{"DateTruncateAlterPrecisionScaleDownNullable"};
-  std::vector<llvm::Value*> f_args{ts_lv,
-                                   cgen_state_->llInt(static_cast<int64_t>(
-                                       DateTimeUtils::get_timestamp_precision_scale(
-                                           abs(operand_dimen - target_dimen))))};
-  if (nullable) {
-    f_args.push_back(cgen_state_->inlineIntNull(SQLTypeInfo(kBIGINT, false)));
+  const auto scale =
+      DateTimeUtils::get_timestamp_precision_scale(abs(operand_dimen - target_dimen));
+  if (operand_dimen < target_dimen) {
+    return nullable
+               ? cgen_state_->emitCall("mul_int64_t_nullable_lhs",
+                                       {ts_lv,
+                                        cgen_state_->llInt(static_cast<int64_t>(scale)),
+                                        cgen_state_->inlineIntNull(operand_ti)})
+               : cgen_state_->ir_builder_.CreateMul(
+                     ts_lv, cgen_state_->llInt(static_cast<int64_t>(scale)));
   }
-  return operand_dimen < target_dimen
-             ? cgen_state_->emitExternalCall(nullable ? sup_null_fname : sup_fname,
-                                             get_int_type(64, cgen_state_->context_),
-                                             f_args)
-             : cgen_state_->emitExternalCall(nullable ? sdn_null_fname : sdn_fname,
-                                             get_int_type(64, cgen_state_->context_),
-                                             f_args);
+  return nullable
+             ? cgen_state_->emitCall("div_int64_t_nullable_lhs",
+                                     {ts_lv,
+                                      cgen_state_->llInt(static_cast<int64_t>(scale)),
+                                      cgen_state_->inlineIntNull(operand_ti)})
+             : cgen_state_->ir_builder_.CreateSDiv(
+                   ts_lv, cgen_state_->llInt(static_cast<int64_t>(scale)));
 }
 
 llvm::Value* CodeGenerator::codegenCastFromString(llvm::Value* operand_lv,

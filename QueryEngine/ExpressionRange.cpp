@@ -740,20 +740,24 @@ ExpressionRange getDateTimePrecisionCastRange(const ExpressionRange& arg_range,
   const int32_t ti_dimen = target_ti.get_dimension();
   const int32_t oper_dimen = oper_ti.get_dimension();
   CHECK(oper_dimen != ti_dimen);
-  const int64_t scale =
-      DateTimeUtils::get_timestamp_precision_scale(abs(oper_dimen - ti_dimen));
   const int64_t min_ts =
       ti_dimen > oper_dimen
-          ? DateTimeUtils::get_datetime_scaled_epoch<DateTimeUtils::ScaleUpType>(
-                arg_range.getIntMin(), scale)
-          : DateTimeUtils::get_datetime_scaled_epoch<DateTimeUtils::ScaleDownType>(
-                arg_range.getIntMin(), scale);
+          ? DateTimeUtils::get_datetime_scaled_epoch(DateTimeUtils::ScalingType::ScaleUp,
+                                                     arg_range.getIntMin(),
+                                                     abs(oper_dimen - ti_dimen))
+          : DateTimeUtils::get_datetime_scaled_epoch(
+                DateTimeUtils::ScalingType::ScaleDown,
+                arg_range.getIntMin(),
+                abs(oper_dimen - ti_dimen));
   const int64_t max_ts =
       ti_dimen > oper_dimen
-          ? DateTimeUtils::get_datetime_scaled_epoch<DateTimeUtils::ScaleUpType>(
-                arg_range.getIntMax(), scale)
-          : DateTimeUtils::get_datetime_scaled_epoch<DateTimeUtils::ScaleDownType>(
-                arg_range.getIntMax(), scale);
+          ? DateTimeUtils::get_datetime_scaled_epoch(DateTimeUtils::ScalingType::ScaleUp,
+                                                     arg_range.getIntMax(),
+                                                     abs(oper_dimen - ti_dimen))
+          : DateTimeUtils::get_datetime_scaled_epoch(
+                DateTimeUtils::ScalingType::ScaleDown,
+                arg_range.getIntMax(),
+                abs(oper_dimen - ti_dimen));
 
   return ExpressionRange::makeIntRange(min_ts, max_ts, 0, arg_range.hasNulls());
 }
