@@ -744,12 +744,16 @@ ExpressionRange getDateTimePrecisionCastRange(const ExpressionRange& arg_range,
       DateTimeUtils::get_timestamp_precision_scale(abs(oper_dimen - ti_dimen));
   const int64_t min_ts =
       ti_dimen > oper_dimen
-          ? DateTruncateAlterPrecisionScaleUp(arg_range.getIntMin(), scale)
-          : DateTruncateAlterPrecisionScaleDown(arg_range.getIntMin(), scale);
+          ? DateTimeUtils::get_datetime_scaled_epoch<DateTimeUtils::ScaleUpType>(
+                arg_range.getIntMin(), scale)
+          : DateTimeUtils::get_datetime_scaled_epoch<DateTimeUtils::ScaleDownType>(
+                arg_range.getIntMin(), scale);
   const int64_t max_ts =
       ti_dimen > oper_dimen
-          ? DateTruncateAlterPrecisionScaleUp(arg_range.getIntMax(), scale)
-          : DateTruncateAlterPrecisionScaleDown(arg_range.getIntMax(), scale);
+          ? DateTimeUtils::get_datetime_scaled_epoch<DateTimeUtils::ScaleUpType>(
+                arg_range.getIntMax(), scale)
+          : DateTimeUtils::get_datetime_scaled_epoch<DateTimeUtils::ScaleDownType>(
+                arg_range.getIntMax(), scale);
 
   return ExpressionRange::makeIntRange(min_ts, max_ts, 0, arg_range.hasNulls());
 }

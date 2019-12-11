@@ -45,6 +45,10 @@ static const std::map<std::pair<int32_t, DatetruncField>, int64_t>
 
 namespace DateTimeUtils {
 
+// Tag helpers for precision scaling up/down.
+struct ScaleUpType {};
+struct ScaleDownType {};
+
 constexpr inline int64_t get_timestamp_precision_scale(const int32_t dimen) {
   switch (dimen) {
     case 0:
@@ -161,6 +165,22 @@ const inline int64_t get_datetrunc_high_precision_scale(const DatetruncField& fi
     return result->second;
   }
   return -1;
+}
+
+template <typename ScaleType>
+constexpr inline int64_t get_datetime_scaled_epoch(const int64_t epoch,
+                                                   const int32_t dimen) {
+  if constexpr (std::is_same_v<ScaleType, ScaleUpType>) {
+    const auto scaled_epoch = epoch * get_timestamp_precision_scale(dimen);
+    if (epoch && epoch != scaled_epoch / get_timestamp_precision_scale(dimen)) {
+      throw std::runtime_error(
+          "Value Overflow/underflow detected while scaling DateTime precision.");
+    }
+    return scaled_epoch;
+  } else {
+    static_assert(std::is_same_v<ScaleType, ScaleDownType>);
+    return epoch / get_timestamp_precision_scale(dimen);
+  }
 }
 
 }  // namespace DateTimeUtils
