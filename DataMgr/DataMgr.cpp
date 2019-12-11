@@ -196,7 +196,7 @@ std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
         md.startPage = segIt.start_page;
         md.numPages = segIt.num_pages;
         md.touch = segIt.last_touched;
-        md.isFree = segIt.mem_status;
+        md.memStatus = segIt.mem_status;
         md.chunk_key.insert(
             md.chunk_key.end(), segIt.chunk_key.begin(), segIt.chunk_key.end());
         mi.nodeMemoryData.push_back(md);
@@ -226,7 +226,7 @@ std::vector<MemoryInfo> DataMgr::getMemoryInfo(const MemoryLevel memLevel) {
           md.touch = segIt.last_touched;
           md.chunk_key.insert(
               md.chunk_key.end(), segIt.chunk_key.begin(), segIt.chunk_key.end());
-          md.isFree = segIt.mem_status;
+          md.memStatus = segIt.mem_status;
           mi.nodeMemoryData.push_back(md);
         }
       }

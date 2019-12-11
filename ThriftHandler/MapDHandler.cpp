@@ -2124,7 +2124,7 @@ void MapDHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
       md.num_pages = gpu.numPages;
       md.touch = gpu.touch;
       md.chunk_key.insert(md.chunk_key.end(), gpu.chunk_key.begin(), gpu.chunk_key.end());
-      md.is_free = gpu.isFree == Buffer_Namespace::MemStatus::FREE;
+      md.is_free = gpu.memStatus == Buffer_Namespace::MemStatus::FREE;
       nodeInfo.node_memory_data.push_back(md);
     }
     _return.push_back(nodeInfo);
