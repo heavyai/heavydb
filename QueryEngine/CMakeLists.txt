@@ -194,10 +194,10 @@ add_custom_command(
     ${CMAKE_CURRENT_SOURCE_DIR}/RuntimeFunctions.cpp)
 
 add_custom_command(
-    DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp
+    DEPENDS ExtensionFunctions.hpp ExtensionFunctionsGeo.hpp ExtensionFunctionsArray.hpp
     OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
     COMMAND ${llvm_clangpp_cmd}
-    ARGS -std=c++14 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color
+    ARGS -std=c++14 -fsyntax-only -Xclang -ast-dump -fno-diagnostics-color -Wno-return-type-c-linkage
     ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp | grep FunctionDecl | grep ExtensionFunctions |
     sed -E "s/\\-FunctionDecl.*line:[0-9]+:[0-9]+//g" > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast)
 
@@ -255,6 +255,7 @@ add_custom_command(
         -D__STDC_LIMIT_MACROS
         -D__STDC_CONSTANT_MACROS
         -D_FORCE_INLINES
+        -Xcompiler -Wno-return-type-c-linkage
         ${MAPD_DEFINITIONS}
         --device-link
         -arch sm_30

@@ -134,6 +134,15 @@ std::string serialize_llvm_object(const T* llvm_obj) {
   return ss.str();
 }
 
+template <>
+std::string serialize_llvm_object(const llvm::Module* module) {
+  std::stringstream ss;
+  llvm::raw_os_ostream os(ss);
+  module->print(os, nullptr);
+  os.flush();
+  return ss.str();
+}
+
 ExecutionEngineWrapper::ExecutionEngineWrapper() {}
 
 ExecutionEngineWrapper::ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine)

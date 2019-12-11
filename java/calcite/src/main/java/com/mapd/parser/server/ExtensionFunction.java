@@ -142,7 +142,7 @@ public class ExtensionFunction {
       case ArrayInt32:
         return "array_i32";
       case ArrayInt64:
-        return "array_i64";
+        return "{i64*, i64, i8}*";
       case ArrayFloat:
         return "array_float";
       case ArrayDouble:

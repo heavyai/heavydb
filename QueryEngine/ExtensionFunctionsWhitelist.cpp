@@ -151,7 +151,7 @@ std::string serialize_type(const ExtArgumentType type) {
     case ExtArgumentType::ArrayInt32:
       return "array_i32";
     case ExtArgumentType::ArrayInt64:
-      return "array_i64";
+      return "{i64*, i64, i8}*";
     case ExtArgumentType::ArrayFloat:
       return "array_float";
     case ExtArgumentType::ArrayDouble:
@@ -179,6 +179,13 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
   /* This function is mostly used for scalar types.
      For non-scalar types, NULL is returned as a placeholder.
    */
+
+  auto generate_array_type = [](const auto subtype) {
+    auto ti = SQLTypeInfo(kARRAY, false);
+    ti.set_subtype(subtype);
+    return ti;
+  };
+
   switch (ext_arg_type) {
     case ExtArgumentType::Bool:
       return SQLTypeInfo(kBOOLEAN, false);
@@ -194,6 +201,18 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
       return SQLTypeInfo(kFLOAT, false);
     case ExtArgumentType::Double:
       return SQLTypeInfo(kDOUBLE, false);
+    case ExtArgumentType::ArrayInt8:
+      return generate_array_type(kTINYINT);
+    case ExtArgumentType::ArrayInt16:
+      return generate_array_type(kSMALLINT);
+    case ExtArgumentType::ArrayInt32:
+      return generate_array_type(kINT);
+    case ExtArgumentType::ArrayInt64:
+      return generate_array_type(kBIGINT);
+    case ExtArgumentType::ArrayFloat:
+      return generate_array_type(kFLOAT);
+    case ExtArgumentType::ArrayDouble:
+      return generate_array_type(kDOUBLE);
     default:
       LOG(WARNING) << "ExtArgumentType `" << serialize_type(ext_arg_type)
                    << "` cannot be converted to SQLTypeInfo. Returning nulltype.";
@@ -256,9 +275,16 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
         continue;
       }
 
-      std::string decl_prefix{"declare " + serialize_type(signature.getRet()) + " @" +
-                              signature.getName()};
+      std::string decl_prefix;
       std::vector<std::string> arg_strs;
+
+      if (signature.getRet() == ExtArgumentType::ArrayInt64) {
+        decl_prefix = "declare void @" + signature.getName();
+        arg_strs.emplace_back("{i64*, i64, i8}*");
+      } else {
+        decl_prefix =
+            "declare " + serialize_type(signature.getRet()) + " @" + signature.getName();
+      }
       for (const auto arg : signature.getArgs()) {
         arg_strs.push_back(serialize_type(arg));
       }
@@ -338,7 +364,7 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "array_i32") {
     return ExtArgumentType::ArrayInt32;
   }
-  if (type_name == "array_i64") {
+  if (type_name == "{i64*, i64, i8}*") {
     return ExtArgumentType::ArrayInt64;
   }
   if (type_name == "array_float") {

@@ -407,10 +407,12 @@ class CodeGenerator {
     llvm::BasicBlock* orig_bb;
   };
 
-  ArgNullcheckBBs beginArgsNullcheck(const Analyzer::FunctionOper* function_oper,
-                                     const std::vector<llvm::Value*>& orig_arg_lvs);
+  std::tuple<ArgNullcheckBBs, llvm::Value*> beginArgsNullcheck(
+      const Analyzer::FunctionOper* function_oper,
+      const std::vector<llvm::Value*>& orig_arg_lvs);
 
   llvm::Value* endArgsNullcheck(const ArgNullcheckBBs&,
+                                llvm::Value*,
                                 llvm::Value*,
                                 const Analyzer::FunctionOper*);
 

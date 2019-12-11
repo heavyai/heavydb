@@ -21,10 +21,20 @@
 #include "ExtensionFunctionsWhitelist.h"
 #include "TableFunctions/TableFunctions.hpp"
 
+#include <tuple>
+
 extern std::unique_ptr<llvm::Module> udf_gpu_module;
 extern std::unique_ptr<llvm::Module> udf_cpu_module;
 
 namespace {
+
+llvm::StructType* get_arr_struct_type(CgenState* cgen_state, llvm::Type* array_type) {
+  return llvm::StructType::get(cgen_state->context_,
+                               {array_type,
+                                llvm::Type::getInt64Ty(cgen_state->context_),
+                                llvm::Type::getInt8Ty(cgen_state->context_)},
+                               false);
+}
 
 llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type,
                                       llvm::LLVMContext& ctx) {
@@ -42,6 +52,8 @@ llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type,
       return llvm::Type::getFloatTy(ctx);
     case ExtArgumentType::Double:
       return llvm::Type::getDoubleTy(ctx);
+    case ExtArgumentType::ArrayInt64:
+      return llvm::Type::getVoidTy(ctx);
     default:
       CHECK(false);
   }
@@ -85,11 +97,20 @@ inline SQLTypeInfo get_sql_type_from_llvm_type(const llvm::Type* ll_type) {
 }
 
 bool ext_func_call_requires_nullcheck(const Analyzer::FunctionOper* function_oper) {
+  const auto& func_ti = function_oper->get_type_info();
   for (size_t i = 0; i < function_oper->getArity(); ++i) {
     const auto arg = function_oper->getArg(i);
     const auto& arg_ti = arg->get_type_info();
-    if (!arg_ti.get_notnull() && !arg_ti.is_array() && !arg_ti.is_geometry()) {
+    if (func_ti.is_array() && arg_ti.is_array()) {
+      // If the function returns an array and any of the arguments are arrays, allow NULL
+      // scalars.
+      // TODO: Make this a property of the FunctionOper following `RETURN NULL ON NULL`
+      // semantics.
+      return false;
+    } else if (!arg_ti.get_notnull() && !arg_ti.is_array() && !arg_ti.is_geometry()) {
       return true;
+    } else {
+      continue;
     }
   }
   return false;
@@ -112,9 +133,12 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
   auto ext_func_sig = bind_function(function_oper);
 
   const auto& ret_ti = function_oper->get_type_info();
-  CHECK(ret_ti.is_integer() || ret_ti.is_fp() || ret_ti.is_boolean());
-  const auto ret_ty =
-      ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_);
+  CHECK(ret_ti.is_integer() || ret_ti.is_fp() || ret_ti.is_boolean() ||
+        ret_ti.is_array());
+  if (ret_ti.is_array() && co.device_type_ == ExecutorDeviceType::GPU) {
+    throw QueryMustRunOnCpu();
+  }
+  auto ret_ty = ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_);
   const auto current_bb = cgen_state_->ir_builder_.GetInsertBlock();
   for (auto it : cgen_state_->ext_call_cache_) {
     if (*it.foper == *function_oper) {
@@ -132,7 +156,8 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
     const auto arg0 =
         (arg_cast && arg_cast->get_optype() == kCAST) ? arg_cast->get_operand() : arg;
     const auto array_expr_arg = dynamic_cast<const Analyzer::ArrayExpr*>(arg0);
-    auto is_local_alloc = (array_expr_arg && array_expr_arg->isLocalAlloc());
+    auto is_local_alloc =
+        ret_ti.is_array() || (array_expr_arg && array_expr_arg->isLocalAlloc());
     const auto& arg_ti = arg->get_type_info();
     const auto arg_lvs = codegen(arg, true, co);
     // TODO(adb / d): Assuming no const array cols for geo (for now)
@@ -159,21 +184,37 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
   // the assumption that the inputs are validated before calling them. Generate
   // code to do the check at the call site: if any argument is NULL, return NULL
   // without calling the function at all.
-  const auto bbs = beginArgsNullcheck(function_oper, orig_arg_lvs);
+  const auto [bbs, null_array_ptr] = beginArgsNullcheck(function_oper, orig_arg_lvs);
   CHECK_GE(orig_arg_lvs.size(), function_oper->getArity());
   // Arguments must be converted to the types the extension function can handle.
-  const auto args = codegenFunctionOperCastArgs(
+  auto args = codegenFunctionOperCastArgs(
       function_oper, &ext_func_sig, orig_arg_lvs, const_arr_size, co);
-  const auto ext_call =
-      cgen_state_->emitExternalCall(ext_func_sig.getName(), ret_ty, args);
-  auto ext_call_nullcheck = endArgsNullcheck(bbs, ext_call, function_oper);
+
+  llvm::Value* array_ret{nullptr};
+  if (ret_ti.is_array()) {
+    // codegen array return as first arg
+    ret_ty = llvm::Type::getVoidTy(cgen_state_->context_);
+    const auto arr_struct_ty = get_arr_struct_type(
+        cgen_state_, llvm::Type::getInt64PtrTy(cgen_state_->context_));
+    array_ret = cgen_state_->ir_builder_.CreateAlloca(arr_struct_ty);
+    args.insert(args.begin(), array_ret);
+  }
+  const auto ext_call = cgen_state_->emitExternalCall(
+      ext_func_sig.getName(), ret_ty, args, {}, ret_ti.is_array());
+  auto ext_call_nullcheck = endArgsNullcheck(
+      bbs, ret_ti.is_array() ? array_ret : ext_call, null_array_ptr, function_oper);
 
   // Cast the return of the extension function to match the FunctionOper
-  const auto extension_ret_ti = get_sql_type_from_llvm_type(ret_ty);
-  if (bbs.args_null_bb &&
-      extension_ret_ti.get_type() != function_oper->get_type_info().get_type()) {
-    ext_call_nullcheck = codegenCast(
-        ext_call_nullcheck, extension_ret_ti, function_oper->get_type_info(), false, co);
+  if (!ret_ti.is_array()) {
+    const auto extension_ret_ti = get_sql_type_from_llvm_type(ret_ty);
+    if (bbs.args_null_bb &&
+        extension_ret_ti.get_type() != function_oper->get_type_info().get_type()) {
+      ext_call_nullcheck = codegenCast(ext_call_nullcheck,
+                                       extension_ret_ti,
+                                       function_oper->get_type_info(),
+                                       false,
+                                       co);
+    }
   }
 
   cgen_state_->ext_call_cache_.push_back({function_oper, ext_call_nullcheck});
@@ -182,14 +223,20 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
 }
 
 // Start the control flow needed for a call site check of NULL arguments.
-CodeGenerator::ArgNullcheckBBs CodeGenerator::beginArgsNullcheck(
-    const Analyzer::FunctionOper* function_oper,
-    const std::vector<llvm::Value*>& orig_arg_lvs) {
+std::tuple<CodeGenerator::ArgNullcheckBBs, llvm::Value*>
+CodeGenerator::beginArgsNullcheck(const Analyzer::FunctionOper* function_oper,
+                                  const std::vector<llvm::Value*>& orig_arg_lvs) {
   llvm::BasicBlock* args_null_bb{nullptr};
   llvm::BasicBlock* args_notnull_bb{nullptr};
   llvm::BasicBlock* orig_bb = cgen_state_->ir_builder_.GetInsertBlock();
+  llvm::Value* null_array_alloca{nullptr};
   // Only generate the check if required (at least one argument must be nullable).
   if (ext_func_call_requires_nullcheck(function_oper)) {
+    if (function_oper->get_type_info().is_array()) {
+      const auto arr_struct_ty = get_arr_struct_type(
+          cgen_state_, llvm::Type::getInt64PtrTy(cgen_state_->context_));
+      null_array_alloca = cgen_state_->ir_builder_.CreateAlloca(arr_struct_ty);
+    }
     const auto args_notnull_lv = cgen_state_->ir_builder_.CreateNot(
         codegenFunctionOperNullArg(function_oper, orig_arg_lvs));
     args_notnull_bb = llvm::BasicBlock::Create(
@@ -199,35 +246,62 @@ CodeGenerator::ArgNullcheckBBs CodeGenerator::beginArgsNullcheck(
     cgen_state_->ir_builder_.CreateCondBr(args_notnull_lv, args_notnull_bb, args_null_bb);
     cgen_state_->ir_builder_.SetInsertPoint(args_notnull_bb);
   }
-  return {args_null_bb, args_notnull_bb, orig_bb};
+  return std::make_tuple(
+      CodeGenerator::ArgNullcheckBBs{args_null_bb, args_notnull_bb, orig_bb},
+      null_array_alloca);
 }
 
 // Wrap up the control flow needed for NULL argument handling.
 llvm::Value* CodeGenerator::endArgsNullcheck(
     const ArgNullcheckBBs& bbs,
     llvm::Value* fn_ret_lv,
+    llvm::Value* null_array_ptr,
     const Analyzer::FunctionOper* function_oper) {
   if (bbs.args_null_bb) {
     CHECK(bbs.args_notnull_bb);
     cgen_state_->ir_builder_.CreateBr(bbs.args_null_bb);
     cgen_state_->ir_builder_.SetInsertPoint(bbs.args_null_bb);
 
-    // The pre-cast SQL equivalent of the type returned by the extension function.
-    const auto extension_ret_ti = get_sql_type_from_llvm_type(fn_ret_lv->getType());
+    llvm::PHINode* ext_call_phi{nullptr};
+    llvm::Value* null_lv{nullptr};
+    if (!function_oper->get_type_info().is_array()) {
+      // The pre-cast SQL equivalent of the type returned by the extension function.
+      const auto extension_ret_ti = get_sql_type_from_llvm_type(fn_ret_lv->getType());
 
-    auto ext_call_phi = cgen_state_->ir_builder_.CreatePHI(
-        extension_ret_ti.is_fp()
-            ? get_fp_type(extension_ret_ti.get_size() * 8, cgen_state_->context_)
-            : get_int_type(extension_ret_ti.get_size() * 8, cgen_state_->context_),
-        2);
+      ext_call_phi = cgen_state_->ir_builder_.CreatePHI(
+          extension_ret_ti.is_fp()
+              ? get_fp_type(extension_ret_ti.get_size() * 8, cgen_state_->context_)
+              : get_int_type(extension_ret_ti.get_size() * 8, cgen_state_->context_),
+          2);
 
+      null_lv =
+          extension_ret_ti.is_fp()
+              ? static_cast<llvm::Value*>(cgen_state_->inlineFpNull(extension_ret_ti))
+              : static_cast<llvm::Value*>(cgen_state_->inlineIntNull(extension_ret_ti));
+    } else {
+      const auto arr_struct_ty = get_arr_struct_type(
+          cgen_state_, llvm::Type::getInt64PtrTy(cgen_state_->context_));
+      ext_call_phi =
+          cgen_state_->ir_builder_.CreatePHI(llvm::PointerType::get(arr_struct_ty, 0), 2);
+
+      CHECK(null_array_ptr);
+      const auto arr_null_bool =
+          cgen_state_->ir_builder_.CreateStructGEP(arr_struct_ty, null_array_ptr, 2);
+      cgen_state_->ir_builder_.CreateStore(
+          llvm::ConstantInt::get(get_int_type(1, cgen_state_->context_), 1),
+          arr_null_bool);
+
+      const auto arr_null_size =
+          cgen_state_->ir_builder_.CreateStructGEP(arr_struct_ty, null_array_ptr, 1);
+      cgen_state_->ir_builder_.CreateStore(
+          llvm::ConstantInt::get(get_int_type(64, cgen_state_->context_), 0),
+          arr_null_size);
+    }
     ext_call_phi->addIncoming(fn_ret_lv, bbs.args_notnull_bb);
+    ext_call_phi->addIncoming(
+        function_oper->get_type_info().is_array() ? null_array_ptr : null_lv,
+        bbs.orig_bb);
 
-    const auto null_lv =
-        extension_ret_ti.is_fp()
-            ? static_cast<llvm::Value*>(cgen_state_->inlineFpNull(extension_ret_ti))
-            : static_cast<llvm::Value*>(cgen_state_->inlineIntNull(extension_ret_ti));
-    ext_call_phi->addIncoming(null_lv, bbs.orig_bb);
     return ext_call_phi;
   }
   return fn_ret_lv;
@@ -266,7 +340,8 @@ llvm::Value* CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
       CHECK_EQ(size_t(1), arg_lvs.size());
       const auto arg_lv = arg_lvs.front();
       CHECK(arg_lv->getType()->isIntegerTy(64));
-      const auto bbs = beginArgsNullcheck(function_oper, {arg_lvs});
+      CodeGenerator::ArgNullcheckBBs bbs;
+      std::tie(bbs, std::ignore) = beginArgsNullcheck(function_oper, {arg_lvs});
       const std::string func_name =
           (function_oper->getName() == "FLOOR") ? "decimal_floor" : "decimal_ceil";
       const auto covar_result_lv = cgen_state_->emitCall(
@@ -276,7 +351,7 @@ llvm::Value* CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
       CHECK_EQ(0, ret_ti.get_scale());
       const auto result_lv = cgen_state_->ir_builder_.CreateSDiv(
           covar_result_lv, cgen_state_->llInt(exp_to_scale(arg_ti.get_scale())));
-      return endArgsNullcheck(bbs, result_lv, function_oper);
+      return endArgsNullcheck(bbs, result_lv, nullptr, function_oper);
     } else if (function_oper->getName() == "ROUND" &&
                function_oper->getArg(0)->get_type_info().is_decimal()) {
       CHECK_EQ(size_t(2), function_oper->getArity());
@@ -297,7 +372,9 @@ llvm::Value* CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
         arg1_lv = codegenCast(arg1_lv, arg1_ti, SQLTypeInfo(kINT, true), false, co);
       }
 
-      const auto bbs0 = beginArgsNullcheck(function_oper, {arg0_lv, arg1_lvs.front()});
+      CodeGenerator::ArgNullcheckBBs bbs0;
+      std::tie(bbs0, std::ignore) =
+          beginArgsNullcheck(function_oper, {arg0_lv, arg1_lvs.front()});
 
       const std::string func_name = "Round__4";
       const auto ret_ti = function_oper->get_type_info();
@@ -307,7 +384,7 @@ llvm::Value* CodeGenerator::codegenFunctionOperWithCustomTypeHandling(
           get_int_type(64, cgen_state_->context_),
           {arg0_lv, arg1_lv, cgen_state_->llInt(arg0_ti.get_scale())});
 
-      return endArgsNullcheck(bbs0, result_lv, function_oper);
+      return endArgsNullcheck(bbs0, result_lv, nullptr, function_oper);
     }
     throw std::runtime_error("Type combination not supported for function " +
                              function_oper->getName());
@@ -370,34 +447,38 @@ std::pair<llvm::Value*, llvm::Value*> CodeGenerator::codegenArrayBuff(
   return std::make_pair(buff, len);
 }
 
-llvm::StructType* CodeGenerator::createArrayStructType(const std::string& udf_func_name,
+llvm::StructType* CodeGenerator::createArrayStructType(const std::string& ext_func_name,
                                                        size_t param_num) {
-  llvm::Function* udf_func = cgen_state_->module_->getFunction(udf_func_name);
-  llvm::Module* module_for_lookup = cgen_state_->module_;
+  llvm::Function* udf_func = cgen_state_->module_->getFunction(ext_func_name);
+  llvm::StructType* array_type{nullptr};
+  if (udf_func) {
+    // TODO: Ensure the user defined function signature matches the expected type of the
+    // array struct
+    llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
+    CHECK_LE(param_num, udf_func_type->getNumParams());
+    llvm::Type* param_type = udf_func_type->getParamType(param_num);
+    CHECK(param_type->isPointerTy());
+    llvm::Type* struct_type = param_type->getPointerElementType();
+    CHECK(struct_type->isStructTy());
+    CHECK_EQ(struct_type->getStructNumElements(), size_t(3));
 
-  CHECK(udf_func);
+    if (llvm::cast<llvm::StructType>(struct_type)->isLiteral()) {
+      return llvm::cast<llvm::StructType>(struct_type);
+    }
 
-  llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
-  CHECK(param_num < udf_func_type->getNumParams());
-  llvm::Type* param_type = udf_func_type->getParamType(param_num);
-  CHECK(param_type->isPointerTy());
-  llvm::Type* struct_type = param_type->getPointerElementType();
-  CHECK(struct_type->isStructTy());
-  CHECK(struct_type->getStructNumElements() == 3);
-
-  if (llvm::cast<llvm::StructType>(struct_type)->isLiteral()) {
-    return llvm::cast<llvm::StructType>(struct_type);
+    llvm::StringRef struct_name = struct_type->getStructName();
+    array_type = cgen_state_->module_->getTypeByName(struct_name);
+  } else {
+    // Generate struct type
+    return get_arr_struct_type(cgen_state_,
+                               llvm::Type::getInt64PtrTy(cgen_state_->context_));
   }
 
-  llvm::StringRef struct_name = struct_type->getStructName();
-
-  llvm::StructType* array_type = module_for_lookup->getTypeByName(struct_name);
   CHECK(array_type);
-
-  return (array_type);
+  return array_type;
 }
 
-void CodeGenerator::codegenArrayArgs(const std::string& udf_func_name,
+void CodeGenerator::codegenArrayArgs(const std::string& ext_func_name,
                                      size_t param_num,
                                      llvm::Value* array_buf,
                                      llvm::Value* array_size,
@@ -407,8 +488,8 @@ void CodeGenerator::codegenArrayArgs(const std::string& udf_func_name,
   CHECK(array_size);
   CHECK(array_null);
 
-  auto array_abstraction = createArrayStructType(udf_func_name, param_num);
-  auto alloc_mem = cgen_state_->ir_builder_.CreateAlloca(array_abstraction, nullptr);
+  auto array_abstraction = createArrayStructType(ext_func_name, param_num);
+  auto alloc_mem = cgen_state_->ir_builder_.CreateAlloca(array_abstraction);
 
   auto array_buf_ptr =
       cgen_state_->ir_builder_.CreateStructGEP(array_abstraction, alloc_mem, 0);

@@ -191,11 +191,9 @@ class ExtensionFunctionSignatureParser {
     if (type_name.endsWith(" *")) {
       return pointerType(deserializeType(type_name.substring(0, type_name.length() - 2)));
     }
-
     if (type_name.endsWith("*")) {
       return pointerType(deserializeType(type_name.substring(0, type_name.length() - 1)));
     }
-
     if (type_name.equals("Array<bool>")) {
       return ExtensionFunction.ExtArgumentType.ArrayInt8;
     }

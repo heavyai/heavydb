@@ -5,8 +5,7 @@
 #include <cmath>
 #include <cstdlib>
 
-#define EXTENSION_INLINE extern "C" ALWAYS_INLINE DEVICE
-#define EXTENSION_NOINLINE extern "C" NEVER_INLINE DEVICE
+#include "OmniSciTypes.h"
 
 /* Example extension functions:
  *
@@ -881,4 +880,5 @@ EXTENSION_NOINLINE bool is_point_size_in_merc_view(const double lon,
            lat + latdiff < min_lat || lat - latdiff > max_lat);
 }
 
+#include "ExtensionFunctionsArray.hpp"
 #include "ExtensionFunctionsGeo.hpp"

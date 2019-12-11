@@ -1743,6 +1743,8 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
     const Analyzer::Expr* target_expr,
     const CompilationOptions& co) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
+  const auto func_expr = dynamic_cast<const Analyzer::FunctionOper*>(target_expr);
+
   // TODO(alex): handle arrays uniformly?
   CodeGenerator code_generator(executor_);
   if (target_expr) {
@@ -1752,7 +1754,7 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
           agg_expr ? code_generator.codegen(agg_expr->get_arg(), true, co)
                    : code_generator.codegen(
                          target_expr, !executor_->plan_state_->allow_lazy_fetch_, co);
-      if (target_ti.isChunkIteratorPackaging()) {
+      if (!func_expr && target_ti.isChunkIteratorPackaging()) {
         // Something with the chunk transport is code that was generated from a source
         // other than an ARRAY[] expression
         CHECK_EQ(size_t(1), target_lvs.size());
@@ -1772,12 +1774,63 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
                 {target_lvs.front(),
                  code_generator.posArg(target_expr),
                  executor_->cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))})};
-      } else if (target_ti.isStandardBufferPackaging()) {
+      } else {
         if (agg_expr) {
           throw std::runtime_error(
               "Using array[] operator as argument to an aggregate operator is not "
               "supported");
         }
+        CHECK(func_expr || target_ti.isStandardBufferPackaging());
+        if (dynamic_cast<const Analyzer::FunctionOper*>(target_expr)) {
+          CHECK_EQ(size_t(1), target_lvs.size());
+
+          const auto target_lv = LL_BUILDER.CreateLoad(target_lvs[0]);
+
+          // const auto target_lv_type = target_lvs[0]->getType();
+          // CHECK(target_lv_type->isStructTy());
+          // CHECK_EQ(target_lv_type->getNumContainedTypes(), 3u);
+          const auto i8p_ty = llvm::PointerType::get(
+              get_int_type(8, executor_->cgen_state_->context_), 0);
+          const auto ptr = LL_BUILDER.CreatePointerCast(
+              LL_BUILDER.CreateExtractValue(target_lv, 0), i8p_ty);
+          const auto size = LL_BUILDER.CreateExtractValue(target_lv, 1);
+          const auto null_flag = LL_BUILDER.CreateExtractValue(target_lv, 2);
+
+          const auto nullcheck_ok_bb = llvm::BasicBlock::Create(
+              LL_CONTEXT, "arr_nullcheck_ok_bb", executor_->cgen_state_->row_func_);
+          const auto nullcheck_fail_bb = llvm::BasicBlock::Create(
+              LL_CONTEXT, "arr_nullcheck_fail_bb", executor_->cgen_state_->row_func_);
+
+          // TODO(adb): probably better to zext the bool
+          const auto nullcheck = LL_BUILDER.CreateICmpEQ(
+              null_flag, executor_->cgen_state_->llInt(static_cast<int8_t>(1)));
+          LL_BUILDER.CreateCondBr(nullcheck, nullcheck_fail_bb, nullcheck_ok_bb);
+
+          const auto ret_bb = llvm::BasicBlock::Create(
+              LL_CONTEXT, "arr_return", executor_->cgen_state_->row_func_);
+          LL_BUILDER.SetInsertPoint(ret_bb);
+          auto result_phi = LL_BUILDER.CreatePHI(i8p_ty, 2, "array_ptr_return");
+          result_phi->addIncoming(ptr, nullcheck_ok_bb);
+
+          const auto null_arr_sentinel = LL_BUILDER.CreateIntToPtr(
+              executor_->cgen_state_->llInt(static_cast<int8_t>(0)), i8p_ty);
+          result_phi->addIncoming(null_arr_sentinel, nullcheck_fail_bb);
+
+          LL_BUILDER.SetInsertPoint(nullcheck_ok_bb);
+          executor_->cgen_state_->emitExternalCall(
+              "register_buffer_with_executor_rsm",
+              llvm::Type::getVoidTy(executor_->cgen_state_->context_),
+              {executor_->cgen_state_->llInt(reinterpret_cast<int64_t>(executor_)), ptr});
+          LL_BUILDER.CreateBr(ret_bb);
+
+          LL_BUILDER.SetInsertPoint(nullcheck_fail_bb);
+          LL_BUILDER.CreateBr(ret_bb);
+
+          LL_BUILDER.SetInsertPoint(ret_bb);
+
+          return {result_phi, size};
+        }
+        CHECK_EQ(size_t(2), target_lvs.size());
         return {target_lvs[0], target_lvs[1]};
       }
     }
