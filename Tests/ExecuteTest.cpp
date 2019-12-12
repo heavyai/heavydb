@@ -5516,6 +5516,47 @@ void import_dept_table() {
   }
 }
 
+void import_corr_in_lookup() {
+  const std::string create_corr_in_lookup_table{
+      "CREATE TABLE corr_in_lookup (id INT, val INT);"};
+  run_ddl_statement(create_corr_in_lookup_table);
+  g_sqlite_comparator.query(create_corr_in_lookup_table);
+
+  std::vector<std::string> lookup_tuples = {"(1,1)", "(2,2)", "(3,3)", "(4,4)"};
+
+  for (std::string tuple : lookup_tuples) {
+    std::stringstream insert_tuple_str;
+    insert_tuple_str << "INSERT INTO corr_in_lookup VALUES " << tuple << ";";
+    run_multiple_agg(insert_tuple_str.str(), ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_tuple_str.str());
+  }
+}
+
+void import_corr_in_facts() {
+  const std::string create_corr_in_facts_table{
+      "CREATE TABLE corr_in_facts (id INT, val INT);"};
+  run_ddl_statement(create_corr_in_facts_table);
+  g_sqlite_comparator.query(create_corr_in_facts_table);
+
+  std::vector<std::string> facts_tuples = {
+      "(1,1)",
+      "(1,2)",
+      "(1,3)",
+      "(1,4)",
+      "(2,1)",
+      "(2,2)",
+      "(2,3)",
+      "(2,4)",
+  };
+
+  for (std::string tuple : facts_tuples) {
+    std::stringstream insert_tuple_str;
+    insert_tuple_str << "INSERT INTO corr_in_facts VALUES " << tuple << ";";
+    run_multiple_agg(insert_tuple_str.str(), ExecutorDeviceType::CPU);
+    g_sqlite_comparator.query(insert_tuple_str.str());
+  }
+}
+
 void import_geospatial_test() {
   const std::string geospatial_test("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement(geospatial_test);
@@ -13236,64 +13277,23 @@ TEST(Select, Correlated_Exists) {
 }
 
 TEST(Select, Correlated_In) {
-  // table creation
-  const std::string drop_lookup_tbl_ddl = "DROP TABLE IF EXISTS lookup";
-  const std::string drop_facts_tbl_ddl = "DROP TABLE IF EXISTS facts";
-  const std::string create_lookup_tbl_ddl = "CREATE TABLE lookup (id int, val int)";
-  const std::string create_facts_tbl_ddl = "CREATE TABLE facts (id int, val int)";
-
-  run_ddl_statement(drop_lookup_tbl_ddl);
-  run_ddl_statement(drop_facts_tbl_ddl);
-  run_ddl_statement(create_lookup_tbl_ddl);
-  run_ddl_statement(create_facts_tbl_ddl);
-
-  g_sqlite_comparator.query(drop_lookup_tbl_ddl);
-  g_sqlite_comparator.query(drop_facts_tbl_ddl);
-  g_sqlite_comparator.query(create_lookup_tbl_ddl);
-  g_sqlite_comparator.query(create_facts_tbl_ddl);
-
-  std::vector<std::string> lookup_tuples = {"(1,1)", "(2,2)", "(3,3)", "(4,4)"};
-
-  std::vector<std::string> facts_tuples = {
-      "(1,1)",
-      "(1,2)",
-      "(1,3)",
-      "(1,4)",
-      "(2,1)",
-      "(2,2)",
-      "(2,3)",
-      "(2,4)",
-  };
-
-  // create lookup
-  for (std::string tuple : lookup_tuples) {
-    std::stringstream insert_tuple_str;
-    insert_tuple_str << "INSERT INTO lookup VALUES " << tuple << ";";
-    run_multiple_agg(insert_tuple_str.str(), ExecutorDeviceType::CPU);
-    g_sqlite_comparator.query(insert_tuple_str.str());
-  }
-
-  // create facts
-  for (std::string tuple : facts_tuples) {
-    std::stringstream insert_tuple_str;
-    insert_tuple_str << "INSERT INTO facts VALUES " << tuple << ";";
-    run_multiple_agg(insert_tuple_str.str(), ExecutorDeviceType::CPU);
-    g_sqlite_comparator.query(insert_tuple_str.str());
-  }
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    c("SELECT f.val FROM facts f WHERE f.val IN (SELECT l.val FROM lookup l WHERE f.id = "
+    c("SELECT f.val FROM corr_in_facts f WHERE f.val IN (SELECT l.val FROM "
+      "corr_in_lookup l WHERE f.id = "
       "l.id) AND f.val > 3",
       dt);
-    c("SELECT f.val FROM facts f WHERE f.val IN (SELECT l.val FROM lookup l WHERE f.id "
+    c("SELECT f.val FROM corr_in_facts f WHERE f.val IN (SELECT l.val FROM "
+      "corr_in_lookup l WHERE f.id "
       "<> l.id) AND f.val > 3",
       dt);
-    c("SELECT f.id FROM facts f WHERE f.id IN (SELECT l.id FROM lookup l WHERE f.val <> "
+    c("SELECT f.id FROM corr_in_facts f WHERE f.id IN (SELECT l.id FROM corr_in_lookup l "
+      "WHERE f.val <> "
       "l.val) AND f.val < 2",
       dt);
-    c("SELECT f.id FROM facts f WHERE f.id IN (SELECT l.id FROM lookup l WHERE f.val = "
+    c("SELECT f.id FROM corr_in_facts f WHERE f.id IN (SELECT l.id FROM corr_in_lookup l "
+      "WHERE f.val = "
       "l.val) AND f.val < 2",
       dt);
   }
@@ -16994,6 +16994,18 @@ int create_and_populate_tables(bool with_delete_support = true) {
     return -EEXIST;
   }
   try {
+    import_corr_in_lookup();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'corr_in_lookup'";
+    return -EEXIST;
+  }
+  try {
+    import_corr_in_facts();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'corr_in_facts'";
+    return -EEXIST;
+  }
+  try {
     import_geospatial_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'geospatial_test'";
@@ -17252,6 +17264,12 @@ void drop_tables() {
   const std::string drop_dept_table{"DROP TABLE dept;"};
   g_sqlite_comparator.query(drop_dept_table);
   run_ddl_statement(drop_dept_table);
+  const std::string drop_corr_in_lookup_table{"DROP TABLE IF EXISTS corr_in_lookup;"};
+  run_ddl_statement(drop_corr_in_lookup_table);
+  g_sqlite_comparator.query(drop_corr_in_lookup_table);
+  const std::string drop_corr_in_facts_table{"DROP TABLE IF EXISTS corr_in_facts;"};
+  run_ddl_statement(drop_corr_in_facts_table);
+  g_sqlite_comparator.query(drop_corr_in_facts_table);
   run_ddl_statement("DROP TABLE geospatial_test;");
   const std::string drop_test_in_bitmap{"DROP TABLE test_in_bitmap;"};
   g_sqlite_comparator.query(drop_test_in_bitmap);
