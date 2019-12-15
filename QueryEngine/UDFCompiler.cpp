@@ -45,8 +45,10 @@ namespace {
 
 class FunctionDeclVisitor : public RecursiveASTVisitor<FunctionDeclVisitor> {
  public:
-  FunctionDeclVisitor(llvm::raw_fd_ostream& ast_file, SourceManager& s_manager)
-      : ast_file_(ast_file), source_manager_(s_manager) {
+  FunctionDeclVisitor(llvm::raw_fd_ostream& ast_file,
+                      SourceManager& s_manager,
+                      ASTContext& context)
+      : ast_file_(ast_file), source_manager_(s_manager), context_(context) {
     source_manager_.getDiagnostics().setShowColors();
   }
 
@@ -54,7 +56,13 @@ class FunctionDeclVisitor : public RecursiveASTVisitor<FunctionDeclVisitor> {
     // Only function definitions (with bodies), not declarations.
     if (f->hasBody()) {
       if (getMainFileName() == getFuncDeclFileName(f)) {
-        f->dump(ast_file_);
+        auto printing_policy = context_.getPrintingPolicy();
+        printing_policy.FullyQualifiedName = 1;
+        printing_policy.UseVoidForZeroParams = 1;
+        printing_policy.PolishForDeclaration = 1;
+        printing_policy.TerseOutput = 1;
+        f->print(ast_file_, printing_policy);
+        ast_file_ << "\n";
       }
     }
 
@@ -77,14 +85,17 @@ class FunctionDeclVisitor : public RecursiveASTVisitor<FunctionDeclVisitor> {
  private:
   llvm::raw_fd_ostream& ast_file_;
   SourceManager& source_manager_;
+  ASTContext& context_;
 };
 
 // Implementation of the ASTConsumer interface for reading an AST produced
 // by the Clang parser.
 class DeclASTConsumer : public ASTConsumer {
  public:
-  DeclASTConsumer(llvm::raw_fd_ostream& ast_file, SourceManager& s_manager)
-      : visitor_(ast_file, s_manager) {}
+  DeclASTConsumer(llvm::raw_fd_ostream& ast_file,
+                  SourceManager& s_manager,
+                  ASTContext& context)
+      : visitor_(ast_file, s_manager, context) {}
 
   // Override the method that gets called for each parsed top-level
   // declaration.
@@ -111,7 +122,8 @@ class HandleDeclAction : public ASTFrontendAction {
 
   std::unique_ptr<ASTConsumer> CreateASTConsumer(CompilerInstance& instance,
                                                  StringRef file) override {
-    return llvm::make_unique<DeclASTConsumer>(ast_file_, instance.getSourceManager());
+    return llvm::make_unique<DeclASTConsumer>(
+        ast_file_, instance.getSourceManager(), instance.getASTContext());
   }
 
  private:

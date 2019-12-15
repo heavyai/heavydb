@@ -100,7 +100,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
 
     try {
       if (!udfAstFile.isEmpty()) {
-        udfSigs = ExtensionFunctionSignatureParser.parse(udfAstFile);
+        udfSigs = ExtensionFunctionSignatureParser.parseUdfAst(udfAstFile);
       }
     } catch (IOException ex) {
       MAPDLOGGER.error("Could not load udf function signatures: " + ex.getMessage());
