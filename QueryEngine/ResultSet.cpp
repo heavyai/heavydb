@@ -266,16 +266,6 @@ void ResultSet::append(ResultSet& that) {
   if (!that.storage_) {
     return;
   }
-  if (that.rowCount() == 0) {
-    // When we enable columnar output, adding an empty resultset to an appended storage
-    // makes our engine attempt to copy an empty result column to an output buffer
-    // which is completely useless and even causes unnecessary failure of query execution
-    // For instance, we got an error during columnarization of join result
-    // btw. sharded tables in multi-gpu environment, especially when join keys have
-    // one of the following types: string (encoded), time, and timestamp.
-    // Therefore, we skip adding such an empty resultset
-    return;
-  }
   appended_storage_.push_back(std::move(that.storage_));
   query_mem_desc_.setEntryCount(
       query_mem_desc_.getEntryCount() +
