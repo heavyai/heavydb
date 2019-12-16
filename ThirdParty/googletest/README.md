@@ -1,7 +1,7 @@
 Google Mock and Google Test
 ---------------------------
 
-This is Google Test v1.8.1.
+This is Google Test v1.10.0.
 
 This directory contains [Google Test and Google
 Mock](https://github.com/google/googletest), which have been fused together to
@@ -32,8 +32,9 @@ Remove source directory:
 rm -rf googletest
 ```
 
-Note: as of 2019-05-28 the fuse scripts are written for Python 2; running with
-Python 3 will result in a `SyntaxError` due to a `print`.
+Note: as of 2019-12-16 the fuse scripts are written for Python 2; running with
+Python 3 will result in a `SyntaxError` due to a `print`. This is unlikely to
+be fixed since the scripts are unsupported.
 
 ### Usage
 

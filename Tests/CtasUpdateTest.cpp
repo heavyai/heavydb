@@ -1388,24 +1388,24 @@ const std::shared_ptr<TestColumnDescriptor> STRING_NONE_BASE =
 #ifdef RUN_ALL_TEST
 
 #define INSTANTIATE_DATA_INGESTION_TEST(CDT)                                           \
-  INSTANTIATE_TEST_CASE_P(                                                             \
+  INSTANTIATE_TEST_SUITE_P(                                                            \
       CDT,                                                                             \
       Ctas,                                                                            \
       testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{CDT}));       \
-  INSTANTIATE_TEST_CASE_P(                                                             \
+  INSTANTIATE_TEST_SUITE_P(                                                            \
       CDT,                                                                             \
       Itas,                                                                            \
       testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{CDT}));       \
-  INSTANTIATE_TEST_CASE_P(                                                             \
+  INSTANTIATE_TEST_SUITE_P(                                                            \
       CDT,                                                                             \
       Update,                                                                          \
       testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{CDT}));       \
-  INSTANTIATE_TEST_CASE_P(                                                             \
+  INSTANTIATE_TEST_SUITE_P(                                                            \
       VARLEN_TEXT_AND_##CDT,                                                           \
       Update,                                                                          \
       testing::Values(                                                                 \
           std::vector<std::shared_ptr<TestColumnDescriptor>>{STRING_NONE_BASE, CDT})); \
-  INSTANTIATE_TEST_CASE_P(                                                             \
+  INSTANTIATE_TEST_SUITE_P(                                                            \
       CDT##_AND_VARLEN_TEXT,                                                           \
       Update,                                                                          \
       testing::Values(                                                                 \
@@ -1620,11 +1620,11 @@ const std::vector<std::shared_ptr<TestColumnDescriptor>> ALL = {STRING_NONE_BASE
                                                                 GEO_POLYGON,
                                                                 GEO_MULTI_POLYGON};
 
-INSTANTIATE_TEST_CASE_P(MIXED_ALL, Ctas, testing::Values(ALL));
-INSTANTIATE_TEST_CASE_P(MIXED_ALL, Itas, testing::Values(ALL));
-INSTANTIATE_TEST_CASE_P(MIXED_ALL, Update, testing::Values(ALL));
+INSTANTIATE_TEST_SUITE_P(MIXED_ALL, Ctas, testing::Values(ALL));
+INSTANTIATE_TEST_SUITE_P(MIXED_ALL, Itas, testing::Values(ALL));
+INSTANTIATE_TEST_SUITE_P(MIXED_ALL, Update, testing::Values(ALL));
 
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
     MIXED_VARLEN_WITHOUT_GEO,
     Update,
     testing::Values(std::vector<std::shared_ptr<TestColumnDescriptor>>{
