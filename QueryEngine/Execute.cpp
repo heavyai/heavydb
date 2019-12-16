@@ -904,15 +904,11 @@ ResultSetPtr Executor::reduceMultiDeviceResultSets(
     reduced_results = first;
   }
 
-#ifdef WITH_REDUCTION_JIT
   const auto& this_result_set = results_per_device[0].first;
   ResultSetReductionJIT reduction_jit(this_result_set->getQueryMemDesc(),
                                       this_result_set->getTargetInfos(),
                                       this_result_set->getTargetInitVals());
   const auto reduction_code = reduction_jit.codegen();
-#else
-  ReductionCode reduction_code{};
-#endif  // WITH_REDUCTION_JIT
   for (size_t i = 1; i < results_per_device.size(); ++i) {
     reduced_results->getStorage()->reduce(
         *(results_per_device[i].first->getStorage()), {}, reduction_code);

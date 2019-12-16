@@ -74,7 +74,6 @@ static void start_calcite_server_as_daemon(const int mapd_port,
                                            const std::string& ssl_keystore,
                                            const std::string& ssl_keystore_password,
                                            const std::string& ssl_key_file,
-                                           const std::string& ssl_cert_file,
                                            const std::string& udf_filename) {
   std::string const xDebug = "-Xdebug";
   std::string const remoteDebug =
@@ -175,8 +174,7 @@ static void start_calcite_server_as_daemon(const int mapd_port,
 std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
 Calcite::getClient(int port) {
   const auto transport = connMgr_->open_buffered_client_transport(
-      "localhost", port, ssl_cert_file_, true, 2000, 5000, 5000);
-
+      "localhost", port, ssl_ca_file_, true, 2000, 5000, 5000);
   try {
     transport->open();
 
@@ -228,7 +226,6 @@ void Calcite::runServer(const int mapd_port,
                                  ssl_keystore_,
                                  ssl_keystore_password_,
                                  ssl_key_file_,
-                                 ssl_cert_file_,
                                  udf_filename);
 
   // check for new server for 5 seconds max
@@ -304,7 +301,7 @@ Calcite::Calcite(const MapDParameters& mapd_parameter,
     , ssl_key_file_(mapd_parameter.ssl_key_file)
     , ssl_keystore_(mapd_parameter.ssl_keystore)
     , ssl_keystore_password_(mapd_parameter.ssl_keystore_password)
-    , ssl_cert_file_(mapd_parameter.ssl_cert_file) {
+    , ssl_ca_file_(mapd_parameter.ssl_trust_ca_file) {
   init(mapd_parameter.omnisci_server_port,
        mapd_parameter.calcite_port,
        data_dir,

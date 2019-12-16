@@ -419,8 +419,13 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoFunct
         throw QueryNotSupported(rex_function->getName() +
                                 ": expects scalar as first argument");
       }
-      auto arg0 = translateGeoFunctionArg(
-          rex_scalar0, arg_ti, lindex, with_bounds, with_render_group, expand_geo_col);
+      auto arg0 = translateGeoFunctionArg(rex_scalar0,
+                                          arg_ti,
+                                          lindex,
+                                          with_bounds,
+                                          with_render_group,
+                                          expand_geo_col,
+                                          is_projection);
       if (!IS_GEO(arg_ti.get_type())) {
         throw QueryNotSupported(rex_function->getName() + " expects geometry argument");
       }
@@ -544,7 +549,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateGeoConstructor(
   if (func_resolve(rex_function->getName(),
                    "ST_GeomFromText"sv,
                    "ST_GeogFromText"sv,
-                   "ST_Point"sv)) {
+                   "ST_Point"sv,
+                   "ST_SetSRID"sv)) {
     SQLTypeInfo arg_ti;
     int32_t lindex = 0;
     auto geoargs =

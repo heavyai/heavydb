@@ -50,7 +50,9 @@ public class ExtensionFunction {
     ArrayFloat,
     ArrayDouble,
     GeoPoint,
-    Cursor
+    GeoLineString,
+    Cursor,
+    GeoPolygon
   }
   ;
 
@@ -148,6 +150,10 @@ public class ExtensionFunction {
         return "geo_point";
       case Cursor:
         return "cursor";
+      case GeoLineString:
+        return "geo_linestring";
+      case GeoPolygon:
+        return "geo_polygon";
     }
     MAPDLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;

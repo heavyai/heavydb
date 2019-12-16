@@ -4,7 +4,7 @@
 DAG Execution / Translation
 ===========================
 
-Once the relational algebra tree provided by Calcite has been interpreted (see :doc:`../calcite/calcite_parser`) and optimized (see :doc:`./optimizer`) the tree is ordered and executed. Each remaining node in the tree (except for ``RelTableScan`` and ``RelJoin``) forms a query step. Each step is executed in order, with the result from all previous steps available for subsequent steps. The relational algebra tree is a directed, ascyclic graph dictating the execution order of the query steps.
+Once the relational algebra tree provided by Calcite has been interpreted (see :doc:`../calcite/calcite_parser`) and optimized (see :doc:`./optimizer`) the tree is ordered and executed. Each remaining node in the tree (except for ``RelTableScan`` and ``RelJoin``) forms a query step. Each step is executed in order, with the result from all previous steps available for subsequent steps. The relational algebra tree is a directed, acyclic graph dictating the execution order of the query steps.
 
 Determining Execution Order
 ===========================

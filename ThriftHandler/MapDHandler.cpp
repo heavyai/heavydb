@@ -26,18 +26,10 @@
 #include "MapDServer.h"
 #include "QueryEngine/UDFCompiler.h"
 #include "TokenCompletionHints.h"
+
 #ifdef HAVE_PROFILER
 #include <gperftools/heap-profiler.h>
 #endif  // HAVE_PROFILER
-#include <thrift/concurrency/PlatformThreadFactory.h>
-#include <thrift/concurrency/ThreadManager.h>
-#include <thrift/protocol/TBinaryProtocol.h>
-#include <thrift/protocol/TJSONProtocol.h>
-#include <thrift/server/TThreadedServer.h>
-#include <thrift/transport/TBufferTransports.h>
-#include <thrift/transport/THttpServer.h>
-#include <thrift/transport/TServerSocket.h>
-#include <thrift/transport/TTransportException.h>
 
 #include "MapDRelease.h"
 
@@ -379,7 +371,8 @@ std::string const MapDHandler::createInMemoryCalciteSession(
                                             calcite_->getInternalSessionProxyUserName(),
                                             calcite_->getInternalSessionProxyPassword(),
                                             true,
-                                            -1);
+                                            -1,
+                                            true);
   const auto emplace_ret =
       sessions_.emplace(session_id,
                         std::make_shared<Catalog_Namespace::SessionInfo>(
@@ -464,6 +457,8 @@ void MapDHandler::connect(TSessionId& session,
                          " is not allowed to access database " + dbname2 + ".");
   }
   connect_impl(session, passwd, dbname2, user_meta, cat, stdlog);
+  // if pki auth session will come back encrypted with user pubkey
+  SysCatalog::instance().check_for_session_encryption(passwd, session);
 }
 
 void MapDHandler::connect_impl(TSessionId& session,
@@ -980,6 +975,8 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
           std::string("Exception: invalid device_id or unavailable GPU with this ID"));
     }
   }
+  _return.execution_time_ms = 0;
+
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
@@ -990,11 +987,13 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
       std::string query_ra;
       TableMap table_map;
       OptionalTableMap tableNames(table_map);
-      query_ra = parse_to_ra(query_state->createQueryStateProxy(),
-                             query_str,
-                             {},
-                             tableNames,
-                             mapd_parameters_);
+      _return.execution_time_ms += measure<>::execution([&]() {
+        query_ra = parse_to_ra(query_state->createQueryStateProxy(),
+                               query_str,
+                               {},
+                               tableNames,
+                               mapd_parameters_);
+      });
 
       // COPY_TO/SELECT: get read ExecutorOuterLock >> TableReadLock for each table  (note
       // for update/delete this would be a table write lock)
@@ -1788,10 +1787,10 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
     THROW_MAPD_EXCEPTION("Table " + table_name + " doesn't exist");
   }
   if (td->isView) {
+    auto query_state = create_query_state(session_copy, td->viewSQL);
+    stdlog.setQueryState(query_state);
     try {
       if (hasTableAccessPrivileges(td, session)) {
-        auto query_state = create_query_state(session_copy, td->viewSQL);
-        stdlog.setQueryState(query_state);
         const auto query_ra = parse_to_ra(query_state->createQueryStateProxy(),
                                           query_state->getQueryStr(),
                                           {},
@@ -1814,10 +1813,12 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
       } else {
         THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
       }
-    } catch (std::exception& e) {
-      TColumnType tColumnType;
-      tColumnType.col_name = "BROKEN_VIEW_PLEASE_FIX";
-      _return.row_desc.push_back(tColumnType);
+    } catch (const std::exception& e) {
+      THROW_MAPD_EXCEPTION("View query has failed with an error: '" +
+                           std::string(e.what()) +
+                           "'.\nThe view must be dropped and re-created to "
+                           "resolve the error. \nQuery:\n" +
+                           query_state->getQueryStr());
     }
   } else {
     try {
@@ -2130,7 +2131,7 @@ void MapDHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
       md.num_pages = gpu.numPages;
       md.touch = gpu.touch;
       md.chunk_key.insert(md.chunk_key.end(), gpu.chunk_key.begin(), gpu.chunk_key.end());
-      md.is_free = gpu.isFree == Buffer_Namespace::MemStatus::FREE;
+      md.is_free = gpu.memStatus == Buffer_Namespace::MemStatus::FREE;
       nodeInfo.node_memory_data.push_back(md);
     }
     _return.push_back(nodeInfo);
@@ -4570,7 +4571,15 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                         mapd_parameters_,
                                         nullptr);
   RelAlgExecutor ra_executor(executor.get(), cat);
-  const auto result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
+  ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
+                                                     ExecutorDeviceType::CPU,
+                                                     QueryMemoryDescriptor(),
+                                                     nullptr,
+                                                     nullptr),
+                         {}};
+  _return.execution_time_ms += measure<>::execution(
+      [&]() { result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr); });
+  _return.execution_time_ms -= result.getRows()->getQueueTime();
   const auto rs = result.getRows();
   const auto converter =
       std::make_unique<ArrowResultSetConverter>(rs,
@@ -4579,16 +4588,22 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                                 device_id,
                                                 getTargetNames(result.getTargetsMeta()),
                                                 first_n);
-  const auto copy = converter->getArrowResult();
-  _return.sm_handle = std::string(copy.sm_handle.begin(), copy.sm_handle.end());
-  _return.sm_size = copy.sm_size;
-  _return.df_handle = std::string(copy.df_handle.begin(), copy.df_handle.end());
+  ArrowResult arrow_result;
+
+  _return.arrow_conversion_time_ms +=
+      measure<>::execution([&] { arrow_result = converter->getArrowResult(); });
+  _return.sm_handle =
+      std::string(arrow_result.sm_handle.begin(), arrow_result.sm_handle.end());
+  _return.sm_size = arrow_result.sm_size;
+  _return.df_handle =
+      std::string(arrow_result.df_handle.begin(), arrow_result.df_handle.end());
   if (device_type == ExecutorDeviceType::GPU) {
     std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
     CHECK(!ipc_handle_to_dev_ptr_.count(_return.df_handle));
-    ipc_handle_to_dev_ptr_.insert(std::make_pair(_return.df_handle, copy.df_dev_ptr));
+    ipc_handle_to_dev_ptr_.insert(
+        std::make_pair(_return.df_handle, arrow_result.df_dev_ptr));
   }
-  _return.df_size = copy.df_size;
+  _return.df_size = arrow_result.df_size;
 }
 
 void MapDHandler::execute_root_plan(TQueryResult& _return,

@@ -18,7 +18,6 @@
 #define AUTHMETADATA_H
 
 #include <string>
-
 struct AuthMetadata {
   AuthMetadata() {}
   int32_t port;
@@ -30,6 +29,8 @@ struct AuthMetadata {
   std::string domainComp;
   std::string restUrl;
   std::string restToken;
+  bool pki_db_client_auth = false;
+  std::string ca_file_name;
   bool allowLocalAuthFallback;
 };
 

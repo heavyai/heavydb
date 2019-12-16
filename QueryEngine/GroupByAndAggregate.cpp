@@ -724,7 +724,8 @@ KeylessInfo GroupByAndAggregate::getKeylessInfo(
               getExpressionRange(agg_expr->get_arg(), query_infos_, executor_);
           // NULL sentinel and init value for kMAX are identical, which results in
           // ambiguity in detecting empty keys in presence of nulls.
-          if (expr_range_info.hasNulls()) {
+          if (expr_range_info.getType() == ExpressionRangeType::Invalid ||
+              expr_range_info.hasNulls()) {
             break;
           }
           auto init_min = get_agg_initial_val(agg_info.agg_kind,

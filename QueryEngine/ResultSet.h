@@ -132,13 +132,6 @@ class ResultSetStorage {
                       int8_t* this_buff,
                       const int8_t* that_buff) const;
 
-  void reduceOneEntryNoCollisionsRowWise(
-      const size_t i,
-      int8_t* this_buff,
-      const int8_t* that_buff,
-      const ResultSetStorage& that,
-      const std::vector<std::string>& serialized_varlen_buffer) const;
-
   bool isEmptyEntry(const size_t entry_idx, const int8_t* buff) const;
   bool isEmptyEntry(const size_t entry_idx) const;
   bool isEmptyEntryColumnar(const size_t entry_idx, const int8_t* buff) const;
@@ -653,7 +646,10 @@ class ResultSet {
                       const size_t target_logical_idx,
                       const StorageLookupResult& storage_lookup_result) const;
 
-  std::pair<ssize_t, size_t> getStorageIndex(const size_t entry_idx) const;
+  /// Returns (storageIdx, entryIdx) pair, where:
+  /// storageIdx : 0 is storage_, storageIdx-1 is index into appended_storage_.
+  /// entryIdx   : local index into the storage object.
+  std::pair<size_t, size_t> getStorageIndex(const size_t entry_idx) const;
 
   const std::vector<const int8_t*>& getColumnFrag(const size_t storge_idx,
                                                   const size_t col_logical_idx,

@@ -1087,6 +1087,15 @@ std::vector<TargetMetaInfo> get_modify_manipulated_targets_meta(
   return targets_meta;
 }
 
+inline SQLTypeInfo get_logical_type_for_expr(const Analyzer::Expr& expr) {
+  if (is_count_distinct(&expr)) {
+    return SQLTypeInfo(kBIGINT, false);
+  } else if (is_agg(&expr)) {
+    return get_nullable_logical_type_info(expr.get_type_info());
+  }
+  return get_logical_type_info(expr.get_type_info());
+}
+
 template <class RA>
 std::vector<TargetMetaInfo> get_targets_meta(
     const RA* ra_node,
@@ -1095,14 +1104,9 @@ std::vector<TargetMetaInfo> get_targets_meta(
   for (size_t i = 0; i < ra_node->size(); ++i) {
     CHECK(target_exprs[i]);
     // TODO(alex): remove the count distinct type fixup.
-    targets_meta.emplace_back(
-        ra_node->getFieldName(i),
-        is_count_distinct(target_exprs[i])
-            ? SQLTypeInfo(kBIGINT, false)
-            : is_agg(target_exprs[i])
-                  ? get_nullable_logical_type_info(target_exprs[i]->get_type_info())
-                  : get_logical_type_info(target_exprs[i]->get_type_info()),
-        target_exprs[i]->get_type_info());
+    targets_meta.emplace_back(ra_node->getFieldName(i),
+                              get_logical_type_for_expr(*target_exprs[i]),
+                              target_exprs[i]->get_type_info());
   }
   return targets_meta;
 }
@@ -1668,12 +1672,27 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     try {
       const auto source_work_unit = createSortInputWorkUnit(sort, eo.just_explain);
       is_desc = first_oe_is_desc(source_work_unit.exe_unit.sort_info.order_entries);
+      ExecutionOptions eo_copy = {
+          eo.output_columnar_hint,
+          eo.allow_multifrag,
+          eo.just_explain,
+          eo.allow_loop_joins,
+          eo.with_watchdog,
+          eo.jit_debug,
+          eo.just_validate || sort->isEmptyResult(),
+          eo.with_dynamic_watchdog,
+          eo.dynamic_watchdog_time_limit,
+          eo.find_push_down_candidates,
+          eo.just_calcite_explain,
+          eo.gpu_input_mem_limit_percent,
+      };
+
       groupby_exprs = source_work_unit.exe_unit.groupby_exprs;
       auto source_result = executeWorkUnit(source_work_unit,
                                            source->getOutputMetainfo(),
                                            is_aggregate,
                                            co,
-                                           eo,
+                                           eo_copy,
                                            render_info,
                                            queue_time_ms);
       if (render_info && render_info->isPotentialInSituRender()) {
@@ -1885,34 +1904,16 @@ RelAlgExecutionUnit decide_approx_count_distinct_implementation(
   return ra_exe_unit;
 }
 
-void build_render_targets(
-    RenderInfo& render_info,
-    const std::vector<Analyzer::Expr*>& work_unit_target_exprs,
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& owned_target_exprs,
-    const std::vector<TargetMetaInfo>& targets_meta) {
+void build_render_targets(RenderInfo& render_info,
+                          const std::vector<Analyzer::Expr*>& work_unit_target_exprs,
+                          const std::vector<TargetMetaInfo>& targets_meta) {
   CHECK_EQ(work_unit_target_exprs.size(), targets_meta.size());
   render_info.targets.clear();
   for (size_t i = 0; i < targets_meta.size(); ++i) {
-    // TODO(croot): find a better way to iterate through these or a better data
-    // structure for faster lookup to avoid the double for-loop. These vectors should
-    // be small tho and have no real impact on performance.
-    size_t j{0};
-    for (j = 0; j < owned_target_exprs.size(); ++j) {
-      if (owned_target_exprs[j].get() == work_unit_target_exprs[i]) {
-        break;
-      }
-    }
-    CHECK_LT(j, owned_target_exprs.size());
-
-    const auto& meta_ti = targets_meta[i].get_physical_type_info();
-    const auto& expr_ti = owned_target_exprs[j]->get_type_info();
-    CHECK(meta_ti == expr_ti) << targets_meta[i].get_resname() << " " << i << "," << j
-                              << ", targets meta: " << meta_ti.get_type_name() << "("
-                              << meta_ti.get_compression_name()
-                              << "), target_expr: " << expr_ti.get_type_name() << "("
-                              << expr_ti.get_compression_name() << ")";
     render_info.targets.emplace_back(std::make_shared<Analyzer::TargetEntry>(
-        targets_meta[i].get_resname(), owned_target_exprs[j], false));
+        targets_meta[i].get_resname(),
+        work_unit_target_exprs[i]->get_shared_ptr(),
+        false));
   }
 }
 
@@ -1968,10 +1969,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     ExecutionResult result(result_rows, aggregated_result.targets_meta);
     body->setOutputMetainfo(aggregated_result.targets_meta);
     if (render_info) {
-      build_render_targets(*render_info,
-                           work_unit.exe_unit.target_exprs,
-                           target_exprs_owned_,
-                           targets_meta);
+      build_render_targets(*render_info, work_unit.exe_unit.target_exprs, targets_meta);
     }
     return result;
   }
@@ -2058,8 +2056,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
 
   result.setQueueTime(queue_time_ms);
   if (render_info) {
-    build_render_targets(
-        *render_info, work_unit.exe_unit.target_exprs, target_exprs_owned_, targets_meta);
+    build_render_targets(*render_info, work_unit.exe_unit.target_exprs, targets_meta);
     if (render_info->isPotentialInSituRender()) {
       // return an empty result (with the same queue time, and zero render time)
       return {

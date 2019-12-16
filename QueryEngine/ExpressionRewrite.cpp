@@ -16,6 +16,7 @@
 
 #include "ExpressionRewrite.h"
 #include "../Analyzer/Analyzer.h"
+#include "../Parser/ParserNode.h"
 #include "../Shared/sqldefs.h"
 #include "DeepCopyVisitor.h"
 #include "Execute.h"
@@ -24,6 +25,7 @@
 #include "Shared/Logger.h"
 #include "WindowExpressionRewrite.h"
 
+#include <boost/locale/conversion.hpp>
 #include <unordered_set>
 
 namespace {
@@ -651,6 +653,17 @@ class ConstantFoldingVisitor : public DeepCopyVisitor {
                                        bin_oper->get_qualifier(),
                                        lhs,
                                        rhs);
+  }
+
+  std::shared_ptr<Analyzer::Expr> visitLower(
+      const Analyzer::LowerExpr* lower_expr) const override {
+    const auto constant_arg_expr =
+        dynamic_cast<const Analyzer::Constant*>(lower_expr->get_arg());
+    if (constant_arg_expr) {
+      return Parser::StringLiteral::analyzeValue(
+          boost::locale::to_lower(*constant_arg_expr->get_constval().stringval));
+    }
+    return makeExpr<Analyzer::LowerExpr>(lower_expr->get_own_arg());
   }
 
  protected:

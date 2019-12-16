@@ -18,8 +18,14 @@ class BenchmarkLoader:
         assert bench_filename in self.filename_list
 
         with open(self.dir_name + bench_filename) as json_file:
-            self.data = sorted(
+            # only load those queries that were successful
+            filtered_input_data = filter(
+                lambda experiment: experiment["succeeded"] is True,
                 json.load(json_file),
+            )
+            # sort queries based on their IDs
+            self.data = sorted(
+                filtered_input_data,
                 key=lambda experiment: experiment["results"]["query_id"],
             )
 
@@ -62,7 +68,7 @@ class BenchAnalyzer:
     def __init__(self, ref, sample, attribute):
         assert isinstance(ref, BenchmarkLoader)
         assert isinstance(sample, BenchmarkLoader)
-        self.__header_info = [ref.getRunTableName(), attribute]
+        self.__header_info = [ref.getFrontAttribute("query_group"), attribute]
         self.__label_name_ref = ref.fetchQueryNames()
         self.__label_name_sample = sample.fetchQueryNames()
         self.__missing_queries_ref = []
@@ -265,7 +271,7 @@ def main(argv):
     dir_artifact_ref = ""
     epsilon = 0.05
     query_attribute = (
-        "query_total_avg"
+        "query_exec_trimmed_avg"
     )  # default attribute to use for benchmark comparison
 
     to_print = False  # printing all the results, disabled by default

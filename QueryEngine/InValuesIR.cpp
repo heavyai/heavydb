@@ -100,11 +100,6 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set
     result = cgen_state_->llInt(int8_t(0));
   }
   CHECK(result);
-  if (in_vals_bitmap->isEmpty()) {
-    return in_vals_bitmap->hasNull()
-               ? cgen_state_->inlineIntNull(SQLTypeInfo(kBOOLEAN, false))
-               : result;
-  }
   CHECK_EQ(size_t(1), lhs_lvs.size());
   return cgen_state_->addInValuesBitmap(in_vals_bitmap)
       ->codegen(lhs_lvs.front(), executor());

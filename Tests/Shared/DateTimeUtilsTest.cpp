@@ -87,6 +87,21 @@ TEST(TIME, IllegalParseTimeString) {
 }
 #endif
 
+TEST(TIMESTAMPS, OverflowUnderflow) {
+  using namespace std::string_literals;
+  static const std::unordered_set<std::string> values = {
+      "2273-01-01 23:12:12"s,
+      "2263-01-01 00:00:00"s,
+      "09/21/1676 00:12:43.145224193"s,
+      "09/21/1677 00:00:43.145224193"s};
+  for (const auto& value : values) {
+    ASSERT_NO_THROW(DateTimeStringValidate<kTIMESTAMP>()(value, 0));
+    ASSERT_NO_THROW(DateTimeStringValidate<kTIMESTAMP>()(value, 3));
+    ASSERT_NO_THROW(DateTimeStringValidate<kTIMESTAMP>()(value, 6));
+    ASSERT_THROW(DateTimeStringValidate<kTIMESTAMP>()(value, 9), std::runtime_error);
+  }
+}
+
 int main(int argc, char** argv) {
   TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);

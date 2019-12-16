@@ -36,7 +36,7 @@
 #include <csignal>
 #include <random>
 
-#define CALCITEPORT 36279
+#define CALCITEPORT 3279
 
 extern size_t g_leaf_count;
 extern bool g_enable_filter_push_down;
@@ -163,7 +163,7 @@ QueryRunner::QueryRunner(const char* db_path,
 
   if (create_user) {
     if (!sys_cat.getMetadataForUser(user_name, user)) {
-      sys_cat.createUser(user_name, passwd, false, "");
+      sys_cat.createUser(user_name, passwd, false, "", true);
     }
   }
   CHECK(sys_cat.getMetadataForUser(user_name, user));

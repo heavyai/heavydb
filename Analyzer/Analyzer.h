@@ -74,6 +74,7 @@ class Expr : public std::enable_shared_from_this<Expr> {
   Expr(const SQLTypeInfo& ti, bool has_agg = false)
       : type_info(ti), contains_agg(has_agg) {}
   virtual ~Expr() {}
+  std::shared_ptr<Analyzer::Expr> get_shared_ptr() { return shared_from_this(); }
   const SQLTypeInfo& get_type_info() const { return type_info; }
   void set_type_info(const SQLTypeInfo& ti) { type_info = ti; }
   bool get_contains_agg() const { return contains_agg; }
@@ -741,6 +742,8 @@ class LowerExpr : public Expr {
   LowerExpr(std::shared_ptr<Analyzer::Expr> arg) : Expr(arg->get_type_info()), arg(arg) {}
 
   const Expr* get_arg() const { return arg.get(); }
+
+  const std::shared_ptr<Analyzer::Expr> get_own_arg() const { return arg; }
 
   void collect_rte_idx(std::set<int>& rte_idx_set) const override {
     arg->collect_rte_idx(rte_idx_set);

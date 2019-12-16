@@ -45,6 +45,7 @@
 #include "LdapServer.h"
 #include "LinkDescriptor.h"
 #include "ObjectRoleDescriptor.h"
+#include "PkiServer.h"
 #include "RestServer.h"
 
 #include "../DataMgr/DataMgr.h"
@@ -70,20 +71,32 @@ namespace Catalog_Namespace {
  * @brief metadata for a mapd user
  */
 struct UserMetadata {
-  UserMetadata(int32_t u, const std::string& n, const std::string& p, bool s, int32_t d)
-      : userId(u), userName(n), passwd_hash(p), isSuper(s), defaultDbId(d) {}
+  UserMetadata(int32_t u,
+               const std::string& n,
+               const std::string& p,
+               bool s,
+               int32_t d,
+               bool l)
+      : userId(u)
+      , userName(n)
+      , passwd_hash(p)
+      , isSuper(s)
+      , defaultDbId(d)
+      , can_login(l) {}
   UserMetadata() {}
   UserMetadata(UserMetadata const& user_meta)
       : UserMetadata(user_meta.userId,
                      user_meta.userName,
                      user_meta.passwd_hash,
                      user_meta.isSuper.load(),
-                     user_meta.defaultDbId) {}
+                     user_meta.defaultDbId,
+                     user_meta.can_login) {}
   int32_t userId;
   std::string userName;
   std::string passwd_hash;
-  std::atomic<bool> isSuper;
+  std::atomic<bool> isSuper{false};
   int32_t defaultDbId;
+  bool can_login{true};
 };
 
 /*
@@ -151,12 +164,14 @@ class SysCatalog : private CommonFileOperations {
   void createUser(const std::string& name,
                   const std::string& passwd,
                   bool issuper,
-                  const std::string& dbname);
+                  const std::string& dbname,
+                  bool can_login);
   void dropUser(const std::string& name);
   void alterUser(const int32_t userid,
                  const std::string* passwd,
                  bool* issuper,
-                 const std::string* dbname);
+                 const std::string* dbname,
+                 bool* can_login);
   void renameUser(std::string const& old_name, std::string const& new_name);
   void createDatabase(const std::string& dbname, int owner);
   void renameDatabase(std::string const& old_name, std::string const& new_name);
@@ -166,10 +181,10 @@ class SysCatalog : private CommonFileOperations {
   bool checkPasswordForUser(const std::string& passwd,
                             std::string& name,
                             UserMetadata& user);
-  void getMetadataWithDefault(std::string& dbname,
-                              const std::string& username,
-                              Catalog_Namespace::DBMetadata& db_meta,
-                              UserMetadata& user_meta);
+  void getMetadataWithDefaultDB(std::string& dbname,
+                                const std::string& username,
+                                Catalog_Namespace::DBMetadata& db_meta,
+                                UserMetadata& user_meta);
   bool getMetadataForDB(const std::string& name, DBMetadata& db);
   bool getMetadataForDBById(const int32_t idIn, DBMetadata& db);
   Data_Namespace::DataMgr& getDataMgr() const { return *dataMgr_; }
@@ -253,6 +268,7 @@ class SysCatalog : private CommonFileOperations {
                                   bool* issuper);
   std::unordered_map<std::string, std::vector<std::string>> getGranteesOfSharedDashboards(
       const std::vector<std::string>& dashboard_ids);
+  void check_for_session_encryption(const std::string& pki_cert, std::string& session);
 
  private:
   typedef std::map<std::string, Grantee*> GranteeMap;
@@ -279,6 +295,7 @@ class SysCatalog : private CommonFileOperations {
   void updateUserSchema();
   void updatePasswordsToHashes();
   void updateBlankPasswordsToRandom();
+  void updateSupportUserDeactivation();
   void migrateDBAccessPrivileges();
 
   void loginImpl(std::string& username,
@@ -339,6 +356,7 @@ class SysCatalog : private CommonFileOperations {
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
   std::unique_ptr<LdapServer> ldap_server_;
   std::unique_ptr<RestServer> rest_server_;
+  std::unique_ptr<PkiServer> pki_server_;
   const AuthMetadata* authMetadata_;
   std::shared_ptr<Calcite> calciteMgr_;
   std::vector<LeafHostInfo> string_dict_hosts_;

@@ -69,6 +69,7 @@ class MapDRenderHandler {
   static std::string dump_table_col_names(
       const std::map<std::string, std::vector<std::string>>& table_col_names) {
     CHECK(false);
+    return "";
   }
 
   void get_result_row_for_pixel(

@@ -218,10 +218,8 @@ public final class MapDParser {
           // only expand if it is correlated.
 
           if (expression.isA(EXISTS)) {
-            if (expression instanceof SqlCall) {
-              SqlCall call = (SqlCall) expression;
-              expression = call.getOperandList().get(0);
-            }
+            // always expand subquery by EXISTS clause
+            return true;
           }
 
           if (isCorrelated(expression)) {
@@ -513,25 +511,30 @@ public final class MapDParser {
                             .getField(id.names.get(id.names.size() - 1), false, false)
                             .getType();
             if (null != fieldType.getComponentType()) {
-              expression = new SqlBasicCall(new SqlCastFunction(),
-                      new SqlNode[] {identifierExpression,
-                              new SqlDataTypeSpec(
-                                      new SqlCollectionTypeNameSpec(
-
-                                              new SqlBasicTypeNameSpec(
-                                                      fieldType.getComponentType()
-                                                              .getSqlTypeName(),
-                                                      fieldType.getPrecision(),
-                                                      fieldType.getScale(),
-                                                      null == fieldType.getCharset()
-                                                              ? null
-                                                              : fieldType.getCharset()
-                                                                        .name(),
-                                                      SqlParserPos.ZERO),
-                                              fieldType.getSqlTypeName(),
-                                              SqlParserPos.ZERO),
-                                      SqlParserPos.ZERO)},
-                      SqlParserPos.ZERO);
+              // DO NOT CAST to null array,
+              // this is currently not supported in the query engine
+              throw new RuntimeException("Updating arrays to NULL not supported!");
+              //              expression = new SqlBasicCall(new SqlCastFunction(),
+              //                      new SqlNode[] {identifierExpression,
+              //                              new SqlDataTypeSpec(
+              //                                      new SqlCollectionTypeNameSpec(
+              //
+              //                                              new SqlBasicTypeNameSpec(
+              //                                                      fieldType.getComponentType()
+              //                                                              .getSqlTypeName(),
+              //                                                      fieldType.getPrecision(),
+              //                                                      fieldType.getScale(),
+              //                                                      null ==
+              //                                                      fieldType.getCharset()
+              //                                                              ? null
+              //                                                              :
+              //                                                              fieldType.getCharset()
+              //                                                                        .name(),
+              //                                                      SqlParserPos.ZERO),
+              //                                              fieldType.getSqlTypeName(),
+              //                                              SqlParserPos.ZERO),
+              //                                      SqlParserPos.ZERO)},
+              //                      SqlParserPos.ZERO);
             } else {
               expression = new SqlBasicCall(new SqlCastFunction(),
                       new SqlNode[] {identifierExpression,

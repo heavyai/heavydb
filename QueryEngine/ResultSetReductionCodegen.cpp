@@ -62,7 +62,7 @@ llvm::Type* llvm_type(const Type type, llvm::LLVMContext& ctx) {
       return llvm::Type::getDoublePtrTy(ctx);
     }
     case Type::VoidPtr: {
-      return llvm::PointerType::get(llvm::Type::getVoidTy(ctx), 0);
+      return llvm::PointerType::get(get_int_type(8, ctx), 0);
     }
     case Type::Int64PtrPtr: {
       return llvm::PointerType::get(llvm::PointerType::get(get_int_type(64, ctx), 0), 0);

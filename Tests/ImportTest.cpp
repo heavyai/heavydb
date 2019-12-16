@@ -49,7 +49,6 @@ namespace {
 
 void decode_str_array(const TargetValue& r, std::vector<std::string>& arr);
 bool g_aggregator{false};
-size_t g_num_leafs{1};
 
 #define SKIP_ALL_ON_AGGREGATOR()                         \
   if (g_aggregator) {                                    \

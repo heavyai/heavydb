@@ -13,7 +13,7 @@ For more details, see the [OmniSciDB Developer Documentation](https://omnisci.gi
 - Read up about [building, running tests, and basic usage and configuration](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#building).
 - [Download and install](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#DownloadsandInstallationInstructions) the package.
 - Initialize servers [using a wrapper](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#starting-using-the-startomnisci-wrapper) or [manually](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#starting-manually)
-- [Load sample data.](#working-with-data) Sample sets can be found in the [Data Set Library](https://community.omnisci.com/browse/new-item2).
+- [Load sample data.](#working-with-data) Sample sets can be found in the [Data Set Library](https://community.omnisci.com/browse/dataset-library).
 - Perform a sample query
 
 For complete [download and installation instructions](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#downloads-and-installation-instructions), please visit the [Documentation](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation) page.
@@ -22,7 +22,7 @@ For complete [download and installation instructions](https://github.com/omnisci
 
 - How-tos, code snippets and more on the [OmniSci Blog](https://www.omnisci.com/blog/)
 - [Tutorials & Demos](https://github.com/omnisci/omniscidb/wiki/Tutorials-&-Demos)
-- Need a data set to practice with? Search the [Data Set Library](https://community.omnisci.com/browse/new-item2)
+- Need a data set to practice with? Search the [Data Set Library](https://community.omnisci.com/browse/dataset-library)
 - Video overview of the [Architecture](https://github.com/omnisci/omniscidb/wiki/Architecture#video-overview)
 
 ## Learn more

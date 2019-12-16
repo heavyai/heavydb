@@ -159,6 +159,11 @@ if("${Thrift_VERSION}" VERSION_LESS "0.11.0")
 else()
   add_definitions("-DHAVE_THRIFT_STD_SHAREDPTR")
 endif()
+if("${Thrift_VERSION}" VERSION_LESS "0.13.0")
+  add_definitions("-DHAVE_THRIFT_PLATFORMTHREADFACTORY")
+else()
+  add_definitions("-DHAVE_THRIFT_THREADFACTORY")
+endif()
 
 find_package(Git)
 find_package(Glog REQUIRED)
@@ -256,11 +261,6 @@ if(ENABLE_CODE_COVERAGE)
 endif()
 
 option(ENABLE_DECODERS_BOUNDS_CHECKING "Enable bounds checking for column decoding" OFF)
-
-option(ENABLE_REDUCTION_JIT "Enable JIT for result set reduction" ON)
-if( ENABLE_REDUCTION_JIT )
-  add_definitions("-DWITH_REDUCTION_JIT")
-endif()
 
 if(ENABLE_STANDALONE_CALCITE)
   add_definitions("-DSTANDALONE_CALCITE")

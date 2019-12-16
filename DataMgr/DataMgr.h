@@ -52,7 +52,7 @@ struct MemoryData {
   size_t numPages;
   u_int32_t touch;
   std::vector<int32_t> chunk_key;
-  Buffer_Namespace::MemStatus isFree;
+  Buffer_Namespace::MemStatus memStatus;
 };
 
 struct MemoryInfo {

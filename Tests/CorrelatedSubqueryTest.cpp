@@ -1095,7 +1095,7 @@ TEST(Delete, DISABLED_NonCorrelatedAllowed) {
   ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
 }
 
-TEST(Select, DISABLED_Exists_NoJoinCorrelation) {
+TEST(Select, Exists_NoJoinCorrelation) {
   int factsCount = 13;
   int lookupCount = 5;
   setupTest("int", factsCount, lookupCount);
@@ -1116,17 +1116,17 @@ TEST(Select, DISABLED_Exists_NoJoinCorrelation) {
 
   sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE EXISTS "
-      "(SELECT * FROM test_lookup l);";
+      "(SELECT * FROM test_lookup l where l.val > 10000);";
   auto results3 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
   numResultRows = results3->rowCount();
-  ASSERT_EQ(static_cast<uint32_t>(factsCount), numResultRows);
+  ASSERT_EQ(static_cast<uint32_t>(0), numResultRows);
 
   sql =
       "SELECT fact.id, fact.val FROM test_facts fact WHERE NOT EXISTS "
-      "(SELECT * FROM test_lookup l);";
+      "(SELECT * FROM test_lookup l where l.val > 10000);";
   auto results4 = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
   numResultRows = results4->rowCount();
-  ASSERT_EQ(static_cast<uint32_t>(0), numResultRows);
+  ASSERT_EQ(static_cast<uint32_t>(factsCount), numResultRows);
 }
 
 TEST(Select, JoinCorrelation) {

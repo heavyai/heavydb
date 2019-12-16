@@ -591,7 +591,7 @@ void ResultSet::parallelTop(const std::list<Analyzer::OrderEntry>& order_entries
   topPermutation(permutation_, top_n, compare);
 }
 
-std::pair<ssize_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) const {
+std::pair<size_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) const {
   size_t fixedup_entry_idx = entry_idx;
   auto entry_count = storage_->query_mem_desc_.getEntryCount();
   const bool is_rowwise_layout = !storage_->query_mem_desc_.didOutputColumnar();
@@ -608,18 +608,18 @@ std::pair<ssize_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) co
     }
     fixedup_entry_idx -= entry_count;
   }
-  CHECK(false);
-  return {-1, entry_idx};
+  UNREACHABLE() << "entry_idx = " << entry_idx << ", query_mem_desc_.getEntryCount() = "
+                << query_mem_desc_.getEntryCount();
+  return {};
 }
 
 ResultSet::StorageLookupResult ResultSet::findStorage(const size_t entry_idx) const {
-  ssize_t stg_idx{-1};
-  size_t fixedup_entry_idx{entry_idx};
+  size_t stg_idx;
+  size_t fixedup_entry_idx;
   std::tie(stg_idx, fixedup_entry_idx) = getStorageIndex(entry_idx);
-  CHECK_LE(ssize_t(0), stg_idx);
   return {stg_idx ? appended_storage_[stg_idx - 1].get() : storage_.get(),
           fixedup_entry_idx,
-          static_cast<size_t>(stg_idx)};
+          stg_idx};
 }
 
 template <typename BUFFER_ITERATOR_TYPE>

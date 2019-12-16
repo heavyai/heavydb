@@ -61,8 +61,8 @@ find_library(Arrow_DC_LIBRARY
   /usr/local/homebrew/lib
   /opt/local/lib)
 
-find_library(Arrow_GPU_LIBRARY
-  NAMES arrow_gpu
+find_library(Arrow_GPU_CUDA_LIBRARY
+  NAMES arrow_cuda
   HINTS
   ENV LD_LIBRARY_PATH
   ENV DYLD_LIBRARY_PATH
@@ -76,7 +76,7 @@ get_filename_component(Arrow_LIBRARY_DIR ${Arrow_LIBRARY} DIRECTORY)
 
 # Set standard CMake FindPackage variables if found.
 set(Arrow_LIBRARIES ${Arrow_LIBRARY} ${Arrow_DC_LIBRARY})
-set(Arrow_GPU_LIBRARIES ${Arrow_GPU_LIBRARY})
+set(Arrow_GPU_CUDA_LIBRARIES ${Arrow_GPU_CUDA_LIBRARY})
 set(Arrow_LIBRARY_DIRS ${Arrow_LIBRARY_DIR})
 set(Arrow_INCLUDE_DIRS ${Arrow_LIBRARY_DIR}/../include)
 

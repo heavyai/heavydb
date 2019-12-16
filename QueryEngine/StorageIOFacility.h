@@ -246,7 +246,7 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
       ScalarTargetValueVector scalar_target_values(rows_per_column);
 
       auto complete_entry_block_size = entries_per_column / normalized_cpu_threads();
-      auto partial_row_block_size = rows_per_column % normalized_cpu_threads();
+      auto partial_row_block_size = entries_per_column % normalized_cpu_threads();
       auto usable_threads = normalized_cpu_threads();
       if (UNLIKELY(rows_per_column < (unsigned)normalized_cpu_threads())) {
         complete_entry_block_size = entries_per_column;
@@ -338,6 +338,8 @@ StorageIOFacility<EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER>::yieldUpdateCallb
           t.wait();
           entries_processed += t.get();
         }
+
+        CHECK(row_idx == rows_per_column);
 
         IOFacility::updateColumn(catalog_,
                                  update_log.getPhysicalTableId(),

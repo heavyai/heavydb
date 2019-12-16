@@ -25,17 +25,10 @@
 #define MAPDHANDLER_H
 
 #include "LeafAggregator.h"
+
 #ifdef HAVE_PROFILER
 #include <gperftools/heap-profiler.h>
 #endif  // HAVE_PROFILER
-#include <thrift/concurrency/PlatformThreadFactory.h>
-#include <thrift/concurrency/ThreadManager.h>
-#include <thrift/protocol/TBinaryProtocol.h>
-#include <thrift/protocol/TJSONProtocol.h>
-#include <thrift/server/TThreadedServer.h>
-#include <thrift/transport/TBufferTransports.h>
-#include <thrift/transport/THttpServer.h>
-#include <thrift/transport/TServerSocket.h>
 
 #include "MapDRelease.h"
 

@@ -147,9 +147,6 @@ class ExtensionFunctionSignatureParser {
     if (type_name.isEmpty() || type_name.equals("void")) {
       return ExtensionFunction.ExtArgumentType.Void;
     }
-    if (type_name.equals("GeoPoint")) {
-      return ExtensionFunction.ExtArgumentType.GeoPoint;
-    }
     if (type_name.endsWith(" *")) {
       return pointerType(deserializeType(type_name.substring(0, type_name.length() - 2)));
     }
@@ -183,6 +180,16 @@ class ExtensionFunctionSignatureParser {
     if (type_name.equals("Cursor")) {
       return ExtensionFunction.ExtArgumentType.Cursor;
     }
+    if (type_name.equals("GeoPoint")) {
+      return ExtensionFunction.ExtArgumentType.GeoPoint;
+    }
+    if (type_name.equals("GeoLineString")) {
+      return ExtensionFunction.ExtArgumentType.GeoLineString;
+    }
+    if (type_name.equals("GeoPolygon")) {
+      return ExtensionFunction.ExtArgumentType.GeoPolygon;
+    }
+
     MAPDLOGGER.info(
             "ExtensionfunctionSignatureParser::deserializeType: unknown type_name=`"
             + type_name + "`");

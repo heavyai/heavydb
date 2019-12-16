@@ -211,6 +211,7 @@ inline SQLTypeInfo type_info_from_thrift(const TTypeInfo& thrift_ti,
   const auto ti = thrift_to_type(thrift_ti.type);
   if (IS_GEO(ti)) {
     const auto base_type = static_cast<SQLTypes>(thrift_ti.precision);
+    CHECK_LT(base_type, kSQLTYPE_LAST);
     return SQLTypeInfo(
         ti,
         thrift_ti.scale,
