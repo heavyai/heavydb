@@ -7183,6 +7183,33 @@ TEST(Select, Joins_InnerJoin_Sharded) {
   }
 }
 
+TEST(Select, Joins_Sharded_Empty_Last_Appended_Storage) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    size_t num_shards = choose_shard_count();
+
+    // we make a query filtering out all tuples in the last shard
+    // and force project it
+
+    // id of the last shard
+    int id_filtered_shard = num_shards - 1;
+    if (g_leaf_count > 1) {
+      id_filtered_shard = (num_shards / g_leaf_count) - 1;
+    }
+
+    std::stringstream query;
+    // i % 2 != id_filtered_shard is a filter condition
+    // to remove all tuples in the last shard
+    query << "SELECT t1.i, t1.j, t1.s FROM (SELECT i, j, s FROM st4 WHERE i % "
+          << num_shards << " != " << id_filtered_shard
+          << ") t1, st4 t2 WHERE t1.i = t2.i ORDER BY t1.i, t1.j, t1.s;";
+    std::cout << "[# shards: " << num_shards
+              << ", id_filtered_shard: " << id_filtered_shard
+              << ", query: " << query.str() << "\n";
+    SKIP_ON_AGGREGATOR(c(query.str(), dt));
+  }
+}
+
 TEST(Select, Joins_Negative_ShardKey) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -17338,6 +17365,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "st2", fragment_size, num_shards * fragment_size, shard_info, delete_support);
     create_sharded_join_table(
         "st3", fragment_size, 8 * num_shards, shard_info, delete_support);
+    create_sharded_join_table(
+        "st4", fragment_size, num_shards, shard_info, delete_support);
 
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'array_test_inner'";
