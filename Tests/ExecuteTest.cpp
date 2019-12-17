@@ -69,6 +69,7 @@ size_t g_shard_count{0};
 bool g_use_row_iterator{true};
 size_t g_num_leafs{1};
 bool g_keep_test_data{false};
+bool g_use_temporary_tables{false};
 
 size_t choose_shard_count() {
   auto session = QR::get()->getSession();
@@ -94,6 +95,7 @@ std::string build_create_table_statement(
     const ShardInfo& shard_info,
     const std::vector<SharedDictionaryInfo>& shared_dict_info,
     const size_t fragment_size,
+    const bool use_temporary_tables,
     const bool delete_support = true,
     const bool replicated = false) {
   const std::string shard_key_def{
@@ -127,7 +129,10 @@ std::string build_create_table_statement(
   const std::string replicated_def{
       (!replicated || !shard_info.shard_col.empty()) ? "" : ", PARTITIONS='REPLICATED' "};
 
-  return "CREATE TABLE " + table_name + "(" + columns_definition + shard_key_def +
+  const std::string create_def{use_temporary_tables ? "CREATE TEMPORARY TABLE "
+                                                    : "CREATE TABLE "};
+
+  return create_def + table_name + "(" + columns_definition + shard_key_def +
          boost::algorithm::join(shared_dict_def, "") + ") WITH (" +
          with_statement_assembly.str() + replicated_def + ");";
 }
@@ -485,6 +490,12 @@ void c_arrow(const std::string& query_string, const ExecutorDeviceType device_ty
     EXP;                         \
   } else {                       \
     EXPECT_ANY_THROW(EXP);       \
+  }
+
+#define SKIP_WITH_TEMP_TABLES()                                   \
+  if (g_use_temporary_tables) {                                   \
+    LOG(ERROR) << "Tests not valid when using temporary tables."; \
+    return;                                                       \
   }
 
 bool validate_statement_syntax(const std::string& stmt) {
@@ -5316,6 +5327,7 @@ void import_join_test(bool with_delete_support) {
                                    {g_shard_count ? "dup_str" : "", g_shard_count},
                                    {},
                                    2,
+                                   g_use_temporary_tables,
                                    with_delete_support,
                                    g_aggregator);
   run_ddl_statement(create_test);
@@ -5385,8 +5397,8 @@ void import_coalesce_cols_join_test(const int id, bool with_delete_support) {
                                                         table_name,
                                                         {"", g_shard_count},
                                                         {},
-
                                                         id == 2 ? 2 : 20,
+                                                        g_use_temporary_tables,
                                                         with_delete_support,
                                                         g_aggregator);
   run_ddl_statement(create_test);
@@ -5617,7 +5629,8 @@ void import_geospatial_join_test(const bool replicate_inner_table = false) {
                                                        {"", 0},
                                                        {},
                                                        20,
-                                                       true,
+                                                       /*use_temporary_tables=*/false,
+                                                       /*deleted_support=*/true,
                                                        g_aggregator);
   run_ddl_statement(create_statement);
   TestHelpers::ValuesGenerator gen("geospatial_inner_join_test");
@@ -7687,8 +7700,14 @@ class JoinTest : public ::testing::Test {
 
       const std::string columns_definition{
           "x int not null, y int, str text encoding dict"};
-      const auto table_create = build_create_table_statement(
-          columns_definition, table_name, {"", 0}, {}, 50, true, false);
+      const auto table_create = build_create_table_statement(columns_definition,
+                                                             table_name,
+                                                             {"", 0},
+                                                             {},
+                                                             50,
+                                                             g_use_temporary_tables,
+                                                             true,
+                                                             false);
       run_ddl_statement(table_create);
 
       TestHelpers::ValuesGenerator gen(table_name);
@@ -8010,6 +8029,8 @@ TEST(Select, UnsupportedSortOfIntermediateResult) {
 }
 
 TEST(Select, Views) {
+  SKIP_WITH_TEMP_TABLES();
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT x, COUNT(*) FROM view_test WHERE y > 41 GROUP BY x;", dt);
@@ -8018,6 +8039,8 @@ TEST(Select, Views) {
 }
 
 TEST(Select, Views_With_Subquery) {
+  SKIP_WITH_TEMP_TABLES();
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT x, COUNT(*) FROM view_test WHERE y < (SELECT max(y) FROM test) GROUP BY x;",
@@ -8027,6 +8050,7 @@ TEST(Select, Views_With_Subquery) {
 
 TEST(Select, CreateTableAsSelect) {
   SKIP_ALL_ON_AGGREGATOR();
+  SKIP_WITH_TEMP_TABLES();
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -13142,6 +13166,8 @@ TEST(Delete, ExtraFragment) {
 }
 
 TEST(Delete, Joins_ImplicitJoins) {
+  SKIP_WITH_TEMP_TABLES();
+
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -13341,6 +13367,8 @@ TEST(Select, Deleted) {
 #endif
 
 TEST(Select, GeoSpatial_Basics) {
+  SKIP_WITH_TEMP_TABLES();
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     ASSERT_EQ(static_cast<int64_t>(g_num_rows),
@@ -13410,6 +13438,8 @@ TEST(Select, GeoSpatial_Basics) {
 }
 
 TEST(Select, GeoSpatial_Projection) {
+  SKIP_WITH_TEMP_TABLES();
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     // Select *
@@ -14731,6 +14761,8 @@ TEST(Select, GeoSpatial_Projection) {
 }
 
 TEST(Select, GeoSpatial_GeoJoin) {
+  SKIP_WITH_TEMP_TABLES();
+
   // Test loop joins
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -16019,6 +16051,10 @@ TEST(Select, GroupEmptyBlank) {
     const std::string drop_old_test{"DROP TABLE IF EXISTS blank_test;"};
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
+    ScopeGuard cleanup = [&drop_old_test] {
+      run_ddl_statement(drop_old_test);
+      g_sqlite_comparator.query(drop_old_test);
+    };
     std::string columns_definition{"t1 TEXT NOT NULL, i1 INTEGER"};
     const std::string create_test =
         build_create_table_statement(columns_definition,
@@ -16026,6 +16062,7 @@ TEST(Select, GroupEmptyBlank) {
                                      {g_shard_count ? "i1" : "", g_shard_count},
                                      {},
                                      10,
+                                     g_use_temporary_tables,
                                      true);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query("CREATE TABLE blank_test (t1 TEXT NOT NULL, i1 INTEGER);");
@@ -16058,29 +16095,32 @@ TEST(Select, VariableLengthAggs) {
                  std::runtime_error);
 
     // geometry:
-    {
-      std::string query("SELECT id, COUNT(poly) FROM geospatial_test GROUP BY id;");
-      auto result = run_multiple_agg(query, dt);
-      ASSERT_EQ(result->rowCount(), size_t(g_num_rows));
+    if (!g_use_temporary_tables) {
+      // Geospatial not yet supported in temporary tables
+      {
+        std::string query("SELECT id, COUNT(poly) FROM geospatial_test GROUP BY id;");
+        auto result = run_multiple_agg(query, dt);
+        ASSERT_EQ(result->rowCount(), size_t(g_num_rows));
+      }
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT id, MIN(p) FROM geospatial_test GROUP BY id ORDER BY id DESC;", dt),
+          std::runtime_error);
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT id, MAX(l) FROM geospatial_test GROUP BY id ORDER BY id DESC;", dt),
+          std::runtime_error);
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT id, SUM(poly) FROM geospatial_test GROUP BY id ORDER BY id DESC;",
+              dt),
+          std::runtime_error);
+      EXPECT_THROW(
+          run_multiple_agg(
+              "SELECT id, AVG(mpoly) FROM geospatial_test GROUP BY id ORDER BY id DESC;",
+              dt),
+          std::runtime_error);
     }
-    EXPECT_THROW(
-        run_multiple_agg(
-            "SELECT id, MIN(p) FROM geospatial_test GROUP BY id ORDER BY id DESC;", dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg(
-            "SELECT id, MAX(l) FROM geospatial_test GROUP BY id ORDER BY id DESC;", dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg(
-            "SELECT id, SUM(poly) FROM geospatial_test GROUP BY id ORDER BY id DESC;",
-            dt),
-        std::runtime_error);
-    EXPECT_THROW(
-        run_multiple_agg(
-            "SELECT id, AVG(mpoly) FROM geospatial_test GROUP BY id ORDER BY id DESC;",
-            dt),
-        std::runtime_error);
 
     // arrays:
     {
@@ -16107,6 +16147,29 @@ TEST(Select, VariableLengthAggs) {
   }
 }
 
+TEST(TemporaryTables, Unsupported) {
+  if (!g_use_temporary_tables) {
+    LOG(ERROR) << "Tests not valid without temporary tables.";
+    return;
+  }
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    EXPECT_ANY_THROW(run_simple_agg("DELETE FROM test WHERE x = 7;", dt));
+    EXPECT_ANY_THROW(run_simple_agg("UPDATE test SET x = 8 WHERE x = 7;", dt));
+  }
+
+  {
+    // ensure a newly created table cannot share a dictionary with a temporary table
+    ScopeGuard reset = [] {
+      run_ddl_statement("DROP TABLE IF EXISTS sharing_temp_table_dict;");
+    };
+    EXPECT_ANY_THROW(
+        run_ddl_statement("CREATE TABLE sharing_temp_table_dict (x INT, str TEXT, SHARED "
+                          "DICTIONARY(str) REFERENCES test(null_str));"));
+  }
+}
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,
@@ -16126,6 +16189,7 @@ int create_sharded_join_table(const std::string& table_name,
                                                          shard_info,
                                                          {},
                                                          fragment_size,
+                                                         g_use_temporary_tables,
                                                          with_delete_support);
     run_ddl_statement(create_ddl);
     g_sqlite_comparator.query("CREATE TABLE " + table_name + "(i int, j int, s text);");
@@ -16279,7 +16343,8 @@ int create_and_populate_rounding_table() {
   return 0;
 }
 
-int create_and_populate_tables(bool with_delete_support = true) {
+int create_and_populate_tables(const bool use_temporary_tables,
+                               const bool with_delete_support = true) {
   try {
     const std::string drop_old_test{"DROP TABLE IF EXISTS test_inner;"};
     run_ddl_statement(drop_old_test);
@@ -16294,6 +16359,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
                                      {g_shard_count ? "str" : "", g_shard_count},
                                      {},
                                      2,
+                                     use_temporary_tables,
                                      with_delete_support,
                                      g_aggregator);
     run_ddl_statement(create_test_inner);
@@ -16332,6 +16398,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
                                      {g_shard_count ? "x" : "", g_shard_count},
                                      {},
                                      2,
+                                     use_temporary_tables,
                                      with_delete_support,
                                      g_aggregator);
     run_ddl_statement(create_bweq_test);
@@ -16371,6 +16438,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
                                      {g_shard_count ? "x" : "", g_shard_count},
                                      {},
                                      2,
+                                     use_temporary_tables,
                                      with_delete_support,
                                      g_aggregator);
     run_ddl_statement(create_vacuum_test_alt);
@@ -16403,7 +16471,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
     std::string columns_definition{"x int not null, y int, str text encoding dict, deleted boolean"};
 
     const auto create_test_inner_deleted =
-        build_create_table_statement(columns_definition, "test_inner_deleted", {"", 0}, {}, 2, with_delete_support );
+        build_create_table_statement(columns_definition, "test_inner_deleted", {"", 0}, {}, 2, use_temporary_tables, with_delete_support);
     run_ddl_statement(create_test_inner_deleted);
     auto& cat = QR::get()->getSession()->getCatalog();
     const auto td = cat.getMetadataForTable("test_inner_deleted");
@@ -16435,6 +16503,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
                                      {g_shard_count ? "x" : "", g_shard_count},
                                      {},
                                      2,
+                                     use_temporary_tables,
                                      with_delete_support,
                                      g_aggregator);
     run_ddl_statement(create_test_inner);
@@ -16460,6 +16529,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
                                      {g_shard_count ? "x" : "", g_shard_count},
                                      {},
                                      2,
+                                     use_temporary_tables,
                                      with_delete_support,
                                      g_aggregator);
     run_ddl_statement(create_test_inner);
@@ -16484,8 +16554,14 @@ int create_and_populate_tables(bool with_delete_support = true) {
     run_ddl_statement(drop_old_bar);
     g_sqlite_comparator.query(drop_old_bar);
     std::string columns_definition{"str text encoding dict"};
-    const auto create_bar = build_create_table_statement(
-        columns_definition, "bar", {"", 0}, {}, 2, with_delete_support, g_aggregator);
+    const auto create_bar = build_create_table_statement(columns_definition,
+                                                         "bar",
+                                                         {"", 0},
+                                                         {},
+                                                         2,
+                                                         use_temporary_tables,
+                                                         with_delete_support,
+                                                         g_aggregator);
     run_ddl_statement(create_bar);
     g_sqlite_comparator.query("CREATE TABLE bar(str text);");
   } catch (...) {
@@ -16547,6 +16623,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         {g_shard_count ? "str" : "", g_shard_count},
         {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
         2,
+        use_temporary_tables,
         with_delete_support);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
@@ -16632,6 +16709,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         {g_shard_count ? "str" : "", g_shard_count},
         {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
         2,
+        use_temporary_tables,
         with_delete_support,
         g_aggregator);
     run_ddl_statement(create_test);
@@ -16673,6 +16751,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
         {g_shard_count ? "str" : "", g_shard_count},
         {{"str", "test_inner", "str"}, {"shared_dict", "test", "str"}},
         2,
+        use_temporary_tables,
         with_delete_support,
         g_aggregator);
     run_ddl_statement(create_test);
@@ -16711,8 +16790,13 @@ int create_and_populate_tables(bool with_delete_support = true) {
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{"i INT, b BIGINT"};
-    const std::string create_test = build_create_table_statement(
-        columns_definition, "test_ranges", {"", 0}, {}, 2, with_delete_support);
+    const std::string create_test = build_create_table_statement(columns_definition,
+                                                                 "test_ranges",
+                                                                 {"", 0},
+                                                                 {},
+                                                                 2,
+                                                                 use_temporary_tables,
+                                                                 with_delete_support);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query("CREATE TABLE test_ranges(i INT, b BIGINT);");
   } catch (...) {
@@ -16752,6 +16836,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
                                      {g_shard_count ? "x" : "", g_shard_count},
                                      {},
                                      2,
+                                     use_temporary_tables,
                                      with_delete_support);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
@@ -16826,6 +16911,7 @@ int create_and_populate_tables(bool with_delete_support = true) {
                                      {"", 0},
                                      {},
                                      32000000,
+                                     use_temporary_tables,
                                      with_delete_support,
                                      g_aggregator);
     run_ddl_statement(create_array_test);
@@ -17005,16 +17091,19 @@ int create_and_populate_tables(bool with_delete_support = true) {
     LOG(ERROR) << "Failed to (re-)create table 'corr_in_facts'";
     return -EEXIST;
   }
-  try {
-    import_geospatial_test();
-  } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'geospatial_test'";
-    return -EEXIST;
-  }
-  try {
-    import_geospatial_join_test(g_aggregator);
-  } catch (...) {
-    LOG(ERROR) << "Failed to (re-)create table 'geospatial_inner_join_test'";
+  if (!use_temporary_tables) {
+    // Geospatial not yet supported in temporary tables
+    try {
+      import_geospatial_test();
+    } catch (...) {
+      LOG(ERROR) << "Failed to (re-)create table 'geospatial_test'";
+      return -EEXIST;
+    }
+    try {
+      import_geospatial_join_test(g_aggregator);
+    } catch (...) {
+      LOG(ERROR) << "Failed to (re-)create table 'geospatial_inner_join_test'";
+    }
   }
   try {
     const std::string drop_old_empty{"DROP TABLE IF EXISTS emptytab;"};
@@ -17270,7 +17359,9 @@ void drop_tables() {
   const std::string drop_corr_in_facts_table{"DROP TABLE IF EXISTS corr_in_facts;"};
   run_ddl_statement(drop_corr_in_facts_table);
   g_sqlite_comparator.query(drop_corr_in_facts_table);
-  run_ddl_statement("DROP TABLE geospatial_test;");
+  if (!g_use_temporary_tables) {
+    run_ddl_statement("DROP TABLE geospatial_test;");
+  }
   const std::string drop_test_in_bitmap{"DROP TABLE test_in_bitmap;"};
   g_sqlite_comparator.query(drop_test_in_bitmap);
   run_ddl_statement(drop_test_in_bitmap);
@@ -17284,7 +17375,7 @@ void drop_tables() {
   g_sqlite_comparator.query(drop_test_lots_cols);
   run_ddl_statement(drop_test_lots_cols);
 
-  if (!g_aggregator) {
+  if (!g_aggregator && !g_use_temporary_tables) {
     const std::string drop_ctas_test{"DROP TABLE ctas_test;"};
     g_sqlite_comparator.query(drop_ctas_test);
     run_ddl_statement(drop_ctas_test);
@@ -17303,6 +17394,9 @@ void drop_tables() {
 }
 
 void drop_views() {
+  if (g_use_temporary_tables) {
+    return;
+  }
   const std::string drop_view_test{"DROP VIEW view_test;"};
   run_ddl_statement(drop_view_test);
   g_sqlite_comparator.query(drop_view_test);
@@ -17360,6 +17454,8 @@ int main(int argc, char** argv) {
                      po::value<std::string>(),
                      "Dump IR for all executed queries to file. Currently only supports "
                      "single node tests.");
+  desc.add_options()("use-temporary-tables",
+                     "Use temporary tables instead of physical storage.");
 
   desc.add_options()(
       "test-help",
@@ -17400,6 +17496,11 @@ int main(int argc, char** argv) {
     g_keep_test_data = true;
   }
 
+  if (vm.count("use-temporary-tables")) {
+    LOG(INFO) << "Running ExecuteTest using temporary tables.";
+    g_use_temporary_tables = true;
+  }
+
   // insert artificial gap of columnId so as to test against the gap w/o
   // need of ALTER ADD/DROP COLUMN before doing query test.
   // Note: Temporarily disabling for distributed tests.
@@ -17410,14 +17511,14 @@ int main(int argc, char** argv) {
   if (use_existing_data) {
     testing::GTEST_FLAG(filter) = "Select*";
   } else {
-    err = create_and_populate_tables();
-    if (!err) {
+    err = create_and_populate_tables(g_use_temporary_tables);
+    if (!err && !g_use_temporary_tables) {
       err = create_views();
     }
-    if (!err) {
+    if (!err && !g_use_temporary_tables) {
       SKIP_ON_AGGREGATOR(err = create_as_select());
     }
-    if (!err) {
+    if (!err && !g_use_temporary_tables) {
       SKIP_ON_AGGREGATOR(err = create_as_select_empty());
     }
   }

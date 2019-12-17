@@ -128,6 +128,7 @@ add_test(ImportTest ImportTest ${TEST_ARGS})
 add_test(AlterColumnTest AlterColumnTest ${TEST_ARGS})
 add_test(UtilTest UtilTest ${TEST_ARGS})
 add_test(ExecuteTest ExecuteTest ${TEST_ARGS})
+add_test(NAME ExecuteTestTemporaryTables COMMAND ExecuteTest ${TEST_ARGS} "--use-temporary-tables")
 add_test(CodeGeneratorTest CodeGeneratorTest ${TEST_ARGS})
 add_test(ResultSetTest ResultSetTest ${TEST_ARGS})
 add_test(ColumnarResultsTest ColumnarResultsTest ${TEST_ARGS})
@@ -171,7 +172,7 @@ if("${S3CLIENT_CONF}" MATCHES "AWS_REGION=([^\n]+)")
   set(AWS_REGION "${CMAKE_MATCH_1}")
 endif()
 
-set(SANITY_TESTS
+set(TEST_PROGRAMS 
   DumpRestoreTest
   PlanTest
   ExecuteTest
@@ -203,9 +204,11 @@ set(SANITY_TESTS
 )
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
-  list(APPEND SANITY_TESTS UdfTest)
+  list(APPEND TEST_PROGRAMS UdfTest)
 endif()
 
+set(SANITY_TESTS ${TEST_PROGRAMS})
+list(APPEND SANITY_TESTS ExecuteTestTemporaryTables)
 
 set_tests_properties(${SANITY_TESTS} PROPERTIES LABELS "sanity")
 
@@ -216,7 +219,7 @@ add_custom_target(sanity_tests
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose --label-regex sanity
-    DEPENDS ${SANITY_TESTS}
+    DEPENDS ${TEST_PROGRAMS}
     USES_TERMINAL)
 
 add_custom_target(all_tests
@@ -226,7 +229,7 @@ add_custom_target(all_tests
                 AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
                 ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS ${SANITY_TESTS} ProfileTest UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StoragePerfTest
+    DEPENDS ${TEST_PROGRAMS} ProfileTest UtilTest RunQueryLoop StringDictionaryTest StringTransformTest StoragePerfTest
     USES_TERMINAL)
 
 add_custom_target(storage_perf_tests
