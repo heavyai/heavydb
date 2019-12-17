@@ -47,7 +47,6 @@ class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
   };
 
   std::map<std::array<int, 3>, std::vector<ArrowFragment>> m_columns;
-  std::map<std::array<int, 3>, StringDictionary*> m_dictionaries;
 };
 
 void registerArrowCsvForeignStorage(void) {
@@ -57,12 +56,10 @@ void registerArrowCsvForeignStorage(void) {
 
 ArrowCsvForeignStorage::~ArrowCsvForeignStorage() {
   m_columns.clear();
-  m_dictionaries.clear();
 }
 
 void ArrowCsvForeignStorage::append(
     const std::vector<ForeignStorageColumnBuffer>& column_buffers) {
-  printf("-- aaaaaapend!!!!\n");
   CHECK(false);
 }
 
@@ -109,7 +106,6 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
                                   const SQLTypeInfo& sql_type,
                                   int8_t* dest,
                                   const size_t numBytes) {
-  // printf("-- reading %d:%d<=%u\n", chunk_key[2], chunk_key[3], unsigned(numBytes));
   std::array<int, 3> col_key{chunk_key[0], chunk_key[1], chunk_key[2]};
   auto& frag = m_columns.at(col_key).at(chunk_key[3]);
 
@@ -247,7 +243,6 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
                                            const TableDescriptor& td,
                                            const std::list<ColumnDescriptor>& cols,
                                            Data_Namespace::AbstractBufferMgr* mgr) {
-  printf("-- registering %s!!!!\n", info.c_str());
   auto memp = arrow::default_memory_pool();
   auto popt = arrow::csv::ParseOptions::Defaults();
   popt.quoting = false;
@@ -331,14 +326,12 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
     col.resize(fragments.size());
     auto clp = ARROW_GET_DATA(table.column(cln++)).get();
 
+    StringDictionary* dict;
     if (c.columnType.is_dict_encoded_string()) {
       auto dictDesc = const_cast<DictDescriptor*>(
           catalog->getMetadataForDict(c.columnType.get_comp_param()));
-      CHECK(dictDesc);
-      auto stringDict = dictDesc->stringDict.get();
-      m_dictionaries[col_key] = stringDict;
+      dict = dictDesc->stringDict.get();
     }
-
     auto empty = clp->null_count() == clp->length();
 
     // fill each fragment
@@ -351,7 +344,6 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
         arrow::Array* chunk = clp->chunk(i).get();
         if (c.columnType.is_dict_encoded_string()) {
           arrow::Int32Builder indexBuilder;
-          auto dict = m_dictionaries[col_key];
           auto stringArray = static_cast<arrow::StringArray*>(chunk);
           indexBuilder.Reserve(stringArray->length());
           for (int i = 0; i < stringArray->length(); i++) {
