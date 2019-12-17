@@ -264,7 +264,7 @@ class SysCatalog : private CommonFileOperations {
   void renameObjectsInDescriptorMap(DBObject& object,
                                     const Catalog_Namespace::Catalog& cat);
   void syncUserWithRemoteProvider(const std::string& user_name,
-                                  const std::vector<std::string>& roles,
+                                  std::vector<std::string> idp_roles,
                                   bool* issuper);
   std::unordered_map<std::string, std::vector<std::string>> getGranteesOfSharedDashboards(
       const std::vector<std::string>& dashboard_ids);

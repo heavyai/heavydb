@@ -2182,7 +2182,7 @@ void SysCatalog::revokeDBObjectPrivilegesFromAll(DBObject object, Catalog* catal
 }
 
 void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
-                                            const std::vector<std::string>& roles,
+                                            std::vector<std::string> idp_roles,
                                             bool* is_super) {
   UserMetadata user_meta;
   if (!getMetadataForUser(user_name, user_meta)) {
@@ -2196,18 +2196,20 @@ void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
   if (user_rl) {
     current_roles = user_rl->getRoles();
   }
-  std::for_each(current_roles.begin(), current_roles.end(), to_upper);
-  std::for_each(roles.begin(), roles.end(), to_upper);
+  std::transform(
+      current_roles.begin(), current_roles.end(), current_roles.begin(), to_upper);
+  std::transform(idp_roles.begin(), idp_roles.end(), idp_roles.begin(), to_upper);
   // first remove obsolete ones
   for (auto& current_role_name : current_roles) {
-    if (std::find(roles.begin(), roles.end(), current_role_name) == roles.end()) {
+    if (std::find(idp_roles.begin(), idp_roles.end(), current_role_name) ==
+        idp_roles.end()) {
       revokeRole(current_role_name, user_name);
     }
   }
   // now re-add them
   std::stringstream ss;
   ss << "Roles synchronized for user " << user_name << ": ";
-  for (auto& role_name : roles) {
+  for (auto& role_name : idp_roles) {
     auto* rl = getRoleGrantee(role_name);
     if (rl) {
       grantRole(role_name, user_name);
