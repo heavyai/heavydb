@@ -2106,9 +2106,11 @@ void Catalog::createTable(
       }
       cd.tableId = td.tableId;
       cd.columnId = colId++;
+      td.columnIdBySpi_.push_back(cd.columnId);
       cds.push_back(cd);
     }
   }
+  
   try {
     addTableToMap(td, cds, dds);
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
