@@ -1189,9 +1189,13 @@ void ResultSet::copyColumnIntoBuffer(const size_t column_idx,
 
   // the appended storages:
   for (size_t i = 0; i < appended_storage_.size(); i++) {
-    CHECK_LT(out_buff_offset, output_buffer_size);
     const size_t crt_storage_row_count =
         appended_storage_[i]->query_mem_desc_.getEntryCount();
+    if (crt_storage_row_count == 0) {
+      // skip an empty appended storage
+      continue;
+    }
+    CHECK_LT(out_buff_offset, output_buffer_size);
     const size_t crt_buffer_size = crt_storage_row_count * column_width_size;
     const size_t column_offset =
         appended_storage_[i]->query_mem_desc_.getColOffInBytes(column_idx);
