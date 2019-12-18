@@ -315,6 +315,7 @@ void shutdown() {
 std::istream& operator>>(std::istream& in, Channels& channels) {
   std::string line;
   std::getline(in, line);
+  unquote(line);
   std::regex const rex(R"(\w+)");
   using TokenItr = std::regex_token_iterator<std::string::iterator>;
   TokenItr const end;
@@ -343,6 +344,7 @@ std::ostream& operator<<(std::ostream& out, Channels const& channels) {
 std::istream& operator>>(std::istream& in, Severity& sev) {
   std::string token;
   in >> token;
+  unquote(token);
   auto itr = std::find(SeverityNames.cbegin(), SeverityNames.cend(), token);
   if (itr == SeverityNames.cend()) {
     in.setstate(std::ios_base::failbit);

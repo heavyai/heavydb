@@ -93,6 +93,11 @@ std::string strip(const std::string& str);
 bool remove_unquoted_newlines_linefeeds_and_tabs_from_sql_string(
     std::string& str) noexcept;
 
+// Remove quotes if they match from beginning and end of string.
+// Return true if string was changed, false if not.
+// Does not check for escaped quotes within string.
+bool unquote(std::string&);
+
 // NOTE: this check for C++17 is required because Parser/ is pinned to C++14.
 #if __cplusplus >= 201703L
 namespace {
