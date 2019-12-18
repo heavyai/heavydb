@@ -1807,7 +1807,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
         THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
       }
     } catch (const std::exception& e) {
-      THROW_MAPD_EXCEPTION("View query has failed with an error: '" +
+      THROW_MAPD_EXCEPTION("View '" + table_name + "' query has failed with an error: '" +
                            std::string(e.what()) +
                            "'.\nThe view must be dropped and re-created to "
                            "resolve the error. \nQuery:\n" +
