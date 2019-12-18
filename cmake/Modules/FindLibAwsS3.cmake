@@ -97,26 +97,6 @@ find_library(LibAwsS3_LIBRARY
   /usr/local/homebrew/lib
   /opt/local/lib)
 
-find_library(LibSsl_LIBRARY
-  NAMES ssl
-  HINTS ENV LD_LIBRARY_PATH
-  HINTS ENV DYLD_LIBRARY_PATH
-  PATHS
-  /usr/lib
-  /usr/local/lib
-  /usr/local/homebrew/lib
-  /opt/local/lib)
-
-find_library(LibCrypto_LIBRARY
-  NAMES crypto
-  HINTS ENV LD_LIBRARY_PATH
-  HINTS ENV DYLD_LIBRARY_PATH
-  PATHS
-  /usr/lib
-  /usr/local/lib
-  /usr/local/homebrew/lib
-  /opt/local/lib)
-
 find_library(LibCurl_LIBRARY
   NAMES curl
   HINTS ENV LD_LIBRARY_PATH
@@ -126,6 +106,8 @@ find_library(LibCurl_LIBRARY
   /usr/local/lib
   /usr/local/homebrew/lib
   /opt/local/lib)
+
+find_package(OpenSSL REQUIRED)
 
 #message("libAwsCore_LIBRARY = ${libAwsCore_LIBRARY}")
 #message("LibAwsS3_LIBRARY = ${LibAwsS3_LIBRARY}")
@@ -148,7 +130,7 @@ find_path(LibAwsS3_INCLUDE_DIR
 #message("LibAwsS3_INCLUDE_DIR= ${LibAwsS3_INCLUDE_DIR}")
 
 # Set standard CMake FindPackage variables if found.
-set(LibAwsS3_SUPPORT_LIBRARIES ${LibCurl_LIBRARY} ${LibSsl_LIBRARY} ${LibCrypto_LIBRARY})
+set(LibAwsS3_SUPPORT_LIBRARIES ${LibCurl_LIBRARY} ${OPENSSL_LIBRARIES})
 set(LibAwsS3_LIBRARIES ${LibAwsS3_LIBRARIES} ${LibAwsS3_LIBRARY} ${libAwsCore_LIBRARY} ${libAwsCEventStream_LIBRARY} ${libAwsCCommon_LIBRARY} ${libAwsChecksums_LIBRARY} ${LibAwsS3_SUPPORT_LIBRARIES})
 set(LibAwsS3_INCLUDE_DIRS ${LibAwsS3_INCLUDE_DIR})
 set(LibAwsS3_LIBRARY_DIRS ${LibAwsS3_LIBRARY_DIR})
@@ -165,7 +147,6 @@ find_package_handle_standard_args(LibAwsS3 REQUIRED_VARS
   libAwsCCommon_LIBRARY
   libAwsCEventStream_LIBRARY
   libAwsChecksums_LIBRARY
-  LibSsl_LIBRARY
-  LibCrypto_LIBRARY
+  OPENSSL_LIBRARIES
   LibCurl_LIBRARY
   )

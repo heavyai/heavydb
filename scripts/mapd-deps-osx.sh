@@ -74,15 +74,22 @@ done
 export PATH=~/bin:$PATH
 
 cat >> ~/.bash_profile <<EOF
-#mapd-deps cuda
-CUDA_ROOT=\$(ls -d /Developer/NVIDIA/CUDA-* | tail -n 1)
-DYLD_LIBRARY_PATH=\$CUDA_ROOT/lib:\$DYLD_LIBRARY_PATH
-PATH=\$CUDA_ROOT/bin:\$PATH
+#mapd-deps
 PATH=\$HOME/bin:\$PATH
-export DYLD_LIBRARY_PATH PATH
+DYLD_LIBRARY_PATH=/usr/local/opt/openssl/lib:\$DYLD_LIBRARY_PATH
+export PATH DYLD_LIBRARY_PATH
 EOF
 
 source ~/.bash_profile
+
+cat >> ~/.zlogin <<EOF
+#mapd-deps
+PATH=\$HOME/bin:\$PATH
+DYLD_LIBRARY_PATH=/usr/local/opt/openssl/lib:\$DYLD_LIBRARY_PATH
+export PATH DYLD_LIBRARY_PATH
+EOF
+
+source ~/.zlogin
 
 #done!
 #git clone mapd2 && cd mapd2 && mkdir build && cd build && ccmake ..
