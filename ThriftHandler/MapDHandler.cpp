@@ -1182,12 +1182,11 @@ void MapDHandler::get_completion_hints_unsorted(std::vector<TCompletionHint>& hi
   get_token_based_completions(hints, session, visible_tables, sql, cursor);
 }
 
-void MapDHandler::get_token_based_completions(
-    std::vector<TCompletionHint>& hints,
-    const TSessionId& session,
-    const std::vector<std::string>& visible_tables,
-    const std::string& sql,
-    const int cursor) {
+void MapDHandler::get_token_based_completions(std::vector<TCompletionHint>& hints,
+                                              const TSessionId& session,
+                                              std::vector<std::string>& visible_tables,
+                                              const std::string& sql,
+                                              const int cursor) {
   const auto last_word =
       find_last_word_from_cursor(sql, cursor < 0 ? sql.size() : cursor);
   boost::regex select_expr{R"(\s*select\s+)",
@@ -1229,33 +1228,47 @@ void MapDHandler::get_token_based_completions(
 }
 
 std::unordered_map<std::string, std::unordered_set<std::string>>
-MapDHandler::fill_column_names_by_table(const std::vector<std::string>& table_names,
+MapDHandler::fill_column_names_by_table(std::vector<std::string>& table_names,
                                         const TSessionId& session) {
   std::unordered_map<std::string, std::unordered_set<std::string>> column_names_by_table;
-  for (const auto& table_name : table_names) {
+  for (auto it = table_names.begin(); it != table_names.end();) {
     TTableDetails table_details;
-    get_table_details(table_details, session, table_name);
-    for (const auto& column_type : table_details.row_desc) {
-      column_names_by_table[table_name].emplace(column_type.col_name);
+    try {
+      get_table_details(table_details, session, *it);
+    } catch (const TMapDException& e) {
+      // Remove the corrupted Table/View name from the list for further processing.
+      it = table_names.erase(it);
+      continue;
     }
+    for (const auto& column_type : table_details.row_desc) {
+      column_names_by_table[*it].emplace(column_type.col_name);
+    }
+    ++it;
   }
   return column_names_by_table;
 }
 
 std::unordered_set<std::string> MapDHandler::get_uc_compatible_table_names_by_column(
     const std::unordered_set<std::string>& uc_column_names,
-    const std::vector<std::string>& table_names,
+    std::vector<std::string>& table_names,
     const TSessionId& session) {
   std::unordered_set<std::string> compatible_table_names_by_column;
-  for (const auto& table_name : table_names) {
+  for (auto it = table_names.begin(); it != table_names.end();) {
     TTableDetails table_details;
-    get_table_details(table_details, session, table_name);
+    try {
+      get_table_details(table_details, session, *it);
+    } catch (const TMapDException& e) {
+      // Remove the corrupted Table/View name from the list for further processing.
+      it = table_names.erase(it);
+      continue;
+    }
     for (const auto& column_type : table_details.row_desc) {
       if (uc_column_names.find(to_upper(column_type.col_name)) != uc_column_names.end()) {
-        compatible_table_names_by_column.emplace(to_upper(table_name));
+        compatible_table_names_by_column.emplace(to_upper(*it));
         break;
       }
     }
+    ++it;
   }
   return compatible_table_names_by_column;
 }

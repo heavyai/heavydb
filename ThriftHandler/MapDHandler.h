@@ -646,7 +646,7 @@ class MapDHandler : public MapDIf {
                                      const int cursor);
   void get_token_based_completions(std::vector<TCompletionHint>& hints,
                                    const TSessionId& session,
-                                   const std::vector<std::string>& visible_tables,
+                                   std::vector<std::string>& visible_tables,
                                    const std::string& sql,
                                    const int cursor);
   Planner::RootPlan* parse_to_plan_legacy(
@@ -655,7 +655,7 @@ class MapDHandler : public MapDIf {
       const std::string& action /* render or validate */);
 
   std::unordered_map<std::string, std::unordered_set<std::string>>
-  fill_column_names_by_table(const std::vector<std::string>& table_names,
+  fill_column_names_by_table(std::vector<std::string>& table_names,
                              const TSessionId& session);
 
   static bool has_database_permission(const AccessPrivileges& privs,
@@ -673,7 +673,7 @@ class MapDHandler : public MapDIf {
   // specified in the projection.
   std::unordered_set<std::string> get_uc_compatible_table_names_by_column(
       const std::unordered_set<std::string>& uc_column_names,
-      const std::vector<std::string>& table_names,
+      std::vector<std::string>& table_names,
       const TSessionId& session);
 
   query_state::QueryStates query_states_;
