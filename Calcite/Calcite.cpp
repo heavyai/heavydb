@@ -70,10 +70,11 @@ static void start_calcite_server_as_daemon(const int mapd_port,
                                            const std::string& data_dir,
                                            const size_t calcite_max_mem,
                                            const std::string& ssl_trust_store,
-                                           const std::string& ssl_trust_password,
+                                           const std::string& ssl_trust_password_X,
                                            const std::string& ssl_keystore,
-                                           const std::string& ssl_keystore_password,
+                                           const std::string& ssl_keystore_password_X,
                                            const std::string& ssl_key_file,
+                                           const std::string& mapd_config_file,
                                            const std::string& udf_filename) {
   std::string const xDebug = "-Xdebug";
   std::string const remoteDebug =
@@ -92,6 +93,7 @@ static void start_calcite_server_as_daemon(const int mapd_port,
   std::string mapdPortD = std::to_string(mapd_port);
   std::string mapdTrustStoreP = "-T";
   std::string mapdTrustPasswdP = "-P";
+  std::string mapdConfigFileP = "-c";
   std::string mapdKeyStoreP = "-Y";
   std::string mapdKeyStorePasswdP = "-Z";
   std::string mapdLogDirectory = "-DMAPD_LOG_DIR=" + data_dir;
@@ -102,6 +104,12 @@ static void start_calcite_server_as_daemon(const int mapd_port,
     userDefinedFunctionsP += "-u";
     userDefinedFunctionsD += udf_filename;
   }
+
+  // If a config file hasn't been supplied then put the password in the params
+  // otherwise send an empty string and Calcite should get it from the config file.
+  std::string key_store_password =
+      (mapd_config_file == "") ? ssl_keystore_password_X : "";
+  std::string trust_store_password = (mapd_config_file == "") ? ssl_trust_password_X : "";
 
   int pid = fork();
   if (pid == 0) {
@@ -126,11 +134,13 @@ static void start_calcite_server_as_daemon(const int mapd_port,
                          mapdTrustStoreP.c_str(),
                          ssl_trust_store.c_str(),
                          mapdTrustPasswdP.c_str(),
-                         ssl_trust_password.c_str(),
+                         trust_store_password.c_str(),
                          mapdKeyStoreP.c_str(),
                          ssl_keystore.c_str(),
                          mapdKeyStorePasswdP.c_str(),
-                         ssl_keystore_password.c_str(),
+                         key_store_password.c_str(),
+                         mapdConfigFileP.c_str(),
+                         mapd_config_file.c_str(),
                          (char*)0);
     } else {
       i = wrapped_execlp("java",
@@ -151,11 +161,13 @@ static void start_calcite_server_as_daemon(const int mapd_port,
                          mapdTrustStoreP.c_str(),
                          ssl_trust_store.c_str(),
                          mapdTrustPasswdP.c_str(),
-                         ssl_trust_password.c_str(),
+                         trust_store_password.c_str(),
                          mapdKeyStoreP.c_str(),
                          ssl_keystore.c_str(),
                          mapdKeyStorePasswdP.c_str(),
-                         ssl_keystore_password.c_str(),
+                         key_store_password.c_str(),
+                         mapdConfigFileP.c_str(),
+                         mapd_config_file.c_str(),
                          userDefinedFunctionsP.c_str(),
                          userDefinedFunctionsD.c_str(),
                          (char*)0);
@@ -195,7 +207,7 @@ void Calcite::runServer(const int mapd_port,
                         const std::string& data_dir,
                         const size_t calcite_max_mem,
                         const std::string& udf_filename) {
-  LOG(INFO) << "Running calcite server as a daemon";
+  LOG(INFO) << "Running Calcite server as a daemon";
 
   // ping server to see if for any reason there is an orphaned one
   int ping_time = ping();
@@ -226,12 +238,14 @@ void Calcite::runServer(const int mapd_port,
                                  ssl_keystore_,
                                  ssl_keystore_password_,
                                  ssl_key_file_,
+                                 mapd_config_file_,
                                  udf_filename);
 
   // check for new server for 5 seconds max
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
-  for (int i = 2; i < 50; i++) {
-    int ping_time = ping();
+  int retry_max = 50;
+  for (int i = 2; i <= retry_max; i++) {
+    int ping_time = ping(i, retry_max);
     if (ping_time > -1) {
       LOG(INFO) << "Calcite server start took " << i * 100 << " ms ";
       LOG(INFO) << "ping took " << ping_time << " ms ";
@@ -243,12 +257,14 @@ void Calcite::runServer(const int mapd_port,
     }
   }
   server_available_ = false;
-  LOG(FATAL) << "Could not connect to calcite remote server running on port " << port;
+  LOG(FATAL) << "Could not connect to Calcite remote server running on port [" << port
+             << "]";
 }
 
 // ping existing server
 // return -1 if no ping response
-int Calcite::ping() {
+// params set to default values in header
+int Calcite::ping(int retry_num, int max_retry) {
   try {
     auto ms = measure<>::execution([&]() {
       auto clientP = getClient(remote_calcite_port_);
@@ -258,6 +274,9 @@ int Calcite::ping() {
     return ms;
 
   } catch (TException& tx) {
+    if (retry_num >= max_retry) {
+      LOG(ERROR) << "Problems connecting to Calcite. Thrift error - " << tx.what();
+    }
     return -1;
   }
 }
@@ -301,7 +320,8 @@ Calcite::Calcite(const MapDParameters& mapd_parameter,
     , ssl_key_file_(mapd_parameter.ssl_key_file)
     , ssl_keystore_(mapd_parameter.ssl_keystore)
     , ssl_keystore_password_(mapd_parameter.ssl_keystore_password)
-    , ssl_ca_file_(mapd_parameter.ssl_trust_ca_file) {
+    , ssl_ca_file_(mapd_parameter.ssl_trust_ca_file)
+    , mapd_config_file_(mapd_parameter.config_file) {
   init(mapd_parameter.omnisci_server_port,
        mapd_parameter.calcite_port,
        data_dir,
@@ -483,7 +503,7 @@ TPlanResult Calcite::processImpl(
       throw std::invalid_argument(e.whyUp);
     } catch (const std::exception& ex) {
       LOG(FATAL)
-          << "Error occurred trying to communicate with calcite server, the error was: '"
+          << "Error occurred trying to communicate with Calcite server, the error was: '"
           << ex.what() << "', omnisci_server restart will be required";
       return ret;  // satisfy return-type warning
     }

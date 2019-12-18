@@ -277,7 +277,6 @@ class MapDProgramOptions {
   int http_port = 6278;
   size_t reserved_gpu_mem = 1 << 27;
   std::string base_path;
-  std::string config_file = {"mapd.conf"};
   std::string cluster_file = {"cluster.conf"};
   std::string cluster_topology_file = {"cluster_topology.conf"};
   std::string license_path = {""};
@@ -395,7 +394,7 @@ void MapDProgramOptions::fillOptions() {
                             "Calcite port number.");
   }
   help_desc.add_options()("config",
-                          po::value<std::string>(&config_file),
+                          po::value<std::string>(&mapd_parameters.config_file),
                           "Path to server configuration file.");
   help_desc.add_options()("cpu-buffer-mem-bytes",
                           po::value<size_t>(&mapd_parameters.cpu_buffer_mem_bytes)
@@ -883,7 +882,7 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
     po::notify(vm);
 
     if (vm.count("config")) {
-      std::ifstream settings_file(config_file);
+      std::ifstream settings_file(mapd_parameters.config_file);
 
       auto sanitized_settings = sanitize_config_file(settings_file);
 

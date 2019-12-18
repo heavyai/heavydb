@@ -40,6 +40,7 @@ struct MapDParameters {
   size_t cpu_buffer_mem_bytes = 0;  // max size of memory reserved for CPU buffers [bytes]
   size_t gpu_buffer_mem_bytes = 0;  // max size of memory reserved for GPU buffers [bytes]
   double gpu_input_mem_limit = 0.9;  // Punt query to CPU if input mem exceeds % GPU mem
+  std::string config_file = "";
   std::string ssl_cert_file = "";    // file path to server's certified PKI certificate
   std::string ssl_key_file = "";     // file path to server's' private PKI key
   std::string ssl_trust_store = "";  // file path to java jks version of ssl_key_fle

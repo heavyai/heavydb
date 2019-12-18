@@ -116,7 +116,7 @@ class Calcite final {
   std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
   getClient(int port);
 
-  int ping();
+  int ping(int retry_num = 0, int max_retry = 50);
 
   mapd::shared_ptr<ThriftClientConnection> connMgr_;
   bool server_available_;
@@ -127,6 +127,7 @@ class Calcite final {
   std::string ssl_keystore_;
   std::string ssl_keystore_password_;
   std::string ssl_ca_file_;
+  std::string mapd_config_file_;
   std::once_flag shutdown_once_flag_;
 };
 

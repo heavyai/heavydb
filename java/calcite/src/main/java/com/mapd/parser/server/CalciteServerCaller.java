@@ -30,12 +30,14 @@ import org.apache.log4j.PropertyConfigurator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
+import java.io.StringReader;
 import java.nio.file.FileSystemNotFoundException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Properties;
-
 public class CalciteServerCaller {
   private SockTransportProperties client_skT = null;
   private SockTransportProperties server_skT = null;
@@ -103,6 +105,11 @@ public class CalciteServerCaller {
                               .longOpt("udf")
                               .build();
 
+    Option config_file = Option.builder("c")
+                                 .hasArg()
+                                 .desc("Configuration file")
+                                 .longOpt("config")
+                                 .build();
     options.addOption(port);
     options.addOption(data);
     options.addOption(extensions);
@@ -112,6 +119,7 @@ public class CalciteServerCaller {
     options.addOption(ssl_keystore);
     options.addOption(ssl_keystore_password);
     options.addOption(udf_file);
+    options.addOption(config_file);
 
     CommandLineParser parser = new DefaultParser();
 
@@ -132,6 +140,7 @@ public class CalciteServerCaller {
     String key_store = cmd.getOptionValue("keystore", "");
     String key_store_pw = cmd.getOptionValue("keystore_password", "");
     String udfName = cmd.getOptionValue("udf", "");
+    String configuration_file = cmd.getOptionValue("config", "");
 
     final Path extensionFunctionsAstFile =
             Paths.get(extensionsDir, "ExtensionFunctions.ast");
@@ -148,24 +157,59 @@ public class CalciteServerCaller {
     PropertyConfigurator.configure(p);
 
     try {
+      Properties properties = null;
+      if (!configuration_file.isEmpty()) {
+        properties = CalciteServerCaller.readPropertyFile(configuration_file);
+      }
       if (trust_store == null || trust_store.isEmpty()) {
         client_skT = SockTransportProperties.getUnencryptedClient();
         // client_skT = new SockTransportProperties(load_trust_store);
       } else {
-        client_skT = SockTransportProperties.getEncryptedClientSpecifiedTrustStore(
-                trust_store, trust_store_pw);
+        if (properties != null && trust_store_pw.isEmpty()) {
+          // If a configuration file was supplied and trust password is empty read
+          // properties it to get the trust store password
+          trust_store_pw = properties.getProperty("ssl-trust-password");
+          if (trust_store_pw == null) {
+            MAPDLOGGER.warn("Failed to load trust store password from config file ["
+                    + configuration_file + "] for trust store [" + trust_store + "]");
+          }
+        }
+        try {
+          client_skT = SockTransportProperties.getEncryptedClientSpecifiedTrustStore(
+                  trust_store, trust_store_pw);
+        } catch (Exception eX) {
+          String error =
+                  "Loading encrypted client SockTransportProperties failed. Error - "
+                  + eX.toString();
+          throw new RuntimeException(error);
+        }
       }
-
       if (key_store != null && !key_store.isEmpty()) {
         // If suppled a key store load a server transport, otherwise server_skT can stay
-        // as null
-        server_skT = SockTransportProperties.getEncryptedServer(key_store, key_store_pw);
+        // as null If a configuration file was supplied read and password is empty read
+        // properties for key store password
+        if (properties != null && key_store_pw.isEmpty()) {
+          key_store_pw = properties.getProperty("ssl-keystore-password");
+          if (key_store_pw == null) {
+            String err = "Failed to load key store password from config file ["
+                    + configuration_file + "] for key store [" + key_store + "]";
+            throw new RuntimeException(err);
+          }
+        }
+        try {
+          server_skT =
+                  SockTransportProperties.getEncryptedServer(key_store, key_store_pw);
+        } catch (Exception eX) {
+          String error =
+                  "Loading encrypted Server SockTransportProperties failed. Error - "
+                  + eX.toString();
+          throw eX;
+        }
       } else {
         server_skT = SockTransportProperties.getUnecryptedServer();
       }
     } catch (Exception ex) {
-      MAPDLOGGER.error(
-              "Supplied java trust stored could not be opened " + ex.getMessage());
+      MAPDLOGGER.error("Error opening SocketTransport. " + ex.getMessage());
       exit(0);
     }
 
@@ -209,5 +253,26 @@ public class CalciteServerCaller {
     // automatically generate the help statement
     HelpFormatter formatter = new HelpFormatter();
     formatter.printHelp("CalciteServerCaller", options);
+  }
+
+  static private Properties readPropertyFile(String fileName) {
+    Properties properties = new Properties();
+    try {
+      BufferedReader bufferedReader = new BufferedReader(new FileReader(fileName));
+      StringBuffer sb = new StringBuffer();
+      for (String line = bufferedReader.readLine(); line != null;
+              line = bufferedReader.readLine()) {
+        if (line.toLowerCase().equals("[web]")) {
+          break;
+        }
+        line = line.replaceAll("[\",']", "");
+        sb.append(line + "\n");
+      }
+      properties.load(new StringReader(sb.toString()));
+    } catch (java.io.IOException iE) {
+      MAPDLOGGER.warn("Could not load configuration file [" + fileName
+              + "] to get keystore/truststore password. Error - " + iE.toString());
+    }
+    return properties;
   }
 }
