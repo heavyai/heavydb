@@ -1,0 +1,9 @@
+Class com::omnisci::jdbc::OmniSciDatabaseMetaData
+=================================================
+
+.. doxygenclass:: com::omnisci::jdbc::OmniSciDatabaseMetaData
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

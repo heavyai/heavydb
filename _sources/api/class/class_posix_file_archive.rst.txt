@@ -1,0 +1,9 @@
+Class PosixFileArchive
+======================
+
+.. doxygenclass:: PosixFileArchive
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

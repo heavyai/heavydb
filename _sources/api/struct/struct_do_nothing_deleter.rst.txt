@@ -1,0 +1,9 @@
+Struct DoNothingDeleter
+=======================
+
+.. doxygenstruct:: DoNothingDeleter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::CaseInsensitiveListSqlOperatorTable
+=====================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::CaseInsensitiveListSqlOperatorTable
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

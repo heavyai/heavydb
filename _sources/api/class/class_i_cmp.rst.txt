@@ -1,0 +1,9 @@
+Class ICmp
+==========
+
+.. doxygenclass:: ICmp
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

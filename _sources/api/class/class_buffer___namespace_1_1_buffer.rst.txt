@@ -1,0 +1,9 @@
+Class Buffer_Namespace::Buffer
+==============================
+
+.. doxygenclass:: Buffer_Namespace::Buffer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

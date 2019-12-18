@@ -1,0 +1,9 @@
+Class Parser::FixedPtLiteral
+============================
+
+.. doxygenclass:: Parser::FixedPtLiteral
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

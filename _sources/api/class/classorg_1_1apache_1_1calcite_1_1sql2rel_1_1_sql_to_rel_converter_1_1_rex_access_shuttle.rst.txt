@@ -1,0 +1,9 @@
+Class org::apache::calcite::sql2rel::SqlToRelConverter::RexAccessShuttle
+========================================================================
+
+.. doxygenclass:: org::apache::calcite::sql2rel::SqlToRelConverter::RexAccessShuttle
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

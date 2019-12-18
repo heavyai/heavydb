@@ -1,0 +1,9 @@
+Class CompressionFailedError
+============================
+
+.. doxygenclass:: CompressionFailedError
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

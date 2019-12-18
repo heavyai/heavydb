@@ -1,0 +1,9 @@
+Class ArrowResultSetConverter
+=============================
+
+.. doxygenclass:: ArrowResultSetConverter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class SQLTypeInfoCore
+=====================
+
+.. doxygenclass:: SQLTypeInfoCore
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct Experimental::MetaSwitchTraits< SQLTypeInfo >
+====================================================
+
+.. doxygenstruct:: Experimental::MetaSwitchTraits< SQLTypeInfo >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

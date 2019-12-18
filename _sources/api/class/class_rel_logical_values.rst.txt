@@ -1,0 +1,9 @@
+Class RelLogicalValues
+======================
+
+.. doxygenclass:: RelLogicalValues
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class SpeculativeTopNBlacklist
+==============================
+
+.. doxygenclass:: SpeculativeTopNBlacklist
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

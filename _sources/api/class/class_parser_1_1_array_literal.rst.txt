@@ -1,0 +1,9 @@
+Class Parser::ArrayLiteral
+==========================
+
+.. doxygenclass:: Parser::ArrayLiteral
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

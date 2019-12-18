@@ -1,0 +1,9 @@
+Class DateTimeTranslator
+========================
+
+.. doxygenclass:: DateTimeTranslator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

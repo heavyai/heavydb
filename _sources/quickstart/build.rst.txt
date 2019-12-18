@@ -8,7 +8,7 @@ Build OmniSciDB
     Before you begin building, install the appropriate :doc:``./deps``.
 
 
-OmniSciDB uses ``CMake <https://cmake.org/>``_ for its build system. The following commands will build a simple, ``CUDA`` enabled build using 4 CPU threads:
+OmniSciDB uses `CMake <https://cmake.org/>`_ for its build system. The following commands will build a simple, ``CUDA`` enabled build using 4 CPU threads:
 
 .. code-block:: shell
 
@@ -37,6 +37,5 @@ The following ``cmake``/``ccmake`` options can enable/disable different features
 * ``-DENABLE_TSAN=off`` - Enable thread sanitizer. Default is ``off``.
 * ``-DENABLE_CODE_COVERAGE=off`` - Enable code coverage symbols (clang only). Default is ``off``.
 * ``-DENALBE_JAVA_REMOTE_DEBUG=on`` - Enable Java Remote Debug. Default is ``off``.
-* ``-DMAPD_DOCS_DOWNLOAD=on`` - Download the latest master build of the documentation / ``docs.mapd.com``. Default is ``off``.
-*                             **Note:** this is a >50MB download.
+* ``-DMAPD_DOCS_DOWNLOAD=on`` - Download the latest master build of the documentation / ``docs.mapd.com``. Default is ``off``. **Note:** this is a >50MB download.
 * ``-DPREFER_STATIC_LIBS=off`` - Static link dependencies, if available. Default is ``off``.

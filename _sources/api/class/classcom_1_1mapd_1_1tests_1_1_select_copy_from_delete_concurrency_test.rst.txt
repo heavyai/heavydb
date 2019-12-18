@@ -1,0 +1,9 @@
+Class com::mapd::tests::SelectCopyFromDeleteConcurrencyTest
+===========================================================
+
+.. doxygenclass:: com::mapd::tests::SelectCopyFromDeleteConcurrencyTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

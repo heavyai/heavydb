@@ -1,0 +1,9 @@
+Struct GeoTargetValuePtrSerializer< kPOLYGON >
+==============================================
+
+.. doxygenstruct:: GeoTargetValuePtrSerializer< kPOLYGON >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

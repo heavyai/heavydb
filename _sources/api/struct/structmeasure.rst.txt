@@ -1,0 +1,9 @@
+Struct measure
+==============
+
+.. doxygenstruct:: measure
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

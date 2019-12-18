@@ -1,0 +1,9 @@
+Struct LinkDescriptor
+=====================
+
+.. doxygenstruct:: LinkDescriptor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

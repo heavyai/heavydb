@@ -1,0 +1,9 @@
+Struct GeoTargetValueSerializer
+===============================
+
+.. doxygenstruct:: GeoTargetValueSerializer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

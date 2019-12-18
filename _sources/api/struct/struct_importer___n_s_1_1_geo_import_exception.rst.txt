@@ -1,0 +1,9 @@
+Struct Importer_NS::GeoImportException
+======================================
+
+.. doxygenstruct:: Importer_NS::GeoImportException
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

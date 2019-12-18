@@ -1,0 +1,9 @@
+Class Analyzer::ExtractExpr
+===========================
+
+.. doxygenclass:: Analyzer::ExtractExpr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

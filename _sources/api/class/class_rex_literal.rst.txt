@@ -1,0 +1,9 @@
+Class RexLiteral
+================
+
+.. doxygenclass:: RexLiteral
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

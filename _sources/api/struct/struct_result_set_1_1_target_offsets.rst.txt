@@ -1,0 +1,9 @@
+Struct ResultSet::TargetOffsets
+===============================
+
+.. doxygenstruct:: ResultSet::TargetOffsets
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

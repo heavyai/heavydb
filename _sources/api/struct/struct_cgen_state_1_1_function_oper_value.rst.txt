@@ -1,0 +1,9 @@
+Struct CgenState::FunctionOperValue
+===================================
+
+.. doxygenstruct:: CgenState::FunctionOperValue
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

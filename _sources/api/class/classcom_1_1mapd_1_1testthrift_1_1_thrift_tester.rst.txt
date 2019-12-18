@@ -1,0 +1,9 @@
+Class com::mapd::testthrift::ThriftTester
+=========================================
+
+.. doxygenclass:: com::mapd::testthrift::ThriftTester
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

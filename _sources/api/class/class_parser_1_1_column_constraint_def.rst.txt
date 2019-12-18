@@ -1,0 +1,9 @@
+Class Parser::ColumnConstraintDef
+=================================
+
+.. doxygenclass:: Parser::ColumnConstraintDef
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

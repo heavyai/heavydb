@@ -1,0 +1,9 @@
+Class For
+=========
+
+.. doxygenclass:: For
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

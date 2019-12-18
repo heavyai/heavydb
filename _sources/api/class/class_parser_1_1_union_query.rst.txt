@@ -1,0 +1,9 @@
+Class Parser::UnionQuery
+========================
+
+.. doxygenclass:: Parser::UnionQuery
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

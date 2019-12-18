@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::convert_meters_to_pixel_width
+=====================================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::convert_meters_to_pixel_width
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct std::hash< std::vector< int > >
+======================================
+
+.. doxygenstruct:: std::hash< std::vector< int > >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

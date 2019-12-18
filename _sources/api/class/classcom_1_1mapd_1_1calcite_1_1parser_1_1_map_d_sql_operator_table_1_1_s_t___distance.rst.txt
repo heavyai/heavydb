@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Distance
+===================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Distance
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class QueryRunner::QueryRunner
+==============================
+
+.. doxygenclass:: QueryRunner::QueryRunner
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

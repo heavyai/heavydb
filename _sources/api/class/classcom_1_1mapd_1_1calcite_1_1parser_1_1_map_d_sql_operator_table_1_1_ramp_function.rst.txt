@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::RampFunction
+====================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::RampFunction
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

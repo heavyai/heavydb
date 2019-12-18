@@ -1,0 +1,9 @@
+Class logger::Duration
+======================
+
+.. doxygenclass:: logger::Duration
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

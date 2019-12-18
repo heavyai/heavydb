@@ -1,0 +1,9 @@
+Struct Importer_NS::Importer::GeoFileLayerInfo
+==============================================
+
+.. doxygenstruct:: Importer_NS::Importer::GeoFileLayerInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

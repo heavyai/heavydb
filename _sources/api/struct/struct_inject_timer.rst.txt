@@ -1,0 +1,9 @@
+Struct InjectTimer
+==================
+
+.. doxygenstruct:: InjectTimer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

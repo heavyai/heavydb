@@ -1,0 +1,9 @@
+Class Planner::Append
+=====================
+
+.. doxygenclass:: Planner::Append
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

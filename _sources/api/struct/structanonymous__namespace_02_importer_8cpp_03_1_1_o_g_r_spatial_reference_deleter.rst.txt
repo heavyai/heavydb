@@ -1,0 +1,9 @@
+Struct anonymous_namespace{Importer.cpp}::OGRSpatialReferenceDeleter
+====================================================================
+
+.. doxygenstruct:: anonymous_namespace{Importer.cpp}::OGRSpatialReferenceDeleter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Parser::AlterUserStmt
+===========================
+
+.. doxygenclass:: Parser::AlterUserStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

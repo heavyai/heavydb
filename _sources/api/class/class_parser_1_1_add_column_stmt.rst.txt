@@ -1,0 +1,9 @@
+Class Parser::AddColumnStmt
+===========================
+
+.. doxygenclass:: Parser::AddColumnStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

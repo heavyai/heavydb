@@ -1,0 +1,9 @@
+Struct CompilationOptions
+=========================
+
+.. doxygenstruct:: CompilationOptions
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

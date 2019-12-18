@@ -1,0 +1,9 @@
+Class anonymous_namespace{ExpressionRewrite.cpp}::ConstantFoldingVisitor
+========================================================================
+
+.. doxygenclass:: anonymous_namespace{ExpressionRewrite.cpp}::ConstantFoldingVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

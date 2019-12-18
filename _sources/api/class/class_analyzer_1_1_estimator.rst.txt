@@ -1,0 +1,9 @@
+Class Analyzer::Estimator
+=========================
+
+.. doxygenclass:: Analyzer::Estimator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class com::mapd::metadata::GeoRelDataType
+=========================================
+
+.. doxygenclass:: com::mapd::metadata::GeoRelDataType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct Parser::InsertIntoTableAsSelectStmt::LocalConnector
+==========================================================
+
+.. doxygenstruct:: Parser::InsertIntoTableAsSelectStmt::LocalConnector
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

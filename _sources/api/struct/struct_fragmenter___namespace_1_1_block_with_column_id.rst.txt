@@ -1,0 +1,9 @@
+Struct Fragmenter_Namespace::BlockWithColumnId
+==============================================
+
+.. doxygenstruct:: Fragmenter_Namespace::BlockWithColumnId
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

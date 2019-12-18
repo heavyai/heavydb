@@ -1,0 +1,9 @@
+Class MemCpy
+============
+
+.. doxygenclass:: MemCpy
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

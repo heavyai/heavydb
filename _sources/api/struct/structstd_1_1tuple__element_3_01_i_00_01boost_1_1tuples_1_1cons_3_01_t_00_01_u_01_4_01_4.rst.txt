@@ -1,0 +1,9 @@
+Struct std::tuple_element< I, boost::tuples::cons< T, U > >
+===========================================================
+
+.. doxygenstruct:: std::tuple_element< I, boost::tuples::cons< T, U > >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::MyUDFFunction
+=====================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::MyUDFFunction
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

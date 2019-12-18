@@ -1,0 +1,9 @@
+Class com::mapd::utility::MutuallyExlusiveOptionsException
+==========================================================
+
+.. doxygenclass:: com::mapd::utility::MutuallyExlusiveOptionsException
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

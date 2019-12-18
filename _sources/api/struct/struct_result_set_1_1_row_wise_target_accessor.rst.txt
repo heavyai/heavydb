@@ -1,0 +1,9 @@
+Struct ResultSet::RowWiseTargetAccessor
+=======================================
+
+.. doxygenstruct:: ResultSet::RowWiseTargetAccessor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

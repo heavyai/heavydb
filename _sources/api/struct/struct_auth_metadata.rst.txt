@@ -1,0 +1,9 @@
+Struct AuthMetadata
+===================
+
+.. doxygenstruct:: AuthMetadata
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

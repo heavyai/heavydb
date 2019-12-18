@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_XMin
+===============================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::ST_XMin
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

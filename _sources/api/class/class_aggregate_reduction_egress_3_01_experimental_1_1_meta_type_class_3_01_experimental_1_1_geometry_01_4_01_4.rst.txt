@@ -1,0 +1,9 @@
+Class AggregateReductionEgress< Experimental::MetaTypeClass< Experimental::Geometry > >
+=======================================================================================
+
+.. doxygenclass:: AggregateReductionEgress< Experimental::MetaTypeClass< Experimental::Geometry > >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Parser::DropDBStmt
+========================
+
+.. doxygenclass:: Parser::DropDBStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

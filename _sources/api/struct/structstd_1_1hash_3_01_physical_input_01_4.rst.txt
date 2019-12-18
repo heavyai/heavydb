@@ -1,0 +1,9 @@
+Struct std::hash< PhysicalInput >
+=================================
+
+.. doxygenstruct:: std::hash< PhysicalInput >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

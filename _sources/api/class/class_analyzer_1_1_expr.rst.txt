@@ -1,0 +1,9 @@
+Class Analyzer::Expr
+====================
+
+.. doxygenclass:: Analyzer::Expr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

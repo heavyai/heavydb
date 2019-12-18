@@ -1,0 +1,9 @@
+Struct query_state::SessionData
+===============================
+
+.. doxygenstruct:: query_state::SessionData
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

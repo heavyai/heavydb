@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::ArrayLength
+===================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::ArrayLength
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Parser::TruncateTableStmt
+===============================
+
+.. doxygenclass:: Parser::TruncateTableStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

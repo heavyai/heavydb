@@ -1,0 +1,9 @@
+Class logger::DurationTree
+==========================
+
+.. doxygenclass:: logger::DurationTree
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

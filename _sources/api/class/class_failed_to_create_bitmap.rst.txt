@@ -1,0 +1,9 @@
+Class FailedToCreateBitmap
+==========================
+
+.. doxygenclass:: FailedToCreateBitmap
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

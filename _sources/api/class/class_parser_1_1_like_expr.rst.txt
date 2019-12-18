@@ -1,0 +1,9 @@
+Class Parser::LikeExpr
+======================
+
+.. doxygenclass:: Parser::LikeExpr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

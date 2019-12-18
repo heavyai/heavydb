@@ -1,0 +1,9 @@
+Class Catalog_Namespace::read_lock
+==================================
+
+.. doxygenclass:: Catalog_Namespace::read_lock
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class SringConstInResultSet
+===========================
+
+.. doxygenclass:: SringConstInResultSet
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

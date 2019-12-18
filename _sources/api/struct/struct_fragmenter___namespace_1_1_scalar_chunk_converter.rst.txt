@@ -1,0 +1,9 @@
+Struct Fragmenter_Namespace::ScalarChunkConverter
+=================================================
+
+.. doxygenstruct:: Fragmenter_Namespace::ScalarChunkConverter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

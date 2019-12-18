@@ -1,0 +1,9 @@
+Class Catalog_Namespace::SysCatalog
+===================================
+
+.. doxygenclass:: Catalog_Namespace::SysCatalog
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

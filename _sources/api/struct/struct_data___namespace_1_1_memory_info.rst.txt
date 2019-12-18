@@ -1,0 +1,9 @@
+Struct Data_Namespace::MemoryInfo
+=================================
+
+.. doxygenstruct:: Data_Namespace::MemoryInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

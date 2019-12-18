@@ -1,0 +1,9 @@
+Class Planner::Result
+=====================
+
+.. doxygenclass:: Planner::Result
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

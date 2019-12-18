@@ -1,0 +1,9 @@
+Class com::mapd::metadata::PointSqlType
+=======================================
+
+.. doxygenclass:: com::mapd::metadata::PointSqlType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

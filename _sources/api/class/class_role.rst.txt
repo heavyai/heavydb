@@ -1,0 +1,9 @@
+Class Role
+==========
+
+.. doxygenclass:: Role
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

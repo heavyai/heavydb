@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Disjoint
+===================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::ST_Disjoint
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

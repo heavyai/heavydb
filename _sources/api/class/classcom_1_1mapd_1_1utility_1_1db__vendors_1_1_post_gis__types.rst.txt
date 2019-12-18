@@ -1,0 +1,9 @@
+Class com::mapd::utility::db_vendors::PostGis_types
+===================================================
+
+.. doxygenclass:: com::mapd::utility::db_vendors::PostGis_types
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

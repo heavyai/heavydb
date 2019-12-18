@@ -1,0 +1,9 @@
+Class Catalog_Namespace::CommonFileOperations
+=============================================
+
+.. doxygenclass:: Catalog_Namespace::CommonFileOperations
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

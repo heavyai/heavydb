@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDParserOptions::FilterPushDownInfo
+=======================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDParserOptions::FilterPushDownInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Fragmenter_Namespace::SortedOrderFragmenter
+=================================================
+
+.. doxygenclass:: Fragmenter_Namespace::SortedOrderFragmenter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

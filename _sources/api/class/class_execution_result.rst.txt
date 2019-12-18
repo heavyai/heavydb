@@ -1,0 +1,9 @@
+Class ExecutionResult
+=====================
+
+.. doxygenclass:: ExecutionResult
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class RexVisitorBase
+====================
+
+.. doxygenclass:: RexVisitorBase
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

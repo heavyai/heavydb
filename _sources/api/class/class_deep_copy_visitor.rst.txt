@@ -1,0 +1,9 @@
+Class DeepCopyVisitor
+=====================
+
+.. doxygenclass:: DeepCopyVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

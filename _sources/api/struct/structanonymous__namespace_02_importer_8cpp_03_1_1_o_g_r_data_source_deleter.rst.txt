@@ -1,0 +1,9 @@
+Struct anonymous_namespace{Importer.cpp}::OGRDataSourceDeleter
+==============================================================
+
+.. doxygenstruct:: anonymous_namespace{Importer.cpp}::OGRDataSourceDeleter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

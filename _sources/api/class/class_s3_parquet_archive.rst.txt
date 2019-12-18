@@ -1,0 +1,9 @@
+Class S3ParquetArchive
+======================
+
+.. doxygenclass:: S3ParquetArchive
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

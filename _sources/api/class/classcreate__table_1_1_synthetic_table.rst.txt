@@ -1,0 +1,9 @@
+Class create_table::SyntheticTable
+==================================
+
+.. doxygenclass:: create_table::SyntheticTable
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

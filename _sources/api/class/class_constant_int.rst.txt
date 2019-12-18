@@ -1,0 +1,9 @@
+Class ConstantInt
+=================
+
+.. doxygenclass:: ConstantInt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

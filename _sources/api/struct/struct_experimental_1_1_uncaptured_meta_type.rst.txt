@@ -1,0 +1,9 @@
+Struct Experimental::UncapturedMetaType
+=======================================
+
+.. doxygenstruct:: Experimental::UncapturedMetaType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

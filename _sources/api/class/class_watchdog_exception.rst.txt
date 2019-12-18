@@ -1,0 +1,9 @@
+Class WatchdogException
+=======================
+
+.. doxygenclass:: WatchdogException
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

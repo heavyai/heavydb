@@ -1,0 +1,9 @@
+Struct std::equal_to< shared_ptr< const InputColDescriptor > >
+==============================================================
+
+.. doxygenstruct:: std::equal_to< shared_ptr< const InputColDescriptor > >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

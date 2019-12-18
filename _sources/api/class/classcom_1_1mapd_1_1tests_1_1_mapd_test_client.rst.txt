@@ -1,0 +1,9 @@
+Class com::mapd::tests::MapdTestClient
+======================================
+
+.. doxygenclass:: com::mapd::tests::MapdTestClient
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

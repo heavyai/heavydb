@@ -1,0 +1,9 @@
+Class com::mapd::tests::CalciteViewsConcurrencyTest
+===================================================
+
+.. doxygenclass:: com::mapd::tests::CalciteViewsConcurrencyTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

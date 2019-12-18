@@ -1,0 +1,9 @@
+Struct Importer_NS::CopyParams
+==============================
+
+.. doxygenstruct:: Importer_NS::CopyParams
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::PgExtract
+=================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::PgExtract
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

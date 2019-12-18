@@ -1,0 +1,9 @@
+Class RexInput
+==============
+
+.. doxygenclass:: RexInput
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

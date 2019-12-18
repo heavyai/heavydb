@@ -1,0 +1,9 @@
+Class Parser::DMLStmt
+=====================
+
+.. doxygenclass:: Parser::DMLStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

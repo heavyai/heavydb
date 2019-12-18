@@ -1,0 +1,9 @@
+Class anonymous_namespace{Execute.cpp}::OutVecOwner
+===================================================
+
+.. doxygenclass:: anonymous_namespace{Execute.cpp}::OutVecOwner
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

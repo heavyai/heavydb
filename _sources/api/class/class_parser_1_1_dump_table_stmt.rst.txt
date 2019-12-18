@@ -1,0 +1,9 @@
+Class Parser::DumpTableStmt
+===========================
+
+.. doxygenclass:: Parser::DumpTableStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

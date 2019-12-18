@@ -1,0 +1,9 @@
+Struct anonymous_namespace{ArrowImporter.h}::DataBufferBase
+===========================================================
+
+.. doxygenstruct:: anonymous_namespace{ArrowImporter.h}::DataBufferBase
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

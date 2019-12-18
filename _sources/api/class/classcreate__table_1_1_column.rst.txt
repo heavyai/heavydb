@@ -1,0 +1,9 @@
+Class create_table::Column
+==========================
+
+.. doxygenclass:: create_table::Column
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

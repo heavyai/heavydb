@@ -1,0 +1,9 @@
+Struct ResultSet::StorageLookupResult
+=====================================
+
+.. doxygenstruct:: ResultSet::StorageLookupResult
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

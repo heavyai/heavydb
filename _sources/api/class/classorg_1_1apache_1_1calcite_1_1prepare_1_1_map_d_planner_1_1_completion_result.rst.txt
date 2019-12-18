@@ -1,0 +1,9 @@
+Class org::apache::calcite::prepare::MapDPlanner::CompletionResult
+==================================================================
+
+.. doxygenclass:: org::apache::calcite::prepare::MapDPlanner::CompletionResult
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct Fragmenter_Namespace::InsertDataLoader::DistributedConnector
+===================================================================
+
+.. doxygenstruct:: Fragmenter_Namespace::InsertDataLoader::DistributedConnector
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

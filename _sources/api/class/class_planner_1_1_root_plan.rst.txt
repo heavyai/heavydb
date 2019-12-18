@@ -1,0 +1,9 @@
+Class Planner::RootPlan
+=======================
+
+.. doxygenclass:: Planner::RootPlan
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

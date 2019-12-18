@@ -1,0 +1,9 @@
+Class com::mapd::tests::EagainConcurrencyTest
+=============================================
+
+.. doxygenclass:: com::mapd::tests::EagainConcurrencyTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

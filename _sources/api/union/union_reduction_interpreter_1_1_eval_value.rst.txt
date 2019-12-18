@@ -1,0 +1,5 @@
+Union ReductionInterpreter::EvalValue
+=====================================
+
+.. doxygenunion:: ReductionInterpreter::EvalValue
+   :project: OmniSciDB

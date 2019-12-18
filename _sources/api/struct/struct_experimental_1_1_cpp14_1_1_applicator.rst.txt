@@ -1,0 +1,9 @@
+Struct Experimental::Cpp14::Applicator
+======================================
+
+.. doxygenstruct:: Experimental::Cpp14::Applicator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

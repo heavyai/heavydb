@@ -1,0 +1,9 @@
+Class Parser::SelectEntry
+=========================
+
+.. doxygenclass:: Parser::SelectEntry
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

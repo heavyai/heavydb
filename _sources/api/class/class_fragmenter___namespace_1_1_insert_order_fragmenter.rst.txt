@@ -1,0 +1,9 @@
+Class Fragmenter_Namespace::InsertOrderFragmenter
+=================================================
+
+.. doxygenclass:: Fragmenter_Namespace::InsertOrderFragmenter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

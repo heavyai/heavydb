@@ -1,0 +1,9 @@
+Struct File_Namespace::readThreadDS
+===================================
+
+.. doxygenstruct:: File_Namespace::readThreadDS
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

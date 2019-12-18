@@ -1,0 +1,9 @@
+Struct is_null_order_entry
+==========================
+
+.. doxygenstruct:: is_null_order_entry
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

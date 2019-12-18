@@ -1,0 +1,9 @@
+Struct DeviceArrayDatum
+=======================
+
+.. doxygenstruct:: DeviceArrayDatum
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

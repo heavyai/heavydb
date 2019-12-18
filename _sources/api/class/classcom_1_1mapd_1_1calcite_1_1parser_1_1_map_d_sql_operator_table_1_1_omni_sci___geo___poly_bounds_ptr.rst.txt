@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::OmniSci_Geo_PolyBoundsPtr
+=================================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::OmniSci_Geo_PolyBoundsPtr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

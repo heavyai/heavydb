@@ -1,0 +1,9 @@
+Class ColumnFetcher
+===================
+
+.. doxygenclass:: ColumnFetcher
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

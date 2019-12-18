@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::OmniSci_Geo_PolyRenderGroup
+===================================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::OmniSci_Geo_PolyRenderGroup
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct SlotSize
+===============
+
+.. doxygenstruct:: SlotSize
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

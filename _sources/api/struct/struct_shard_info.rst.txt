@@ -1,0 +1,9 @@
+Struct ShardInfo
+================
+
+.. doxygenstruct:: ShardInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

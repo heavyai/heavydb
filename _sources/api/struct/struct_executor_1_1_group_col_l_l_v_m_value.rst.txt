@@ -1,0 +1,9 @@
+Struct Executor::GroupColLLVMValue
+==================================
+
+.. doxygenstruct:: Executor::GroupColLLVMValue
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

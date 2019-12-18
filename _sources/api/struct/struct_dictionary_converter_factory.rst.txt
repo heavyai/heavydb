@@ -1,0 +1,9 @@
+Struct DictionaryConverterFactory
+=================================
+
+.. doxygenstruct:: DictionaryConverterFactory
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

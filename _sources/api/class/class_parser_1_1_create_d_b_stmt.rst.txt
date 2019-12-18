@@ -1,0 +1,9 @@
+Class Parser::CreateDBStmt
+==========================
+
+.. doxygenclass:: Parser::CreateDBStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

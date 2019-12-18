@@ -1,0 +1,9 @@
+Struct GeoReturnTypeTraits< ResultSet::GeoReturnType::WktString, GEO_SOURCE_TYPE >
+==================================================================================
+
+.. doxygenstruct:: GeoReturnTypeTraits< ResultSet::GeoReturnType::WktString, GEO_SOURCE_TYPE >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

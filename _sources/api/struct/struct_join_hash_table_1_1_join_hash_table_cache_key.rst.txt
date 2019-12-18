@@ -1,0 +1,9 @@
+Struct JoinHashTable::JoinHashTableCacheKey
+===========================================
+
+.. doxygenstruct:: JoinHashTable::JoinHashTableCacheKey
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

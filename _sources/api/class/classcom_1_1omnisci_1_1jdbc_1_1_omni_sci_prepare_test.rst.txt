@@ -1,0 +1,9 @@
+Class com::omnisci::jdbc::OmniSciPrepareTest
+============================================
+
+.. doxygenclass:: com::omnisci::jdbc::OmniSciPrepareTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Geo_namespace::GeoTypesError
+==================================
+
+.. doxygenclass:: Geo_namespace::GeoTypesError
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

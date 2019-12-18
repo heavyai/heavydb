@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::is_point_in_view
+========================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::is_point_in_view
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

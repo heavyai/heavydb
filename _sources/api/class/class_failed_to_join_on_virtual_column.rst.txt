@@ -1,0 +1,9 @@
+Class FailedToJoinOnVirtualColumn
+=================================
+
+.. doxygenclass:: FailedToJoinOnVirtualColumn
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

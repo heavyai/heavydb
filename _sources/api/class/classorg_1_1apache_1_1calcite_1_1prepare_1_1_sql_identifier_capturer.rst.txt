@@ -1,0 +1,9 @@
+Class org::apache::calcite::prepare::SqlIdentifierCapturer
+==========================================================
+
+.. doxygenclass:: org::apache::calcite::prepare::SqlIdentifierCapturer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Cast
+==========
+
+.. doxygenclass:: Cast
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

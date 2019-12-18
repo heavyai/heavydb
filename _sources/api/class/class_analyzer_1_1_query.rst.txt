@@ -1,0 +1,9 @@
+Class Analyzer::Query
+=====================
+
+.. doxygenclass:: Analyzer::Query
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

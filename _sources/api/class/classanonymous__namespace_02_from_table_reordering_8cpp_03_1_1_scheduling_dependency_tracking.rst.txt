@@ -1,0 +1,9 @@
+Class anonymous_namespace{FromTableReordering.cpp}::SchedulingDependencyTracking
+================================================================================
+
+.. doxygenclass:: anonymous_namespace{FromTableReordering.cpp}::SchedulingDependencyTracking
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

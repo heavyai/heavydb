@@ -1,0 +1,9 @@
+Struct Lock_Namespace::TableLock
+================================
+
+.. doxygenstruct:: Lock_Namespace::TableLock
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

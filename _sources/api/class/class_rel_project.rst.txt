@@ -1,0 +1,9 @@
+Class RelProject
+================
+
+.. doxygenclass:: RelProject
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

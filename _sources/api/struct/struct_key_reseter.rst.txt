@@ -1,0 +1,9 @@
+Struct KeyReseter
+=================
+
+.. doxygenstruct:: KeyReseter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

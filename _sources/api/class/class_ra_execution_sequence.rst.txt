@@ -1,0 +1,9 @@
+Class RaExecutionSequence
+=========================
+
+.. doxygenclass:: RaExecutionSequence
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

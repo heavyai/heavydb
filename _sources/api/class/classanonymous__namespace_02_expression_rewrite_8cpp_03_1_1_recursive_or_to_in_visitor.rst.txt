@@ -1,0 +1,9 @@
+Class anonymous_namespace{ExpressionRewrite.cpp}::RecursiveOrToInVisitor
+========================================================================
+
+.. doxygenclass:: anonymous_namespace{ExpressionRewrite.cpp}::RecursiveOrToInVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Allocator
+===============
+
+.. doxygenclass:: Allocator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

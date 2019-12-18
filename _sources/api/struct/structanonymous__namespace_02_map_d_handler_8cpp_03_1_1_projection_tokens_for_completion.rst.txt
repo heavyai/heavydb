@@ -1,0 +1,9 @@
+Struct anonymous_namespace{MapDHandler.cpp}::ProjectionTokensForCompletion
+==========================================================================
+
+.. doxygenstruct:: anonymous_namespace{MapDHandler.cpp}::ProjectionTokensForCompletion
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

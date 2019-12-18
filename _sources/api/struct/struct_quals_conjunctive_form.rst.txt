@@ -1,0 +1,9 @@
+Struct QualsConjunctiveForm
+===========================
+
+.. doxygenstruct:: QualsConjunctiveForm
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

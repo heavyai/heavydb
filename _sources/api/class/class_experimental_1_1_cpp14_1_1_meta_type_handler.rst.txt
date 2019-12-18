@@ -1,0 +1,9 @@
+Class Experimental::Cpp14::MetaTypeHandler
+==========================================
+
+.. doxygenclass:: Experimental::Cpp14::MetaTypeHandler
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

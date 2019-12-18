@@ -1,0 +1,9 @@
+Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RexPhysicalInputsVisitor
+=====================================================================================
+
+.. doxygenclass:: anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RexPhysicalInputsVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

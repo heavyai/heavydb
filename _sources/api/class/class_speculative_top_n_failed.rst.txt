@@ -1,0 +1,9 @@
+Class SpeculativeTopNFailed
+===========================
+
+.. doxygenclass:: SpeculativeTopNFailed
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

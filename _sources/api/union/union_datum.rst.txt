@@ -1,0 +1,5 @@
+Union Datum
+===========
+
+.. doxygenunion:: Datum
+   :project: OmniSciDB

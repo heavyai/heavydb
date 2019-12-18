@@ -1,0 +1,9 @@
+Class com::mapd::dashboard::DashboardTest
+=========================================
+
+.. doxygenclass:: com::mapd::dashboard::DashboardTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

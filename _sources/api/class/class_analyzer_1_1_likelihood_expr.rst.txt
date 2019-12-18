@@ -1,0 +1,9 @@
+Class Analyzer::LikelihoodExpr
+==============================
+
+.. doxygenclass:: Analyzer::LikelihoodExpr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

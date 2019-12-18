@@ -1,0 +1,9 @@
+Class Buffer_Namespace::GpuCudaBuffer
+=====================================
+
+.. doxygenclass:: Buffer_Namespace::GpuCudaBuffer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

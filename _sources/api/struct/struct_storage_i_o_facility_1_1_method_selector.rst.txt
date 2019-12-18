@@ -1,0 +1,9 @@
+Struct StorageIOFacility::MethodSelector
+========================================
+
+.. doxygenstruct:: StorageIOFacility::MethodSelector
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

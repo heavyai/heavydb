@@ -1,0 +1,9 @@
+Struct anonymous_namespace{ResultSetIteration.cpp}::GeoTargetValueBuilder
+=========================================================================
+
+.. doxygenstruct:: anonymous_namespace{ResultSetIteration.cpp}::GeoTargetValueBuilder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Geo_namespace::GeoLineString
+==================================
+
+.. doxygenclass:: Geo_namespace::GeoLineString
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

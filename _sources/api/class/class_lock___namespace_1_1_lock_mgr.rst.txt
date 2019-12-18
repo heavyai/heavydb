@@ -1,0 +1,9 @@
+Class Lock_Namespace::LockMgr
+=============================
+
+.. doxygenclass:: Lock_Namespace::LockMgr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

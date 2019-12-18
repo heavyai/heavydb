@@ -1,0 +1,9 @@
+Class anonymous_namespace{RelAlgOptimizer.cpp}::RexInputSinker
+==============================================================
+
+.. doxygenclass:: anonymous_namespace{RelAlgOptimizer.cpp}::RexInputSinker
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

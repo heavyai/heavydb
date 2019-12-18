@@ -1,0 +1,9 @@
+Class Parser::CreateRoleStmt
+============================
+
+.. doxygenclass:: Parser::CreateRoleStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

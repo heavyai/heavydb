@@ -1,0 +1,9 @@
+Class Importer_NS::DataStreamSink
+=================================
+
+.. doxygenclass:: Importer_NS::DataStreamSink
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

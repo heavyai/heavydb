@@ -1,0 +1,9 @@
+Class CardinalityEstimationRequired
+===================================
+
+.. doxygenclass:: CardinalityEstimationRequired
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

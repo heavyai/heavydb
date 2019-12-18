@@ -1,0 +1,9 @@
+Class query_state::StdLogData
+=============================
+
+.. doxygenclass:: query_state::StdLogData
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

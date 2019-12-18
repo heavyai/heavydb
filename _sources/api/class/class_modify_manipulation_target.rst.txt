@@ -1,0 +1,9 @@
+Class ModifyManipulationTarget
+==============================
+
+.. doxygenclass:: ModifyManipulationTarget
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

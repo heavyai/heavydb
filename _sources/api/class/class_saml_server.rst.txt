@@ -1,0 +1,9 @@
+Class SamlServer
+================
+
+.. doxygenclass:: SamlServer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

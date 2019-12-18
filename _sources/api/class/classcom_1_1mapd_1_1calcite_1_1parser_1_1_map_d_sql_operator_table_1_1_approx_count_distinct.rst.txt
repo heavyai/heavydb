@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::ApproxCountDistinct
+===========================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::ApproxCountDistinct
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

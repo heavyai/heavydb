@@ -1,0 +1,9 @@
+Class Lock_Namespace::TableLockMgrImpl
+======================================
+
+.. doxygenclass:: Lock_Namespace::TableLockMgrImpl
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

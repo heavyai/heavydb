@@ -1,0 +1,9 @@
+Struct DictionaryValueConverter
+===============================
+
+.. doxygenstruct:: DictionaryValueConverter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

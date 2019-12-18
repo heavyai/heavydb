@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::KeyForString
+====================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::KeyForString
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

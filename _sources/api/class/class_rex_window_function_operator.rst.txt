@@ -1,0 +1,9 @@
+Class RexWindowFunctionOperator
+===============================
+
+.. doxygenclass:: RexWindowFunctionOperator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

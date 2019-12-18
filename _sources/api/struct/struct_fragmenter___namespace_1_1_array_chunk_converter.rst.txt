@@ -1,0 +1,9 @@
+Struct Fragmenter_Namespace::ArrayChunkConverter
+================================================
+
+.. doxygenstruct:: Fragmenter_Namespace::ArrayChunkConverter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

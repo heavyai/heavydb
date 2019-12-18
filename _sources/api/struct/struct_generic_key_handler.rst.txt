@@ -1,0 +1,9 @@
+Struct GenericKeyHandler
+========================
+
+.. doxygenstruct:: GenericKeyHandler
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

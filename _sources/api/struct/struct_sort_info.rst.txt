@@ -1,0 +1,9 @@
+Struct SortInfo
+===============
+
+.. doxygenstruct:: SortInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

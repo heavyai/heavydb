@@ -1,0 +1,9 @@
+Struct Parser::DefaultValidate< StringLiteral >
+===============================================
+
+.. doxygenstruct:: Parser::DefaultValidate< StringLiteral >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

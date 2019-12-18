@@ -1,0 +1,9 @@
+Class anonymous_namespace{RelAlgExecutor.cpp}::RexUsedInputsVisitor
+===================================================================
+
+.. doxygenclass:: anonymous_namespace{RelAlgExecutor.cpp}::RexUsedInputsVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

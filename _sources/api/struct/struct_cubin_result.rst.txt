@@ -1,0 +1,9 @@
+Struct CubinResult
+==================
+
+.. doxygenstruct:: CubinResult
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

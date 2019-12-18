@@ -1,0 +1,9 @@
+Class com::mapd::utility::db_vendors::OmniSciGeo_types
+======================================================
+
+.. doxygenclass:: com::mapd::utility::db_vendors::OmniSciGeo_types
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

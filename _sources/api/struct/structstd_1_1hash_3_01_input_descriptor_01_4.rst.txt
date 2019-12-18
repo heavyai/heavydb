@@ -1,0 +1,9 @@
+Struct std::hash< InputDescriptor >
+===================================
+
+.. doxygenstruct:: std::hash< InputDescriptor >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

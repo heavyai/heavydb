@@ -1,0 +1,9 @@
+Class ExtensionFunction
+=======================
+
+.. doxygenclass:: ExtensionFunction
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

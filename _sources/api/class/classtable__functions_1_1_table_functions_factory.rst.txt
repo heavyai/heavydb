@@ -1,0 +1,9 @@
+Class table_functions::TableFunctionsFactory
+============================================
+
+.. doxygenclass:: table_functions::TableFunctionsFactory
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

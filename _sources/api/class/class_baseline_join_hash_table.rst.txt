@@ -1,0 +1,9 @@
+Class BaselineJoinHashTable
+===========================
+
+.. doxygenclass:: BaselineJoinHashTable
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class RexAgg
+============
+
+.. doxygenclass:: RexAgg
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

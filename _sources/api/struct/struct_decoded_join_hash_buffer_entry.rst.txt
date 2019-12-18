@@ -1,0 +1,9 @@
+Struct DecodedJoinHashBufferEntry
+=================================
+
+.. doxygenstruct:: DecodedJoinHashBufferEntry
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

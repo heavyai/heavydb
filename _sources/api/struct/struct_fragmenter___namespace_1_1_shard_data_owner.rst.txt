@@ -1,0 +1,9 @@
+Struct Fragmenter_Namespace::ShardDataOwner
+===========================================
+
+.. doxygenstruct:: Fragmenter_Namespace::ShardDataOwner
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

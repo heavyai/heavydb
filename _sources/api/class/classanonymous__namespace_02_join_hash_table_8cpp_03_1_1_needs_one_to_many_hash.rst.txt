@@ -1,0 +1,9 @@
+Class anonymous_namespace{JoinHashTable.cpp}::NeedsOneToManyHash
+================================================================
+
+.. doxygenclass:: anonymous_namespace{JoinHashTable.cpp}::NeedsOneToManyHash
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Chunk_NS::Chunk
+=====================
+
+.. doxygenclass:: Chunk_NS::Chunk
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

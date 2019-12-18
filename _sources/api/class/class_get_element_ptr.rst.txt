@@ -1,0 +1,9 @@
+Class GetElementPtr
+===================
+
+.. doxygenclass:: GetElementPtr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class RexRef
+============
+
+.. doxygenclass:: RexRef
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

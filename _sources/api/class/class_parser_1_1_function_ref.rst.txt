@@ -1,0 +1,9 @@
+Class Parser::FunctionRef
+=========================
+
+.. doxygenclass:: Parser::FunctionRef
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

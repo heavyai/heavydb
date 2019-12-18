@@ -1,0 +1,9 @@
+Struct ArrowResultSetConverter::SerializedArrowOutput
+=====================================================
+
+.. doxygenstruct:: ArrowResultSetConverter::SerializedArrowOutput
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

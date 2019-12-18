@@ -1,0 +1,9 @@
+Struct DBObjectKey
+==================
+
+.. doxygenstruct:: DBObjectKey
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

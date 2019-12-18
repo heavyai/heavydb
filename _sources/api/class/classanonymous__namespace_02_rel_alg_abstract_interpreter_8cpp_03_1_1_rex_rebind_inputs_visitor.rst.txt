@@ -1,0 +1,9 @@
+Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RexRebindInputsVisitor
+================================================================================
+
+.. doxygenclass:: anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RexRebindInputsVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

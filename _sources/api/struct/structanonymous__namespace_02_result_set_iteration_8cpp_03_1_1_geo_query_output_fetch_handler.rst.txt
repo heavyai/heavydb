@@ -1,0 +1,9 @@
+Struct anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler
+==============================================================================
+
+.. doxygenstruct:: anonymous_namespace{ResultSetIteration.cpp}::GeoQueryOutputFetchHandler
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

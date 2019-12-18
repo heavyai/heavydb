@@ -1,0 +1,9 @@
+Struct Fragmenter_Namespace::DateChunkConverter
+===============================================
+
+.. doxygenstruct:: Fragmenter_Namespace::DateChunkConverter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

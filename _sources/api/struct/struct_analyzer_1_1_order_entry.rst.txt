@@ -1,0 +1,9 @@
+Struct Analyzer::OrderEntry
+===========================
+
+.. doxygenstruct:: Analyzer::OrderEntry
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct InternalTargetValue
+==========================
+
+.. doxygenstruct:: InternalTargetValue
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

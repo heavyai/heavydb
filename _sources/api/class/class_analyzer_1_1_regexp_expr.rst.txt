@@ -1,0 +1,9 @@
+Class Analyzer::RegexpExpr
+==========================
+
+.. doxygenclass:: Analyzer::RegexpExpr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

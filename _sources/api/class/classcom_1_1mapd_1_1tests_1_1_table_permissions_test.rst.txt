@@ -1,0 +1,9 @@
+Class com::mapd::tests::TablePermissionsTest
+============================================
+
+.. doxygenclass:: com::mapd::tests::TablePermissionsTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

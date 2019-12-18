@@ -1,0 +1,9 @@
+Struct std::hash< RexInput >
+============================
+
+.. doxygenstruct:: std::hash< RexInput >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

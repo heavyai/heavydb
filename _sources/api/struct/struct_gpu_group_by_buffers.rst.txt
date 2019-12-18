@@ -1,0 +1,9 @@
+Struct GpuGroupByBuffers
+========================
+
+.. doxygenstruct:: GpuGroupByBuffers
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

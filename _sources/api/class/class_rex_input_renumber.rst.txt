@@ -1,0 +1,9 @@
+Class RexInputRenumber
+======================
+
+.. doxygenclass:: RexInputRenumber
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

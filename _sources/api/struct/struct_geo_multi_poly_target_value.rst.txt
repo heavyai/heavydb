@@ -1,0 +1,9 @@
+Struct GeoMultiPolyTargetValue
+==============================
+
+.. doxygenstruct:: GeoMultiPolyTargetValue
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

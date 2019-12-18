@@ -1,0 +1,9 @@
+Class Parser::InsertIntoTableAsSelectStmt
+=========================================
+
+.. doxygenclass:: Parser::InsertIntoTableAsSelectStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

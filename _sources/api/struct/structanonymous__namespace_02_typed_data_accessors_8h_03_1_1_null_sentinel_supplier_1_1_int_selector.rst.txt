@@ -1,0 +1,9 @@
+Struct anonymous_namespace{TypedDataAccessors.h}::NullSentinelSupplier::IntSelector
+===================================================================================
+
+.. doxygenstruct:: anonymous_namespace{TypedDataAccessors.h}::NullSentinelSupplier::IntSelector
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

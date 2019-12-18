@@ -1,0 +1,9 @@
+Class Analyzer::DatetruncExpr
+=============================
+
+.. doxygenclass:: Analyzer::DatetruncExpr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Buffer_Namespace::BufferMgr
+=================================
+
+.. doxygenclass:: Buffer_Namespace::BufferMgr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

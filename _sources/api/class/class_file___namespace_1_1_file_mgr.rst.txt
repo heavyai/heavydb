@@ -1,0 +1,9 @@
+Class File_Namespace::FileMgr
+=============================
+
+.. doxygenclass:: File_Namespace::FileMgr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

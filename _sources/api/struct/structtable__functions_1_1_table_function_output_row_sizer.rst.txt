@@ -1,0 +1,9 @@
+Struct table_functions::TableFunctionOutputRowSizer
+===================================================
+
+.. doxygenstruct:: table_functions::TableFunctionOutputRowSizer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class FailedToFetchColumn
+=========================
+
+.. doxygenclass:: FailedToFetchColumn
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

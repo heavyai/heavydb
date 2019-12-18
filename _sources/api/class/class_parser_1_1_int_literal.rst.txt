@@ -1,0 +1,9 @@
+Class Parser::IntLiteral
+========================
+
+.. doxygenclass:: Parser::IntLiteral
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

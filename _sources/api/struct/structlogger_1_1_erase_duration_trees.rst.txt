@@ -1,0 +1,9 @@
+Struct logger::EraseDurationTrees
+=================================
+
+.. doxygenstruct:: logger::EraseDurationTrees
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

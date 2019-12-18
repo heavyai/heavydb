@@ -1,0 +1,9 @@
+Class TableGenerations
+======================
+
+.. doxygenclass:: TableGenerations
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

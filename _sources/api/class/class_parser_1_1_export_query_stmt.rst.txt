@@ -1,0 +1,9 @@
+Class Parser::ExportQueryStmt
+=============================
+
+.. doxygenclass:: Parser::ExportQueryStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

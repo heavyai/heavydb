@@ -1,0 +1,9 @@
+Struct anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler
+=======================================================================
+
+.. doxygenstruct:: anonymous_namespace{ResultSetIteration.cpp}::GeoLazyFetchHandler
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

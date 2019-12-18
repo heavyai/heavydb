@@ -1,0 +1,9 @@
+Class Analyzer::FunctionOperWithCustomTypeHandling
+==================================================
+
+.. doxygenclass:: Analyzer::FunctionOperWithCustomTypeHandling
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

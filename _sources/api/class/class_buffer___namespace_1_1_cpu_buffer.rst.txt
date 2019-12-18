@@ -1,0 +1,9 @@
+Class Buffer_Namespace::CpuBuffer
+=================================
+
+.. doxygenclass:: Buffer_Namespace::CpuBuffer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

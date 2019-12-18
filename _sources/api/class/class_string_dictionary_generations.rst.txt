@@ -1,0 +1,9 @@
+Class StringDictionaryGenerations
+=================================
+
+.. doxygenclass:: StringDictionaryGenerations
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

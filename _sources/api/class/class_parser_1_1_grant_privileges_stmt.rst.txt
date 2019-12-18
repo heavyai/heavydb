@@ -1,0 +1,9 @@
+Class Parser::GrantPrivilegesStmt
+=================================
+
+.. doxygenclass:: Parser::GrantPrivilegesStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

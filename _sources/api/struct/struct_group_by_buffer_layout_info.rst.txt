@@ -1,0 +1,9 @@
+Struct GroupByBufferLayoutInfo
+==============================
+
+.. doxygenstruct:: GroupByBufferLayoutInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

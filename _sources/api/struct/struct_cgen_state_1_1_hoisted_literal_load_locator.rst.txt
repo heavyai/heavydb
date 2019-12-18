@@ -1,0 +1,9 @@
+Struct CgenState::HoistedLiteralLoadLocator
+===========================================
+
+.. doxygenstruct:: CgenState::HoistedLiteralLoadLocator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

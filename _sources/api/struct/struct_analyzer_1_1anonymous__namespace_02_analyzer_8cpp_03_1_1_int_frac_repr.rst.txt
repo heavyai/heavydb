@@ -1,0 +1,9 @@
+Struct Analyzer::anonymous_namespace{Analyzer.cpp}::IntFracRepr
+===============================================================
+
+.. doxygenstruct:: Analyzer::anonymous_namespace{Analyzer.cpp}::IntFracRepr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

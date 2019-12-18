@@ -1,0 +1,9 @@
+Class Analyzer::UOper
+=====================
+
+.. doxygenclass:: Analyzer::UOper
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct RelAlgExecutorTraits
+===========================
+
+.. doxygenstruct:: RelAlgExecutorTraits
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

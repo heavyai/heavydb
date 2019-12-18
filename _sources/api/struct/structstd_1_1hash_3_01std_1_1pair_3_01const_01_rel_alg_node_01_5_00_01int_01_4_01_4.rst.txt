@@ -1,0 +1,9 @@
+Struct std::hash< std::pair< const RelAlgNode *, int > >
+========================================================
+
+.. doxygenstruct:: std::hash< std::pair< const RelAlgNode *, int > >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

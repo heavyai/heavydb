@@ -1,0 +1,9 @@
+Struct Parser::ShouldInvalidateSessionsByDB< RenameDatabaseStmt >
+=================================================================
+
+.. doxygenstruct:: Parser::ShouldInvalidateSessionsByDB< RenameDatabaseStmt >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

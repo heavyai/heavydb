@@ -1,0 +1,9 @@
+Class Parser::OptimizeTableStmt
+===============================
+
+.. doxygenclass:: Parser::OptimizeTableStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct ThreadController_NS::FutureGetter< void >
+================================================
+
+.. doxygenstruct:: ThreadController_NS::FutureGetter< void >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

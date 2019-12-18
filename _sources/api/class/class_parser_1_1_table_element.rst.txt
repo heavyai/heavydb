@@ -1,0 +1,9 @@
+Class Parser::TableElement
+==========================
+
+.. doxygenclass:: Parser::TableElement
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

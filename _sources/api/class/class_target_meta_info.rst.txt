@@ -1,0 +1,9 @@
+Class TargetMetaInfo
+====================
+
+.. doxygenclass:: TargetMetaInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

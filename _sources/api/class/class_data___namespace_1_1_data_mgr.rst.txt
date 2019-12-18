@@ -1,0 +1,9 @@
+Class Data_Namespace::DataMgr
+=============================
+
+.. doxygenclass:: Data_Namespace::DataMgr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

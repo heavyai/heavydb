@@ -1,0 +1,9 @@
+Class Fragmenter_Namespace::RowDataProvider
+===========================================
+
+.. doxygenclass:: Fragmenter_Namespace::RowDataProvider
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

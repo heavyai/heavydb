@@ -1,0 +1,9 @@
+Class Parser::CopyTableStmt
+===========================
+
+.. doxygenclass:: Parser::CopyTableStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

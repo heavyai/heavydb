@@ -1,0 +1,9 @@
+Class Analyzer::GeoExpr
+=======================
+
+.. doxygenclass:: Analyzer::GeoExpr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

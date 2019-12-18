@@ -1,0 +1,9 @@
+Class com::mapd::utility::SQLImporter
+=====================================
+
+.. doxygenclass:: com::mapd::utility::SQLImporter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

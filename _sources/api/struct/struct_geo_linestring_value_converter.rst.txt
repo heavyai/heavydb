@@ -1,0 +1,9 @@
+Struct GeoLinestringValueConverter
+==================================
+
+.. doxygenstruct:: GeoLinestringValueConverter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

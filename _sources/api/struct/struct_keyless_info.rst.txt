@@ -1,0 +1,9 @@
+Struct KeylessInfo
+==================
+
+.. doxygenstruct:: KeylessInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

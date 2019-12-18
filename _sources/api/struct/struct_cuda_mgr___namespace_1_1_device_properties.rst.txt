@@ -1,0 +1,9 @@
+Struct CudaMgr_Namespace::DeviceProperties
+==========================================
+
+.. doxygenstruct:: CudaMgr_Namespace::DeviceProperties
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

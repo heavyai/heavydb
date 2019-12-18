@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::PgUnnest
+================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::PgUnnest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

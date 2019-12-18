@@ -1,0 +1,9 @@
+Class File_Namespace::FileBuffer
+================================
+
+.. doxygenclass:: File_Namespace::FileBuffer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct anonymous_namespace{MapDHandler.cpp}::ForceDisconnect
+============================================================
+
+.. doxygenstruct:: anonymous_namespace{MapDHandler.cpp}::ForceDisconnect
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class org::apache::calcite::sql2rel::SqlToRelConverter::AggConverter
+====================================================================
+
+.. doxygenclass:: org::apache::calcite::sql2rel::SqlToRelConverter::AggConverter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class anonymous_namespace{RelAlgOptimizer.cpp}::SubConditionReplacer
+====================================================================
+
+.. doxygenclass:: anonymous_namespace{RelAlgOptimizer.cpp}::SubConditionReplacer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

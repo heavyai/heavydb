@@ -1,0 +1,9 @@
+Struct CodeGenerator::GPUCode
+=============================
+
+.. doxygenstruct:: CodeGenerator::GPUCode
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

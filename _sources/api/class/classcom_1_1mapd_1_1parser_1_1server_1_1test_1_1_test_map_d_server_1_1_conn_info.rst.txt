@@ -1,0 +1,9 @@
+Class com::mapd::parser::server::test::TestMapDServer::ConnInfo
+===============================================================
+
+.. doxygenclass:: com::mapd::parser::server::test::TestMapDServer::ConnInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

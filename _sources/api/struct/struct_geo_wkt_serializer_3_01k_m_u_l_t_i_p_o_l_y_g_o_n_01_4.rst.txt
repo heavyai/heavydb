@@ -1,0 +1,9 @@
+Struct GeoWktSerializer< kMULTIPOLYGON >
+========================================
+
+.. doxygenstruct:: GeoWktSerializer< kMULTIPOLYGON >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

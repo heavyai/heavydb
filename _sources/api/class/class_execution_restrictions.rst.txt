@@ -1,0 +1,9 @@
+Class ExecutionRestrictions
+===========================
+
+.. doxygenclass:: ExecutionRestrictions
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

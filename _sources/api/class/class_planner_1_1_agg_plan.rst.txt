@@ -1,0 +1,9 @@
+Class Planner::AggPlan
+======================
+
+.. doxygenclass:: Planner::AggPlan
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

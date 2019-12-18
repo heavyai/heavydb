@@ -1,0 +1,9 @@
+Class CodeGenerator
+===================
+
+.. doxygenclass:: CodeGenerator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

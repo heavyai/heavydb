@@ -1,0 +1,9 @@
+Struct StringDictionary::compare_cache_value_t
+==============================================
+
+.. doxygenstruct:: StringDictionary::compare_cache_value_t
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

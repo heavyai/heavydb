@@ -1,0 +1,9 @@
+Struct anonymous_namespace{FromTableReordering.cpp}::TraversalEdge
+==================================================================
+
+.. doxygenstruct:: anonymous_namespace{FromTableReordering.cpp}::TraversalEdge
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

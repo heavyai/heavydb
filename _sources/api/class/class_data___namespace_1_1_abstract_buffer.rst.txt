@@ -1,0 +1,9 @@
+Class Data_Namespace::AbstractBuffer
+====================================
+
+.. doxygenclass:: Data_Namespace::AbstractBuffer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

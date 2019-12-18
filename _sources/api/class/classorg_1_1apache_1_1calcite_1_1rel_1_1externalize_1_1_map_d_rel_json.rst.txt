@@ -1,0 +1,9 @@
+Class org::apache::calcite::rel::externalize::MapDRelJson
+=========================================================
+
+.. doxygenclass:: org::apache::calcite::rel::externalize::MapDRelJson
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

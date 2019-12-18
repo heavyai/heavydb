@@ -1,0 +1,9 @@
+Class ExternalCall
+==================
+
+.. doxygenclass:: ExternalCall
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

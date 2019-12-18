@@ -1,0 +1,9 @@
+Class OutOfMemory
+=================
+
+.. doxygenclass:: OutOfMemory
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

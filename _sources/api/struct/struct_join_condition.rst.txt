@@ -1,0 +1,9 @@
+Struct JoinCondition
+====================
+
+.. doxygenstruct:: JoinCondition
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

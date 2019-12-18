@@ -1,0 +1,9 @@
+Class BloscCompressor
+=====================
+
+.. doxygenclass:: BloscCompressor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

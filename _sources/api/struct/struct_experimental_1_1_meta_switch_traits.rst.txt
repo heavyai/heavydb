@@ -1,0 +1,9 @@
+Struct Experimental::MetaSwitchTraits
+=====================================
+
+.. doxygenstruct:: Experimental::MetaSwitchTraits
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

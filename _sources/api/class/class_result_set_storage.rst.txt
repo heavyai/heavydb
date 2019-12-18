@@ -1,0 +1,9 @@
+Class ResultSetStorage
+======================
+
+.. doxygenclass:: ResultSetStorage
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

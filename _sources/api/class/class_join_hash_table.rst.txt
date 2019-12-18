@@ -1,0 +1,9 @@
+Class JoinHashTable
+===================
+
+.. doxygenclass:: JoinHashTable
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

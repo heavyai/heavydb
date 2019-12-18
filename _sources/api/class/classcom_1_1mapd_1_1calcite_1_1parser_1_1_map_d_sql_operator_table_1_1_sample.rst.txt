@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::Sample
+==============================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::Sample
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

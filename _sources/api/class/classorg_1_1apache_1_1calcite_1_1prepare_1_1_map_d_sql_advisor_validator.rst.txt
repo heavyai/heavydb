@@ -1,0 +1,9 @@
+Class org::apache::calcite::prepare::MapDSqlAdvisorValidator
+============================================================
+
+.. doxygenclass:: org::apache::calcite::prepare::MapDSqlAdvisorValidator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

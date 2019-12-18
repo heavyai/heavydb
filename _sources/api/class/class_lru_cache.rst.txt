@@ -1,0 +1,9 @@
+Class LruCache
+==============
+
+.. doxygenclass:: LruCache
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Parser::LikelihoodExpr
+============================
+
+.. doxygenclass:: Parser::LikelihoodExpr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

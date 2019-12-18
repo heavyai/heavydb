@@ -1,0 +1,9 @@
+Class StorageIOFacility::UpdateTransactionParameters
+====================================================
+
+.. doxygenclass:: StorageIOFacility::UpdateTransactionParameters
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

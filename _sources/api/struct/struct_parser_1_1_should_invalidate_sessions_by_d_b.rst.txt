@@ -1,0 +1,9 @@
+Struct Parser::ShouldInvalidateSessionsByDB
+===========================================
+
+.. doxygenstruct:: Parser::ShouldInvalidateSessionsByDB
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

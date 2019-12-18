@@ -1,0 +1,9 @@
+Struct BaselineJoinHashTable::CompositeKeyInfo
+==============================================
+
+.. doxygenstruct:: BaselineJoinHashTable::CompositeKeyInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

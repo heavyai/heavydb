@@ -1,0 +1,9 @@
+Class Analyzer::DateaddExpr
+===========================
+
+.. doxygenclass:: Analyzer::DateaddExpr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

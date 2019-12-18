@@ -1,0 +1,9 @@
+Class com::omnisci::jdbc::KeyLoader::S_struct
+=============================================
+
+.. doxygenclass:: com::omnisci::jdbc::KeyLoader::S_struct
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

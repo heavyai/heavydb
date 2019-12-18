@@ -1,0 +1,9 @@
+Class com::mapd::metadata::PolygonSqlType
+=========================================
+
+.. doxygenclass:: com::mapd::metadata::PolygonSqlType
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct ResultSet::ResultSetComparator
+=====================================
+
+.. doxygenstruct:: ResultSet::ResultSetComparator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

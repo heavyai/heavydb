@@ -1,0 +1,9 @@
+Class Planner::Optimizer
+========================
+
+.. doxygenclass:: Planner::Optimizer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

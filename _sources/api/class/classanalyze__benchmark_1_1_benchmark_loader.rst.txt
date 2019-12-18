@@ -1,0 +1,9 @@
+Class analyze_benchmark::BenchmarkLoader
+========================================
+
+.. doxygenclass:: analyze_benchmark::BenchmarkLoader
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

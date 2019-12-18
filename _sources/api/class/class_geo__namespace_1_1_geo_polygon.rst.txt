@@ -1,0 +1,9 @@
+Class Geo_namespace::GeoPolygon
+===============================
+
+.. doxygenclass:: Geo_namespace::GeoPolygon
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

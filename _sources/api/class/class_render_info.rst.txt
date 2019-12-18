@@ -1,0 +1,9 @@
+Class RenderInfo
+================
+
+.. doxygenclass:: RenderInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

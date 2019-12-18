@@ -1,0 +1,9 @@
+Class StringDictionary
+======================
+
+.. doxygenclass:: StringDictionary
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

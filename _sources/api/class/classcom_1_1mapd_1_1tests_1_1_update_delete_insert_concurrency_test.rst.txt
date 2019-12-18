@@ -1,0 +1,9 @@
+Class com::mapd::tests::UpdateDeleteInsertConcurrencyTest
+=========================================================
+
+.. doxygenclass:: com::mapd::tests::UpdateDeleteInsertConcurrencyTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

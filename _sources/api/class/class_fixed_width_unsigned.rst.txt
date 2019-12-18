@@ -1,0 +1,9 @@
+Class FixedWidthUnsigned
+========================
+
+.. doxygenclass:: FixedWidthUnsigned
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

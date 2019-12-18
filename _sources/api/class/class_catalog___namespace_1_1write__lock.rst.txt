@@ -1,0 +1,9 @@
+Class Catalog_Namespace::write_lock
+===================================
+
+.. doxygenclass:: Catalog_Namespace::write_lock
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

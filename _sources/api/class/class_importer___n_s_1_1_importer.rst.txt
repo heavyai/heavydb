@@ -1,0 +1,9 @@
+Class Importer_NS::Importer
+===========================
+
+.. doxygenclass:: Importer_NS::Importer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

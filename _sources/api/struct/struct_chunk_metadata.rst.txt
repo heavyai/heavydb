@@ -1,0 +1,9 @@
+Struct ChunkMetadata
+====================
+
+.. doxygenstruct:: ChunkMetadata
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

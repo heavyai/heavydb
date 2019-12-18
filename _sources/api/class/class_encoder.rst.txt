@@ -1,0 +1,9 @@
+Class Encoder
+=============
+
+.. doxygenclass:: Encoder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

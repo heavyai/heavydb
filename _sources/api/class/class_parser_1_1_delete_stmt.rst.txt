@@ -1,0 +1,9 @@
+Class Parser::DeleteStmt
+========================
+
+.. doxygenclass:: Parser::DeleteStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct File_Namespace::Page
+===========================
+
+.. doxygenstruct:: File_Namespace::Page
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

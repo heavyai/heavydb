@@ -1,0 +1,9 @@
+Struct Parser::ShouldInvalidateSessionsByUser< DropUserStmt >
+=============================================================
+
+.. doxygenstruct:: Parser::ShouldInvalidateSessionsByUser< DropUserStmt >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

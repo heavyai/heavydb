@@ -1,0 +1,9 @@
+Class BinaryOperator
+====================
+
+.. doxygenclass:: BinaryOperator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class anonymous_namespace{JoinFilterPushDown.cpp}::BindFilterToOutermostVisitor
+===============================================================================
+
+.. doxygenclass:: anonymous_namespace{JoinFilterPushDown.cpp}::BindFilterToOutermostVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

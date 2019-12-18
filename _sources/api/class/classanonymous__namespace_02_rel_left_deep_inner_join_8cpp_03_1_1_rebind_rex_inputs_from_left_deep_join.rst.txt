@@ -1,0 +1,9 @@
+Class anonymous_namespace{RelLeftDeepInnerJoin.cpp}::RebindRexInputsFromLeftDeepJoin
+====================================================================================
+
+.. doxygenclass:: anonymous_namespace{RelLeftDeepInnerJoin.cpp}::RebindRexInputsFromLeftDeepJoin
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

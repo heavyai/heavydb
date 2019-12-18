@@ -1,0 +1,9 @@
+Struct RelAlgExecutionUnit
+==========================
+
+.. doxygenstruct:: RelAlgExecutionUnit
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

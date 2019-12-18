@@ -1,0 +1,9 @@
+Class com::mapd::metadata::MetaConnect
+======================================
+
+.. doxygenclass:: com::mapd::metadata::MetaConnect
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

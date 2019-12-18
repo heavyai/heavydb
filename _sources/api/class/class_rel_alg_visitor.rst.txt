@@ -1,0 +1,9 @@
+Class RelAlgVisitor
+===================
+
+.. doxygenclass:: RelAlgVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

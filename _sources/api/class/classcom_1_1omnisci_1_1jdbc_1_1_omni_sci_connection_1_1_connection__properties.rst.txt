@@ -1,0 +1,9 @@
+Class com::omnisci::jdbc::OmniSciConnection::Connection_properties
+==================================================================
+
+.. doxygenclass:: com::omnisci::jdbc::OmniSciConnection::Connection_properties
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::OffsetInFragment
+========================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::OffsetInFragment
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

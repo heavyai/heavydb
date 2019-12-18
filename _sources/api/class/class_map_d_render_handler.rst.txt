@@ -1,0 +1,9 @@
+Class MapDRenderHandler
+=======================
+
+.. doxygenclass:: MapDRenderHandler
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

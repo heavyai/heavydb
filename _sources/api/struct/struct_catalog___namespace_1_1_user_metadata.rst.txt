@@ -1,0 +1,9 @@
+Struct Catalog_Namespace::UserMetadata
+======================================
+
+.. doxygenstruct:: Catalog_Namespace::UserMetadata
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

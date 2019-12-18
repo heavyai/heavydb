@@ -1,0 +1,9 @@
+Class ArrayContextTypeSizer
+===========================
+
+.. doxygenclass:: ArrayContextTypeSizer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

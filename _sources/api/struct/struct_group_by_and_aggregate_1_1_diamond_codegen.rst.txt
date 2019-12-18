@@ -1,0 +1,9 @@
+Struct GroupByAndAggregate::DiamondCodegen
+==========================================
+
+.. doxygenstruct:: GroupByAndAggregate::DiamondCodegen
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

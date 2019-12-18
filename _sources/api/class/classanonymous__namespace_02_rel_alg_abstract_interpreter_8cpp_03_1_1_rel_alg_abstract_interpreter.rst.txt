@@ -1,0 +1,9 @@
+Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RelAlgAbstractInterpreter
+===================================================================================
+
+.. doxygenclass:: anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RelAlgAbstractInterpreter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

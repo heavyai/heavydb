@@ -1,0 +1,9 @@
+Class Parser::RegexpExpr
+========================
+
+.. doxygenclass:: Parser::RegexpExpr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

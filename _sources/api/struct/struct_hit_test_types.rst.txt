@@ -1,0 +1,9 @@
+Struct HitTestTypes
+===================
+
+.. doxygenstruct:: HitTestTypes
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

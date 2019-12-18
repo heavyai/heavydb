@@ -1,0 +1,9 @@
+Class anonymous_namespace{ExpressionRewrite.cpp}::ArrayElementStringLiteralEncodingVisitor
+==========================================================================================
+
+.. doxygenclass:: anonymous_namespace{ExpressionRewrite.cpp}::ArrayElementStringLiteralEncodingVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

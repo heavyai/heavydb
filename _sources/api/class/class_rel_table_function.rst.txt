@@ -1,0 +1,9 @@
+Class RelTableFunction
+======================
+
+.. doxygenclass:: RelTableFunction
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class CudaMgr_Namespace::CudaMgr
+================================
+
+.. doxygenclass:: CudaMgr_Namespace::CudaMgr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

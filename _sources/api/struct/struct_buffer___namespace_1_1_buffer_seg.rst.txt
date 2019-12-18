@@ -1,0 +1,9 @@
+Struct Buffer_Namespace::BufferSeg
+==================================
+
+.. doxygenstruct:: Buffer_Namespace::BufferSeg
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

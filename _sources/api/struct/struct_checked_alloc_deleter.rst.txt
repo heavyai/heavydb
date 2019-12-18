@@ -1,0 +1,9 @@
+Struct CheckedAllocDeleter
+==========================
+
+.. doxygenstruct:: CheckedAllocDeleter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

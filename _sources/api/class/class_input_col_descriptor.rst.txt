@@ -1,0 +1,9 @@
+Class InputColDescriptor
+========================
+
+.. doxygenclass:: InputColDescriptor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

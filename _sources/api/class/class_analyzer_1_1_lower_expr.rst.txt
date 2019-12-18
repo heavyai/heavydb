@@ -1,0 +1,9 @@
+Class Analyzer::LowerExpr
+=========================
+
+.. doxygenclass:: Analyzer::LowerExpr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

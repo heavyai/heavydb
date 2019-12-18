@@ -1,0 +1,9 @@
+Class Parser::InsertStmt
+========================
+
+.. doxygenclass:: Parser::InsertStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

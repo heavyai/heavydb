@@ -1,0 +1,9 @@
+Struct HashJoinMatchingSet
+==========================
+
+.. doxygenstruct:: HashJoinMatchingSet
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

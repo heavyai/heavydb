@@ -1,0 +1,9 @@
+Class anonymous_namespace{ScalarCodeGenerator.cpp}::UsedColumnExpressions
+=========================================================================
+
+.. doxygenclass:: anonymous_namespace{ScalarCodeGenerator.cpp}::UsedColumnExpressions
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

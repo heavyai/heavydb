@@ -1,0 +1,9 @@
+Class analyze_benchmark::PrettyPrint
+====================================
+
+.. doxygenclass:: analyze_benchmark::PrettyPrint
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

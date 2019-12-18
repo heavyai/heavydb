@@ -1,0 +1,9 @@
+Class Geo_namespace::GeoPoint
+=============================
+
+.. doxygenclass:: Geo_namespace::GeoPoint
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Worker
+============
+
+.. doxygenclass:: Worker
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

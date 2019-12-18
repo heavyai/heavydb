@@ -1,0 +1,9 @@
+Struct ChunkStats
+=================
+
+.. doxygenstruct:: ChunkStats
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class com::mapd::bench::Benchmark
+=================================
+
+.. doxygenclass:: com::mapd::bench::Benchmark
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct Experimental::MetaTypeClassDeterminant< Geometry >
+=========================================================
+
+.. doxygenstruct:: Experimental::MetaTypeClassDeterminant< Geometry >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

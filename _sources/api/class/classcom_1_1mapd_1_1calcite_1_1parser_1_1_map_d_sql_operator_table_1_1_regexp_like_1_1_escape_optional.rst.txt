@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::RegexpLike::EscapeOptional
+==================================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::RegexpLike::EscapeOptional
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

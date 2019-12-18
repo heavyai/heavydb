@@ -1,0 +1,9 @@
+Class DistributedLoader
+=======================
+
+.. doxygenclass:: DistributedLoader
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class AggregatedColRange
+========================
+
+.. doxygenclass:: AggregatedColRange
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct DashboardPrivileges
+==========================
+
+.. doxygenstruct:: DashboardPrivileges
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class com::mapd::parser::server::ExtensionFunction
+==================================================
+
+.. doxygenclass:: com::mapd::parser::server::ExtensionFunction
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

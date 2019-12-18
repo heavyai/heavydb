@@ -1,0 +1,9 @@
+Class Geo_namespace::GeoTypesFactory
+====================================
+
+.. doxygenclass:: Geo_namespace::GeoTypesFactory
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

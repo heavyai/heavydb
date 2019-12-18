@@ -1,0 +1,9 @@
+Class Parser::ShardKeyDef
+=========================
+
+.. doxygenclass:: Parser::ShardKeyDef
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

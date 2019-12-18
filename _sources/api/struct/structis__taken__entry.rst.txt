@@ -1,0 +1,9 @@
+Struct is_taken_entry
+=====================
+
+.. doxygenstruct:: is_taken_entry
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

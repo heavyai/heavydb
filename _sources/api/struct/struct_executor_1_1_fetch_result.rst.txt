@@ -1,0 +1,9 @@
+Struct Executor::FetchResult
+============================
+
+.. doxygenstruct:: Executor::FetchResult
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

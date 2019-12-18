@@ -1,0 +1,9 @@
+Struct BaselineJoinHashTable::HashTableCacheKey
+===============================================
+
+.. doxygenstruct:: BaselineJoinHashTable::HashTableCacheKey
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

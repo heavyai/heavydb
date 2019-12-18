@@ -1,0 +1,9 @@
+Class boost_variant_accessor
+============================
+
+.. doxygenclass:: boost_variant_accessor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

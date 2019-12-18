@@ -1,0 +1,9 @@
+Struct ArrowResultSetConverter::ColumnBuilder
+=============================================
+
+.. doxygenstruct:: ArrowResultSetConverter::ColumnBuilder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

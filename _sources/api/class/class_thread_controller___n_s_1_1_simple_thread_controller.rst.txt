@@ -1,0 +1,9 @@
+Class ThreadController_NS::SimpleThreadController
+=================================================
+
+.. doxygenclass:: ThreadController_NS::SimpleThreadController
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

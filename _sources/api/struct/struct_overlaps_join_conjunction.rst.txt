@@ -1,0 +1,9 @@
+Struct OverlapsJoinConjunction
+==============================
+
+.. doxygenstruct:: OverlapsJoinConjunction
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

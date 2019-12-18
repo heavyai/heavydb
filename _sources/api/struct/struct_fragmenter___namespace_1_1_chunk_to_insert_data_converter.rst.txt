@@ -1,0 +1,9 @@
+Struct Fragmenter_Namespace::ChunkToInsertDataConverter
+=======================================================
+
+.. doxygenstruct:: Fragmenter_Namespace::ChunkToInsertDataConverter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Analyzer::CaseExpr
+========================
+
+.. doxygenclass:: Analyzer::CaseExpr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

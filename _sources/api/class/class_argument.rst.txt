@@ -1,0 +1,9 @@
+Class Argument
+==============
+
+.. doxygenclass:: Argument
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDUser
+==========================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDUser
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

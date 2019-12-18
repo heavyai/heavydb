@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDSqlOperatorTable::CastToGeography
+=======================================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDSqlOperatorTable::CastToGeography
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

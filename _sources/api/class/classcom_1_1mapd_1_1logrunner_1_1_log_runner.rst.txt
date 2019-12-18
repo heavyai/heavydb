@@ -1,0 +1,9 @@
+Class com::mapd::logrunner::LogRunner
+=====================================
+
+.. doxygenclass:: com::mapd::logrunner::LogRunner
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

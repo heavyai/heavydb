@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::ProjectProjectRemoveRule
+==========================================================
+
+.. doxygenclass:: com::mapd::calcite::parser::ProjectProjectRemoveRule
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

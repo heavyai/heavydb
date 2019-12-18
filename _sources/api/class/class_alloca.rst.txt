@@ -1,0 +1,9 @@
+Class Alloca
+============
+
+.. doxygenclass:: Alloca
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

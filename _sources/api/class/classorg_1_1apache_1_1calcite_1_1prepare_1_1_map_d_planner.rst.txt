@@ -1,0 +1,9 @@
+Class org::apache::calcite::prepare::MapDPlanner
+================================================
+
+.. doxygenclass:: org::apache::calcite::prepare::MapDPlanner
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

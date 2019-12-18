@@ -1,0 +1,9 @@
+Class MapDAggHandler
+====================
+
+.. doxygenclass:: MapDAggHandler
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

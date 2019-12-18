@@ -1,0 +1,9 @@
+Struct ResultSet::ColumnWiseTargetAccessor
+==========================================
+
+.. doxygenstruct:: ResultSet::ColumnWiseTargetAccessor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

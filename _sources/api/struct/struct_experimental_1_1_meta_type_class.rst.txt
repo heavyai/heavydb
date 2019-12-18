@@ -1,0 +1,9 @@
+Struct Experimental::MetaTypeClass
+==================================
+
+.. doxygenstruct:: Experimental::MetaTypeClass
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

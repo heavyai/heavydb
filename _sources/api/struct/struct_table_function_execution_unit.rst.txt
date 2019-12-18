@@ -1,0 +1,9 @@
+Struct TableFunctionExecutionUnit
+=================================
+
+.. doxygenstruct:: TableFunctionExecutionUnit
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

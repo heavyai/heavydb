@@ -1,0 +1,9 @@
+Struct Experimental::MetaTypeClassDeterminant< Array >
+======================================================
+
+.. doxygenstruct:: Experimental::MetaTypeClassDeterminant< Array >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

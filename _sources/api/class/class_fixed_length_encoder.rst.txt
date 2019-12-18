@@ -1,0 +1,9 @@
+Class FixedLengthEncoder
+========================
+
+.. doxygenclass:: FixedLengthEncoder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class Parser::DoubleLiteral
+===========================
+
+.. doxygenclass:: Parser::DoubleLiteral
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

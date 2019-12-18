@@ -1,0 +1,9 @@
+Struct anonymous_namespace{ArrowImporter.h}::ArrowValue< std::string >
+======================================================================
+
+.. doxygenstruct:: anonymous_namespace{ArrowImporter.h}::ArrowValue< std::string >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

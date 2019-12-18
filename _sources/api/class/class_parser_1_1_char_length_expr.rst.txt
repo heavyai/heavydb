@@ -1,0 +1,9 @@
+Class Parser::CharLengthExpr
+============================
+
+.. doxygenclass:: Parser::CharLengthExpr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct ExecutionOptions
+=======================
+
+.. doxygenstruct:: ExecutionOptions
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

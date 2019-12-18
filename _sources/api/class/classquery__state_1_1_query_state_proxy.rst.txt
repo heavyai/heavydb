@@ -1,0 +1,9 @@
+Class query_state::QueryStateProxy
+==================================
+
+.. doxygenclass:: query_state::QueryStateProxy
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

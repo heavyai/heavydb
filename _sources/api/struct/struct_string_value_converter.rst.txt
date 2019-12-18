@@ -1,0 +1,9 @@
+Struct StringValueConverter
+===========================
+
+.. doxygenstruct:: StringValueConverter
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

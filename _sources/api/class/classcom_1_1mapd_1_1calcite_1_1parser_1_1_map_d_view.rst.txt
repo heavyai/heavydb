@@ -1,0 +1,9 @@
+Class com::mapd::calcite::parser::MapDView
+==========================================
+
+.. doxygenclass:: com::mapd::calcite::parser::MapDView
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

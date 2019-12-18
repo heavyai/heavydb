@@ -1,0 +1,9 @@
+Class org::apache::calcite::rel::rules::DynamicFilterJoinRule
+=============================================================
+
+.. doxygenclass:: org::apache::calcite::rel::rules::DynamicFilterJoinRule
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

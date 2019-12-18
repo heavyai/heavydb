@@ -1,0 +1,9 @@
+Struct Executor::CompilationResult
+==================================
+
+.. doxygenstruct:: Executor::CompilationResult
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

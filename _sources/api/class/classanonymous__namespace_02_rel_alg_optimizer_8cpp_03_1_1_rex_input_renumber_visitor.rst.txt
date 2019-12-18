@@ -1,0 +1,9 @@
+Class anonymous_namespace{RelAlgOptimizer.cpp}::RexInputRenumberVisitor
+=======================================================================
+
+.. doxygenclass:: anonymous_namespace{RelAlgOptimizer.cpp}::RexInputRenumberVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

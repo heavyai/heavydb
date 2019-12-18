@@ -1,0 +1,9 @@
+Class com::mapd::parser::server::CalciteServerWrapper
+=====================================================
+
+.. doxygenclass:: com::mapd::parser::server::CalciteServerWrapper
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

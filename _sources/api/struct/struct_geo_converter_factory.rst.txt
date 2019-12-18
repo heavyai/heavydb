@@ -1,0 +1,9 @@
+Struct GeoConverterFactory
+==========================
+
+.. doxygenstruct:: GeoConverterFactory
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

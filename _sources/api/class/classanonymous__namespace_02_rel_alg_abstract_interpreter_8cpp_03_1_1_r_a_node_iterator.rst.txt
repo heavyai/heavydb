@@ -1,0 +1,9 @@
+Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RANodeIterator
+========================================================================
+
+.. doxygenclass:: anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RANodeIterator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

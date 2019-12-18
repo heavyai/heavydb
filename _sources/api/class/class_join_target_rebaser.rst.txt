@@ -1,0 +1,9 @@
+Class JoinTargetRebaser
+=======================
+
+.. doxygenclass:: JoinTargetRebaser
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

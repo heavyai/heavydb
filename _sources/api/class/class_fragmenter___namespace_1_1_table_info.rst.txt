@@ -1,0 +1,9 @@
+Class Fragmenter_Namespace::TableInfo
+=====================================
+
+.. doxygenclass:: Fragmenter_Namespace::TableInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
