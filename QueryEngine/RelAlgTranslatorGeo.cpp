@@ -818,7 +818,8 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateBinaryGeoFunction(
     throw QueryNotSupported(rex_function->getName() +
                             " accepts either two GEOGRAPHY or two GEOMETRY arguments");
   }
-  if (arg0_ti.get_output_srid() > 0 &&
+  // Check SRID match if at least one is set/valid
+  if ((arg0_ti.get_output_srid() > 0 || arg1_ti.get_output_srid() > 0) &&
       arg0_ti.get_output_srid() != arg1_ti.get_output_srid()) {
     throw QueryNotSupported(rex_function->getName() + " cannot accept different SRIDs");
   }

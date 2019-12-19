@@ -13327,6 +13327,12 @@ TEST(Select, GeoSpatial_Basics) {
                                   "WHERE ST_Distance(p, 'LINESTRING(-1 0, 0 1)') < 2.5;",
                                   dt)));
 
+    // SRID mismatch
+    EXPECT_THROW(run_simple_agg("SELECT ST_Distance('POINT(0 0)', "
+                                "ST_Transform(ST_SetSRID(p, 4326), 900913)) "
+                                "FROM geospatial_test limit 1;",
+                                dt),
+                 std::runtime_error);
     // Unsupported aggs
     EXPECT_THROW(run_simple_agg("SELECT MIN(p) FROM geospatial_test;", dt),
                  std::runtime_error);
@@ -14746,15 +14752,16 @@ TEST(Select, GeoSpatial_GeoJoin) {
         static_cast<int64_t>(1),
         v<int64_t>(run_simple_agg(
             "SELECT a.id FROM geospatial_test a INNER JOIN geospatial_inner_join_test "
-            "b ON ST_Contains(b.poly, a.gp4326) WHERE b.id = 2 OFFSET 1;",
+            "b ON ST_Contains(ST_SetSRID(b.poly, 4326), a.gp4326) WHERE b.id = 2 "
+            "OFFSET 1;",
             dt))));
 
-    ASSERT_EQ(
-        static_cast<int64_t>(3),
-        v<int64_t>(run_simple_agg("SELECT count(*) FROM geospatial_test a INNER JOIN "
-                                  "geospatial_inner_join_test b ON ST_Contains(b.poly, "
-                                  "a.gp4326) WHERE b.id = 4;",
-                                  dt)));
+    ASSERT_EQ(static_cast<int64_t>(3),
+              v<int64_t>(run_simple_agg(
+                  "SELECT count(*) FROM geospatial_test a INNER JOIN "
+                  "geospatial_inner_join_test b ON ST_Contains(ST_SetSRID(b.poly, 4326), "
+                  "a.gp4326) WHERE b.id = 4;",
+                  dt)));
   }
 }
 
