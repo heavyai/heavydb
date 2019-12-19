@@ -64,7 +64,6 @@ class ForeignStorageInterface {
                            std::list<ColumnDescriptor>& cols);
   //! ids are created
   static void registerTable(Catalog_Namespace::Catalog* catalog,
-                            const int db_id,
                             const TableDescriptor& td,
                             const std::list<ColumnDescriptor>& cols);
 
