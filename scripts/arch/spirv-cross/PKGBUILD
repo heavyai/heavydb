@@ -9,7 +9,7 @@ url="https://github.com/KhronosGroup/SPIRV-Cross"
 license=('Apache-2.0')
 optdepends=()
 source=("https://github.com/KhronosGroup/$pkgname/archive/$_tag.tar.gz")
-sha256sums=('fba92cd232851bcf014fb12ddcd5be73bbe025ed9ca5f544b89262b1059e46d6')
+sha256sums=('b4e2e50c4514eda7dfbfeb3b80656a5306372e0ce904ba770c52fa903802d178')
 
 build(){
   mkdir build

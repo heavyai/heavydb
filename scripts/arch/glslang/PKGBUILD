@@ -12,7 +12,7 @@ depends=('gcc-libs' 'spirv-tools' 'python')
 makedepends=('cmake' 'ninja')
 options=('staticlibs')
 source=(${pkgname}-${pkgver}.tar.gz::https://github.com/KhronosGroup/glslang/archive/${pkgver}.tar.gz)
-sha256sums=('4d238000162029f791cfcd65a28f10defa574516b94d9392695d27c8a1ce8b62')
+sha256sums=('4ecce011b73dd7196a5114f66776d5a4c4c3674fc9bc6f39ad3c1ee15a8abbe1')
 
 build() {
   cd ${pkgname}-${pkgver}
