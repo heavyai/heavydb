@@ -1194,7 +1194,6 @@ static bool parseUserMetadataFromSQLite(const std::unique_ptr<SqliteConnector>& 
 }
 
 bool SysCatalog::getMetadataForUser(const string& name, UserMetadata& user) {
-  LOG(INFO) << "getMetadataForUser " << name;
   sys_sqlite_lock sqlite_lock(this);
   sqliteConnector_->query_with_text_param(
       "SELECT userid, name, passwd_hash, issuper, default_db, can_login FROM mapd_users "
@@ -2185,11 +2184,15 @@ void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
                                             std::vector<std::string> idp_roles,
                                             bool* is_super) {
   UserMetadata user_meta;
+  bool is_super_user = is_super ? *is_super : false;
   if (!getMetadataForUser(user_name, user_meta)) {
-    createUser(
-        user_name, generate_random_string(72), is_super ? *is_super : false, "", true);
-  } else if (is_super && *is_super != user_meta.isSuper) {
+    createUser(user_name, generate_random_string(72), is_super_user, "", true);
+    LOG(INFO) << "User " << user_name << " has been created by remote identity provider"
+              << " with IS_SUPER = " << (is_super_user ? "'TRUE'" : "'FALSE'");
+  } else if (is_super && is_super_user != user_meta.isSuper) {
     alterUser(user_meta.userId, nullptr, is_super, nullptr, nullptr);
+    LOG(INFO) << "IS_SUPER for user " << user_name << " has been changed to "
+              << (is_super_user ? "TRUE" : "FALSE") << " by remote identity provider";
   }
   std::vector<std::string> current_roles = {};
   auto* user_rl = getUserGrantee(user_name);
@@ -2199,27 +2202,41 @@ void SysCatalog::syncUserWithRemoteProvider(const std::string& user_name,
   std::transform(
       current_roles.begin(), current_roles.end(), current_roles.begin(), to_upper);
   std::transform(idp_roles.begin(), idp_roles.end(), idp_roles.begin(), to_upper);
+  std::list<std::string> roles_revoked, roles_granted;
   // first remove obsolete ones
   for (auto& current_role_name : current_roles) {
     if (std::find(idp_roles.begin(), idp_roles.end(), current_role_name) ==
         idp_roles.end()) {
       revokeRole(current_role_name, user_name);
+      roles_revoked.push_back(current_role_name);
     }
   }
-  // now re-add them
-  std::stringstream ss;
-  ss << "Roles synchronized for user " << user_name << ": ";
   for (auto& role_name : idp_roles) {
-    auto* rl = getRoleGrantee(role_name);
-    if (rl) {
-      grantRole(role_name, user_name);
-      ss << role_name << " ";
-    } else {
-      LOG(WARNING) << "Error synchronizing roles for user " << user_name << ": role "
-                   << role_name << " does not exist.";
+    if (std::find(current_roles.begin(), current_roles.end(), role_name) ==
+        current_roles.end()) {
+      auto* rl = getRoleGrantee(role_name);
+      if (rl) {
+        grantRole(role_name, user_name);
+        roles_granted.push_back(role_name);
+      } else {
+        LOG(WARNING) << "Error synchronizing roles for user " << user_name << ": role "
+                     << role_name << " does not exist";
+      }
     }
   }
-  LOG(INFO) << ss.str();
+  if (roles_granted.empty() && roles_revoked.empty()) {
+    LOG(INFO) << "Roles for user " << user_name
+              << " are up to date with remote identity provider";
+  } else {
+    if (!roles_revoked.empty()) {
+      LOG(INFO) << "Roles revoked during synchronization with identity provider for user "
+                << user_name << ": " << join(roles_revoked, " ");
+    }
+    if (!roles_granted.empty()) {
+      LOG(INFO) << "Roles granted during synchronization with identity provider for user "
+                << user_name << ": " << join(roles_granted, " ");
+    }
+  }
 }
 
 std::unordered_map<std::string, std::vector<std::string>>
