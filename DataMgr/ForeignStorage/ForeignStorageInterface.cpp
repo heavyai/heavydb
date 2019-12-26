@@ -300,11 +300,6 @@ void ForeignStorageInterface::registerPersistentStorageInterface(
 std::pair<std::string, std::string> parseStorageType(const std::string& type) {
   size_t sep = type.find_first_of(':'), sep2 = sep != std::string::npos ? sep + 1 : sep;
   auto res = std::make_pair(type.substr(0, sep), type.substr(sep2));
-  auto& type_info = res.second;
-  std::transform(
-      type_info.begin(), type_info.end(), type_info.begin(), [](unsigned char c) {
-        return std::tolower(c);
-      });  // TODO: get original unmodified case
   return res;
 }
 
