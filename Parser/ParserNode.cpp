@@ -2066,8 +2066,9 @@ decltype(auto) get_property_value(const NameValueAssign* p,
 decltype(auto) get_storage_type(TableDescriptor& td,
                                 const NameValueAssign* p,
                                 const std::list<ColumnDescriptor>& columns) {
-  return get_property_value<StringLiteral>(
-      p, [&td](const auto val) { td.storageType = to_upper(val); });
+  auto assignment = [&td](const auto val) { td.storageType = val; };
+  return get_property_value<StringLiteral, decltype(assignment), CaseSensitiveValidate>(
+      p, assignment);
 }
 
 decltype(auto) get_frag_size_def(TableDescriptor& td,

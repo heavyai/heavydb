@@ -50,6 +50,7 @@ add_executable(UtilTest UtilTest.cpp)
 add_executable(StorageTest StorageTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 add_executable(StoragePerfTest StoragePerfTest.cpp PopulateTableRandom.cpp ScanTable.cpp)
 add_executable(ImportTest ImportTest.cpp)
+add_executable(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest.cpp)
 add_executable(AlterColumnTest AlterColumnTest.cpp)
 add_executable(UpdelStorageTest UpdelStorageTest.cpp)
 add_executable(ComputeMetadataTest ComputeMetadataTest.cpp)
@@ -100,6 +101,7 @@ target_link_libraries(CodeGeneratorTest ${EXECUTE_TEST_LIBS} CsvImport QueryRunn
 target_link_libraries(ExecuteTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(RunQueryLoop ${EXECUTE_TEST_LIBS} bcrypt)
 target_link_libraries(ImportTest gtest ${EXECUTE_TEST_LIBS})
+target_link_libraries(ArrowCsvForeignStorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(AlterColumnTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(PlanTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UpdelStorageTest gtest ${EXECUTE_TEST_LIBS})
@@ -134,6 +136,7 @@ add_test(DumpRestoreTest DumpRestoreTest ${TEST_ARGS})
 add_test(PlanTest PlanTest ${TEST_ARGS})
 add_test(UpdelStorageTest UpdelStorageTest ${TEST_ARGS})
 add_test(ImportTest ImportTest ${TEST_ARGS})
+add_test(ArrowCsvForeignStorageTest ArrowCsvForeignStorageTest ${TEST_ARGS})
 add_test(AlterColumnTest AlterColumnTest ${TEST_ARGS})
 add_test(UtilTest UtilTest ${TEST_ARGS})
 add_test(ExecuteTest ExecuteTest ${TEST_ARGS})
@@ -195,6 +198,7 @@ set(TEST_PROGRAMS
   ResultSetBaselineRadixSortTest
   StorageTest
   ImportTest
+  ArrowCsvForeignStorageTest
   AlterColumnTest
   UpdelStorageTest
   ComputeMetadataTest

@@ -2055,6 +2055,15 @@ struct DefaultValidate<StringLiteral> {
   }
 };
 
+struct CaseSensitiveValidate {
+  template <typename T>
+  decltype(auto) operator()(T t) {
+    const auto val = static_cast<const StringLiteral*>(t->get_value())->get_stringval();
+    CHECK(val);
+    return *val;
+  }
+};
+
 template <typename T>
 struct ShouldInvalidateSessionsByDB : public std::false_type {};
 template <typename T>
