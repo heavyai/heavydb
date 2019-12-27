@@ -2544,10 +2544,12 @@ int64_t insert_one_dict_str(T* col_data,
     const auto dd = catalog.getMetadataForDict(dict_id);
     CHECK(dd && dd->stringDict);
     int32_t str_id = dd->stringDict->getOrAdd(str);
-    const bool checkpoint_ok = dd->stringDict->checkpoint();
-    if (!checkpoint_ok) {
-      throw std::runtime_error("Failed to checkpoint dictionary for column " +
-                               columnName);
+    if (!dd->dictIsTemp) {
+      const auto checkpoint_ok = dd->stringDict->checkpoint();
+      if (!checkpoint_ok) {
+        throw std::runtime_error("Failed to checkpoint dictionary for column " +
+                                 columnName);
+      }
     }
     const bool invalid = str_id > max_valid_int_value<T>();
     if (invalid || str_id == inline_int_null_value<int32_t>()) {
