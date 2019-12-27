@@ -82,9 +82,7 @@ public class tester {
       MapDParserOptions mdpo = new MapDParserOptions();
       MAPDLOGGER.error("MapDParser result: \n"
               + mp.getRelAlgebra(
-                      "select * from customer where c_custkey = 1.345000 limit 5",
-                      mdpo,
-                      mdu));
+                      "select * from customer where c_custkey = 1.345000 limit 5", mdpo));
     } catch (SqlParseException ex) {
       Logger.getLogger(tester.class.getName()).log(Level.SEVERE, null, ex);
     } catch (ValidationException ex) {

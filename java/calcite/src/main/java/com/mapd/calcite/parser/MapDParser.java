@@ -191,8 +191,7 @@ public final class MapDParser {
               new MapDParser(dataDir, extSigs, mapdPort, sock_transport_properties);
       MapDParserOptions options = new MapDParserOptions();
       parser.setUser(mapdUser);
-      parser.getRelAlgebra(
-              expression.toSqlString(SqlDialect.CALCITE).getSql(), options, mapdUser);
+      parser.getRelAlgebra(expression.toSqlString(SqlDialect.CALCITE).getSql(), options);
     } catch (Exception e) {
       // if we are not able to parse, then assume correlated
       return true;
@@ -327,8 +326,7 @@ public final class MapDParser {
     this.mapdUser = mapdUser;
   }
 
-  public String getRelAlgebra(
-          String sql, final MapDParserOptions parserOptions, final MapDUser mapDUser)
+  public String getRelAlgebra(String sql, final MapDParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
     final RelRoot sqlRel = queryToSqlNode(sql, parserOptions);

@@ -169,7 +169,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
       try {
         MapDParserOptions parserOptions = new MapDParserOptions(
                 filterPushDownInfo, legacySyntax, isExplain, isViewOptimize);
-        relAlgebra = parser.getRelAlgebra(sqlText, parserOptions, mapDUser);
+        relAlgebra = parser.getRelAlgebra(sqlText, parserOptions);
       } catch (ValidationException ex) {
         String msg = "Validation: " + ex.getMessage();
         MAPDLOGGER.error(msg);
