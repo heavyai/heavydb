@@ -26,6 +26,7 @@
 #include "QueryRewrite.h"
 #include "SpeculativeTopN.h"
 #include "StreamingTopN.h"
+#include "ThriftHandler/QueryState.h"
 
 #include <ctime>
 #include <sstream>
@@ -53,10 +54,13 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
  public:
   using TargetInfoList = std::vector<TargetInfo>;
 
-  RelAlgExecutor(Executor* executor, const Catalog_Namespace::Catalog& cat)
+  RelAlgExecutor(Executor* executor,
+                 const Catalog_Namespace::Catalog& cat,
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr)
       : StorageIOFacility(executor, cat)
       , executor_(executor)
       , cat_(cat)
+      , query_state_(query_state)
       , now_(0)
       , queue_time_ms_(0) {}
 
@@ -330,6 +334,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
 
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;
+  std::shared_ptr<const query_state::QueryState> query_state_;
   TemporaryTables temporary_tables_;
   time_t now_;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove

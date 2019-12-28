@@ -147,7 +147,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& que
       continue;
     }
     // Execute the subquery and cache the result.
-    RelAlgExecutor ra_executor(executor_, cat_);
+    RelAlgExecutor ra_executor(executor_, cat_, query_state_);
     RaExecutionSequence subquery_seq(subquery_ra);
     auto result = ra_executor.executeRelAlgSeq(subquery_seq, co, eo, nullptr, 0);
     subquery->setExecutionResult(std::make_shared<ExecutionResult>(result));
@@ -1772,17 +1772,19 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
   sort->setOutputMetainfo(source->getOutputMetainfo());
   // NB: the `body` field of the returned `WorkUnit` needs to be the `source` node,
   // not the `sort`. The aggregator needs the pre-sorted result from leaves.
-  return {{source_exe_unit.input_descs,
-           std::move(source_exe_unit.input_col_descs),
-           source_exe_unit.simple_quals,
-           source_exe_unit.quals,
-           source_exe_unit.join_quals,
-           source_exe_unit.groupby_exprs,
-           source_exe_unit.target_exprs,
-           nullptr,
-           {sort_info.order_entries, sort_algorithm, limit, offset},
-           scan_total_limit,
-           source_exe_unit.query_features},
+  return {RelAlgExecutionUnit{source_exe_unit.input_descs,
+                              std::move(source_exe_unit.input_col_descs),
+                              source_exe_unit.simple_quals,
+                              source_exe_unit.quals,
+                              source_exe_unit.join_quals,
+                              source_exe_unit.groupby_exprs,
+                              source_exe_unit.target_exprs,
+                              nullptr,
+                              {sort_info.order_entries, sort_algorithm, limit, offset},
+                              scan_total_limit,
+                              source_exe_unit.query_features,
+                              source_exe_unit.use_bump_allocator,
+                              source_exe_unit.query_state},
           source,
           max_groups_buffer_entry_guess,
           std::move(source_work_unit.query_rewriter),
@@ -2593,7 +2595,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
                                         sort_info,
                                         0,
                                         query_features,
-                                        false};
+                                        false,
+                                        query_state_};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta =
@@ -2669,7 +2672,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                                         sort_info,
                                         0,
                                         query_features,
-                                        false};
+                                        false,
+                                        query_state_};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(compound, rewritten_exe_unit.target_exprs);
@@ -2908,18 +2912,19 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
       target_exprs_owned_, scalar_sources, groupby_exprs, aggregate, translator);
   const auto targets_meta = get_targets_meta(aggregate, target_exprs);
   aggregate->setOutputMetainfo(targets_meta);
-  return {{input_descs,
-           input_col_descs,
-           {},
-           {},
-           {},
-           groupby_exprs,
-           target_exprs,
-           nullptr,
-           sort_info,
-           0,
-           query_features,
-           false},
+  return {RelAlgExecutionUnit{input_descs,
+                              input_col_descs,
+                              {},
+                              {},
+                              {},
+                              groupby_exprs,
+                              target_exprs,
+                              nullptr,
+                              sort_info,
+                              0,
+                              query_features,
+                              false,
+                              query_state_},
           aggregate,
           max_groups_buffer_entry_default_guess,
           nullptr};
@@ -2989,18 +2994,19 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
   const auto targets_meta =
       get_modify_manipulated_targets_meta(project, filtered_target_exprs);
   project->setOutputMetainfo(targets_meta);
-  return {{input_descs,
-           filtered_input_col_descs,
-           {},
-           {},
-           left_deep_join_quals,
-           {nullptr},
-           filtered_target_exprs,
-           nullptr,
-           sort_info,
-           0,
-           query_features,
-           false},
+  return {RelAlgExecutionUnit{input_descs,
+                              filtered_input_col_descs,
+                              {},
+                              {},
+                              left_deep_join_quals,
+                              {nullptr},
+                              filtered_target_exprs,
+                              nullptr,
+                              sort_info,
+                              0,
+                              query_features,
+                              false,
+                              query_state_},
           project,
           max_groups_buffer_entry_default_guess,
           nullptr};
@@ -3067,7 +3073,8 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
                                         sort_info,
                                         0,
                                         query_features,
-                                        false};
+                                        false,
+                                        query_state_};
   auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
   const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
   const auto targets_meta = get_targets_meta(project, rewritten_exe_unit.target_exprs);

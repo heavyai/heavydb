@@ -29,6 +29,7 @@
 #include "../Shared/sqldefs.h"
 #include "Descriptors/InputDescriptors.h"
 #include "QueryFeatures.h"
+#include "ThriftHandler/QueryState.h"
 
 #include <list>
 #include <memory>
@@ -71,6 +72,7 @@ struct RelAlgExecutionUnit {
   size_t scan_limit;
   QueryFeatureDescriptor query_features;
   bool use_bump_allocator{false};
+  std::shared_ptr<const query_state::QueryState> query_state;
 };
 
 struct TableFunctionExecutionUnit {

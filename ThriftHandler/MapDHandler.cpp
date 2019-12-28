@@ -1001,6 +1001,7 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
       }
       execute_rel_alg_df(_return,
                          query_ra,
+                         query_state->createQueryStateProxy(),
                          *session_ptr,
                          device_type == TDeviceType::CPU ? ExecutorDeviceType::CPU
                                                          : ExecutorDeviceType::GPU,
@@ -4515,7 +4516,8 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                                         jit_debug_ ? "mapdquery" : "",
                                         mapd_parameters_,
                                         nullptr);
-  RelAlgExecutor ra_executor(executor.get(), cat);
+  RelAlgExecutor ra_executor(
+      executor.get(), cat, query_state_proxy.getQueryState().shared_from_this());
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
@@ -4546,6 +4548,7 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
 
 void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                      const std::string& query_ra,
+                                     QueryStateProxy query_state_proxy,
                                      const Catalog_Namespace::SessionInfo& session_info,
                                      const ExecutorDeviceType device_type,
                                      const size_t device_id,
@@ -4576,7 +4579,8 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                         jit_debug_ ? "mapdquery" : "",
                                         mapd_parameters_,
                                         nullptr);
-  RelAlgExecutor ra_executor(executor.get(), cat);
+  RelAlgExecutor ra_executor(
+      executor.get(), cat, query_state_proxy.getQueryState().shared_from_this());
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),

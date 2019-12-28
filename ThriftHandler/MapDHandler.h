@@ -61,6 +61,7 @@
 #include "Shared/scope.h"
 #include "StringDictionary/StringDictionaryClient.h"
 #include "ThriftHandler/DistributedValidate.h"
+#include "ThriftHandler/QueryState.h"
 
 #include <fcntl.h>
 #include <sys/time.h>
@@ -569,6 +570,7 @@ class MapDHandler : public MapDIf {
 
   void execute_rel_alg_df(TDataFrame& _return,
                           const std::string& query_ra,
+                          QueryStateProxy query_state_proxy,
                           const Catalog_Namespace::SessionInfo& session_info,
                           const ExecutorDeviceType device_type,
                           const size_t device_id,
