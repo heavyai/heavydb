@@ -21,31 +21,37 @@
  *
  * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
  **/
+
+#include "Catalog.h"
+#include "SysCatalog.h"
+
 #include <sys/wait.h>
 
 #include <algorithm>
+#include <boost/algorithm/string/predicate.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/range/adaptor/map.hpp>
+#include <boost/version.hpp>
 #include <cassert>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <exception>
+#include <fstream>
 #include <list>
 #include <memory>
 #include <random>
 #include <regex>
 #include <sstream>
-#include "Catalog.h"
-#include "SysCatalog.h"
-
-#include <boost/algorithm/string/predicate.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/range/adaptor/map.hpp>
-#include <boost/version.hpp>
 #if BOOST_VERSION >= 106600
 #include <boost/uuid/detail/sha1.hpp>
 #else
 #include <boost/uuid/sha1.hpp>
 #endif
+#include <rapidjson/document.h>
+#include <rapidjson/istreamwrapper.h>
+#include <rapidjson/ostreamwrapper.h>
+#include <rapidjson/writer.h>
 
 #include "../Fragmenter/Fragmenter.h"
 #include "../Fragmenter/SortedOrderFragmenter.h"
@@ -71,8 +77,12 @@ using std::runtime_error;
 using std::string;
 using std::vector;
 
-int g_test_against_columnId_gap = 0;
+int g_test_against_columnId_gap{0};
 extern bool g_cache_string_hash;
+
+// Serialize temp tables to a json file in the Catalogs directory for Calcite parsing
+// under unit testing.
+bool g_serialize_temp_tables{false};
 
 namespace Catalog_Namespace {
 
@@ -126,6 +136,16 @@ void Catalog::updateFrontendViewsToDashboards() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
+namespace {
+
+inline auto table_json_filepath(const std::string& base_path,
+                                const std::string& db_name) {
+  return boost::filesystem::path(base_path + "/mapd_catalogs/" + db_name +
+                                 "_temp_tables.json");
+}
+
+}  // namespace
+
 Catalog::Catalog(const string& basePath,
                  const DBMetadata& curDB,
                  std::shared_ptr<Data_Namespace::DataMgr> dataMgr,
@@ -151,6 +171,9 @@ Catalog::Catalog(const string& basePath,
   if (!is_new_db) {
     CheckAndExecuteMigrationsPostBuildMaps();
   }
+  if (g_serialize_temp_tables) {
+    boost::filesystem::remove(table_json_filepath(basePath_, currentDB_.dbName));
+  }
 }
 
 Catalog::~Catalog() {
@@ -174,6 +197,10 @@ Catalog::~Catalog() {
   }
 
   // ColumnDescriptorMapById points to the same descriptors.  No need to delete
+
+  if (g_serialize_temp_tables) {
+    boost::filesystem::remove(table_json_filepath(basePath_, currentDB_.dbName));
+  }
 }
 
 void Catalog::updateTableDescriptorSchema() {
@@ -2109,8 +2136,12 @@ void Catalog::createTable(
       td.columnIdBySpi_.push_back(cd.columnId);
       cds.push_back(cd);
     }
+
+    if (g_serialize_temp_tables) {
+      serializeTableJsonUnlocked(&td, cds);
+    }
   }
-  
+
   try {
     addTableToMap(td, cds, dds);
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
@@ -2121,6 +2152,100 @@ void Catalog::createTable(
   }
 
   sqliteConnector_.query("END TRANSACTION");
+}
+
+void Catalog::serializeTableJsonUnlocked(const TableDescriptor* td,
+                                         const std::list<ColumnDescriptor>& cds) const {
+  // relies on the catalog write lock
+  using namespace rapidjson;
+
+  VLOG(1) << "Serializing temporary table " << td->tableName << " to JSON for Calcite.";
+
+  const auto db_name = currentDB_.dbName;
+  const auto file_path = table_json_filepath(basePath_, db_name);
+
+  Document d;
+  if (boost::filesystem::exists(file_path)) {
+    // look for an existing file for this database
+    std::ifstream reader(file_path.string());
+    CHECK(reader.is_open());
+    IStreamWrapper json_read_wrapper(reader);
+    d.ParseStream(json_read_wrapper);
+  } else {
+    d.SetObject();
+  }
+  CHECK(d.IsObject());
+  CHECK(!d.HasMember(StringRef(td->tableName.c_str())));
+
+  Value table(kObjectType);
+  table.AddMember(
+      "name", Value().SetString(StringRef(td->tableName.c_str())), d.GetAllocator());
+  table.AddMember("id", Value().SetInt(td->tableId), d.GetAllocator());
+  table.AddMember("columns", Value(kArrayType), d.GetAllocator());
+
+  for (const auto& cd : cds) {
+    Value column(kObjectType);
+    column.AddMember(
+        "name", Value().SetString(StringRef(cd.columnName)), d.GetAllocator());
+    column.AddMember("coltype",
+                     Value().SetInt(static_cast<int>(cd.columnType.get_type())),
+                     d.GetAllocator());
+    column.AddMember("colsubtype",
+                     Value().SetInt(static_cast<int>(cd.columnType.get_subtype())),
+                     d.GetAllocator());
+    column.AddMember(
+        "coldim", Value().SetInt(cd.columnType.get_dimension()), d.GetAllocator());
+    column.AddMember(
+        "colscale", Value().SetInt(cd.columnType.get_scale()), d.GetAllocator());
+    column.AddMember(
+        "is_notnull", Value().SetBool(cd.columnType.get_notnull()), d.GetAllocator());
+    column.AddMember("is_systemcol", Value().SetBool(cd.isSystemCol), d.GetAllocator());
+    column.AddMember("is_virtualcol", Value().SetBool(cd.isVirtualCol), d.GetAllocator());
+    column.AddMember("is_deletedcol", Value().SetBool(cd.isDeletedCol), d.GetAllocator());
+    table["columns"].PushBack(column, d.GetAllocator());
+  }
+  d.AddMember(StringRef(td->tableName.c_str()), table, d.GetAllocator());
+
+  // Overwrite the existing file
+  std::ofstream writer(file_path.string(), writer.trunc | writer.out);
+  CHECK(writer.is_open());
+  OStreamWrapper json_wrapper(writer);
+
+  Writer<OStreamWrapper> json_writer(json_wrapper);
+  d.Accept(json_writer);
+  writer.close();
+}
+
+void Catalog::dropTableFromJsonUnlocked(const std::string& table_name) const {
+  // relies on the catalog write lock
+  using namespace rapidjson;
+
+  VLOG(1) << "Dropping temporary table " << table_name << " to JSON for Calcite.";
+
+  const auto db_name = currentDB_.dbName;
+  const auto file_path = table_json_filepath(basePath_, db_name);
+
+  CHECK(boost::filesystem::exists(file_path));
+  Document d;
+
+  std::ifstream reader(file_path.string());
+  CHECK(reader.is_open());
+  IStreamWrapper json_read_wrapper(reader);
+  d.ParseStream(json_read_wrapper);
+
+  CHECK(d.IsObject());
+  auto table_name_ref = StringRef(table_name.c_str());
+  CHECK(d.HasMember(table_name_ref));
+  CHECK(d.RemoveMember(table_name_ref));
+
+  // Overwrite the existing file
+  std::ofstream writer(file_path.string(), writer.trunc | writer.out);
+  CHECK(writer.is_open());
+  OStreamWrapper json_wrapper(writer);
+
+  Writer<OStreamWrapper> json_writer(json_wrapper);
+  d.Accept(json_writer);
+  writer.close();
 }
 
 // returns the table epoch or -1 if there is something wrong with the shared epoch
@@ -2586,6 +2711,9 @@ void Catalog::doDropTable(const TableDescriptor* td) {
   if (td->isView) {
     sqliteConnector_.query_with_text_param("DELETE FROM mapd_views WHERE tableid = ?",
                                            std::to_string(tableId));
+  }
+  if (table_is_temporary(td)) {
+    dropTableFromJsonUnlocked(td->tableName);
   }
   eraseTablePhysicalData(td);
 }

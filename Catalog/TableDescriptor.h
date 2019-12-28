@@ -85,4 +85,8 @@ inline bool compare_td_id(const TableDescriptor* first, const TableDescriptor* s
   return (first->tableId < second->tableId);
 }
 
+inline bool table_is_temporary(const TableDescriptor* td) {
+  return td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
+}
+
 #endif  // TABLE_DESCRIPTOR

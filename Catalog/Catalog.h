@@ -314,6 +314,10 @@ class Catalog final {
 
   const int getColumnIdBySpiUnlocked(const int table_id, const size_t spi) const;
 
+  void serializeTableJsonUnlocked(const TableDescriptor* td,
+                                  const std::list<ColumnDescriptor>& cds) const;
+  void dropTableFromJsonUnlocked(const std::string& table_name) const;
+
   std::string basePath_;
   TableDescriptorMap tableDescriptorMap_;
   TableDescriptorMapById tableDescriptorMapById_;

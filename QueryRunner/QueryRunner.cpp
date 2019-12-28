@@ -43,6 +43,8 @@ extern bool g_enable_filter_push_down;
 
 double g_gpu_mem_limit_percent{0.9};
 
+extern bool g_serialize_temp_tables;
+
 using namespace Catalog_Namespace;
 namespace {
 
@@ -123,6 +125,8 @@ QueryRunner::QueryRunner(const char* db_path,
                          const int reserved_gpu_mem,
                          const bool create_user,
                          const bool create_db) {
+  g_serialize_temp_tables = true;
+
   boost::filesystem::path base_path{db_path};
   CHECK(boost::filesystem::exists(base_path));
   auto system_db_file = base_path / "mapd_catalogs" / OMNISCI_DEFAULT_DB;
