@@ -277,7 +277,8 @@ class Catalog final {
                      const std::list<ColumnDescriptor>& columns,
                      const std::list<DictDescriptor>& dicts);
   void addReferenceToForeignDict(ColumnDescriptor& referencing_column,
-                                 Parser::SharedDictionaryDef shared_dict_def);
+                                 Parser::SharedDictionaryDef shared_dict_def,
+                                 const bool persist_reference);
   bool setColumnSharedDictionary(
       ColumnDescriptor& cd,
       std::list<ColumnDescriptor>& cdd,

@@ -2113,23 +2113,28 @@ void Catalog::createTable(
       }
 
       if (cd.columnType.get_compression() == kENCODING_DICT) {
-        // TODO(vraj) : create shared dictionary for temp table if needed
-        std::string fileName("");
-        std::string folderPath("");
-        DictRef dict_ref(currentDB_.dbId, nextTempDictId_);
-        nextTempDictId_++;
-        DictDescriptor dd(dict_ref,
-                          fileName,
-                          cd.columnType.get_comp_param(),
-                          false,
-                          1,
-                          folderPath,
-                          true);  // Is dictName (2nd argument) used?
-        dds.push_back(dd);
-        if (!cd.columnType.is_array()) {
-          cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
+        const bool is_foreign_col =
+            setColumnSharedDictionary(cd, cds, dds, td, shared_dict_defs);
+
+        if (!is_foreign_col) {
+          // Create a new temporary dictionary
+          std::string fileName("");
+          std::string folderPath("");
+          DictRef dict_ref(currentDB_.dbId, nextTempDictId_);
+          nextTempDictId_++;
+          DictDescriptor dd(dict_ref,
+                            fileName,
+                            cd.columnType.get_comp_param(),
+                            false,
+                            1,
+                            folderPath,
+                            true);  // Is dictName (2nd argument) used?
+          dds.push_back(dd);
+          if (!cd.columnType.is_array()) {
+            cd.columnType.set_size(cd.columnType.get_comp_param() / 8);
+          }
+          cd.columnType.set_comp_param(dict_ref.dictId);
         }
-        cd.columnType.set_comp_param(dict_ref.dictId);
       }
       cd.tableId = td.tableId;
       cd.columnId = colId++;
@@ -2389,7 +2394,8 @@ const ColumnDescriptor* get_foreign_col(
 }  // namespace
 
 void Catalog::addReferenceToForeignDict(ColumnDescriptor& referencing_column,
-                                        Parser::SharedDictionaryDef shared_dict_def) {
+                                        Parser::SharedDictionaryDef shared_dict_def,
+                                        const bool persist_reference) {
   cat_write_lock write_lock(this);
   const auto foreign_ref_col = get_foreign_col(*this, shared_dict_def);
   CHECK(foreign_ref_col);
@@ -2401,10 +2407,12 @@ void Catalog::addReferenceToForeignDict(ColumnDescriptor& referencing_column,
   const auto& dd = dictIt->second;
   CHECK_GE(dd->refcount, 1);
   ++dd->refcount;
-  cat_sqlite_lock sqlite_lock(this);
-  sqliteConnector_.query_with_text_params(
-      "UPDATE mapd_dictionaries SET refcount = refcount + 1 WHERE dictid = ?",
-      {std::to_string(dict_id)});
+  if (persist_reference) {
+    cat_sqlite_lock sqlite_lock(this);
+    sqliteConnector_.query_with_text_params(
+        "UPDATE mapd_dictionaries SET refcount = refcount + 1 WHERE dictid = ?",
+        {std::to_string(dict_id)});
+  }
 }
 
 bool Catalog::setColumnSharedDictionary(
@@ -2433,15 +2441,8 @@ bool Catalog::setColumnSharedDictionary(
         CHECK(colIt != cdd.end());
         cd.columnType = colIt->columnType;
 
-        sqliteConnector_.query_with_text_params(
-            "SELECT dictid FROM mapd_dictionaries WHERE dictid in (select comp_param "
-            "from "
-            "mapd_columns "
-            "where compression = ? and tableid = ? and columnid = ?)",
-            std::vector<std::string>{std::to_string(kENCODING_DICT),
-                                     std::to_string(td.tableId),
-                                     std::to_string(colIt->columnId)});
-        const auto dict_id = sqliteConnector_.getData<int>(0, 0);
+        const int dict_id = colIt->columnType.get_comp_param();
+        CHECK_GE(dict_id, 1);
         auto dictIt = std::find_if(
             dds.begin(), dds.end(), [this, dict_id](const DictDescriptor it) {
               return it.dictRef.dbId == this->currentDB_.dbId &&
@@ -2451,17 +2452,31 @@ bool Catalog::setColumnSharedDictionary(
           // There exists dictionary definition of a dictionary column
           CHECK_GE(dictIt->refcount, 1);
           ++dictIt->refcount;
-          sqliteConnector_.query_with_text_params(
-              "UPDATE mapd_dictionaries SET refcount = refcount + 1 WHERE dictid = ?",
-              {std::to_string(dict_id)});
+          if (!table_is_temporary(&td)) {
+            // Persist reference count
+            sqliteConnector_.query_with_text_params(
+                "UPDATE mapd_dictionaries SET refcount = refcount + 1 WHERE dictid = ?",
+                {std::to_string(dict_id)});
+          }
         } else {
           // The dictionary is referencing a column which is referencing a column in
           // diffrent table
           auto root_dict_def = compress_reference_path(shared_dict_def, shared_dict_defs);
-          addReferenceToForeignDict(cd, root_dict_def);
+          addReferenceToForeignDict(cd, root_dict_def, !table_is_temporary(&td));
         }
       } else {
-        addReferenceToForeignDict(cd, shared_dict_def);
+        const auto& foreign_table_name = shared_dict_def.get_foreign_table();
+        const auto foreign_td = getMetadataForTable(foreign_table_name, false);
+        if (table_is_temporary(foreign_td)) {
+          if (!table_is_temporary(&td)) {
+            throw std::runtime_error(
+                "Only temporary tables can share dictionaries with other temporary "
+                "tables.");
+          }
+          addReferenceToForeignDict(cd, shared_dict_def, false);
+        } else {
+          addReferenceToForeignDict(cd, shared_dict_def, !table_is_temporary(&td));
+        }
       }
       return true;
     }
