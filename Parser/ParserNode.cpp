@@ -2233,7 +2233,6 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   TableDescriptor td;
   std::list<ColumnDescriptor> columns;
-  std::unordered_set<std::string> uc_col_names;
   std::vector<SharedDictionaryDef> shared_dict_defs;
 
   executeDryRun(session, td, columns, shared_dict_defs);
