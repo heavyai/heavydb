@@ -69,6 +69,7 @@ class DefaultIOFacet {
                             COLUMN_TYPE_INFO const& col_type_info,
                             TransactionLog& transaction_tracker) {
     auto const* table_descriptor = cat.getMetadataForTable(table_id);
+    CHECK(!table_is_temporary(table_descriptor));
     auto* fragmenter = table_descriptor->fragmenter;
     CHECK(fragmenter);
 
@@ -156,7 +157,11 @@ class StorageIOFacility {
         : table_descriptor_(table_desc)
         , update_column_names_(update_column_names)
         , targets_meta_(target_types)
-        , varlen_update_required_(varlen_update_required){};
+        , varlen_update_required_(varlen_update_required) {
+      if (table_is_temporary(table_descriptor_)) {
+        throw std::runtime_error("UPDATE not yet supported on temporary tables.");
+      }
+    };
 
     auto getUpdateColumnCount() const { return update_column_names_.size(); }
     auto const* getTableDescriptor() const { return table_descriptor_; }

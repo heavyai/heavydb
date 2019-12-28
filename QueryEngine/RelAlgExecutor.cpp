@@ -1226,6 +1226,9 @@ void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
     throw std::runtime_error(
         "DELETE only supported on tables with the vacuum attribute set to 'delayed'");
   }
+  if (table_is_temporary(table_descriptor)) {
+    throw std::runtime_error("DELETE not yet supported on temporary tables.");
+  }
 
   const auto work_unit = createModifyCompoundWorkUnit(
       compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
@@ -1262,6 +1265,9 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
   if (!table_descriptor->hasDeletedCol) {
     throw std::runtime_error(
         "DELETE only supported on tables with the vacuum attribute set to 'delayed'");
+  }
+  if (table_is_temporary(table_descriptor)) {
+    throw std::runtime_error("DELETE not yet supported on temporary tables.");
   }
 
   auto work_unit = createModifyProjectWorkUnit(
