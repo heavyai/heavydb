@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2019 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,59 +18,61 @@
  * File:   MapDRenderHandler.h
  * Author: Chris Root
  *
- * Created on Nov 6, 2017, 10:00 AM
+ * Created on Dec 18, 2019, 10:00 AM
  */
 
-#ifndef MAPDRENDERHANDLER_H_
-#define MAPDRENDERHANDLER_H_
+#pragma once
 
-#include "../MapDHandler.h"
 #include "Shared/MapDParameters.h"
+#include "gen-cpp/MapD.h"
+
+class MapDHandler;
+
+namespace Catalog_Namespace {
+class SessionInfo;
+}
+
+namespace QueryRenderer {
+class QueryRenderManager;
+}  // namespace QueryRenderer
+
+namespace Parser {
+class DDLStmt;
+}
 
 class MapDRenderHandler {
  public:
-  ~MapDRenderHandler() {}
+  // forward declaration of the implementation class to be defined later.
+  // This is public as there can be certain functionality at lower levels that may want to
+  // work directly with the implementation layer.
+  class Impl;
+
+  explicit MapDRenderHandler(MapDHandler* mapd_handler,
+                             const size_t render_mem_bytes,
+                             const size_t render_poly_cache_bytes,
+                             const bool enable_auto_clear_render_mem,
+                             const int render_oom_retry_threshold,
+                             const MapDParameters mapd_parameters);
+  ~MapDRenderHandler();
 
  private:
-  MapDRenderHandler(MapDHandler* mapd_handler,
-                    const size_t render_mem_bytes,
-                    const int num_gpus,
-                    const int start_gpu,
-                    const MapDParameters mapd_parameters) {
-    throw std::runtime_error(
-        "Rendering is only supported in the Enterprise and Community Editions");
-  }
-
-  void disconnect(const TSessionId& session) {}
-
+  void disconnect(const TSessionId& session);
   void render_vega(TRenderResult& _return,
                    const std::shared_ptr<Catalog_Namespace::SessionInfo> session_info,
                    const int64_t widget_id,
                    const std::string& vega_json,
                    const int32_t compression_level,
-                   const std::string& nonce) {
-    CHECK(false);
-  }
+                   const std::string& nonce);
 
   void start_render_query(TPendingRenderQuery& _return,
                           const TSessionId& session,
                           const int64_t widget_id,
                           const int16_t node_idx,
-                          const std::string& vega_json) {
-    CHECK(false);
-  }
+                          const std::string& vega_json);
 
   void execute_next_render_step(TRenderStepResult& _return,
                                 const TPendingRenderQuery& pending_render,
-                                const TRenderAggDataMap& merged_data) {
-    CHECK(false);
-  }
-
-  static std::string dump_table_col_names(
-      const std::map<std::string, std::vector<std::string>>& table_col_names) {
-    CHECK(false);
-    return "";
-  }
+                                const TRenderAggDataMap& merged_data);
 
   void get_result_row_for_pixel(
       TPixelTableRowResult& _return,
@@ -80,22 +82,17 @@ class MapDRenderHandler {
       const std::map<std::string, std::vector<std::string>>& table_col_names,
       const bool column_format,
       const int32_t pixelRadius,
-      const std::string& nonce) {
-    CHECK(false);
-  }
+      const std::string& nonce);
 
-  void clear_gpu_memory() { CHECK(false); }
-  void clear_cpu_memory() { CHECK(false); }
+  void clear_gpu_memory();
+  void clear_cpu_memory();
 
-  ::QueryRenderer::QueryRenderManager* get_render_manager() {
-    CHECK(false);
-    return nullptr;
-  }
+  QueryRenderer::QueryRenderManager* get_render_manager();
 
-  void handle_ddl(Parser::DDLStmt*) { CHECK(false); }
-  void shutdown() { CHECK(false); }
+  void handle_ddl(Parser::DDLStmt*);
+  void shutdown();
+
+  std::unique_ptr<Impl> impl_;
 
   friend class MapDHandler;
 };
-
-#endif /* MAPDRENDERHANDLER_H_ */

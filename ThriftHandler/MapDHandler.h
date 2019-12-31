@@ -61,6 +61,7 @@
 #include "Shared/scope.h"
 #include "StringDictionary/StringDictionaryClient.h"
 #include "ThriftHandler/DistributedValidate.h"
+#include "ThriftHandler/MapDRenderHandler.h"
 #include "ThriftHandler/QueryState.h"
 
 #include <fcntl.h>
@@ -98,7 +99,6 @@
 
 using namespace std::string_literals;
 
-class MapDRenderHandler;
 class MapDAggHandler;
 class MapDLeafHandler;
 
@@ -703,7 +703,7 @@ class MapDHandler : public MapDIf {
                                  std::string base_path,
                                  std::string query_file_path);
 
-  friend class MapDRenderHandler;
+  friend class MapDRenderHandler::Impl;
   friend class MapDAggHandler;
   friend class MapDLeafHandler;
 

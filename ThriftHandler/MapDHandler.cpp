@@ -43,7 +43,6 @@
 #include "Import/Importer.h"
 #include "LockMgr/TableLockMgr.h"
 #include "MapDDistributedHandler.h"
-#include "MapDRenderHandler.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/ReservedKeywords.h"
 #include "Parser/parser.h"
@@ -318,8 +317,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
 
   if (is_rendering_enabled) {
     try {
-      render_handler_.reset(new MapDRenderHandler(
-          this, render_mem_bytes, num_gpus, start_gpu, mapd_parameters_));
+      render_handler_.reset(
+          new MapDRenderHandler(this, render_mem_bytes, 0u, false, 0, mapd_parameters_));
     } catch (const std::exception& e) {
       LOG(ERROR) << "Backend rendering disabled: " << e.what();
     }
@@ -1666,6 +1665,20 @@ void MapDHandler::get_all_roles_for_user(std::vector<std::string>& roles,
   }
 }
 
+namespace {
+std::string dump_table_col_names(
+    const std::map<std::string, std::vector<std::string>>& table_col_names) {
+  std::ostringstream oss;
+  for (const auto& [table_name, col_names] : table_col_names) {
+    oss << ":" << table_name;
+    for (const auto& col_name : col_names) {
+      oss << "," << col_name;
+    }
+  }
+  return oss.str();
+}
+}  // namespace
+
 void MapDHandler::get_result_row_for_pixel(
     TPixelTableRowResult& _return,
     const TSessionId& session,
@@ -1687,7 +1700,7 @@ void MapDHandler::get_result_row_for_pixel(
                        "pixel_radius",
                        pixel_radius,
                        "table_col_names",
-                       MapDRenderHandler::dump_table_col_names(table_col_names),
+                       dump_table_col_names(table_col_names),
                        "nonce",
                        nonce);
   auto session_ptr = stdlog.getSessionInfo();
