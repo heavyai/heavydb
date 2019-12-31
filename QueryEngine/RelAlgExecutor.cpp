@@ -15,6 +15,7 @@
  */
 
 #include "RelAlgExecutor.h"
+#include "QueryEngine/RelAlgDagBuilder.h"
 #include "RelAlgTranslator.h"
 
 #include "CalciteDeserializerUtils.h"
@@ -67,10 +68,19 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
                                                    const CompilationOptions& co,
                                                    const ExecutionOptions& eo,
                                                    RenderInfo* render_info) {
+  RelAlgDagBuilder query_dag(
+      query_ra, cat_, render_info ? render_info->getRenderQueryOptsPtr() : nullptr);
+  return executeRelAlgQuery(query_dag, co, eo, render_info);
+}
+
+ExecutionResult RelAlgExecutor::executeRelAlgQuery(RelAlgDagBuilder& query_dag,
+                                                   const CompilationOptions& co,
+                                                   const ExecutionOptions& eo,
+                                                   RenderInfo* render_info) {
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(executeRelAlgQuery);
   try {
-    return executeRelAlgQueryNoRetry(query_ra, co, eo, render_info);
+    return executeRelAlgQueryNoRetry(query_dag, co, eo, render_info);
   } catch (const QueryMustRunOnCpu&) {
     if (!g_allow_cpu_retry) {
       throw;
@@ -86,18 +96,19 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
   if (render_info) {
     render_info->setForceNonInSituData();
   }
-  return executeRelAlgQueryNoRetry(query_ra, co_cpu, eo, render_info);
+  query_dag.resetQueryExecutionState();
+  return executeRelAlgQueryNoRetry(query_dag, co_cpu, eo, render_info);
 }
 
-ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const std::string& query_ra,
+ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(RelAlgDagBuilder& query_dag,
                                                           const CompilationOptions& co,
                                                           const ExecutionOptions& eo,
                                                           RenderInfo* render_info) {
   INJECT_TIMER(executeRelAlgQueryNoRetry);
   decltype(subqueries_)().swap(subqueries_);
 
-  const auto ra = deserialize_ra_dag(
-      query_ra, cat_, this, render_info ? render_info->getRenderQueryOptsPtr() : nullptr);
+  registerSubqueries(query_dag.getSubqueries());
+  const auto ra = query_dag.getRootNode();
 
   // capture the lock acquistion time
   auto clock_begin = timer_start();

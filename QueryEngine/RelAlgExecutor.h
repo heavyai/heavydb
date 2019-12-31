@@ -23,6 +23,7 @@
 #include "Execute.h"
 #include "InputMetadata.h"
 #include "JoinFilterPushDown.h"
+#include "QueryEngine/RelAlgDagBuilder.h"
 #include "QueryRewrite.h"
 #include "SpeculativeTopN.h"
 #include "StreamingTopN.h"
@@ -69,6 +70,11 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                                      const ExecutionOptions& eo,
                                      RenderInfo* render_info);
 
+  ExecutionResult executeRelAlgQuery(RelAlgDagBuilder& query_dag,
+                                     const CompilationOptions& co,
+                                     const ExecutionOptions& eo,
+                                     RenderInfo* render_info);
+
   ExecutionResult executeRelAlgQueryWithFilterPushDown(const RaExecutionSequence& seq,
                                                        const CompilationOptions& co,
                                                        const ExecutionOptions& eo,
@@ -105,8 +111,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
     CHECK(it_ok.second);
   }
 
-  void registerSubquery(std::shared_ptr<RexSubQuery> subquery) noexcept {
-    subqueries_.push_back(subquery);
+  void registerSubqueries(std::vector<std::shared_ptr<RexSubQuery>> subqueries) noexcept {
+    subqueries_ = std::move(subqueries);
   }
 
   const std::vector<std::shared_ptr<RexSubQuery>>& getSubqueries() const noexcept {
@@ -126,7 +132,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
   static std::string getErrorMessageFromCode(const int32_t error_code);
 
  private:
-  ExecutionResult executeRelAlgQueryNoRetry(const std::string& query_ra,
+  ExecutionResult executeRelAlgQueryNoRetry(RelAlgDagBuilder& query_dag,
                                             const CompilationOptions& co,
                                             const ExecutionOptions& eo,
                                             RenderInfo* render_info);

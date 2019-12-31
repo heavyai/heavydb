@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include "../RelAlgAbstractInterpreter.h"
+#include "../RelAlgDagBuilder.h"
 
 void alterRAForRender(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
                       const RenderQueryOptions& render_opts);

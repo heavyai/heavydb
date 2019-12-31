@@ -24,7 +24,7 @@
 #include "ExpressionRewrite.h"
 #include "ExtensionFunctionsBinding.h"
 #include "ExtensionFunctionsWhitelist.h"
-#include "RelAlgAbstractInterpreter.h"
+#include "RelAlgDagBuilder.h"
 #include "WindowContext.h"
 
 #include <future>

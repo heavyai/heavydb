@@ -19,7 +19,7 @@
 
 #include "Execute.h"
 #include "QueryFeatures.h"
-#include "RelAlgAbstractInterpreter.h"
+#include "RelAlgDagBuilder.h"
 
 #include <ctime>
 #include <memory>

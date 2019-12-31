@@ -19,7 +19,7 @@
 #include <boost/graph/topological_sort.hpp>
 
 #include "QueryEngine/GroupByAndAggregate.h"
-#include "QueryEngine/RelAlgAbstractInterpreter.h"
+#include "QueryEngine/RelAlgDagBuilder.h"
 
 ExecutionResult::ExecutionResult(const std::shared_ptr<ResultSet>& rows,
                                  const std::vector<TargetMetaInfo>& targets_meta)

@@ -15,7 +15,7 @@
  */
 
 #include "RelLeftDeepInnerJoin.h"
-#include "RelAlgAbstractInterpreter.h"
+#include "RelAlgDagBuilder.h"
 #include "RexVisitor.h"
 #include "Shared/Logger.h"
 
@@ -250,7 +250,8 @@ void rebind_inputs_from_left_deep_join(const RexScalar* rex,
 }
 
 void create_left_deep_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
-  for (const auto& left_deep_join_candidate : nodes) {
+  std::list<std::shared_ptr<RelAlgNode>> new_nodes;
+  for (auto& left_deep_join_candidate : nodes) {
     std::shared_ptr<RelLeftDeepInnerJoin> left_deep_join;
     std::shared_ptr<const RelAlgNode> old_root;
     std::tie(left_deep_join, old_root) = create_left_deep_join(left_deep_join_candidate);
@@ -285,5 +286,12 @@ void create_left_deep_join(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
         }
       }
     }
+
+    new_nodes.emplace_back(std::move(left_deep_join));
   }
+
+  // insert the new left join nodes to the front of the owned RelAlgNode list.
+  // This is done to ensure all created RelAlgNodes exist in this list for later
+  // visitation, such as RelAlgDagBuilder::resetQueryExecutionState.
+  nodes.insert(nodes.begin(), new_nodes.begin(), new_nodes.end());
 }

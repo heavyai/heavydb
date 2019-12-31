@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_RELALGABSTRACTINTERPRETER_H
-#define QUERYENGINE_RELALGABSTRACTINTERPRETER_H
+#ifndef QUERYENGINE_RELALGDAGBUILDER_H
+#define QUERYENGINE_RELALGDAGBUILDER_H
 
 #include "../Catalog/Catalog.h"
 #include "../Shared/ConfigResolve.h"
@@ -26,6 +26,7 @@
 #include "TypePunning.h"
 
 #include <rapidjson/document.h>
+#include <boost/core/noncopyable.hpp>
 #include <boost/make_unique.hpp>
 #include <boost/utility.hpp>
 #include <boost/variant.hpp>
@@ -610,6 +611,11 @@ class RelAlgNode {
   RelAlgNode() : id_(crt_id_++), context_data_(nullptr), is_nop_(false) {}
 
   virtual ~RelAlgNode() {}
+
+  void resetQueryExecutionState() {
+    context_data_ = nullptr;
+    targets_metainfo_ = {};
+  }
 
   void setContextData(const void* context_data) const {
     CHECK(!context_data_);
@@ -1476,13 +1482,79 @@ class QueryNotSupported : public std::runtime_error {
   QueryNotSupported(const std::string& reason) : std::runtime_error(reason) {}
 };
 
-class RelAlgExecutor;
+/**
+ * Builder class to create an in-memory, easy-to-navigate relational algebra DAG
+ * interpreted from a JSON representation from Calcite. Also, applies high level
+ * optimizations which can be expressed through relational algebra extended with
+ * RelCompound. The RelCompound node is an equivalent representation for sequences of
+ * RelFilter, RelProject and RelAggregate nodes. This coalescing minimizes the amount of
+ * intermediate buffers required to evaluate a query. Lower level optimizations are taken
+ * care by lower levels, mainly RelAlgTranslator and the IR code generation.
+ */
+class RelAlgDagBuilder : public boost::noncopyable {
+ public:
+  RelAlgDagBuilder() = delete;
 
-std::shared_ptr<const RelAlgNode> deserialize_ra_dag(
-    const std::string& query_ra,
-    const Catalog_Namespace::Catalog& cat,
-    RelAlgExecutor* ra_executor,
-    const RenderQueryOptions* render_opts = nullptr);
+  /**
+   * Constructs a RelAlg DAG from a JSON representation.
+   * @param query_ra A JSON string representation of an RA tree from Calcite.
+   * @param cat DB catalog for the current user.
+   * @param render_opts Additional build options for render queries.
+   */
+  RelAlgDagBuilder(const std::string& query_ra,
+                   const Catalog_Namespace::Catalog& cat,
+                   const RenderQueryOptions* render_opts);
+
+  /**
+   * Constructs a sub-DAG for any subqueries. Should only be called during DAG
+   * building.
+   * @param root_dag_builder The root DAG builder. The root stores pointers to all
+   * subqueries.
+   * @param query_ast The current JSON node to build a DAG for.
+   * @param cat DB catalog for the current user.
+   * @param render_opts Additional build options for render queries.
+   */
+  RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
+                   const rapidjson::Value& query_ast,
+                   const Catalog_Namespace::Catalog& cat,
+                   const RenderQueryOptions* render_opts);
+
+  /**
+   * Returns the root node of the DAG.
+   */
+  std::shared_ptr<const RelAlgNode> getRootNode() const {
+    CHECK(nodes_.size());
+    return nodes_.back();
+  }
+
+  /**
+   * Registers a subquery with a root DAG builder. Should only be called during DAG
+   * building and registration should only occur on the root.
+   */
+  void registerSubquery(std::shared_ptr<RexSubQuery> subquery) {
+    subqueries_.push_back(subquery);
+  }
+
+  /**
+   * Gets all registered subqueries. Only the root DAG can contain subqueries.
+   */
+  const std::vector<std::shared_ptr<RexSubQuery>>& getSubqueries() const {
+    return subqueries_;
+  }
+
+  /**
+   * Gets all registered subqueries. Only the root DAG can contain subqueries.
+   */
+  void resetQueryExecutionState();
+
+ private:
+  void build(const rapidjson::Value& query_ast, RelAlgDagBuilder& root_dag_builder);
+
+  const Catalog_Namespace::Catalog& cat_;
+  std::vector<std::shared_ptr<RelAlgNode>> nodes_;
+  std::vector<std::shared_ptr<RexSubQuery>> subqueries_;
+  const RenderQueryOptions* render_opts_;
+};
 
 std::string tree_string(const RelAlgNode*, const size_t indent = 0);
 
@@ -1490,4 +1562,4 @@ using RANodeOutput = std::vector<RexInput>;
 
 RANodeOutput get_node_output(const RelAlgNode* ra_node);
 
-#endif  // QUERYENGINE_RELALGABSTRACTINTERPRETER_H
+#endif  // QUERYENGINE_RELALGDAGBUILDER_H

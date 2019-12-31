@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-#include "RelAlgAbstractInterpreter.h"
+#include "RelAlgDagBuilder.h"
 #include "../Shared/sqldefs.h"
 #include "CalciteDeserializerUtils.h"
+#include "Catalog/Catalog.h"
+#include "Descriptors/RelAlgExecutionDescriptor.h"
 #include "JsonAccessors.h"
-#include "RelAlgExecutor.h"
 #include "RelAlgOptimizer.h"
 #include "RelLeftDeepInnerJoin.h"
 #include "Rendering/RenderRelAlgUtils.h"
@@ -490,7 +491,7 @@ unsigned node_id(const rapidjson::Value& ra_node) noexcept {
 }
 
 // The parse_* functions below de-serialize expressions as they come from Calcite.
-// RelAlgAbstractInterpreter will take care of making the representation easy to
+// RelAlgDagBuilder will take care of making the representation easy to
 // navigate for lower layers, for example by replacing RexAbstractInput with RexInput.
 
 std::unique_ptr<RexAbstractInput> parse_abstract_input(
@@ -569,11 +570,7 @@ std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
 
 std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr,
                                                    const Catalog_Namespace::Catalog& cat,
-                                                   RelAlgExecutor* ra_executor);
-
-std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
-                                                  const Catalog_Namespace::Catalog& cat,
-                                                  RelAlgExecutor* ra_executor);
+                                                   RelAlgDagBuilder& root_dag_builder);
 
 SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
   CHECK(type_obj.IsObject() && type_obj.MemberCount() >= 2);
@@ -593,10 +590,10 @@ SQLTypeInfo parse_type(const rapidjson::Value& type_obj) {
 std::vector<std::unique_ptr<const RexScalar>> parse_expr_array(
     const rapidjson::Value& arr,
     const Catalog_Namespace::Catalog& cat,
-    RelAlgExecutor* ra_executor) {
+    RelAlgDagBuilder& root_dag_builder) {
   std::vector<std::unique_ptr<const RexScalar>> exprs;
   for (auto it = arr.Begin(); it != arr.End(); ++it) {
-    exprs.emplace_back(parse_scalar_expr(*it, cat, ra_executor));
+    exprs.emplace_back(parse_scalar_expr(*it, cat, root_dag_builder));
   }
   return exprs;
 }
@@ -656,10 +653,10 @@ SqlWindowFunctionKind parse_window_function_kind(const std::string& name) {
 std::vector<std::unique_ptr<const RexScalar>> parse_window_order_exprs(
     const rapidjson::Value& arr,
     const Catalog_Namespace::Catalog& cat,
-    RelAlgExecutor* ra_executor) {
+    RelAlgDagBuilder& root_dag_builder) {
   std::vector<std::unique_ptr<const RexScalar>> exprs;
   for (auto it = arr.Begin(); it != arr.End(); ++it) {
-    exprs.emplace_back(parse_scalar_expr(field(*it, "field"), cat, ra_executor));
+    exprs.emplace_back(parse_scalar_expr(field(*it, "field"), cat, root_dag_builder));
   }
   return exprs;
 }
@@ -678,7 +675,7 @@ NullSortedPosition parse_nulls_position(const rapidjson::Value& collation) {
 
 std::vector<SortField> parse_window_order_collation(const rapidjson::Value& arr,
                                                     const Catalog_Namespace::Catalog& cat,
-                                                    RelAlgExecutor* ra_executor) {
+                                                    RelAlgDagBuilder& root_dag_builder) {
   std::vector<SortField> collation;
   size_t field_idx = 0;
   for (auto it = arr.Begin(); it != arr.End(); ++it, ++field_idx) {
@@ -692,7 +689,7 @@ std::vector<SortField> parse_window_order_collation(const rapidjson::Value& arr,
 RexWindowFunctionOperator::RexWindowBound parse_window_bound(
     const rapidjson::Value& window_bound_obj,
     const Catalog_Namespace::Catalog& cat,
-    RelAlgExecutor* ra_executor) {
+    RelAlgDagBuilder& root_dag_builder) {
   CHECK(window_bound_obj.IsObject());
   RexWindowFunctionOperator::RexWindowBound window_bound;
   window_bound.unbounded = json_bool(field(window_bound_obj, "unbounded"));
@@ -701,7 +698,7 @@ RexWindowFunctionOperator::RexWindowBound parse_window_bound(
   window_bound.is_current_row = json_bool(field(window_bound_obj, "is_current_row"));
   const auto& offset_field = field(window_bound_obj, "offset");
   if (offset_field.IsObject()) {
-    window_bound.offset = parse_scalar_expr(offset_field, cat, ra_executor);
+    window_bound.offset = parse_scalar_expr(offset_field, cat, root_dag_builder);
   } else {
     CHECK(offset_field.IsNull());
   }
@@ -709,34 +706,49 @@ RexWindowFunctionOperator::RexWindowBound parse_window_bound(
   return window_bound;
 }
 
+std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
+                                                  const Catalog_Namespace::Catalog& cat,
+                                                  RelAlgDagBuilder& root_dag_builder) {
+  const auto& operands = field(expr, "operands");
+  CHECK(operands.IsArray());
+  CHECK_GE(operands.Size(), unsigned(0));
+  const auto& subquery_ast = field(expr, "subquery");
+
+  RelAlgDagBuilder subquery_dag(root_dag_builder, subquery_ast, cat, nullptr);
+  auto subquery = std::make_shared<RexSubQuery>(subquery_dag.getRootNode());
+  root_dag_builder.registerSubquery(subquery);
+  return subquery->deepCopy();
+}
+
 std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
                                             const Catalog_Namespace::Catalog& cat,
-                                            RelAlgExecutor* ra_executor) {
+                                            RelAlgDagBuilder& root_dag_builder) {
   const auto op_name = json_str(field(expr, "op"));
   const bool is_quantifier =
       op_name == std::string("PG_ANY") || op_name == std::string("PG_ALL");
   const auto op = is_quantifier ? kFUNCTION : to_sql_op(op_name);
   const auto& operators_json_arr = field(expr, "operands");
   CHECK(operators_json_arr.IsArray());
-  auto operands = parse_expr_array(operators_json_arr, cat, ra_executor);
+  auto operands = parse_expr_array(operators_json_arr, cat, root_dag_builder);
   const auto type_it = expr.FindMember("type");
   CHECK(type_it != expr.MemberEnd());
   auto ti = parse_type(type_it->value);
   if (op == kIN && expr.HasMember("subquery")) {
-    auto subquery = parse_subquery(expr, cat, ra_executor);
+    auto subquery = parse_subquery(expr, cat, root_dag_builder);
     operands.emplace_back(std::move(subquery));
   }
   if (expr.FindMember("partition_keys") != expr.MemberEnd()) {
     const auto& partition_keys_arr = field(expr, "partition_keys");
-    auto partition_keys = parse_expr_array(partition_keys_arr, cat, ra_executor);
+    auto partition_keys = parse_expr_array(partition_keys_arr, cat, root_dag_builder);
     const auto& order_keys_arr = field(expr, "order_keys");
-    auto order_keys = parse_window_order_exprs(order_keys_arr, cat, ra_executor);
-    const auto collation = parse_window_order_collation(order_keys_arr, cat, ra_executor);
+    auto order_keys = parse_window_order_exprs(order_keys_arr, cat, root_dag_builder);
+    const auto collation =
+        parse_window_order_collation(order_keys_arr, cat, root_dag_builder);
     const auto kind = parse_window_function_kind(op_name);
     const auto lower_bound =
-        parse_window_bound(field(expr, "lower_bound"), cat, ra_executor);
+        parse_window_bound(field(expr, "lower_bound"), cat, root_dag_builder);
     const auto upper_bound =
-        parse_window_bound(field(expr, "upper_bound"), cat, ra_executor);
+        parse_window_bound(field(expr, "upper_bound"), cat, root_dag_builder);
     bool is_rows = json_bool(field(expr, "is_rows"));
     ti.set_notnull(false);
     return std::make_unique<RexWindowFunctionOperator>(kind,
@@ -756,7 +768,7 @@ std::unique_ptr<RexOperator> parse_operator(const rapidjson::Value& expr,
 
 std::unique_ptr<RexCase> parse_case(const rapidjson::Value& expr,
                                     const Catalog_Namespace::Catalog& cat,
-                                    RelAlgExecutor* ra_executor) {
+                                    RelAlgDagBuilder& root_dag_builder) {
   const auto& operands = field(expr, "operands");
   CHECK(operands.IsArray());
   CHECK_GE(operands.Size(), unsigned(2));
@@ -765,12 +777,12 @@ std::unique_ptr<RexCase> parse_case(const rapidjson::Value& expr,
       std::pair<std::unique_ptr<const RexScalar>, std::unique_ptr<const RexScalar>>>
       expr_pair_list;
   for (auto operands_it = operands.Begin(); operands_it != operands.End();) {
-    auto when_expr = parse_scalar_expr(*operands_it++, cat, ra_executor);
+    auto when_expr = parse_scalar_expr(*operands_it++, cat, root_dag_builder);
     if (operands_it == operands.End()) {
       else_expr = std::move(when_expr);
       break;
     }
-    auto then_expr = parse_scalar_expr(*operands_it++, cat, ra_executor);
+    auto then_expr = parse_scalar_expr(*operands_it++, cat, root_dag_builder);
     expr_pair_list.emplace_back(std::move(when_expr), std::move(then_expr));
   }
   return std::unique_ptr<RexCase>(new RexCase(expr_pair_list, else_expr));
@@ -821,7 +833,7 @@ std::unique_ptr<const RexAgg> parse_aggregate_expr(const rapidjson::Value& expr)
 
 std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr,
                                                    const Catalog_Namespace::Catalog& cat,
-                                                   RelAlgExecutor* ra_executor) {
+                                                   RelAlgDagBuilder& root_dag_builder) {
   CHECK(expr.IsObject());
   if (expr.IsObject() && expr.HasMember("input")) {
     return std::unique_ptr<const RexScalar>(parse_abstract_input(expr));
@@ -832,12 +844,13 @@ std::unique_ptr<const RexScalar> parse_scalar_expr(const rapidjson::Value& expr,
   if (expr.IsObject() && expr.HasMember("op")) {
     const auto op_str = json_str(field(expr, "op"));
     if (op_str == std::string("CASE")) {
-      return std::unique_ptr<const RexScalar>(parse_case(expr, cat, ra_executor));
+      return std::unique_ptr<const RexScalar>(parse_case(expr, cat, root_dag_builder));
     }
     if (op_str == std::string("$SCALAR_QUERY")) {
-      return std::unique_ptr<const RexScalar>(parse_subquery(expr, cat, ra_executor));
+      return std::unique_ptr<const RexScalar>(
+          parse_subquery(expr, cat, root_dag_builder));
     }
-    return std::unique_ptr<const RexScalar>(parse_operator(expr, cat, ra_executor));
+    return std::unique_ptr<const RexScalar>(parse_operator(expr, cat, root_dag_builder));
   }
   throw QueryNotSupported("Expression node " + json_node_to_string(expr) +
                           " not supported");
@@ -1777,72 +1790,31 @@ void check_empty_inputs_field(const rapidjson::Value& node) noexcept {
   CHECK(inputs_json.IsArray() && !inputs_json.Size());
 }
 
-// Create an in-memory, easy to navigate relational algebra DAG from its serialized,
-// JSON representation. Also, apply high level optimizations which can be expressed
-// through relational algebra extended with RelCompound. The RelCompound node is an
-// equivalent representation for sequences of RelFilter, RelProject and RelAggregate
-// nodes. This coalescing minimizes the amount of intermediate buffers required to
-// evaluate a query. Lower level optimizations are taken care by lower levels, mainly
-// RelAlgTranslator and the IR code generation.
-class RelAlgAbstractInterpreter {
+const TableDescriptor* getTableFromScanNode(const Catalog_Namespace::Catalog& cat,
+                                            const rapidjson::Value& scan_ra) {
+  const auto& table_json = field(scan_ra, "table");
+  CHECK(table_json.IsArray());
+  CHECK_EQ(unsigned(2), table_json.Size());
+  const auto td = cat.getMetadataForTable(table_json[1].GetString());
+  CHECK(td);
+  return td;
+}
+
+std::vector<std::string> getFieldNamesFromScanNode(const rapidjson::Value& scan_ra) {
+  const auto& fields_json = field(scan_ra, "fieldNames");
+  return strings_from_json_array(fields_json);
+}
+
+}  // namespace
+
+namespace details {
+
+class RelAlgDispatcher {
  public:
-  RelAlgAbstractInterpreter(const rapidjson::Value& query_ast,
-                            const Catalog_Namespace::Catalog& cat,
-                            RelAlgExecutor* ra_executor,
-                            const RenderQueryOptions* render_opts)
-      : query_ast_(query_ast)
-      , cat_(cat)
-      , ra_executor_(ra_executor)
-      , render_opts_(render_opts) {}
+  RelAlgDispatcher(const Catalog_Namespace::Catalog& cat) : cat_(cat) {}
 
-  std::shared_ptr<const RelAlgNode> run() {
-    const auto& rels = field(query_ast_, "rels");
-    CHECK(rels.IsArray());
-    try {
-      dispatchNodes(rels);
-    } catch (const QueryNotSupported&) {
-      throw;
-    }
-    CHECK(!nodes_.empty());
-    bind_inputs(nodes_);
-
-    if (render_opts_) {
-      // Alter the RA for render. Do this before any flattening/optimizations are done to
-      // the tree.
-      alterRAForRender(nodes_, *render_opts_);
-    }
-
-    mark_nops(nodes_);
-    simplify_sort(nodes_);
-    sink_projected_boolean_expr_to_join(nodes_);
-    eliminate_identical_copy(nodes_);
-    fold_filters(nodes_);
-    std::vector<const RelAlgNode*> filtered_left_deep_joins;
-    std::vector<const RelAlgNode*> left_deep_joins;
-    for (const auto& node : nodes_) {
-      const auto left_deep_join_root = get_left_deep_join_root(node);
-      // The filter which starts a left-deep join pattern must not be coalesced
-      // since it contains (part of) the join condition.
-      if (left_deep_join_root) {
-        left_deep_joins.push_back(left_deep_join_root.get());
-        if (std::dynamic_pointer_cast<const RelFilter>(left_deep_join_root)) {
-          filtered_left_deep_joins.push_back(left_deep_join_root.get());
-        }
-      }
-    }
-    if (filtered_left_deep_joins.empty()) {
-      hoist_filter_cond_to_cross_join(nodes_);
-    }
-    eliminate_dead_columns(nodes_);
-    separate_window_function_expressions(nodes_);
-    coalesce_nodes(nodes_, left_deep_joins);
-    CHECK(nodes_.back().unique());
-    create_left_deep_join(nodes_);
-    return nodes_.back();
-  }
-
- private:
-  void dispatchNodes(const rapidjson::Value& rels) {
+  std::vector<std::shared_ptr<RelAlgNode>> run(const rapidjson::Value& rels,
+                                               RelAlgDagBuilder& root_dag_builder) {
     for (auto rels_it = rels.Begin(); rels_it != rels.End(); ++rels_it) {
       const auto& crt_node = *rels_it;
       const auto id = node_id(crt_node);
@@ -1853,13 +1825,13 @@ class RelAlgAbstractInterpreter {
       if (rel_op == std::string("EnumerableTableScan")) {
         ra_node = dispatchTableScan(crt_node);
       } else if (rel_op == std::string("LogicalProject")) {
-        ra_node = dispatchProject(crt_node);
+        ra_node = dispatchProject(crt_node, root_dag_builder);
       } else if (rel_op == std::string("LogicalFilter")) {
-        ra_node = dispatchFilter(crt_node);
+        ra_node = dispatchFilter(crt_node, root_dag_builder);
       } else if (rel_op == std::string("LogicalAggregate")) {
         ra_node = dispatchAggregate(crt_node);
       } else if (rel_op == std::string("LogicalJoin")) {
-        ra_node = dispatchJoin(crt_node);
+        ra_node = dispatchJoin(crt_node, root_dag_builder);
       } else if (rel_op == std::string("LogicalSort")) {
         ra_node = dispatchSort(crt_node);
       } else if (rel_op == std::string("LogicalValues")) {
@@ -1867,23 +1839,27 @@ class RelAlgAbstractInterpreter {
       } else if (rel_op == std::string("LogicalTableModify")) {
         ra_node = dispatchModify(crt_node);
       } else if (rel_op == std::string("LogicalTableFunctionScan")) {
-        ra_node = dispatchTableFunction(crt_node);
+        ra_node = dispatchTableFunction(crt_node, root_dag_builder);
       } else {
         throw QueryNotSupported(std::string("Node ") + rel_op + " not supported yet");
       }
       nodes_.push_back(ra_node);
     }
+
+    return std::move(nodes_);
   }
 
+ private:
   std::shared_ptr<RelScan> dispatchTableScan(const rapidjson::Value& scan_ra) {
     check_empty_inputs_field(scan_ra);
     CHECK(scan_ra.IsObject());
-    const auto td = getTableFromScanNode(scan_ra);
+    const auto td = getTableFromScanNode(cat_, scan_ra);
     const auto field_names = getFieldNamesFromScanNode(scan_ra);
     return std::make_shared<RelScan>(td, field_names);
   }
 
-  std::shared_ptr<RelProject> dispatchProject(const rapidjson::Value& proj_ra) {
+  std::shared_ptr<RelProject> dispatchProject(const rapidjson::Value& proj_ra,
+                                              RelAlgDagBuilder& root_dag_builder) {
     const auto inputs = getRelAlgInputs(proj_ra);
     CHECK_EQ(size_t(1), inputs.size());
     const auto& exprs_json = field(proj_ra, "exprs");
@@ -1891,19 +1867,21 @@ class RelAlgAbstractInterpreter {
     std::vector<std::unique_ptr<const RexScalar>> exprs;
     for (auto exprs_json_it = exprs_json.Begin(); exprs_json_it != exprs_json.End();
          ++exprs_json_it) {
-      exprs.emplace_back(parse_scalar_expr(*exprs_json_it, cat_, ra_executor_));
+      exprs.emplace_back(parse_scalar_expr(*exprs_json_it, cat_, root_dag_builder));
     }
     const auto& fields = field(proj_ra, "fields");
     return std::make_shared<RelProject>(
         exprs, strings_from_json_array(fields), inputs.front());
   }
 
-  std::shared_ptr<RelFilter> dispatchFilter(const rapidjson::Value& filter_ra) {
+  std::shared_ptr<RelFilter> dispatchFilter(const rapidjson::Value& filter_ra,
+                                            RelAlgDagBuilder& root_dag_builder) {
     const auto inputs = getRelAlgInputs(filter_ra);
     CHECK_EQ(size_t(1), inputs.size());
     const auto id = node_id(filter_ra);
     CHECK(id);
-    auto condition = parse_scalar_expr(field(filter_ra, "condition"), cat_, ra_executor_);
+    auto condition =
+        parse_scalar_expr(field(filter_ra, "condition"), cat_, root_dag_builder);
     return std::make_shared<RelFilter>(condition, inputs.front());
   }
 
@@ -1929,11 +1907,13 @@ class RelAlgAbstractInterpreter {
     return std::make_shared<RelAggregate>(group.size(), aggs, fields, inputs.front());
   }
 
-  std::shared_ptr<RelJoin> dispatchJoin(const rapidjson::Value& join_ra) {
+  std::shared_ptr<RelJoin> dispatchJoin(const rapidjson::Value& join_ra,
+                                        RelAlgDagBuilder& root_dag_builder) {
     const auto inputs = getRelAlgInputs(join_ra);
     CHECK_EQ(size_t(2), inputs.size());
     const auto join_type = to_join_type(json_str(field(join_ra, "joinType")));
-    auto filter_rex = parse_scalar_expr(field(join_ra, "condition"), cat_, ra_executor_);
+    auto filter_rex =
+        parse_scalar_expr(field(join_ra, "condition"), cat_, root_dag_builder);
     return std::make_shared<RelJoin>(inputs[0], inputs[1], filter_rex, join_type);
   }
 
@@ -1963,7 +1943,7 @@ class RelAlgAbstractInterpreter {
     const auto inputs = getRelAlgInputs(logical_modify_ra);
     CHECK_EQ(size_t(1), inputs.size());
 
-    const auto table_descriptor = getTableFromScanNode(logical_modify_ra);
+    const auto table_descriptor = getTableFromScanNode(cat_, logical_modify_ra);
     if (table_descriptor->isView) {
       throw std::runtime_error("UPDATE of a view is unsupported.");
     }
@@ -2001,7 +1981,8 @@ class RelAlgAbstractInterpreter {
   }
 
   std::shared_ptr<RelTableFunction> dispatchTableFunction(
-      const rapidjson::Value& table_func_ra) {
+      const rapidjson::Value& table_func_ra,
+      RelAlgDagBuilder& root_dag_builder) {
     const auto inputs = getRelAlgInputs(table_func_ra);
     CHECK_EQ(size_t(1), inputs.size());
 
@@ -2055,7 +2036,7 @@ class RelAlgAbstractInterpreter {
         }
       }
       table_func_inputs.emplace_back(
-          parse_scalar_expr(*exprs_json_it, cat_, ra_executor_));
+          parse_scalar_expr(*exprs_json_it, cat_, root_dag_builder));
     }
 
     const auto& op_name = field(invocation, "op");
@@ -2105,21 +2086,6 @@ class RelAlgAbstractInterpreter {
     return std::make_shared<RelLogicalValues>(tuple_type);
   }
 
-  const TableDescriptor* getTableFromScanNode(const rapidjson::Value& scan_ra) const {
-    const auto& table_json = field(scan_ra, "table");
-    CHECK(table_json.IsArray());
-    CHECK_EQ(unsigned(2), table_json.Size());
-    const auto td = cat_.getMetadataForTable(table_json[1].GetString());
-    CHECK(td);
-    return td;
-  }
-
-  std::vector<std::string> getFieldNamesFromScanNode(
-      const rapidjson::Value& scan_ra) const {
-    const auto& fields_json = field(scan_ra, "fieldNames");
-    return strings_from_json_array(fields_json);
-  }
-
   std::vector<std::shared_ptr<const RelAlgNode>> getRelAlgInputs(
       const rapidjson::Value& node) {
     if (node.HasMember("inputs")) {
@@ -2140,49 +2106,84 @@ class RelAlgAbstractInterpreter {
     return nodes_.back();
   }
 
-  const rapidjson::Value& query_ast_;
   const Catalog_Namespace::Catalog& cat_;
   std::vector<std::shared_ptr<RelAlgNode>> nodes_;
-  RelAlgExecutor* ra_executor_;
-  const RenderQueryOptions* render_opts_;
 };
 
-std::shared_ptr<const RelAlgNode> ra_interpret(const rapidjson::Value& query_ast,
-                                               const Catalog_Namespace::Catalog& cat,
-                                               RelAlgExecutor* ra_executor,
-                                               const RenderQueryOptions* render_opts) {
-  RelAlgAbstractInterpreter interp(query_ast, cat, ra_executor, render_opts);
-  return interp.run();
-}
+}  // namespace details
 
-std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
-                                                  const Catalog_Namespace::Catalog& cat,
-                                                  RelAlgExecutor* ra_executor) {
-  const auto& operands = field(expr, "operands");
-  CHECK(operands.IsArray());
-  CHECK_GE(operands.Size(), unsigned(0));
-  const auto& subquery_ast = field(expr, "subquery");
-
-  const auto ra = ra_interpret(subquery_ast, cat, ra_executor, nullptr);
-  auto subquery = std::make_shared<RexSubQuery>(ra);
-  ra_executor->registerSubquery(subquery);
-  return subquery->deepCopy();
-}
-
-}  // namespace
-
-// Driver for the query de-serialization and high level optimization.
-std::shared_ptr<const RelAlgNode> deserialize_ra_dag(
-    const std::string& query_ra,
-    const Catalog_Namespace::Catalog& cat,
-    RelAlgExecutor* ra_executor,
-    const RenderQueryOptions* render_opts) {
+RelAlgDagBuilder::RelAlgDagBuilder(const std::string& query_ra,
+                                   const Catalog_Namespace::Catalog& cat,
+                                   const RenderQueryOptions* render_opts)
+    : cat_(cat), render_opts_(render_opts) {
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
   CHECK(!query_ast.HasParseError());
   CHECK(query_ast.IsObject());
   RelAlgNode::resetRelAlgFirstId();
-  return ra_interpret(query_ast, cat, ra_executor, render_opts);
+  build(query_ast, *this);
+}
+
+RelAlgDagBuilder::RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
+                                   const rapidjson::Value& query_ast,
+                                   const Catalog_Namespace::Catalog& cat,
+                                   const RenderQueryOptions* render_opts)
+    : cat_(cat), render_opts_(render_opts) {
+  build(query_ast, root_dag_builder);
+}
+
+void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
+                             RelAlgDagBuilder& lead_dag_builder) {
+  const auto& rels = field(query_ast, "rels");
+  CHECK(rels.IsArray());
+  try {
+    nodes_ = details::RelAlgDispatcher(cat_).run(rels, lead_dag_builder);
+  } catch (const QueryNotSupported&) {
+    throw;
+  }
+  CHECK(!nodes_.empty());
+  bind_inputs(nodes_);
+
+  if (render_opts_) {
+    // Alter the RA for render. Do this before any flattening/optimizations are done to
+    // the tree.
+    alterRAForRender(nodes_, *render_opts_);
+  }
+
+  mark_nops(nodes_);
+  simplify_sort(nodes_);
+  sink_projected_boolean_expr_to_join(nodes_);
+  eliminate_identical_copy(nodes_);
+  fold_filters(nodes_);
+  std::vector<const RelAlgNode*> filtered_left_deep_joins;
+  std::vector<const RelAlgNode*> left_deep_joins;
+  for (const auto& node : nodes_) {
+    const auto left_deep_join_root = get_left_deep_join_root(node);
+    // The filter which starts a left-deep join pattern must not be coalesced
+    // since it contains (part of) the join condition.
+    if (left_deep_join_root) {
+      left_deep_joins.push_back(left_deep_join_root.get());
+      if (std::dynamic_pointer_cast<const RelFilter>(left_deep_join_root)) {
+        filtered_left_deep_joins.push_back(left_deep_join_root.get());
+      }
+    }
+  }
+  if (filtered_left_deep_joins.empty()) {
+    hoist_filter_cond_to_cross_join(nodes_);
+  }
+  eliminate_dead_columns(nodes_);
+  separate_window_function_expressions(nodes_);
+  coalesce_nodes(nodes_, left_deep_joins);
+  CHECK(nodes_.back().unique());
+  create_left_deep_join(nodes_);
+}
+
+void RelAlgDagBuilder::resetQueryExecutionState() {
+  for (auto& node : nodes_) {
+    if (node) {
+      node->resetQueryExecutionState();
+    }
+  }
 }
 
 // Prints the relational algebra as a tree; useful for debugging.

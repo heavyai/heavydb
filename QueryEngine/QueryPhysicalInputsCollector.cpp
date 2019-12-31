@@ -16,7 +16,7 @@
 
 #include "QueryPhysicalInputsCollector.h"
 
-#include "RelAlgAbstractInterpreter.h"
+#include "RelAlgDagBuilder.h"
 #include "RelAlgVisitor.h"
 #include "RexVisitor.h"
 

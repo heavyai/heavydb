@@ -70,7 +70,7 @@ set(query_engine_source_files
     QueryTemplateGenerator.cpp
     QueryExecutionContext.cpp
     QueryMemoryInitializer.cpp
-    RelAlgAbstractInterpreter.cpp
+    RelAlgDagBuilder.cpp
     RelLeftDeepInnerJoin.cpp
     RelAlgExecutor.cpp
     RelAlgTranslator.cpp

@@ -17,7 +17,7 @@
 #ifndef QUERYENGINE_REXVISITOR_H
 #define QUERYENGINE_REXVISITOR_H
 
-#include "RelAlgAbstractInterpreter.h"
+#include "RelAlgDagBuilder.h"
 
 #include <memory>
 
