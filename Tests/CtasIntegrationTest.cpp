@@ -1082,10 +1082,20 @@ int main(int argc, char* argv[]) {
     desc.add_options()("db",
                        po::value<std::string>(&db)->default_value(db)->implicit_value(db),
                        "db to connect to");
+    desc.add_options()(
+        "test-help",
+        "Print all ImportTest specific options (for gtest options use `--help`).");
 
     po::variables_map vm;
     po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
     po::notify(vm);
+
+    if (vm.count("test-help")) {
+      std::cout << "Usage: CtasIntegrationTest" << std::endl << std::endl;
+      std::cout << desc << std::endl;
+      return 0;
+    }
+
     mapd::shared_ptr<ThriftClientConnection> connMgr;
     connMgr = std::make_shared<ThriftClientConnection>();
     auto transport = connMgr->open_buffered_client_transport(host, port, cert);
