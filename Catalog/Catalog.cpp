@@ -2727,7 +2727,7 @@ void Catalog::doDropTable(const TableDescriptor* td) {
     sqliteConnector_.query_with_text_param("DELETE FROM mapd_views WHERE tableid = ?",
                                            std::to_string(tableId));
   }
-  if (table_is_temporary(td)) {
+  if (g_serialize_temp_tables && table_is_temporary(td)) {
     dropTableFromJsonUnlocked(td->tableName);
   }
   eraseTablePhysicalData(td);
