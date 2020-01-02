@@ -47,6 +47,9 @@ Debug/
 # VIM editor files
 .*.swp
 
+# Emacs editor files
+*~
+
 # Thrift-generated files
 java/src/gen/
 gen-js/

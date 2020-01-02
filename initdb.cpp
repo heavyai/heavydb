@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
                   .run(),
               vm);
     if (vm.count("help")) {
-      std::cout << "Usage: initdb [-f] <catalog path>\n";
+      std::cout << desc;
       return 0;
     }
     if (vm.count("force")) {

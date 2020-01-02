@@ -67,6 +67,7 @@ add_executable(UpdateMetadataTest UpdateMetadataTest.cpp)
 add_executable(CalciteOptimizeTest CalciteOptimizeTest.cpp)
 add_executable(JoinHashTableTest JoinHashTableTest.cpp)
 add_executable(ColumnarResultsTest ColumnarResultsTest.cpp ResultSetTestUtils.cpp)
+add_executable(CommandLineTest CommandLineTest.cpp)
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_executable(UdfTest UdfTest.cpp)
 endif()
@@ -116,6 +117,8 @@ target_link_libraries(CtasIntegrationTest gtest Shared mapd_thrift ThriftClient 
 target_link_libraries(DateTimeUtilsTest gtest Shared ${LLVM_LINKER_FLAGS})
 target_link_libraries(CalciteOptimizeTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
 target_link_libraries(JoinHashTableTest gtest ${EXECUTE_TEST_LIBS} CsvImport QueryRunner)
+target_link_libraries(CommandLineTest gtest Shared ${Boost_LIBRARIES})
+
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS} CsvImport QueryRunner)
 endif()
@@ -156,6 +159,7 @@ add_test(DateTimeUtilsTest DateTimeUtilsTest ${TEST_ARGS})
 add_test(UpdateMetadataTest UpdateMetadataTest ${TEST_ARGS})
 add_test(CalciteOptimizeTest CalciteOptimizeTest ${TEST_ARGS})
 add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
+add_test(CommandLineTest CommandLineTest ${TEST_ARGS})
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_test(UdfTest UdfTest ${TEST_ARGS})
 endif()
@@ -201,6 +205,7 @@ set(TEST_PROGRAMS
   CalciteOptimizeTest
   JoinHashTableTest
   StringFunctionsTest
+  CommandLineTest
 )
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
