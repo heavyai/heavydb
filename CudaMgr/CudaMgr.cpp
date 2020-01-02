@@ -25,6 +25,13 @@
 
 namespace CudaMgr_Namespace {
 
+std::string errorMessage(CUresult const status) {
+  const char* errorString{nullptr};
+  cuGetErrorString(status, &errorString);
+  return errorString ? "CUDA Error: " + std::string(errorString)
+                     : "CUDA Driver API error code " + std::to_string(status);
+}
+
 CudaMgr::CudaMgr(const int num_gpus, const int start_gpu)
     : start_gpu_(start_gpu), max_shared_memory_for_all_(0) {
   checkError(cuInit(0));
@@ -298,8 +305,12 @@ void CudaMgr::createDeviceContexts() {
         try {
           checkError(cuCtxDestroy(device_contexts_[destroy_id]));
         } catch (const CudaErrorException& e) {
-          LOG(ERROR) << "Error destroying context after failed creation for device "
-                     << destroy_id;
+          LOG(ERROR) << "Failed to destroy CUDA context for device ID " << destroy_id
+                     << " with " << e.what()
+                     << ". CUDA contexts were being destroyed due to an error creating "
+                        "CUDA context for device ID "
+                     << d << " out of " << device_count_ << " (" << errorMessage(status)
+                     << ").";
         }
       }
       // checkError will translate the message and throw

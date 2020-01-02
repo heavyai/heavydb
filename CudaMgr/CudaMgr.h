@@ -41,22 +41,17 @@ using DeviceGroup = std::vector<DeviceIdentifier>;
 namespace CudaMgr_Namespace {
 
 #ifdef HAVE_CUDA
+std::string errorMessage(CUresult const);
+
 class CudaErrorException : public std::runtime_error {
  public:
   CudaErrorException(CUresult status)
-      : std::runtime_error(processStatus(status)), status_(status) {}
+      : std::runtime_error(errorMessage(status)), status_(status) {}
 
   CUresult getStatus() const { return status_; }
 
  private:
-  CUresult status_;
-  std::string processStatus(CUresult status) {
-    const char* errorString{nullptr};
-    cuGetErrorString(status, &errorString);
-    return errorString
-               ? "CUDA Error: " + std::string(errorString)
-               : std::string("CUDA Driver API error code ") + std::to_string(status);
-  }
+  CUresult const status_;
 };
 #endif
 
