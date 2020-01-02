@@ -100,7 +100,6 @@
   grpc-ecosystem/go-grpc-middleware         [Apache-2.0](https://github.com/grpc-ecosystem/go-grpc-middleware/blob/master/LICENSE)        Distributed consensus
   grpc-ecosystem/go-grpc-prometheus         [Apache-2.0](https://github.com/grpc-ecosystem/go-grpc-prometheus/blob/master/LICENSE)        Distributed consensus
   grpc-ecosystem/grpc-gateway               [BSD-3-Clause](https://github.com/grpc-ecosystem/grpc-gateway/blob/master/LICENSE.txt)        Distributed consensus
-  hashicorp/hcl                             [MPL-2.0](https://github.com/hashicorp/hcl/blob/master/LICENSE)                               Distributed consensus
   Jeffail/gabs                              [MIT](https://github.com/Jeffail/gabs/blob/master/LICENSE)                                    Distributed consensus
   jonboulle/clockwork                       [Apache-2.0](https://github.com/jonboulle/clockwork/blob/master/LICENSE)                      Distributed consensus
   kr/pretty                                 [MIT](https://github.com/kr/pretty/blob/master/License)                                       Distributed consensus

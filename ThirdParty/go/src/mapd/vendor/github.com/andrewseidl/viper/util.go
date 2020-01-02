@@ -21,7 +21,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/hashicorp/hcl"
 	"github.com/magiconair/properties"
 	toml "github.com/pelletier/go-toml"
 	"github.com/spf13/cast"
@@ -164,15 +163,6 @@ func unmarshallConfigReader(in io.Reader, c map[string]interface{}, configType s
 
 	case "json":
 		if err := json.Unmarshal(buf.Bytes(), &c); err != nil {
-			return ConfigParseError{err}
-		}
-
-	case "hcl":
-		obj, err := hcl.Parse(string(buf.Bytes()))
-		if err != nil {
-			return ConfigParseError{err}
-		}
-		if err = hcl.DecodeObject(&c, obj); err != nil {
 			return ConfigParseError{err}
 		}
 

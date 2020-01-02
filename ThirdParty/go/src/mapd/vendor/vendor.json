@@ -13,10 +13,10 @@
 			"revisionTime": "2017-06-07T19:55:31Z"
 		},
 		{
-			"checksumSHA1": "J5hOr3qJwd020FZJpYEMmdt8jMQ=",
+			"checksumSHA1": "rsp1guRQXhaaYX2IPBSJT9orwys=",
 			"path": "github.com/andrewseidl/viper",
-			"revision": "f1e6386c8d33102ad845a193e847720cc3b41107",
-			"revisionTime": "2017-07-24T17:18:54Z"
+			"revision": "757ecc9b7b3e16980d4fbf4fc328b2bc75841ddc",
+			"revisionTime": "2019-12-28T04:06:10Z"
 		},
 		{
 			"checksumSHA1": "0rido7hYHQtfq3UJzVT5LClLAWc=",
@@ -220,51 +220,6 @@
 			"path": "github.com/grpc-ecosystem/grpc-gateway/utilities",
 			"revision": "79ff520b46091f8148bafeafd6e798826d6d47c2",
 			"revisionTime": "2019-03-31T07:18:29Z"
-		},
-		{
-			"path": "github.com/hashicorp/hcl",
-			"revision": "e96d23138c76470c808bf6586bdaf981bbd25cae",
-			"revisionTime": "2016-01-30T16:51:29+01:00"
-		},
-		{
-			"path": "github.com/hashicorp/hcl/hcl/ast",
-			"revision": "e96d23138c76470c808bf6586bdaf981bbd25cae",
-			"revisionTime": "2016-01-30T16:51:29+01:00"
-		},
-		{
-			"path": "github.com/hashicorp/hcl/hcl/parser",
-			"revision": "e96d23138c76470c808bf6586bdaf981bbd25cae",
-			"revisionTime": "2016-01-30T16:51:29+01:00"
-		},
-		{
-			"path": "github.com/hashicorp/hcl/hcl/scanner",
-			"revision": "e96d23138c76470c808bf6586bdaf981bbd25cae",
-			"revisionTime": "2016-01-30T16:51:29+01:00"
-		},
-		{
-			"path": "github.com/hashicorp/hcl/hcl/strconv",
-			"revision": "e96d23138c76470c808bf6586bdaf981bbd25cae",
-			"revisionTime": "2016-01-30T16:51:29+01:00"
-		},
-		{
-			"path": "github.com/hashicorp/hcl/hcl/token",
-			"revision": "e96d23138c76470c808bf6586bdaf981bbd25cae",
-			"revisionTime": "2016-01-30T16:51:29+01:00"
-		},
-		{
-			"path": "github.com/hashicorp/hcl/json/parser",
-			"revision": "e96d23138c76470c808bf6586bdaf981bbd25cae",
-			"revisionTime": "2016-01-30T16:51:29+01:00"
-		},
-		{
-			"path": "github.com/hashicorp/hcl/json/scanner",
-			"revision": "e96d23138c76470c808bf6586bdaf981bbd25cae",
-			"revisionTime": "2016-01-30T16:51:29+01:00"
-		},
-		{
-			"path": "github.com/hashicorp/hcl/json/token",
-			"revision": "e96d23138c76470c808bf6586bdaf981bbd25cae",
-			"revisionTime": "2016-01-30T16:51:29+01:00"
 		},
 		{
 			"checksumSHA1": "ChcNoh60YHvqeHJ2sR649+W1pb4=",
