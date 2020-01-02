@@ -100,14 +100,7 @@ import org.apache.calcite.util.Util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.EnumSet;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 import java.util.function.BiPredicate;
 
 /**
@@ -138,6 +131,8 @@ public final class MapDParser {
   SqlNode sqlNode_;
   private SockTransportProperties sock_transport_properties = null;
 
+  private static Map<String, Boolean> SubqueryCorrMemo = new HashMap<>();
+
   public MapDParser(String dataDir,
           final Map<String, ExtensionFunction> extSigs,
           int mapdPort,
@@ -152,6 +147,10 @@ public final class MapDParser {
     this.extSigs = extSigs;
     this.mapdPort = mapdPort;
     this.sock_transport_properties = skT;
+  }
+
+  public void clearMemo() {
+    SubqueryCorrMemo.clear();
   }
 
   private static final Context MAPD_CONNECTION_CONTEXT = new Context() {
@@ -194,9 +193,10 @@ public final class MapDParser {
       parser.getRelAlgebra(expression.toSqlString(SqlDialect.CALCITE).getSql(), options);
     } catch (Exception e) {
       // if we are not able to parse, then assume correlated
+      SubqueryCorrMemo.put(expression.toString(), true);
       return true;
     }
-
+    SubqueryCorrMemo.put(expression.toString(), false);
     return false;
   }
 
@@ -226,6 +226,7 @@ public final class MapDParser {
             // expand subquery by IN clause
             // but correlated subquery by NOT_IN clause is not available
             // currently due to a lack of supporting in Calcite
+            boolean found_expression = false;
             if (expression instanceof SqlCall) {
               SqlCall call = (SqlCall) expression;
               if (call.getOperandList().size() == 2) {
@@ -239,11 +240,21 @@ public final class MapDParser {
                 // does not have SqlSelect as its second operand
                 if (call.getOperandList().get(1) instanceof SqlSelect) {
                   expression = call.getOperandList().get(1);
-                } else {
-                  return false;
+                  SqlSelect select_call = (SqlSelect) expression;
+                  if (select_call.hasWhere()) {
+                    found_expression = true;
+                  }
                 }
               }
             }
+            if (!found_expression) {
+              return false;
+            }
+          }
+
+          String queryString = expression.toString();
+          if (SubqueryCorrMemo.containsKey(queryString)) {
+            return SubqueryCorrMemo.get(queryString);
           }
 
           if (isCorrelated(expression)) {

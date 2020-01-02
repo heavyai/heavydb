@@ -138,6 +138,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
     MapDParser parser;
     try {
       parser = (MapDParser) parserPool.borrowObject();
+      parser.clearMemo();
     } catch (Exception ex) {
       String msg = "Could not get Parse Item from pool: " + ex.getMessage();
       MAPDLOGGER.error(msg);
