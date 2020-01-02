@@ -57,6 +57,7 @@ while (( $# )); do
         --config)
             shift
             if [ -e "$1" ]; then
+                CONFIG_FILE="$1"
                 CONFIG="--config $1"
             else
                 echo "WARN: config file does not exist, ignoring: --config $1" >&2
@@ -113,7 +114,14 @@ if [ "$INSERT_SAMPLE_DATA" = true ] && [ ! "$NON_INTERACTIVE" = true ]; then
 fi
 
 if [ -d frontend ] && [ -e ./bin/omnisci_web_server ]; then
-    ./bin/omnisci_web_server $RO --port $MAPD_WEB_PORT --backend-url "http://localhost:${MAPD_HTTP_PORT}" --data $MAPD_DATA $HTTPS $HTTPS_CERT $HTTPS_KEY $CONFIG $VERBOSE &
+    # use https for backend-url if both ssl-cert and ssl-key options are in the config file
+    BACKEND_URL="http://localhost:${MAPD_HTTP_PORT}"
+    if [ -e "$CONFIG_FILE" ]; then
+        if grep --quiet "^ssl-cert" "$CONFIG_FILE" && grep --quiet "^ssl-private-key" "$CONFIG_FILE"; then
+            BACKEND_URL="https://localhost:${MAPD_HTTP_PORT}"
+        fi
+    fi
+    ./bin/omnisci_web_server $RO --port $MAPD_WEB_PORT --backend-url "${BACKEND_URL}" --data $MAPD_DATA $HTTPS $HTTPS_CERT $HTTPS_KEY $CONFIG $VERBOSE &
     PID2=$!
     echo "- omnisci_web_server $PID2 started"
 
