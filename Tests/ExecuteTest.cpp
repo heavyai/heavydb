@@ -5529,6 +5529,9 @@ void import_dept_table() {
 }
 
 void import_corr_in_lookup() {
+  const std::string drop_old_test{"DROP TABLE IF EXISTS corr_in_lookup;"};
+  run_ddl_statement(drop_old_test);
+  g_sqlite_comparator.query(drop_old_test);
   const std::string create_corr_in_lookup_table{
       "CREATE TABLE corr_in_lookup (id INT, val INT);"};
   run_ddl_statement(create_corr_in_lookup_table);
@@ -5545,6 +5548,9 @@ void import_corr_in_lookup() {
 }
 
 void import_corr_in_facts() {
+  const std::string drop_old_test{"DROP TABLE IF EXISTS corr_in_facts;"};
+  run_ddl_statement(drop_old_test);
+  g_sqlite_comparator.query(drop_old_test);
   const std::string create_corr_in_facts_table{
       "CREATE TABLE corr_in_facts (id INT, val INT);"};
   run_ddl_statement(create_corr_in_facts_table);
