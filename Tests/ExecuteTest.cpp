@@ -17457,9 +17457,9 @@ int main(int argc, char** argv) {
                      "Don't create and drop tables and only run select tests (it "
                      "implies --keep-data).");
   desc.add_options()("dump-ir",
-                     po::value<std::string>(),
-                     "Dump IR for all executed queries to file. Currently only supports "
-                     "single node tests.");
+                     po::value<bool>()->default_value(false)->implicit_value(true),
+                     "Dump IR and PTX for all executed queries to file."
+                     " Currently only supports single node tests.");
   desc.add_options()("use-temporary-tables",
                      "Use temporary tables instead of physical storage.");
 
@@ -17468,7 +17468,8 @@ int main(int argc, char** argv) {
       "Print all ExecuteTest specific options (for gtest options use `--help`).");
 
   logger::LogOptions log_options(argv[0]);
-  log_options.max_files_ = 0;  // stderr only by default
+  log_options.severity_ = logger::Severity::FATAL;
+  log_options.set_options();  // update default values
   desc.add(log_options.get_options());
 
   po::variables_map vm;
@@ -17479,6 +17480,12 @@ int main(int argc, char** argv) {
     std::cout << "Usage: ExecuteTest" << std::endl << std::endl;
     std::cout << desc << std::endl;
     return 0;
+  }
+
+  if (vm["dump-ir"].as<bool>()) {
+    // Only log IR, PTX channels to file with no rotation size.
+    log_options.channels_ = {logger::Channel::IR, logger::Channel::PTX};
+    log_options.rotation_size_ = std::numeric_limits<size_t>::max();
   }
 
   logger::init(log_options);
@@ -17492,10 +17499,6 @@ int main(int argc, char** argv) {
   QR::init(BASE_PATH);
   if (vm.count("with-sharding")) {
     g_shard_count = choose_shard_count();
-  }
-  if (vm.count("dump-ir")) {
-    const auto filename = vm["dump-ir"].as<std::string>();
-    QR::get()->setIRFilename(filename);
   }
 
   if (vm.count("keep-data")) {

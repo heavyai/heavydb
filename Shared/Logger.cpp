@@ -59,12 +59,40 @@ std::string filename(char const* path) {
   return boost::filesystem::path(path).filename().string();
 }
 
-LogOptions::LogOptions(char const* argv0) : options_("Logging") {
+LogOptions::LogOptions(char const* argv0) {
   // Log file base_name matches name of program.
   std::string const base_name =
       argv0 == nullptr ? std::string("omnisci_server") : filename(argv0);
   file_name_pattern_ = base_name + file_name_pattern_;
   symlink_ = base_name + symlink_;
+  set_options();
+}
+
+boost::filesystem::path LogOptions::full_log_dir() const {
+  return log_dir_.has_root_directory() ? log_dir_ : base_path_ / log_dir_;
+}
+
+po::options_description const& LogOptions::get_options() const {
+  return *options_;
+}
+
+// Typical usage calls either get_options() or parse_command_line() but not both.
+void LogOptions::parse_command_line(int argc, char const* const* argv) {
+  po::variables_map vm;
+  po::store(
+      po::command_line_parser(argc, argv).options(*options_).allow_unregistered().run(),
+      vm);
+  po::notify(vm);  // Sets LogOptions member variables.
+}
+
+// Must be called before init() to take effect.
+void LogOptions::set_base_path(std::string const& base_path) {
+  base_path_ = base_path;
+}
+
+// May be called to update default values based on updated member variables.
+void LogOptions::set_options() {
+  options_ = std::make_unique<boost::program_options::options_description>("Logging");
   std::string const channels = join(ChannelNames, " ");
   // Filter out DEBUG[1-4] severities from --help options
   std::string severities;
@@ -73,65 +101,44 @@ LogOptions::LogOptions(char const* argv0) : options_("Logging") {
       (severities += (severities.empty() ? "" : " ")) += name;
     }
   }
-  options_.add_options()(
+  options_->add_options()(
       "log-directory",
       po::value<boost::filesystem::path>(&log_dir_)->default_value(log_dir_),
       "Logging directory. May be relative to data directory, or absolute.");
-  options_.add_options()(
+  options_->add_options()(
       "log-file-name",
       po::value<std::string>(&file_name_pattern_)->default_value(file_name_pattern_),
       "Log file name relative to log-directory.");
-  options_.add_options()("log-symlink",
-                         po::value<std::string>(&symlink_)->default_value(symlink_),
-                         "Symlink to active log.");
-  options_.add_options()("log-severity",
-                         po::value<Severity>(&severity_)->default_value(severity_),
-                         ("Log to file severity level: " + severities).c_str());
-  options_.add_options()(
+  options_->add_options()("log-symlink",
+                          po::value<std::string>(&symlink_)->default_value(symlink_),
+                          "Symlink to active log.");
+  options_->add_options()("log-severity",
+                          po::value<Severity>(&severity_)->default_value(severity_),
+                          ("Log to file severity level: " + severities).c_str());
+  options_->add_options()(
       "log-severity-clog",
       po::value<Severity>(&severity_clog_)->default_value(severity_clog_),
       ("Log to console severity level: " + severities).c_str());
-  options_.add_options()("log-channels",
-                         po::value<Channels>(&channels_)->default_value(channels_),
-                         ("Log channel debug info: " + channels).c_str());
-  options_.add_options()("log-auto-flush",
-                         po::value<bool>(&auto_flush_)->default_value(auto_flush_),
-                         "Flush logging buffer to file after each message.");
-  options_.add_options()("log-max-files",
-                         po::value<size_t>(&max_files_)->default_value(max_files_),
-                         "Maximum number of log files to keep.");
-  options_.add_options()(
+  options_->add_options()("log-channels",
+                          po::value<Channels>(&channels_)->default_value(channels_),
+                          ("Log channel debug info: " + channels).c_str());
+  options_->add_options()("log-auto-flush",
+                          po::value<bool>(&auto_flush_)->default_value(auto_flush_),
+                          "Flush logging buffer to file after each message.");
+  options_->add_options()("log-max-files",
+                          po::value<size_t>(&max_files_)->default_value(max_files_),
+                          "Maximum number of log files to keep.");
+  options_->add_options()(
       "log-min-free-space",
-      po::value<size_t>(&min_free_space_)->default_value(20 << 20),
+      po::value<size_t>(&min_free_space_)->default_value(min_free_space_),
       "Minimum number of bytes left on device before oldest log files are deleted.");
-  options_.add_options()("log-rotate-daily",
-                         po::value<bool>(&rotate_daily_)->default_value(true),
-                         "Start new log files at midnight.");
-  options_.add_options()("log-rotation-size",
-                         po::value<size_t>(&rotation_size_)->default_value(10 << 20),
-                         "Maximum file size in bytes before new log files are started.");
-}
-
-boost::filesystem::path LogOptions::full_log_dir() const {
-  return log_dir_.has_root_directory() ? log_dir_ : base_path_ / log_dir_;
-}
-
-po::options_description const& LogOptions::get_options() const {
-  return options_;
-}
-
-// Typical usage calls either get_options() or parse_command_line() but not both.
-void LogOptions::parse_command_line(int argc, char const* const* argv) {
-  po::variables_map vm;
-  po::store(
-      po::command_line_parser(argc, argv).options(options_).allow_unregistered().run(),
-      vm);
-  po::notify(vm);  // Sets LogOptions member variables.
-}
-
-// Must be called before init() to take effect.
-void LogOptions::set_base_path(std::string const& base_path) {
-  base_path_ = base_path;
+  options_->add_options()("log-rotate-daily",
+                          po::value<bool>(&rotate_daily_)->default_value(rotate_daily_),
+                          "Start new log files at midnight.");
+  options_->add_options()(
+      "log-rotation-size",
+      po::value<size_t>(&rotation_size_)->default_value(rotation_size_),
+      "Maximum file size in bytes before new log files are started.");
 }
 
 template <typename TAG>

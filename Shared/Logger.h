@@ -105,7 +105,9 @@ using Channels = std::set<Channel>;
 // Filled by boost::program_options
 class LogOptions {
   std::string base_path_{"."};  // ignored if log_dir_ is absolute.
-  boost::program_options::options_description options_;
+  // boost::program_options::options_description is not copyable so unique_ptr
+  // allows for modification after initialization (e.g. changing default values.)
+  std::unique_ptr<boost::program_options::options_description> options_;
 
  public:
   // Initialize to default values
@@ -127,6 +129,7 @@ class LogOptions {
   boost::program_options::options_description const& get_options() const;
   void parse_command_line(int, char const* const*);
   void set_base_path(std::string const& base_path);
+  void set_options();
 };
 
 // Execute once in main() to initialize boost loggers.
