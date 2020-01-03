@@ -1,15 +1,15 @@
 .. OmniSciDB Query Execution
 
 ==================================
-Interpreter / Optimizer
+DAG Builder / Optimizer
 ==================================
 
-The ``RelAlgAbstractInterpreter`` and ``RelAlgOptimizer`` are responsible for deserializing the relational algebra tree returned from Calcite (see :doc:`../calcite/calcite_parser`) and building a relational algebra tree using OmniSciDB specific data structures. The OmniSciDB RA Tree then passes through several optimization passes. The process of building the OmniSciDB tree and a description of the optimization passes currently employed follows. 
+The :cpp:class:`RelAlgDagBuilder` and ``RelAlgOptimizer`` are responsible for deserializing the relational algebra tree returned from Calcite (see :doc:`../calcite/calcite_parser`) and building a relational algebra DAG (Directed Acyclic Graph) using OmniSciDB specific data structures. The OmniSciDB RA DAG then passes through several optimization passes. The process of building the OmniSciDB DAG and a description of the optimization passes currently employed follows. 
 
-Interpreter
+DAG Builder
 ===========
 
-The class ``RelAlgAbstractInterpreter`` deserializes the JSON string containing the optimized relational algebra tree from Calcite. The interpreter file also includes a class hierarchy for defining relational algebra nodes (``RelAlgNode``) and relational algebra node expressions (``Rex``). The run method iterates the list of relational algebra nodes present in the JSON and calls a deserialization function for each node. The deserialization function returns a class derived from ``RelAlgNode`` -- the type of the class corresponds to the type of relational algebra node. A complete list of currently supported relational algebra nodes is available in the table below.
+The class :cpp:class:`RelAlgDagBuilder` deserializes the JSON string containing the optimized relational algebra tree from Calcite. The interpreter file also includes a class hierarchy for defining relational algebra nodes (``RelAlgNode``) and relational algebra node expressions (``Rex``). The RelAlgDagBuilder constructor takes a JSON ra tree from calcite as an argument and calls a deserialization function for each node in the tree. The deserialization function returns a class derived from ``RelAlgNode`` -- the type of the class corresponds to the type of relational algebra node. A complete list of currently supported relational algebra nodes is available in the table below.
 
 =====================  =======================  ==================================================================
 Calcite Node Type      ``RelAlgNode`` Subclass    Calcite Description

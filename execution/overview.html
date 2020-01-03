@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
-    <link rel="next" title="7.2. Interpreter / Optimizer" href="optimizer.html" />
+    <link rel="next" title="7.2. DAG Builder / Optimizer" href="optimizer.html" />
     <link rel="prev" title="7. Query Execution" href="index.html" /> 
 </head>
 
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.1.0dev 7af5cbc
+                5.1.0dev f2e2c34
               </div>
             
           
@@ -128,20 +128,21 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../catalog/index.html">3. Catalog</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#high-level-overview">3.1. High Level Overview</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#system-catalog-global">3.2. System Catalog (Global)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#system-schema-syscatalog">3.2. System Schema (SysCatalog)</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#users">3.2.1. Users</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#roles">3.2.2. Roles</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#databases">3.2.3. Databases</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#permissions">3.2.4. Permissions</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#catalog-database-specific">3.3. Catalog (Database Specific)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#database-schema-catalog">3.3. Database Schema (Catalog)</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#tables">3.3.1. Tables</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#columns">3.3.2. Columns</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#dictionaries">3.3.3. Dictionaries</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#sharded-tables">3.3.4. Sharded Tables</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#views">3.3.5. Views</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#dashboards">3.3.6. Dashboards</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#temporary-tables">3.3.6. Temporary Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../catalog/index.html#dashboards">3.3.7. Dashboards</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../catalog/index.html#migration">3.4. Migration</a></li>
@@ -189,19 +190,22 @@
 <li class="toctree-l2"><a class="reference internal" href="../flow/data.html#output-data">5.2. Output Data</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="../calcite/calcite_parser.html">6. Calcite Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../calcite/calcite_parser.html">6. Calcite Parser</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../calcite/calcite_parser.html#communication-between-calcite-and-omniscidb">6.1. Communication between Calcite and OmniSciDB</a></li>
+</ul>
+</li>
 <li class="toctree-l1 current"><a class="reference internal" href="index.html">7. Query Execution</a><ul class="current">
 <li class="toctree-l2 current"><a class="current reference internal" href="#">7.1. Overview</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#request-handler-mapdhandler">7.1.1. Request Handler (MapDHandler)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#apache-calcite">7.1.2. Apache Calcite</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#relational-algebra-executor">7.1.3. Relational Algebra Executor</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#relational-algebra-abstract-interpreter-and-optimizer">7.1.4. Relational Algebra Abstract Interpreter and Optimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#relational-algebra-dag-builder-and-optimizer">7.1.4. Relational Algebra Dag Builder and Optimizer</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#relational-algebra-translator">7.1.5. Relational Algebra Translator</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#executor">7.1.6. Executor</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="optimizer.html">7.2. Interpreter / Optimizer</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="optimizer.html#interpreter">7.2.1. Interpreter</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="optimizer.html">7.2. DAG Builder / Optimizer</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="optimizer.html#dag-builder">7.2.1. DAG Builder</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="optimizer.html#relalgnode">7.2.1.1. <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="optimizer.html#rex">7.2.1.2. <code class="docutils literal notranslate"><span class="pre">Rex</span></code></a></li>
 </ul>
@@ -470,6 +474,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_map_d_leaf_handler.html">Class MapDLeafHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_map_d_program_options.html">Class MapDProgramOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_map_d_render_handler.html">Class MapDRenderHandler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/class_map_d_render_handler_1_1_impl.html">Class MapDRenderHandler::Impl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_max_range_table_index_visitor.html">Class MaxRangeTableIndexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_mem_cpy.html">Class MemCpy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_modify_manipulation_target.html">Class ModifyManipulationTarget</a></li>
@@ -605,6 +610,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_reduction_interpreter_impl.html">Class ReductionInterpreterImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_reduction_ran_out_of_slots.html">Class ReductionRanOutOfSlots</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_rel_aggregate.html">Class RelAggregate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/class_rel_alg_dag_builder.html">Class RelAlgDagBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_rel_alg_executor.html">Class RelAlgExecutor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_rel_alg_node.html">Class RelAlgNode</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_rel_alg_translator.html">Class RelAlgTranslator</a></li>
@@ -714,14 +720,13 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rel_alg_physical_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RelAlgPhysicalInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rel_alg_physical_table_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RelAlgPhysicalTableInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rex_physical_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RexPhysicalInputsVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_r_a_node_iterator.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RANodeIterator</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_rel_alg_abstract_interpreter.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RelAlgAbstractInterpreter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_rex_input_backpropagation_visitor.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RexInputBackpropagationVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_rex_rebind_inputs_visitor.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RexRebindInputsVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_rex_window_func_replacement_visitor.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RexWindowFuncReplacementVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_window_function_detection_visitor.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::WindowFunctionDetectionVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1anonymous__namespace_02_rel258877837ad902c02966e4128d3d3254.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RexInputReplacementVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1anonymous__namespace_02_rel80cbfaf79428c2e44e8c93c72a7e9f56.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::anonymous_namespace{RelAlgAbstractInterpreter.cpp}::CoalesceSecondaryProjectVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_r_a_node_iterator.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::RANodeIterator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_rex_input_backpropagation_visitor.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::RexInputBackpropagationVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_rex_rebind_inputs_visitor.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::RexRebindInputsVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_rex_window_func_replacement_visitor.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::RexWindowFuncReplacementVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_window_function_detection_visitor.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::WindowFunctionDetectionVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1anonymous__namespace_02_rel_alg_dag_37bbb45ac7c2d8584821b5ef04b2b27a.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::anonymous_namespace{RelAlgDagBuilder.cpp}::RexInputReplacementVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1anonymous__namespace_02_rel_alg_dag_8ddffa3a48943f55448d6093bbe501fd.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::anonymous_namespace{RelAlgDagBuilder.cpp}::CoalesceSecondaryProjectVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_rex_used_inputs_visitor.html">Class anonymous_namespace{RelAlgExecutor.cpp}::RexUsedInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_availability_checker.html">Class anonymous_namespace{RelAlgOptimizer.cpp}::AvailabilityChecker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_rex_input_collector.html">Class anonymous_namespace{RelAlgOptimizer.cpp}::RexInputCollector</a></li>
@@ -886,6 +891,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classcom_1_1omnisci_1_1jdbc_1_1_property__loader.html">Class com::omnisci::jdbc::Property_loader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classcreate__table_1_1_column.html">Class create_table::Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classcreate__table_1_1_synthetic_table.html">Class create_table::SyntheticTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classlogger_1_1_debug_timer.html">Class logger::DebugTimer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classlogger_1_1_duration.html">Class logger::Duration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classlogger_1_1_duration_tree.html">Class logger::DurationTree</a></li>
@@ -1353,17 +1359,17 @@ OmniSciDB uses a lightweight Bison-based parser.</p>
 </div>
 <div class="section" id="relational-algebra-executor">
 <h2>7.1.3. Relational Algebra Executor<a class="headerlink" href="#relational-algebra-executor" title="Permalink to this headline">¶</a></h2>
-<p>The <code class="docutils literal notranslate"><span class="pre">RelAlgExecutor</span></code> manages the execution of a relational algebra query. The input to the <code class="docutils literal notranslate"><span class="pre">RelAlgExecutor</span></code> is a relational algebra tree serialized in a JSON string. The <code class="docutils literal notranslate"><span class="pre">RelAlgExecutor</span></code> manages the deserialization of the tree and its converison into a query plan, OmniSciDB specific query plan optimizations, translating each node in the query plan into an abstract syntax tree (AST) for code generation, and finally creating a work unit for each AST and passing the work unit to the <code class="docutils literal notranslate"><span class="pre">Executor</span></code> for kernel compilation and execution. While OmniSciDB attempts to consolidate queries to minimize the number of query steps (see doc:<cite>./optimization</cite>), some queries may have multiple intermediate steps. The <code class="docutils literal notranslate"><span class="pre">RelAlgExecutor</span></code> manages execution for each query step and stores the state of previous steps for use in later steps.</p>
+<p>The <code class="docutils literal notranslate"><span class="pre">RelAlgExecutor</span></code> manages the execution of a relational algebra query. The input to the <code class="docutils literal notranslate"><span class="pre">RelAlgExecutor</span></code> is a relational algebra tree serialized in a JSON string, or an already deserialized tree via <a class="reference internal" href="../api/class/class_rel_alg_dag_builder.html#_CPPv416RelAlgDagBuilder" title="RelAlgDagBuilder"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">RelAlgDagBuilder</span></code></a>. The <code class="docutils literal notranslate"><span class="pre">RelAlgExecutor</span></code> converts the RA DAG into a query plan, optimizes OmniSciDB specific query plans, translates each node in the query plan into an abstract syntax tree (AST) for code generation, and finally creates a work unit for each AST and passing the work unit to the <code class="docutils literal notranslate"><span class="pre">Executor</span></code> for kernel compilation and execution. While OmniSciDB attempts to consolidate queries to minimize the number of query steps (see doc:<cite>./optimization</cite>), some queries may have multiple intermediate steps. The <code class="docutils literal notranslate"><span class="pre">RelAlgExecutor</span></code> manages execution for each query step and stores the state of previous steps for use in later steps.</p>
 <div class="figure align-center">
 <p class="plantuml">
-<img src="../_images/plantuml-59a797d365221b09f202a8e5d55f776fcc20701f.png" alt="&#64;startuml
-RelAlgExecutor -&gt; RelAlgAbstractInterpreter: Deserialize RA
+<img src="../_images/plantuml-973ac7711741dfbacff35c54d18b47fc429e6a1b.png" alt="&#64;startuml
+RelAlgExecutor -&gt; RelAlgDagBuilder: Deserialize RA
 
-RelAlgAbstractInterpreter -&gt; RelAlgOptimizer: OmniSciDB Specific RA Tree Optimization
+RelAlgDagBuilder -&gt; RelAlgOptimizer: OmniSciDB Specific RA Tree Optimization
 
-RelAlgOptimizer -&gt; RelAlgAbstractInterpreter: Return Optimized RA Tree
+RelAlgOptimizer -&gt; RelAlgDagBuilder: Return Optimized RA Tree
 
-RelAlgAbstractInterpreter -&gt; RelAlgExecutor: Return Optimized RA Tree
+RelAlgDagBuilder -&gt; RelAlgExecutor: Return Optimized RA Tree
 
 group Per Query Step
 
@@ -1381,13 +1387,13 @@ end
 </p>
 </div>
 </div>
-<div class="section" id="relational-algebra-abstract-interpreter-and-optimizer">
-<h2>7.1.4. Relational Algebra Abstract Interpreter and Optimizer<a class="headerlink" href="#relational-algebra-abstract-interpreter-and-optimizer" title="Permalink to this headline">¶</a></h2>
-<p>The <code class="docutils literal notranslate"><span class="pre">RelAlgAbstractInterpreter</span></code> deserializes the JSON string containing the optimized relational algebra tree from Calcite. The interpreter creates a <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code> object for each top-level relational algebra node. Each <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code> is made up of <code class="docutils literal notranslate"><span class="pre">Rex</span></code> (relational algebra <a class="reference internal" href="../glossary/index.html#term-expression"><span class="xref std std-term">expression</span></a>) nodes. The interpreter also manages OmniSciDB specific query optimization (see <a class="reference internal" href="optimizer.html"><span class="doc">Interpreter / Optimizer</span></a>). After optimization, each RA node in the tree is a discrete unit of execution, typically referred to as a <strong>query step</strong>.</p>
+<div class="section" id="relational-algebra-dag-builder-and-optimizer">
+<h2>7.1.4. Relational Algebra Dag Builder and Optimizer<a class="headerlink" href="#relational-algebra-dag-builder-and-optimizer" title="Permalink to this headline">¶</a></h2>
+<p>The <a class="reference internal" href="../api/class/class_rel_alg_dag_builder.html#_CPPv416RelAlgDagBuilder" title="RelAlgDagBuilder"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">RelAlgDagBuilder</span></code></a> deserializes the JSON string containing the optimized relational algebra tree from Calcite. The builder creates a <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code> object for each top-level relational algebra node. Each <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code> is made up of <code class="docutils literal notranslate"><span class="pre">Rex</span></code> (relational algebra <a class="reference internal" href="../glossary/index.html#term-expression"><span class="xref std std-term">expression</span></a>) nodes. The builder also manages OmniSciDB specific query optimizations (see <a class="reference internal" href="optimizer.html"><span class="doc">DAG Builder / Optimizer</span></a>). After optimization, each RA node in the DAG is a discrete unit of execution, typically referred to as a <strong>query step</strong>.</p>
 </div>
 <div class="section" id="relational-algebra-translator">
 <h2>7.1.5. Relational Algebra Translator<a class="headerlink" href="#relational-algebra-translator" title="Permalink to this headline">¶</a></h2>
-<p>Once an optimized relational algebra tree has been assembled, each top-level <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code> is executed. The <code class="docutils literal notranslate"><span class="pre">RelAlgTranslator</span></code> is the first step in node execution. To execute a query step, the RA node must be converted into an abstract syntax tree (AST). The AST drives code generation, building an execution kernel specified by the type of the RA node and its expressions. The input to the <code class="docutils literal notranslate"><span class="pre">RelAlgTranslator</span></code> is a <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code>, and the output of the <code class="docutils literal notranslate"><span class="pre">RelAlgTranslator</span></code> is a set of <code class="docutils literal notranslate"><span class="pre">Analyzer</span></code> nodes specifying the inputs, outputs, filters, and expressions required for the query step.</p>
+<p>Once an optimized relational algebra DAG has been assembled, each top-level <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code> is executed. The <code class="docutils literal notranslate"><span class="pre">RelAlgTranslator</span></code> is the first step in node execution. To execute a query step, the RA node must be converted into an abstract syntax tree (AST). The AST drives code generation, building an execution kernel specified by the type of the RA node and its expressions. The input to the <code class="docutils literal notranslate"><span class="pre">RelAlgTranslator</span></code> is a <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code>, and the output of the <code class="docutils literal notranslate"><span class="pre">RelAlgTranslator</span></code> is a set of <code class="docutils literal notranslate"><span class="pre">Analyzer</span></code> nodes specifying the inputs, outputs, filters, and expressions required for the query step.</p>
 </div>
 <div class="section" id="executor">
 <h2>7.1.6. Executor<a class="headerlink" href="#executor" title="Permalink to this headline">¶</a></h2>
@@ -1403,7 +1409,7 @@ end
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="optimizer.html" class="btn btn-neutral float-right" title="7.2. Interpreter / Optimizer" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="optimizer.html" class="btn btn-neutral float-right" title="7.2. DAG Builder / Optimizer" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="index.html" class="btn btn-neutral float-left" title="7. Query Execution" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

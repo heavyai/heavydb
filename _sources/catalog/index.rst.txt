@@ -10,12 +10,12 @@ High Level Overview
 .. include:: ./overview.inc
 
 
-System Catalog (Global)
+System Schema (SysCatalog)
 ============================================
 .. include:: ./system_catalog.inc
 
 
-Catalog (Database Specific)
+Database Schema (Catalog)
 ============================================
 .. include:: ./catalog.inc
 

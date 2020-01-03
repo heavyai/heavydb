@@ -1,0 +1,9 @@
+Class anonymous_namespace{RelAlgDagBuilder.cpp}::WindowFunctionDetectionVisitor
+===============================================================================
+
+.. doxygenclass:: anonymous_namespace{RelAlgDagBuilder.cpp}::WindowFunctionDetectionVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

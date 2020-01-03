@@ -1,0 +1,9 @@
+Class anonymous_namespace{RelAlgDagBuilder.cpp}::anonymous_namespace{RelAlgDagBuilder.cpp}::RexInputReplacementVisitor
+======================================================================================================================
+
+.. doxygenclass:: anonymous_namespace{RelAlgDagBuilder.cpp}::anonymous_namespace{RelAlgDagBuilder.cpp}::RexInputReplacementVisitor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

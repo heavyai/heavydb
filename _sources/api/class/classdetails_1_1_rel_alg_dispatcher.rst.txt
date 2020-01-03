@@ -1,0 +1,9 @@
+Class details::RelAlgDispatcher
+===============================
+
+.. doxygenclass:: details::RelAlgDispatcher
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

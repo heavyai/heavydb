@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.1.0dev 7af5cbc
+                5.1.0dev f2e2c34
               </div>
             
           
@@ -128,20 +128,21 @@
 </li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">3. Catalog</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="#high-level-overview">3.1. High Level Overview</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#system-catalog-global">3.2. System Catalog (Global)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#system-schema-syscatalog">3.2. System Schema (SysCatalog)</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#users">3.2.1. Users</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#roles">3.2.2. Roles</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#databases">3.2.3. Databases</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#permissions">3.2.4. Permissions</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="#catalog-database-specific">3.3. Catalog (Database Specific)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#database-schema-catalog">3.3. Database Schema (Catalog)</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="#tables">3.3.1. Tables</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#columns">3.3.2. Columns</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#dictionaries">3.3.3. Dictionaries</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#sharded-tables">3.3.4. Sharded Tables</a></li>
 <li class="toctree-l3"><a class="reference internal" href="#views">3.3.5. Views</a></li>
-<li class="toctree-l3"><a class="reference internal" href="#dashboards">3.3.6. Dashboards</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#temporary-tables">3.3.6. Temporary Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#dashboards">3.3.7. Dashboards</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="#migration">3.4. Migration</a></li>
@@ -189,19 +190,22 @@
 <li class="toctree-l2"><a class="reference internal" href="../flow/data.html#output-data">5.2. Output Data</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="../calcite/calcite_parser.html">6. Calcite Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../calcite/calcite_parser.html">6. Calcite Parser</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../calcite/calcite_parser.html#communication-between-calcite-and-omniscidb">6.1. Communication between Calcite and OmniSciDB</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="../execution/index.html">7. Query Execution</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../execution/overview.html">7.1. Overview</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#request-handler-mapdhandler">7.1.1. Request Handler (MapDHandler)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#apache-calcite">7.1.2. Apache Calcite</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-executor">7.1.3. Relational Algebra Executor</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-abstract-interpreter-and-optimizer">7.1.4. Relational Algebra Abstract Interpreter and Optimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-dag-builder-and-optimizer">7.1.4. Relational Algebra Dag Builder and Optimizer</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#relational-algebra-translator">7.1.5. Relational Algebra Translator</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../execution/overview.html#executor">7.1.6. Executor</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../execution/optimizer.html">7.2. Interpreter / Optimizer</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../execution/optimizer.html#interpreter">7.2.1. Interpreter</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../execution/optimizer.html">7.2. DAG Builder / Optimizer</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../execution/optimizer.html#dag-builder">7.2.1. DAG Builder</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#relalgnode">7.2.1.1. <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../execution/optimizer.html#rex">7.2.1.2. <code class="docutils literal notranslate"><span class="pre">Rex</span></code></a></li>
 </ul>
@@ -470,6 +474,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_map_d_leaf_handler.html">Class MapDLeafHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_map_d_program_options.html">Class MapDProgramOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_map_d_render_handler.html">Class MapDRenderHandler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/class_map_d_render_handler_1_1_impl.html">Class MapDRenderHandler::Impl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_max_range_table_index_visitor.html">Class MaxRangeTableIndexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_mem_cpy.html">Class MemCpy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_modify_manipulation_target.html">Class ModifyManipulationTarget</a></li>
@@ -605,6 +610,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_reduction_interpreter_impl.html">Class ReductionInterpreterImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_reduction_ran_out_of_slots.html">Class ReductionRanOutOfSlots</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_rel_aggregate.html">Class RelAggregate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/class_rel_alg_dag_builder.html">Class RelAlgDagBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_rel_alg_executor.html">Class RelAlgExecutor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_rel_alg_node.html">Class RelAlgNode</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_rel_alg_translator.html">Class RelAlgTranslator</a></li>
@@ -714,14 +720,13 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rel_alg_physical_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RelAlgPhysicalInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rel_alg_physical_table_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RelAlgPhysicalTableInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rex_physical_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RexPhysicalInputsVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_r_a_node_iterator.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RANodeIterator</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_rel_alg_abstract_interpreter.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RelAlgAbstractInterpreter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_rex_input_backpropagation_visitor.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RexInputBackpropagationVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_rex_rebind_inputs_visitor.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RexRebindInputsVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_rex_window_func_replacement_visitor.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RexWindowFuncReplacementVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_window_function_detection_visitor.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::WindowFunctionDetectionVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1anonymous__namespace_02_rel258877837ad902c02966e4128d3d3254.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RexInputReplacementVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1anonymous__namespace_02_rel80cbfaf79428c2e44e8c93c72a7e9f56.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::anonymous_namespace{RelAlgAbstractInterpreter.cpp}::CoalesceSecondaryProjectVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_r_a_node_iterator.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::RANodeIterator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_rex_input_backpropagation_visitor.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::RexInputBackpropagationVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_rex_rebind_inputs_visitor.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::RexRebindInputsVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_rex_window_func_replacement_visitor.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::RexWindowFuncReplacementVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_window_function_detection_visitor.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::WindowFunctionDetectionVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1anonymous__namespace_02_rel_alg_dag_37bbb45ac7c2d8584821b5ef04b2b27a.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::anonymous_namespace{RelAlgDagBuilder.cpp}::RexInputReplacementVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1anonymous__namespace_02_rel_alg_dag_8ddffa3a48943f55448d6093bbe501fd.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::anonymous_namespace{RelAlgDagBuilder.cpp}::CoalesceSecondaryProjectVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_rex_used_inputs_visitor.html">Class anonymous_namespace{RelAlgExecutor.cpp}::RexUsedInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_availability_checker.html">Class anonymous_namespace{RelAlgOptimizer.cpp}::AvailabilityChecker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_rex_input_collector.html">Class anonymous_namespace{RelAlgOptimizer.cpp}::RexInputCollector</a></li>
@@ -886,6 +891,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classcom_1_1omnisci_1_1jdbc_1_1_property__loader.html">Class com::omnisci::jdbc::Property_loader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classcreate__table_1_1_column.html">Class create_table::Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classcreate__table_1_1_synthetic_table.html">Class create_table::SyntheticTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classlogger_1_1_debug_timer.html">Class logger::DebugTimer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classlogger_1_1_duration.html">Class logger::Duration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/classlogger_1_1_duration_tree.html">Class logger::DurationTree</a></li>
@@ -1317,8 +1323,8 @@
 <p>Both SysCatalog and Catalog classes are defined in files of the same name in the <cite>Catalog</cite> source directory. All catalog-related code lives inside the <code class="docutils literal notranslate"><span class="pre">Catalog_Namespace</span></code>.</p>
 <img alt="../_images/catalog_overview.png" src="../_images/catalog_overview.png" />
 </div>
-<div class="section" id="system-catalog-global">
-<h2>3.2. System Catalog (Global)<a class="headerlink" href="#system-catalog-global" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="system-schema-syscatalog">
+<h2>3.2. System Schema (SysCatalog)<a class="headerlink" href="#system-schema-syscatalog" title="Permalink to this headline">¶</a></h2>
 <p><code class="docutils literal notranslate"><span class="pre">SysCatalog</span></code> is a singleton class responsible for managing top-level OmniSciDB server metadata, including:</p>
 <ul class="simple">
 <li><p>Users</p></li>
@@ -1348,9 +1354,9 @@
 <p>The <code class="docutils literal notranslate"><span class="pre">objectDescriptorMap_</span></code> in the <code class="docutils literal notranslate"><span class="pre">SysCatalog</span></code> class stores <code class="docutils literal notranslate"><span class="pre">ObjectRoleDescriptor``s,</span> <span class="pre">relating</span> <span class="pre">a</span> <span class="pre">role</span> <span class="pre">to</span> <span class="pre">a</span> <span class="pre">specific</span> <span class="pre">privilege</span> <span class="pre">grant.</span> <span class="pre">The</span>&#160; <span class="pre">``objectDescriptorMap_</span></code> is also built when  Together, the <code class="docutils literal notranslate"><span class="pre">granteeMap_</span></code> and <code class="docutils literal notranslate"><span class="pre">objectDescriptorMap_</span></code> are referenced when determining if a user has access to perform an action in the database.</p>
 </div>
 </div>
-<div class="section" id="catalog-database-specific">
-<h2>3.3. Catalog (Database Specific)<a class="headerlink" href="#catalog-database-specific" title="Permalink to this headline">¶</a></h2>
-<p>The <code class="docutils literal notranslate"><span class="pre">Catalog</span></code> is the top-level metadata object for a database. When the OmniSciDB data directory is initialized, an initial “default” database is created. By default, OmniSciDB always has at least one catalog at startup. The <code class="docutils literal notranslate"><span class="pre">Catalog</span></code> maintains the following objects:</p>
+<div class="section" id="database-schema-catalog">
+<h2>3.3. Database Schema (Catalog)<a class="headerlink" href="#database-schema-catalog" title="Permalink to this headline">¶</a></h2>
+<p>The <a class="reference internal" href="../api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7CatalogE" title="Catalog_Namespace::Catalog"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">Catalog_Namespace::Catalog</span></code></a> is the top-level container for schemas associated with an individual database. When the OmniSciDB data directory is initialized, an initial “default” database is created. OmniSciDB always has at least one catalog at startup. The <code class="docutils literal notranslate"><span class="pre">Catalog</span></code> maintains the following objects:</p>
 <ul class="simple">
 <li><p>Tables</p></li>
 <li><p>Columns</p></li>
@@ -1363,7 +1369,7 @@
 <a class="reference internal image-reference" href="../_images/cat_schema.png"><img alt="../_images/cat_schema.png" src="../_images/cat_schema.png" style="height: 400px;" /></a>
 <div class="section" id="tables">
 <h3>3.3.1. Tables<a class="headerlink" href="#tables" title="Permalink to this headline">¶</a></h3>
-<p>Tables metadata for all tables in a given database is stored in the <code class="docutils literal notranslate"><span class="pre">mapd_tables</span></code> <em>SQLite</em> table and read by the <code class="docutils literal notranslate"><span class="pre">Catalog</span></code> at startup. Table metadata is stored in a <code class="docutils literal notranslate"><span class="pre">TableDescriptor</span></code> for access by other objects in the system. For a given table, the <code class="docutils literal notranslate"><span class="pre">TableDescriptor</span></code> both holds table metadata (id, fragment size, etc) and is responsible for instantiating the <code class="docutils literal notranslate"><span class="pre">Fragmenter</span></code> for the table. That is, the <code class="docutils literal notranslate"><span class="pre">TableDescriptor</span></code> is the primary interface to locating storage for a given table.</p>
+<p>Tables metadata for all tables in a given database is stored in the <code class="docutils literal notranslate"><span class="pre">mapd_tables</span></code> <em>SQLite</em> table and read by the <code class="docutils literal notranslate"><span class="pre">Catalog</span></code> at startup. Table metadata is stored in the <a class="reference internal" href="../api/struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">TableDescriptor</span></code></a> object for access by other objects in the system. For a given table, the <a class="reference internal" href="../api/struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">TableDescriptor</span></code></a> both holds table metadata (<code class="docutils literal notranslate"><span class="pre">id</span></code>, <code class="docutils literal notranslate"><span class="pre">fragment</span> <span class="pre">size</span></code>, etc) and is responsible for instantiating the <code class="docutils literal notranslate"><span class="pre">Fragmenter</span></code> for the table. That is, the <a class="reference internal" href="../api/struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">TableDescriptor</span></code></a> is the primary interface to locating storage for a given table.</p>
 </div>
 <div class="section" id="columns">
 <h3>3.3.2. Columns<a class="headerlink" href="#columns" title="Permalink to this headline">¶</a></h3>
@@ -1371,7 +1377,7 @@
 </div>
 <div class="section" id="dictionaries">
 <h3>3.3.3. Dictionaries<a class="headerlink" href="#dictionaries" title="Permalink to this headline">¶</a></h3>
-<p>Columns of type <cite>dictionary encoded string</cite> require a separate string dictionary. The string dictionary metadata is stored in the <code class="docutils literal notranslate"><span class="pre">mapd_dictionaries</span></code> SQLite table. <code class="docutils literal notranslate"><span class="pre">DictDescriptor</span></code> objects encapsulate string dictionary information. Like the <code class="docutils literal notranslate"><span class="pre">TabelDescriptor</span></code>, <code class="docutils literal notranslate"><span class="pre">DictDescriptor</span></code> is the primary interface for accessing physical string dictionary storage.</p>
+<p>Columns of type <cite>dictionary encoded string</cite> require a separate string dictionary. The string dictionary metadata is stored in the <code class="docutils literal notranslate"><span class="pre">mapd_dictionaries</span></code> SQLite table. <a class="reference internal" href="../api/struct/struct_dict_descriptor.html#_CPPv414DictDescriptor" title="DictDescriptor"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">DictDescriptor</span></code></a> objects encapsulate string dictionary information. Like the <a class="reference internal" href="../api/struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">TableDescriptor</span></code></a>, <a class="reference internal" href="../api/struct/struct_dict_descriptor.html#_CPPv414DictDescriptor" title="DictDescriptor"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">DictDescriptor</span></code></a> is the primary interface for accessing physical string dictionary storage.</p>
 </div>
 <div class="section" id="sharded-tables">
 <h3>3.3.4. Sharded Tables<a class="headerlink" href="#sharded-tables" title="Permalink to this headline">¶</a></h3>
@@ -1379,10 +1385,16 @@
 </div>
 <div class="section" id="views">
 <h3>3.3.5. Views<a class="headerlink" href="#views" title="Permalink to this headline">¶</a></h3>
-<p>Views in OmniSciDB are currently not materialized during creation. Instead, the definition for the view is stored in the <code class="docutils literal notranslate"><span class="pre">mapd_views</span></code> <em>SQLite</em> table, and the view is materialized lazily when the view is queried. By using lazy materialization, OmniSciDB fuse the query on the view with the underlying table(s) backing the view, reducing the number of intermediate projections required and/or the amount of data that must be loaded and processed. Views are represented by a <code class="docutils literal notranslate"><span class="pre">TableDescriptor</span></code> object with the <cite>isView</cite> boolean member set to <cite>true</cite>.</p>
+<p>Views in OmniSciDB are currently not materialized during creation. Instead, the definition for the view is stored in the <code class="docutils literal notranslate"><span class="pre">mapd_views</span></code> <em>SQLite</em> table, and the view is materialized lazily when the view is queried. By using lazy materialization, OmniSciDB fuse the query on the view with the underlying table(s) backing the view, reducing the number of intermediate projections required and/or the amount of data that must be loaded and processed. Views are represented by a <a class="reference internal" href="../api/struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">TableDescriptor</span></code></a> object with the <cite>isView</cite> boolean member set to <cite>true</cite>.</p>
+</div>
+<div class="section" id="temporary-tables">
+<h3>3.3.6. Temporary Tables<a class="headerlink" href="#temporary-tables" title="Permalink to this headline">¶</a></h3>
+<p>OmniSciDB supports temporary tables. Temporary tables can be created using <code class="docutils literal notranslate"><span class="pre">CREATE</span> <span class="pre">TEMPORARY</span> <span class="pre">TABLE</span></code>. All types (except geospatial types) are supported in temporary tables. Temporary tables store their data in CPU memory and persist until the server is restarted.</p>
+<p>Temporary tables are identified by checking the <code class="docutils literal notranslate"><span class="pre">persistenceLevel</span></code> property of the <a class="reference internal" href="../api/struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor"><code class="xref cpp cpp-class docutils literal notranslate"><span class="pre">TableDescriptor</span></code></a>. A free function, <code class="docutils literal notranslate"><span class="pre">table_is_temporary</span></code>, is available for convenience.</p>
+<p>Note that <span class="xref std std-ref">calcite_parser</span> relies on reading the sqlite catalog files directly for unit testing. To test temporary tables, a separate JSON file is created in the catalog directory for each database containing temporary table metadata. See <span class="xref std std-ref">calcite_omniscidb_comms</span> for more details.</p>
 </div>
 <div class="section" id="dashboards">
-<h3>3.3.6. Dashboards<a class="headerlink" href="#dashboards" title="Permalink to this headline">¶</a></h3>
+<h3>3.3.7. Dashboards<a class="headerlink" href="#dashboards" title="Permalink to this headline">¶</a></h3>
 <p>OmniSciDB holds the dashboard state for OmniSci Immerse (Enterprise Edition only), our web-based data exploration tool. Dashboards are serialized and stored in the <code class="docutils literal notranslate"><span class="pre">mapd_dashboards</span></code> table. Because dashboards are built over a database and typically contain many database objects, they are considered a top-level object in the OmniSciDB catalog and object permissions model.</p>
 </div>
 </div>

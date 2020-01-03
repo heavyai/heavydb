@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.1.0dev 7af5cbc
+                5.1.0dev f2e2c34
               </div>
             
           
@@ -128,20 +128,21 @@
 </li>
 <li class="toctree-l1"><a class="reference internal" href="../../catalog/index.html">3. Catalog</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../catalog/index.html#high-level-overview">3.1. High Level Overview</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../../catalog/index.html#system-catalog-global">3.2. System Catalog (Global)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../catalog/index.html#system-schema-syscatalog">3.2. System Schema (SysCatalog)</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../catalog/index.html#users">3.2.1. Users</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../catalog/index.html#roles">3.2.2. Roles</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../catalog/index.html#databases">3.2.3. Databases</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../catalog/index.html#permissions">3.2.4. Permissions</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../catalog/index.html#catalog-database-specific">3.3. Catalog (Database Specific)</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../catalog/index.html#database-schema-catalog">3.3. Database Schema (Catalog)</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../catalog/index.html#tables">3.3.1. Tables</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../catalog/index.html#columns">3.3.2. Columns</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../catalog/index.html#dictionaries">3.3.3. Dictionaries</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../catalog/index.html#sharded-tables">3.3.4. Sharded Tables</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../catalog/index.html#views">3.3.5. Views</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../catalog/index.html#dashboards">3.3.6. Dashboards</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../catalog/index.html#temporary-tables">3.3.6. Temporary Tables</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../catalog/index.html#dashboards">3.3.7. Dashboards</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../catalog/index.html#migration">3.4. Migration</a></li>
@@ -189,19 +190,22 @@
 <li class="toctree-l2"><a class="reference internal" href="../../flow/data.html#output-data">5.2. Output Data</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="../../calcite/calcite_parser.html">6. Calcite Parser</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../calcite/calcite_parser.html">6. Calcite Parser</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../calcite/calcite_parser.html#communication-between-calcite-and-omniscidb">6.1. Communication between Calcite and OmniSciDB</a></li>
+</ul>
+</li>
 <li class="toctree-l1"><a class="reference internal" href="../../execution/index.html">7. Query Execution</a><ul>
 <li class="toctree-l2"><a class="reference internal" href="../../execution/overview.html">7.1. Overview</a><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../execution/overview.html#request-handler-mapdhandler">7.1.1. Request Handler (MapDHandler)</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../execution/overview.html#apache-calcite">7.1.2. Apache Calcite</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../execution/overview.html#relational-algebra-executor">7.1.3. Relational Algebra Executor</a></li>
-<li class="toctree-l3"><a class="reference internal" href="../../execution/overview.html#relational-algebra-abstract-interpreter-and-optimizer">7.1.4. Relational Algebra Abstract Interpreter and Optimizer</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../execution/overview.html#relational-algebra-dag-builder-and-optimizer">7.1.4. Relational Algebra Dag Builder and Optimizer</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../execution/overview.html#relational-algebra-translator">7.1.5. Relational Algebra Translator</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../execution/overview.html#executor">7.1.6. Executor</a></li>
 </ul>
 </li>
-<li class="toctree-l2"><a class="reference internal" href="../../execution/optimizer.html">7.2. Interpreter / Optimizer</a><ul>
-<li class="toctree-l3"><a class="reference internal" href="../../execution/optimizer.html#interpreter">7.2.1. Interpreter</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../execution/optimizer.html">7.2. DAG Builder / Optimizer</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../execution/optimizer.html#dag-builder">7.2.1. DAG Builder</a><ul>
 <li class="toctree-l4"><a class="reference internal" href="../../execution/optimizer.html#relalgnode">7.2.1.1. <code class="docutils literal notranslate"><span class="pre">RelAlgNode</span></code></a></li>
 <li class="toctree-l4"><a class="reference internal" href="../../execution/optimizer.html#rex">7.2.1.2. <code class="docutils literal notranslate"><span class="pre">Rex</span></code></a></li>
 </ul>
@@ -470,6 +474,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_map_d_leaf_handler.html">Class MapDLeafHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_map_d_program_options.html">Class MapDProgramOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_map_d_render_handler.html">Class MapDRenderHandler</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_map_d_render_handler_1_1_impl.html">Class MapDRenderHandler::Impl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_max_range_table_index_visitor.html">Class MaxRangeTableIndexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_mem_cpy.html">Class MemCpy</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_modify_manipulation_target.html">Class ModifyManipulationTarget</a></li>
@@ -605,6 +610,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_reduction_interpreter_impl.html">Class ReductionInterpreterImpl</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_reduction_ran_out_of_slots.html">Class ReductionRanOutOfSlots</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_aggregate.html">Class RelAggregate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_rel_alg_dag_builder.html">Class RelAlgDagBuilder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_alg_executor.html">Class RelAlgExecutor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_alg_node.html">Class RelAlgNode</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_rel_alg_translator.html">Class RelAlgTranslator</a></li>
@@ -714,14 +720,13 @@
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RelAlgPhysicalInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rel_alg_physical_table_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RelAlgPhysicalTableInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_query_physical_inputs_collector_8cpp_03_1_1_rex_physical_inputs_visitor.html">Class anonymous_namespace{QueryPhysicalInputsCollector.cpp}::RexPhysicalInputsVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_r_a_node_iterator.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RANodeIterator</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_rel_alg_abstract_interpreter.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RelAlgAbstractInterpreter</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_rex_input_backpropagation_visitor.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RexInputBackpropagationVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_rex_rebind_inputs_visitor.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RexRebindInputsVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_rex_window_func_replacement_visitor.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RexWindowFuncReplacementVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1_window_function_detection_visitor.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::WindowFunctionDetectionVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1anonymous__namespace_02_rel258877837ad902c02966e4128d3d3254.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::anonymous_namespace{RelAlgAbstractInterpreter.cpp}::RexInputReplacementVisitor</a></li>
-<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_abstract_interpreter_8cpp_03_1_1anonymous__namespace_02_rel80cbfaf79428c2e44e8c93c72a7e9f56.html">Class anonymous_namespace{RelAlgAbstractInterpreter.cpp}::anonymous_namespace{RelAlgAbstractInterpreter.cpp}::CoalesceSecondaryProjectVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_r_a_node_iterator.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::RANodeIterator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_rex_input_backpropagation_visitor.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::RexInputBackpropagationVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_rex_rebind_inputs_visitor.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::RexRebindInputsVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_rex_window_func_replacement_visitor.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::RexWindowFuncReplacementVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1_window_function_detection_visitor.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::WindowFunctionDetectionVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1anonymous__namespace_02_rel_alg_dag_37bbb45ac7c2d8584821b5ef04b2b27a.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::anonymous_namespace{RelAlgDagBuilder.cpp}::RexInputReplacementVisitor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_dag_builder_8cpp_03_1_1anonymous__namespace_02_rel_alg_dag_8ddffa3a48943f55448d6093bbe501fd.html">Class anonymous_namespace{RelAlgDagBuilder.cpp}::anonymous_namespace{RelAlgDagBuilder.cpp}::CoalesceSecondaryProjectVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_executor_8cpp_03_1_1_rex_used_inputs_visitor.html">Class anonymous_namespace{RelAlgExecutor.cpp}::RexUsedInputsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_availability_checker.html">Class anonymous_namespace{RelAlgOptimizer.cpp}::AvailabilityChecker</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classanonymous__namespace_02_rel_alg_optimizer_8cpp_03_1_1_rex_input_collector.html">Class anonymous_namespace{RelAlgOptimizer.cpp}::RexInputCollector</a></li>
@@ -886,6 +891,7 @@
 <li class="toctree-l2"><a class="reference internal" href="classcom_1_1omnisci_1_1jdbc_1_1_property__loader.html">Class com::omnisci::jdbc::Property_loader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcreate__table_1_1_column.html">Class create_table::Column</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classcreate__table_1_1_synthetic_table.html">Class create_table::SyntheticTable</a></li>
+<li class="toctree-l2"><a class="reference internal" href="classdetails_1_1_rel_alg_dispatcher.html">Class details::RelAlgDispatcher</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_debug_timer.html">Class logger::DebugTimer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_duration.html">Class logger::Duration</a></li>
 <li class="toctree-l2"><a class="reference internal" href="classlogger_1_1_duration_tree.html">Class logger::DurationTree</a></li>
