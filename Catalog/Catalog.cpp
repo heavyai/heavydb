@@ -1387,7 +1387,8 @@ void Catalog::instantiateFragmenter(TableDescriptor* td) const {
                                                  td->maxChunkSize,
                                                  td->fragPageSize,
                                                  td->maxRows,
-                                                 td->persistenceLevel);
+                                                 td->persistenceLevel,
+                                                 !td->storageType.empty());
     }
   });
   LOG(INFO) << "Instantiating Fragmenter for table " << td->tableName << " took "

@@ -57,8 +57,8 @@ TargetValue run_simple_agg(const string& query_str) {
   return crt_row[0];
 }
 
-const char* create_table_trips = R"(
-CREATE TABLE trips (
+const char* trips_table_ddl = R"( 
+trips (
 trip_id BIGINT,
 vendor_id TEXT ENCODING NONE,
 pickup_datetime TIMESTAMP,
@@ -116,7 +116,7 @@ class NycTaxiTest : public ::testing::Test {
  protected:
   void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
-    ASSERT_NO_THROW(run_ddl_statement(create_table_trips););
+    ASSERT_NO_THROW(run_ddl_statement("CREATE TABLE " + std::string(trips_table_ddl)));
   }
 
   void TearDown() override {
@@ -130,6 +130,27 @@ TEST_F(NycTaxiTest, RunSimpleQuery) {
             v<int64_t>(run_simple_agg(
                 "SELECT count(vendor_id) FROM trips where vendor_id < '5'")));
 }
+
+class NycTaxiTemporaryTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
+    ASSERT_NO_THROW(
+        run_ddl_statement("CREATE TEMPORARY TABLE " + std::string(trips_table_ddl)));
+  }
+
+  void TearDown() override {
+    ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
+  }
+};
+
+TEST_F(NycTaxiTemporaryTest, RunSimpleQuery) {
+  std::shared_ptr<ResultSet> res;
+  ASSERT_EQ(999,
+            v<int64_t>(run_simple_agg(
+                "SELECT count(vendor_id) FROM trips where vendor_id < '5'")));
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
