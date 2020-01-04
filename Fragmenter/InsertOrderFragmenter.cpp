@@ -53,7 +53,8 @@ InsertOrderFragmenter::InsertOrderFragmenter(
     const size_t maxChunkSize,
     const size_t pageSize,
     const size_t maxRows,
-    const Data_Namespace::MemoryLevel defaultInsertLevel)
+    const Data_Namespace::MemoryLevel defaultInsertLevel,
+    const bool uses_foreign_storage)
     : chunkKeyPrefix_(chunkKeyPrefix)
     , dataMgr_(dataMgr)
     , catalog_(catalog)
@@ -67,6 +68,7 @@ InsertOrderFragmenter::InsertOrderFragmenter(
     , maxRows_(maxRows)
     , fragmenterType_("insert_order")
     , defaultInsertLevel_(defaultInsertLevel)
+    , uses_foreign_storage_(uses_foreign_storage)
     , hasMaterializedRowId_(false)
     , mutex_access_inmem_states(new std::mutex) {
   // Note that Fragmenter is not passed virtual columns and so should only
@@ -86,7 +88,8 @@ InsertOrderFragmenter::InsertOrderFragmenter(
 InsertOrderFragmenter::~InsertOrderFragmenter() {}
 
 void InsertOrderFragmenter::getChunkMetadata() {
-  if (defaultInsertLevel_ == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+  if (uses_foreign_storage_ ||
+      defaultInsertLevel_ == Data_Namespace::MemoryLevel::DISK_LEVEL) {
     // memory-resident tables won't have anything on disk
     std::vector<std::pair<ChunkKey, ChunkMetadata>> chunk_metadata;
     dataMgr_->getChunkMetadataVecForKeyPrefix(chunk_metadata, chunkKeyPrefix_);
@@ -151,7 +154,7 @@ void InsertOrderFragmenter::getChunkMetadata() {
   // this is maximum number of rows assuming everything is fixed length
   maxFragmentRows_ = std::min(maxFragmentRows_, maxChunkSize_ / maxFixedColSize);
 
-  if (fragmentInfoVec_.size() > 0) {
+  if (!uses_foreign_storage_ && fragmentInfoVec_.size() > 0) {
     // Now need to get the insert buffers for each column - should be last
     // fragment
     int lastFragmentId = fragmentInfoVec_.back().fragmentId;

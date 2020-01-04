@@ -66,7 +66,8 @@ class InsertOrderFragmenter : public AbstractFragmenter {
       const size_t maxChunkSize = DEFAULT_MAX_CHUNK_SIZE,
       const size_t pageSize = DEFAULT_PAGE_SIZE /*default 1MB*/,
       const size_t maxRows = DEFAULT_MAX_ROWS,
-      const Data_Namespace::MemoryLevel defaultInsertLevel = Data_Namespace::DISK_LEVEL);
+      const Data_Namespace::MemoryLevel defaultInsertLevel = Data_Namespace::DISK_LEVEL,
+      const bool uses_foreign_storage = false);
 
   ~InsertOrderFragmenter() override;
   /**
@@ -201,6 +202,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
       insertMutex_;  // to prevent race conditions on insert - only one insert statement
                      // should be going to a table at a time
   Data_Namespace::MemoryLevel defaultInsertLevel_;
+  const bool uses_foreign_storage_;
   bool hasMaterializedRowId_;
   int rowIdColId_;
   std::unordered_map<int, size_t> varLenColInfo_;
