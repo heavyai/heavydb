@@ -186,7 +186,7 @@ public final class MapDParser {
   }
 
   private boolean isCorrelated(SqlNode expression) {
-    String queryString = expression.toString();
+    String queryString = expression.toSqlString(SqlDialect.CALCITE).getSql();
     if (SubqueryCorrMemo.containsKey(queryString)) {
       return SubqueryCorrMemo.get(queryString);
     }
