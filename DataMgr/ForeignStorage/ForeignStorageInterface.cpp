@@ -117,10 +117,10 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
                                                const size_t initialSize = 0) override {
     mapd_unique_lock<mapd_shared_mutex> chunk_index_write_lock(chunk_index_mutex_);
     const auto it_ok = chunk_index_.emplace(
-        key, new ForeignStorageBuffer(key, persistent_foreign_storage_));
+        key, std::make_unique<ForeignStorageBuffer>(key, persistent_foreign_storage_));
     // this check fails if we create table, drop it and create again
     // CHECK(it_ok.second);
-    return it_ok.first->second;
+    return it_ok.first->second.get();
   }
 
   Data_Namespace::AbstractBuffer* getBuffer(const ChunkKey& key,
@@ -128,7 +128,7 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
     mapd_shared_lock<mapd_shared_mutex> chunk_index_write_lock(chunk_index_mutex_);
     const auto it = chunk_index_.find(key);
     CHECK(it != chunk_index_.end());
-    return it->second;
+    return it->second.get();
   }
 
   void fetchBuffer(const ChunkKey& key,
@@ -260,7 +260,7 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
   const int db_id_;
   const int table_id_;
   PersistentForeignStorageInterface* persistent_foreign_storage_;
-  std::map<ChunkKey, ForeignStorageBuffer*> chunk_index_;
+  std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_index_;
   mutable mapd_shared_mutex chunk_index_mutex_;
 };
 
