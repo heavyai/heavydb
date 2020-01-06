@@ -219,7 +219,7 @@ class ForeignStorageInterface {
                                                                 const int table_id);
 
   static void registerPersistentStorageInterface(
-      PersistentForeignStorageInterface* persistent_foreign_storage);
+      std::unique_ptr<PersistentForeignStorageInterface> persistent_foreign_storage);
 
   static void destroy();
 
@@ -233,7 +233,8 @@ class ForeignStorageInterface {
                             const std::list<ColumnDescriptor>& cols);
 
  private:
-  static std::unordered_map<std::string, PersistentForeignStorageInterface*>
+  static std::unordered_map<std::string,
+                            std::unique_ptr<PersistentForeignStorageInterface>>
       persistent_storage_interfaces_;
   static std::map<std::pair<int, int>, PersistentForeignStorageInterface*>
       table_persistent_storage_interface_map_;

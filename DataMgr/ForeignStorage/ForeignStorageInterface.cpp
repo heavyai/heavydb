@@ -156,11 +156,11 @@ Data_Namespace::AbstractBufferMgr* ForeignStorageInterface::lookupBufferManager(
 }
 
 void ForeignStorageInterface::registerPersistentStorageInterface(
-    PersistentForeignStorageInterface* persistent_foreign_storage) {
+    std::unique_ptr<PersistentForeignStorageInterface> persistent_foreign_storage) {
   std::lock_guard<std::mutex> persistent_storage_interfaces_lock(
       persistent_storage_interfaces_mutex_);
   const auto it_ok = persistent_storage_interfaces_.emplace(
-      persistent_foreign_storage->getType(), persistent_foreign_storage);
+      persistent_foreign_storage->getType(), std::move(persistent_foreign_storage));
   CHECK(it_ok.second);
 }
 
@@ -178,7 +178,7 @@ void ForeignStorageInterface::prepareTable(const int db_id,
       persistent_storage_interfaces_mutex_);
   const auto it = persistent_storage_interfaces_.find(type.first);
   CHECK(it != persistent_storage_interfaces_.end());
-  auto p = it->second;
+  auto& p = it->second;
   persistent_storage_interfaces_lock.unlock();
   p->prepareTable(db_id, type.second, td, cols);
 }
@@ -196,7 +196,7 @@ void ForeignStorageInterface::registerTable(Catalog_Namespace::Catalog* catalog,
 
   auto db_id = catalog->getCurrentDB().dbId;
   const auto it_ok = table_persistent_storage_interface_map_.emplace(
-      std::make_pair(db_id, table_id), it->second);
+      std::make_pair(db_id, table_id), it->second.get());
   // this check fails if we create table, drop it and create again
   // CHECK(it_ok.second);
   persistent_storage_interfaces_lock.unlock();
@@ -210,9 +210,10 @@ void ForeignStorageInterface::registerTable(Catalog_Namespace::Catalog* catalog,
 
 void ForeignStorageInterface::destroy() {
   persistent_storage_interfaces_.clear();
+  managers_map_.clear();
 }
 
-std::unordered_map<std::string, PersistentForeignStorageInterface*>
+std::unordered_map<std::string, std::unique_ptr<PersistentForeignStorageInterface>>
     ForeignStorageInterface::persistent_storage_interfaces_;
 std::map<std::pair<int, int>, PersistentForeignStorageInterface*>
     ForeignStorageInterface::table_persistent_storage_interface_map_;

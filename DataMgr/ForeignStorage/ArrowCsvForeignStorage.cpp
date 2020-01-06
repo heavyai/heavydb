@@ -19,7 +19,6 @@
 #include <future>
 
 class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
-  ~ArrowCsvForeignStorage() override;
   void append(const std::vector<ForeignStorageColumnBuffer>& column_buffers) override;
 
   void read(const ChunkKey& chunk_key,
@@ -43,7 +42,6 @@ class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
   struct ArrowFragment {
     int64_t sz;
     std::vector<std::shared_ptr<arrow::ArrayData>> chunks;
-    ~ArrowFragment() { chunks.clear(); }
   };
 
   std::map<std::array<int, 3>, std::vector<ArrowFragment>> m_columns;
@@ -51,11 +49,7 @@ class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
 
 void registerArrowCsvForeignStorage(void) {
   ForeignStorageInterface::registerPersistentStorageInterface(
-      new ArrowCsvForeignStorage());
-}
-
-ArrowCsvForeignStorage::~ArrowCsvForeignStorage() {
-  m_columns.clear();
+      std::make_unique<ArrowCsvForeignStorage>());
 }
 
 void ArrowCsvForeignStorage::append(
