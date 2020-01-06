@@ -101,6 +101,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiPredicate;
 
 /**
@@ -131,7 +132,7 @@ public final class MapDParser {
   SqlNode sqlNode_;
   private SockTransportProperties sock_transport_properties = null;
 
-  private static Map<String, Boolean> SubqueryCorrMemo = new HashMap<>();
+  private static Map<String, Boolean> SubqueryCorrMemo = new ConcurrentHashMap<>();
 
   public MapDParser(String dataDir,
           final Map<String, ExtensionFunction> extSigs,
@@ -185,6 +186,11 @@ public final class MapDParser {
   }
 
   private boolean isCorrelated(SqlNode expression) {
+    String queryString = expression.toString();
+    if (SubqueryCorrMemo.containsKey(queryString)) {
+      return SubqueryCorrMemo.get(queryString);
+    }
+
     try {
       MapDParser parser =
               new MapDParser(dataDir, extSigs, mapdPort, sock_transport_properties);
@@ -193,10 +199,10 @@ public final class MapDParser {
       parser.getRelAlgebra(expression.toSqlString(SqlDialect.CALCITE).getSql(), options);
     } catch (Exception e) {
       // if we are not able to parse, then assume correlated
-      SubqueryCorrMemo.put(expression.toString(), true);
+      SubqueryCorrMemo.put(queryString, true);
       return true;
     }
-    SubqueryCorrMemo.put(expression.toString(), false);
+    SubqueryCorrMemo.put(queryString, false);
     return false;
   }
 
@@ -250,11 +256,6 @@ public final class MapDParser {
             if (!found_expression) {
               return false;
             }
-          }
-
-          String queryString = expression.toString();
-          if (SubqueryCorrMemo.containsKey(queryString)) {
-            return SubqueryCorrMemo.get(queryString);
           }
 
           if (isCorrelated(expression)) {

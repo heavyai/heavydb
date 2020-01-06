@@ -17086,18 +17086,12 @@ int create_and_populate_tables(const bool use_temporary_tables,
     return -EEXIST;
   }
   try {
-    const std::string drop_old_corr_in_lookup{"DROP TABLE IF EXISTS corr_in_lookup;"};
-    run_ddl_statement(drop_old_corr_in_lookup);
-    g_sqlite_comparator.query(drop_old_corr_in_lookup);
     import_corr_in_lookup();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'corr_in_lookup'";
     return -EEXIST;
   }
   try {
-    const std::string drop_old_corr_in_facts{"DROP TABLE IF EXISTS corr_in_facts;"};
-    run_ddl_statement(drop_old_corr_in_facts);
-    g_sqlite_comparator.query(drop_old_corr_in_facts);
     import_corr_in_facts();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'corr_in_facts'";
