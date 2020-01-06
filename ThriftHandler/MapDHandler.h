@@ -165,7 +165,8 @@ class MapDHandler : public MapDIf {
   void get_hardware_info(TClusterHardwareInfo& _return,
                          const TSessionId& session) override;
 
-  bool hasTableAccessPrivileges(const TableDescriptor* td, const TSessionId& session);
+  bool hasTableAccessPrivileges(const TableDescriptor* td,
+                                const Catalog_Namespace::SessionInfo& session_info);
   void get_tables(std::vector<std::string>& _return, const TSessionId& session) override;
   void get_physical_tables(std::vector<std::string>& _return,
                            const TSessionId& session) override;
@@ -481,18 +482,17 @@ class MapDHandler : public MapDIf {
                     const std::string& dbname,
                     Catalog_Namespace::UserMetadata& user_meta,
                     std::shared_ptr<Catalog_Namespace::Catalog> cat,
-                    query_state::StdLog&);
+                    query_state::StdLog& stdlog);
   void disconnect_impl(const SessionMap::iterator& session_it);
   void check_table_load_privileges(const TSessionId& session,
                                    const std::string& table_name);
   void check_table_load_privileges(const Catalog_Namespace::SessionInfo& session_info,
                                    const std::string& table_name);
   void get_tables_impl(std::vector<std::string>& table_names,
-                       query_state::StdLog& stdlog,
+                       const Catalog_Namespace::SessionInfo&,
                        const GetTablesType get_tables_type);
   void get_table_details_impl(TTableDetails& _return,
-                              query_state::StdLog&,
-                              const TSessionId& session,
+                              query_state::StdLog& stdlog,
                               const std::string& table_name,
                               const bool get_system,
                               const bool get_physical);
@@ -643,11 +643,11 @@ class MapDHandler : public MapDIf {
 
   void get_completion_hints_unsorted(std::vector<TCompletionHint>& hints,
                                      std::vector<std::string>& visible_tables,
-                                     const TSessionId& session,
+                                     query_state::StdLog& stdlog,
                                      const std::string& sql,
                                      const int cursor);
   void get_token_based_completions(std::vector<TCompletionHint>& hints,
-                                   const TSessionId& session,
+                                   query_state::StdLog& stdlog,
                                    std::vector<std::string>& visible_tables,
                                    const std::string& sql,
                                    const int cursor);
@@ -658,7 +658,7 @@ class MapDHandler : public MapDIf {
 
   std::unordered_map<std::string, std::unordered_set<std::string>>
   fill_column_names_by_table(std::vector<std::string>& table_names,
-                             const TSessionId& session);
+                             query_state::StdLog& stdlog);
 
   static bool has_database_permission(const AccessPrivileges& privs,
                                       const TDBObjectPermissions& permissions);

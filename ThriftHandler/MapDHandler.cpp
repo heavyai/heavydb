@@ -1127,7 +1127,7 @@ void MapDHandler::get_completion_hints(std::vector<TCompletionHint>& hints,
                                        const int cursor) {
   auto stdlog = STDLOG(get_session_ptr(session));
   std::vector<std::string> visible_tables;  // Tables allowed for the given session.
-  get_completion_hints_unsorted(hints, visible_tables, session, sql, cursor);
+  get_completion_hints_unsorted(hints, visible_tables, stdlog, sql, cursor);
   const auto proj_tokens = extract_projection_tokens_for_completion(sql);
   auto compatible_table_names = get_uc_compatible_table_names_by_column(
       proj_tokens.uc_column_names, visible_tables, session);
@@ -1156,12 +1156,12 @@ void MapDHandler::get_completion_hints(std::vector<TCompletionHint>& hints,
 
 void MapDHandler::get_completion_hints_unsorted(std::vector<TCompletionHint>& hints,
                                                 std::vector<std::string>& visible_tables,
-                                                const TSessionId& session,
+                                                query_state::StdLog& stdlog,
                                                 const std::string& sql,
                                                 const int cursor) {
-  const auto session_info = get_session_copy(session);
+  const auto& session_info = *stdlog.getConstSessionInfo();
   try {
-    get_tables(visible_tables, session);
+    get_tables_impl(visible_tables, session_info, GET_PHYSICAL_TABLES_AND_VIEWS);
     // Filter out keywords suggested by Calcite which we don't support.
     hints = just_whitelisted_keyword_hints(
         calcite_->getCompletionHints(session_info, visible_tables, sql, cursor));
@@ -1179,11 +1179,11 @@ void MapDHandler::get_completion_hints_unsorted(std::vector<TCompletionHint>& hi
     return;
   }
   // Before FROM, the query is too incomplete for context-sensitive completions.
-  get_token_based_completions(hints, session, visible_tables, sql, cursor);
+  get_token_based_completions(hints, stdlog, visible_tables, sql, cursor);
 }
 
 void MapDHandler::get_token_based_completions(std::vector<TCompletionHint>& hints,
-                                              const TSessionId& session,
+                                              query_state::StdLog& stdlog,
                                               std::vector<std::string>& visible_tables,
                                               const std::string& sql,
                                               const int cursor) {
@@ -1196,8 +1196,7 @@ void MapDHandler::get_token_based_completions(std::vector<TCompletionHint>& hint
   // After SELECT but before FROM, look for all columns in all tables which match the
   // prefix.
   if (boost::regex_search(sql.cbegin(), sql.cbegin() + length_to_cursor, select_expr)) {
-    const auto column_names_by_table =
-        fill_column_names_by_table(visible_tables, session);
+    const auto column_names_by_table = fill_column_names_by_table(visible_tables, stdlog);
     // Trust the fully qualified columns the most.
     if (get_qualified_column_hints(hints, last_word, column_names_by_table)) {
       return;
@@ -1229,12 +1228,12 @@ void MapDHandler::get_token_based_completions(std::vector<TCompletionHint>& hint
 
 std::unordered_map<std::string, std::unordered_set<std::string>>
 MapDHandler::fill_column_names_by_table(std::vector<std::string>& table_names,
-                                        const TSessionId& session) {
+                                        query_state::StdLog& stdlog) {
   std::unordered_map<std::string, std::unordered_set<std::string>> column_names_by_table;
   for (auto it = table_names.begin(); it != table_names.end();) {
     TTableDetails table_details;
     try {
-      get_table_details(table_details, session, *it);
+      get_table_details_impl(table_details, stdlog, *it, false, false);
     } catch (const TMapDException& e) {
       // Remove the corrupted Table/View name from the list for further processing.
       it = table_names.erase(it);
@@ -1781,25 +1780,23 @@ void MapDHandler::get_internal_table_details(TTableDetails& _return,
                                              const TSessionId& session,
                                              const std::string& table_name) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
-  get_table_details_impl(_return, stdlog, session, table_name, true, false);
+  get_table_details_impl(_return, stdlog, table_name, true, false);
 }
 
 void MapDHandler::get_table_details(TTableDetails& _return,
                                     const TSessionId& session,
                                     const std::string& table_name) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
-  get_table_details_impl(_return, stdlog, session, table_name, false, false);
+  get_table_details_impl(_return, stdlog, table_name, false, false);
 }
 
 void MapDHandler::get_table_details_impl(TTableDetails& _return,
                                          query_state::StdLog& stdlog,
-                                         const TSessionId& session,
                                          const std::string& table_name,
                                          const bool get_system,
                                          const bool get_physical) {
-  auto session_copy =
-      std::make_shared<Catalog_Namespace::SessionInfo>(*stdlog.getSessionInfo());
-  auto& cat = session_copy->getCatalog();
+  auto session_info = stdlog.getSessionInfo();
+  auto& cat = session_info->getCatalog();
   auto td = cat.getMetadataForTable(
       table_name,
       false);  // don't populate fragmenter on this call since we only want metadata
@@ -1807,10 +1804,10 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
     THROW_MAPD_EXCEPTION("Table " + table_name + " doesn't exist");
   }
   if (td->isView) {
-    auto query_state = create_query_state(session_copy, td->viewSQL);
+    auto query_state = create_query_state(session_info, td->viewSQL);
     stdlog.setQueryState(query_state);
     try {
-      if (hasTableAccessPrivileges(td, session)) {
+      if (hasTableAccessPrivileges(td, *session_info)) {
         const auto query_ra = parse_to_ra(query_state->createQueryStateProxy(),
                                           query_state->getQueryStr(),
                                           {},
@@ -1842,7 +1839,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
     }
   } else {
     try {
-      if (hasTableAccessPrivileges(td, session)) {
+      if (hasTableAccessPrivileges(td, *session_info)) {
         const auto col_descriptors =
             cat.getAllColumnMetadataForTable(td->tableId, get_system, true, get_physical);
         const auto deleted_cd = cat.getDeletedColumn(td);
@@ -1891,9 +1888,9 @@ void MapDHandler::get_link_view(TFrontendView& _return,
   _return.view_metadata = ld->viewMetadata;
 }
 
-bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td,
-                                           const TSessionId& session) {
-  const auto session_info = get_session_copy(session);
+bool MapDHandler::hasTableAccessPrivileges(
+    const TableDescriptor* td,
+    const Catalog_Namespace::SessionInfo& session_info) {
   auto& cat = session_info.getCatalog();
   auto user_metadata = session_info.get_currentUser();
 
@@ -1909,10 +1906,9 @@ bool MapDHandler::hasTableAccessPrivileges(const TableDescriptor* td,
 }
 
 void MapDHandler::get_tables_impl(std::vector<std::string>& table_names,
-                                  query_state::StdLog& stdlog,
+                                  const Catalog_Namespace::SessionInfo& session_info,
                                   const GetTablesType get_tables_type) {
-  auto const session_ptr = stdlog.getConstSessionInfo();
-  auto const& cat = session_ptr->getCatalog();
+  auto const& cat = session_info.getCatalog();
   const auto tables = cat.getAllTableMetadata();
   for (const auto td : tables) {
     if (td->shard >= 0) {
@@ -1934,7 +1930,7 @@ void MapDHandler::get_tables_impl(std::vector<std::string>& table_names,
       default:
         break;
     }
-    if (!hasTableAccessPrivileges(td, session_ptr->get_session_id())) {
+    if (!hasTableAccessPrivileges(td, session_info)) {
       // skip table, as there are no privileges to access it
       continue;
     }
@@ -1945,19 +1941,20 @@ void MapDHandler::get_tables_impl(std::vector<std::string>& table_names,
 void MapDHandler::get_tables(std::vector<std::string>& table_names,
                              const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
-  get_tables_impl(table_names, stdlog, GET_PHYSICAL_TABLES_AND_VIEWS);
+  get_tables_impl(
+      table_names, *stdlog.getConstSessionInfo(), GET_PHYSICAL_TABLES_AND_VIEWS);
 }
 
 void MapDHandler::get_physical_tables(std::vector<std::string>& table_names,
                                       const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
-  get_tables_impl(table_names, stdlog, GET_PHYSICAL_TABLES);
+  get_tables_impl(table_names, *stdlog.getConstSessionInfo(), GET_PHYSICAL_TABLES);
 }
 
 void MapDHandler::get_views(std::vector<std::string>& table_names,
                             const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
-  get_tables_impl(table_names, stdlog, GET_VIEWS);
+  get_tables_impl(table_names, *stdlog.getConstSessionInfo(), GET_VIEWS);
 }
 
 void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
@@ -1976,7 +1973,7 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
       // skip shards, they're not standalone tables
       continue;
     }
-    if (!hasTableAccessPrivileges(td, session)) {
+    if (!hasTableAccessPrivileges(td, *session_ptr)) {
       // skip table, as there are no privileges to access it
       continue;
     }
@@ -2026,7 +2023,7 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
       }
     } else {
       try {
-        if (hasTableAccessPrivileges(td, session)) {
+        if (hasTableAccessPrivileges(td, *session_ptr)) {
           const auto col_descriptors =
               cat.getAllColumnMetadataForTable(td->tableId, false, true, false);
           const auto deleted_cd = cat.getDeletedColumn(td);
