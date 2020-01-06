@@ -317,6 +317,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
                 stringArray->null_count() == stringArray->length()) {
               indexBuilder.Append(inline_int_null_value<int32_t>());
             } else {
+              CHECK(dict);
               auto curStr = stringArray->GetString(i);
               indexBuilder.Append(dict->getOrAdd(curStr));
             }
