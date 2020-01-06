@@ -676,7 +676,7 @@ class MapDHandler : public MapDIf {
   std::unordered_set<std::string> get_uc_compatible_table_names_by_column(
       const std::unordered_set<std::string>& uc_column_names,
       std::vector<std::string>& table_names,
-      const TSessionId& session);
+      query_state::StdLog& stdlog);
 
   query_state::QueryStates query_states_;
   SessionMap sessions_;

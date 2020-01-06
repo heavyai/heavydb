@@ -1130,7 +1130,7 @@ void MapDHandler::get_completion_hints(std::vector<TCompletionHint>& hints,
   get_completion_hints_unsorted(hints, visible_tables, stdlog, sql, cursor);
   const auto proj_tokens = extract_projection_tokens_for_completion(sql);
   auto compatible_table_names = get_uc_compatible_table_names_by_column(
-      proj_tokens.uc_column_names, visible_tables, session);
+      proj_tokens.uc_column_names, visible_tables, stdlog);
   // Add the table qualifiers explicitly specified by the user.
   compatible_table_names.insert(proj_tokens.uc_column_table_qualifiers.begin(),
                                 proj_tokens.uc_column_table_qualifiers.end());
@@ -1250,12 +1250,12 @@ MapDHandler::fill_column_names_by_table(std::vector<std::string>& table_names,
 std::unordered_set<std::string> MapDHandler::get_uc_compatible_table_names_by_column(
     const std::unordered_set<std::string>& uc_column_names,
     std::vector<std::string>& table_names,
-    const TSessionId& session) {
+    query_state::StdLog& stdlog) {
   std::unordered_set<std::string> compatible_table_names_by_column;
   for (auto it = table_names.begin(); it != table_names.end();) {
     TTableDetails table_details;
     try {
-      get_table_details(table_details, session, *it);
+      get_table_details_impl(table_details, stdlog, *it, false, false);
     } catch (const TMapDException& e) {
       // Remove the corrupted Table/View name from the list for further processing.
       it = table_names.erase(it);
