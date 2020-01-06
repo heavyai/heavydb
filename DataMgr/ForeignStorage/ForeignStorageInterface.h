@@ -48,6 +48,171 @@ class PersistentForeignStorageInterface {
   virtual std::string getType() const = 0;
 };
 
+class ForeignStorageBuffer : public Data_Namespace::AbstractBuffer {
+ public:
+  ForeignStorageBuffer(const ChunkKey& chunk_key,
+                       PersistentForeignStorageInterface* persistent_foreign_storage);
+
+  void read(int8_t* const dst,
+            const size_t numBytes,
+            const size_t offset = 0,
+            const Data_Namespace::MemoryLevel dstBufferType = Data_Namespace::CPU_LEVEL,
+            const int dstDeviceId = -1) override;
+
+  void append(int8_t* src,
+              const size_t numBytes,
+              const Data_Namespace::MemoryLevel srcBufferType = Data_Namespace::CPU_LEVEL,
+              const int deviceId = -1) override;
+
+  Data_Namespace::MemoryLevel getType() const override {
+    return Data_Namespace::MemoryLevel::DISK_LEVEL;
+  };
+
+  size_t size() const override { return size_; }
+
+  std::vector<int8_t> moveBuffer() { return std::move(buff_); }
+
+  void write(int8_t* src,
+             const size_t numBytes,
+             const size_t offset = 0,
+             const Data_Namespace::MemoryLevel srcBufferType = Data_Namespace::CPU_LEVEL,
+             const int srcDeviceId = -1) override {
+    CHECK(false);
+  }
+
+  void reserve(size_t numBytes) override { CHECK(false); }
+
+  int8_t* getMemoryPtr() override {
+    CHECK(false);
+    return nullptr;
+  }
+
+  size_t pageCount() const override {
+    CHECK(false);
+    return 0;
+  }
+
+  size_t pageSize() const override {
+    CHECK(false);
+    return 0;
+  }
+
+  size_t reservedSize() const override {
+    CHECK(false);
+    return 0;
+  }
+
+ private:
+  const ChunkKey chunk_key_;
+  PersistentForeignStorageInterface* persistent_foreign_storage_;
+  std::vector<int8_t> buff_;
+};
+
+class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
+ public:
+  ForeignStorageBufferMgr(const int db_id,
+                          const int table_id,
+                          PersistentForeignStorageInterface* persistent_foreign_storage);
+
+  void checkpoint() override;
+
+  Data_Namespace::AbstractBuffer* createBuffer(const ChunkKey& key,
+                                               const size_t pageSize = 0,
+                                               const size_t initialSize = 0) override;
+
+  Data_Namespace::AbstractBuffer* getBuffer(const ChunkKey& key,
+                                            const size_t numBytes = 0) override;
+
+  void fetchBuffer(const ChunkKey& key,
+                   Data_Namespace::AbstractBuffer* destBuffer,
+                   const size_t numBytes = 0) override;
+
+  void getChunkMetadataVecForKeyPrefix(
+      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadataVec,
+      const ChunkKey& keyPrefix) override;
+  std::string getStringMgrType() override { return ToString(FILE_MGR); }
+
+  size_t getNumChunks() override {
+    mapd_shared_lock<mapd_shared_mutex> chunk_index_write_lock(chunk_index_mutex_);
+    return chunk_index_.size();
+  }
+
+  void deleteBuffer(const ChunkKey& key, const bool purge = true) override {
+    CHECK(false);
+  }
+
+  void deleteBuffersWithPrefix(const ChunkKey& keyPrefix,
+                               const bool purge = true) override {
+    CHECK(false);
+  }
+
+  Data_Namespace::AbstractBuffer* putBuffer(const ChunkKey& key,
+                                            Data_Namespace::AbstractBuffer* srcBuffer,
+                                            const size_t numBytes = 0) override {
+    CHECK(false);
+    return nullptr;
+  }
+
+  void getChunkMetadataVec(
+      std::vector<std::pair<ChunkKey, ChunkMetadata>>& chunkMetadata) override {
+    CHECK(false);
+  }
+
+  bool isBufferOnDevice(const ChunkKey& key) override {
+    CHECK(false);
+    return false;
+  }
+
+  std::string printSlabs() override {
+    CHECK(false);
+    return "";
+  }
+
+  void clearSlabs() override { CHECK(false); }
+
+  size_t getMaxSize() override {
+    CHECK(false);
+    return 0;
+  }
+
+  size_t getInUseSize() override {
+    CHECK(false);
+    return 0;
+  }
+
+  size_t getAllocated() override {
+    CHECK(false);
+    return 0;
+  }
+
+  bool isAllocationCapped() override {
+    CHECK(false);
+    return false;
+  }
+
+  void checkpoint(const int db_id, const int tb_id) override { CHECK(false); }
+
+  // Buffer API
+  Data_Namespace::AbstractBuffer* alloc(const size_t numBytes = 0) override {
+    CHECK(false);
+    return nullptr;
+  }
+
+  void free(Data_Namespace::AbstractBuffer* buffer) override { CHECK(false); }
+
+  MgrType getMgrType() override {
+    CHECK(false);
+    return FILE_MGR;
+  }
+
+ private:
+  const int db_id_;
+  const int table_id_;
+  PersistentForeignStorageInterface* persistent_foreign_storage_;
+  std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_index_;
+  mutable mapd_shared_mutex chunk_index_mutex_;
+};
+
 class ForeignStorageInterface {
  public:
   static Data_Namespace::AbstractBufferMgr* lookupBufferManager(const int db_id,
@@ -72,5 +237,7 @@ class ForeignStorageInterface {
       persistent_storage_interfaces_;
   static std::map<std::pair<int, int>, PersistentForeignStorageInterface*>
       table_persistent_storage_interface_map_;
+  static std::map<std::pair<int, int>, std::unique_ptr<ForeignStorageBufferMgr>>
+      managers_map_;
   static std::mutex persistent_storage_interfaces_mutex_;
 };
