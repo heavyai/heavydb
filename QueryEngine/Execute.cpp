@@ -107,14 +107,12 @@ Executor::Executor(const int db_id,
                    const size_t block_size_x,
                    const size_t grid_size_x,
                    const std::string& debug_dir,
-                   const std::string& debug_file,
-                   ::QueryRenderer::QueryRenderManager* render_manager)
+                   const std::string& debug_file)
     : cgen_state_(new CgenState({}, false))
     , gpu_active_modules_device_mask_(0x0)
     , interrupted_(false)
     , cpu_code_cache_(code_cache_size)
     , gpu_code_cache_(code_cache_size)
-    , render_manager_(render_manager)
     , block_size_x_(block_size_x)
     , grid_size_x_(grid_size_x)
     , debug_dir_(debug_dir)
@@ -124,14 +122,12 @@ Executor::Executor(const int db_id,
     , temporary_tables_(nullptr)
     , input_table_info_cache_(this) {}
 
-std::shared_ptr<Executor> Executor::getExecutor(
-    const int db_id,
-    const std::string& debug_dir,
-    const std::string& debug_file,
-    const MapDParameters mapd_parameters,
-    ::QueryRenderer::QueryRenderManager* render_manager) {
+std::shared_ptr<Executor> Executor::getExecutor(const int db_id,
+                                                const std::string& debug_dir,
+                                                const std::string& debug_file,
+                                                const MapDParameters mapd_parameters) {
   INJECT_TIMER(getExecutor);
-  const auto executor_key = std::make_pair(db_id, render_manager);
+  const auto executor_key = db_id;
   {
     mapd_shared_lock<mapd_shared_mutex> read_lock(executors_cache_mutex_);
     auto it = executors_.find(executor_key);
@@ -149,8 +145,7 @@ std::shared_ptr<Executor> Executor::getExecutor(
                                                mapd_parameters.cuda_block_size,
                                                mapd_parameters.cuda_grid_size,
                                                debug_dir,
-                                               debug_file,
-                                               render_manager);
+                                               debug_file);
     auto it_ok = executors_.insert(std::make_pair(executor_key, executor));
     CHECK(it_ok.second);
     return executor;
@@ -3310,7 +3305,6 @@ void Executor::setupCaching(const std::unordered_set<PhysicalInput>& phys_inputs
   table_generations_ = computeTableGenerations(phys_table_ids);
 }
 
-std::map<std::pair<int, ::QueryRenderer::QueryRenderManager*>, std::shared_ptr<Executor>>
-    Executor::executors_;
+std::map<int, std::shared_ptr<Executor>> Executor::executors_;
 std::mutex Executor::execute_mutex_;
 mapd_shared_mutex Executor::executors_cache_mutex_;

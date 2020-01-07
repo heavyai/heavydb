@@ -540,8 +540,7 @@ void MapDHandler::interrupt(const TSessionId& session) {
     auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                           jit_debug_ ? "/tmp" : "",
                                           jit_debug_ ? "mapdquery" : "",
-                                          mapd_parameters_,
-                                          nullptr);
+                                          mapd_parameters_);
     CHECK(executor);
 
     VLOG(1) << "Received interrupt: "
@@ -4524,8 +4523,7 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
-                                        mapd_parameters_,
-                                        nullptr);
+                                        mapd_parameters_);
   RelAlgExecutor ra_executor(
       executor.get(), cat, query_state_proxy.getQueryState().shared_from_this());
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
@@ -4587,8 +4585,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
-                                        mapd_parameters_,
-                                        nullptr);
+                                        mapd_parameters_);
   RelAlgExecutor ra_executor(
       executor.get(), cat, query_state_proxy.getQueryState().shared_from_this());
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
@@ -4633,12 +4630,10 @@ void MapDHandler::execute_root_plan(TQueryResult& _return,
                                     const Catalog_Namespace::SessionInfo& session_info,
                                     const ExecutorDeviceType executor_device_type,
                                     const int32_t first_n) const {
-  auto executor = Executor::getExecutor(
-      root_plan->getCatalog().getCurrentDB().dbId,
-      jit_debug_ ? "/tmp" : "",
-      jit_debug_ ? "mapdquery" : "",
-      mapd_parameters_,
-      render_handler_ ? render_handler_->get_render_manager() : nullptr);
+  auto executor = Executor::getExecutor(root_plan->getCatalog().getCurrentDB().dbId,
+                                        jit_debug_ ? "/tmp" : "",
+                                        jit_debug_ ? "mapdquery" : "",
+                                        mapd_parameters_);
   std::shared_ptr<ResultSet> results;
   _return.execution_time_ms += measure<>::execution([&]() {
     results = executor->execute(root_plan,
@@ -5060,8 +5055,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
               cat, td->tableName, LockType::CheckpointLock);
           auto table_write_lock = TableLockMgr::getWriteLockForTable(cat, td->tableName);
 
-          auto executor = Executor::getExecutor(
-              cat.getCurrentDB().dbId, "", "", mapd_parameters_, nullptr);
+          auto executor =
+              Executor::getExecutor(cat.getCurrentDB().dbId, "", "", mapd_parameters_);
           const TableOptimizer optimizer(td, executor.get(), cat);
           if (optimize_stmt->shouldVacuumDeletedRows()) {
             optimizer.vacuumDeletedRows();

@@ -338,15 +338,13 @@ class Executor {
            const size_t block_size_x,
            const size_t grid_size_x,
            const std::string& debug_dir,
-           const std::string& debug_file,
-           ::QueryRenderer::QueryRenderManager* render_manager);
+           const std::string& debug_file);
 
   static std::shared_ptr<Executor> getExecutor(
       const int db_id,
       const std::string& debug_dir = "",
       const std::string& debug_file = "",
-      const MapDParameters mapd_parameters = MapDParameters(),
-      ::QueryRenderer::QueryRenderManager* render_manager = nullptr);
+      const MapDParameters mapd_parameters = MapDParameters());
 
   static void nukeCacheOfExecutors() {
     std::lock_guard<std::mutex> flush_lock(
@@ -367,62 +365,6 @@ class Executor {
                                      const bool allow_multifrag,
                                      const bool allow_loop_joins,
                                      RenderInfo* render_query_data = nullptr);
-
-  std::shared_ptr<ResultSet> renderPointsNonInSitu(
-      const std::string& queryStr,
-      const ExecutionResult& results,
-      const Catalog_Namespace::SessionInfo& session,
-      const int render_widget_id,
-      const ::QueryRenderer::JSONLocation* data_loc,
-      RenderInfo* render_query_data);
-
-  std::shared_ptr<ResultSet> renderPointsInSitu(RenderInfo* render_query_data);
-
-  std::shared_ptr<ResultSet> renderPolygonsNonInSitu(
-      const std::string& queryStr,
-      const ExecutionResult& results,
-      const Catalog_Namespace::SessionInfo& session,
-      const int render_widget_id,
-      const ::QueryRenderer::JSONLocation* data_loc,
-      RenderInfo* render_query_data,
-      const std::string& poly_table_name);
-
-  std::shared_ptr<ResultSet> renderLinesNonInSitu(
-      const std::string& queryStr,
-      const ExecutionResult& results,
-      const Catalog_Namespace::SessionInfo& session,
-      const int render_widget_id,
-      const ::QueryRenderer::JSONLocation* data_loc,
-      RenderInfo* render_query_data);
-
-#if HAVE_CUDA
-  enum class InSituGeoRenderType { kPOLYGONS, kLINES };
-
-  std::shared_ptr<ResultSet> renderGeoInSitu(
-      const InSituGeoRenderType in_situ_geo_render_type,
-      const std::string& queryStr,
-      const ExecutionResult& results,
-      const Catalog_Namespace::SessionInfo& session,
-      const int render_widget_id,
-      const ::QueryRenderer::JSONLocation* data_loc,
-      RenderInfo* render_query_data,
-      const std::string& line_table_name);
-#endif
-
-  std::vector<int32_t> getStringIds(
-      const std::string& col_name,
-      const std::vector<std::string>& col_vals,
-      const ::QueryRenderer::QueryDataLayout* query_data_layout,
-      const ResultSet* results,
-      const std::shared_ptr<RowSetMemoryOwner>& row_set_mem_owner,
-      const bool warn = false) const;
-
-  std::vector<std::string> getStringsFromIds(
-      const std::string& col_name,
-      const std::vector<int32_t>& ids,
-      const ::QueryRenderer::QueryDataLayout* query_data_layout,
-      const ResultSet* results,
-      const std::shared_ptr<RowSetMemoryOwner>& row_set_mem_owner) const;
 
   StringDictionaryProxy* getStringDictionaryProxy(
       const int dictId,
@@ -1004,8 +946,6 @@ class Executor {
   CodeCache cpu_code_cache_;
   CodeCache gpu_code_cache_;
 
-  ::QueryRenderer::QueryRenderManager* render_manager_;
-
   static const size_t baseline_threshold{
       1000000};  // if a perfect hash needs more entries, use baseline
   static const size_t code_cache_size{10000};
@@ -1024,9 +964,7 @@ class Executor {
   StringDictionaryGenerations string_dictionary_generations_;
   TableGenerations table_generations_;
 
-  static std::map<std::pair<int, ::QueryRenderer::QueryRenderManager*>,
-                  std::shared_ptr<Executor>>
-      executors_;
+  static std::map<int, std::shared_ptr<Executor>> executors_;
   static std::mutex execute_mutex_;
   static mapd_shared_mutex executors_cache_mutex_;
 
