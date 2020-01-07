@@ -205,6 +205,7 @@ extern "C" ALWAYS_INLINE int64_t scale_decimal_down_not_nullable(const int64_t o
     return operand == null_val ? null_val : -operand;                                \
   }
 
+DEF_UMINUS_NULLABLE(int8_t, int8_t)
 DEF_UMINUS_NULLABLE(int16_t, int16_t)
 DEF_UMINUS_NULLABLE(int32_t, int32_t)
 DEF_UMINUS_NULLABLE(int64_t, int64_t)

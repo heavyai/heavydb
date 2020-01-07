@@ -7833,6 +7833,7 @@ TEST(Select, RuntimeFunctions) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     c("SELECT SUM(ABS(-x + 1)) FROM test;", dt);
+    c("SELECT SUM(ABS(-w + 1)) FROM test;", dt);
     c("SELECT SUM(ABS(-y + 1)) FROM test;", dt);
     c("SELECT SUM(ABS(-z + 1)) FROM test;", dt);
     c("SELECT SUM(ABS(-t + 1)) FROM test;", dt);
@@ -16622,7 +16623,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{
-        "x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn "
+        "x int not null, w tinyint, y int, z smallint, t bigint, b boolean, f float, ff "
+        "float, fn "
         "float, d double, dn double, str "
         "varchar(10), null_str text encoding dict, fixed_str text encoding dict(16), "
         "fixed_null_str text encoding "
@@ -16644,7 +16646,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
         with_delete_support);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
-        "CREATE TABLE test(x int not null, y int, z smallint, t bigint, b boolean, f "
+        "CREATE TABLE test(x int not null, w tinyint, y int, z smallint, t bigint, b "
+        "boolean, f "
         "float, ff float, fn float, d "
         "double, dn double, str varchar(10), null_str text, fixed_str text, "
         "fixed_null_str text, real_str text, "
@@ -16662,7 +16665,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
   CHECK_EQ(g_num_rows % 2, 0);
   for (ssize_t i = 0; i < g_num_rows; ++i) {
     const std::string insert_query{
-        "INSERT INTO test VALUES(7, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, "
+        "INSERT INTO test VALUES(7, -8, 42, 101, 1001, 't', 1.1, 1.1, null, 2.2, null, "
         "'foo', null, 'foo', null, "
         "'real_foo', 'foo',"
         "'2014-12-13 22:23:15', '2014-12-13 22:23:15.323', '1999-07-11 "
@@ -16678,7 +16681,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
-        "INSERT INTO test VALUES(8, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
+        "INSERT INTO test VALUES(8, -7, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, 2.4, "
         "-2002.4, 'bar', null, 'bar', null, "
         "'real_bar', NULL, '2014-12-13 22:23:15', '2014-12-13 22:23:15.323', "
         "'2014-12-13 "
@@ -16693,7 +16696,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
   }
   for (ssize_t i = 0; i < g_num_rows / 2; ++i) {
     const std::string insert_query{
-        "INSERT INTO test VALUES(7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, "
+        "INSERT INTO test VALUES(7, -7, 43, 102, 1002, 't', 1.3, 1000.3, -1000.3, 2.6, "
         "-220.6, 'baz', null, null, null, "
         "'real_baz', 'baz', '2014-12-14 22:23:15', '2014-12-14 22:23:15.750', "
         "'2014-12-14 22:23:15.437321', "
@@ -16710,7 +16713,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{
-        "x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn "
+        "x int not null, w tinyint, y int, z smallint, t bigint, b boolean, f float, ff "
+        "float, fn "
         "float, d double, dn double, str "
         "varchar(10), null_str text encoding dict, fixed_str text encoding dict(16), "
         "fixed_null_str text encoding "
@@ -16731,7 +16735,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
         g_aggregator);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
-        "CREATE TABLE test_empty(x int not null, y int, z smallint, t bigint, b "
+        "CREATE TABLE test_empty(x int not null, w tinyint, y int, z smallint, t bigint, "
+        "b "
         "boolean, "
         "f "
         "float, ff float, fn float, d "
@@ -16752,7 +16757,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
     run_ddl_statement(drop_old_test);
     g_sqlite_comparator.query(drop_old_test);
     std::string columns_definition{
-        "x int not null, y int, z smallint, t bigint, b boolean, f float, ff float, fn "
+        "x int not null, w tinyint, y int, z smallint, t bigint, b boolean, f float, ff "
+        "float, fn "
         "float, d double, dn double, str "
         "varchar(10), null_str text encoding dict, fixed_str text encoding dict(16), "
         "fixed_null_str text encoding "
@@ -16773,7 +16779,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
         g_aggregator);
     run_ddl_statement(create_test);
     g_sqlite_comparator.query(
-        "CREATE TABLE test_one_row(x int not null, y int, z smallint, t bigint, b "
+        "CREATE TABLE test_one_row(x int not null, w tinyint, y int, z smallint, t "
+        "bigint, b "
         "boolean, "
         "f "
         "float, ff float, fn float, d "
@@ -16791,7 +16798,7 @@ int create_and_populate_tables(const bool use_temporary_tables,
   }
   {
     const std::string insert_query{
-        "INSERT INTO test_one_row VALUES(8, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, "
+        "INSERT INTO test_one_row VALUES(8, -8, 43, -78, 1002, 'f', 1.2, 101.2, -101.2, "
         "2.4, "
         "-2002.4, 'bar', null, 'bar', null, "
         "'real_bar', NULL, '2014-12-13 22:23:15', "
