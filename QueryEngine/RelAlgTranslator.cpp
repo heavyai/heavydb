@@ -942,7 +942,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(
   CHECK_EQ(size_t(2), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
   const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
-  if (!timeunit_lit) {
+  if (!timeunit_lit || timeunit_lit->get_is_null()) {
     throw std::runtime_error("The time unit parameter must be a literal.");
   }
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
@@ -1003,7 +1003,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
   CHECK_EQ(size_t(3), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
   const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
-  if (!timeunit_lit) {
+  if (!timeunit_lit || timeunit_lit->get_is_null()) {
     throw std::runtime_error("The time unit parameter must be a literal.");
   }
 
@@ -1146,7 +1146,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatediff(
   CHECK_EQ(size_t(3), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
   const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
-  if (!timeunit_lit) {
+  if (!timeunit_lit || timeunit_lit->get_is_null()) {
     throw std::runtime_error("The time unit parameter must be a literal.");
   }
   const auto start = translateScalarRex(rex_function->getOperand(1));
@@ -1160,7 +1160,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatepart(
   CHECK_EQ(size_t(2), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
   const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
-  if (!timeunit_lit) {
+  if (!timeunit_lit || timeunit_lit->get_is_null()) {
     throw std::runtime_error("The time unit parameter must be a literal.");
   }
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
@@ -1250,7 +1250,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatetime(
   const auto arg = translateScalarRex(rex_function->getOperand(0));
   const auto arg_lit = std::dynamic_pointer_cast<Analyzer::Constant>(arg);
   const std::string datetime_err{R"(Only DATETIME('NOW') supported for now.)"};
-  if (!arg_lit) {
+  if (!arg_lit || arg_lit->get_is_null()) {
     throw std::runtime_error(datetime_err);
   }
   CHECK(arg_lit->get_type_info().is_string());

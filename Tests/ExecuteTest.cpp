@@ -2910,6 +2910,7 @@ TEST(Select, Time) {
               v<int64_t>(run_simple_agg(
                   "SELECT COUNT(*) FROM test WHERE CAST('15:13:15' AS TIME) <= n;", dt)));
     cta("SELECT DATETIME('NOW') FROM test limit 1;", dt);
+    EXPECT_ANY_THROW(run_simple_agg("SELECT DATETIME(NULL) FROM test LIMIT 1;", dt));
     // these next tests work because all dates are before now 2015-12-8 17:00:00
     ASSERT_EQ(
         2 * g_num_rows,
@@ -8753,6 +8754,7 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(4607435125L,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEPART('nanosecond', m_9) FROM test limit 1;", dt)));
+    EXPECT_ANY_THROW(run_simple_agg("SELECT DATEPART(NULL, m_9) FROM test limit 1;", dt));
     /* ---DATE ADD --- */
     ASSERT_EQ(1177559344607435125L,
               v<int64_t>(run_simple_agg(
@@ -8873,6 +8875,8 @@ TEST(Select, TimestampPrecision) {
         1146023345607436000L,
         v<int64_t>(run_simple_agg(
             "SELECT DATEADD('nanosecond', 1000000875, m_9) FROM test limit 1;", dt)));
+    EXPECT_ANY_THROW(
+        run_simple_agg("SELECT DATEADD(NULL, NULL, m_9) FROM test LIMIT 1;", dt));
     /* ---DATE DIFF --- */
     ASSERT_EQ(1146023344607435125L - 931701773874533000L,
               v<int64_t>(run_simple_agg(
@@ -9198,7 +9202,8 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg(
                   "SELECT DATEDIFF('year', m, m_3) FROM test limit 1;", dt)));
-
+    EXPECT_ANY_THROW(
+        run_simple_agg("SELECT DATEDIFF(NULL, m, m_3) FROM test limit 1;", dt));
     /* ---TIMESTAMPADD --- */
     ASSERT_EQ(1177559344607435125L,
               v<int64_t>(run_simple_agg(
@@ -9522,6 +9527,8 @@ TEST(Select, TimestampPrecision) {
             "timestamp(3)) between "
             "TIMESTAMP(3) '2014-12-13 22:23:14' and TIMESTAMP(3) '2014-12-13 22:23:15'",
             dt)));
+    ASSERT_ANY_THROW(
+        run_simple_agg("SELECT PG_DATE_TRUNC(NULL, m) FROM test LIMIT 1;", dt));
     /*-- Dates ---*/
     ASSERT_EQ(
         g_num_rows + g_num_rows / 2,
