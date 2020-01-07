@@ -46,17 +46,6 @@
 
 #include <vector>
 
-#ifndef __CUDACC__
-#include <unistd.h>  // sysconf
-#include <algorithm>
-inline long cpu_threads() {
-  // could use std::thread::hardware_concurrency(), but some
-  // slightly out-of-date compilers (gcc 4.7) implement it as always 0.
-  // Play it POSIX.1 safe instead.
-  return std::max(2 * sysconf(_SC_NPROCESSORS_CONF), 1L);
-}
-#endif
-
 enum DEV_KIND { CPU, GPU };
 
 enum DIST_KIND { INVALID, NRM, EXP1, EXP2, UNI, POI };

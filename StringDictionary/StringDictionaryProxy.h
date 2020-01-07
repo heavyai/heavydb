@@ -17,10 +17,6 @@
 #ifndef STRINGDICTIONARY_STRINGDICTIONARYPROXY_H
 #define STRINGDICTIONARY_STRINGDICTIONARYPROXY_H
 
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
 #include "../Shared/mapd_shared_mutex.h"
 #include "StringDictionary.h"
 

@@ -21,11 +21,6 @@
 #include "DictRef.h"
 #include "DictionaryCache.hpp"
 
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
-
 #include <future>
 #include <map>
 #include <string>

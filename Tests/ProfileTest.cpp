@@ -25,6 +25,7 @@
 #include "../QueryEngine/Descriptors/RowSetMemoryOwner.h"
 #include "../QueryEngine/ResultSet.h"
 #include "Shared/measure.h"
+#include "Shared/thread_count.h"
 #include "TestHelpers.h"
 
 #if defined(HAVE_CUDA) && CUDA_VERSION >= 8000

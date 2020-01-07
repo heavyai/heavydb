@@ -21,7 +21,6 @@
  *
  */
 #include "File.h"
-#include <unistd.h>
 #include <boost/filesystem.hpp>
 #include <cstdio>
 #include <cstring>

@@ -53,7 +53,6 @@
 #include <llvm/Transforms/Utils/ValueMapper.h>
 #include <rapidjson/document.h>
 
-#include <unistd.h>
 #include <algorithm>
 #include <condition_variable>
 #include <cstddef>

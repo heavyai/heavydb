@@ -64,11 +64,9 @@
 #include "ThriftHandler/MapDRenderHandler.h"
 #include "ThriftHandler/QueryState.h"
 
-#include <fcntl.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <unistd.h>
 #include <atomic>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>

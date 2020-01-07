@@ -18,7 +18,6 @@
 #define FILEINFO_H
 
 #include <fcntl.h>
-#include <unistd.h>
 #include <cstdio>
 #include <cstring>
 #include <mutex>

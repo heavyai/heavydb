@@ -24,6 +24,9 @@
 #include "StringDictionaryClient.h"
 
 #include <sys/fcntl.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
 #include <boost/sort/spreadsort/string_sort.hpp>
