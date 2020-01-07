@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
-#include "ColumnFetcher.h"
-#include "Execute.h"
+#include "QueryEngine/ColumnFetcher.h"
+
+#include <memory>
+
+#include "QueryEngine/Execute.h"
 
 ColumnFetcher::ColumnFetcher(Executor* executor, const ColumnCacheMap& column_cache)
     : executor_(executor), columnarized_table_cache_(column_cache) {}
@@ -188,6 +191,10 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
     if (memory_level == Data_Namespace::CPU_LEVEL) {
       return reinterpret_cast<int8_t*>(&chunk_iter);
     } else {
+      auto ab = chunk->get_buffer();
+      ab->pin();
+      auto& row_set_mem_owner = executor_->getRowSetMemoryOwner();
+      row_set_mem_owner->addVarlenInputBuffer(ab);
       CHECK_EQ(Data_Namespace::GPU_LEVEL, memory_level);
       auto& data_mgr = cat.getDataMgr();
       auto chunk_iter_gpu = CudaAllocator::alloc(&data_mgr, sizeof(ChunkIter), device_id);
@@ -241,10 +248,10 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
                                                     Data_Namespace::CPU_LEVEL,
                                                     int(0));
         column_frags.push_back(
-            boost::make_unique<ColumnarResults>(executor_->row_set_mem_owner_,
-                                                col_buffer,
-                                                fragment.getNumTuples(),
-                                                chunk_meta_it->second.sqlType));
+            std::make_unique<ColumnarResults>(executor_->row_set_mem_owner_,
+                                              col_buffer,
+                                              fragment.getNumTuples(),
+                                              chunk_meta_it->second.sqlType));
       }
       auto merged_results =
           ColumnarResults::mergeResults(executor_->row_set_mem_owner_, column_frags);

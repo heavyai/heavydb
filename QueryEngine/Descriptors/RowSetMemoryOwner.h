@@ -16,17 +16,17 @@
 
 #pragma once
 
-#include "../StringDictionary/StringDictionaryProxy.h"
-#include "Shared/Logger.h"
-
 #include <boost/noncopyable.hpp>
-
 #include <list>
 #include <mutex>
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
+
+#include "DataMgr/AbstractBuffer.h"
+#include "Shared/Logger.h"
+#include "StringDictionary/StringDictionaryProxy.h"
 
 class ResultSet;
 
@@ -53,6 +53,17 @@ class RowSetMemoryOwner : boost::noncopyable {
   void addVarlenBuffer(void* varlen_buffer) {
     std::lock_guard<std::mutex> lock(state_mutex_);
     varlen_buffers_.push_back(varlen_buffer);
+  }
+
+  /**
+   * Adds a GPU buffer containing a variable length input column. Variable length inputs
+   * on GPU are referenced in output projected targets and should not be freed until the
+   * query results have been resolved.
+   */
+  void addVarlenInputBuffer(Data_Namespace::AbstractBuffer* buffer) {
+    std::lock_guard<std::mutex> lock(state_mutex_);
+    CHECK_EQ(buffer->getType(), Data_Namespace::MemoryLevel::GPU_LEVEL);
+    varlen_input_buffers_.push_back(buffer);
   }
 
   std::string* addString(const std::string& str) {
@@ -121,6 +132,10 @@ class RowSetMemoryOwner : boost::noncopyable {
     for (auto varlen_buffer : varlen_buffers_) {
       free(varlen_buffer);
     }
+    for (auto varlen_input_buffer : varlen_input_buffers_) {
+      CHECK(varlen_input_buffer);
+      varlen_input_buffer->unPin();
+    }
     for (auto col_buffer : col_buffers_) {
       free(col_buffer);
     }
@@ -146,6 +161,7 @@ class RowSetMemoryOwner : boost::noncopyable {
   std::unordered_map<int, StringDictionaryProxy*> str_dict_proxy_owned_;
   std::shared_ptr<StringDictionaryProxy> lit_str_dict_proxy_;
   std::vector<void*> col_buffers_;
+  std::vector<Data_Namespace::AbstractBuffer*> varlen_input_buffers_;
   mutable std::mutex state_mutex_;
 
   friend class ResultSet;
