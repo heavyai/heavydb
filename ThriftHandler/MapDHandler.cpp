@@ -4524,8 +4524,10 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
                                         mapd_parameters_);
-  RelAlgExecutor ra_executor(
-      executor.get(), cat, query_state_proxy.getQueryState().shared_from_this());
+  RelAlgExecutor ra_executor(executor.get(),
+                             cat,
+                             query_ra,
+                             query_state_proxy.getQueryState().shared_from_this());
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
@@ -4533,7 +4535,7 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                                                      nullptr),
                          {}};
   _return.execution_time_ms += measure<>::execution(
-      [&]() { result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr); });
+      [&]() { result = ra_executor.executeRelAlgQuery(co, eo, nullptr); });
   // reduce execution time by the time spent during queue waiting
   _return.execution_time_ms -= result.getRows()->getQueueTime();
   const auto& filter_push_down_info = result.getPushedDownFilterInfo();
@@ -4586,8 +4588,10 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                         jit_debug_ ? "/tmp" : "",
                                         jit_debug_ ? "mapdquery" : "",
                                         mapd_parameters_);
-  RelAlgExecutor ra_executor(
-      executor.get(), cat, query_state_proxy.getQueryState().shared_from_this());
+  RelAlgExecutor ra_executor(executor.get(),
+                             cat,
+                             query_ra,
+                             query_state_proxy.getQueryState().shared_from_this());
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
@@ -4595,7 +4599,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                                      nullptr),
                          {}};
   _return.execution_time_ms += measure<>::execution(
-      [&]() { result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr); });
+      [&]() { result = ra_executor.executeRelAlgQuery(co, eo, nullptr); });
   _return.execution_time_ms -= result.getRows()->getQueueTime();
   const auto rs = result.getRows();
   const auto converter =

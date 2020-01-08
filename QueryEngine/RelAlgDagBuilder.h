@@ -27,9 +27,6 @@
 
 #include <rapidjson/document.h>
 #include <boost/core/noncopyable.hpp>
-#include <boost/make_unique.hpp>
-#include <boost/utility.hpp>
-#include <boost/variant.hpp>
 
 #include <iterator>
 #include <memory>
@@ -1522,7 +1519,14 @@ class RelAlgDagBuilder : public boost::noncopyable {
   /**
    * Returns the root node of the DAG.
    */
-  std::shared_ptr<const RelAlgNode> getRootNode() const {
+  const RelAlgNode& getRootNode() const {
+    CHECK(nodes_.size());
+    const auto& last_ptr = nodes_.back();
+    CHECK(last_ptr);
+    return *last_ptr;
+  }
+
+  std::shared_ptr<const RelAlgNode> getRootNodeShPtr() const {
     CHECK(nodes_.size());
     return nodes_.back();
   }

@@ -64,23 +64,14 @@ std::unordered_set<PhysicalInput> get_physical_inputs(
 
 }  // namespace
 
-ExecutionResult RelAlgExecutor::executeRelAlgQuery(const std::string& query_ra,
-                                                   const CompilationOptions& co,
+ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
                                                    const ExecutionOptions& eo,
                                                    RenderInfo* render_info) {
-  RelAlgDagBuilder query_dag(
-      query_ra, cat_, render_info ? render_info->getRenderQueryOptsPtr() : nullptr);
-  return executeRelAlgQuery(query_dag, co, eo, render_info);
-}
-
-ExecutionResult RelAlgExecutor::executeRelAlgQuery(RelAlgDagBuilder& query_dag,
-                                                   const CompilationOptions& co,
-                                                   const ExecutionOptions& eo,
-                                                   RenderInfo* render_info) {
+  CHECK(query_dag_);
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(executeRelAlgQuery);
   try {
-    return executeRelAlgQueryNoRetry(query_dag, co, eo, render_info);
+    return executeRelAlgQueryNoRetry(co, eo, render_info);
   } catch (const QueryMustRunOnCpu&) {
     if (!g_allow_cpu_retry) {
       throw;
@@ -96,19 +87,16 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(RelAlgDagBuilder& query_dag,
   if (render_info) {
     render_info->setForceNonInSituData();
   }
-  query_dag.resetQueryExecutionState();
-  return executeRelAlgQueryNoRetry(query_dag, co_cpu, eo, render_info);
+  return executeRelAlgQueryNoRetry(co_cpu, eo, render_info);
 }
 
-ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(RelAlgDagBuilder& query_dag,
-                                                          const CompilationOptions& co,
+ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptions& co,
                                                           const ExecutionOptions& eo,
                                                           RenderInfo* render_info) {
   INJECT_TIMER(executeRelAlgQueryNoRetry);
-  decltype(subqueries_)().swap(subqueries_);
 
-  registerSubqueries(query_dag.getSubqueries());
-  const auto ra = query_dag.getRootNode();
+  query_dag_->resetQueryExecutionState();
+  const auto& ra = query_dag_->getRootNode();
 
   // capture the lock acquistion time
   auto clock_begin = timer_start();
@@ -125,13 +113,13 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(RelAlgDagBuilder& quer
     }
     cleanupPostExecution();
   };
-  const auto phys_inputs = get_physical_inputs(cat_, ra.get());
-  const auto phys_table_ids = get_physical_table_inputs(ra.get());
+  const auto phys_inputs = get_physical_inputs(cat_, &ra);
+  const auto phys_table_ids = get_physical_table_inputs(&ra);
   executor_->setCatalog(&cat_);
   executor_->setupCaching(phys_inputs, phys_table_ids);
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
-  auto ed_seq = RaExecutionSequence(ra.get());
+  auto ed_seq = RaExecutionSequence(&ra);
 
   if (render_info) {
     // set render to be non-insitu in certain situations.
@@ -151,7 +139,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(RelAlgDagBuilder& quer
   }
 
   // Dispatch the subqueries first
-  for (auto subquery : subqueries_) {
+  for (auto subquery : getSubqueries()) {
     const auto subquery_ra = subquery->getRelAlg();
     CHECK(subquery_ra);
     if (subquery_ra->hasContextData()) {
@@ -166,20 +154,19 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(RelAlgDagBuilder& quer
   return executeRelAlgSeq(ed_seq, co, eo, render_info, queue_time_ms);
 }
 
-AggregatedColRange RelAlgExecutor::computeColRangesCache(const RelAlgNode* ra) {
+AggregatedColRange RelAlgExecutor::computeColRangesCache() {
   AggregatedColRange agg_col_range_cache;
-  const auto phys_inputs = get_physical_inputs(cat_, ra);
+  const auto phys_inputs = get_physical_inputs(cat_, &getRootRelAlgNode());
   return executor_->computeColRangesCache(phys_inputs);
 }
 
-StringDictionaryGenerations RelAlgExecutor::computeStringDictionaryGenerations(
-    const RelAlgNode* ra) {
-  const auto phys_inputs = get_physical_inputs(cat_, ra);
+StringDictionaryGenerations RelAlgExecutor::computeStringDictionaryGenerations() {
+  const auto phys_inputs = get_physical_inputs(cat_, &getRootRelAlgNode());
   return executor_->computeStringDictionaryGenerations(phys_inputs);
 }
 
-TableGenerations RelAlgExecutor::computeTableGenerations(const RelAlgNode* ra) {
-  const auto phys_table_ids = get_physical_table_inputs(ra);
+TableGenerations RelAlgExecutor::computeTableGenerations() {
+  const auto phys_table_ids = get_physical_table_inputs(&getRootRelAlgNode());
   return executor_->computeTableGenerations(phys_table_ids);
 }
 

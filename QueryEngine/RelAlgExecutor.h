@@ -61,17 +61,35 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
       : StorageIOFacility(executor, cat)
       , executor_(executor)
       , cat_(cat)
-      , query_state_(query_state)
+      , query_state_(std::move(query_state))
       , now_(0)
       , queue_time_ms_(0) {}
 
-  ExecutionResult executeRelAlgQuery(const std::string& query_ra,
-                                     const CompilationOptions& co,
-                                     const ExecutionOptions& eo,
-                                     RenderInfo* render_info);
+  RelAlgExecutor(Executor* executor,
+                 const Catalog_Namespace::Catalog& cat,
+                 const std::string& query_ra,
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr)
+      : StorageIOFacility(executor, cat)
+      , executor_(executor)
+      , cat_(cat)
+      , query_dag_(std::make_unique<RelAlgDagBuilder>(query_ra, cat_, nullptr))
+      , query_state_(std::move(query_state))
+      , now_(0)
+      , queue_time_ms_(0) {}
 
-  ExecutionResult executeRelAlgQuery(RelAlgDagBuilder& query_dag,
-                                     const CompilationOptions& co,
+  RelAlgExecutor(Executor* executor,
+                 const Catalog_Namespace::Catalog& cat,
+                 std::unique_ptr<RelAlgDagBuilder> query_dag,
+                 std::shared_ptr<const query_state::QueryState> query_state = nullptr)
+      : StorageIOFacility(executor, cat)
+      , executor_(executor)
+      , cat_(cat)
+      , query_dag_(std::move(query_dag))
+      , query_state_(std::move(query_state))
+      , now_(0)
+      , queue_time_ms_(0) {}
+
+  ExecutionResult executeRelAlgQuery(const CompilationOptions& co,
                                      const ExecutionOptions& eo,
                                      RenderInfo* render_info);
 
@@ -111,19 +129,18 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
     CHECK(it_ok.second);
   }
 
-  void registerSubqueries(std::vector<std::shared_ptr<RexSubQuery>> subqueries) noexcept {
-    subqueries_ = std::move(subqueries);
+  const RelAlgNode& getRootRelAlgNode() const {
+    CHECK(query_dag_);
+    return query_dag_->getRootNode();
   }
-
   const std::vector<std::shared_ptr<RexSubQuery>>& getSubqueries() const noexcept {
-    return subqueries_;
+    CHECK(query_dag_);
+    return query_dag_->getSubqueries();
   };
 
-  AggregatedColRange computeColRangesCache(const RelAlgNode* ra);
-
-  StringDictionaryGenerations computeStringDictionaryGenerations(const RelAlgNode* ra);
-
-  TableGenerations computeTableGenerations(const RelAlgNode* ra);
+  AggregatedColRange computeColRangesCache();
+  StringDictionaryGenerations computeStringDictionaryGenerations();
+  TableGenerations computeTableGenerations();
 
   Executor* getExecutor() const;
 
@@ -132,8 +149,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
   static std::string getErrorMessageFromCode(const int32_t error_code);
 
  private:
-  ExecutionResult executeRelAlgQueryNoRetry(RelAlgDagBuilder& query_dag,
-                                            const CompilationOptions& co,
+  ExecutionResult executeRelAlgQueryNoRetry(const CompilationOptions& co,
                                             const ExecutionOptions& eo,
                                             RenderInfo* render_info);
 
@@ -340,11 +356,11 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
 
   Executor* executor_;
   const Catalog_Namespace::Catalog& cat_;
+  std::unique_ptr<RelAlgDagBuilder> query_dag_;
   std::shared_ptr<const query_state::QueryState> query_state_;
   TemporaryTables temporary_tables_;
   time_t now_;
   std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;  // TODO(alex): remove
-  std::vector<std::shared_ptr<RexSubQuery>> subqueries_;
   std::unordered_map<unsigned, AggregatedResult> leaf_results_;
   int64_t queue_time_ms_;
   static SpeculativeTopNBlacklist speculative_topn_blacklist_;

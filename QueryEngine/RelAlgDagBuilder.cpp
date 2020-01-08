@@ -715,7 +715,7 @@ std::unique_ptr<const RexSubQuery> parse_subquery(const rapidjson::Value& expr,
   const auto& subquery_ast = field(expr, "subquery");
 
   RelAlgDagBuilder subquery_dag(root_dag_builder, subquery_ast, cat, nullptr);
-  auto subquery = std::make_shared<RexSubQuery>(subquery_dag.getRootNode());
+  auto subquery = std::make_shared<RexSubQuery>(subquery_dag.getRootNodeShPtr());
   root_dag_builder.registerSubquery(subquery);
   return subquery->deepCopy();
 }

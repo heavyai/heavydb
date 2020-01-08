@@ -2283,14 +2283,14 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                          false,
                          false,
                          0.9};
-  RelAlgExecutor ra_executor(executor.get(), catalog);
+  RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
                                                      nullptr),
                          {}};
-  result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
+  result = ra_executor.executeRelAlgQuery(co, eo, nullptr);
   targets = result.getTargetsMeta();
 
   return result.getRows();

@@ -378,9 +378,8 @@ ExecutionResult run_select_query_with_filter_push_down(
                                       false,
                                       false)
                             .plan_result;
-  RelAlgExecutor ra_executor(executor.get(), cat);
-
-  auto result = ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
+  auto result =
+      RelAlgExecutor(executor.get(), cat, query_ra).executeRelAlgQuery(co, eo, nullptr);
   const auto& filter_push_down_requests = result.getPushedDownFilterInfo();
   if (!filter_push_down_requests.empty()) {
     std::vector<TFilterPushDownInfo> filter_push_down_info;
@@ -411,7 +410,8 @@ ExecutionResult run_select_query_with_filter_push_down(
                                        /*find_push_down_candidates=*/false,
                                        /*just_calcite_explain=*/false,
                                        eo.gpu_input_mem_limit_percent};
-    return ra_executor.executeRelAlgQuery(new_query_ra, co, eo_modified, nullptr);
+    return RelAlgExecutor(executor.get(), cat, new_query_ra)
+        .executeRelAlgQuery(co, eo_modified, nullptr);
   } else {
     return result;
   }
@@ -462,8 +462,8 @@ ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
                                       false,
                                       false)
                             .plan_result;
-  RelAlgExecutor ra_executor(executor.get(), cat);
-  return ra_executor.executeRelAlgQuery(query_ra, co, eo, nullptr);
+  return RelAlgExecutor(executor.get(), cat, query_ra)
+      .executeRelAlgQuery(co, eo, nullptr);
 }
 
 void QueryRunner::reset() {
