@@ -28,6 +28,15 @@ namespace Importer_NS {
 std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti);
 }  // namespace Importer_NS
 
+template <typename T>
+T get_fixed_array_null_value() {
+  if (std::is_floating_point<T>::value) {
+    return static_cast<T>(inline_fp_null_array_value<T>());
+  } else {
+    return static_cast<T>(inline_int_null_array_value<T>());
+  }
+}
+
 template <typename SOURCE_TYPE, typename TARGET_TYPE>
 struct NumericValueConverter : public TargetValueConverter {
   using ColumnDataPtr = std::unique_ptr<TARGET_TYPE, CheckedMallocDeleter<TARGET_TYPE>>;
@@ -37,6 +46,7 @@ struct NumericValueConverter : public TargetValueConverter {
   TARGET_TYPE null_value_;
   SOURCE_TYPE null_check_value_;
   bool do_null_check_;
+  TARGET_TYPE fixed_array_null_value_;
 
   boost_variant_accessor<SOURCE_TYPE> SOURCE_TYPE_ACCESSOR;
 
@@ -49,12 +59,21 @@ struct NumericValueConverter : public TargetValueConverter {
       , null_value_(nullValue)
       , null_check_value_(nullCheckValue)
       , do_null_check_(doNullCheck) {
+    fixed_array_null_value_ = get_fixed_array_null_value<TARGET_TYPE>();
     if (num_rows) {
       allocateColumnarData(num_rows);
     }
   }
 
   ~NumericValueConverter() override {}
+
+  bool allowFixedNullArray() { return true; }
+
+  void populateFixedArrayNullSentinel(size_t num_rows) {
+    allocateColumnarData(num_rows);
+    CHECK(fixed_array_null_value_ != 0);
+    column_data_.get()[0] = fixed_array_null_value_;
+  }
 
   void allocateColumnarData(size_t num_rows) override {
     CHECK(num_rows > 0);
@@ -163,11 +182,11 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
       source_dict_desc_ = cat.getMetadataForDict(std::abs(sourceDictId), true);
       CHECK(source_dict_desc_);
     } else {
-      CHECK(literals_dict);
-
-      for (auto& entry : literals_dict->getTransientMapping()) {
-        auto newId = target_dict_desc_->stringDict->getOrAdd(entry.second);
-        literals_lookup_[entry.first] = newId;
+      if (literals_dict) {
+        for (auto& entry : literals_dict->getTransientMapping()) {
+          auto newId = target_dict_desc_->stringDict->getOrAdd(entry.second);
+          literals_lookup_[entry.first] = newId;
+        }
       }
 
       literals_lookup_[buffer_null_sentinal_] = buffer_null_sentinal_;
@@ -181,6 +200,8 @@ struct DictionaryValueConverter : public NumericValueConverter<int64_t, TARGET_T
   }
 
   ~DictionaryValueConverter() override {}
+
+  bool allowFixedNullArray() { return false; }
 
   ElementsBufferColumnPtr allocateColumnarBuffer(size_t num_rows) {
     CHECK(num_rows > 0);
@@ -456,6 +477,9 @@ struct ArrayValueConverter : public TargetValueConverter {
   SQLTypeInfo element_type_info_;
   bool do_check_null_;
   bool data_finalized_ = false;
+  int8_t* fixed_array_null_sentinel_;
+  size_t fixed_array_size_;
+  size_t fixed_array_elements_count_;
 
   boost_variant_accessor<ArrayTargetValue> ARRAY_VALUE_ACCESSOR;
 
@@ -469,6 +493,19 @@ struct ArrayValueConverter : public TargetValueConverter {
       , do_check_null_(do_check_null) {
     if (num_rows) {
       allocateColumnarData(num_rows);
+    }
+
+    if (cd->columnType.get_size() > 0) {
+      fixed_array_size_ = cd->columnType.get_size();
+      fixed_array_elements_count_ =
+          fixed_array_size_ / sizeof(ELEMENT_CONVERTER::fixed_array_null_value_);
+      element_converter_->populateFixedArrayNullSentinel(fixed_array_elements_count_);
+      fixed_array_null_sentinel_ =
+          reinterpret_cast<int8_t*>(element_converter_->column_data_.get());
+    } else {
+      fixed_array_size_ = 0;
+      fixed_array_elements_count_ = 0;
+      fixed_array_null_sentinel_ = nullptr;
     }
   }
 
@@ -489,6 +526,14 @@ struct ArrayValueConverter : public TargetValueConverter {
     if (arrayValue->is_initialized()) {
       const auto& vec = arrayValue->get();
       bool is_null = false;
+
+      if (fixed_array_elements_count_) {
+        if (fixed_array_elements_count_ != vec.size()) {
+          throw std::runtime_error(
+              "Incorrect number of array elements for fixed length array column");
+        }
+      }
+
       if (vec.size()) {
         typename ELEMENT_CONVERTER::ElementsBufferColumnPtr elementBuffer =
             element_converter_->allocateColumnarBuffer(vec.size());
@@ -506,10 +551,17 @@ struct ArrayValueConverter : public TargetValueConverter {
         (*column_data_)[row] = ArrayDatum(0, nullptr, is_null, DoNothingDeleter());
       }
     } else {
-      // TODO: what does it mean if do_check_null_ is set to false and we get a NULL?
-      // CHECK(do_check_null_);  // May need to check
+      if (!do_check_null_) {
+        throw std::runtime_error("NULL assignment of non null column not allowed");
+      }
+
+      if (fixed_array_elements_count_ && !element_converter_->allowFixedNullArray()) {
+        throw std::runtime_error("NULL assignment of fixed length array not allowed");
+      }
+
       bool is_null = true;  // do_check_null_;
-      (*column_data_)[row] = ArrayDatum(0, nullptr, is_null, DoNothingDeleter());
+      (*column_data_)[row] = ArrayDatum(
+          fixed_array_size_, fixed_array_null_sentinel_, is_null, DoNothingDeleter());
       (*column_data_)[row].is_null = is_null;
     }
   }

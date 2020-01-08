@@ -45,8 +45,10 @@ SQLTypeInfo build_type_info(const SQLTypes sql_type,
                             const int scale,
                             const int precision) {
   SQLTypeInfo ti(sql_type, 0, 0, true);
-  ti.set_scale(scale);
-  ti.set_precision(precision);
+  if (ti.is_decimal()) {
+    ti.set_scale(scale);
+    ti.set_precision(precision);
+  }
   return ti;
 }
 
@@ -246,11 +248,11 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateAggregateRex(
 
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
     const RexLiteral* rex_literal) {
-  const auto lit_ti = build_type_info(
+  auto lit_ti = build_type_info(
       rex_literal->getType(), rex_literal->getScale(), rex_literal->getPrecision());
-  const auto target_ti = build_type_info(rex_literal->getTargetType(),
-                                         rex_literal->getTypeScale(),
-                                         rex_literal->getTypePrecision());
+  auto target_ti = build_type_info(rex_literal->getTargetType(),
+                                   rex_literal->getTypeScale(),
+                                   rex_literal->getTypePrecision());
   switch (rex_literal->getType()) {
     case kDECIMAL: {
       const auto val = rex_literal->getVal<int64_t>();
@@ -301,6 +303,12 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateLiteral(
       return makeExpr<Analyzer::Constant>(rex_literal->getType(), false, d);
     }
     case kNULLT: {
+      if (target_ti.is_array()) {
+        Analyzer::ExpressionPtrVector args;
+        // defaulting to valid sub-type for convenience
+        target_ti.set_subtype(kBOOLEAN);
+        return makeExpr<Analyzer::ArrayExpr>(target_ti, args, -1, true);
+      }
       return makeExpr<Analyzer::Constant>(rex_literal->getTargetType(), true, Datum{0});
     }
     default: {
@@ -1312,7 +1320,7 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
     auto translated_function_args(translateFunctionArgs(rex_function));
     if (translated_function_args.size() > 0) {
       auto const& first_element_logical_type(
-          get_logical_type_info(translated_function_args[0]->get_type_info()));
+          get_nullable_logical_type_info(translated_function_args[0]->get_type_info()));
 
       on_member_of_typeset<kCHAR, kVARCHAR, kTEXT>(
           first_element_logical_type,
@@ -1338,8 +1346,9 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
             bool same_type_status = true;
             for (auto const& expr_ptr : translated_function_args) {
               same_type_status =
-                  same_type_status && (first_element_logical_type ==
-                                       get_logical_type_info(expr_ptr->get_type_info()));
+                  same_type_status &&
+                  (first_element_logical_type ==
+                   get_nullable_logical_type_info(expr_ptr->get_type_info()));
             }
 
             if (same_type_status == false) {
@@ -1356,7 +1365,10 @@ Analyzer::ExpressionPtr RelAlgTranslator::translateArrayFunction(
       return makeExpr<Analyzer::ArrayExpr>(
           sql_type, translated_function_args, feature_stash_.getAndBumpArrayExprCount());
     } else {
-      throw std::runtime_error("NULL ARRAY[] expressions not supported yet.  FIX-ME.");
+      // defaulting to valid sub-type for convenience
+      sql_type.set_subtype(kBOOLEAN);
+      return makeExpr<Analyzer::ArrayExpr>(
+          sql_type, translated_function_args, feature_stash_.getAndBumpArrayExprCount());
     }
   } else {
     feature_stash_.setCPUOnlyExecutionRequired();

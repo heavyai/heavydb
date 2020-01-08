@@ -193,8 +193,12 @@ struct FixedLenArrayChunkConverter : public ChunkToInsertDataConverter {
 
   void convertToColumnarFormat(size_t row, size_t indexInFragment) override {
     auto src_value_ptr = data_buffer_addr_ + (indexInFragment * fixed_array_length_);
-    (*column_data_)[row] =
-        ArrayDatum(fixed_array_length_, (int8_t*)src_value_ptr, DoNothingDeleter());
+
+    bool is_null = FixedLengthArrayNoneEncoder::is_null(column_descriptor_->columnType,
+                                                        src_value_ptr);
+
+    (*column_data_)[row] = ArrayDatum(
+        fixed_array_length_, (int8_t*)src_value_ptr, is_null, DoNothingDeleter());
   }
 
   void addDataBlocksToInsertData(Fragmenter_Namespace::InsertData& insertData) override {

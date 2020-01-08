@@ -143,20 +143,11 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     update_elem_stats(ArrayDatum(array_size, array, is_null(array), DoNothingDeleter()));
   }
 
-  Datum elem_min;
-  Datum elem_max;
-  bool has_nulls;
-  bool initialized;
-
- private:
-  std::mutex EncoderMutex_;
-  size_t array_size;
-
-  bool is_null(int8_t* array) {
-    if (buffer_->sql_type.get_notnull()) {
+  static bool is_null(const SQLTypeInfo& type, int8_t* array) {
+    if (type.get_notnull()) {
       return false;
     }
-    switch (buffer_->sql_type.get_subtype()) {
+    switch (type.get_subtype()) {
       case kBOOLEAN: {
         const bool* bool_array = (bool*)array;
         return ((int8_t)bool_array[0] == NULL_ARRAY_BOOLEAN);
@@ -196,7 +187,7 @@ class FixedLengthArrayNoneEncoder : public Encoder {
       case kCHAR:
       case kVARCHAR:
       case kTEXT: {
-        CHECK_EQ(buffer_->sql_type.get_compression(), kENCODING_DICT);
+        CHECK_EQ(type.get_compression(), kENCODING_DICT);
         const int32_t* int_array = (int32_t*)array;
         return (int_array[0] == NULL_ARRAY_INT);
       }
@@ -205,6 +196,17 @@ class FixedLengthArrayNoneEncoder : public Encoder {
     }
     return false;
   }
+
+  Datum elem_min;
+  Datum elem_max;
+  bool has_nulls;
+  bool initialized;
+
+ private:
+  std::mutex EncoderMutex_;
+  size_t array_size;
+
+  bool is_null(int8_t* array) { return is_null(buffer_->sql_type, array); }
 
   void update_elem_stats(const ArrayDatum& array) {
     if (array.is_null) {

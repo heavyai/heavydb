@@ -111,6 +111,19 @@ std::vector<llvm::Value*> CodeGenerator::codegenArrayExpr(
   auto* array_type = get_int_array_type(
       array_element_size_bytes * 8, array_expr->getElementCount(), cgen_state_->context_);
 
+  if (array_expr->isNull()) {
+    return {llvm::ConstantPointerNull::get(
+                llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0)),
+            cgen_state_->llInt(0)};
+  }
+
+  if (0 == array_expr->getElementCount()) {
+    llvm::Constant* dead_const = cgen_state_->llInt(0xdead);
+    llvm::Value* dead_pointer = llvm::ConstantExpr::getIntToPtr(
+        dead_const, llvm::PointerType::get(get_int_type(64, cgen_state_->context_), 0));
+    return {dead_pointer, cgen_state_->llInt(0)};
+  }
+
   llvm::Value* allocated_target_buffer;
   if (array_expr->isLocalAlloc()) {
     allocated_target_buffer = ir_builder.CreateAlloca(array_type);

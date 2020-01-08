@@ -116,6 +116,8 @@ public final class MapDParser {
   private static final EnumSet<SqlKind> DELETE = EnumSet.of(SqlKind.DELETE);
   private static final EnumSet<SqlKind> UPDATE = EnumSet.of(SqlKind.UPDATE);
   private static final EnumSet<SqlKind> IN = EnumSet.of(SqlKind.IN);
+  private static final EnumSet<SqlKind> ARRAY_VALUE =
+          EnumSet.of(SqlKind.ARRAY_VALUE_CONSTRUCTOR);
 
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(MapDParser.class);
 
@@ -533,60 +535,42 @@ public final class MapDParser {
         SqlNode targetColumn = update.getTargetColumnList().get(i);
         SqlNode expression = update.getSourceExpressionList().get(i);
 
-        // special handling of NULL values (ie, make it cast to correct type)
-        if (expression instanceof SqlLiteral) {
-          SqlLiteral identifierExpression = (SqlLiteral) expression;
-          if (null == identifierExpression.getValue()) {
-            if (!(targetColumn instanceof SqlIdentifier)) {
-              throw new RuntimeException("Unknown identifier type!");
-            }
+        if (!(targetColumn instanceof SqlIdentifier)) {
+          throw new RuntimeException("Unknown identifier type!");
+        }
+        SqlIdentifier id = (SqlIdentifier) targetColumn;
+        RelDataType fieldType =
+                targetTableType.getField(id.names.get(id.names.size() - 1), false, false)
+                        .getType();
 
-            SqlIdentifier id = (SqlIdentifier) targetColumn;
-            RelDataType fieldType =
-                    targetTableType
-                            .getField(id.names.get(id.names.size() - 1), false, false)
-                            .getType();
-            if (null != fieldType.getComponentType()) {
-              // DO NOT CAST to null array,
-              // this is currently not supported in the query engine
-              throw new RuntimeException("Updating arrays to NULL not supported!");
-              //              expression = new SqlBasicCall(new SqlCastFunction(),
-              //                      new SqlNode[] {identifierExpression,
-              //                              new SqlDataTypeSpec(
-              //                                      new SqlCollectionTypeNameSpec(
-              //
-              //                                              new SqlBasicTypeNameSpec(
-              //                                                      fieldType.getComponentType()
-              //                                                              .getSqlTypeName(),
-              //                                                      fieldType.getPrecision(),
-              //                                                      fieldType.getScale(),
-              //                                                      null ==
-              //                                                      fieldType.getCharset()
-              //                                                              ? null
-              //                                                              :
-              //                                                              fieldType.getCharset()
-              //                                                                        .name(),
-              //                                                      SqlParserPos.ZERO),
-              //                                              fieldType.getSqlTypeName(),
-              //                                              SqlParserPos.ZERO),
-              //                                      SqlParserPos.ZERO)},
-              //                      SqlParserPos.ZERO);
+        if (expression.isA(ARRAY_VALUE) && null != fieldType.getComponentType()) {
+          // apply a cast to all array value elements
+
+          SqlDataTypeSpec elementType = new SqlDataTypeSpec(
+                  new SqlBasicTypeNameSpec(fieldType.getComponentType().getSqlTypeName(),
+                          fieldType.getPrecision(),
+                          fieldType.getScale(),
+                          null == fieldType.getCharset() ? null
+                                                         : fieldType.getCharset().name(),
+                          SqlParserPos.ZERO),
+                  SqlParserPos.ZERO);
+          SqlCall array_expression = (SqlCall) expression;
+          ArrayList<SqlNode> values = new ArrayList<>();
+
+          for (SqlNode value : array_expression.getOperandList()) {
+            if (value.isA(EnumSet.of(SqlKind.LITERAL))) {
+              SqlNode casted_value = new SqlBasicCall(SqlStdOperatorTable.CAST,
+                      new SqlNode[] {value, elementType},
+                      value.getParserPosition());
+              values.add(casted_value);
             } else {
-              expression = new SqlBasicCall(new SqlCastFunction(),
-                      new SqlNode[] {identifierExpression,
-                              new SqlDataTypeSpec(
-                                      new SqlBasicTypeNameSpec(fieldType.getSqlTypeName(),
-                                              fieldType.getPrecision(),
-                                              fieldType.getScale(),
-                                              null == fieldType.getCharset()
-                                                      ? null
-                                                      : fieldType.getCharset().name(),
-                                              SqlParserPos.ZERO),
-                                      null,
-                                      SqlParserPos.ZERO)},
-                      SqlParserPos.ZERO);
+              values.add(value);
             }
           }
+
+          expression = new SqlBasicCall(MapDSqlOperatorTable.ARRAY_VALUE_CONSTRUCTOR,
+                  values.toArray(new SqlNode[0]),
+                  expression.getParserPosition());
         }
         sourceExpression.add(expression);
       }
@@ -639,22 +623,16 @@ public final class MapDParser {
     }
 
     int idx = 0;
-    for (RexNode n : project.getChildExps()) {
+    for (RexNode exp : project.getChildExps()) {
       if (applyRexCast && idx + 1 < project.getChildExps().size()) {
         RelDataType expectedFieldType =
                 targetTableType.getField(fields.get(idx), false, false).getType();
-        RexNode exp = project.getChildExps().get(idx);
-        if (exp.getType().equals(expectedFieldType)
-                || EnumSet.of(SqlKind.ARRAY_VALUE_CONSTRUCTOR).contains(exp.getKind())) {
-          nodes.add(project.getChildExps().get(idx));
-        } else {
+        if (!exp.getType().equals(expectedFieldType) && !exp.isA(ARRAY_VALUE)) {
           exp = builder.makeCast(expectedFieldType, exp);
-          nodes.add(exp);
         }
-      } else {
-        nodes.add(project.getChildExps().get(idx));
       }
 
+      nodes.add(exp);
       idx++;
     }
 

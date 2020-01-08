@@ -331,9 +331,17 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
   std::string get_column_definition() override { return column_definition; }
 
   std::string make_column_value(int rows, std::string prefix, std::string suffix) {
+    rows = fixupRowForDatatype(rows);
+
+    if (0 == rows) {
+      return "null";
+    }
+
     std::string values = prefix;
 
+    rows -= 1;
     int i = 0;
+    auto elementOffset = fixupElementIndexOffset();
 
     if (fixed_array_length) {
       i = rows;
@@ -346,7 +354,7 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
       if (firstElementWritten) {
         values += ", ";
       }
-      values += element_descriptor->get_column_value(i + 1);
+      values += element_descriptor->get_column_value(i + elementOffset);
       firstElementWritten = true;
     }
     values += suffix;
@@ -355,36 +363,65 @@ class ArrayColumnDescriptor : public TestColumnDescriptor {
   }
 
   std::string get_column_value(int row) override {
-    return make_column_value(row + 1, "{", "}");
+    return make_column_value(row, "{", "}");
   }
 
   std::string get_update_column_value(int row) override {
-    return make_column_value(row + 1, "ARRAY[", "]");
+    return make_column_value(row, "ARRAY[", "]");
   }
 
-  bool check_column_value(const int row,
+  int fixupRowForDatatype(int row) {
+    if (fixed_array_length) {
+      auto def = element_descriptor->get_column_definition();
+      if (def == "TEXT" || def == "CHAR(100)" || def == "VARCHAR(100)") {
+        return row + 1;
+      }
+    }
+    return row;
+  }
+
+  int fixupElementIndexOffset() {
+    if ("BOOLEAN" == element_descriptor->get_column_definition()) {
+      return 1;  // null
+    }
+    return 0;
+  }
+
+  bool check_column_value(int row,
                           const SQLTypeInfo& type,
                           const TargetValue* value) override {
+    const auto actual_row = row;
+    row = fixupRowForDatatype(row);
+
     auto arrayValue = boost::get<ArrayTargetValue>(value);
 
     if (!arrayValue) {
       return false;
     }
+
+    if (0 == row) {
+      return !arrayValue->is_initialized();
+    }
+
     if (!arrayValue->is_initialized()) {
-      return true;  // NULL array, nothing to check
+      return false;
     }
 
     const SQLTypeInfo subtype = type.get_elem_type();
 
-    int elementIndex = 1;
+    int elementIndex = 0;
 
     if (fixed_array_length) {
-      elementIndex += row + 1;
+      elementIndex += row - 1;
     }
+    auto elementOffset = fixupElementIndexOffset();
 
     const auto& vec = arrayValue->get();
     for (auto& scalarValue : vec) {
-      if (!element_descriptor->check_column_value(elementIndex, subtype, &scalarValue)) {
+      if (!element_descriptor->check_column_value(
+              elementIndex + elementOffset, subtype, &scalarValue)) {
+        LOG(ERROR) << get_column_definition() << " row (" << actual_row
+                   << ") -> expected " << get_column_value(actual_row);
         return false;
       }
 
@@ -1171,27 +1208,28 @@ TEST_P(Itas, InsertIntoTableFromSelectSharded) {
                ", SHARD KEY (id)) WITH (shard_count = 4, partitions='SHARDED')");
 }
 
-TEST(Update, InvalidArrayAssignment) {
+TEST(Update, InvalidTextArrayAssignment) {
   run_ddl_statement("DROP TABLE IF EXISTS arr;");
-  run_ddl_statement("CREATE TABLE arr (id int, ia int[]);");
-  run_multiple_agg("INSERT INTO arr VALUES(0 , null); ", ExecutorDeviceType::CPU);
-  run_multiple_agg("INSERT INTO arr VALUES(1 , ARRAY[]); ", ExecutorDeviceType::CPU);
-  run_multiple_agg("INSERT INTO arr VALUES(2 , ARRAY[1]); ", ExecutorDeviceType::CPU);
-
+  run_ddl_statement("CREATE TABLE arr (id int, ia text[3]);");
+  run_multiple_agg("INSERT INTO arr VALUES(1 , ARRAY[null,null,null]); ",
+                   ExecutorDeviceType::CPU);
+  ASSERT_ANY_THROW(
+      run_multiple_agg("INSERT INTO arr VALUES(0 , null); ", ExecutorDeviceType::CPU));
   ASSERT_ANY_THROW(
       run_multiple_agg("UPDATE arr set ia = NULL;", ExecutorDeviceType::CPU));
+
   ASSERT_ANY_THROW(
       run_multiple_agg("UPDATE arr set ia = ARRAY[];", ExecutorDeviceType::CPU));
-}
 
-TEST(Update, NullArrayAssignment) {
-  run_ddl_statement("DROP TABLE IF EXISTS arr;");
-  run_ddl_statement("CREATE TABLE arr (id int, ia int[]);");
-  run_multiple_agg("INSERT INTO arr VALUES(1, ARRAY[1]); ", ExecutorDeviceType::CPU);
-  run_ddl_statement("alter table arr add column da double[];");
+  ASSERT_ANY_THROW(
+      run_multiple_agg("UPDATE arr set ia = ARRAY[null];", ExecutorDeviceType::CPU));
 
-  ASSERT_NO_THROW(
-      run_multiple_agg("update arr set ia = array[1,2];", ExecutorDeviceType::CPU));
+  ASSERT_ANY_THROW(
+      run_multiple_agg("UPDATE arr set ia = ARRAY['one'];", ExecutorDeviceType::CPU));
+
+  ASSERT_ANY_THROW(
+      run_multiple_agg("UPDATE arr set ia = ARRAY['one', 'two', 'three', 'four'];",
+                       ExecutorDeviceType::CPU));
 }
 
 TEST_P(Update, UpdateColumnByColumn) {

@@ -23,6 +23,7 @@ import com.mapd.parser.server.ExtensionFunction;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.SqlAggFunction;
+import org.apache.calcite.sql.SqlCallBinding;
 import org.apache.calcite.sql.SqlFunction;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlIdentifier;
@@ -31,6 +32,7 @@ import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.SqlOperatorBinding;
 import org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.calcite.sql.SqlSyntax;
+import org.apache.calcite.sql.fun.SqlArrayValueConstructor;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.type.OperandTypes;
 import org.apache.calcite.sql.type.SqlTypeFamily;
@@ -83,6 +85,9 @@ class CaseInsensitiveListSqlOperatorTable extends ListSqlOperatorTable {
  * @author michael
  */
 public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
+  public static final SqlArrayValueConstructorAllowingEmpty ARRAY_VALUE_CONSTRUCTOR =
+          new SqlArrayValueConstructorAllowingEmpty();
+
   static {
     try {
       // some nasty bit to remove the std APPROX_COUNT_DISTINCT function definition
@@ -94,7 +99,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         for (Iterator i = operators.entries().iterator(); i.hasNext();) {
           Map.Entry entry = (Map.Entry) i.next();
           if (entry.getValue() == SqlStdOperatorTable.APPROX_COUNT_DISTINCT
-                  || entry.getValue() == SqlStdOperatorTable.AVG) {
+                  || entry.getValue() == SqlStdOperatorTable.AVG
+                  || entry.getValue() == SqlStdOperatorTable.ARRAY_VALUE_CONSTRUCTOR) {
             i.remove();
           }
         }
@@ -108,11 +114,14 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         for (Iterator i = operators.entries().iterator(); i.hasNext();) {
           Map.Entry entry = (Map.Entry) i.next();
           if (entry.getValue() == SqlStdOperatorTable.APPROX_COUNT_DISTINCT
-                  || entry.getValue() == SqlStdOperatorTable.AVG) {
+                  || entry.getValue() == SqlStdOperatorTable.AVG
+                  || entry.getValue() == SqlStdOperatorTable.ARRAY_VALUE_CONSTRUCTOR) {
             i.remove();
           }
         }
       }
+
+      SqlStdOperatorTable.instance().register(ARRAY_VALUE_CONSTRUCTOR);
 
     } catch (Exception e) {
       throw new RuntimeException(e);
@@ -241,6 +250,26 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
     }
     assert suffix_idx > 0;
     return str.substring(0, suffix_idx - 1);
+  }
+
+  public static class SqlArrayValueConstructorAllowingEmpty
+          extends SqlArrayValueConstructor {
+    @Override
+    protected RelDataType getComponentType(
+            RelDataTypeFactory typeFactory, List<RelDataType> argTypes) {
+      if (argTypes.isEmpty()) {
+        return typeFactory.createSqlType(SqlTypeName.NULL);
+      }
+      return super.getComponentType(typeFactory, argTypes);
+    }
+
+    @Override
+    public boolean checkOperandTypes(SqlCallBinding callBinding, boolean throwOnFailure) {
+      if (callBinding.operands().isEmpty()) {
+        return true;
+      }
+      return super.checkOperandTypes(callBinding, throwOnFailure);
+    }
   }
 
   /**
