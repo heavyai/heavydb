@@ -162,6 +162,8 @@ std::string serialize_type(const ExtArgumentType type) {
       return "geo_linestring";
     case ExtArgumentType::GeoPolygon:
       return "geo_polygon";
+    case ExtArgumentType::GeoMultiPolygon:
+      return "geo_multi_polygon";
     case ExtArgumentType::Cursor:
       return "cursor";
     default:
@@ -353,6 +355,9 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "geo_polygon") {
     return ExtArgumentType::GeoPolygon;
+  }
+  if (type_name == "geo_multi_polygon") {
+    return ExtArgumentType::GeoMultiPolygon;
   }
   if (type_name == "cursor") {
     return ExtArgumentType::Cursor;

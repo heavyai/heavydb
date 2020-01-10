@@ -52,7 +52,8 @@ public class ExtensionFunction {
     GeoPoint,
     GeoLineString,
     Cursor,
-    GeoPolygon
+    GeoPolygon,
+    GeoMultiPolygon
   }
   ;
 
@@ -154,6 +155,8 @@ public class ExtensionFunction {
         return "geo_linestring";
       case GeoPolygon:
         return "geo_polygon";
+      case GeoMultiPolygon:
+        return "geo_multi_polygon";
     }
     MAPDLOGGER.info("Extensionfunction::typeName: unknown type=`" + type + "`");
     assert false;

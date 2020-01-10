@@ -1577,6 +1577,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         case GeoPoint:
         case GeoLineString:
         case GeoPolygon:
+        case GeoMultiPolygon:
           return SqlTypeName.GEOMETRY;
         case Cursor:
           return SqlTypeName.CURSOR;

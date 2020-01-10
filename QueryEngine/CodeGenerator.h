@@ -420,6 +420,13 @@ class CodeGenerator {
   llvm::StructType* createArrayStructType(const std::string& udf_func_name,
                                           size_t param_num);
 
+  llvm::Value* codegenCompression(const SQLTypeInfo& type_info);
+
+  std::pair<llvm::Value*, llvm::Value*> codegenArrayBuff(llvm::Value* chunk,
+                                                         llvm::Value* row_pos,
+                                                         SQLTypes array_type,
+                                                         bool cast_and_extend);
+
   void codegenArrayArgs(const std::string& udf_func_name,
                         size_t param_num,
                         llvm::Value* array_buf,
@@ -464,6 +471,22 @@ class CodeGenerator {
                              llvm::Value* input_srid,
                              llvm::Value* output_srid,
                              std::vector<llvm::Value*>& output_args);
+
+  llvm::StructType* createMultiPolygonStructType(const std::string& udf_func_name,
+                                                 size_t param_num);
+
+  void codegenGeoMultiPolygonArgs(const std::string& udf_func_name,
+                                  size_t param_num,
+                                  llvm::Value* polygon_coords,
+                                  llvm::Value* polygon_coords_size,
+                                  llvm::Value* ring_sizes_buf,
+                                  llvm::Value* ring_sizes,
+                                  llvm::Value* polygon_bounds,
+                                  llvm::Value* polygon_bounds_sizes,
+                                  llvm::Value* compression,
+                                  llvm::Value* input_srid,
+                                  llvm::Value* output_srid,
+                                  std::vector<llvm::Value*>& output_args);
 
   std::vector<llvm::Value*> codegenFunctionOperCastArgs(
       const Analyzer::FunctionOper*,

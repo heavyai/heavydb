@@ -214,6 +214,7 @@ TEST_F(UDFCompilerTest, UdfQuery) {
   run_ddl_statement("DROP TABLE IF EXISTS geospatial_test;");
   run_ddl_statement("DROP TABLE IF EXISTS geospatial_linestring;");
   run_ddl_statement("DROP TABLE IF EXISTS geo_poly;");
+  run_ddl_statement("DROP TABLE IF EXISTS geo_mpoly;");
 
   run_ddl_statement(
       "CREATE TABLE stocks(symbol text, open_p int, high_p int, "
@@ -227,6 +228,7 @@ TEST_F(UDFCompilerTest, UdfQuery) {
 
   run_ddl_statement("CREATE TABLE geospatial_linestring (id INT, l LINESTRING)");
   run_ddl_statement("CREATE TABLE geo_poly (id INT, p POLYGON);");
+  run_ddl_statement("CREATE TABLE geo_mpoly (id INT, p MULTIPOLYGON);");
 
   std::string insert1(
       "INSERT into stocks VALUES ('NVDA', '178', '178', '171', '173', '2019-05-07');");
@@ -276,6 +278,12 @@ TEST_F(UDFCompilerTest, UdfQuery) {
       "INSERT into geo_poly VALUES(0, 'POLYGON((1 0, "
       "0 1, -1 0, 0 -1, 1 0), (0.1 0, 0 0.1, -0.1 0, 0 -0.1, 0.1 0))');");
   EXPECT_NO_THROW(run_multiple_agg(polygon_insert1, ExecutorDeviceType::CPU));
+
+  std::string multipolygon_insert1(
+      "INSERT into geo_mpoly VALUES(0, 'MULTIPOLYGON(((1 0, 0 1, -1 0, 0 -1, 1 0), "
+      "(0.1 0, 0 0.1, -0.1 0, 0 -0.1, 0.1 0)), ((2 0, 0 2, -2 0, 0 -2, 2 0), "
+      "(0.2 0, 0 0.2, -0.2 0, 0 -0.2, 0.2 0)))');");
+  EXPECT_NO_THROW(run_multiple_agg(multipolygon_insert1, ExecutorDeviceType::CPU));
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -422,6 +430,30 @@ TEST_F(UDFCompilerTest, UdfQuery) {
     ASSERT_EQ(0,
               v<int64_t>(run_simple_agg(
                   "select polygon_output_srid(p) from geo_poly WHERE id = 0;", dt)));
+
+    ASSERT_NEAR(static_cast<double>(2.0 - 0.02 + 8.0 - 0.08),
+                v<double>(run_simple_agg(
+                    "select multipolygon_area(p) from geo_mpoly WHERE id = 0;", dt)),
+                static_cast<double>(0.0001));
+
+    ASSERT_NEAR(static_cast<double>(4 * 1.41421 + 4 * 2.82842),
+                v<double>(run_simple_agg(
+                    "select multipolygon_perimeter(p) from geo_mpoly WHERE id = 0;", dt)),
+                static_cast<double>(0.0001));
+
+    ASSERT_EQ(
+        0,
+        v<int64_t>(run_simple_agg(
+            "select multipolygon_compression(p) from geo_mpoly WHERE id = 0;", dt)));
+
+    ASSERT_EQ(0,
+              v<int64_t>(run_simple_agg(
+                  "select multipolygon_input_srid(p) from geo_mpoly WHERE id = 0;", dt)));
+
+    ASSERT_EQ(
+        0,
+        v<int64_t>(run_simple_agg(
+            "select multipolygon_output_srid(p) from geo_mpoly WHERE id = 0;", dt)));
   }
 
   EXPECT_THROW(run_simple_agg("SELECT udf_range_integer(high_p, low_p) from stocks where "
@@ -434,6 +466,7 @@ TEST_F(UDFCompilerTest, UdfQuery) {
   run_ddl_statement("DROP TABLE geospatial_test;");
   run_ddl_statement("DROP TABLE geospatial_linestring;");
   run_ddl_statement("DROP TABLE geo_poly;");
+  run_ddl_statement("DROP TABLE geo_mpoly;");
 }
 
 int main(int argc, char** argv) {

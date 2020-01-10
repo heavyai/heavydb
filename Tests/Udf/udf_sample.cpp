@@ -134,6 +134,17 @@ double ST_Perimeter_Polygon_Geodesic(int8_t* poly,
                                      int32_t osr);
 
 EXTENSION_NOINLINE
+double ST_Perimeter_MultiPolygon(int8_t* mpoly_coords,
+                                 int64_t mpoly_coords_size,
+                                 int32_t* mpoly_ring_sizes,
+                                 int64_t mpoly_num_rings,
+                                 int32_t* mpoly_poly_sizes,
+                                 int64_t mpoly_num_polys,
+                                 int32_t ic,
+                                 int32_t isr,
+                                 int32_t osr);
+
+EXTENSION_NOINLINE
 double ST_Area_Polygon(int8_t* poly_coords,
                        int64_t poly_coords_size,
                        int32_t* poly_ring_sizes,
@@ -150,6 +161,17 @@ double ST_Area_Polygon_Geodesic(int8_t* poly_coords,
                                 int32_t ic,
                                 int32_t isr,
                                 int32_t osr);
+
+EXTENSION_NOINLINE
+double ST_Area_MultiPolygon(int8_t* mpoly_coords,
+                            int64_t mpoly_coords_size,
+                            int32_t* mpoly_ring_sizes,
+                            int64_t mpoly_num_rings,
+                            int32_t* mpoly_poly_sizes,
+                            int64_t mpoly_num_polys,
+                            int32_t ic,
+                            int32_t isr,
+                            int32_t osr);
 
 struct GeoPoint {
   int8_t* ptr;
@@ -180,6 +202,33 @@ struct GeoPolygon {
   DEVICE std::size_t getCoordsSize() const { return coords_size; }
 
   DEVICE std::size_t getNumRings() const { return num_rings; }
+
+  DEVICE int32_t getCompression() const { return compression; }
+
+  DEVICE int32_t getInputSrid() const { return input_srid; }
+
+  DEVICE int32_t getOutputSrid() const { return output_srid; }
+};
+
+struct GeoMultiPolygon {
+  int8_t* ptr_coords;
+  std::size_t coords_size;
+  int32_t* ring_sizes;
+  std::size_t num_rings;
+  int32_t* poly_sizes;
+  std::size_t num_polys;
+  int32_t compression;
+  int32_t input_srid;
+  int32_t output_srid;
+
+  DEVICE int32_t* getRingSizes() { return ring_sizes; }
+  DEVICE std::size_t getCoordsSize() const { return coords_size; }
+
+  DEVICE std::size_t getNumRings() const { return num_rings; }
+
+  DEVICE int32_t* getPolygonSizes() { return poly_sizes; }
+
+  DEVICE std::size_t getNumPolygons() const { return num_polys; }
 
   DEVICE int32_t getCompression() const { return compression; }
 
@@ -340,5 +389,53 @@ int32_t polygon_output_srid(GeoPolygon p) {
 
 EXTENSION_NOINLINE
 int32_t polygon_num_rings(GeoPolygon p) {
+  return p.getNumRings();
+}
+
+// MultiPolygon udf
+
+EXTENSION_NOINLINE
+double multipolygon_area(GeoMultiPolygon p) {
+  return ST_Area_MultiPolygon(p.ptr_coords,
+                              p.getCoordsSize(),
+                              p.getRingSizes(),
+                              p.getNumRings(),
+                              p.getPolygonSizes(),
+                              p.getNumPolygons(),
+                              p.getCompression(),
+                              p.getInputSrid(),
+                              p.getOutputSrid());
+}
+
+EXTENSION_NOINLINE
+double multipolygon_perimeter(GeoMultiPolygon p) {
+  return ST_Perimeter_MultiPolygon(p.ptr_coords,
+                                   p.getCoordsSize(),
+                                   p.getRingSizes(),
+                                   p.getNumRings(),
+                                   p.getPolygonSizes(),
+                                   p.getNumPolygons(),
+                                   p.getCompression(),
+                                   p.getInputSrid(),
+                                   p.getOutputSrid());
+}
+
+EXTENSION_NOINLINE
+int32_t multipolygon_compression(GeoMultiPolygon p) {
+  return p.getCompression();
+}
+
+EXTENSION_NOINLINE
+int32_t multipolygon_input_srid(GeoMultiPolygon p) {
+  return p.getInputSrid();
+}
+
+EXTENSION_NOINLINE
+int32_t multipolygon_output_srid(GeoMultiPolygon p) {
+  return p.getOutputSrid();
+}
+
+EXTENSION_NOINLINE
+int32_t multipolygon_num_rings(GeoMultiPolygon p) {
   return p.getNumRings();
 }
