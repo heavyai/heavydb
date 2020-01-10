@@ -21,23 +21,20 @@
 #define BASE_PATH "./tmp"
 #endif
 
+using namespace TestHelpers;
+
 using QR = QueryRunner::QueryRunner;
+extern size_t g_leaf_count;
+
 namespace {
 std::shared_ptr<Calcite> g_calcite;
+bool g_aggregator{false};
+size_t g_num_leafs{1};
 
 Catalog_Namespace::UserMetadata user;
 std::vector<DBObject> privObjects;
 
 auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-
-template <class T>
-T v(const TargetValue& r) {
-  auto scalar_r = boost::get<ScalarTargetValue>(&r);
-  CHECK(scalar_r);
-  auto p = boost::get<T>(scalar_r);
-  CHECK(p);
-  return *p;
-}
 
 inline void run_ddl_statement(const std::string& query) {
   QR::get()->runDDLStatement(query);
@@ -172,8 +169,9 @@ struct TableObject : testing::Test {
   ~TableObject() override { drop_tables(); }
 };
 
-struct ViewObject : testing::Test {
-  void setup_objects() {
+class ViewObject : public ::testing::Test {
+ protected:
+  void SetUp() override {
     run_ddl_statement("CREATE USER bob (password = 'password', is_super = 'false');");
     run_ddl_statement("CREATE ROLE salesDept;");
     run_ddl_statement("CREATE USER foo (password = 'password', is_super = 'false');");
@@ -184,7 +182,7 @@ struct ViewObject : testing::Test {
     run_ddl_statement("CREATE VIEW bill_view_outer AS SELECT id FROM bill_view;");
   }
 
-  void remove_objects() {
+  void TearDown() override {
     run_ddl_statement("DROP VIEW bill_view_outer;");
     run_ddl_statement("DROP VIEW bill_view;");
     run_ddl_statement("DROP TABLE bill_table");
@@ -193,11 +191,10 @@ struct ViewObject : testing::Test {
     run_ddl_statement("DROP ROLE salesDept;");
     run_ddl_statement("DROP USER bob;");
   }
-  explicit ViewObject() { setup_objects(); }
-  ~ViewObject() override { remove_objects(); }
 };
 
-struct DashboardObject : testing::Test {
+class DashboardObject : public ::testing::Test {
+ protected:
   const std::string dname1 = "ChampionsLeague";
   const std::string dname2 = "Europa";
   const std::string dstate = "active";
@@ -233,15 +230,20 @@ struct DashboardObject : testing::Test {
     }
   }
 
-  explicit DashboardObject() {
+  void SetUp() override {
     drop_dashboards();
     setup_dashboards();
   }
 
-  ~DashboardObject() override { drop_dashboards(); }
+  void TearDown() override { drop_dashboards(); }
 };
 
 TEST_F(GrantSyntax, MultiPrivilegeGrantRevoke) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
   auto session = QR::get()->getSession();
   CHECK(session);
   auto& cat = session->getCatalog();
@@ -274,6 +276,11 @@ TEST_F(GrantSyntax, MultiPrivilegeGrantRevoke) {
 }
 
 TEST_F(GrantSyntax, MultiRoleGrantRevoke) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
   std::vector<std::string> roles = {"Gunners", "Sudens"};
   std::vector<std::string> grantees = {"Juventus", "Bayern"};
   auto check_grant = []() {
@@ -1094,14 +1101,27 @@ void testViewPermissions(std::string user, std::string roleToGrant) {
 }
 
 TEST_F(ViewObject, UserRoleBobGetsGrants) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
   testViewPermissions("bob", "bob");
 }
 
 TEST_F(ViewObject, GroupRoleFooGetsGrants) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
   testViewPermissions("foo", "salesDept");
 }
 
 TEST_F(ViewObject, CalciteViewResolution) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
   auto query_state1 =
       QR::create_query_state(QR::get()->getSession(), "select * from bill_table");
   TPlanResult result = ::g_calcite->process(query_state1->createQueryStateProxy(),
@@ -1644,6 +1664,11 @@ std::unique_ptr<QR> get_qr_for_user(
 }  // namespace
 
 TEST(SysCatalog, RenameUser_AlreadyLoggedInQueryAfterRename) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
   using namespace std::string_literals;
   auto username = "chuck"s;
   auto database_name = "nydb"s;
@@ -1705,6 +1730,11 @@ TEST(SysCatalog, RenameUser_AlreadyLoggedInQueryAfterRename) {
 }
 
 TEST(SysCatalog, RenameUser_ReloginWithOldName) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
   using namespace std::string_literals;
   auto username = "chuck"s;
   auto database_name = "nydb"s;
@@ -1755,6 +1785,11 @@ TEST(SysCatalog, RenameUser_ReloginWithOldName) {
 }
 
 TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
   using namespace std::string_literals;
   auto rename_successful = false;
 
@@ -1830,6 +1865,11 @@ TEST(SysCatalog, RenameUser_CheckPrivilegeTransfer) {
 }
 
 TEST(SysCatalog, RenameUser_SuperUserRenameCheck) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
   using namespace std::string_literals;
 
   ScopeGuard s = [] {
@@ -1867,6 +1907,11 @@ TEST(SysCatalog, RenameUser_SuperUserRenameCheck) {
 }
 
 TEST(SysCatalog, RenameDatabase_Basic) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
   using namespace std::string_literals;
   auto username = "magicwand"s;
   auto database_name = "gdpgrowth"s;
@@ -1914,6 +1959,11 @@ TEST(SysCatalog, RenameDatabase_Basic) {
 }
 
 TEST(SysCatalog, RenameDatabase_WrongUser) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
   using namespace std::string_literals;
   auto username = "reader"s;
   auto database_name = "fnews"s;
@@ -1955,6 +2005,11 @@ TEST(SysCatalog, RenameDatabase_WrongUser) {
 }
 
 TEST(SysCatalog, RenameDatabase_SuperUser) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
   using namespace std::string_literals;
   auto username = "maurypovich"s;
   auto database_name = "paternitydb"s;
@@ -2068,6 +2123,11 @@ TEST(SysCatalog, RenameDatabase_FailedCopy) {
 }
 
 TEST(SysCatalog, RenameDatabase_PrivsTest) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
   using namespace std::string_literals;
   auto rename_successful = false;
 
@@ -2288,6 +2348,11 @@ void compare_user_lists(const std::vector<std::string>& expected,
 }  // namespace
 
 TEST(SysCatalog, AllUserMetaTest) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
   using namespace std::string_literals;
   Users users_;
 
@@ -2359,6 +2424,11 @@ TEST(SysCatalog, AllUserMetaTest) {
 }
 
 TEST(SysCatalog, RecursiveRolesUserMetaData) {
+  if (g_aggregator) {
+    LOG(ERROR) << "Test not supported in distributed mode.";
+    return;
+  }
+
   using namespace std::string_literals;
   Users users_;
   Roles roles_;
@@ -2465,8 +2535,35 @@ TEST(Login, Deactivation) {
 }
 
 int main(int argc, char* argv[]) {
-  TestHelpers::init_logger_stderr_only(argc, argv);
   testing::InitGoogleTest(&argc, argv);
+
+  namespace po = boost::program_options;
+
+  po::options_description desc("Options");
+
+  // these two are here to allow passing correctly google testing parameters
+  desc.add_options()("gtest_list_tests", "list all tests");
+  desc.add_options()("gtest_filter", "filters tests, use --help for details");
+
+  desc.add_options()(
+      "test-help",
+      "Print all ImportTest specific options (for gtest options use `--help`).");
+
+  logger::LogOptions log_options(argv[0]);
+  log_options.max_files_ = 0;  // stderr only by default
+  desc.add(log_options.get_options());
+
+  po::variables_map vm;
+  po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
+  po::notify(vm);
+
+  if (vm.count("test-help")) {
+    std::cout << "Usage: ImportTest" << std::endl << std::endl;
+    std::cout << desc << std::endl;
+    return 0;
+  }
+
+  logger::init(log_options);
 
   QR::init(BASE_PATH);
 
