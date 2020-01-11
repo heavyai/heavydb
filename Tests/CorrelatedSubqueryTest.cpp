@@ -611,6 +611,12 @@ TEST(Update, MultipleCorrelatedDisallowed) {
   QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
 
   sql =
+      "UPDATE test_facts SET lookup_id = 1 WHERE (SELECT SAMPLE(id) FROM "
+      "test_lookup_where WHERE "
+      "val=test_facts.val) > 10";
+  ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+
+  sql =
       "UPDATE test_facts SET lookup_id = (SELECT SAMPLE(test_lookup.id) FROM test_lookup "
       "WHERE val = test_facts.val) WHERE (SELECT SAMPLE(id) FROM test_lookup_where WHERE "
       "val=test_facts.val) < 10";

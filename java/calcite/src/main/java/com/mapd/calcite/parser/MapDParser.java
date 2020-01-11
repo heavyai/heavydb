@@ -506,7 +506,10 @@ public final class MapDParser {
     SqlBasicVisitor<Void> correlatedQueriesCounter = new SqlBasicVisitor<Void>() {
       @Override
       public Void visit(SqlCall call) {
-        if (call.isA(SCALAR)) {
+        if (call.isA(SCALAR)
+                && ((call instanceof SqlBasicCall && call.operandCount() == 1
+                            && !call.operand(0).isA(SCALAR))
+                        || !(call instanceof SqlBasicCall))) {
           if (isCorrelated(call)) {
             correlatedQueriesCount[0]++;
           }
