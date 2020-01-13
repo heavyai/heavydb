@@ -236,29 +236,32 @@ class SQLiteComparator {
                     const ExecutorDeviceType device_type,
                     const bool timestamp_approx,
                     const bool is_arrow = false) {
+    auto const errmsg = ExecutorDeviceType::CPU == device_type
+                            ? "CPU: " + sqlite_query_string
+                            : "GPU: " + sqlite_query_string;
     connector_.query(sqlite_query_string);
-    ASSERT_EQ(connector_.getNumRows(), mapd_results->rowCount());
+    ASSERT_EQ(connector_.getNumRows(), mapd_results->rowCount()) << errmsg;
     const int num_rows{static_cast<int>(connector_.getNumRows())};
     if (mapd_results->definitelyHasNoRows()) {
-      ASSERT_EQ(0, num_rows);
+      ASSERT_EQ(0, num_rows) << errmsg;
       return;
     }
     if (!num_rows) {
       return;
     }
-    CHECK_EQ(connector_.getNumCols(), mapd_results->colCount());
+    CHECK_EQ(connector_.getNumCols(), mapd_results->colCount()) << errmsg;
     const int num_cols{static_cast<int>(connector_.getNumCols())};
     auto row_iterator = mapd_results->rowIterator(true, true);
     for (int row_idx = 0; row_idx < num_rows; ++row_idx) {
       const auto crt_row =
           g_use_row_iterator ? *row_iterator++ : mapd_results->getNextRow(true, true);
-      CHECK(!crt_row.empty());
-      CHECK_EQ(static_cast<size_t>(num_cols), crt_row.size());
+      CHECK(!crt_row.empty()) << errmsg;
+      CHECK_EQ(static_cast<size_t>(num_cols), crt_row.size()) << errmsg;
       for (int col_idx = 0; col_idx < num_cols; ++col_idx) {
         const auto ref_col_type = connector_.columnTypes[col_idx];
         const auto mapd_variant = crt_row[col_idx];
         const auto scalar_mapd_variant = boost::get<ScalarTargetValue>(&mapd_variant);
-        CHECK(scalar_mapd_variant);
+        CHECK(scalar_mapd_variant) << errmsg;
         auto mapd_ti = mapd_results->getColType(col_idx);
         const auto mapd_type = mapd_ti.get_type();
         checkTypeConsistency(ref_col_type, mapd_ti);
@@ -272,10 +275,10 @@ class SQLiteComparator {
             ASSERT_NE(nullptr, mapd_as_int_p);
             const auto mapd_val = *mapd_as_int_p;
             if (ref_is_null) {
-              ASSERT_EQ(inline_int_null_val(mapd_ti), mapd_val);
+              ASSERT_EQ(inline_int_null_val(mapd_ti), mapd_val) << errmsg;
             } else {
               const auto ref_val = connector_.getData<int64_t>(row_idx, col_idx);
-              ASSERT_EQ(ref_val, mapd_val);
+              ASSERT_EQ(ref_val, mapd_val) << errmsg;
             }
             break;
           }
@@ -283,7 +286,7 @@ class SQLiteComparator {
           case kCHAR:
           case kVARCHAR: {
             const auto mapd_as_str_p = boost::get<NullableString>(scalar_mapd_variant);
-            ASSERT_NE(nullptr, mapd_as_str_p);
+            ASSERT_NE(nullptr, mapd_as_str_p) << errmsg;
             const auto mapd_str_notnull = boost::get<std::string>(mapd_as_str_p);
             if (ref_is_null) {
               // CHECK(!mapd_str_notnull); // JUST TO DEBUG SOMETHING TO BE UNCOMENTED
@@ -291,11 +294,11 @@ class SQLiteComparator {
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
               if (mapd_str_notnull) {
                 const auto mapd_val = *mapd_str_notnull;
-                ASSERT_EQ(ref_val, mapd_val);
+                ASSERT_EQ(ref_val, mapd_val) << errmsg;
               } else {
                 // not null but no data, so val is empty string
                 const auto mapd_val = "";
-                ASSERT_EQ(ref_val, mapd_val);
+                ASSERT_EQ(ref_val, mapd_val) << errmsg;
               }
             }
             break;
@@ -304,25 +307,27 @@ class SQLiteComparator {
           case kDECIMAL:
           case kDOUBLE: {
             const auto mapd_as_double_p = boost::get<double>(scalar_mapd_variant);
-            ASSERT_NE(nullptr, mapd_as_double_p);
+            ASSERT_NE(nullptr, mapd_as_double_p) << errmsg;
             const auto mapd_val = *mapd_as_double_p;
             if (ref_is_null) {
-              ASSERT_EQ(inline_fp_null_val(SQLTypeInfo(kDOUBLE, false)), mapd_val);
+              ASSERT_EQ(inline_fp_null_val(SQLTypeInfo(kDOUBLE, false)), mapd_val)
+                  << errmsg;
             } else {
               const auto ref_val = connector_.getData<double>(row_idx, col_idx);
-              ASSERT_TRUE(approx_eq(ref_val, mapd_val));
+              ASSERT_TRUE(approx_eq(ref_val, mapd_val)) << errmsg;
             }
             break;
           }
           case kFLOAT: {
             const auto mapd_as_float_p = boost::get<float>(scalar_mapd_variant);
-            ASSERT_NE(nullptr, mapd_as_float_p);
+            ASSERT_NE(nullptr, mapd_as_float_p) << errmsg;
             const auto mapd_val = *mapd_as_float_p;
             if (ref_is_null) {
-              ASSERT_EQ(inline_fp_null_val(SQLTypeInfo(kFLOAT, false)), mapd_val);
+              ASSERT_EQ(inline_fp_null_val(SQLTypeInfo(kFLOAT, false)), mapd_val)
+                  << errmsg;
             } else {
               const auto ref_val = connector_.getData<float>(row_idx, col_idx);
-              ASSERT_TRUE(approx_eq(ref_val, mapd_val));
+              ASSERT_TRUE(approx_eq(ref_val, mapd_val)) << errmsg;
             }
             break;
           }
@@ -334,7 +339,7 @@ class SQLiteComparator {
             time_t nsec = 0;
             const int dimen = mapd_ti.get_dimension();
             if (ref_is_null) {
-              CHECK_EQ(inline_int_null_val(mapd_ti), mapd_val);
+              CHECK_EQ(inline_int_null_val(mapd_ti), mapd_val) << errmsg;
             } else {
               struct tm tm_struct {
                 0
@@ -347,9 +352,10 @@ class SQLiteComparator {
               // handle fractional seconds
               if (end_str != nullptr && *end_str != '.') {
                 if (end_str) {
-                  ASSERT_EQ(0, *end_str);
+                  ASSERT_EQ(0, *end_str) << errmsg;
                 }
-                ASSERT_EQ(ref_val.size(), static_cast<size_t>(end_str - ref_val.c_str()));
+                ASSERT_EQ(ref_val.size(), static_cast<size_t>(end_str - ref_val.c_str()))
+                    << errmsg;
               }
               if (dimen > 0 && mapd_type == kTIMESTAMP) {
                 int fs = 0;
@@ -364,19 +370,22 @@ class SQLiteComparator {
                 } else if (*end_str == '\0') {
                   nsec = timegm(&tm_struct) * pow(10, dimen);
                 } else {
-                  CHECK(false);
+                  CHECK(false) << errmsg;
                 }
               }
               if (timestamp_approx) {
                 // approximate result give 10 second lee way
                 ASSERT_NEAR(*mapd_as_int_p,
                             dimen > 0 ? nsec : timegm(&tm_struct),
-                            dimen > 0 ? 10 * pow(10, dimen) : 10);
+                            dimen > 0 ? 10 * pow(10, dimen) : 10)
+                    << errmsg;
               } else {
                 if (is_arrow && mapd_type == kDATE) {
-                  ASSERT_EQ(*mapd_as_int_p, timegm(&tm_struct) * kMilliSecsPerSec);
+                  ASSERT_EQ(*mapd_as_int_p, timegm(&tm_struct) * kMilliSecsPerSec)
+                      << errmsg;
                 } else {
-                  ASSERT_EQ(*mapd_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct));
+                  ASSERT_EQ(*mapd_as_int_p, dimen > 0 ? nsec : timegm(&tm_struct))
+                      << errmsg;
                 }
               }
             }
@@ -384,41 +393,42 @@ class SQLiteComparator {
           }
           case kBOOLEAN: {
             const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
-            CHECK(mapd_as_int_p);
+            CHECK(mapd_as_int_p) << errmsg;
             const auto mapd_val = *mapd_as_int_p;
             if (ref_is_null) {
-              CHECK_EQ(inline_int_null_val(mapd_ti), mapd_val);
+              CHECK_EQ(inline_int_null_val(mapd_ti), mapd_val) << errmsg;
             } else {
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
               if (ref_val == "t") {
-                ASSERT_EQ(1, *mapd_as_int_p);
+                ASSERT_EQ(1, *mapd_as_int_p) << errmsg;
               } else {
-                CHECK_EQ("f", ref_val);
-                ASSERT_EQ(0, *mapd_as_int_p);
+                CHECK_EQ("f", ref_val) << errmsg;
+                ASSERT_EQ(0, *mapd_as_int_p) << errmsg;
               }
             }
             break;
           }
           case kTIME: {
             const auto mapd_as_int_p = boost::get<int64_t>(scalar_mapd_variant);
-            CHECK(mapd_as_int_p);
+            CHECK(mapd_as_int_p) << errmsg;
             const auto mapd_val = *mapd_as_int_p;
             if (ref_is_null) {
-              CHECK_EQ(inline_int_null_val(mapd_ti), mapd_val);
+              CHECK_EQ(inline_int_null_val(mapd_ti), mapd_val) << errmsg;
             } else {
               const auto ref_val = connector_.getData<std::string>(row_idx, col_idx);
               std::vector<std::string> time_tokens;
               boost::split(time_tokens, ref_val, boost::is_any_of(":"));
-              ASSERT_EQ(size_t(3), time_tokens.size());
+              ASSERT_EQ(size_t(3), time_tokens.size()) << errmsg;
               ASSERT_EQ(boost::lexical_cast<int64_t>(time_tokens[0]) * 3600 +
                             boost::lexical_cast<int64_t>(time_tokens[1]) * 60 +
                             boost::lexical_cast<int64_t>(time_tokens[2]),
-                        *mapd_as_int_p);
+                        *mapd_as_int_p)
+                  << errmsg;
             }
             break;
           }
           default:
-            CHECK(false);
+            CHECK(false) << errmsg;
         }
       }
     }
