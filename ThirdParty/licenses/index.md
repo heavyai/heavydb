@@ -60,6 +60,7 @@ dgrijalva/jwt-go | [MIT](<https://github.com/dgrijalva/jwt-go/blob/master/LICENS
 --- | --- | --- |
 Apache commons-cli | [Apache](<https://github.com/apache/commons-cli/blob/trunk/LICENSE.txt>) | CLI flags handler |
 Apache commons-math3 | [Apache](<https://github.com/apache/commons-math/blob/master/LICENSE.txt>) | Math functions |
+Apache commons-text | [Apache](<https://github.com/apache/commons-text/blob/master/LICENSE.txt>) | String parsing functions |
 slf4j-log4j12 | [MIT](<http://www.slf4j.org/license.html>) | Java logging |
 Google Gson | [Apache](<https://github.com/google/gson/blob/master/LICENSE>) | Java JSON parsing |
 Xerial sqlite-jdbc | [Apache](<https://github.com/xerial/sqlite-jdbc/blob/master/LICENSE>) | Catalog connector/reader |
