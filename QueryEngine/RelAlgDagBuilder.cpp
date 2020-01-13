@@ -25,6 +25,8 @@
 #include "Rendering/RenderRelAlgUtils.h"
 #include "RexVisitor.h"
 
+#include <rapidjson/error/en.h>
+#include <rapidjson/error/error.h>
 #include <rapidjson/stringbuffer.h>
 #include <rapidjson/writer.h>
 
@@ -2118,7 +2120,15 @@ RelAlgDagBuilder::RelAlgDagBuilder(const std::string& query_ra,
     : cat_(cat), render_opts_(render_opts) {
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
-  CHECK(!query_ast.HasParseError());
+  if (query_ast.HasParseError()) {
+    query_ast.GetParseError();
+    LOG(ERROR) << "Failed to parse RA tree from Calcite (offset "
+               << query_ast.GetErrorOffset() << "):\n"
+               << rapidjson::GetParseError_En(query_ast.GetParseError());
+    VLOG(1) << "Failed to parse query RA: " << query_ra;
+    throw std::runtime_error(
+        "Failed to parse relational algebra tree. Possible query syntax error.");
+  }
   CHECK(query_ast.IsObject());
   RelAlgNode::resetRelAlgFirstId();
   build(query_ast, *this);
