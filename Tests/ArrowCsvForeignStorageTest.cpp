@@ -34,6 +34,12 @@
 #include "../Shared/geo_types.h"
 #include "../Shared/scope.h"
 #include "boost/filesystem.hpp"
+
+#include <arrow/util/task-group.h>
+#include <arrow/util/thread-pool.h>
+
+#include <atomic>
+
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
@@ -149,6 +155,37 @@ TEST_F(NycTaxiTemporaryTest, RunSimpleQuery) {
   ASSERT_EQ(999,
             v<int64_t>(run_simple_agg(
                 "SELECT count(vendor_id) FROM trips where vendor_id < '5'")));
+}
+
+class ArrowTaskGroupTest : public ::testing::Test {};
+
+TEST_F(ArrowTaskGroupTest, ReproduceRace) {
+  auto tp = arrow::internal::GetCpuThreadPool();
+  auto tg = arrow::internal::TaskGroup::MakeThreaded(tp);
+
+  std::vector<int> results(10000, 0);
+
+  std::atomic<int> counter{0};
+
+  for (int i = 0; i < 10000; i++) {
+    ++counter;
+    tg->Append([i, &results, &counter]() mutable {
+      for (int j = 0; j < 10000; j++) {
+        auto& element = results[i];
+        element += 23;
+      }
+      --counter;
+      return arrow::Status::OK();
+    });
+  }
+
+  tg->Finish();
+  ASSERT_EQ(counter.load(), 0);
+  for (int i = 0; i < 10000; i++) {
+    if (results[i] < 10) {
+      throw;
+    }
+  }
 }
 
 }  // namespace

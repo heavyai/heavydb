@@ -16,6 +16,7 @@
 #include "../QueryEngine/ArrowUtil.h"
 
 #include <array>
+#include <atomic>
 #include <future>
 
 class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
@@ -270,6 +271,8 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   auto tp = arrow::internal::GetCpuThreadPool();
   auto tg = arrow::internal::TaskGroup::MakeThreaded(tp);
 
+  std::atomic<int> counter{0};
+
   for (auto& c : cols) {
     if (cln >= num_cols) {
       LOG(ERROR) << "Number of columns read from Arrow (" << num_cols
@@ -367,13 +370,15 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
         b->encoder.reset(Encoder::Create(b, c.columnType));
         b->has_encoder = true;
         if (!empty) {
+          ++counter;
           // asynchronously update stats for incoming data
-          tg->Append([b, fr = &frag]() {
+          tg->Append([b, fr = &frag, &counter]() {
             for (auto chunk : fr->chunks) {
               auto len = chunk->length;
               auto data = chunk->buffers[1]->data();
               b->encoder->updateStats((const int8_t*)data, len);
             }
+            --counter;
             return arrow::Status::OK();
           });
         }
@@ -384,6 +389,8 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
 
   // wait untill all stats have been updated
   r = tg->Finish();
+  CHECK(counter.load() == 0);
+
   ARROW_THROW_NOT_OK(r);
   printf("-- created: %d columns, %d chunks, %d frags\n",
          num_cols,
