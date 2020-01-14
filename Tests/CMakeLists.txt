@@ -52,6 +52,7 @@ add_executable(AlterColumnTest AlterColumnTest.cpp)
 add_executable(UpdelStorageTest UpdelStorageTest.cpp)
 add_executable(ComputeMetadataTest ComputeMetadataTest.cpp)
 add_executable(BumpAllocatorTest BumpAllocatorTest.cpp)
+add_executable(SpecialCharsTest SpecialCharsTest.cpp)
 add_executable(TableFunctionsTest TableFunctionsTest.cpp)
 add_executable(TopKTest TopKTest.cpp)
 add_executable(TokenCompletionHintsTest TokenCompletionHintsTest.cpp)
@@ -103,6 +104,7 @@ target_link_libraries(StorageTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ComputeMetadataTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TableFunctionsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(BumpAllocatorTest ${EXECUTE_TEST_LIBS})
+target_link_libraries(SpecialCharsTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(UpdateMetadataTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StoragePerfTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
@@ -145,6 +147,7 @@ add_test(StringFunctionsTest StringFunctionsTest ${TEST_ARGS})
 add_test(StorageTest StorageTest ${TEST_ARGS})
 add_test(ComputeMetadataTest ComputeMetadataTest ${TEST_ARGS})
 add_test(BumpAllocatorTest BumpAllocatorTest ${TEST_ARGS})
+add_test(SpecialCharsTest SpecialCharsTest ${TEST_ARGS})
 add_test(TableFunctionsTest TableFunctionsTest ${TEST_ARGS})
 add_test(StoragePerfTest StoragePerfTest ${TEST_ARGS})
 add_test(TopKTest TopKTest ${TEST_ARGS})
@@ -191,6 +194,7 @@ set(TEST_PROGRAMS
   UpdelStorageTest
   ComputeMetadataTest
   BumpAllocatorTest
+  SpecialCharsTest
   TableFunctionsTest
   TopKTest
   TokenCompletionHintsTest
