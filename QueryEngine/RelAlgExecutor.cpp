@@ -1985,9 +1985,13 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     build_render_targets(*render_info, work_unit.exe_unit.target_exprs, targets_meta);
     if (render_info->isPotentialInSituRender()) {
       // return an empty result (with the same queue time, and zero render time)
-      return {
-          std::make_shared<ResultSet>(queue_time_ms, 0, executor_->row_set_mem_owner_),
-          {}};
+      return {std::make_shared<ResultSet>(
+                  queue_time_ms,
+                  0,
+                  executor_->row_set_mem_owner_
+                      ? executor_->row_set_mem_owner_->cloneStrDictDataOnly()
+                      : nullptr),
+              {}};
     }
   }
   return result;

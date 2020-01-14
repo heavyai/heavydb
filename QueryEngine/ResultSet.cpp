@@ -194,6 +194,7 @@ ResultSet::ResultSet(int64_t queue_time_ms,
     : device_type_(ExecutorDeviceType::CPU)
     , device_id_(-1)
     , fetched_so_far_(0)
+    , row_set_mem_owner_(row_set_mem_owner)
     , queue_time_ms_(queue_time_ms)
     , render_time_ms_(render_time_ms)
     , estimator_buffer_(nullptr)
