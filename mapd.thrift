@@ -384,6 +384,7 @@ struct TRawRenderPassDataResult {
   5: binary row_ids_B
   6: binary table_ids
   7: binary accum_data
+  8: i32 accum_depth
 }
 
 typedef map<i32, TRawRenderPassDataResult> TRenderPassMap
