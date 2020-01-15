@@ -31,7 +31,6 @@ class RenderInfo {
  public:
   std::unique_ptr<RenderAllocatorMap> render_allocator_map_ptr;
   const std::shared_ptr<const ::QueryRenderer::RenderSession> render_session;
-  std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner;
 
   // Info for all the column targets retrieved in in a query. Used to extract column/table
   // info when rendering.

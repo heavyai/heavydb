@@ -105,14 +105,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
   if (g_enable_dynamic_watchdog) {
     executor_->resetInterrupt();
   }
-  ScopeGuard row_set_holder = [this, &render_info] {
-    if (render_info) {
-      // need to hold onto the RowSetMemOwner for potential
-      // string id lookups during render vega validation
-      render_info->row_set_mem_owner = executor_->row_set_mem_owner_;
-    }
-    cleanupPostExecution();
-  };
+  ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
   const auto phys_inputs = get_physical_inputs(cat_, &ra);
   const auto phys_table_ids = get_physical_table_inputs(&ra);
   executor_->setCatalog(&cat_);
