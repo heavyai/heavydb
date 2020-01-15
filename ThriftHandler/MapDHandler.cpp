@@ -436,6 +436,7 @@ void MapDHandler::connect(TSessionId& session,
     cat = SysCatalog::instance().login(
         dbname2, username2, passwd, user_meta, !super_user_rights_);
   } catch (std::exception& e) {
+    stdlog.appendNameValuePairs("user", username, "db", dbname, "exception", e.what());
     THROW_MAPD_EXCEPTION(e.what());
   }
 
@@ -445,6 +446,8 @@ void MapDHandler::connect(TSessionId& session,
   std::vector<DBObject> dbObjects;
   dbObjects.push_back(dbObject);
   if (!SysCatalog::instance().checkPrivileges(user_meta, dbObjects)) {
+    stdlog.appendNameValuePairs(
+        "user", username, "db", dbname, "exception", "Missing Privileges");
     THROW_MAPD_EXCEPTION("Unauthorized Access: user " + username +
                          " is not allowed to access database " + dbname2 + ".");
   }
