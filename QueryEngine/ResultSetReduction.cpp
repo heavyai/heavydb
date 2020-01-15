@@ -23,6 +23,7 @@
  */
 
 #include "DynamicWatchdog.h"
+#include "Execute.h"
 #include "ResultSet.h"
 #include "ResultSetReductionInterpreter.h"
 #include "ResultSetReductionJIT.h"
@@ -164,6 +165,10 @@ void run_reduction_code(const ReductionCode& reduction_code,
     err = ret.int_val;
   }
   if (err) {
+    if (err == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES) {
+      throw std::runtime_error("Multiple distinct values encountered");
+    }
+
     throw std::runtime_error(
         "Query execution has exceeded the time limit or was interrupted during result "
         "set reduction");
@@ -1346,6 +1351,54 @@ int8_t get_width_for_slot(const size_t target_slot_idx,
   return query_mem_desc.getPaddedSlotWidthBytes(target_slot_idx);
 }
 
+void ResultSetStorage::reduceOneSlotSingleValue(int8_t* this_ptr1,
+                                                const TargetInfo& target_info,
+                                                const size_t target_slot_idx,
+                                                const size_t init_agg_val_idx,
+                                                const int8_t* that_ptr1) const {
+  const bool float_argument_input = takes_float_argument(target_info);
+  const auto chosen_bytes =
+      get_width_for_slot(target_slot_idx, float_argument_input, query_mem_desc_);
+  auto init_val = target_init_vals_[init_agg_val_idx];
+
+  auto reduce = [&](auto const& size_tag) {
+    using CastTarget = std::decay_t<decltype(size_tag)>;
+    const auto lhs_proj_col = *reinterpret_cast<const CastTarget*>(this_ptr1);
+    const auto rhs_proj_col = *reinterpret_cast<const CastTarget*>(that_ptr1);
+    if (rhs_proj_col == init_val) {
+      // ignore
+    } else if (lhs_proj_col == init_val) {
+      *reinterpret_cast<CastTarget*>(this_ptr1) = rhs_proj_col;
+    } else if (lhs_proj_col != rhs_proj_col) {
+      throw std::runtime_error("Multiple distinct values encountered");
+    }
+  };
+
+  switch (chosen_bytes) {
+    case 1: {
+      CHECK(query_mem_desc_.isLogicalSizedColumnsAllowed());
+      reduce(int8_t());
+      break;
+    }
+    case 2: {
+      CHECK(query_mem_desc_.isLogicalSizedColumnsAllowed());
+      reduce(int16_t());
+      break;
+    }
+    case 4: {
+      reduce(int32_t());
+      break;
+    }
+    case 8: {
+      CHECK(!target_info.sql_type.is_varlen());
+      reduce(int64_t());
+      break;
+    }
+    default:
+      LOG(FATAL) << "Invalid slot width: " << chosen_bytes;
+  }
+}
+
 void ResultSetStorage::reduceOneSlot(
     int8_t* this_ptr1,
     int8_t* this_ptr2,
@@ -1368,7 +1421,11 @@ void ResultSetStorage::reduceOneSlot(
   const auto chosen_bytes =
       get_width_for_slot(target_slot_idx, float_argument_input, query_mem_desc_);
   auto init_val = target_init_vals_[init_agg_val_idx];
-  if (target_info.is_agg && target_info.agg_kind != kSAMPLE) {
+
+  if (target_info.is_agg && target_info.agg_kind == kSINGLE_VALUE) {
+    reduceOneSlotSingleValue(
+        this_ptr1, target_info, target_logical_idx, init_agg_val_idx, that_ptr1);
+  } else if (target_info.is_agg && target_info.agg_kind != kSAMPLE) {
     switch (target_info.agg_kind) {
       case kCOUNT:
       case kAPPROX_COUNT_DISTINCT: {

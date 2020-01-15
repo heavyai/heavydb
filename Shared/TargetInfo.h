@@ -53,6 +53,7 @@ inline bool is_agg_domain_range_equivalent(const SQLAgg& agg_kind) {
   switch (agg_kind) {
     case kMIN:
     case kMAX:
+    case kSINGLE_VALUE:
     case kSAMPLE:
       return true;
     default:
@@ -120,7 +121,8 @@ inline bool is_distinct_target(const TargetInfo& target_info) {
 inline bool takes_float_argument(const TargetInfo& target_info) {
   return target_info.is_agg &&
          (target_info.agg_kind == kAVG || target_info.agg_kind == kSUM ||
-          target_info.agg_kind == kMIN || target_info.agg_kind == kMAX) &&
+          target_info.agg_kind == kMIN || target_info.agg_kind == kMAX ||
+          target_info.agg_kind == kSINGLE_VALUE) &&
          target_info.agg_arg_type.get_type() == kFLOAT;
 }
 

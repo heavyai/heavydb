@@ -128,7 +128,7 @@ int64_t get_agg_initial_val(const SQLAgg agg,
                             const SQLTypeInfo& ti,
                             const bool enable_compaction,
                             const unsigned min_byte_width_to_compact) {
-  CHECK(!ti.is_string() || agg == kSAMPLE);
+  CHECK(!ti.is_string() || (agg == kSINGLE_VALUE || agg == kSAMPLE));
   const auto byte_width =
       enable_compaction
           ? compact_byte_width(static_cast<unsigned>(get_bit_width(ti) >> 3),
@@ -215,6 +215,7 @@ int64_t get_agg_initial_val(const SQLAgg agg,
           CHECK(false);
       }
     }
+    case kSINGLE_VALUE:
     case kSAMPLE:
     case kMAX: {
       switch (byte_width) {

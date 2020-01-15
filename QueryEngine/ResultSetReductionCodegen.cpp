@@ -139,27 +139,34 @@ llvm::Instruction::CastOps llvm_cast_op(const Cast::CastOp op) {
 void return_early(llvm::Value* cond,
                   const ReductionCode& reduction_code,
                   llvm::Function* func,
-                  int error_code) {
+                  llvm::Value* error_code) {
   auto cgen_state = reduction_code.cgen_state.get();
   auto& ctx = cgen_state->context_;
   const auto early_return = llvm::BasicBlock::Create(ctx, ".early_return", func, 0);
   const auto do_reduction = llvm::BasicBlock::Create(ctx, ".do_reduction", func, 0);
   cgen_state->ir_builder_.CreateCondBr(cond, early_return, do_reduction);
   cgen_state->ir_builder_.SetInsertPoint(early_return);
+
   if (func->getReturnType()->isVoidTy()) {
     cgen_state->ir_builder_.CreateRetVoid();
   } else {
-    cgen_state->ir_builder_.CreateRet(cgen_state->llInt<int32_t>(error_code));
+    CHECK(error_code);
+    cgen_state->ir_builder_.CreateRet(error_code);
   }
+
   cgen_state->ir_builder_.SetInsertPoint(do_reduction);
 }
 
 // Returns the corresponding LLVM value for the given IR value.
 llvm::Value* mapped_value(const Value* val,
                           const std::unordered_map<const Value*, llvm::Value*>& m) {
-  const auto it = m.find(val);
-  CHECK(it != m.end());
-  return it->second;
+  if (val) {
+    const auto it = m.find(val);
+    CHECK(it != m.end());
+    return it->second;
+  } else {
+    return nullptr;
+  }
 }
 
 // Returns the corresponding LLVM function for the given IR function.
@@ -241,7 +248,7 @@ void translate_body(const std::vector<std::unique_ptr<Instruction>>& body,
         translated = cgen_state->ir_builder_.CreateCall(
             mapped_function(call->callee(), f), llvm_args, call->label());
       } else {
-        cgen_state->emitCall(call->callee_name(), llvm_args);
+        translated = cgen_state->emitCall(call->callee_name(), llvm_args);
       }
     } else if (auto external_call = dynamic_cast<const ExternalCall*>(instr_ptr)) {
       translated = cgen_state->emitExternalCall(external_call->callee_name(),
@@ -262,7 +269,7 @@ void translate_body(const std::vector<std::unique_ptr<Instruction>>& body,
       return_early(mapped_value(ret_early->cond(), m),
                    reduction_code,
                    llvm_function,
-                   ret_early->error_code());
+                   mapped_value(ret_early->error_code(), m));
     } else if (auto for_loop = dynamic_cast<const For*>(instr_ptr)) {
       translate_for(for_loop, reduction_code.ir_reduce_loop.get(), reduction_code, m, f);
     } else {

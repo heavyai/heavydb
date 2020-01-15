@@ -261,6 +261,8 @@ struct CgenState {
 
   llvm::ConstantInt* llBool(const bool v) const { return ::ll_bool(v, context_); }
 
+  void emitErrorCheck(llvm::Value* condition, llvm::Value* errorCode, std::string label);
+
   llvm::Module* module_;
   llvm::Function* row_func_;
   std::vector<llvm::Function*> helper_functions_;

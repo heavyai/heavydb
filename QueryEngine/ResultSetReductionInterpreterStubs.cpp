@@ -214,6 +214,12 @@ StubGenerator::Stub StubGenerator::generateStub(const std::string& name,
       value = cgen_state->ir_builder_.CreateSExt(value, i64_type);
       break;
     }
+    case Type::Int32: {
+      write_arg_name += "int";
+      const auto i64_type = get_int_type(64, cgen_state->context_);
+      value = cgen_state->ir_builder_.CreateSExt(value, i64_type);
+      break;
+    }
     case Type::Void: {
       value = nullptr;
       break;

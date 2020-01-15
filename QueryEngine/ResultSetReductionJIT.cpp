@@ -236,6 +236,45 @@ void emit_write_projection(Value* slot_pi8,
   }
 }
 
+// Emit code to load the value stored at the 'other_pi8' as an integer of the given width
+// 'chosen_bytes' and write it to the 'slot_pi8' destination only if necessary (the
+// existing value at destination is the initialization value).
+const Value* emit_checked_write_projection(Value* slot_pi8,
+                                           Value* other_pi8,
+                                           const int64_t init_val,
+                                           const size_t chosen_bytes,
+                                           Function* ir_reduce_one_entry) {
+  if (chosen_bytes == sizeof(int32_t)) {
+    const auto func_name = "checked_single_agg_id_int32";
+    const auto proj_val = emit_load_i32(other_pi8, ir_reduce_one_entry);
+    const auto slot_pi32 = ir_reduce_one_entry->add<Cast>(
+        Cast::CastOp::BitCast, slot_pi8, Type::Int32Ptr, "");
+    return ir_reduce_one_entry->add<Call>(
+        func_name,
+        Type::Int32,
+        std::vector<const Value*>{
+            slot_pi32,
+            proj_val,
+            ir_reduce_one_entry->addConstant<ConstantInt>(init_val, Type::Int32)},
+        "");
+  } else {
+    const auto func_name = "checked_single_agg_id";
+    CHECK_EQ(chosen_bytes, sizeof(int64_t));
+    const auto proj_val = emit_load_i64(other_pi8, ir_reduce_one_entry);
+    const auto slot_pi64 = ir_reduce_one_entry->add<Cast>(
+        Cast::CastOp::BitCast, slot_pi8, Type::Int64Ptr, "");
+
+    return ir_reduce_one_entry->add<Call>(
+        func_name,
+        Type::Int32,
+        std::vector<const Value*>{
+            slot_pi64,
+            proj_val,
+            ir_reduce_one_entry->addConstant<ConstantInt>(init_val, Type::Int64)},
+        "");
+  }
+}
+
 std::unique_ptr<Function> create_function(
     const std::string name,
     const std::vector<Function::NamedArg>& arg_types,
@@ -278,7 +317,7 @@ std::unique_ptr<Function> setup_reduce_one_entry(ReductionCode* reduction_code,
                           {"this_qmd", Type::VoidPtr},
                           {"that_qmd", Type::VoidPtr},
                           {"serialized_varlen_buffer_arg", Type::VoidPtr}},
-                         Type::Void,
+                         Type::Int32,
                          /*always_inline=*/true);
 }
 
@@ -292,7 +331,7 @@ std::unique_ptr<Function> setup_reduce_one_entry_idx(ReductionCode* reduction_co
                           {"this_qmd_handle", Type::VoidPtr},
                           {"that_qmd_handle", Type::VoidPtr},
                           {"serialized_varlen_buffer", Type::VoidPtr}},
-                         Type::Void,
+                         Type::Int32,
                          /*always_inline=*/true);
 }
 
@@ -629,7 +668,8 @@ void ResultSetReductionJIT::reduceOneEntryNoCollisions(
       ir_reduce_one_entry->add<Call>(reduction_code.ir_is_empty.get(),
                                      std::vector<const Value*>{that_row_ptr},
                                      "that_is_empty");
-  ir_reduce_one_entry->add<ReturnEarly>(that_is_empty, 0, "");
+  ir_reduce_one_entry->add<ReturnEarly>(
+      that_is_empty, ir_reduce_one_entry->addConstant<ConstantInt>(0, Type::Int32), "");
 
   const auto key_bytes = get_key_bytes_rowwise(query_mem_desc_);
   if (key_bytes) {  // copy the key from right hand side
@@ -730,7 +770,8 @@ void ResultSetReductionJIT::reduceOneEntryTargetsNoCollisions(
       }
     }
   }
-  ir_reduce_one_entry->add<Ret>();
+  ir_reduce_one_entry->add<Ret>(
+      ir_reduce_one_entry->addConstant<ConstantInt>(0, Type::Int32));
 }
 
 void ResultSetReductionJIT::reduceOneEntryBaseline(
@@ -788,7 +829,8 @@ void ResultSetReductionJIT::reduceOneEntryBaseline(
     that_ptr1 = ir_reduce_one_entry->add<GetElementPtr>(
         that_targets_ptr_arg, next_slot_rel_off, next_desc);
   }
-  ir_reduce_one_entry->add<Ret>();
+  ir_reduce_one_entry->add<Ret>(
+      ir_reduce_one_entry->addConstant<ConstantInt>(0, Type::Int32));
 }
 
 void ResultSetReductionJIT::reduceOneEntryNoCollisionsIdx(
@@ -812,7 +854,7 @@ void ResultSetReductionJIT::reduceOneEntryNoCollisionsIdx(
       this_buff, row_off_in_bytes, "this_row_ptr");
   const auto that_row_ptr = ir_reduce_one_entry_idx->add<GetElementPtr>(
       that_buff, row_off_in_bytes, "that_row_ptr");
-  ir_reduce_one_entry_idx->add<Call>(
+  const auto reduce_rc = ir_reduce_one_entry_idx->add<Call>(
       reduction_code.ir_reduce_one_entry.get(),
       std::vector<const Value*>{this_row_ptr,
                                 that_row_ptr,
@@ -820,7 +862,7 @@ void ResultSetReductionJIT::reduceOneEntryNoCollisionsIdx(
                                 that_qmd_handle,
                                 serialized_varlen_buffer_arg},
       "");
-  ir_reduce_one_entry_idx->add<Ret>();
+  ir_reduce_one_entry_idx->add<Ret>(reduce_rc);
 }
 
 void ResultSetReductionJIT::reduceOneEntryBaselineIdx(
@@ -847,7 +889,10 @@ void ResultSetReductionJIT::reduceOneEntryBaselineIdx(
       ir_reduce_one_entry_idx->add<Call>(reduction_code.ir_is_empty.get(),
                                          std::vector<const Value*>{that_row_ptr},
                                          "that_is_empty");
-  ir_reduce_one_entry_idx->add<ReturnEarly>(that_is_empty, 0, "");
+  ir_reduce_one_entry_idx->add<ReturnEarly>(
+      that_is_empty,
+      ir_reduce_one_entry_idx->addConstant<ConstantInt>(0, Type::Int32),
+      "");
   const auto key_count = query_mem_desc_.getGroupbyColCount();
   const auto one_element =
       ir_reduce_one_entry_idx->addConstant<ConstantInt>(1, Type::Int32);
@@ -876,7 +921,10 @@ void ResultSetReductionJIT::reduceOneEntryBaselineIdx(
       ir_reduce_one_entry_idx->add<Load>(this_is_empty_ptr, "this_is_empty");
   this_is_empty = ir_reduce_one_entry_idx->add<Cast>(
       Cast::CastOp::Trunc, this_is_empty, Type::Int1, "this_is_empty_bool");
-  ir_reduce_one_entry_idx->add<ReturnEarly>(this_is_empty, 0, "");
+  ir_reduce_one_entry_idx->add<ReturnEarly>(
+      this_is_empty,
+      ir_reduce_one_entry_idx->addConstant<ConstantInt>(0, Type::Int32),
+      "");
   const auto key_qw_count = get_slot_off_quad(query_mem_desc_);
   const auto this_targets_ptr = ir_reduce_one_entry_idx->add<Cast>(
       Cast::CastOp::BitCast, this_targets_ptr_i64, Type::Int8Ptr, "this_targets_ptr");
@@ -885,7 +933,7 @@ void ResultSetReductionJIT::reduceOneEntryBaselineIdx(
       ir_reduce_one_entry_idx->addConstant<ConstantInt>(key_byte_count, Type::Int32);
   const auto that_targets_ptr = ir_reduce_one_entry_idx->add<GetElementPtr>(
       that_row_ptr, key_byte_count_lv, "that_targets_ptr");
-  ir_reduce_one_entry_idx->add<Call>(
+  const auto reduce_rc = ir_reduce_one_entry_idx->add<Call>(
       reduction_code.ir_reduce_one_entry.get(),
       std::vector<const Value*>{this_targets_ptr,
                                 that_targets_ptr,
@@ -893,7 +941,7 @@ void ResultSetReductionJIT::reduceOneEntryBaselineIdx(
                                 that_qmd_handle,
                                 serialized_varlen_buffer_arg},
       "");
-  ir_reduce_one_entry_idx->add<Ret>();
+  ir_reduce_one_entry_idx->add<Ret>(reduce_rc);
 }
 
 namespace {
@@ -922,16 +970,27 @@ void generate_loop_body(For* for_loop,
                           watchdog_triggered,
                           ir_reduce_loop->addConstant<ConstantInt>(0, Type::Int8),
                           "");
-  for_loop->add<ReturnEarly>(watchdog_triggered_bool, WATCHDOG_ERROR, "");
-  for_loop->add<Call>(ir_reduce_one_entry_idx,
-                      std::vector<const Value*>{this_buff,
-                                                that_buff,
-                                                that_entry_idx,
-                                                that_entry_count,
-                                                this_qmd_handle,
-                                                that_qmd_handle,
-                                                serialized_varlen_buffer},
-                      "");
+  for_loop->add<ReturnEarly>(
+      watchdog_triggered_bool,
+      ir_reduce_loop->addConstant<ConstantInt>(WATCHDOG_ERROR, Type::Int32),
+      "");
+  const auto reduce_rc =
+      for_loop->add<Call>(ir_reduce_one_entry_idx,
+                          std::vector<const Value*>{this_buff,
+                                                    that_buff,
+                                                    that_entry_idx,
+                                                    that_entry_count,
+                                                    this_qmd_handle,
+                                                    that_qmd_handle,
+                                                    serialized_varlen_buffer},
+                          "");
+
+  auto reduce_rc_bool =
+      for_loop->add<ICmp>(ICmp::Predicate::NE,
+                          reduce_rc,
+                          ir_reduce_loop->addConstant<ConstantInt>(0, Type::Int32),
+                          "");
+  for_loop->add<ReturnEarly>(reduce_rc_bool, reduce_rc, "");
 }
 
 }  // namespace
@@ -981,7 +1040,8 @@ void ResultSetReductionJIT::reduceOneSlot(Value* this_ptr1,
       get_width_for_slot(target_slot_idx, float_argument_input, query_mem_desc_);
   CHECK_LT(init_agg_val_idx, target_init_vals_.size());
   auto init_val = target_init_vals_[init_agg_val_idx];
-  if (target_info.is_agg && target_info.agg_kind != kSAMPLE) {
+  if (target_info.is_agg &&
+      (target_info.agg_kind != kSINGLE_VALUE && target_info.agg_kind != kSAMPLE)) {
     reduceOneAggregateSlot(this_ptr1,
                            this_ptr2,
                            that_ptr1,
@@ -992,6 +1052,18 @@ void ResultSetReductionJIT::reduceOneSlot(Value* this_ptr1,
                            init_val,
                            chosen_bytes,
                            ir_reduce_one_entry);
+  } else if (target_info.agg_kind == kSINGLE_VALUE) {
+    const auto checked_rc = emit_checked_write_projection(
+        this_ptr1, that_ptr1, init_val, chosen_bytes, ir_reduce_one_entry);
+
+    auto checked_rc_bool = ir_reduce_one_entry->add<ICmp>(
+        ICmp::Predicate::NE,
+        checked_rc,
+        ir_reduce_one_entry->addConstant<ConstantInt>(0, Type::Int32),
+        "");
+
+    ir_reduce_one_entry->add<ReturnEarly>(checked_rc_bool, checked_rc, "");
+
   } else {
     emit_write_projection(
         this_ptr1, that_ptr1, init_val, chosen_bytes, ir_reduce_one_entry);

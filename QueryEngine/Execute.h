@@ -967,6 +967,7 @@ class Executor {
   static std::mutex execute_mutex_;
   static mapd_shared_mutex executors_cache_mutex_;
 
+ public:
   static const int32_t ERR_DIV_BY_ZERO{1};
   static const int32_t ERR_OUT_OF_GPU_MEM{2};
   static const int32_t ERR_OUT_OF_SLOTS{3};
@@ -981,6 +982,8 @@ class Executor {
   static const int32_t ERR_TOO_MANY_LITERALS{12};
   static const int32_t ERR_STRING_CONST_IN_RESULTSET{13};
   static const int32_t ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY{14};
+  static const int32_t ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES{15};
+
   friend class BaselineJoinHashTable;
   friend class CodeGenerator;
   friend class ColumnFetcher;

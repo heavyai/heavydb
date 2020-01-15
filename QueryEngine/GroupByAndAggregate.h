@@ -285,6 +285,8 @@ class GroupByAndAggregate {
 
   llvm::Value* emitCall(const std::string& fname, const std::vector<llvm::Value*>& args);
 
+  void checkErrorCode(llvm::Value* retCode);
+
   bool needsUnnestDoublePatch(llvm::Value* val_ptr,
                               const std::string& agg_base_name,
                               const bool threads_share_memory,

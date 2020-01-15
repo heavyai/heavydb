@@ -28,7 +28,6 @@ inline bool need_patch_unnest_double(const SQLTypeInfo& ti,
 
 inline std::string patch_agg_fname(const std::string& agg_name) {
   const auto new_name = agg_name + "_slow";
-  CHECK_EQ("agg_id_double_shared_slow", new_name);
   return new_name;
 }
 

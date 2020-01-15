@@ -103,6 +103,8 @@ extern bool g_enable_experimental_string_functions;
 
 int const Executor::max_gpu_count;
 
+const int32_t Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES;
+
 Executor::Executor(const int db_id,
                    const size_t block_size_x,
                    const size_t grid_size_x,
@@ -771,6 +773,19 @@ std::pair<int64_t, int32_t> Executor::reduceResults(const SQLAgg agg,
             CHECK(false);
         }
       }
+    case kSINGLE_VALUE: {
+      int64_t agg_result = agg_init_val;
+      for (size_t i = 0; i < out_vec_sz; ++i) {
+        if (out_vec[i] != agg_init_val) {
+          if (agg_result == agg_init_val) {
+            agg_result = out_vec[i];
+          } else if (out_vec[i] != agg_result) {
+            return {agg_result, Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES};
+          }
+        }
+      }
+      return {agg_result, 0};
+    }
     case kSAMPLE: {
       int64_t agg_result = agg_init_val;
       for (size_t i = 0; i < out_vec_sz; ++i) {
@@ -1445,7 +1460,7 @@ void fill_entries_for_empty_input(std::vector<TargetInfo>& target_infos,
     } else if (agg_info.agg_kind == kAVG) {
       entry.push_back(inline_null_val(agg_info.sql_type, float_argument_input));
       entry.push_back(0);
-    } else if (agg_info.agg_kind == kSAMPLE) {
+    } else if (agg_info.agg_kind == kSINGLE_VALUE || agg_info.agg_kind == kSAMPLE) {
       if (agg_info.sql_type.is_geometry()) {
         for (int i = 0; i < agg_info.sql_type.get_physical_coord_cols() * 2; i++) {
           entry.push_back(0);
@@ -2333,7 +2348,8 @@ int32_t Executor::executePlanWithoutGroupBy(
   if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW ||
       error_code == Executor::ERR_DIV_BY_ZERO ||
       error_code == Executor::ERR_OUT_OF_TIME ||
-      error_code == Executor::ERR_INTERRUPTED) {
+      error_code == Executor::ERR_INTERRUPTED ||
+      error_code == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES) {
     return error_code;
   }
   if (ra_exe_unit.estimator) {
@@ -2375,6 +2391,10 @@ int32_t Executor::executePlanWithoutGroupBy(
         break;
       }
     }
+  }
+
+  if (error_code) {
+    return error_code;
   }
 
   CHECK_EQ(size_t(1), query_exe_context->query_buffers_->result_sets_.size());
@@ -2480,7 +2500,8 @@ int32_t Executor::executePlanWithGroupBy(
   if (error_code == Executor::ERR_OVERFLOW_OR_UNDERFLOW ||
       error_code == Executor::ERR_DIV_BY_ZERO ||
       error_code == Executor::ERR_OUT_OF_TIME ||
-      error_code == Executor::ERR_INTERRUPTED) {
+      error_code == Executor::ERR_INTERRUPTED ||
+      error_code == Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES) {
     return error_code;
   }
 

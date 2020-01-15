@@ -461,6 +461,10 @@ declare void @agg_id_int8_shared(i8*, i8);
 declare void @agg_id_double_shared(i64*, double);
 declare void @agg_id_double_shared_slow(i64*, double*);
 declare void @agg_id_float_shared(i32*, float);
+declare i32 @checked_single_agg_id_shared(i64*, i64, i64);
+declare i32 @checked_single_agg_id_double_shared(i64*, double, double);
+declare i32 @checked_single_agg_id_double_shared_slow(i64*, double*, double);
+declare i32 @checked_single_agg_id_float_shared(i32*, float, float);
 declare i1 @slotEmptyKeyCAS(i64*, i64, i64);
 declare i1 @slotEmptyKeyCAS_int32(i32*, i32, i32);
 declare i1 @slotEmptyKeyCAS_int16(i16*, i16, i16);
@@ -1192,6 +1196,10 @@ std::vector<std::string> get_agg_fnames(const std::vector<Analyzer::Expr*>& targ
         result.emplace_back(agg_expr->get_is_distinct() ? "agg_count_distinct"
                                                         : "agg_count");
         break;
+      case kSINGLE_VALUE: {
+        result.emplace_back(agg_type_info.is_fp() ? "agg_id_double" : "agg_id");
+        break;
+      }
       case kSAMPLE: {
         // Note that varlen SAMPLE arguments are handled separately above
         result.emplace_back(agg_type_info.is_fp() ? "agg_id_double" : "agg_id");

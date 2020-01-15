@@ -226,9 +226,12 @@ class ReductionInterpreterImpl {
       // Call an internal runtime function.
       const auto func_ptr = bindStub(call);
       const auto inputs = getCallInputs(call, interpreter);
-      CHECK(call->type() == Type::Void);
-      ReductionInterpreter::EvalValue unused;
-      func_ptr(&unused, &inputs);
+      ReductionInterpreter::EvalValue ret;
+      func_ptr(&ret, &inputs);
+      if (call->type() != Type::Void) {
+        // Assign the returned value.
+        interpreter->setVar(call, ret);
+      }
     }
     return;
   }
@@ -278,8 +281,12 @@ class ReductionInterpreterImpl {
     const auto ret_early = static_cast<const ReturnEarly*>(instruction);
     CHECK(ret_early->cond()->type() == Type::Int1);
     const auto cond = interpreter->vars_[ret_early->cond()->id()];
+
+    auto error_code = ret_early->error_code();
+
     if (cond.int_val) {
-      interpreter->ret_ = ReductionInterpreter::EvalValue{.int_val = cond.int_val};
+      auto rc = interpreter->vars_[error_code->id()].int_val;
+      interpreter->ret_ = ReductionInterpreter::EvalValue{.int_val = rc};
     }
   }
 
@@ -296,7 +303,11 @@ class ReductionInterpreterImpl {
       // The start and end indices are absolute, but the iteration happens from 0.
       // Subtract the start index before setting the iterator.
       interpreter->vars_[for_loop->iter()->id()] = {.int_val = i - start.int_val};
-      ReductionInterpreter::run(for_loop->body(), interpreter->vars_);
+      auto ret = ReductionInterpreter::run(for_loop->body(), interpreter->vars_);
+      if (ret) {
+        interpreter->ret_ = *ret;
+        break;
+      }
     }
     // Pop all the alloca buffers allocated by the code in the loop.
     interpreter->alloca_buffers_.resize(saved_alloca_count);

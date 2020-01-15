@@ -2341,6 +2341,8 @@ std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {
       return "Not enough OpenGL memory to render the query results";
     case Executor::ERR_STREAMING_TOP_N_NOT_SUPPORTED_IN_RENDER_QUERY:
       return "Streaming-Top-N not supported in Render Query";
+    case Executor::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES:
+      return "Multiple distinct values encountered";
   }
   return "Other error: code " + std::to_string(error_code);
 }

@@ -2532,6 +2532,9 @@ std::string AggExpr::toString() const {
     case kAPPROX_COUNT_DISTINCT:
       agg = "APPROX_COUNT_DISTINCT";
       break;
+    case kSINGLE_VALUE:
+      agg = "SINGLE_VALUE";
+      break;
     case kSAMPLE:
       agg = "SAMPLE";
       break;

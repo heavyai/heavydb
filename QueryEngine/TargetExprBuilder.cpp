@@ -63,6 +63,8 @@ std::vector<std::string> agg_fn_base_names(const TargetInfo& target_info) {
       return {"agg_sum"};
     case kAPPROX_COUNT_DISTINCT:
       return {"agg_approximate_count_distinct"};
+    case kSINGLE_VALUE:
+      return {"checked_single_agg_id"};
     case kSAMPLE:
       return {"agg_id"};
     default:
@@ -358,6 +360,10 @@ void TargetExprCodegen::codegen(
       const auto& arg_ti = target_info.agg_arg_type;
       if (need_skip_null && !arg_ti.is_geometry()) {
         agg_fname += "_skip_val";
+      }
+
+      if (target_info.agg_kind == kSINGLE_VALUE ||
+          (need_skip_null && !arg_ti.is_geometry())) {
         llvm::Value* null_in_lv{nullptr};
         if (arg_ti.is_fp()) {
           null_in_lv =
@@ -381,7 +387,11 @@ void TargetExprCodegen::codegen(
             agg_fname = patch_agg_fname(agg_fname);
           }
         }
-        group_by_and_agg->emitCall(agg_fname, agg_args);
+        auto agg_fname_call_ret_lv = group_by_and_agg->emitCall(agg_fname, agg_args);
+
+        if (agg_fname.find("checked") != std::string::npos) {
+          group_by_and_agg->checkErrorCode(agg_fname_call_ret_lv);
+        }
       }
     }
     if (window_func && window_function_requires_peer_handling(window_func)) {
@@ -456,7 +466,7 @@ void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
   auto target_info = get_target_info(target_expr, g_bigint_count);
   auto arg_expr = agg_arg(target_expr);
   if (arg_expr) {
-    if (target_info.agg_kind == kSAMPLE) {
+    if (target_info.agg_kind == kSINGLE_VALUE || target_info.agg_kind == kSAMPLE) {
       target_info.skip_null_val = false;
     } else if (query_mem_desc.getQueryDescriptionType() ==
                    QueryDescriptionType::NonGroupedAggregate &&

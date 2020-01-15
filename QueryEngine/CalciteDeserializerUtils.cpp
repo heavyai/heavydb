@@ -37,6 +37,11 @@ SQLTypeInfo get_agg_type(const SQLAgg agg_kind, const Analyzer::Expr* arg_expr) 
       return SQLTypeInfo(kDOUBLE, false);
     case kAPPROX_COUNT_DISTINCT:
       return SQLTypeInfo(kBIGINT, false);
+    case kSINGLE_VALUE:
+      if (arg_expr->get_type_info().is_varlen()) {
+        throw std::runtime_error("SINGLE_VALUE not supported on '" +
+                                 arg_expr->get_type_info().get_type_name() + "' input.");
+      }
     case kSAMPLE:
       return arg_expr->get_type_info();
     default:

@@ -354,6 +354,16 @@ class Call : public Instruction {
       , arguments_(arguments)
       , cached_callee_(nullptr) {}
 
+  Call(const std::string& callee_name,
+       const Type returnType,
+       const std::vector<const Value*>& arguments,
+       const std::string& label)
+      : Instruction(returnType, label)
+      , callee_name_(callee_name)
+      , callee_(nullptr)
+      , arguments_(arguments)
+      , cached_callee_(nullptr) {}
+
   bool external() const { return false; }
 
   const std::string& callee_name() const { return callee_name_; }
@@ -444,18 +454,21 @@ class MemCpy : public Instruction {
 // is true. If the function return type is void, the error code is ignored.
 class ReturnEarly : public Instruction {
  public:
-  ReturnEarly(const Value* cond, const int error_code, const std::string& label)
+  ReturnEarly(const Value* cond, const std::string& label)
+      : Instruction(Type::Void, label), cond_(cond), error_code_(nullptr) {}
+
+  ReturnEarly(const Value* cond, const Value* error_code, const std::string& label)
       : Instruction(Type::Void, label), cond_(cond), error_code_(error_code) {}
 
   const Value* cond() const { return cond_; }
 
-  int error_code() const { return error_code_; }
+  const Value* error_code() const { return error_code_; }
 
   void run(ReductionInterpreterImpl* interpreter) override;
 
  private:
   const Value* cond_;
-  const int error_code_;
+  const Value* error_code_;
 };
 
 // An operation which executes the provided body from the given start index to the end

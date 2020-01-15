@@ -154,3 +154,15 @@ llvm::Value* CgenState::emitCall(const std::string& fname,
 
   return ir_builder_.CreateCall(func, args);
 }
+
+void CgenState::emitErrorCheck(llvm::Value* condition,
+                               llvm::Value* errorCode,
+                               std::string label) {
+  needs_error_check_ = true;
+  auto check_ok = llvm::BasicBlock::Create(context_, label + "_ok", row_func_);
+  auto check_fail = llvm::BasicBlock::Create(context_, label + "_fail", row_func_);
+  ir_builder_.CreateCondBr(condition, check_ok, check_fail);
+  ir_builder_.SetInsertPoint(check_fail);
+  ir_builder_.CreateRet(errorCode);
+  ir_builder_.SetInsertPoint(check_ok);
+}

@@ -715,6 +715,33 @@ extern "C" __device__ void agg_id_shared(int64_t* agg, const int64_t val) {
   *agg = val;
 }
 
+extern "C" __device__ int32_t checked_single_agg_id_shared(int64_t* agg,
+                                                           const int64_t val,
+                                                           const int64_t null_val) {
+  unsigned long long int* address_as_ull = reinterpret_cast<unsigned long long int*>(agg);
+  unsigned long long int old = *address_as_ull, assumed;
+
+  if (val == null_val) {
+    return 0;
+  }
+
+  do {
+    if (static_cast<int64_t>(old) != null_val) {
+      if (static_cast<int64_t>(old) != val) {
+        // see Execute::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES
+        return 15;
+      } else {
+        break;
+      }
+    }
+
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, val);
+  } while (assumed != old);
+
+  return 0;
+}
+
 #define DEF_AGG_ID_INT_SHARED(n)                                            \
   extern "C" __device__ void agg_id_int##n##_shared(int##n##_t* agg,        \
                                                     const int##n##_t val) { \
@@ -724,18 +751,102 @@ extern "C" __device__ void agg_id_shared(int64_t* agg, const int64_t val) {
 DEF_AGG_ID_INT_SHARED(32)
 DEF_AGG_ID_INT_SHARED(16)
 DEF_AGG_ID_INT_SHARED(8)
+
 #undef DEF_AGG_ID_INT_SHARED
 
 extern "C" __device__ void agg_id_double_shared(int64_t* agg, const double val) {
   *agg = *(reinterpret_cast<const int64_t*>(&val));
 }
 
+extern "C" __device__ int32_t checked_single_agg_id_double_shared(int64_t* agg,
+                                                                  const double val,
+                                                                  const double null_val) {
+  unsigned long long int* address_as_ull = reinterpret_cast<unsigned long long int*>(agg);
+  unsigned long long int old = *address_as_ull, assumed;
+
+  if (val == null_val) {
+    return 0;
+  }
+
+  do {
+    if (static_cast<int64_t>(old) != __double_as_longlong(null_val)) {
+      if (static_cast<int64_t>(old) != __double_as_longlong(val)) {
+        // see Execute::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES
+        return 15;
+      } else {
+        break;
+      }
+    }
+
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, __double_as_longlong(val));
+  } while (assumed != old);
+
+  return 0;
+}
+
 extern "C" __device__ void agg_id_double_shared_slow(int64_t* agg, const double* val) {
   *agg = *(reinterpret_cast<const int64_t*>(val));
 }
 
+extern "C" __device__ int32_t
+checked_single_agg_id_double_shared_slow(int64_t* agg,
+                                         const double* valp,
+                                         const double null_val) {
+  unsigned long long int* address_as_ull = reinterpret_cast<unsigned long long int*>(agg);
+  unsigned long long int old = *address_as_ull, assumed;
+  double val = *valp;
+
+  if (val == null_val) {
+    return 0;
+  }
+
+  do {
+    if (static_cast<int64_t>(old) != __double_as_longlong(null_val)) {
+      if (static_cast<int64_t>(old) != __double_as_longlong(val)) {
+        // see Execute::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES
+        return 15;
+      } else {
+        break;
+      }
+    }
+
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, __double_as_longlong(val));
+  } while (assumed != old);
+
+  return 0;
+}
+
 extern "C" __device__ void agg_id_float_shared(int32_t* agg, const float val) {
   *agg = __float_as_int(val);
+}
+
+extern "C" __device__ int32_t checked_single_agg_id_float_shared(int32_t* agg,
+                                                                 const float val,
+                                                                 const float null_val) {
+  int* address_as_ull = reinterpret_cast<int*>(agg);
+  int old = *address_as_ull, assumed;
+
+  if (val == null_val) {
+    return 0;
+  }
+
+  do {
+    if (old != __float_as_int(null_val)) {
+      if (old != __float_as_int(val)) {
+        // see Execute::ERR_SINGLE_VALUE_FOUND_MULTIPLE_VALUES
+        return 15;
+      } else {
+        break;
+      }
+    }
+
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, __float_as_int(val));
+  } while (assumed != old);
+
+  return 0;
 }
 
 #define DEF_SKIP_AGG(base_agg_func)                             \

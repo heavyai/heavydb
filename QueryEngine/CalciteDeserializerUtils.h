@@ -113,6 +113,9 @@ inline SQLAgg to_agg_kind(const std::string& agg_name) {
   if (agg_name == std::string("SAMPLE") || agg_name == std::string("LAST_SAMPLE")) {
     return kSAMPLE;
   }
+  if (agg_name == std::string("SINGLE_VALUE")) {
+    return kSINGLE_VALUE;
+  }
   throw std::runtime_error("Aggregate function " + agg_name + " not supported");
 }
 

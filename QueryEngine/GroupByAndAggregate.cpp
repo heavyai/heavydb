@@ -491,7 +491,8 @@ void GroupByAndAggregate::addTransientStringLiterals(
     }
     const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(target_expr);
     if (agg_expr) {
-      if (agg_expr->get_aggtype() == kSAMPLE) {
+      if (agg_expr->get_aggtype() == kSINGLE_VALUE ||
+          agg_expr->get_aggtype() == kSAMPLE) {
         add_transient_string_literals_for_expression(
             agg_expr->get_arg(), executor, row_set_mem_owner);
       }
@@ -1857,6 +1858,14 @@ std::vector<llvm::Value*> GroupByAndAggregate::codegenAggArg(
 llvm::Value* GroupByAndAggregate::emitCall(const std::string& fname,
                                            const std::vector<llvm::Value*>& args) {
   return executor_->cgen_state_->emitCall(fname, args);
+}
+
+void GroupByAndAggregate::checkErrorCode(llvm::Value* retCode) {
+  auto zero_const = llvm::ConstantInt::get(retCode->getType(), 0, true);
+  auto rc_check_condition = executor_->cgen_state_->ir_builder_.CreateICmp(
+      llvm::ICmpInst::ICMP_EQ, retCode, zero_const);
+
+  executor_->cgen_state_->emitErrorCheck(rc_check_condition, retCode, "rc");
 }
 
 #undef ROW_FUNC

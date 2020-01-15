@@ -68,7 +68,16 @@ enum SQLOps {
 
 enum SQLQualifier { kONE, kANY, kALL };
 
-enum SQLAgg { kAVG, kMIN, kMAX, kSUM, kCOUNT, kAPPROX_COUNT_DISTINCT, kSAMPLE };
+enum SQLAgg {
+  kAVG,
+  kMIN,
+  kMAX,
+  kSUM,
+  kCOUNT,
+  kAPPROX_COUNT_DISTINCT,
+  kSAMPLE,
+  kSINGLE_VALUE
+};
 
 enum class SqlWindowFunctionKind {
   ROW_NUMBER,
