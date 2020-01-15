@@ -14,23 +14,22 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_RELALGDAGBUILDER_H
-#define QUERYENGINE_RELALGDAGBUILDER_H
-
-#include "../Catalog/Catalog.h"
-#include "../Shared/ConfigResolve.h"
-#include "../Shared/Rendering/RenderQueryOptions.h"
-#include "../Shared/sql_window_function_to_string.h"
-
-#include "TargetMetaInfo.h"
-#include "TypePunning.h"
-
-#include <rapidjson/document.h>
-#include <boost/core/noncopyable.hpp>
+#pragma once
 
 #include <iterator>
 #include <memory>
 #include <unordered_map>
+
+#include <rapidjson/document.h>
+#include <boost/core/noncopyable.hpp>
+
+#include "Catalog/Catalog.h"
+#include "Shared/ConfigResolve.h"
+#include "Shared/sql_window_function_to_string.h"
+
+#include "QueryEngine/Rendering/RenderInfo.h"
+#include "QueryEngine/TargetMetaInfo.h"
+#include "QueryEngine/TypePunning.h"
 
 using ColumnNameList = std::vector<std::string>;
 
@@ -1500,7 +1499,7 @@ class RelAlgDagBuilder : public boost::noncopyable {
    */
   RelAlgDagBuilder(const std::string& query_ra,
                    const Catalog_Namespace::Catalog& cat,
-                   const RenderQueryOptions* render_opts);
+                   const RenderInfo* render_info);
 
   /**
    * Constructs a sub-DAG for any subqueries. Should only be called during DAG
@@ -1514,7 +1513,7 @@ class RelAlgDagBuilder : public boost::noncopyable {
   RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
                    const rapidjson::Value& query_ast,
                    const Catalog_Namespace::Catalog& cat,
-                   const RenderQueryOptions* render_opts);
+                   const RenderInfo* render_opts);
 
   /**
    * Returns the root node of the DAG.
@@ -1557,7 +1556,7 @@ class RelAlgDagBuilder : public boost::noncopyable {
   const Catalog_Namespace::Catalog& cat_;
   std::vector<std::shared_ptr<RelAlgNode>> nodes_;
   std::vector<std::shared_ptr<RexSubQuery>> subqueries_;
-  const RenderQueryOptions* render_opts_;
+  const RenderInfo* render_info_;
 };
 
 std::string tree_string(const RelAlgNode*, const size_t indent = 0);
@@ -1565,5 +1564,3 @@ std::string tree_string(const RelAlgNode*, const size_t indent = 0);
 using RANodeOutput = std::vector<RexInput>;
 
 RANodeOutput get_node_output(const RelAlgNode* ra_node);
-
-#endif  // QUERYENGINE_RELALGDAGBUILDER_H

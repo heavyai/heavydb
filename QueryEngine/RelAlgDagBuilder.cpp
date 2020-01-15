@@ -2116,8 +2116,8 @@ class RelAlgDispatcher {
 
 RelAlgDagBuilder::RelAlgDagBuilder(const std::string& query_ra,
                                    const Catalog_Namespace::Catalog& cat,
-                                   const RenderQueryOptions* render_opts)
-    : cat_(cat), render_opts_(render_opts) {
+                                   const RenderInfo* render_info)
+    : cat_(cat), render_info_(render_info) {
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
   if (query_ast.HasParseError()) {
@@ -2137,8 +2137,8 @@ RelAlgDagBuilder::RelAlgDagBuilder(const std::string& query_ra,
 RelAlgDagBuilder::RelAlgDagBuilder(RelAlgDagBuilder& root_dag_builder,
                                    const rapidjson::Value& query_ast,
                                    const Catalog_Namespace::Catalog& cat,
-                                   const RenderQueryOptions* render_opts)
-    : cat_(cat), render_opts_(render_opts) {
+                                   const RenderInfo* render_info)
+    : cat_(cat), render_info_(render_info) {
   build(query_ast, root_dag_builder);
 }
 
@@ -2154,10 +2154,10 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
   CHECK(!nodes_.empty());
   bind_inputs(nodes_);
 
-  if (render_opts_) {
+  if (render_info_) {
     // Alter the RA for render. Do this before any flattening/optimizations are done to
     // the tree.
-    alterRAForRender(nodes_, *render_opts_);
+    alterRAForRender(nodes_, *render_info_);
   }
 
   mark_nops(nodes_);

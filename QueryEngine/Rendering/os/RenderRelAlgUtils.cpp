@@ -17,6 +17,6 @@
 #include "../RenderRelAlgUtils.h"
 
 void alterRAForRender(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
-                      const RenderQueryOptions& render_opts) {
+                      const RenderInfo& render_info) {
   CHECK(false);
 }
