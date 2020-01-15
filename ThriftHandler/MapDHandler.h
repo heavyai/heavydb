@@ -60,6 +60,7 @@
 #include "Shared/measure.h"
 #include "Shared/scope.h"
 #include "StringDictionary/StringDictionaryClient.h"
+#include "ThriftHandler/ConnectionInfo.h"
 #include "ThriftHandler/DistributedValidate.h"
 #include "ThriftHandler/MapDRenderHandler.h"
 #include "ThriftHandler/QueryState.h"
@@ -67,6 +68,10 @@
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <thrift/server/TServer.h>
+#include <thrift/transport/THttpTransport.h>
+#include <thrift/transport/TSocket.h>
+#include <thrift/transport/TTransport.h>
 #include <atomic>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/replace.hpp>
@@ -92,6 +97,7 @@
 #include <thread>
 #include <typeinfo>
 #include <unordered_map>
+
 #include "gen-cpp/MapD.h"
 #include "gen-cpp/extension_functions_types.h"
 
@@ -110,6 +116,47 @@ using permissionFuncPtr = bool (*)(const AccessPrivileges&, const TDBObjectPermi
 using TableMap = std::map<std::string, bool>;
 using OptionalTableMap = boost::optional<TableMap&>;
 using query_state::QueryStateProxy;
+
+class MapDTrackingProcessor : public MapDProcessor {
+ public:
+  MapDTrackingProcessor(mapd::shared_ptr<MapDIf> handler) : MapDProcessor(handler) {}
+
+  bool process(mapd::shared_ptr<::apache::thrift::protocol::TProtocol> in,
+               mapd::shared_ptr<::apache::thrift::protocol::TProtocol> out,
+               void* connectionContext) {
+    using namespace ::apache::thrift;
+
+    auto transport = in->getTransport();
+    if (transport) {
+      const auto origin_str = transport->getOrigin();
+      std::vector<std::string> origins;
+      boost::split(origins, origin_str, boost::is_any_of(","));
+      if (origins.empty()) {
+        MapDTrackingProcessor::client_address = origin_str;
+      } else {
+        // Take the first origin, which should be the client IP before any intermediate
+        // servers (e.g. the web server)
+        auto trimmed_origin = origins.front();
+        boost::algorithm::trim(trimmed_origin);
+        MapDTrackingProcessor::client_address = trimmed_origin;
+      }
+      if (dynamic_cast<transport::THttpTransport*>(transport.get())) {
+        MapDTrackingProcessor::client_protocol = ClientProtocol::HTTP;
+      } else if (dynamic_cast<transport::TBufferedTransport*>(transport.get())) {
+        MapDTrackingProcessor::client_protocol = ClientProtocol::TCP;
+      } else {
+        MapDTrackingProcessor::client_protocol = ClientProtocol::Other;
+      }
+    } else {
+      MapDTrackingProcessor::client_address = "";
+    }
+
+    return MapDProcessor::process(in, out, connectionContext);
+  }
+
+  static thread_local std::string client_address;
+  static thread_local ClientProtocol client_protocol;
+};
 
 class MapDHandler : public MapDIf {
  public:
@@ -657,6 +704,8 @@ class MapDHandler : public MapDIf {
   std::unordered_map<std::string, std::unordered_set<std::string>>
   fill_column_names_by_table(std::vector<std::string>& table_names,
                              query_state::StdLog& stdlog);
+
+  ConnectionInfo getConnectionInfo() const;
 
   static bool has_database_permission(const AccessPrivileges& privs,
                                       const TDBObjectPermissions& permissions);

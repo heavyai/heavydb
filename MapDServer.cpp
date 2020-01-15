@@ -1167,8 +1167,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
   };
 
   if (prog_config_opts.mapd_parameters.ha_group_id.empty()) {
-    mapd::shared_ptr<TProcessor> processor(new MapDProcessor(g_mapd_handler));
-
+    mapd::shared_ptr<TProcessor> processor(new MapDTrackingProcessor(g_mapd_handler));
     mapd::shared_ptr<TTransportFactory> bufTransportFactory(
         new TBufferedTransportFactory());
     mapd::shared_ptr<TProtocolFactory> bufProtocolFactory(new TBinaryProtocolFactory());

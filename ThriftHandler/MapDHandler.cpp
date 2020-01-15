@@ -115,6 +115,9 @@ using namespace Lock_Namespace;
     throw ex;                        \
   }
 
+thread_local std::string MapDTrackingProcessor::client_address;
+thread_local ClientProtocol MapDTrackingProcessor::client_protocol;
+
 namespace {
 
 SessionMap::iterator get_session_from_map(const TSessionId& session,
@@ -427,6 +430,7 @@ void MapDHandler::connect(TSessionId& session,
                           const std::string& passwd,
                           const std::string& dbname) {
   auto stdlog = STDLOG();  // session_info set by connect_impl()
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   std::string username2 = username;  // login() may reset username given as argument
   std::string dbname2 = dbname;      // login() may reset dbname given as argument
@@ -490,6 +494,7 @@ void MapDHandler::connect_impl(TSessionId& session,
 
 void MapDHandler::disconnect(const TSessionId& session) {
   auto stdlog = STDLOG();
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it_unsafe(session, write_lock);
   stdlog.setSessionInfo(session_it->second);
@@ -514,6 +519,7 @@ void MapDHandler::disconnect_impl(const SessionMap::iterator& session_it) {
 
 void MapDHandler::switch_database(const TSessionId& session, const std::string& dbname) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it_unsafe(session, write_lock);
 
@@ -530,6 +536,7 @@ void MapDHandler::switch_database(const TSessionId& session, const std::string& 
 
 void MapDHandler::interrupt(const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   if (g_enable_dynamic_watchdog) {
     // Shared lock to allow simultaneous interrupts of multiple sessions
     mapd_shared_lock<mapd_shared_mutex> read_lock(sessions_mutex_);
@@ -561,6 +568,7 @@ void MapDHandler::interrupt(const TSessionId& session) {
 
 void MapDHandler::get_server_status(TServerStatus& _return, const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   const auto rendering_enabled = bool(render_handler_);
   _return.read_only = read_only_;
   _return.version = MAPD_RELEASE;
@@ -574,6 +582,7 @@ void MapDHandler::get_server_status(TServerStatus& _return, const TSessionId& se
 void MapDHandler::get_status(std::vector<TServerStatus>& _return,
                              const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   const auto rendering_enabled = bool(render_handler_);
   TServerStatus ret;
   ret.read_only = read_only_;
@@ -603,6 +612,7 @@ void MapDHandler::get_status(std::vector<TServerStatus>& _return,
 void MapDHandler::get_hardware_info(TClusterHardwareInfo& _return,
                                     const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   THardwareInfo ret;
   const auto cuda_mgr = data_mgr_->getCudaMgr();
   if (cuda_mgr) {
@@ -642,6 +652,7 @@ void MapDHandler::get_hardware_info(TClusterHardwareInfo& _return,
 void MapDHandler::get_session_info(TSessionInfo& _return, const TSessionId& session) {
   auto session_ptr = get_session_ptr(session);
   auto stdlog = STDLOG(session_ptr);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto user_metadata = session_ptr->get_currentUser();
 
   _return.user = user_metadata.userName;
@@ -870,6 +881,7 @@ void MapDHandler::sql_execute(TQueryResult& _return,
   auto session_ptr = get_session_ptr(session);
   auto query_state = create_query_state(session_ptr, query_str);
   auto stdlog = STDLOG(query_state);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
 
   ScopeGuard reset_was_geo_copy_from = [&] { _was_geo_copy_from = false; };
 
@@ -1078,6 +1090,7 @@ void MapDHandler::sql_validate(TTableDescriptor& _return,
                                const TSessionId& session,
                                const std::string& query_str) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto query_state = create_query_state(stdlog.getSessionInfo(), query_str);
   stdlog.setQueryState(query_state);
 
@@ -1247,6 +1260,11 @@ MapDHandler::fill_column_names_by_table(std::vector<std::string>& table_names,
     ++it;
   }
   return column_names_by_table;
+}
+
+ConnectionInfo MapDHandler::getConnectionInfo() const {
+  return ConnectionInfo{MapDTrackingProcessor::client_address,
+                        MapDTrackingProcessor::client_protocol};
 }
 
 std::unordered_set<std::string> MapDHandler::get_uc_compatible_table_names_by_column(
@@ -1704,6 +1722,7 @@ void MapDHandler::get_result_row_for_pixel(
                        dump_table_col_names(table_col_names),
                        "nonce",
                        nonce);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getSessionInfo();
   if (!render_handler_) {
     THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
@@ -1782,6 +1801,7 @@ void MapDHandler::get_internal_table_details(TTableDetails& _return,
                                              const TSessionId& session,
                                              const std::string& table_name) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   get_table_details_impl(_return, stdlog, table_name, true, false);
 }
 
@@ -1789,6 +1809,7 @@ void MapDHandler::get_table_details(TTableDetails& _return,
                                     const TSessionId& session,
                                     const std::string& table_name) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   get_table_details_impl(_return, stdlog, table_name, false, false);
 }
 
@@ -1878,6 +1899,7 @@ void MapDHandler::get_link_view(TFrontendView& _return,
                                 const TSessionId& session,
                                 const std::string& link) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   auto const& cat = session_ptr->getCatalog();
   auto ld = cat.getMetadataForLink(std::to_string(cat.getCurrentDB().dbId) + link);
@@ -1943,6 +1965,7 @@ void MapDHandler::get_tables_impl(std::vector<std::string>& table_names,
 void MapDHandler::get_tables(std::vector<std::string>& table_names,
                              const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   get_tables_impl(
       table_names, *stdlog.getConstSessionInfo(), GET_PHYSICAL_TABLES_AND_VIEWS);
 }
@@ -1950,18 +1973,21 @@ void MapDHandler::get_tables(std::vector<std::string>& table_names,
 void MapDHandler::get_physical_tables(std::vector<std::string>& table_names,
                                       const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   get_tables_impl(table_names, *stdlog.getConstSessionInfo(), GET_PHYSICAL_TABLES);
 }
 
 void MapDHandler::get_views(std::vector<std::string>& table_names,
                             const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   get_tables_impl(table_names, *stdlog.getConstSessionInfo(), GET_VIEWS);
 }
 
 void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
                                   const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   auto query_state = create_query_state(session_ptr, "");
   stdlog.setQueryState(query_state);
@@ -2056,6 +2082,7 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
 void MapDHandler::get_users(std::vector<std::string>& user_names,
                             const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   std::list<Catalog_Namespace::UserMetadata> user_list;
 
@@ -2076,6 +2103,7 @@ void MapDHandler::get_version(std::string& version) {
 
 void MapDHandler::clear_gpu_memory(const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!session_ptr->get_currentUser().isSuper) {
     THROW_MAPD_EXCEPTION("Superuser privilege is required to run clear_gpu_memory");
@@ -2096,6 +2124,7 @@ void MapDHandler::clear_gpu_memory(const TSessionId& session) {
 
 void MapDHandler::clear_cpu_memory(const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!session_ptr->get_currentUser().isSuper) {
     THROW_MAPD_EXCEPTION("Superuser privilege is required to run clear_cpu_memory");
@@ -2122,6 +2151,7 @@ void MapDHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
                              const TSessionId& session,
                              const std::string& memory_level) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   std::vector<Data_Namespace::MemoryInfo> internal_memory;
   Data_Namespace::MemoryLevel mem_level;
   if (!memory_level.compare("gpu")) {
@@ -2165,6 +2195,7 @@ void MapDHandler::get_memory(std::vector<TNodeMemoryInfo>& _return,
 void MapDHandler::get_databases(std::vector<TDBInfo>& dbinfos,
                                 const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   const auto& user = session_ptr->get_currentUser();
   Catalog_Namespace::DBSummaryList dbs =
@@ -2180,6 +2211,7 @@ void MapDHandler::get_databases(std::vector<TDBInfo>& dbinfos,
 void MapDHandler::set_execution_mode(const TSessionId& session,
                                      const TExecuteMode::type mode) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it_unsafe(session, write_lock);
   if (leaf_aggregator_.leafCount() > 0) {
@@ -2209,6 +2241,7 @@ void MapDHandler::load_table_binary(const TSessionId& session,
                                     const std::string& table_name,
                                     const std::vector<TRow>& rows) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("load_table_binary");
   auto& cat = session_ptr->getCatalog();
@@ -2305,6 +2338,7 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
                                              const std::string& table_name,
                                              const std::vector<TColumn>& cols) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("load_table_binary_columnar");
   auto const& cat = session_ptr->getCatalog();
@@ -2482,6 +2516,7 @@ void MapDHandler::load_table(const TSessionId& session,
                              const std::string& table_name,
                              const std::vector<TStringRow>& rows) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("load_table");
   auto& cat = session_ptr->getCatalog();
@@ -2940,6 +2975,7 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
                                       const std::string& file_name_in,
                                       const TCopyParams& cp) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   check_read_only("detect_column_types");
 
   Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
@@ -3133,6 +3169,7 @@ void MapDHandler::render_vega(TRenderResult& _return,
                        vega_json,
                        "nonce",
                        nonce);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!render_handler_) {
     THROW_MAPD_EXCEPTION("Backend rendering is disabled.");
@@ -3170,6 +3207,7 @@ void MapDHandler::get_dashboard(TDashboard& dashboard,
                                 const TSessionId& session,
                                 const int32_t dashboard_id) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   auto const& cat = session_ptr->getCatalog();
   Catalog_Namespace::UserMetadata user_meta;
@@ -3207,6 +3245,7 @@ void MapDHandler::get_dashboard(TDashboard& dashboard,
 void MapDHandler::get_dashboards(std::vector<TDashboard>& dashboards,
                                  const TSessionId& session) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   auto const& cat = session_ptr->getCatalog();
   Catalog_Namespace::UserMetadata user_meta;
@@ -3247,6 +3286,7 @@ int32_t MapDHandler::create_dashboard(const TSessionId& session,
                                       const std::string& image_hash,
                                       const std::string& dashboard_metadata) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("create_dashboard");
   auto& cat = session_ptr->getCatalog();
@@ -3289,6 +3329,7 @@ void MapDHandler::replace_dashboard(const TSessionId& session,
                                     const std::string& image_hash,
                                     const std::string& dashboard_metadata) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("replace_dashboard");
   auto& cat = session_ptr->getCatalog();
@@ -3322,6 +3363,7 @@ void MapDHandler::replace_dashboard(const TSessionId& session,
 void MapDHandler::delete_dashboard(const TSessionId& session,
                                    const int32_t dashboard_id) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("delete_dashboard");
   auto& cat = session_ptr->getCatalog();
@@ -3376,6 +3418,7 @@ void MapDHandler::share_dashboard(const TSessionId& session,
                                   const TDashboardPermissions& permissions,
                                   const bool grant_role = false) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("share_dashboard");
   std::vector<std::string> valid_groups;
@@ -3423,6 +3466,7 @@ void MapDHandler::unshare_dashboard(const TSessionId& session,
                                     const std::vector<std::string>& objects,
                                     const TDashboardPermissions& permissions) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("unshare_dashboard");
   std::vector<std::string> valid_groups;
@@ -3468,6 +3512,7 @@ void MapDHandler::get_dashboard_grantees(
     const TSessionId& session,
     int32_t dashboard_id) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   auto const& cat = session_ptr->getCatalog();
   Catalog_Namespace::UserMetadata user_meta;
@@ -3511,6 +3556,7 @@ void MapDHandler::create_link(std::string& _return,
                               const std::string& view_state,
                               const std::string& view_metadata) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   // check_read_only("create_link");
   auto& cat = session_ptr->getCatalog();
@@ -3564,6 +3610,7 @@ void MapDHandler::create_table(const TSessionId& session,
                                const TFileType::type file_type,
                                const TCreateParams& create_params) {
   auto stdlog = STDLOG("table_name", table_name);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   check_read_only("create_table");
 
   if (ImportHelpers::is_reserved_name(table_name)) {
@@ -3647,6 +3694,7 @@ void MapDHandler::import_table(const TSessionId& session,
                                const std::string& file_name_in,
                                const TCopyParams& cp) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("import_table");
   LOG(INFO) << "import_table " << table_name << " from " << file_name_in;
@@ -3755,6 +3803,7 @@ void MapDHandler::import_geo_table(const TSessionId& session,
                                    const TRowDescriptor& row_desc,
                                    const TCreateParams& create_params) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("import_table");
   auto& cat = session_ptr->getCatalog();
@@ -4198,6 +4247,7 @@ void MapDHandler::import_table_status(TImportStatus& _return,
                                       const TSessionId& session,
                                       const std::string& import_id) {
   auto stdlog = STDLOG(get_session_ptr(session), "import_table_status", import_id);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto is = Importer_NS::Importer::get_import_status(import_id);
   _return.elapsed = is.elapsed.count();
   _return.rows_completed = is.rows_completed;
@@ -4211,6 +4261,7 @@ void MapDHandler::get_first_geo_file_in_archive(std::string& _return,
                                                 const TCopyParams& copy_params) {
   auto stdlog =
       STDLOG(get_session_ptr(session), "get_first_geo_file_in_archive", archive_path_in);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   std::string archive_path(archive_path_in);
 
   if (path_is_relative(archive_path)) {
@@ -4251,6 +4302,7 @@ void MapDHandler::get_all_files_in_archive(std::vector<std::string>& _return,
                                            const TCopyParams& copy_params) {
   auto stdlog =
       STDLOG(get_session_ptr(session), "get_all_files_in_archive", archive_path_in);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
 
   std::string archive_path(archive_path_in);
   if (path_is_relative(archive_path)) {
@@ -4283,6 +4335,7 @@ void MapDHandler::get_layers_in_geo_file(std::vector<TGeoFileLayerInfo>& _return
                                          const std::string& file_name_in,
                                          const TCopyParams& cp) {
   auto stdlog = STDLOG(get_session_ptr(session), "get_layers_in_geo_file", file_name_in);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   std::string file_name(file_name_in);
 
   Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
@@ -5638,6 +5691,7 @@ void MapDHandler::set_table_epoch(const TSessionId& session,
                                   const int table_id,
                                   const int new_epoch) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!session_ptr->get_currentUser().isSuper) {
     throw std::runtime_error("Only superuser can set_table_epoch");
@@ -5655,6 +5709,7 @@ void MapDHandler::set_table_epoch_by_name(const TSessionId& session,
                                           const std::string& table_name,
                                           const int new_epoch) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   if (!session_ptr->get_currentUser().isSuper) {
     throw std::runtime_error("Only superuser can set_table_epoch");
@@ -5675,6 +5730,7 @@ int32_t MapDHandler::get_table_epoch(const TSessionId& session,
                                      const int32_t db_id,
                                      const int32_t table_id) {
   auto stdlog = STDLOG(get_session_ptr(session));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   auto const& cat = session_ptr->getCatalog();
 
@@ -5687,6 +5743,7 @@ int32_t MapDHandler::get_table_epoch(const TSessionId& session,
 int32_t MapDHandler::get_table_epoch_by_name(const TSessionId& session,
                                              const std::string& table_name) {
   auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto session_ptr = stdlog.getConstSessionInfo();
   auto const& cat = session_ptr->getCatalog();
   auto td = cat.getMetadataForTable(
