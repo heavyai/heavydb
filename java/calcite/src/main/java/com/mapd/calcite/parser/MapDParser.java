@@ -36,6 +36,7 @@ import org.apache.calcite.rel.RelRoot;
 import org.apache.calcite.rel.RelShuttleImpl;
 import org.apache.calcite.rel.core.Join;
 import org.apache.calcite.rel.core.RelFactories;
+import org.apache.calcite.rel.core.TableModify;
 import org.apache.calcite.rel.core.TableModify.Operation;
 import org.apache.calcite.rel.logical.LogicalProject;
 import org.apache.calcite.rel.logical.LogicalTableModify;
@@ -63,6 +64,7 @@ import org.apache.calcite.sql.SqlBasicTypeNameSpec;
 import org.apache.calcite.sql.SqlCall;
 import org.apache.calcite.sql.SqlCollectionTypeNameSpec;
 import org.apache.calcite.sql.SqlDataTypeSpec;
+import org.apache.calcite.sql.SqlDelete;
 import org.apache.calcite.sql.SqlDialect;
 import org.apache.calcite.sql.SqlFunctionCategory;
 import org.apache.calcite.sql.SqlIdentifier;
@@ -100,6 +102,7 @@ import org.apache.calcite.util.Util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Field;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiPredicate;
@@ -487,12 +490,7 @@ public final class MapDParser {
     SqlIdentifier targetTable = (SqlIdentifier) update.getTargetTable();
     String targetTableName = targetTable.names.get(targetTable.names.size() - 1);
     MapDPlanner planner = getPlanner();
-    String dummySql = "UPDATE " + targetTableName + " SET "
-            + update.getTargetColumnList()
-                      .get(0)
-                      .toSqlString(SqlDialect.CALCITE)
-                      .toString()
-            + " = NULL";
+    String dummySql = "DELETE FROM " + targetTableName;
     SqlNode dummyNode = planner.parse(dummySql);
     dummyNode = planner.validate(dummyNode);
     RelRoot dummyRoot = planner.rel(dummyNode);
@@ -521,7 +519,8 @@ public final class MapDParser {
     update.accept(correlatedQueriesCounter);
     if (correlatedQueriesCount[0] > 1) {
       throw new CalciteException(
-              "UPDATEs with multiple correlated sub-queries not supported.", null);
+              "table modifications with multiple correlated sub-queries not supported.",
+              null);
     }
 
     boolean allowPushdownJoinCondition = false;
@@ -667,19 +666,45 @@ public final class MapDParser {
           throws SqlParseException, ValidationException, RelConversionException {
     boolean allowCorrelatedSubQueryExpansion = true;
     boolean allowPushdownJoinCondition = true;
+    boolean patchUpdateToDelete = false;
     MapDPlanner planner =
             getPlanner(allowCorrelatedSubQueryExpansion, allowPushdownJoinCondition);
 
     SqlNode node = processSQL(sql, parserOptions.isLegacySyntax(), planner);
 
     if (node.isA(DELETE)) {
-      allowCorrelatedSubQueryExpansion = false;
-      planner = getPlanner(allowCorrelatedSubQueryExpansion, allowPushdownJoinCondition);
-      node = processSQL(sql, parserOptions.isLegacySyntax(), planner);
-    } else if (node.isA(UPDATE)) {
+      SqlDelete sqlDelete = (SqlDelete) node;
+      node = new SqlUpdate(node.getParserPosition(),
+              sqlDelete.getTargetTable(),
+              SqlNodeList.EMPTY,
+              SqlNodeList.EMPTY,
+              sqlDelete.getCondition(),
+              sqlDelete.getSourceSelect(),
+              sqlDelete.getAlias());
+
+      patchUpdateToDelete = true;
+    }
+
+    if (node.isA(UPDATE)) {
       SqlUpdate update = (SqlUpdate) node;
       update = (SqlUpdate) planner.validate(update);
-      return rewriteUpdateAsSelect(update, parserOptions);
+      RelRoot root = rewriteUpdateAsSelect(update, parserOptions);
+
+      if (patchUpdateToDelete) {
+        LogicalTableModify modify = (LogicalTableModify) root.rel;
+
+        try {
+          Field f = TableModify.class.getDeclaredField("operation");
+          f.setAccessible(true);
+          f.set(modify, Operation.DELETE);
+        } catch (Throwable e) {
+          throw new RuntimeException(e);
+        }
+
+        root = RelRoot.of(modify, SqlKind.DELETE);
+      }
+
+      return root;
     }
 
     if (parserOptions.isLegacySyntax()) {

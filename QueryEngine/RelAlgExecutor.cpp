@@ -857,31 +857,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
   return scalar_sources;
 }
 
-std::shared_ptr<Analyzer::Expr> cast_to_column_type(std::shared_ptr<Analyzer::Expr> expr,
-                                                    int32_t tableId,
-                                                    const Catalog_Namespace::Catalog& cat,
-                                                    const std::string& colName) {
-  const auto cd = *cat.getMetadataForColumn(tableId, colName);
-
-  auto cast_ti = cd.columnType;
-
-  // Type needs to be scrubbed because otherwise NULL values could get cut off or
-  // truncated
-  auto cast_logical_ti = get_logical_type_info(cast_ti);
-  if (cast_logical_ti.is_varlen() && cast_logical_ti.is_array()) {
-    return expr;
-  }
-
-  // CastIR.cpp Executor::codegenCast() doesn't know how to cast from a ColumnVar
-  // so it CHECK's unless casting is skipped here.
-  if (std::dynamic_pointer_cast<Analyzer::ColumnVar>(expr)) {
-    return expr;
-  }
-
-  // Cast the expression to match the type of the output column.
-  return expr->add_cast(cast_logical_ti);
-}
-
 template <class RA>
 std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources_for_update(
     const RA* ra_node,
@@ -1015,55 +990,6 @@ std::vector<Analyzer::Expr*> translate_targets(
   return target_exprs;
 }
 
-std::vector<Analyzer::Expr*> translate_targets_for_update(
-    std::vector<std::shared_ptr<Analyzer::Expr>>& target_exprs_owned,
-    const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
-    const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
-    const RelCompound* compound,
-    const RelAlgTranslator& translator,
-    int32_t tableId,
-    const Catalog_Namespace::Catalog& cat,
-    const ColumnNameList& colNames,
-    size_t starting_projection_column_idx) {
-  std::vector<Analyzer::Expr*> target_exprs;
-  for (size_t i = 0; i < compound->size(); ++i) {
-    const auto target_rex = compound->getTargetExpr(i);
-    const auto target_rex_agg = dynamic_cast<const RexAgg*>(target_rex);
-    std::shared_ptr<Analyzer::Expr> target_expr;
-    if (target_rex_agg) {
-      target_expr =
-          RelAlgTranslator::translateAggregateRex(target_rex_agg, scalar_sources);
-    } else {
-      const auto target_rex_scalar = dynamic_cast<const RexScalar*>(target_rex);
-      const auto target_rex_ref = dynamic_cast<const RexRef*>(target_rex_scalar);
-      if (target_rex_ref) {
-        const auto ref_idx = target_rex_ref->getIndex();
-        CHECK_GE(ref_idx, size_t(1));
-        CHECK_LE(ref_idx, groupby_exprs.size());
-        const auto groupby_expr = *std::next(groupby_exprs.begin(), ref_idx - 1);
-        target_expr = var_ref(groupby_expr.get(), Analyzer::Var::kGROUPBY, ref_idx);
-      } else {
-        if (i >= starting_projection_column_idx &&
-            i < get_scalar_sources_size(compound) - 1) {
-          target_expr =
-              cast_to_column_type(translator.translateScalarRex(target_rex_scalar),
-                                  tableId,
-                                  cat,
-                                  colNames[i - starting_projection_column_idx]);
-        } else {
-          target_expr = translator.translateScalarRex(target_rex_scalar);
-        }
-        auto rewritten_expr = rewrite_expr(target_expr.get());
-        target_expr = fold_expr(rewritten_expr.get());
-      }
-    }
-    CHECK(target_expr);
-    target_exprs_owned.push_back(target_expr);
-    target_exprs.push_back(target_expr.get());
-  }
-  return target_exprs;
-}
-
 bool is_count_distinct(const Analyzer::Expr* expr) {
   const auto agg_expr = dynamic_cast<const Analyzer::AggExpr*>(expr);
   return agg_expr && agg_expr->get_is_distinct();
@@ -1079,23 +1005,6 @@ bool is_agg(const Analyzer::Expr* expr) {
     }
   }
   return false;
-}
-
-std::vector<TargetMetaInfo> get_modify_manipulated_targets_meta(
-    ModifyManipulationTarget const* manip_node,
-    const std::vector<Analyzer::Expr*>& target_exprs) {
-  std::vector<TargetMetaInfo> targets_meta;
-
-  for (int i = 0; i < (manip_node->getTargetColumnCount()); ++i) {
-    CHECK(target_exprs[i]);
-    // TODO(alex): remove the count distinct type fixup.
-    targets_meta.emplace_back(manip_node->getTargetColumns()[i],
-                              is_count_distinct(target_exprs[i])
-                                  ? SQLTypeInfo(kBIGINT, false)
-                                  : target_exprs[i]->get_type_info());
-  }
-
-  return targets_meta;
 }
 
 inline SQLTypeInfo get_logical_type_for_expr(const Analyzer::Expr& expr) {
@@ -1230,7 +1139,7 @@ void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
     throw std::runtime_error("DELETE not yet supported on temporary tables.");
   }
 
-  const auto work_unit = createModifyCompoundWorkUnit(
+  const auto work_unit = createCompoundWorkUnit(
       compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
@@ -1248,7 +1157,8 @@ void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
                              eo,
                              cat_,
                              executor_->row_set_mem_owner_,
-                             delete_callback);
+                             delete_callback,
+                             compound->isAggregate());
     delete_params.finalizeTransaction();
   } catch (...) {
     LOG(INFO) << "Delete operation failed.";
@@ -1270,8 +1180,8 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
     throw std::runtime_error("DELETE not yet supported on temporary tables.");
   }
 
-  auto work_unit = createModifyProjectWorkUnit(
-      project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  auto work_unit =
+      createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
   co_project.device_type_ = ExecutorDeviceType::CPU;
@@ -2516,114 +2426,6 @@ std::list<std::shared_ptr<Analyzer::Expr>> rewrite_quals(
 
 }  // namespace
 
-RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyCompoundWorkUnit(
-    const RelCompound* compound,
-    const SortInfo& sort_info,
-    const bool just_explain) {
-  std::vector<InputDescriptor> input_descs;
-  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  auto input_to_nest_level = get_input_nest_levels(compound, {});
-  std::tie(input_descs, input_col_descs, std::ignore) =
-      get_input_desc(compound, input_to_nest_level, {}, cat_);
-  const auto query_infos = get_table_infos(input_descs, executor_);
-  CHECK_EQ(size_t(1), compound->inputCount());
-  const auto left_deep_join =
-      dynamic_cast<const RelLeftDeepInnerJoin*>(compound->getInput(0));
-  JoinQualsPerNestingLevel left_deep_join_quals;
-  const auto join_types = left_deep_join ? left_deep_join_types(left_deep_join)
-                                         : std::vector<JoinType>{get_join_type(compound)};
-  if (left_deep_join) {
-    left_deep_join_quals = translateLeftDeepJoinFilter(
-        left_deep_join, input_descs, input_to_nest_level, just_explain);
-  }
-  QueryFeatureDescriptor query_features;
-  RelAlgTranslator translator(cat_,
-                              executor_,
-                              input_to_nest_level,
-                              join_types,
-                              now_,
-                              just_explain,
-                              query_features);
-  size_t starting_projection_column_idx =
-      get_scalar_sources_size(compound) - compound->getTargetColumnCount() - 1;
-  CHECK_GT(starting_projection_column_idx, 0u);
-  const auto scalar_sources =
-      translate_scalar_sources_for_update(compound,
-                                          translator,
-                                          compound->getModifiedTableDescriptor()->tableId,
-                                          cat_,
-                                          compound->getTargetColumns(),
-                                          starting_projection_column_idx);
-  const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
-  const auto quals_cf = translate_quals(compound, translator);
-  decltype(target_exprs_owned_) target_exprs_owned;
-  translate_targets_for_update(target_exprs_owned,
-                               scalar_sources,
-                               groupby_exprs,
-                               compound,
-                               translator,
-                               compound->getModifiedTableDescriptor()->tableId,
-                               cat_,
-                               compound->getTargetColumns(),
-                               starting_projection_column_idx);
-  target_exprs_owned_.insert(
-      target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
-  const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
-  CHECK_EQ(compound->size(), target_exprs.size());
-
-  const auto update_expr_iter =
-      std::next(target_exprs.cbegin(), starting_projection_column_idx);
-  decltype(target_exprs) filtered_target_exprs(update_expr_iter, target_exprs.end());
-
-  UsedColumnsVisitor used_columns_visitor;
-  std::unordered_set<int> id_accumulator;
-
-  for (auto const& expr :
-       boost::make_iterator_range(update_expr_iter, target_exprs.end())) {
-    auto used_column_ids = used_columns_visitor.visit(expr);
-    id_accumulator.insert(used_column_ids.begin(), used_column_ids.end());
-  }
-  for (auto const& expr : quals_cf.simple_quals) {
-    auto simple_quals_used_column_ids = used_columns_visitor.visit(expr.get());
-    id_accumulator.insert(simple_quals_used_column_ids.begin(),
-                          simple_quals_used_column_ids.end());
-  }
-  for (auto const& expr : quals_cf.quals) {
-    auto quals_used_column_ids = used_columns_visitor.visit(expr.get());
-    id_accumulator.insert(quals_used_column_ids.begin(), quals_used_column_ids.end());
-  }
-
-  decltype(input_col_descs) filtered_input_col_descs;
-  for (auto col_desc : input_col_descs) {
-    if (id_accumulator.find(col_desc->getColId()) != id_accumulator.end()) {
-      filtered_input_col_descs.push_back(col_desc);
-    }
-  }
-
-  const RelAlgExecutionUnit exe_unit = {input_descs,
-                                        filtered_input_col_descs,
-                                        quals_cf.simple_quals,
-                                        rewrite_quals(quals_cf.quals),
-                                        left_deep_join_quals,
-                                        groupby_exprs,
-                                        filtered_target_exprs,
-                                        nullptr,
-                                        sort_info,
-                                        0,
-                                        query_features,
-                                        false,
-                                        query_state_};
-  auto query_rewriter = std::make_unique<QueryRewriter>(query_infos, executor_);
-  const auto rewritten_exe_unit = query_rewriter->rewrite(exe_unit);
-  const auto targets_meta =
-      get_modify_manipulated_targets_meta(compound, rewritten_exe_unit.target_exprs);
-  compound->setOutputMetainfo(targets_meta);
-  return {rewritten_exe_unit,
-          compound,
-          max_groups_buffer_entry_default_guess,
-          std::move(query_rewriter)};
-}
-
 RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
     const RelCompound* compound,
     const SortInfo& sort_info,
@@ -2942,88 +2744,6 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
                               false,
                               query_state_},
           aggregate,
-          max_groups_buffer_entry_default_guess,
-          nullptr};
-}
-
-RelAlgExecutor::WorkUnit RelAlgExecutor::createModifyProjectWorkUnit(
-    const RelProject* project,
-    const SortInfo& sort_info,
-    const bool just_explain) {
-  std::vector<InputDescriptor> input_descs;
-  std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
-  auto input_to_nest_level = get_input_nest_levels(project, {});
-  std::tie(input_descs, input_col_descs, std::ignore) =
-      get_input_desc(project, input_to_nest_level, {}, cat_);
-  const auto left_deep_join =
-      dynamic_cast<const RelLeftDeepInnerJoin*>(project->getInput(0));
-  JoinQualsPerNestingLevel left_deep_join_quals;
-  const auto join_types = left_deep_join ? left_deep_join_types(left_deep_join)
-                                         : std::vector<JoinType>{get_join_type(project)};
-  if (left_deep_join) {
-    left_deep_join_quals = translateLeftDeepJoinFilter(
-        left_deep_join, input_descs, input_to_nest_level, just_explain);
-  }
-  QueryFeatureDescriptor query_features;
-  RelAlgTranslator translator(cat_,
-                              executor_,
-                              input_to_nest_level,
-                              join_types,
-                              now_,
-                              just_explain,
-                              query_features);
-  size_t starting_projection_column_idx =
-      get_scalar_sources_size(project) - project->getTargetColumnCount() - 1;
-  CHECK_GT(starting_projection_column_idx, 0u);
-  auto target_exprs_owned =
-      translate_scalar_sources_for_update(project,
-                                          translator,
-                                          project->getModifiedTableDescriptor()->tableId,
-                                          cat_,
-                                          project->getTargetColumns(),
-                                          starting_projection_column_idx);
-  target_exprs_owned_.insert(
-      target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
-  const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
-  CHECK_EQ(project->size(), target_exprs.size());
-
-  const auto update_expr_iter =
-      std::next(target_exprs.cbegin(), starting_projection_column_idx);
-  decltype(target_exprs) filtered_target_exprs(update_expr_iter, target_exprs.end());
-
-  UsedColumnsVisitor used_columns_visitor;
-  std::unordered_set<int> id_accumulator;
-
-  for (auto const& expr :
-       boost::make_iterator_range(update_expr_iter, target_exprs.end())) {
-    auto used_column_ids = used_columns_visitor.visit(expr);
-    id_accumulator.insert(used_column_ids.begin(), used_column_ids.end());
-  }
-
-  decltype(input_col_descs) filtered_input_col_descs;
-  for (auto col_desc : input_col_descs) {
-    if (id_accumulator.find(col_desc->getColId()) != id_accumulator.end()) {
-      filtered_input_col_descs.push_back(col_desc);
-    }
-  }
-
-  const auto targets_meta =
-      get_modify_manipulated_targets_meta(project, filtered_target_exprs);
-  project->setOutputMetainfo(targets_meta);
-  return {RelAlgExecutionUnit{input_descs,
-                              filtered_input_col_descs,
-                              {},
-                              {},
-                              left_deep_join_quals,
-                              {nullptr},
-                              filtered_target_exprs,
-                              nullptr,
-                              sort_info,
-                              0,
-                              query_features,
-                              false,
-                              query_state_},
-          project,
           max_groups_buffer_entry_default_guess,
           nullptr};
 }

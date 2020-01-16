@@ -1191,33 +1191,51 @@ TEST(Update, DISABLED_NonCorrelatedAllowed2) {
   }
 }
 
-TEST(DELETE, CorrelatedDisallowed) {
+TEST(DELETE, Correlated) {
   int factsCount = 13;
   int lookupCount = 5;
   setupTest("int", factsCount, lookupCount);
+
   std::string sql =
-      "DELETE FROM test_facts WHERE (SELECT test_lookup.id FROM test_lookup WHERE "
-      "test_lookup.val = "
-      "test_facts.val) < 100;";
-  ASSERT_ANY_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+      "UPDATE test_facts SET lookup_id = (SELECT SAMPLE(test_lookup.id) FROM test_lookup "
+      "WHERE "
+      "test_lookup.val = test_facts.val );";
+  ASSERT_NO_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
 
   sql =
       "DELETE FROM test_facts WHERE (SELECT test_lookup.id FROM test_lookup "
       "WHERE test_lookup.val = "
-      "test_facts.val) < 100;";
+      "test_facts.val) < 100 AND (SELECT SAMPLE(test_lookup.val) FROM test_lookup WHERE "
+      "test_lookup.id = test_facts.id) < 100;";
   ASSERT_ANY_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
 
   sql =
-      "DELETE FROM test_facts WHERE (SELECT MIN(test_lookup.id) FROM test_lookup "
-      "WHERE test_lookup.val = "
-      "test_facts.val) < 100;";
-  ASSERT_ANY_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+      "DELETE FROM test_facts WHERE (SELECT SAMPLE(test_lookup.id) FROM test_lookup "
+      "WHERE "
+      "test_lookup.val = "
+      "test_facts.val) < 3;";
+  QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
 
-  sql =
-      "DELETE FROM test_facts WHERE (SELECT MAX(test_lookup.id) FROM test_lookup "
-      "WHERE test_lookup.val = "
-      "test_facts.val) < 100;";
-  ASSERT_ANY_THROW(QR::get()->runSQL(sql, ExecutorDeviceType::CPU));
+  sql = "SELECT id, val, lookup_id FROM test_facts ORDER BY id";
+  auto results = QR::get()->runSQL(sql, ExecutorDeviceType::CPU);
+  ASSERT_EQ(static_cast<uint32_t>(10), results->rowCount());
+
+  auto INT_NULL_SENTINEL = inline_int_null_val(SQLTypeInfo(kINT, false));
+
+  for (int i = 3; i < factsCount; i++) {
+    const auto select_crt_row = results->getNextRow(true, false);
+    auto id = getIntValue(select_crt_row[0]);
+    auto val = getIntValue(select_crt_row[1]);
+    auto lookupId = getIntValue(select_crt_row[2]);
+
+    ASSERT_EQ(id, val);
+
+    if (id < lookupCount) {
+      ASSERT_EQ(lookupId, id);
+    } else {
+      ASSERT_EQ(lookupId, INT_NULL_SENTINEL);
+    }
+  }
 }
 
 TEST(Delete, DISABLED_NonCorrelatedAllowed) {

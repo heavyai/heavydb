@@ -301,9 +301,6 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
 
   WorkUnit createWorkUnit(const RelAlgNode*, const SortInfo&, const bool just_explain);
 
-  WorkUnit createModifyCompoundWorkUnit(const RelCompound* compound,
-                                        const SortInfo& sort_info,
-                                        const bool just_explain);
   WorkUnit createCompoundWorkUnit(const RelCompound*,
                                   const SortInfo&,
                                   const bool just_explain);
@@ -311,10 +308,6 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
   WorkUnit createAggregateWorkUnit(const RelAggregate*,
                                    const SortInfo&,
                                    const bool just_explain);
-
-  WorkUnit createModifyProjectWorkUnit(const RelProject* project,
-                                       const SortInfo& sort_info,
-                                       const bool just_explain);
 
   WorkUnit createProjectWorkUnit(const RelProject*,
                                  const SortInfo&,
