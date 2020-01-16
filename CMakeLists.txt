@@ -60,6 +60,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
 
+add_custom_target(clean-all
+  COMMAND ${CMAKE_BUILD_TOOL} clean
+ )
+
 option(PREFER_STATIC_LIBS "Prefer linking against static libraries" OFF)
 if(PREFER_STATIC_LIBS)
   set(CMAKE_FIND_LIBRARY_SUFFIXES .lib .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
@@ -733,10 +737,6 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
   install(FILES systemd/omnisci.conf.in DESTINATION systemd)
   install(PROGRAMS systemd/install_omnisci_systemd.sh DESTINATION systemd)
 endif()
-
-add_custom_target(clean-all
-  COMMAND ${CMAKE_BUILD_TOOL} clean
-  )
 
 ## mvn process for java code
 find_program(MVN_EXECUTABLE NAMES mvn)
