@@ -254,6 +254,7 @@ class StdLog : public StdLogData {
   std::shared_ptr<QueryState> query_state_;
   void log(logger::Severity, char const* label);
   void logCallStack(logger::Severity, char const* label);
+  static logger::Severity stdlogBeginSeverity(char const* func);
 
  public:
   template <typename... Pairs>
@@ -264,7 +265,7 @@ class StdLog : public StdLogData {
          Pairs&&... pairs)
       : StdLogData(file, line, func, std::forward<Pairs>(pairs)...)
       , session_info_(std::move(session_info)) {
-    log(logger::Severity::DEBUG1, "stdlog_begin");
+    log(stdlogBeginSeverity(func), "stdlog_begin");
   }
 
   template <typename... Pairs>
@@ -277,7 +278,7 @@ class StdLog : public StdLogData {
       : StdLogData(file, line, func, std::forward<Pairs>(pairs)...)
       , session_info_(std::move(session_info))
       , query_state_(std::move(query_state)) {
-    log(logger::Severity::DEBUG1, "stdlog_begin");
+    log(stdlogBeginSeverity(func), "stdlog_begin");
   }
 
   template <typename... Pairs>
@@ -288,12 +289,12 @@ class StdLog : public StdLogData {
          Pairs&&... pairs)
       : StdLogData(file, line, func, std::forward<Pairs>(pairs)...)
       , query_state_(std::move(query_state)) {
-    log(logger::Severity::DEBUG1, "stdlog_begin");
+    log(stdlogBeginSeverity(func), "stdlog_begin");
   }
   template <typename... Pairs>
   StdLog(char const* file, unsigned line, char const* func, Pairs&&... pairs)
       : StdLogData(file, line, func, std::forward<Pairs>(pairs)...) {
-    log(logger::Severity::DEBUG1, "stdlog_begin");
+    log(stdlogBeginSeverity(func), "stdlog_begin");
   }
   StdLog(StdLog const&) = delete;
   StdLog(StdLog&&) = default;

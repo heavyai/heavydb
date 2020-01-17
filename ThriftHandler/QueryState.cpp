@@ -26,6 +26,8 @@
 
 #include <algorithm>
 #include <iomanip>
+#include <string_view>
+#include <unordered_map>
 
 namespace query_state {
 
@@ -160,6 +162,16 @@ std::ostream& operator<<(std::ostream& os, SessionInfoFormatter const& formatter
   return os << QuoteFormatter{formatter.session_info.getCatalog().getCurrentDB().dbName}
             << ' ' << QuoteFormatter{formatter.session_info.get_currentUser().userName}
             << ' ' << formatter.session_info.get_public_session_id();
+}
+
+// Default severity for logging stdlog_begin lines is DEBUG1.
+// Some functions, such as sql_execute, log them at INFO level.
+logger::Severity StdLog::stdlogBeginSeverity(char const* func) {
+  logger::Severity const defaultSeverity = logger::Severity::DEBUG1;
+  static std::unordered_map<std::string_view, logger::Severity> const map{
+      {"sql_execute", logger::Severity::INFO}};
+  auto const itr = map.find(func);
+  return itr == map.cend() ? defaultSeverity : itr->second;
 }
 
 void StdLog::log(logger::Severity severity, char const* label) {
