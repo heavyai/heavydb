@@ -20,6 +20,10 @@
 #include <future>
 
 class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
+  struct ArrowFragment {
+    int64_t sz;
+    std::vector<std::shared_ptr<arrow::ArrayData>> chunks;
+  };
   void append(const std::vector<ForeignStorageColumnBuffer>& column_buffers) override;
 
   void read(const ChunkKey& chunk_key,
@@ -40,10 +44,14 @@ class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
 
   std::string getType() const override;
 
-  struct ArrowFragment {
-    int64_t sz;
-    std::vector<std::shared_ptr<arrow::ArrayData>> chunks;
-  };
+  void createDictionaryEncodedColumn(StringDictionary* dict,
+                                     const ColumnDescriptor& c,
+                                     std::vector<ArrowFragment> &col,
+                                     arrow::ChunkedArray* clp,
+                                     std::shared_ptr<arrow::internal::TaskGroup> tg,
+                                     const std::vector<std::pair<int, int>>& fragments,
+                                     ChunkKey key,
+                                     Data_Namespace::AbstractBufferMgr* mgr);
 
   std::map<std::array<int, 3>, std::vector<ArrowFragment>> m_columns;
 };
@@ -196,6 +204,69 @@ void ArrowCsvForeignStorage::prepareTable(const int db_id,
   td.hasDeletedCol = false;
 }
 
+void ArrowCsvForeignStorage::createDictionaryEncodedColumn(
+    StringDictionary* dict,
+    const ColumnDescriptor& c,
+    std::vector<ArrowFragment> &col,
+    arrow::ChunkedArray* clp,
+    std::shared_ptr<arrow::internal::TaskGroup> tg,
+    const std::vector<std::pair<int, int>>& fragments,
+    ChunkKey key,
+    Data_Namespace::AbstractBufferMgr* mgr) {
+  auto empty = clp->null_count() == clp->length();
+
+  for (size_t f = 0; f < fragments.size(); f++) {
+    key[3] = f;
+    auto& frag = col[f];
+    frag.chunks.resize(fragments[f].second - fragments[f].first);
+    int64_t varlen = 0;
+    auto b = mgr->createBuffer(key);
+    b->sql_type = c.columnType;
+    b->encoder.reset(Encoder::Create(b, c.columnType));
+    b->has_encoder = true;
+    tg->Append([clp,
+                dict,
+                empty,
+                frag = &frag,
+                begin = fragments[f].first,
+                end = fragments[f].second,
+                buffer = b]() {
+      for (int i = begin; i < end; i++) {
+        auto stringArray = std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
+        std::vector<std::string> strings(stringArray->length());
+        for (int i = 0; i < stringArray->length(); i++) {
+          if (stringArray->IsNull(i) || empty ||
+              stringArray->null_count() == stringArray->length()) {
+            strings[i] = "";
+          } else {
+            strings[i] = stringArray->GetString(i);
+          }
+        }
+        CHECK(dict);
+        std::shared_ptr<arrow::Buffer> indices_buf;
+        RETURN_NOT_OK(
+            arrow::AllocateBuffer(stringArray->length() * sizeof(int32_t), &indices_buf));
+        dict->getOrAddBulk(strings,
+                           reinterpret_cast<int32_t*>(indices_buf->mutable_data()));
+        auto indexArray =
+            std::make_shared<arrow::Int32Array>(stringArray->length(), indices_buf);
+
+        frag->chunks[i - begin] = ARROW_GET_DATA(indexArray);
+        frag->sz += stringArray->length();
+
+        auto len = frag->chunks[i - begin]->length;
+        auto data = frag->chunks[i - begin]->buffers[1]->data();
+        buffer->encoder->updateStats((const int8_t*)data, len);
+      }
+
+      buffer->setSize(frag->sz * buffer->sql_type.get_size());
+      buffer->encoder->setNumElems(frag->sz);
+
+      return arrow::Status::OK();
+    });
+  }
+}
+
 void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
                                            std::pair<int, int> table_key,
                                            const std::string& info,
@@ -289,68 +360,19 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
     col.resize(fragments.size());
     auto clp = ARROW_GET_DATA(table.column(cln++)).get();
 
-    StringDictionary* dict;
+    auto empty = clp->null_count() == clp->length();
+
     if (c.columnType.is_dict_encoded_string()) {
       auto dictDesc = const_cast<DictDescriptor*>(
           catalog->getMetadataForDict(c.columnType.get_comp_param()));
-      dict = dictDesc->stringDict.get();
-    }
-    auto empty = clp->null_count() == clp->length();
-
-    // fill each fragment
-    for (size_t f = 0; f < fragments.size(); f++) {
-      key[3] = f;
-      auto& frag = col[f];
-      frag.chunks.resize(fragments[f].second - fragments[f].first);
-      int64_t varlen = 0;
-      // for each arrow chunk
-      if (c.columnType.is_dict_encoded_string()) {
-        auto b = mgr->createBuffer(key);
-        b->sql_type = c.columnType;
-        b->encoder.reset(Encoder::Create(b, c.columnType));
-        b->has_encoder = true;
-        tg->Append([clp,
-                    dict,
-                    empty,
-                    frag = &frag,
-                    begin = fragments[f].first,
-                    end = fragments[f].second,
-                    buffer = b]() {
-          for (int i = begin; i < end; i++) {
-            auto stringArray =
-                std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
-            std::vector<std::string> strings(stringArray->length());
-            for (int i = 0; i < stringArray->length(); i++) {
-              if (stringArray->IsNull(i) || empty ||
-                  stringArray->null_count() == stringArray->length()) {
-                strings[i] = "";
-              } else {
-                strings[i] = stringArray->GetString(i);
-              }
-            }
-            CHECK(dict);
-            std::shared_ptr<arrow::Buffer> indices_buf;
-            RETURN_NOT_OK(arrow::AllocateBuffer(stringArray->length() * sizeof(int32_t),
-                                                &indices_buf));
-            dict->getOrAddBulk(strings,
-                               reinterpret_cast<int32_t*>(indices_buf->mutable_data()));
-            auto indexArray =
-                std::make_shared<arrow::Int32Array>(stringArray->length(), indices_buf);
-
-            frag->chunks[i - begin] = ARROW_GET_DATA(indexArray);
-            frag->sz += stringArray->length();
-
-            auto len = frag->chunks[i - begin]->length;
-            auto data = frag->chunks[i - begin]->buffers[1]->data();
-            buffer->encoder->updateStats((const int8_t*)data, len);
-          }
-
-          buffer->setSize(frag->sz * buffer->sql_type.get_size());
-          buffer->encoder->setNumElems(frag->sz);
-
-          return arrow::Status::OK();
-        });
-      } else {
+      StringDictionary* dict = dictDesc->stringDict.get();
+      createDictionaryEncodedColumn(dict, c, col, clp, tg, fragments, key, mgr);
+    } else {
+      for (size_t f = 0; f < fragments.size(); f++) {
+        key[3] = f;
+        auto& frag = col[f];
+        frag.chunks.resize(fragments[f].second - fragments[f].first);
+        int64_t varlen = 0;
         for (int i = fragments[f].first, e = fragments[f].second; i < e; i++) {
           frag.chunks[i - fragments[f].first] = ARROW_GET_DATA(clp->chunk(i));
           frag.sz += clp->chunk(i)->length();
@@ -372,45 +394,45 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
             }
           }
         }
-      }
 
-      // create buffer descriptotrs
-      if (ctype == kTEXT && !c.columnType.is_dict_encoded_string()) {
-        auto k = key;
-        k.push_back(1);
-        {
-          auto b = mgr->createBuffer(k);
-          b->setSize(varlen);
+        // create buffer descriptotrs
+        if (ctype == kTEXT) {
+          auto k = key;
+          k.push_back(1);
+          {
+            auto b = mgr->createBuffer(k);
+            b->setSize(varlen);
+            b->encoder.reset(Encoder::Create(b, c.columnType));
+            b->has_encoder = true;
+            b->sql_type = c.columnType;
+          }
+          k[4] = 2;
+          {
+            auto b = mgr->createBuffer(k);
+            b->sql_type = SQLTypeInfo(kINT, false);
+            b->setSize(frag.sz * b->sql_type.get_size());
+          }
+        } else {
+          auto b = mgr->createBuffer(key);
+          b->sql_type = c.columnType;
+          b->setSize(frag.sz * b->sql_type.get_size());
           b->encoder.reset(Encoder::Create(b, c.columnType));
           b->has_encoder = true;
-          b->sql_type = c.columnType;
+          if (!empty) {
+            ++counter;
+            // asynchronously update stats for incoming data
+            tg->Append([b, fr = &frag, &counter]() {
+              for (auto chunk : fr->chunks) {
+                auto len = chunk->length;
+                auto data = chunk->buffers[1]->data();
+                b->encoder->updateStats((const int8_t*)data, len);
+              }
+              --counter;
+              return arrow::Status::OK();
+            });
+          }
+          b->encoder->setNumElems(frag.sz);
         }
-        k[4] = 2;
-        {
-          auto b = mgr->createBuffer(k);
-          b->sql_type = SQLTypeInfo(kINT, false);
-          b->setSize(frag.sz * b->sql_type.get_size());
-        }
-      } else if (!c.columnType.is_dict_encoded_string()) {
-        auto b = mgr->createBuffer(key);
-        b->sql_type = c.columnType;
-        b->setSize(frag.sz * b->sql_type.get_size());
-        b->encoder.reset(Encoder::Create(b, c.columnType));
-        b->has_encoder = true;
-        if (!empty) {
-          ++counter;
-          // asynchronously update stats for incoming data
-          tg->Append([b, fr = &frag, &counter]() {
-            for (auto chunk : fr->chunks) {
-              auto len = chunk->length;
-              auto data = chunk->buffers[1]->data();
-              b->encoder->updateStats((const int8_t*)data, len);
-            }
-            --counter;
-            return arrow::Status::OK();
-          });
-        }
-        b->encoder->setNumElems(frag.sz);
       }
     }
   }  // each col and fragment
