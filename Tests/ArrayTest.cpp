@@ -151,22 +151,36 @@ TEST_F(ArrayExtOpsEnv, ArrayAppend) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    const auto rows =
-        run_multiple_agg("SELECT array_append(arri64, i64) FROM array_ext_ops_test;", dt);
-    ASSERT_EQ(rows->rowCount(), size_t(6));
-
     auto check_row_result = [](const auto& crt_row, const auto& expected) {
       compare_array(crt_row[0], expected);
     };
 
-    check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{1, 2, 3});
-    check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{1});
-    check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{-1, 0});
-    check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{0});
-    check_row_result(rows->getNextRow(true, true),
-                     std::vector<int64_t>{4, 5, inline_int_null_value<int64_t>()});
-    check_row_result(rows->getNextRow(true, true),
-                     std::vector<int64_t>{inline_int_null_value<int64_t>()});
+    auto check_entire_integer_result = [&check_row_result](const auto& rows) {
+      ASSERT_EQ(rows->rowCount(), size_t(6));
+
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{1, 2, 3});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{1});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{-1, 0});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{0});
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<int64_t>{4, 5, inline_int_null_value<int64_t>()});
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<int64_t>{inline_int_null_value<int64_t>()});
+    };
+
+    // i64
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_append(arri64, i64) FROM array_ext_ops_test;", dt);
+      check_entire_integer_result(rows);
+    }
+
+    // i32
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_append(arri32, i32) FROM array_ext_ops_test;", dt);
+      check_entire_integer_result(rows);
+    }
   }
 }
 

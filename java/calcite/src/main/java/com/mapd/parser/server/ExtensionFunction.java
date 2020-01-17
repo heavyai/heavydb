@@ -136,17 +136,17 @@ public class ExtensionFunction {
       case PDouble:
         return "double*";
       case ArrayInt8:
-        return "array_i8";
+        return "{i8*, i64, i8}*";
       case ArrayInt16:
-        return "array_i16";
+        return "{i16*, i64, i8}*";
       case ArrayInt32:
-        return "array_i32";
+        return "{i32*, i64, i8}*";
       case ArrayInt64:
         return "{i64*, i64, i8}*";
       case ArrayFloat:
-        return "array_float";
+        return "{float*, i64, i8}*";
       case ArrayDouble:
-        return "array_double";
+        return "{double*, i64, i8}*";
       case GeoPoint:
         return "geo_point";
       case Cursor:

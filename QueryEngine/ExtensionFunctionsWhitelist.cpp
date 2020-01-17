@@ -145,17 +145,17 @@ std::string serialize_type(const ExtArgumentType type) {
     case ExtArgumentType::PDouble:
       return "double*";
     case ExtArgumentType::ArrayInt8:
-      return "array_i8";
+      return "{i8*, i64, i8}*";
     case ExtArgumentType::ArrayInt16:
-      return "array_i16";
+      return "{i16*, i64, i8}*";
     case ExtArgumentType::ArrayInt32:
-      return "array_i32";
+      return "{i32*, i64, i8}*";
     case ExtArgumentType::ArrayInt64:
       return "{i64*, i64, i8}*";
     case ExtArgumentType::ArrayFloat:
-      return "array_float";
+      return "{float*, i64, i8}*";
     case ExtArgumentType::ArrayDouble:
-      return "array_double";
+      return "{double*, i64, i8}*";
     case ExtArgumentType::GeoPoint:
       return "geo_point";
     case ExtArgumentType::GeoLineString:
@@ -278,9 +278,14 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
       std::string decl_prefix;
       std::vector<std::string> arg_strs;
 
-      if (signature.getRet() == ExtArgumentType::ArrayInt64) {
+      if (signature.getRet() == ExtArgumentType::ArrayInt64 ||
+          signature.getRet() == ExtArgumentType::ArrayInt32 ||
+          signature.getRet() == ExtArgumentType::ArrayInt16 ||
+          signature.getRet() == ExtArgumentType::ArrayInt8 ||
+          signature.getRet() == ExtArgumentType::ArrayFloat ||
+          signature.getRet() == ExtArgumentType::ArrayDouble) {
         decl_prefix = "declare void @" + signature.getName();
-        arg_strs.emplace_back("{i64*, i64, i8}*");
+        arg_strs.emplace_back(serialize_type(signature.getRet()));
       } else {
         decl_prefix =
             "declare " + serialize_type(signature.getRet()) + " @" + signature.getName();
@@ -355,22 +360,22 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "double*") {
     return ExtArgumentType::PDouble;
   }
-  if (type_name == "array_i8") {
+  if (type_name == "{i8*, i64, i8}*") {
     return ExtArgumentType::ArrayInt8;
   }
-  if (type_name == "array_i16") {
+  if (type_name == "{i16*, i64, i8}*") {
     return ExtArgumentType::ArrayInt16;
   }
-  if (type_name == "array_i32") {
+  if (type_name == "{i32*, i64, i8}*") {
     return ExtArgumentType::ArrayInt32;
   }
   if (type_name == "{i64*, i64, i8}*") {
     return ExtArgumentType::ArrayInt64;
   }
-  if (type_name == "array_float") {
+  if (type_name == "{float*, i64, i8}*") {
     return ExtArgumentType::ArrayFloat;
   }
-  if (type_name == "array_double") {
+  if (type_name == "{double*, i64, i8}*") {
     return ExtArgumentType::ArrayDouble;
   }
   if (type_name == "geo_point") {
