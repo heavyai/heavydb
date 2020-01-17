@@ -172,6 +172,11 @@ extern "C" int64_t* get_matching_group_value_perfect_hash(int64_t* groups_buffer
                                                           const uint32_t key_qw_count,
                                                           const uint32_t row_size_quad);
 
+extern "C" int64_t* get_matching_group_value_perfect_hash_keyless(
+    int64_t* groups_buffer,
+    const uint32_t hashed_index,
+    const uint32_t row_size_quad);
+
 extern "C" int32_t* get_bucketized_hash_slot(int32_t* buff,
                                              const int64_t key,
                                              const int64_t min_key,

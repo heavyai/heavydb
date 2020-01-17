@@ -406,7 +406,7 @@ void QueryMemoryInitializer::initGroups(const QueryMemoryDescriptor& query_mem_d
 
   if (query_mem_desc.hasKeylessHash()) {
     CHECK(warp_size >= 1);
-    CHECK(key_count == 1);
+    CHECK(key_count == 1 || warp_size == 1);
     for (size_t warp_idx = 0; warp_idx < warp_size; ++warp_idx) {
       for (size_t bin = 0; bin < static_cast<size_t>(groups_buffer_entry_count);
            ++bin, buffer_ptr += row_size) {

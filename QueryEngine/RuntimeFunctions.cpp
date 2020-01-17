@@ -1143,6 +1143,19 @@ extern "C" ALWAYS_INLINE int64_t* get_matching_group_value_perfect_hash(
   return groups_buffer + off + key_count;
 }
 
+/**
+ * For a particular hashed index (only used with multi-column perfect hash group by)
+ * it returns the row-wise offset of the group in the output buffer.
+ * Since it is intended for keyless hash use, it assumes there is no group columns
+ * prepending the output buffer.
+ */
+extern "C" ALWAYS_INLINE int64_t* get_matching_group_value_perfect_hash_keyless(
+    int64_t* groups_buffer,
+    const uint32_t hashed_index,
+    const uint32_t row_size_quad) {
+  return groups_buffer + row_size_quad * hashed_index;
+}
+
 /*
  * For a particular hashed_index, find and initialize (if necessary) all the group
  * columns corresponding to a key. It is assumed that all group columns are 64-bit wide.

@@ -376,12 +376,10 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
 
   // Non-grouped aggregates do not support accessing aggregated ranges
   // Keyless hash is currently only supported with single-column perfect hash
-  const auto keyless_info =
-      !(is_group_by &&
-        col_range_info.hash_type_ == QueryDescriptionType::GroupByPerfectHash &&
-        ra_exe_unit_.groupby_exprs.size() == 1)
-          ? KeylessInfo{false, -1, false}
-          : getKeylessInfo(ra_exe_unit_.target_exprs, is_group_by);
+  const auto keyless_info = !(is_group_by && col_range_info.hash_type_ ==
+                                                 QueryDescriptionType::GroupByPerfectHash)
+                                ? KeylessInfo{false, -1, false}
+                                : getKeylessInfo(ra_exe_unit_.target_exprs, is_group_by);
 
   if (g_enable_watchdog &&
       ((col_range_info.hash_type_ == QueryDescriptionType::GroupByBaselineHash &&
@@ -1295,22 +1293,31 @@ std::tuple<llvm::Value*, llvm::Value*> GroupByAndAggregate::codegenMultiColumnPe
       LL_BUILDER.CreateCall(perfect_hash_func, std::vector<llvm::Value*>{group_key});
 
   if (query_mem_desc.didOutputColumnar()) {
-    const std::string set_matching_func_name{
-        "set_matching_group_value_perfect_hash_columnar"};
-    const std::vector<llvm::Value*> set_matching_func_arg{
-        groups_buffer,
-        hash_lv,
-        group_key,
-        key_size_lv,
-        llvm::ConstantInt::get(get_int_type(32, LL_CONTEXT),
-                               query_mem_desc.getEntryCount())};
-    emitCall(set_matching_func_name, set_matching_func_arg);
+    if (!query_mem_desc.hasKeylessHash()) {
+      const std::string set_matching_func_name{
+          "set_matching_group_value_perfect_hash_columnar"};
+      const std::vector<llvm::Value*> set_matching_func_arg{
+          groups_buffer,
+          hash_lv,
+          group_key,
+          key_size_lv,
+          llvm::ConstantInt::get(get_int_type(32, LL_CONTEXT),
+                                 query_mem_desc.getEntryCount())};
+      emitCall(set_matching_func_name, set_matching_func_arg);
+    }
     return std::make_tuple(groups_buffer, hash_lv);
   } else {
-    return std::make_tuple(
-        emitCall("get_matching_group_value_perfect_hash",
-                 {groups_buffer, hash_lv, group_key, key_size_lv, LL_INT(row_size_quad)}),
-        nullptr);
+    if (query_mem_desc.hasKeylessHash()) {
+      return std::make_tuple(emitCall("get_matching_group_value_perfect_hash_keyless",
+                                      {groups_buffer, hash_lv, LL_INT(row_size_quad)}),
+                             nullptr);
+    } else {
+      return std::make_tuple(
+          emitCall(
+              "get_matching_group_value_perfect_hash",
+              {groups_buffer, hash_lv, group_key, key_size_lv, LL_INT(row_size_quad)}),
+          nullptr);
+    }
   }
 }
 

@@ -221,6 +221,17 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       if (render_info) {
         render_info->setInSituDataIfUnset(false);
       }
+      // keyless hash: whether or not group columns are stored at the beginning of the
+      // output buffer
+      keyless_hash =
+          (!sort_on_gpu_hint ||
+           !QueryMemoryDescriptor::many_entries(
+               col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
+          !col_range_info.bucket && !must_use_baseline_sort && keyless_info.keyless;
+
+      // if keyless, then this target index indicates wheter an entry is empty or not
+      // (acts as a key)
+      idx_target_as_key = keyless_info.target_index;
 
       if (group_col_widths.size() > 1) {
         // col range info max contains the expected cardinality of the output
@@ -228,12 +239,6 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
         actual_col_range_info.bucket = 0;
       } else {
         // single column perfect hash
-        idx_target_as_key = keyless_info.target_index;
-        keyless_hash =
-            (!sort_on_gpu_hint ||
-             !QueryMemoryDescriptor::many_entries(
-                 col_range_info.max, col_range_info.min, col_range_info.bucket)) &&
-            !col_range_info.bucket && !must_use_baseline_sort && keyless_info.keyless;
         entry_count = std::max(
             GroupByAndAggregate::getBucketedCardinality(col_range_info), int64_t(1));
         const size_t interleaved_max_threshold{512};
@@ -735,7 +740,8 @@ size_t QueryMemoryDescriptor::getRowSize() const {
   CHECK(!output_columnar_);
   size_t total_bytes{0};
   if (keyless_hash_) {
-    CHECK_EQ(size_t(1), group_col_widths_.size());
+    // ignore, there's no group column in the output buffer
+    CHECK(query_desc_type_ == QueryDescriptionType::GroupByPerfectHash);
   } else {
     total_bytes += group_col_widths_.size() * getEffectiveKeyWidth();
     total_bytes = align_to_int64(total_bytes);
@@ -816,7 +822,8 @@ size_t QueryMemoryDescriptor::getColOffInBytes(const size_t col_idx) const {
 
   size_t offset{0};
   if (keyless_hash_) {
-    CHECK_EQ(size_t(1), group_col_widths_.size());
+    // ignore, there's no group column in the output buffer
+    CHECK(query_desc_type_ == QueryDescriptionType::GroupByPerfectHash);
   } else {
     offset += group_col_widths_.size() * getEffectiveKeyWidth();
     offset = align_to_int64(offset);
