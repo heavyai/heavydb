@@ -301,30 +301,58 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
     for (size_t f = 0; f < fragments.size(); f++) {
       key[3] = f;
       auto& frag = col[f];
+      frag.chunks.resize(fragments[f].second - fragments[f].first);
       int64_t varlen = 0;
       // for each arrow chunk
-      for (int i = fragments[f].first, e = fragments[f].second; i < e; i++) {
-        if (c.columnType.is_dict_encoded_string()) {
-          arrow::Int32Builder indexBuilder;
-          auto stringArray = std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
-          indexBuilder.Reserve(stringArray->length());
-          for (int i = 0; i < stringArray->length(); i++) {
-            // TODO: use arrow dictionary encoding
-            if (stringArray->IsNull(i) || empty ||
-                stringArray->null_count() == stringArray->length()) {
-              indexBuilder.Append(inline_int_null_value<int32_t>());
-            } else {
-              CHECK(dict);
-              auto curStr = stringArray->GetString(i);
-              indexBuilder.Append(dict->getOrAdd(curStr));
+      if (c.columnType.is_dict_encoded_string()) {
+        auto b = mgr->createBuffer(key);
+        b->sql_type = c.columnType;
+        b->encoder.reset(Encoder::Create(b, c.columnType));
+        b->has_encoder = true;
+        tg->Append([clp,
+                    dict,
+                    empty,
+                    frag = &frag,
+                    begin = fragments[f].first,
+                    end = fragments[f].second,
+                    buffer = b]() {
+          for (int i = begin; i < end; i++) {
+            auto stringArray =
+                std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
+            std::vector<std::string> strings(stringArray->length());
+            for (int i = 0; i < stringArray->length(); i++) {
+              if (stringArray->IsNull(i) || empty ||
+                  stringArray->null_count() == stringArray->length()) {
+                strings[i] = "";
+              } else {
+                strings[i] = stringArray->GetString(i);
+              }
             }
+            CHECK(dict);
+            std::shared_ptr<arrow::Buffer> indices_buf;
+            RETURN_NOT_OK(arrow::AllocateBuffer(stringArray->length() * sizeof(int32_t),
+                                                &indices_buf));
+            dict->getOrAddBulk(strings,
+                               reinterpret_cast<int32_t*>(indices_buf->mutable_data()));
+            auto indexArray =
+                std::make_shared<arrow::Int32Array>(stringArray->length(), indices_buf);
+
+            frag->chunks[i - begin] = ARROW_GET_DATA(indexArray);
+            frag->sz += stringArray->length();
+
+            auto len = frag->chunks[i - begin]->length;
+            auto data = frag->chunks[i - begin]->buffers[1]->data();
+            buffer->encoder->updateStats((const int8_t*)data, len);
           }
-          std::shared_ptr<arrow::Array> indexArray;
-          ARROW_THROW_NOT_OK(indexBuilder.Finish(&indexArray));
-          frag.chunks.emplace_back(ARROW_GET_DATA(indexArray));
-          frag.sz += stringArray->length();
-        } else {
-          frag.chunks.emplace_back(ARROW_GET_DATA(clp->chunk(i)));
+
+          buffer->setSize(frag->sz * buffer->sql_type.get_size());
+          buffer->encoder->setNumElems(frag->sz);
+
+          return arrow::Status::OK();
+        });
+      } else {
+        for (int i = fragments[f].first, e = fragments[f].second; i < e; i++) {
+          frag.chunks[i - fragments[f].first] = ARROW_GET_DATA(clp->chunk(i));
           frag.sz += clp->chunk(i)->length();
           auto& buffers = ARROW_GET_DATA(clp->chunk(i))->buffers;
           if (!empty) {
@@ -363,7 +391,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           b->sql_type = SQLTypeInfo(kINT, false);
           b->setSize(frag.sz * b->sql_type.get_size());
         }
-      } else {
+      } else if (!c.columnType.is_dict_encoded_string()) {
         auto b = mgr->createBuffer(key);
         b->sql_type = c.columnType;
         b->setSize(frag.sz * b->sql_type.get_size());
