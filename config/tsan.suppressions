@@ -5,4 +5,5 @@ race:boost::*::saved_single_repeat
 race:boost::*::saved_state
 race:boost::*::perl_matcher
 race:google::RawLog__SetLastTime
+race:apache::thrift::transport::TServerSocket
 thread:libcuda.so
