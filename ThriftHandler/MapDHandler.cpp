@@ -210,8 +210,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
     , super_user_rights_(false)
     , idle_session_duration_(idle_session_duration * 60)
     , max_session_duration_(max_session_duration * 60)
-    , runtime_udf_registration_enabled_(enable_runtime_udf_registration)
-    , _was_geo_copy_from(false) {
+    , runtime_udf_registration_enabled_(enable_runtime_udf_registration) {
   LOG(INFO) << "OmniSci Server " << MAPD_RELEASE;
   // Register foreign storage interfaces here
   registerArrowCsvForeignStorage();
@@ -940,7 +939,9 @@ void MapDHandler::sql_execute(TQueryResult& _return,
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
   auto timer = DEBUG_TIMER(__func__);
 
-  ScopeGuard reset_was_geo_copy_from = [&] { _was_geo_copy_from = false; };
+  ScopeGuard reset_was_geo_copy_from = [this, &session_ptr] {
+    geo_copy_from_sessions.remove(session_ptr->get_session_id());
+  };
 
   if (first_n >= 0 && at_most_n >= 0) {
     THROW_MAPD_EXCEPTION(std::string("At most one of first_n and at_most_n can be set"));
@@ -984,28 +985,29 @@ void MapDHandler::sql_execute(TQueryResult& _return,
 
   // if the SQL statement we just executed was a geo COPY FROM, the import
   // parameters were captured, and this flag set, so we do the actual import here
-  if (_was_geo_copy_from) {
+  if (auto geo_copy_from_state = geo_copy_from_sessions(session_ptr->get_session_id())) {
     // import_geo_table() calls create_table() which calls this function to
     // do the work, so reset the flag now to avoid executing this part a
     // second time at the end of that, which would fail as the table was
     // already created! Also reset the flag with a ScopeGuard on exiting
     // this function any other way, such as an exception from the code above!
-    _was_geo_copy_from = false;
+    geo_copy_from_sessions.remove(session_ptr->get_session_id());
 
     // create table as replicated?
     TCreateParams create_params;
-    if (_geo_copy_from_partitions == "REPLICATED") {
+    if (geo_copy_from_state->geo_copy_from_partitions == "REPLICATED") {
       create_params.is_replicated = true;
     }
 
     // now do (and time) the import
     _return.total_time_ms = measure<>::execution([&]() {
-      import_geo_table(session,
-                       _geo_copy_from_table,
-                       _geo_copy_from_file_name,
-                       copyparams_to_thrift(_geo_copy_from_copy_params),
-                       TRowDescriptor(),
-                       create_params);
+      import_geo_table(
+          session,
+          geo_copy_from_state->geo_copy_from_table,
+          geo_copy_from_state->geo_copy_from_file_name,
+          copyparams_to_thrift(geo_copy_from_state->geo_copy_from_copy_params),
+          TRowDescriptor(),
+          create_params);
     });
   }
   std::string debug_json = timer.stopAndGetJson();
@@ -5216,11 +5218,15 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       convert_result(_return, ResultSet(*import_stmt->return_message.get()), true);
 
       // get geo_copy_from info
-      _was_geo_copy_from = import_stmt->was_geo_copy_from();
-      import_stmt->get_geo_copy_from_payload(_geo_copy_from_table,
-                                             _geo_copy_from_file_name,
-                                             _geo_copy_from_copy_params,
-                                             _geo_copy_from_partitions);
+      if (import_stmt->was_geo_copy_from()) {
+        GeoCopyFromState geo_copy_from_state;
+        import_stmt->get_geo_copy_from_payload(
+            geo_copy_from_state.geo_copy_from_table,
+            geo_copy_from_state.geo_copy_from_file_name,
+            geo_copy_from_state.geo_copy_from_copy_params,
+            geo_copy_from_state.geo_copy_from_partitions);
+        geo_copy_from_sessions.add(session_ptr->get_session_id(), geo_copy_from_state);
+      }
       return true;
     }
 
