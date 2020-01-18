@@ -2745,7 +2745,7 @@ ImportStatus Detector::importDelimited(const std::string& file_path,
   // somehow clang does not support ext/stdio_filebuf.h, so
   // need to diy readline with customized copy_params.line_delim...
   std::string line;
-  line.reserve(1 << 20);
+  line.reserve(1 * 1024 * 1024);
   auto end_time = std::chrono::steady_clock::now() +
                   timeout * (boost::istarts_with(file_path, "s3://") ? 3 : 1);
   try {
@@ -2753,18 +2753,14 @@ ImportStatus Detector::importDelimited(const std::string& file_path,
       int c;
       size_t n = 0;
       while (EOF != (c = fgetc(p_file)) && copy_params.line_delim != c) {
-        if (n >= line.capacity()) {
+        if (n++ >= line.capacity()) {
           break;
         }
-        if (++n > line.length()) {
-          line.resize(n);
-        }
-        line[n - 1] = c;
+        line += c;
       }
       if (0 == n) {
         break;
       }
-      line[n] = 0;
       // remember the first line, which is possibly a header line, to
       // ignore identical header line(s) in 2nd+ files of a archive;
       // otherwise, 2nd+ header may be mistaken as an all-string row
@@ -2772,11 +2768,13 @@ ImportStatus Detector::importDelimited(const std::string& file_path,
       if (line1.empty()) {
         line1 = line;
       } else if (line == line1) {
+        line.clear();
         continue;
       }
 
-      raw_data += std::string(line, n);
+      raw_data += line;
       raw_data += copy_params.line_delim;
+      line.clear();
       ++import_status.rows_completed;
       if (std::chrono::steady_clock::now() > end_time) {
         if (import_status.rows_completed > 10000) {
