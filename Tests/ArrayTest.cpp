@@ -283,6 +283,19 @@ TEST_F(ArrayExtOpsEnv, ArrayAppend) {
           run_multiple_agg("SELECT array_append(arrf, f) FROM array_ext_ops_test;", dt);
       check_entire_float_result(rows);
     }
+
+    // upcast
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_append(arri64, i8) FROM array_ext_ops_test;", dt);
+      check_entire_integer_result(rows, inline_int_null_value<int64_t>());
+    }
+
+    // unsupported downcast
+    {
+      EXPECT_ANY_THROW(run_multiple_agg(
+          "SELECT array_append(arri32, i64) FROM array_ext_ops_test;", dt));
+    }
   }
 }
 

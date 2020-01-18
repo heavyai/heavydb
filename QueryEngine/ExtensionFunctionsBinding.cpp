@@ -32,6 +32,26 @@
 
 namespace {
 
+ExtArgumentType get_array_arg_elem_type(const ExtArgumentType ext_arg_array_type) {
+  switch (ext_arg_array_type) {
+    case ExtArgumentType::ArrayInt8:
+      return ExtArgumentType::Int8;
+    case ExtArgumentType::ArrayInt16:
+      return ExtArgumentType::Int16;
+    case ExtArgumentType::ArrayInt32:
+      return ExtArgumentType::Int32;
+    case ExtArgumentType::ArrayInt64:
+      return ExtArgumentType::Int64;
+    case ExtArgumentType::ArrayFloat:
+      return ExtArgumentType::Float;
+    case ExtArgumentType::ArrayDouble:
+      return ExtArgumentType::Double;
+    default:
+      UNREACHABLE();
+  }
+  return ExtArgumentType{};
+}
+
 static int match_arguments(const SQLTypeInfo& arg_type,
                            int sig_pos,
                            const std::vector<ExtArgumentType>& sig_types,
@@ -174,8 +194,15 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         penalty_score += 1000;
         return 2;
       } else if (is_ext_arg_type_array(stype)) {
-        penalty_score += 1000;
-        return 1;
+        // array arguments must match exactly
+        CHECK(arg_type.is_array());
+        const auto stype_ti = ext_arg_type_to_type_info(get_array_arg_elem_type(stype));
+        if (arg_type.get_elem_type().get_type() == stype_ti.get_type()) {
+          penalty_score += 1000;
+          return 1;
+        } else {
+          return -1;
+        }
       }
       break;
     case kPOLYGON:
