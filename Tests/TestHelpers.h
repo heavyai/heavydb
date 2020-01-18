@@ -44,6 +44,7 @@ void compare_array(const TargetValue& r,
   size_t ctr = 0;
   for (const ScalarTargetValue scalar_tv : scalar_tv_vector) {
     auto p = boost::get<T>(&scalar_tv);
+    CHECK(p);
     if (tol < 0.) {
       ASSERT_EQ(*p, arr[ctr++]);
     } else {

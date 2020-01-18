@@ -62,12 +62,16 @@ const char* array_ext_ops_schema = R"(
         i32 INT,
         i16 SMALLINT,
         i8 TINYINT,
+        d DOUBLE,
+        f FLOAT,
         i1 BOOLEAN,
         str TEXT ENCODING DICT(32),
         arri64 BIGINT[],
         arri32 INT[],
         arri16 SMALLINT[],
         arri8 TINYINT[],
+        arrd DOUBLE[],
+        arrf FLOAT[],
         arri1 BOOLEAN[],
         arrstr TEXT[]
     );
@@ -84,8 +88,12 @@ class ArrayExtOpsEnv : public ::testing::Test {
                          3,
                          3,
                          3,
+                         3,
+                         3,
                          "'true'",
                          "'c'",
+                         "{1, 2}",
+                         "{1, 2}",
                          "{1, 2}",
                          "{1, 2}",
                          "{1, 2}",
@@ -93,10 +101,26 @@ class ArrayExtOpsEnv : public ::testing::Test {
                          "{'true', 'false'}",
                          "{'a', 'b'}"),
                      ExecutorDeviceType::CPU);
-    run_multiple_agg(
-        gen(1, 1, 1, 1, "'false'", "'a'", "{}", "{}", "{}", "{}", "{}", "{}"),
-        ExecutorDeviceType::CPU);
+    run_multiple_agg(gen(1,
+                         1,
+                         1,
+                         1,
+                         1,
+                         1,
+                         "'false'",
+                         "'a'",
+                         "{}",
+                         "{}",
+                         "{}",
+                         "{}",
+                         "{}",
+                         "{}",
+                         "{}",
+                         "{}"),
+                     ExecutorDeviceType::CPU);
     run_multiple_agg(gen(0,
+                         0,
+                         0,
                          0,
                          0,
                          0,
@@ -106,18 +130,38 @@ class ArrayExtOpsEnv : public ::testing::Test {
                          "{-1}",
                          "{-1}",
                          "{-1}",
+                         "{-1}",
+                         "{-1}",
                          "{'true'}",
                          "{'z'}"),
                      ExecutorDeviceType::CPU);
-    run_multiple_agg(
-        gen(0, 0, 0, 0, "'false'", "'a'", "NULL", "NULL", "NULL", "NULL", "NULL", "NULL"),
-        ExecutorDeviceType::CPU);
+    run_multiple_agg(gen(0,
+                         0,
+                         0,
+                         0,
+                         0,
+                         0,
+                         "'false'",
+                         "'a'",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL"),
+                     ExecutorDeviceType::CPU);
     run_multiple_agg(gen("NULL",
                          "NULL",
                          "NULL",
                          "NULL",
                          "NULL",
                          "NULL",
+                         "NULL",
+                         "NULL",
+                         "{4, 5}",
+                         "{4, 5}",
                          "{4, 5}",
                          "{4, 5}",
                          "{4, 5}",
@@ -126,6 +170,10 @@ class ArrayExtOpsEnv : public ::testing::Test {
                          "{'d', 'e'}"),
                      ExecutorDeviceType::CPU);
     run_multiple_agg(gen("NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
+                         "NULL",
                          "NULL",
                          "NULL",
                          "NULL",
@@ -155,7 +203,8 @@ TEST_F(ArrayExtOpsEnv, ArrayAppend) {
       compare_array(crt_row[0], expected);
     };
 
-    auto check_entire_integer_result = [&check_row_result](const auto& rows) {
+    auto check_entire_integer_result = [&check_row_result](const auto& rows,
+                                                           const int64_t null_sentinel) {
       ASSERT_EQ(rows->rowCount(), size_t(6));
 
       check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{1, 2, 3});
@@ -163,23 +212,76 @@ TEST_F(ArrayExtOpsEnv, ArrayAppend) {
       check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{-1, 0});
       check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{0});
       check_row_result(rows->getNextRow(true, true),
-                       std::vector<int64_t>{4, 5, inline_int_null_value<int64_t>()});
-      check_row_result(rows->getNextRow(true, true),
-                       std::vector<int64_t>{inline_int_null_value<int64_t>()});
+                       std::vector<int64_t>{4, 5, null_sentinel});
+      check_row_result(rows->getNextRow(true, true), std::vector<int64_t>{null_sentinel});
     };
 
     // i64
     {
       const auto rows = run_multiple_agg(
           "SELECT array_append(arri64, i64) FROM array_ext_ops_test;", dt);
-      check_entire_integer_result(rows);
+      check_entire_integer_result(rows, inline_int_null_value<int64_t>());
     }
 
     // i32
     {
       const auto rows = run_multiple_agg(
           "SELECT array_append(arri32, i32) FROM array_ext_ops_test;", dt);
-      check_entire_integer_result(rows);
+      check_entire_integer_result(rows, inline_int_null_value<int32_t>());
+    }
+
+    // i16
+    {
+      const auto rows = run_multiple_agg(
+          "SELECT array_append(arri16, i16) FROM array_ext_ops_test;", dt);
+      check_entire_integer_result(rows, inline_int_null_value<int16_t>());
+    }
+
+    // i8
+    {
+      const auto rows =
+          run_multiple_agg("SELECT array_append(arri8, i8) FROM array_ext_ops_test;", dt);
+      check_entire_integer_result(rows, inline_int_null_value<int8_t>());
+    }
+
+    auto check_entire_double_result = [&check_row_result](const auto& rows) {
+      ASSERT_EQ(rows->rowCount(), size_t(6));
+
+      check_row_result(rows->getNextRow(true, true), std::vector<double>{1, 2, 3});
+      check_row_result(rows->getNextRow(true, true), std::vector<double>{1});
+      check_row_result(rows->getNextRow(true, true), std::vector<double>{-1, 0});
+      check_row_result(rows->getNextRow(true, true), std::vector<double>{0});
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<double>{4, 5, inline_fp_null_value<double>()});
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<double>{inline_fp_null_value<double>()});
+    };
+
+    // double
+    {
+      const auto rows =
+          run_multiple_agg("SELECT array_append(arrd, d) FROM array_ext_ops_test;", dt);
+      check_entire_double_result(rows);
+    }
+
+    auto check_entire_float_result = [&check_row_result](const auto& rows) {
+      ASSERT_EQ(rows->rowCount(), size_t(6));
+
+      check_row_result(rows->getNextRow(true, true), std::vector<float>{1, 2, 3});
+      check_row_result(rows->getNextRow(true, true), std::vector<float>{1});
+      check_row_result(rows->getNextRow(true, true), std::vector<float>{-1, 0});
+      check_row_result(rows->getNextRow(true, true), std::vector<float>{0});
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<float>{4, 5, inline_fp_null_value<float>()});
+      check_row_result(rows->getNextRow(true, true),
+                       std::vector<float>{inline_fp_null_value<float>()});
+    };
+
+    // float
+    {
+      const auto rows =
+          run_multiple_agg("SELECT array_append(arrf, f) FROM array_ext_ops_test;", dt);
+      check_entire_float_result(rows);
     }
   }
 }
