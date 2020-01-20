@@ -46,7 +46,7 @@ class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
 
   void createDictionaryEncodedColumn(StringDictionary* dict,
                                      const ColumnDescriptor& c,
-                                     std::vector<ArrowFragment> &col,
+                                     std::vector<ArrowFragment>& col,
                                      arrow::ChunkedArray* clp,
                                      std::shared_ptr<arrow::internal::TaskGroup> tg,
                                      const std::vector<std::pair<int, int>>& fragments,
@@ -207,30 +207,27 @@ void ArrowCsvForeignStorage::prepareTable(const int db_id,
 void ArrowCsvForeignStorage::createDictionaryEncodedColumn(
     StringDictionary* dict,
     const ColumnDescriptor& c,
-    std::vector<ArrowFragment> &col,
+    std::vector<ArrowFragment>& col,
     arrow::ChunkedArray* clp,
     std::shared_ptr<arrow::internal::TaskGroup> tg,
     const std::vector<std::pair<int, int>>& fragments,
     ChunkKey key,
     Data_Namespace::AbstractBufferMgr* mgr) {
-  auto empty = clp->null_count() == clp->length();
+  tg->Append([dict, &c, &col, clp, tg, &fragments, key, mgr]() mutable {
+    auto empty = clp->null_count() == clp->length();
 
-  for (size_t f = 0; f < fragments.size(); f++) {
-    key[3] = f;
-    auto& frag = col[f];
-    frag.chunks.resize(fragments[f].second - fragments[f].first);
-    int64_t varlen = 0;
-    auto b = mgr->createBuffer(key);
-    b->sql_type = c.columnType;
-    b->encoder.reset(Encoder::Create(b, c.columnType));
-    b->has_encoder = true;
-    tg->Append([clp,
-                dict,
-                empty,
-                frag = &frag,
-                begin = fragments[f].first,
-                end = fragments[f].second,
-                buffer = b]() {
+    auto rtg = tg->MakeSerial();
+
+    for (size_t f = 0; f < fragments.size(); f++) {
+      key[3] = f;
+      auto& frag = col[f];
+      frag.chunks.resize(fragments[f].second - fragments[f].first);
+      auto b = mgr->createBuffer(key);
+      b->sql_type = c.columnType;
+      b->encoder.reset(Encoder::Create(b, c.columnType));
+      b->has_encoder = true;
+      auto begin = fragments[f].first;
+      auto end = fragments[f].second;
       for (int i = begin; i < end; i++) {
         auto stringArray = std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
         std::vector<std::string> strings(stringArray->length());
@@ -251,20 +248,19 @@ void ArrowCsvForeignStorage::createDictionaryEncodedColumn(
         auto indexArray =
             std::make_shared<arrow::Int32Array>(stringArray->length(), indices_buf);
 
-        frag->chunks[i - begin] = ARROW_GET_DATA(indexArray);
-        frag->sz += stringArray->length();
+        frag.chunks[i - begin] = ARROW_GET_DATA(indexArray);
+        frag.sz += stringArray->length();
 
-        auto len = frag->chunks[i - begin]->length;
-        auto data = frag->chunks[i - begin]->buffers[1]->data();
-        buffer->encoder->updateStats((const int8_t*)data, len);
+        auto len = frag.chunks[i - begin]->length;
+        auto data = frag.chunks[i - begin]->buffers[1]->data();
+        b->encoder->updateStats((const int8_t*)data, len);
       }
 
-      buffer->setSize(frag->sz * buffer->sql_type.get_size());
-      buffer->encoder->setNumElems(frag->sz);
-
-      return arrow::Status::OK();
-    });
-  }
+      b->setSize(frag.sz * b->sql_type.get_size());
+      b->encoder->setNumElems(frag.sz);
+    }
+    return arrow::Status::OK();
+  });
 }
 
 void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
