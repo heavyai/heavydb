@@ -19,6 +19,24 @@
 #include <limits>
 #include <type_traits>
 
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
+#define DEVICE __device__
+#else
+#define DEVICE
+#endif
+
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
+#define NEVER_INLINE
+#else
+#define NEVER_INLINE __attribute__((noinline))
+#endif
+
+#if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
+#define ALWAYS_INLINE
+#else
+#define ALWAYS_INLINE __attribute__((always_inline))
+#endif
+
 #define EXTENSION_INLINE extern "C" ALWAYS_INLINE DEVICE
 #define EXTENSION_NOINLINE extern "C" NEVER_INLINE DEVICE
 
@@ -42,7 +60,7 @@ struct Array {
   }
 
   DEVICE T operator()(const unsigned int index) const {
-    if (index < size)
+    if (index < static_cast<unsigned int>(size))
       return ptr[index];
     else
       return 0;  // see array_at
