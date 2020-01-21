@@ -810,12 +810,7 @@ std::vector<std::pair<void*, void*>> Executor::optimizeAndCodegenGPU(
          ++it) {
       if (llvm::isa<llvm::CallInst>(*it)) {
         auto& get_gv_call = llvm::cast<llvm::CallInst>(*it);
-        if (get_gv_call.getCalledFunction()->getName() == "get_group_value" ||
-            get_gv_call.getCalledFunction()->getName() ==
-                "get_group_value_with_watchdog" ||
-            get_gv_call.getCalledFunction()->getName() ==
-                "get_matching_group_value_perfect_hash" ||
-            get_gv_call.getCalledFunction()->getName() == "array_size" ||
+        if (get_gv_call.getCalledFunction()->getName() == "array_size" ||
             get_gv_call.getCalledFunction()->getName() == "linear_probabilistic_count") {
           mark_function_never_inline(cgen_state_->row_func_);
           row_func_not_inlined = true;
