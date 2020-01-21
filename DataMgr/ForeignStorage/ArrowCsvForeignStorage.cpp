@@ -216,16 +216,84 @@ void ArrowCsvForeignStorage::createDictionaryEncodedColumn(
   tg->Append([dict, &c, &col, clp, tg, &fragments, key, mgr]() mutable {
     auto empty = clp->null_count() == clp->length();
 
-    auto rtg = tg->MakeSerial();
+    auto subg = tg->MakeSubGroup();
+    std::vector<std::vector<std::string>> bulk_array(fragments.size());
 
     for (size_t f = 0; f < fragments.size(); f++) {
-      key[3] = f;
-      auto& frag = col[f];
-      frag.chunks.resize(fragments[f].second - fragments[f].first);
-      auto b = mgr->createBuffer(key);
-      b->sql_type = c.columnType;
-      b->encoder.reset(Encoder::Create(b, c.columnType));
-      b->has_encoder = true;
+      auto begin = fragments[f].first;
+      auto end = fragments[f].second;
+      subg->Append([&bulk_array, f, begin, end, empty, clp]() {
+        size_t bulk_size = 0;
+        for (int i = begin; i < end; i++) {
+          auto stringArray = std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
+          bulk_size += stringArray->length();
+        }
+        bulk_array[f] = std::vector<std::string>(bulk_size);
+        size_t current_ind = 0;
+        for (int i = begin; i < end; i++) {
+          auto stringArray = std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
+          for (int i = 0; i < stringArray->length(); i++) {
+            if (stringArray->IsNull(i) || empty ||
+                stringArray->null_count() == stringArray->length()) {
+              bulk_array[f][current_ind] = "";
+            } else {
+              bulk_array[f][current_ind] = stringArray->GetString(i);
+            }
+            current_ind++;
+          }
+        }
+        return arrow::Status::OK();
+      });
+    }
+
+    ARROW_THROW_NOT_OK(subg->Finish());
+
+    std::vector<std::vector<int>> indexes_bulk_array;
+    dict->getOrAddBulkArray(bulk_array, indexes_bulk_array);
+
+    for (size_t f = 0; f < fragments.size(); f++) {
+      auto begin = fragments[f].first;
+      auto end = fragments[f].second;
+      tg->Append([key, f, &col, begin, end, mgr, &c, clp, &indexes_bulk_array]() mutable {
+        key[3] = f;
+        auto& frag = col[f];
+        frag.chunks.resize(end - begin);
+        auto b = mgr->createBuffer(key);
+        b->sql_type = c.columnType;
+        b->encoder.reset(Encoder::Create(b, c.columnType));
+        b->has_encoder = true;
+        size_t current_ind = 0;
+        for (int i = begin; i < end; i++) {
+          auto stringArray = std::static_pointer_cast<arrow::StringArray>(clp->chunk(i));
+          std::shared_ptr<arrow::Buffer> indices_buf;
+          RETURN_NOT_OK(arrow::AllocateBuffer(stringArray->length() * sizeof(int32_t),
+                                              &indices_buf));
+
+          auto raw_data = reinterpret_cast<int*>(indices_buf->mutable_data());
+
+          std::copy(indexes_bulk_array[f].begin() + current_ind,
+                    indexes_bulk_array[f].begin() + current_ind + stringArray->length(),
+                    raw_data);
+
+          auto indexArray =
+              std::make_shared<arrow::Int32Array>(stringArray->length(), indices_buf);
+
+          frag.chunks[i - begin] = ARROW_GET_DATA(indexArray);
+          frag.sz += stringArray->length();
+          current_ind += stringArray->length();
+
+          auto len = frag.chunks[i - begin]->length;
+          auto data = frag.chunks[i - begin]->buffers[1]->data();
+          b->encoder->updateStats((const int8_t*)data, len);
+        }
+
+        b->setSize(frag.sz * b->sql_type.get_size());
+        b->encoder->setNumElems(frag.sz);
+        return arrow::Status::OK();
+      });
+    }
+
+    for (size_t f = 0; f < fragments.size(); f++) {
       auto begin = fragments[f].first;
       auto end = fragments[f].second;
       for (int i = begin; i < end; i++) {
@@ -240,24 +308,7 @@ void ArrowCsvForeignStorage::createDictionaryEncodedColumn(
           }
         }
         CHECK(dict);
-        std::shared_ptr<arrow::Buffer> indices_buf;
-        RETURN_NOT_OK(
-            arrow::AllocateBuffer(stringArray->length() * sizeof(int32_t), &indices_buf));
-        dict->getOrAddBulk(strings,
-                           reinterpret_cast<int32_t*>(indices_buf->mutable_data()));
-        auto indexArray =
-            std::make_shared<arrow::Int32Array>(stringArray->length(), indices_buf);
-
-        frag.chunks[i - begin] = ARROW_GET_DATA(indexArray);
-        frag.sz += stringArray->length();
-
-        auto len = frag.chunks[i - begin]->length;
-        auto data = frag.chunks[i - begin]->buffers[1]->data();
-        b->encoder->updateStats((const int8_t*)data, len);
       }
-
-      b->setSize(frag.sz * b->sql_type.get_size());
-      b->encoder->setNumElems(frag.sz);
     }
     return arrow::Status::OK();
   });
