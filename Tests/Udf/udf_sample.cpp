@@ -2,6 +2,8 @@
 #include <limits>
 #include <type_traits>
 
+#include "../../QueryEngine/OmniSciTypes.h"
+
 #if defined(__clang__) && defined(__CUDA__) && defined(__CUDA_ARCH__)
 #define DEVICE __device__
 #else
@@ -25,29 +27,6 @@
 #define EXTENSION_INLINE extern "C" ALWAYS_INLINE DEVICE
 
 // use std::size_t;
-
-template <typename T>
-struct Array {
-  T* ptr;
-  std::size_t sz;
-  bool is_null;
-
-  DEVICE T operator()(const std::size_t index) {
-    if (index < sz)
-      return ptr[index];
-    else
-      return 0;  // see array_at
-  }
-
-  DEVICE std::size_t getSize() const { return sz; }
-
-  DEVICE bool isNull() const { return is_null; }
-
-  DEVICE constexpr inline T null_value() {
-    return std::is_signed<T>::value ? std::numeric_limits<T>::min()
-                                    : std::numeric_limits<T>::max();
-  }
-};
 
 EXTENSION_NOINLINE
 bool array_is_null_double(Array<double> arr) {

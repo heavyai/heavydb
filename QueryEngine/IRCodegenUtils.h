@@ -18,7 +18,10 @@
 
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Module.h>
 #include <llvm/IR/Type.h>
+#include <llvm/Support/raw_os_ostream.h>
+
 #include "Shared/Logger.h"
 
 inline llvm::ArrayType* get_int_array_type(int const width,
@@ -119,6 +122,12 @@ inline llvm::ConstantInt* ll_bool(const bool v, llvm::LLVMContext& context) {
 llvm::Module* read_template_module(llvm::LLVMContext& context);
 
 template <class T>
-std::string serialize_llvm_object(const T* llvm_obj);
+std::string serialize_llvm_object(const T* llvm_obj) {
+  std::stringstream ss;
+  llvm::raw_os_ostream os(ss);
+  llvm_obj->print(os);
+  os.flush();
+  return ss.str();
+}
 
 void verify_function_ir(const llvm::Function* func);

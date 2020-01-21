@@ -493,17 +493,29 @@ llvm::StructType* CodeGenerator::createArrayStructType(const std::string& ext_fu
                                                        llvm::Type* array_buff_type,
                                                        size_t param_num) {
   llvm::Function* udf_func = cgen_state_->module_->getFunction(ext_func_name);
+  CHECK(array_buff_type);
+  CHECK(array_buff_type->isPointerTy());
+
   llvm::StructType* array_type{nullptr};
   if (udf_func) {
-    // TODO: Ensure the user defined function signature matches the expected type of the
-    // array struct
+    // Compare expected array struct type with type from the function definition from the
+    // UDF module
     llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
     CHECK_LE(param_num, udf_func_type->getNumParams());
     llvm::Type* param_type = udf_func_type->getParamType(param_num);
     CHECK(param_type->isPointerTy());
     llvm::Type* struct_type = param_type->getPointerElementType();
     CHECK(struct_type->isStructTy());
-    CHECK_EQ(struct_type->getStructNumElements(), size_t(3));
+    CHECK_GE(struct_type->getStructNumElements(), size_t(3))
+        << serialize_llvm_object(struct_type);
+
+    const auto expected_arr_struct_type =
+        get_arr_struct_type(cgen_state_, array_buff_type);
+    const auto expected_elems = expected_arr_struct_type->elements();
+    const auto current_elems = expected_arr_struct_type->elements();
+    for (size_t i = 0; i < expected_elems.size(); i++) {
+      CHECK_EQ(expected_elems[i], current_elems[i]);
+    }
 
     if (llvm::cast<llvm::StructType>(struct_type)->isLiteral()) {
       return llvm::cast<llvm::StructType>(struct_type);
@@ -513,8 +525,6 @@ llvm::StructType* CodeGenerator::createArrayStructType(const std::string& ext_fu
     array_type = cgen_state_->module_->getTypeByName(struct_name);
   } else {
     // Generate struct type
-    CHECK(array_buff_type);
-    CHECK(array_buff_type->isPointerTy());
     return get_arr_struct_type(cgen_state_, array_buff_type);
   }
 

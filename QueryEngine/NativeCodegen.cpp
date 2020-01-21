@@ -125,24 +125,6 @@ void optimize_ir(llvm::Function* query_func,
 
 }  // namespace
 
-template <class T>
-std::string serialize_llvm_object(const T* llvm_obj) {
-  std::stringstream ss;
-  llvm::raw_os_ostream os(ss);
-  llvm_obj->print(os);
-  os.flush();
-  return ss.str();
-}
-
-template <>
-std::string serialize_llvm_object(const llvm::Module* module) {
-  std::stringstream ss;
-  llvm::raw_os_ostream os(ss);
-  module->print(os, nullptr);
-  os.flush();
-  return ss.str();
-}
-
 ExecutionEngineWrapper::ExecutionEngineWrapper() {}
 
 ExecutionEngineWrapper::ExecutionEngineWrapper(llvm::ExecutionEngine* execution_engine)
