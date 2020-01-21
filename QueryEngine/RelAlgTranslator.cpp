@@ -945,14 +945,23 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateUnlikely(
   return makeExpr<Analyzer::LikelihoodExpr>(arg, 0.0625);
 }
 
+namespace {
+
+inline void validate_datetime_datepart_argument(
+    const std::shared_ptr<Analyzer::Constant> literal_expr) {
+  if (!literal_expr || literal_expr->get_is_null()) {
+    throw std::runtime_error("The 'DatePart' argument must be a not 'null' literal.");
+  }
+}
+
+}  // namespace
+
 std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateExtract(
     const RexFunctionOperator* rex_function) const {
   CHECK_EQ(size_t(2), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
   const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
-  if (!timeunit_lit || timeunit_lit->get_is_null()) {
-    throw std::runtime_error("The time unit parameter must be a literal.");
-  }
+  validate_datetime_datepart_argument(timeunit_lit);
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
   const bool is_date_trunc = rex_function->getName() == "PG_DATE_TRUNC"sv;
   if (is_date_trunc) {
@@ -1011,11 +1020,13 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDateadd(
   CHECK_EQ(size_t(3), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
   const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
-  if (!timeunit_lit || timeunit_lit->get_is_null()) {
-    throw std::runtime_error("The time unit parameter must be a literal.");
-  }
-
+  validate_datetime_datepart_argument(timeunit_lit);
   const auto number_units = translateScalarRex(rex_function->getOperand(1));
+  const auto number_units_const =
+      std::dynamic_pointer_cast<Analyzer::Constant>(number_units);
+  if (number_units_const && number_units_const->get_is_null()) {
+    throw std::runtime_error("The 'Interval' argument literal must not be 'null'.");
+  }
   auto cast_number_units = number_units->add_cast(SQLTypeInfo(kBIGINT, false));
   const auto datetime = translateScalarRex(rex_function->getOperand(2));
   const auto& datetime_ti = datetime->get_type_info();
@@ -1154,9 +1165,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatediff(
   CHECK_EQ(size_t(3), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
   const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
-  if (!timeunit_lit || timeunit_lit->get_is_null()) {
-    throw std::runtime_error("The time unit parameter must be a literal.");
-  }
+  validate_datetime_datepart_argument(timeunit_lit);
   const auto start = translateScalarRex(rex_function->getOperand(1));
   const auto end = translateScalarRex(rex_function->getOperand(2));
   const auto field = to_datediff_field(*timeunit_lit->get_constval().stringval);
@@ -1168,9 +1177,7 @@ std::shared_ptr<Analyzer::Expr> RelAlgTranslator::translateDatepart(
   CHECK_EQ(size_t(2), rex_function->size());
   const auto timeunit = translateScalarRex(rex_function->getOperand(0));
   const auto timeunit_lit = std::dynamic_pointer_cast<Analyzer::Constant>(timeunit);
-  if (!timeunit_lit || timeunit_lit->get_is_null()) {
-    throw std::runtime_error("The time unit parameter must be a literal.");
-  }
+  validate_datetime_datepart_argument(timeunit_lit);
   const auto from_expr = translateScalarRex(rex_function->getOperand(1));
   return ExtractExpr::generate(
       from_expr, to_datepart_field(*timeunit_lit->get_constval().stringval));

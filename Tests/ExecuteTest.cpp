@@ -8888,6 +8888,8 @@ TEST(Select, TimestampPrecision) {
             "SELECT DATEADD('nanosecond', 1000000875, m_9) FROM test limit 1;", dt)));
     EXPECT_ANY_THROW(
         run_simple_agg("SELECT DATEADD(NULL, NULL, m_9) FROM test LIMIT 1;", dt));
+    EXPECT_ANY_THROW(run_simple_agg(
+        "SELECT DATEADD('microsecond', NULL, m_9) FROM test LIMIT 1;", dt));
     /* ---DATE DIFF --- */
     ASSERT_EQ(1146023344607435125L - 931701773874533000L,
               v<int64_t>(run_simple_agg(
