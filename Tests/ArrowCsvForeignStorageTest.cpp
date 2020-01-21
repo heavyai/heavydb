@@ -58,7 +58,7 @@ TargetValue run_simple_agg(const string& query_str) {
 }
 
 const char* trips_table_ddl = R"( 
-trips (
+CREATE TEMPORARY TABLE trips (
 trip_id BIGINT,
 vendor_id TEXT ENCODING NONE,
 pickup_datetime TIMESTAMP,
@@ -81,7 +81,7 @@ improvement_surcharge DOUBLE,
 total_amount DOUBLE,
 payment_type TEXT ENCODING DICT,
 trip_type BIGINT,
-pickup TEXT ENCODING NONE,
+pickup TEXT ENCODING DICT,
 dropoff TEXT ENCODING NONE,
 cab_type TEXT ENCODING DICT,
 precipitation DOUBLE,
@@ -116,7 +116,7 @@ class NycTaxiTest : public ::testing::Test {
  protected:
   void SetUp() override {
     ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
-    ASSERT_NO_THROW(run_ddl_statement("CREATE TABLE " + std::string(trips_table_ddl)));
+    ASSERT_NO_THROW(run_ddl_statement(trips_table_ddl));
   }
 
   void TearDown() override {
@@ -125,30 +125,20 @@ class NycTaxiTest : public ::testing::Test {
 };
 
 TEST_F(NycTaxiTest, RunSimpleQuery) {
-  std::shared_ptr<ResultSet> res;
+  // TODO: expect +1 rows when move to arrow 0.15 as current arrow doesn't support
+  // headerless csv
   ASSERT_EQ(999,
             v<int64_t>(run_simple_agg(
                 "SELECT count(vendor_id) FROM trips where vendor_id < '5'")));
 }
 
-class NycTaxiTemporaryTest : public ::testing::Test {
- protected:
-  void SetUp() override {
-    ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
-    ASSERT_NO_THROW(
-        run_ddl_statement("CREATE TEMPORARY TABLE " + std::string(trips_table_ddl)));
-  }
-
-  void TearDown() override {
-    ASSERT_NO_THROW(run_ddl_statement("drop table if exists trips;"););
-  }
-};
-
-TEST_F(NycTaxiTemporaryTest, RunSimpleQuery) {
-  std::shared_ptr<ResultSet> res;
-  ASSERT_EQ(999,
-            v<int64_t>(run_simple_agg(
-                "SELECT count(vendor_id) FROM trips where vendor_id < '5'")));
+TEST_F(NycTaxiTest, GroupByColumnWithNulls) {
+  // TODO: expect +1 rows when move to arrow 0.15 as current arrow doesn't support
+  // headerless csv
+  ASSERT_EQ(
+      619,
+      v<int64_t>(run_simple_agg(
+          " select count(*) from (select pickup, count(*) from trips group by pickup)")));
 }
 
 }  // namespace

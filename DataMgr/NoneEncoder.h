@@ -114,6 +114,8 @@ class NoneEncoder : public Encoder {
         decimal_overflow_validator_.validate(data);
         dataMin = std::min(dataMin, data);
         dataMax = std::max(dataMax, data);
+      } else {
+        has_nulls = true;
       }
     }
   }
