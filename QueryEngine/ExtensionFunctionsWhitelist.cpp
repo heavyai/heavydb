@@ -19,6 +19,7 @@
 #include <boost/algorithm/string/join.hpp>
 #include <iostream>
 
+#include "QueryEngine/ExtensionFunctionsBinding.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryEngine/TableFunctions/TableFunctionsFactory.h"
 #include "Shared/StringTransform.h"
@@ -278,12 +279,7 @@ std::vector<std::string> ExtensionFunctionsWhitelist::getLLVMDeclarations(
       std::string decl_prefix;
       std::vector<std::string> arg_strs;
 
-      if (signature.getRet() == ExtArgumentType::ArrayInt64 ||
-          signature.getRet() == ExtArgumentType::ArrayInt32 ||
-          signature.getRet() == ExtArgumentType::ArrayInt16 ||
-          signature.getRet() == ExtArgumentType::ArrayInt8 ||
-          signature.getRet() == ExtArgumentType::ArrayFloat ||
-          signature.getRet() == ExtArgumentType::ArrayDouble) {
+      if (is_ext_arg_type_array(signature.getRet())) {
         decl_prefix = "declare void @" + signature.getName();
         arg_strs.emplace_back(serialize_type(signature.getRet()));
       } else {
