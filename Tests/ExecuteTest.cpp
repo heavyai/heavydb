@@ -6143,6 +6143,26 @@ TEST(Select, GpuSort) {
   }
 }
 
+TEST(Select, GroupByPerfectHash) {
+  // TODO(Saman): add more systematic tests for single-column perfect hash
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT str, x FROM test GROUP BY x, str ORDER BY str, x;", dt);
+    c("SELECT str, x, MAX(smallint_nulls), AVG(y), COUNT(dn) FROM test GROUP BY x, "
+      "str ORDER BY str, x;",
+      dt);
+    c("SELECT str, x, MAX(smallint_nulls), COUNT(dn), COUNT(*) as cnt FROM test GROUP BY "
+      "x, str ORDER BY cnt, str;",
+      dt);
+    c("SELECT x, str, z, SUM(dn), MAX(dn), AVG(dn) FROM test GROUP BY x, str, "
+      "z ORDER BY str, z, x;",
+      dt);
+    c("SELECT x, SUM(dn), str, MAX(dn), z, AVG(dn), COUNT(*) FROM test GROUP BY z, x, "
+      "str ORDER BY str, z, x;",
+      dt);
+  }
+}
+
 TEST(Select, GroupByBaselineHash) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
