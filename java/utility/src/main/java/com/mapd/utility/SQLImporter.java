@@ -535,16 +535,16 @@ public class SQLImporter {
       boolean match = false;
       switch (srcType) {
         case java.sql.Types.TINYINT:
-          match = dstType == TDatumType.TINYINT;
-          break;
+          match |= dstType == TDatumType.TINYINT;
+          // NOTE: it's okay to import smaller type to a bigger one,
+          // so we just fall through and try to match the next type.
+          // But the order of case statements is important here!
         case java.sql.Types.SMALLINT:
-          match = dstType == TDatumType.SMALLINT;
-          break;
+          match |= dstType == TDatumType.SMALLINT;
         case java.sql.Types.INTEGER:
-          match = dstType == TDatumType.INT;
-          break;
+          match |= dstType == TDatumType.INT;
         case java.sql.Types.BIGINT:
-          match = dstType == TDatumType.BIGINT;
+          match |= dstType == TDatumType.BIGINT;
           break;
         case java.sql.Types.DECIMAL:
         case java.sql.Types.NUMERIC:
@@ -553,10 +553,10 @@ public class SQLImporter {
           break;
         case java.sql.Types.FLOAT:
         case java.sql.Types.REAL:
-          match = dstType == TDatumType.FLOAT;
-          break;
+          match |= dstType == TDatumType.FLOAT;
+          // Fall through and try double
         case java.sql.Types.DOUBLE:
-          match = dstType == TDatumType.DOUBLE;
+          match |= dstType == TDatumType.DOUBLE;
           break;
         case java.sql.Types.TIME:
           match = dstType == TDatumType.TIME;
