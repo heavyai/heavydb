@@ -84,6 +84,19 @@ int8_t array_at_int64_is_null(Array<int64_t> arr, std::size_t idx) {
 }
 
 EXTENSION_NOINLINE
+Array<double> array_ret_udf(const Array<int32_t> arr, double multiplier) {
+  Array<double> ret(arr.getSize());
+  for (int64_t i = 0; i < arr.getSize(); i++) {
+    if (arr(i) == arr.null_value()) {
+      ret[i] = ret.null_value();
+    } else {
+      ret[i] = static_cast<double>(arr(i)) * multiplier;
+    }
+  }
+  return ret;
+}
+
+EXTENSION_NOINLINE
 int32_t udf_diff(const int32_t x, const int32_t y) {
   return x - y;
 }

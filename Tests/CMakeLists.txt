@@ -4,6 +4,8 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 set(TEST_BASE_PATH "./tmp")
 add_definitions("-DBASE_PATH=\"${TEST_BASE_PATH}\"")
 
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Udf/udf_sample.cpp DESTINATION ${CMAKE_BINARY_DIR}/Tests/Udf)
+
 add_executable(CodeGeneratorTest CodeGeneratorTest.cpp)
 add_executable(ExecuteTest ExecuteTest.cpp ClusterTester.cpp)
 add_executable(RunQueryLoop RunQueryLoop.cpp)

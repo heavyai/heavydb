@@ -419,10 +419,6 @@ class CodeGenerator {
   llvm::Value* codegenFunctionOperNullArg(const Analyzer::FunctionOper*,
                                           const std::vector<llvm::Value*>&);
 
-  llvm::StructType* createArrayStructType(const std::string& udf_func_name,
-                                          llvm::Type* array_buff_type,
-                                          size_t param_num);
-
   llvm::Value* codegenCompression(const SQLTypeInfo& type_info);
 
   std::pair<llvm::Value*, llvm::Value*> codegenArrayBuff(llvm::Value* chunk,

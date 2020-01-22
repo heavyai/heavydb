@@ -63,7 +63,7 @@ class ExtensionFunctionSignatureParser {
     FileReader fileReader = new FileReader(file);
     BufferedReader bufferedReader = new BufferedReader(fileReader);
     String line;
-    Pattern s = Pattern.compile("([:\\w]+) ([:\\w]+)(?:\\(\\))?\\((.*)\\)");
+    Pattern s = Pattern.compile("([<>:\\w]+) ([:\\w]+)(?:\\(\\))?\\((.*)\\)");
     Map<String, ExtensionFunction> sigs = new HashMap<String, ExtensionFunction>();
     while ((line = bufferedReader.readLine()) != null) {
       Matcher m = s.matcher(line);

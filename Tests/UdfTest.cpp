@@ -454,6 +454,26 @@ TEST_F(UDFCompilerTest, UdfQuery) {
         0,
         v<int64_t>(run_simple_agg(
             "select multipolygon_output_srid(p) from geo_mpoly WHERE id = 0;", dt)));
+
+    {
+      auto check_row_result = [](const auto& crt_row, const auto& expected) {
+        compare_array(crt_row[0], expected);
+      };
+
+      const auto rows = run_multiple_agg(
+          "SELECT array_ret_udf(pay_by_quarter, CAST(1.2 AS DOUBLE)) FROM sal_emp;", dt);
+      ASSERT_EQ(rows->rowCount(), size_t(4));
+      check_row_result(rows->getNextRow(false, false),
+                       std::vector<double>{6000, 7200, 8400, 9600});
+      check_row_result(rows->getNextRow(false, false),
+                       std::vector<double>{3600, 4200, 4800, 5160});
+      check_row_result(rows->getNextRow(false, false), std::vector<double>{});
+      check_row_result(rows->getNextRow(false, false),
+                       std::vector<double>{8400,
+                                           inline_fp_null_value<double>(),
+                                           inline_fp_null_value<double>(),
+                                           10800});
+    }
   }
 
   EXPECT_THROW(run_simple_agg("SELECT udf_range_integer(high_p, low_p) from stocks where "

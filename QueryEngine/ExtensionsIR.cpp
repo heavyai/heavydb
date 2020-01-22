@@ -28,12 +28,48 @@ extern std::unique_ptr<llvm::Module> udf_cpu_module;
 
 namespace {
 
-llvm::StructType* get_arr_struct_type(CgenState* cgen_state, llvm::Type* array_type) {
-  return llvm::StructType::get(cgen_state->context_,
-                               {array_type,
-                                llvm::Type::getInt64Ty(cgen_state->context_),
-                                llvm::Type::getInt8Ty(cgen_state->context_)},
-                               false);
+llvm::StructType* get_arr_struct_type(CgenState* cgen_state,
+                                      const std::string& ext_func_name,
+                                      llvm::Type* array_type,
+                                      size_t param_num) {
+  llvm::Function* udf_func = cgen_state->module_->getFunction(ext_func_name);
+  CHECK(array_type);
+  CHECK(array_type->isPointerTy());
+
+  llvm::StructType* generated_struct_type =
+      llvm::StructType::get(cgen_state->context_,
+                            {array_type,
+                             llvm::Type::getInt64Ty(cgen_state->context_),
+                             llvm::Type::getInt8Ty(cgen_state->context_)},
+                            false);
+  if (udf_func) {
+    // Compare expected array struct type with type from the function definition from the
+    // UDF module, but use the type from the module
+    llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
+    CHECK_LE(param_num, udf_func_type->getNumParams());
+    llvm::Type* param_pointer_type = udf_func_type->getParamType(param_num);
+    CHECK(param_pointer_type->isPointerTy());
+    llvm::Type* param_type = param_pointer_type->getPointerElementType();
+    CHECK(param_type->isStructTy());
+    llvm::StructType* struct_type = llvm::cast<llvm::StructType>(param_type);
+    CHECK_GE(struct_type->getStructNumElements(), size_t(3))
+        << serialize_llvm_object(struct_type);
+
+    const auto expected_elems = generated_struct_type->elements();
+    const auto current_elems = struct_type->elements();
+    for (size_t i = 0; i < expected_elems.size(); i++) {
+      CHECK_EQ(expected_elems[i], current_elems[i]);
+    }
+
+    if (struct_type->isLiteral()) {
+      return struct_type;
+    }
+
+    llvm::StringRef struct_name = struct_type->getStructName();
+    return cgen_state->module_->getTypeByName(struct_name);
+  }
+
+  return generated_struct_type;
 }
 
 llvm::Type* ext_arg_type_to_llvm_type(const ExtArgumentType ext_arg_type,
@@ -233,7 +269,10 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
     // codegen array return as first arg
     ret_ty = llvm::Type::getVoidTy(cgen_state_->context_);
     const auto arr_struct_ty = get_arr_struct_type(
-        cgen_state_, get_llvm_type_from_sql_array_type(ret_ti, cgen_state_->context_));
+        cgen_state_,
+        function_oper->getName(),
+        get_llvm_type_from_sql_array_type(ret_ti, cgen_state_->context_),
+        0);
     array_ret = cgen_state_->ir_builder_.CreateAlloca(arr_struct_ty);
     args.insert(args.begin(), array_ret);
   }
@@ -273,8 +312,10 @@ CodeGenerator::beginArgsNullcheck(const Analyzer::FunctionOper* function_oper,
     if (function_oper->get_type_info().is_array()) {
       const auto arr_struct_ty =
           get_arr_struct_type(cgen_state_,
+                              function_oper->getName(),
                               get_llvm_type_from_sql_array_type(
-                                  function_oper->get_type_info(), cgen_state_->context_));
+                                  function_oper->get_type_info(), cgen_state_->context_),
+                              0);
       null_array_alloca = cgen_state_->ir_builder_.CreateAlloca(arr_struct_ty);
     }
     const auto args_notnull_lv = cgen_state_->ir_builder_.CreateNot(
@@ -321,8 +362,10 @@ llvm::Value* CodeGenerator::endArgsNullcheck(
     } else {
       const auto arr_struct_ty =
           get_arr_struct_type(cgen_state_,
+                              function_oper->getName(),
                               get_llvm_type_from_sql_array_type(
-                                  function_oper->get_type_info(), cgen_state_->context_));
+                                  function_oper->get_type_info(), cgen_state_->context_),
+                              0);
       ext_call_phi =
           cgen_state_->ir_builder_.CreatePHI(llvm::PointerType::get(arr_struct_ty, 0), 2);
 
@@ -489,49 +532,6 @@ std::pair<llvm::Value*, llvm::Value*> CodeGenerator::codegenArrayBuff(
   return std::make_pair(buff, len);
 }
 
-llvm::StructType* CodeGenerator::createArrayStructType(const std::string& ext_func_name,
-                                                       llvm::Type* array_buff_type,
-                                                       size_t param_num) {
-  llvm::Function* udf_func = cgen_state_->module_->getFunction(ext_func_name);
-  CHECK(array_buff_type);
-  CHECK(array_buff_type->isPointerTy());
-
-  llvm::StructType* array_type{nullptr};
-  if (udf_func) {
-    // Compare expected array struct type with type from the function definition from the
-    // UDF module
-    llvm::FunctionType* udf_func_type = udf_func->getFunctionType();
-    CHECK_LE(param_num, udf_func_type->getNumParams());
-    llvm::Type* param_type = udf_func_type->getParamType(param_num);
-    CHECK(param_type->isPointerTy());
-    llvm::Type* struct_type = param_type->getPointerElementType();
-    CHECK(struct_type->isStructTy());
-    CHECK_GE(struct_type->getStructNumElements(), size_t(3))
-        << serialize_llvm_object(struct_type);
-
-    const auto expected_arr_struct_type =
-        get_arr_struct_type(cgen_state_, array_buff_type);
-    const auto expected_elems = expected_arr_struct_type->elements();
-    const auto current_elems = expected_arr_struct_type->elements();
-    for (size_t i = 0; i < expected_elems.size(); i++) {
-      CHECK_EQ(expected_elems[i], current_elems[i]);
-    }
-
-    if (llvm::cast<llvm::StructType>(struct_type)->isLiteral()) {
-      return llvm::cast<llvm::StructType>(struct_type);
-    }
-
-    llvm::StringRef struct_name = struct_type->getStructName();
-    array_type = cgen_state_->module_->getTypeByName(struct_name);
-  } else {
-    // Generate struct type
-    return get_arr_struct_type(cgen_state_, array_buff_type);
-  }
-
-  CHECK(array_type);
-  return array_type;
-}
-
 void CodeGenerator::codegenArrayArgs(const std::string& ext_func_name,
                                      size_t param_num,
                                      llvm::Value* array_buf,
@@ -543,7 +543,7 @@ void CodeGenerator::codegenArrayArgs(const std::string& ext_func_name,
   CHECK(array_null);
 
   auto array_abstraction =
-      createArrayStructType(ext_func_name, array_buf->getType(), param_num);
+      get_arr_struct_type(cgen_state_, ext_func_name, array_buf->getType(), param_num);
   auto alloc_mem = cgen_state_->ir_builder_.CreateAlloca(array_abstraction);
 
   auto array_buf_ptr =
@@ -908,7 +908,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
                                           get_int_type(1, cgen_state_->context_),
                                           {orig_arg_lvs[k], posArg(arg)});
         codegenArrayArgs(ext_func_sig->getName(),
-                         k,
+                         function_oper->get_type_info().is_array() ? k + 1 : k,
                          array_buf_arg,
                          array_size_arg,
                          array_null_arg,

@@ -56,7 +56,7 @@ struct Array {
 
   DEVICE bool isNull() const { return is_null; }
 
-  DEVICE constexpr inline T null_value() {
+  DEVICE constexpr inline T null_value() const {
     return std::is_signed<T>::value ? std::numeric_limits<T>::min()
                                     : std::numeric_limits<T>::max();
   }

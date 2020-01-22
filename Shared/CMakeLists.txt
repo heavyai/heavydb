@@ -12,6 +12,8 @@ set(shared_source_files
     thread_count.cpp
 )
 
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/funcannotations.h DESTINATION ${CMAKE_BINARY_DIR}/Shared/)
+
 add_library(Shared ${shared_source_files})
 target_link_libraries(Shared ${Boost_LIBRARIES} ${GDAL_LIBRARIES})
 
