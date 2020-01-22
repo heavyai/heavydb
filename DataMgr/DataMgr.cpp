@@ -102,13 +102,17 @@ void DataMgr::populateMgrs(const MapDParameters& mapd_parameters,
   levelSizes_.push_back(1);
   size_t cpuBufferSize = mapd_parameters.cpu_buffer_mem_bytes;
   if (cpuBufferSize == 0) {  // if size is not specified
-    cpuBufferSize = getTotalSystemMemory() *
+    const auto total_system_memory = getTotalSystemMemory();
+    VLOG(1) << "Detected " << (float)total_system_memory / (1024 * 1024)
+            << "M of total system memory.";
+    cpuBufferSize = total_system_memory *
                     0.8;  // should get free memory instead of this ugly heuristic
   }
   size_t cpuSlabSize = std::min(static_cast<size_t>(1L << 32), cpuBufferSize);
   // cpuSlabSize -= cpuSlabSize % 512 == 0 ? 0 : 512 - (cpuSlabSize % 512);
   cpuSlabSize = (cpuSlabSize / 512) * 512;
   LOG(INFO) << "cpuSlabSize is " << (float)cpuSlabSize / (1024 * 1024) << "M";
+  LOG(INFO) << "memory pool for CPU is " << (float)cpuBufferSize / (1024 * 1024) << "M";
   if (hasGpus_) {
     LOG(INFO) << "reserved GPU memory is " << (float)reservedGpuMem_ / (1024 * 1024)
               << "M includes render buffer allocation";
@@ -125,6 +129,8 @@ void DataMgr::populateMgrs(const MapDParameters& mapd_parameters,
       size_t gpuSlabSize = std::min(static_cast<size_t>(1L << 31), gpuMaxMemSize);
       gpuSlabSize -= gpuSlabSize % 512 == 0 ? 0 : 512 - (gpuSlabSize % 512);
       LOG(INFO) << "gpuSlabSize is " << (float)gpuSlabSize / (1024 * 1024) << "M";
+      LOG(INFO) << "memory pool for GPU " << gpuNum << " is "
+                << (float)gpuMaxMemSize / (1024 * 1024) << "M";
       bufferMgrs_[2].push_back(new GpuCudaBufferMgr(
           gpuNum, gpuMaxMemSize, cudaMgr_.get(), gpuSlabSize, 512, bufferMgrs_[1][0]));
     }

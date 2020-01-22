@@ -335,8 +335,8 @@ void CudaMgr::printDeviceProperties() const {
     VLOG(1) << "Compute Minor: " << device_properties_[d].computeMinor;
     VLOG(1) << "PCI bus id: " << device_properties_[d].pciBusId;
     VLOG(1) << "PCI deviceId id: " << device_properties_[d].pciDeviceId;
-    VLOG(1) << "Total Global memory: " << device_properties_[d].globalMem / 1073741824.0
-            << " GB";
+    VLOG(1) << "Per device global memory: "
+            << device_properties_[d].globalMem / 1073741824.0 << " GB";
     VLOG(1) << "Memory clock (khz): " << device_properties_[d].memoryClockKhz;
     VLOG(1) << "Memory bandwidth: " << device_properties_[d].memoryBandwidthGBs
             << " GB/sec";
