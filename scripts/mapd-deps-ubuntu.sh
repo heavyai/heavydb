@@ -234,7 +234,7 @@ PATH=\$PREFIX/go/bin:\$PATH
 PATH=\$PREFIX/bin:\$PATH
 
 VULKAN_SDK=\$PREFIX
-VK_LAYER_PATH=\$PREFIX/etc/explicit_layer.d
+VK_LAYER_PATH=\$PREFIX/etc/vulkan/explicit_layer.d
 
 CMAKE_PREFIX_PATH=\$PREFIX:\$CMAKE_PREFIX_PATH
 
