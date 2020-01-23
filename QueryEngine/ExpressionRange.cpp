@@ -893,6 +893,7 @@ ExpressionRange getExpressionRange(
           year_range_min, year_range_max, 0, arg_range.hasNulls());
     }
     case kEPOCH:
+    case kDATEEPOCH:
       return arg_range;
     case kQUARTERDAY:
     case kQUARTER:

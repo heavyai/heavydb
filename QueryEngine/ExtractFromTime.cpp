@@ -250,6 +250,10 @@ extern "C" NEVER_INLINE DEVICE int64_t ExtractFromTime(ExtractField field,
   switch (field) {
     case kEPOCH:
       return timeval;
+    case kDATEEPOCH:
+      return (timeval < 0 && kSecsPerDay != 0)
+                 ? ((timeval / kSecsPerDay) - 1) * kSecsPerDay
+                 : (timeval / kSecsPerDay) * kSecsPerDay;
     case kQUARTERDAY:
       return extract_quarterday(timeval);
     case kHOUR:

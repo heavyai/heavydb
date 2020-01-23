@@ -82,7 +82,8 @@ enum ExtractField {
   kDOY,
   kEPOCH,
   kQUARTERDAY,
-  kWEEK
+  kWEEK,
+  kDATEEPOCH
 };
 
 // Shared by DateTruncate

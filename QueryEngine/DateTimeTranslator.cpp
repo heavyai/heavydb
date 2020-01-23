@@ -54,6 +54,8 @@ std::string from_extract_field(const ExtractField& fieldno) {
       return "quarterday";
     case kWEEK:
       return "week";
+    case kDATEEPOCH:
+      return "dateepoch";
     default:
       UNREACHABLE();
   }
@@ -135,6 +137,8 @@ ExtractField ExtractExpr::to_extract_field(const std::string& field) {
     fieldno = kEPOCH;
   } else if (boost::iequals(field, "week")) {
     fieldno = kWEEK;
+  } else if (boost::iequals(field, "dateepoch")) {
+    fieldno = kDATEEPOCH;
   } else {
     throw std::runtime_error("Unsupported field in EXTRACT function " + field);
   }

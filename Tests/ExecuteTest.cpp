@@ -2940,6 +2940,9 @@ TEST(Select, Time) {
     ASSERT_EQ(14185957950L,
               v<int64_t>(run_simple_agg(
                   "SELECT MAX(EXTRACT(EPOCH FROM m) * 10) FROM test;", dt)));
+    ASSERT_EQ(14185152000L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT MAX(EXTRACT(DATEEPOCH FROM m) * 10) FROM test;", dt)));
     ASSERT_EQ(20140,
               v<int64_t>(run_simple_agg(
                   "SELECT MAX(EXTRACT(YEAR FROM m) * 10) FROM test;", dt)));
@@ -2989,6 +2992,9 @@ TEST(Select, Time) {
     ASSERT_EQ(
         936835200L,
         v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(EPOCH FROM o)) FROM test;", dt)));
+    ASSERT_EQ(936835200L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT MAX(EXTRACT(DATEEPOCH FROM o)) FROM test;", dt)));
     ASSERT_EQ(1L,
               v<int64_t>(run_simple_agg("SELECT MAX(EXTRACT(WEEK FROM CAST('2012-01-01 "
                                         "20:15:12' AS TIMESTAMP))) FROM test limit 1;",
@@ -8233,6 +8239,10 @@ TEST(Select, TimestampMeridiesEncoding) {
         v<int64_t>(run_simple_agg(
             "SELECT count(*) FROM ts_meridies where extract(epoch from ts) = 1325444400;",
             dt)));
+    ASSERT_EQ(10,
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies where "
+                                        "extract(dateepoch from ts) = 1325376000;",
+                                        dt)));
   }
 }
 
@@ -8331,6 +8341,18 @@ TEST(Select, TimestampPrecisionMeridiesEncoding) {
         v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions where "
                                   "extract(epoch from ts9) = 1325430000123456789;",
                                   dt)));
+    ASSERT_EQ(8,
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions "
+                                        "where extract(dateepoch from ts3) = 1325376000;",
+                                        dt)));
+    ASSERT_EQ(8,
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions "
+                                        "where extract(dateepoch from ts6) = 1325376000;",
+                                        dt)));
+    ASSERT_EQ(8,
+              v<int64_t>(run_simple_agg("SELECT count(*) FROM ts_meridies_precisions "
+                                        "where extract(dateepoch from ts9) = 1325376000;",
+                                        dt)));
   }
 }
 
@@ -8523,6 +8545,9 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(1146023344607435125L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(epoch from m_9) FROM test limit 1;", dt)));
+    ASSERT_EQ(1146009600L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(dateepoch from m_9) FROM test limit 1;", dt)));
     ASSERT_EQ(4607435125L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(nanosecond from m_9) FROM test limit 1;", dt)));
@@ -8571,6 +8596,9 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(931701773874533L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(epoch from m_6) FROM test limit 1;", dt)));
+    ASSERT_EQ(931651200L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(dateepoch from m_6) FROM test limit 1;", dt)));
     ASSERT_EQ(53874533000L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(nanosecond from m_6) FROM test limit 1;", dt)));
@@ -8619,6 +8647,9 @@ TEST(Select, TimestampPrecision) {
     ASSERT_EQ(1418509395323L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(epoch from m_3) FROM test limit 1;", dt)));
+    ASSERT_EQ(1418428800L,
+              v<int64_t>(run_simple_agg(
+                  "SELECT EXTRACT(dateepoch from m_3) FROM test limit 1;", dt)));
     ASSERT_EQ(15323000000L,
               v<int64_t>(run_simple_agg(
                   "SELECT EXTRACT(nanosecond from m_3) FROM test limit 1;", dt)));
