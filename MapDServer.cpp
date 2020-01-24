@@ -915,7 +915,7 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
                    "[--http-port <http port number>] [--flush-log] [--version|-v]"
                 << std::endl
                 << std::endl;
-      std::cerr << help_desc << std::endl;
+      std::cout << help_desc << std::endl;
       return 0;
     }
     if (vm.count("dev-options")) {
