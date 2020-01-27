@@ -190,6 +190,10 @@ inline bool fast_logging_check(Severity severity) {
     if (auto _omnisci_logger_ = logger::Logger(logger::tag)) \
   _omnisci_logger_.stream(__FILE__, __LINE__)
 
+#define LOGGING(tag) logger::fast_logging_check(logger::tag)
+
+#define VLOGGING(n) logger::fast_logging_check(logger::DEBUG##n)
+
 #define CHECK(condition)            \
   if (BOOST_UNLIKELY(!(condition))) \
   LOG(FATAL) << "Check failed: " #condition " "
@@ -262,6 +266,10 @@ class NullLogger {
 };
 
 #define LOG(severity) logger::NullLogger<logger::Severity::severity>()
+
+#define LOGGING(tag) false
+
+#define VLOGGING(n) false
 
 #define CHECK(condition) LOG_IF(FATAL, !(condition))
 
