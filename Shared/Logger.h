@@ -290,7 +290,8 @@ class DebugTimer {
  public:
   DebugTimer(Severity, char const* file, int line, char const* name);
   ~DebugTimer();
-  void stop();
+  // *json_str is set only when called on the root DurationTree.
+  void stop(std::string* json_str = nullptr);
 };
 
 void debugTimerNewThread(std::thread::id parent_thread_id);

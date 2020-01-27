@@ -128,6 +128,7 @@ struct TQueryResult {
   2: i64 execution_time_ms
   3: i64 total_time_ms
   4: string nonce
+  5: optional string debug
 }
 
 struct TDataFrame {

@@ -882,6 +882,7 @@ void MapDHandler::sql_execute(TQueryResult& _return,
   auto query_state = create_query_state(session_ptr, query_str);
   auto stdlog = STDLOG(query_state);
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  auto timer = DEBUG_TIMER(__func__);
 
   ScopeGuard reset_was_geo_copy_from = [&] { _was_geo_copy_from = false; };
 
@@ -951,6 +952,7 @@ void MapDHandler::sql_execute(TQueryResult& _return,
                        create_params);
     });
   }
+  timer.stop(&_return.debug);
   stdlog.appendNameValuePairs("execution_time_ms",
                               _return.execution_time_ms,
                               "total_time_ms",  // BE-3420 - Redundant with duration field
