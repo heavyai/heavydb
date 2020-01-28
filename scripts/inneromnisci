@@ -115,13 +115,17 @@ fi
 
 if [ -d frontend ] && [ -e ./bin/omnisci_web_server ]; then
     # use https for backend-url if both ssl-cert and ssl-key options are in the config file
-    BACKEND_URL="http://localhost:${MAPD_HTTP_PORT}"
+    BACKEND_URL="--backend-url http://localhost:${MAPD_HTTP_PORT}"
     if [ -e "$CONFIG_FILE" ]; then
         if grep --quiet "^ssl-cert" "$CONFIG_FILE" && grep --quiet "^ssl-private-key" "$CONFIG_FILE"; then
-            BACKEND_URL="https://localhost:${MAPD_HTTP_PORT}"
+            BACKEND_URL="--backend-url https://localhost:${MAPD_HTTP_PORT}"
+        fi
+        # always use backend-url from the config file
+        if grep --quiet "^backend-url" "$CONFIG_FILE"; then
+            BACKEND_URL=""
         fi
     fi
-    ./bin/omnisci_web_server $RO --port $MAPD_WEB_PORT --backend-url "${BACKEND_URL}" --data $MAPD_DATA $HTTPS $HTTPS_CERT $HTTPS_KEY $CONFIG $VERBOSE &
+    ./bin/omnisci_web_server $RO --port $MAPD_WEB_PORT ${BACKEND_URL} --data $MAPD_DATA $HTTPS $HTTPS_CERT $HTTPS_KEY $CONFIG $VERBOSE &
     PID2=$!
     echo "- omnisci_web_server $PID2 started"
 
