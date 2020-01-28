@@ -464,6 +464,7 @@ QueryMemoryDescriptor ResultSet::fixupQueryMemoryDescriptor(
 
 void ResultSet::sort(const std::list<Analyzer::OrderEntry>& order_entries,
                      const size_t top_n) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK_EQ(-1, cached_row_count_);
   CHECK(!targets_.empty());
 #ifdef HAVE_CUDA

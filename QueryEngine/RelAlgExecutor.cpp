@@ -94,6 +94,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
                                                           const ExecutionOptions& eo,
                                                           RenderInfo* render_info) {
   INJECT_TIMER(executeRelAlgQueryNoRetry);
+  auto timer = DEBUG_TIMER(__func__);
+  auto timer_setup = DEBUG_TIMER("Query pre-execution steps");
 
   query_dag_->resetQueryExecutionState();
   const auto& ra = query_dag_->getRootNode();
@@ -130,6 +132,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     return executeRelAlgQueryWithFilterPushDown(
         ed_seq, co, eo, render_info, queue_time_ms);
   }
+  timer_setup.stop();
 
   // Dispatch the subqueries first
   for (auto subquery : getSubqueries()) {
@@ -255,6 +258,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
                                                  const int64_t queue_time_ms,
                                                  const bool with_existing_temp_tables) {
   INJECT_TIMER(executeRelAlgSeq);
+  auto timer = DEBUG_TIMER(__func__);
   if (!with_existing_temp_tables) {
     decltype(temporary_tables_)().swap(temporary_tables_);
   }
@@ -313,6 +317,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
                                        RenderInfo* render_info,
                                        const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgStep);
+  auto timer = DEBUG_TIMER(__func__);
   WindowProjectNodeContext::reset();
   auto exec_desc_ptr = seq.getDescriptor(step_idx);
   CHECK(exec_desc_ptr);
@@ -1033,6 +1038,7 @@ void RelAlgExecutor::executeUpdateViaCompound(const RelCompound* compound,
                                               const ExecutionOptions& eo,
                                               RenderInfo* render_info,
                                               const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   if (!compound->validateTargetColumns(
           yieldColumnValidator(compound->getModifiedTableDescriptor()))) {
     throw std::runtime_error(
@@ -1074,6 +1080,7 @@ void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
                                              const ExecutionOptions& eo,
                                              RenderInfo* render_info,
                                              const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   if (!project->validateTargetColumns(
           yieldColumnValidator(project->getModifiedTableDescriptor()))) {
     throw std::runtime_error(
@@ -1125,6 +1132,7 @@ void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
                                               const ExecutionOptions& eo,
                                               RenderInfo* render_info,
                                               const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   auto* table_descriptor = compound->getModifiedTableDescriptor();
   if (!table_descriptor->hasDeletedCol) {
     throw std::runtime_error(
@@ -1166,6 +1174,7 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
                                              const ExecutionOptions& eo,
                                              RenderInfo* render_info,
                                              const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   auto* table_descriptor = project->getModifiedTableDescriptor();
   if (!table_descriptor->hasDeletedCol) {
     throw std::runtime_error(
@@ -1217,6 +1226,7 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 const ExecutionOptions& eo,
                                                 RenderInfo* render_info,
                                                 const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   const auto work_unit = createCompoundWorkUnit(
       compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   CompilationOptions co_compound = co;
@@ -1234,6 +1244,7 @@ ExecutionResult RelAlgExecutor::executeAggregate(const RelAggregate* aggregate,
                                                  const ExecutionOptions& eo,
                                                  RenderInfo* render_info,
                                                  const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   const auto work_unit = createAggregateWorkUnit(
       aggregate, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   return executeWorkUnit(work_unit,
@@ -1264,6 +1275,7 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                                                RenderInfo* render_info,
                                                const int64_t queue_time_ms,
                                                const ssize_t previous_count) {
+  auto timer = DEBUG_TIMER(__func__);
   auto work_unit =
       createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   CompilationOptions co_project = co;
@@ -1294,6 +1306,7 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
                                                      const ExecutionOptions& eo,
                                                      const int64_t queue_time_ms) {
   INJECT_TIMER(executeTableFunction);
+  auto timer = DEBUG_TIMER(__func__);
 
   auto co = co_in;
 
@@ -1457,6 +1470,7 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
                                               const ExecutionOptions& eo,
                                               RenderInfo* render_info,
                                               const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   const auto work_unit =
       createFilterWorkUnit(filter, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   return executeWorkUnit(
@@ -1465,6 +1479,7 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
 
 ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
                                               const ExecutionOptions& eo) {
+  auto timer = DEBUG_TIMER(__func__);
   if (eo.just_explain) {
     throw std::runtime_error("EXPLAIN not supported for ModifyTable");
   }
@@ -1482,6 +1497,7 @@ ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
 ExecutionResult RelAlgExecutor::executeLogicalValues(
     const RelLogicalValues* logical_values,
     const ExecutionOptions& eo) {
+  auto timer = DEBUG_TIMER(__func__);
   if (eo.just_explain) {
     throw std::runtime_error("EXPLAIN not supported for LogicalValues");
   }
@@ -1597,6 +1613,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
                                             const ExecutionOptions& eo,
                                             RenderInfo* render_info,
                                             const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   check_sort_node_source_constraint(sort);
   const auto source = sort->getInput(0);
   const bool is_aggregate = node_is_aggregate(source);
@@ -1606,7 +1623,6 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     const auto source_work_unit = createSortInputWorkUnit(sort, eo.just_explain);
     GroupByAndAggregate::addTransientStringLiterals(
         source_work_unit.exe_unit, executor_, executor_->row_set_mem_owner_);
-
     // Handle push-down for LIMIT for multi-node
     auto& aggregated_result = it->second;
     auto& result_rows = aggregated_result.rs;
@@ -1624,7 +1640,6 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     }
     ExecutionResult result(result_rows, aggregated_result.targets_meta);
     sort->setOutputMetainfo(aggregated_result.targets_meta);
-
     return result;
   }
   while (true) {
