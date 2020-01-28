@@ -22,7 +22,6 @@ import org.apache.calcite.tools.RelConversionException;
 import org.apache.calcite.tools.ValidationException;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -81,7 +80,7 @@ public class tester {
     try {
       MapDParserOptions mdpo = new MapDParserOptions();
       MAPDLOGGER.error("MapDParser result: \n"
-              + mp.getRelAlgebra(
+              + mp.processSql(
                       "select * from customer where c_custkey = 1.345000 limit 5", mdpo));
     } catch (SqlParseException ex) {
       Logger.getLogger(tester.class.getName()).log(Level.SEVERE, null, ex);

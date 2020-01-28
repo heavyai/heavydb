@@ -1,0 +1,13 @@
+{
+  "statementType": "DDL",
+  "payload": {
+    "command": "CREATE_SERVER",
+    "ifNotExists": true,
+    "serverName": "test_server",
+    "dataWrapper": "test_data_wrapper",
+    "options": {
+      "attribute_1": "value_1",
+      "attribute_2": "2"
+    }
+  }
+}

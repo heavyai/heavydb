@@ -19,6 +19,8 @@ import static org.apache.calcite.sql.parser.SqlParserPos.ZERO;
 
 import com.google.common.collect.ImmutableList;
 import com.mapd.common.SockTransportProperties;
+import com.mapd.parser.extension.ddl.ExtendedSqlParser;
+import com.mapd.parser.extension.ddl.JsonSerializableDdl;
 import com.mapd.parser.server.ExtensionFunction;
 
 import org.apache.calcite.avatica.util.Casing;
@@ -78,7 +80,6 @@ import org.apache.calcite.sql.SqlOrderBy;
 import org.apache.calcite.sql.SqlSelect;
 import org.apache.calcite.sql.SqlUnresolvedFunction;
 import org.apache.calcite.sql.SqlUpdate;
-import org.apache.calcite.sql.fun.SqlCastFunction;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
@@ -201,7 +202,7 @@ public final class MapDParser {
               new MapDParser(dataDir, extSigs, mapdPort, sock_transport_properties);
       MapDParserOptions options = new MapDParserOptions();
       parser.setUser(mapdUser);
-      parser.getRelAlgebra(expression.toSqlString(SqlDialect.CALCITE).getSql(), options);
+      parser.processSql(expression.toSqlString(SqlDialect.CALCITE).getSql(), options);
     } catch (Exception e) {
       // if we are not able to parse, then assume correlated
       SubqueryCorrMemo.put(queryString, true);
@@ -325,6 +326,7 @@ public final class MapDParser {
                                           .setCaseSensitive(false)
                                           // allow identifiers of up to 512 chars
                                           .setIdentifierMaxLength(512)
+                                          .setParserFactory(ExtendedSqlParser.FACTORY)
                                           .build())
                     .sqlToRelConverterConfig(
                             SqlToRelConverter
@@ -345,11 +347,18 @@ public final class MapDParser {
     this.mapdUser = mapdUser;
   }
 
-  public String getRelAlgebra(String sql, final MapDParserOptions parserOptions)
+  public String processSql(String sql, final MapDParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
     callCount++;
-    final RelRoot sqlRel = queryToSqlNode(sql, parserOptions);
 
+    final MapDPlanner planner = getPlanner(true, true);
+    final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
+
+    if (sqlNode instanceof JsonSerializableDdl) {
+      return ((JsonSerializableDdl) sqlNode).toJsonString();
+    }
+
+    final RelRoot sqlRel = convertSqlToRelNode(sql, sqlNode, planner, parserOptions);
     RelNode project = sqlRel.project();
 
     if (parserOptions.isExplain()) {
@@ -663,15 +672,23 @@ public final class MapDParser {
     return RelRoot.of(modify, SqlKind.UPDATE);
   }
 
-  RelRoot queryToSqlNode(final String sql, final MapDParserOptions parserOptions)
+  RelRoot queryToRelNode(final String sql, final MapDParserOptions parserOptions)
           throws SqlParseException, ValidationException, RelConversionException {
+    final MapDPlanner planner = getPlanner(true, true);
+    final SqlNode sqlNode = parseSql(sql, parserOptions.isLegacySyntax(), planner);
+    return convertSqlToRelNode(sql, sqlNode, planner, parserOptions);
+  }
+
+  RelRoot convertSqlToRelNode(final String sql,
+          final SqlNode sqlNode,
+          final MapDPlanner mapDPlanner,
+          final MapDParserOptions parserOptions)
+          throws SqlParseException, ValidationException, RelConversionException {
+    SqlNode node = sqlNode;
+    MapDPlanner planner = mapDPlanner;
     boolean allowCorrelatedSubQueryExpansion = true;
     boolean allowPushdownJoinCondition = true;
     boolean patchUpdateToDelete = false;
-    MapDPlanner planner =
-            getPlanner(allowCorrelatedSubQueryExpansion, allowPushdownJoinCondition);
-
-    SqlNode node = processSQL(sql, parserOptions.isLegacySyntax(), planner);
 
     if (node.isA(DELETE)) {
       SqlDelete sqlDelete = (SqlDelete) node;
@@ -713,7 +730,7 @@ public final class MapDParser {
       planner.close();
       // create a new one
       planner = getPlanner(allowCorrelatedSubQueryExpansion, allowPushdownJoinCondition);
-      node = processSQL(node.toSqlString(SqlDialect.CALCITE).toString(), false, planner);
+      node = parseSql(node.toSqlString(SqlDialect.CALCITE).toString(), false, planner);
     }
 
     boolean is_select_star = isSelectStar(node);
@@ -742,7 +759,7 @@ public final class MapDParser {
       planner.close();
       // create a new one
       planner = getPlanner(allowCorrelatedSubQueryExpansion, allowPushdownJoinCondition);
-      processSQL(validateR.toSqlString(SqlDialect.CALCITE).toString(), false, planner);
+      parseSql(validateR.toSqlString(SqlDialect.CALCITE).toString(), false, planner);
       // now validate the new modified SqlNode;
       validateR = planner.validate(validateR);
     }
@@ -893,14 +910,14 @@ public final class MapDParser {
     return null;
   }
 
-  private SqlNode processSQL(String sql, final boolean legacy_syntax, Planner planner)
+  private SqlNode parseSql(String sql, final boolean legacy_syntax, Planner planner)
           throws SqlParseException {
     SqlNode parseR = null;
     try {
       parseR = planner.parse(sql);
       MAPDLOGGER.debug(" node is \n" + parseR.toString());
     } catch (SqlParseException ex) {
-      MAPDLOGGER.error("failed to process SQL '" + sql + "' \n" + ex.toString());
+      MAPDLOGGER.error("failed to parse SQL '" + sql + "' \n" + ex.toString());
       throw ex;
     }
 
@@ -1336,7 +1353,7 @@ public final class MapDParser {
           throws SqlParseException {
     try {
       Planner planner = getPlanner();
-      SqlNode node = processSQL(sql, legacy_syntax, planner);
+      SqlNode node = parseSql(sql, legacy_syntax, planner);
       SqlIdentifierCapturer capturer = new SqlIdentifierCapturer();
       capturer.scan(node);
       return capturer;

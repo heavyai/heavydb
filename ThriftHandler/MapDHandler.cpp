@@ -5015,6 +5015,10 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
             query_str.substr(std::string("explain calcite ").length());
         query_ra_calcite_explain = parse_to_ra(
             query_state_proxy, temp_query_str, {}, boost::none, mapd_parameters_);
+      } else if (pw.isCalciteDdl()) {
+        // TODO: implement execution logic for FSI DDL commands
+        LOG(INFO) << "Calcite response for DDL command:\n" << query_ra;
+        throw std::runtime_error{"FSI DDL commands are currently not supported."};
       }
 
       // UPDATE/DELETE needs to get a checkpoint lock as the first lock

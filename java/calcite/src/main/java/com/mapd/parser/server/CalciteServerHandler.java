@@ -57,7 +57,7 @@ import java.util.Map;
  *
  * @author michael
  */
-class CalciteServerHandler implements CalciteServer.Iface {
+public class CalciteServerHandler implements CalciteServer.Iface {
   final static Logger MAPDLOGGER = LoggerFactory.getLogger(CalciteServerHandler.class);
   private TServer server;
 
@@ -80,7 +80,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
 
   // TODO MAT we need to merge this into common code base for these functions with
   // CalciteDirect since we are not deprecating this stuff yet
-  CalciteServerHandler(int mapdPort,
+  public CalciteServerHandler(int mapdPort,
           String dataDir,
           String extensionFunctionsAstFile,
           SockTransportProperties skT,
@@ -94,7 +94,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
       extSigs = ExtensionFunctionSignatureParser.parse(extensionFunctionsAstFile);
     } catch (IOException ex) {
       MAPDLOGGER.error(
-              "Could not load extension function signatures: " + ex.getMessage());
+              "Could not load extension function signatures: " + ex.getMessage(), ex);
     }
     extSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(extSigs);
 
@@ -103,7 +103,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
         udfSigs = ExtensionFunctionSignatureParser.parseUdfAst(udfAstFile);
       }
     } catch (IOException ex) {
-      MAPDLOGGER.error("Could not load udf function signatures: " + ex.getMessage());
+      MAPDLOGGER.error("Could not load udf function signatures: " + ex.getMessage(), ex);
     }
     udfSigsJson = ExtensionFunctionSignatureParser.signaturesToJson(udfSigs);
 
@@ -135,13 +135,14 @@ class CalciteServerHandler implements CalciteServer.Iface {
           boolean isViewOptimize) throws InvalidParseRequest, TException {
     long timer = System.currentTimeMillis();
     callCount++;
+
     MapDParser parser;
     try {
       parser = (MapDParser) parserPool.borrowObject();
       parser.clearMemo();
     } catch (Exception ex) {
       String msg = "Could not get Parse Item from pool: " + ex.getMessage();
-      MAPDLOGGER.error(msg);
+      MAPDLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-1, msg);
     }
     MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort);
@@ -156,7 +157,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
     if (sqlText.length() > 0 && sqlText.charAt(sqlText.length() - 1) == ';') {
       sqlText = sqlText.substring(0, sqlText.length() - 1);
     }
-    String relAlgebra;
+    String jsonResult;
     SqlIdentifierCapturer capturer;
     TAccessedQueryObjects primaryAccessedObjects = new TAccessedQueryObjects();
     TAccessedQueryObjects resolvedAccessedObjects = new TAccessedQueryObjects();
@@ -170,14 +171,14 @@ class CalciteServerHandler implements CalciteServer.Iface {
       try {
         MapDParserOptions parserOptions = new MapDParserOptions(
                 filterPushDownInfo, legacySyntax, isExplain, isViewOptimize);
-        relAlgebra = parser.getRelAlgebra(sqlText, parserOptions);
+        jsonResult = parser.processSql(sqlText, parserOptions);
       } catch (ValidationException ex) {
         String msg = "Validation: " + ex.getMessage();
-        MAPDLOGGER.error(msg);
+        MAPDLOGGER.error(msg, ex);
         throw ex;
       } catch (RelConversionException ex) {
         String msg = " RelConversion failed: " + ex.getMessage();
-        MAPDLOGGER.error(msg);
+        MAPDLOGGER.error(msg, ex);
         throw ex;
       }
       capturer = parser.captureIdentifiers(sqlText, legacySyntax);
@@ -198,15 +199,15 @@ class CalciteServerHandler implements CalciteServer.Iface {
 
     } catch (SqlParseException ex) {
       String msg = "Parse failed: " + ex.getMessage();
-      MAPDLOGGER.error(msg);
+      MAPDLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-2, msg);
     } catch (CalciteContextException ex) {
       String msg = "Validate failed: " + ex.getMessage();
-      MAPDLOGGER.error(msg);
+      MAPDLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-3, msg);
     } catch (Throwable ex) {
       String msg = "Exception occurred: " + ex.getMessage();
-      MAPDLOGGER.error(msg);
+      MAPDLOGGER.error(msg, ex);
       throw new InvalidParseRequest(-4, msg);
     } finally {
       CURRENT_PARSER.set(null);
@@ -215,7 +216,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
         parserPool.returnObject(parser);
       } catch (Exception ex) {
         String msg = "Could not return parse object: " + ex.getMessage();
-        MAPDLOGGER.error(msg);
+        MAPDLOGGER.error(msg, ex);
         throw new InvalidParseRequest(-4, msg);
       }
     }
@@ -223,7 +224,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
     TPlanResult result = new TPlanResult();
     result.primary_accessed_objects = primaryAccessedObjects;
     result.resolved_accessed_objects = resolvedAccessedObjects;
-    result.plan_result = relAlgebra;
+    result.plan_result = jsonResult;
     result.execution_time_ms = System.currentTimeMillis() - timer;
 
     return result;
@@ -265,7 +266,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
       parser = (MapDParser) parserPool.borrowObject();
     } catch (Exception ex) {
       String msg = "Could not get Parse Item from pool: " + ex.getMessage();
-      MAPDLOGGER.error(msg);
+      MAPDLOGGER.error(msg, ex);
       return;
     }
     CURRENT_PARSER.set(parser);
@@ -279,7 +280,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
         parserPool.returnObject(parser);
       } catch (Exception ex) {
         String msg = "Could not return parse object: " + ex.getMessage();
-        MAPDLOGGER.error(msg);
+        MAPDLOGGER.error(msg, ex);
       }
     }
   }
@@ -297,7 +298,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
       parser = (MapDParser) parserPool.borrowObject();
     } catch (Exception ex) {
       String msg = "Could not get Parse Item from pool: " + ex.getMessage();
-      MAPDLOGGER.error(msg);
+      MAPDLOGGER.error(msg, ex);
       throw new TException(msg);
     }
     MapDUser mapDUser = new MapDUser(user, session, catalog, mapdPort);
@@ -311,7 +312,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
       completion_result = parser.getCompletionHints(sql, cursor, visible_tables);
     } catch (Exception ex) {
       String msg = "Could not retrieve completion hints: " + ex.getMessage();
-      MAPDLOGGER.error(msg);
+      MAPDLOGGER.error(msg, ex);
       return new ArrayList<>();
     } finally {
       CURRENT_PARSER.set(null);
@@ -320,7 +321,7 @@ class CalciteServerHandler implements CalciteServer.Iface {
         parserPool.returnObject(parser);
       } catch (Exception ex) {
         String msg = "Could not return parse object: " + ex.getMessage();
-        MAPDLOGGER.error(msg);
+        MAPDLOGGER.error(msg, ex);
         throw new InvalidParseRequest(-4, msg);
       }
     }

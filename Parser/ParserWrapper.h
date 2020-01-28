@@ -89,9 +89,9 @@ class ParserWrapper {
   }
 
   bool isCalcitePathPermissable(bool read_only_mode = false) {
-    return (!is_ddl && !is_optimize && !is_validate &&
-            isCalcitePermissableDml(read_only_mode) &&
-            !(explain_type_ == ExplainType::Other));
+    return is_calcite_ddl_ || (!is_legacy_ddl_ && !is_optimize && !is_validate &&
+                               isCalcitePermissableDml(read_only_mode) &&
+                               !(explain_type_ == ExplainType::Other));
   }
 
   bool isOtherExplain() const { return explain_type_ == ExplainType::Other; }
@@ -116,6 +116,8 @@ class ParserWrapper {
     }
   }
 
+  bool isCalciteDdl() const { return is_calcite_ddl_; }
+
  private:
   DMLType dml_type_ = DMLType::NotDML;
   ExplainType explain_type_ = ExplainType::None;
@@ -127,4 +129,7 @@ class ParserWrapper {
   static const std::string optimized_explain_str;
   static const std::string optimize_str;
   static const std::string validate_str;
+
+  bool is_legacy_ddl_ = false;
+  bool is_calcite_ddl_ = false;
 };

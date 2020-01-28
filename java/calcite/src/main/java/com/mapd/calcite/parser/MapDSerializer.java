@@ -16,6 +16,11 @@
 
 package com.mapd.calcite.parser;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.mapd.parser.extension.ddl.DdlResponse;
+import com.mapd.parser.extension.ddl.JsonSerializableDdl;
+
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.externalize.MapDRelJsonWriter;
 
@@ -24,6 +29,12 @@ import org.apache.calcite.rel.externalize.MapDRelJsonWriter;
  * @author michael
  */
 public class MapDSerializer {
+  private static final Gson gson;
+
+  static {
+    gson = new GsonBuilder().excludeFieldsWithoutExposeAnnotation().create();
+  }
+
   public static String toString(final RelNode rel) {
     if (rel == null) {
       return null;
@@ -31,5 +42,11 @@ public class MapDSerializer {
     final MapDRelJsonWriter planWriter = new MapDRelJsonWriter();
     rel.explain(planWriter);
     return planWriter.asString();
+  }
+
+  public static String toJsonString(final JsonSerializableDdl jsonSerializableDdl) {
+    final DdlResponse ddlResponse = new DdlResponse();
+    ddlResponse.setPayload(jsonSerializableDdl);
+    return gson.toJson(ddlResponse);
   }
 }

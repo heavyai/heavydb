@@ -79,6 +79,7 @@ extern size_t g_max_memory_allocation_size;
 extern size_t g_min_memory_allocation_size;
 extern bool g_enable_experimental_string_functions;
 extern bool g_enable_table_functions;
+extern bool g_enable_fsi;
 
 bool g_enable_thrift_logs{false};
 
@@ -592,6 +593,10 @@ void MapDProgramOptions::fillOptions() {
                               ->default_value(g_enable_experimental_string_functions)
                               ->implicit_value(true),
                           "Enable experimental string functions.");
+  help_desc.add_options()(
+      "enable-fsi",
+      po::value<bool>(&g_enable_fsi)->default_value(g_enable_fsi)->implicit_value(true),
+      "Enable foreign storage interface.");
 
   help_desc.add(log_options_.get_options());
 }
