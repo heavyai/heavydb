@@ -43,6 +43,7 @@ Debug/
 
 # VS code settings files
 .vscode/
+*.code-workspace
 
 # VIM editor files
 .*.swp
