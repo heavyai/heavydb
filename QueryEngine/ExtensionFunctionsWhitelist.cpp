@@ -118,7 +118,7 @@ namespace {
 std::string serialize_type(const ExtArgumentType type) {
   switch (type) {
     case ExtArgumentType::Bool:
-      return "i1";
+      return "i8";  // clang converts bool to i8
     case ExtArgumentType::Int8:
       return "i8";
     case ExtArgumentType::Int16:
@@ -145,6 +145,8 @@ std::string serialize_type(const ExtArgumentType type) {
       return "float*";
     case ExtArgumentType::PDouble:
       return "double*";
+    case ExtArgumentType::PBool:
+      return "i1*";
     case ExtArgumentType::ArrayInt8:
       return "{i8*, i64, i8}*";
     case ExtArgumentType::ArrayInt16:
@@ -157,6 +159,8 @@ std::string serialize_type(const ExtArgumentType type) {
       return "{float*, i64, i8}*";
     case ExtArgumentType::ArrayDouble:
       return "{double*, i64, i8}*";
+    case ExtArgumentType::ArrayBool:
+      return "{i1*, i64, i8}*";
     case ExtArgumentType::GeoPoint:
       return "geo_point";
     case ExtArgumentType::GeoLineString:
@@ -214,6 +218,8 @@ SQLTypeInfo ext_arg_type_to_type_info(const ExtArgumentType ext_arg_type) {
       return generate_array_type(kFLOAT);
     case ExtArgumentType::ArrayDouble:
       return generate_array_type(kDOUBLE);
+    case ExtArgumentType::ArrayBool:
+      return generate_array_type(kBOOLEAN);
     default:
       LOG(WARNING) << "ExtArgumentType `" << serialize_type(ext_arg_type)
                    << "` cannot be converted to SQLTypeInfo. Returning nulltype.";
@@ -315,7 +321,7 @@ namespace {
 
 ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "bool" || type_name == "i1") {
-    return ExtArgumentType::Int8;  // need to handle the possibility of nulls
+    return ExtArgumentType::Bool;
   }
   if (type_name == "i8") {
     return ExtArgumentType::Int8;
@@ -356,6 +362,9 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   if (type_name == "double*") {
     return ExtArgumentType::PDouble;
   }
+  if (type_name == "i1*" || type_name == "bool*") {
+    return ExtArgumentType::PBool;
+  }
   if (type_name == "{i8*, i64, i8}*") {
     return ExtArgumentType::ArrayInt8;
   }
@@ -373,6 +382,9 @@ ExtArgumentType deserialize_type(const std::string& type_name) {
   }
   if (type_name == "{double*, i64, i8}*") {
     return ExtArgumentType::ArrayDouble;
+  }
+  if (type_name == "{i1*, i64, i8}*" || type_name == "{bool*, i64, i8}*") {
+    return ExtArgumentType::ArrayBool;
   }
   if (type_name == "geo_point") {
     return ExtArgumentType::GeoPoint;

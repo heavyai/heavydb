@@ -1123,7 +1123,7 @@ void Constant::do_cast(const SQLTypeInfo& new_type_info) {
     }
     type_info = new_type_info;
   } else if (get_is_null() && (new_type_info.is_number() || new_type_info.is_time() ||
-                               new_type_info.is_string())) {
+                               new_type_info.is_string() || new_type_info.is_boolean())) {
     type_info = new_type_info;
     set_null_value();
   } else {

@@ -48,6 +48,8 @@ ExtArgumentType get_array_arg_elem_type(const ExtArgumentType ext_arg_array_type
       return ExtArgumentType::Float;
     case ExtArgumentType::ArrayDouble:
       return ExtArgumentType::Double;
+    case ExtArgumentType::ArrayBool:
+      return ExtArgumentType::Bool;
     default:
       UNREACHABLE();
   }
@@ -82,6 +84,7 @@ static int match_arguments(const SQLTypeInfo& arg_type,
    */
   auto stype = sig_types[sig_pos];
   int max_pos = sig_types.size() - 1;
+
   switch (arg_type.get_type()) {
     case kBOOLEAN:
       if (stype == ExtArgumentType::Bool) {
@@ -191,7 +194,8 @@ static int match_arguments(const SQLTypeInfo& arg_type,
     case kARRAY:
       if ((stype == ExtArgumentType::PInt8 || stype == ExtArgumentType::PInt16 ||
            stype == ExtArgumentType::PInt32 || stype == ExtArgumentType::PInt64 ||
-           stype == ExtArgumentType::PFloat || stype == ExtArgumentType::PDouble) &&
+           stype == ExtArgumentType::PFloat || stype == ExtArgumentType::PDouble ||
+           stype == ExtArgumentType::PBool) &&
           sig_pos < max_pos && sig_types[sig_pos + 1] == ExtArgumentType::Int64) {
         penalty_score += 1000;
         return 2;
@@ -249,7 +253,8 @@ static int match_arguments(const SQLTypeInfo& arg_type,
     case kNULLT:  // NULL maps to a pointer and size argument
       if ((stype == ExtArgumentType::PInt8 || stype == ExtArgumentType::PInt16 ||
            stype == ExtArgumentType::PInt32 || stype == ExtArgumentType::PInt64 ||
-           stype == ExtArgumentType::PFloat || stype == ExtArgumentType::PDouble) &&
+           stype == ExtArgumentType::PFloat || stype == ExtArgumentType::PDouble ||
+           stype == ExtArgumentType::PBool) &&
           sig_pos < max_pos && sig_types[sig_pos + 1] == ExtArgumentType::Int64) {
         penalty_score += 1000;
         return 2;
@@ -391,6 +396,7 @@ bool is_ext_arg_type_array(const ExtArgumentType ext_arg_type) {
     case ExtArgumentType::ArrayInt64:
     case ExtArgumentType::ArrayFloat:
     case ExtArgumentType::ArrayDouble:
+    case ExtArgumentType::ArrayBool:
       return true;
 
     default:

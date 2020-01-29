@@ -1568,7 +1568,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
               || type == ExtensionFunction.ExtArgumentType.PInt32
               || type == ExtensionFunction.ExtArgumentType.PInt64
               || type == ExtensionFunction.ExtArgumentType.PFloat
-              || type == ExtensionFunction.ExtArgumentType.PDouble;
+              || type == ExtensionFunction.ExtArgumentType.PDouble
+              || type == ExtensionFunction.ExtArgumentType.PBool;
     }
 
     @Override
@@ -1598,6 +1599,8 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
           return ExtensionFunction.ExtArgumentType.Float;
         case PDouble:
           return ExtensionFunction.ExtArgumentType.Double;
+        case PBool:
+          return ExtensionFunction.ExtArgumentType.Bool;
       }
       MAPDLOGGER.error("getValueType: no value for type " + type);
       assert false;
@@ -1627,12 +1630,14 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         case PInt64:
         case PFloat:
         case PDouble:
+        case PBool:
         case ArrayInt8:
         case ArrayInt16:
         case ArrayInt32:
         case ArrayInt64:
         case ArrayFloat:
         case ArrayDouble:
+        case ArrayBool:
           return SqlTypeName.ARRAY;
         case GeoPoint:
         case GeoLineString:
