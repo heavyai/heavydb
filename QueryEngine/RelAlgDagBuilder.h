@@ -1447,8 +1447,11 @@ class RelTableFunction : public RelAlgNode {
 
 class RelLogicalValues : public RelAlgNode {
  public:
-  RelLogicalValues(const std::vector<TargetMetaInfo>& tuple_type)
-      : tuple_type_(tuple_type) {}
+  using RowValues = std::vector<std::unique_ptr<const RexScalar>>;
+
+  RelLogicalValues(const std::vector<TargetMetaInfo>& tuple_type,
+                   std::vector<RowValues>& values)
+      : tuple_type_(tuple_type), values_(std::move(values)) {}
 
   const std::vector<TargetMetaInfo> getTupleType() const { return tuple_type_; }
 
@@ -1463,14 +1466,32 @@ class RelLogicalValues : public RelAlgNode {
     return ret;
   }
 
+  const RexScalar* getValueAt(const size_t row_idx, const size_t col_idx) const {
+    CHECK_LT(row_idx, values_.size());
+    const auto& row = values_[row_idx];
+    CHECK_LT(col_idx, row.size());
+    return row[col_idx].get();
+  }
+
+  size_t getRowsSize() const {
+    if (values_.empty()) {
+      return 0;
+    } else {
+      return values_.front().size();
+    }
+  }
+
+  size_t getNumRows() const { return values_.size(); }
+
   size_t size() const override { return tuple_type_.size(); }
 
-  std::shared_ptr<RelAlgNode> deepCopy() const override {
-    return std::make_shared<RelLogicalValues>(tuple_type_);
-  }
+  bool hasRows() const { return !values_.empty(); }
+
+  std::shared_ptr<RelAlgNode> deepCopy() const override;
 
  private:
   const std::vector<TargetMetaInfo> tuple_type_;
+  const std::vector<RowValues> values_;
 };
 
 class QueryNotSupported : public std::runtime_error {
@@ -1484,8 +1505,8 @@ class QueryNotSupported : public std::runtime_error {
  * optimizations which can be expressed through relational algebra extended with
  * RelCompound. The RelCompound node is an equivalent representation for sequences of
  * RelFilter, RelProject and RelAggregate nodes. This coalescing minimizes the amount of
- * intermediate buffers required to evaluate a query. Lower level optimizations are taken
- * care by lower levels, mainly RelAlgTranslator and the IR code generation.
+ * intermediate buffers required to evaluate a query. Lower level optimizations are
+ * taken care by lower levels, mainly RelAlgTranslator and the IR code generation.
  */
 class RelAlgDagBuilder : public boost::noncopyable {
  public:
