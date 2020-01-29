@@ -5033,10 +5033,102 @@ TEST(Select, TimeInterval) {
   }
 }
 
+TEST(Select, LogicalValues) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    // empty logical values
+    c("SELECT 1 + 2;", dt);
+    c("SELECT 1 * 2.1;", dt);
+    c("SELECT 'alex', 'mapd';", dt);
+    c("SELECT COALESCE(5, NULL, 4);", dt);
+    c("SELECT abs(-5) AS tmp;", dt);
+
+    EXPECT_EQ(6, v<double>(run_simple_agg("SELECT ceil(5.556) AS tmp;", dt)));
+    EXPECT_EQ(5, v<double>(run_simple_agg("SELECT floor(5.556) AS tmp;", dt)));
+
+    // values
+    c("SELECT * FROM (VALUES(1,2,3));", dt);
+    c("SELECT * FROM (VALUES(1, NULL, 3));", dt);
+    c("SELECT * FROM (VALUES(1, 2), (3, NULL));", dt);
+
+    {
+      auto rows = run_multiple_agg("SELECT * FROM (VALUES(1, 2, 3)) as t(x, y, z);", dt);
+      EXPECT_EQ(rows->rowCount(), size_t(1));
+      const auto row = rows->getNextRow(false, false);
+      EXPECT_EQ(1, v<int64_t>(row[0]));
+      EXPECT_EQ(2, v<int64_t>(row[1]));
+      EXPECT_EQ(3, v<int64_t>(row[2]));
+    }
+    {
+      auto rows = run_multiple_agg(
+          "SELECT x, COUNT(y) FROM (VALUES(1, 1), (2, 2), (NULL, NULL), (3, 3)) as t(x, "
+          "y) GROUP BY x;",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(4));
+      {
+        const auto row = rows->getNextRow(false, false);
+        EXPECT_EQ(1, v<int64_t>(row[0]));
+        EXPECT_EQ(1, v<int64_t>(row[1]));
+      }
+      {
+        const auto row = rows->getNextRow(false, false);
+        EXPECT_EQ(2, v<int64_t>(row[0]));
+        EXPECT_EQ(1, v<int64_t>(row[1]));
+      }
+      {
+        const auto row = rows->getNextRow(false, false);
+        EXPECT_EQ(3, v<int64_t>(row[0]));
+        EXPECT_EQ(1, v<int64_t>(row[1]));
+      }
+      {
+        const auto row = rows->getNextRow(false, false);
+        EXPECT_EQ(inline_int_null_val(SQLTypeInfo(kINT, false)), v<int64_t>(row[0]));
+        EXPECT_EQ(0, v<int64_t>(row[1]));
+      }
+    }
+    {
+      auto rows = run_multiple_agg(
+          "SELECT SUM(x), AVG(y), MIN(z) FROM (VALUES(1, 2, 3)) as t(x, y, z);", dt);
+      EXPECT_EQ(rows->rowCount(), size_t(1));
+      const auto row = rows->getNextRow(false, false);
+      EXPECT_EQ(1, v<int64_t>(row[0]));
+      EXPECT_EQ(2, v<double>(row[1]));
+      EXPECT_EQ(3, v<int64_t>(row[2]));
+    }
+    {
+      auto rows = run_multiple_agg("SELECT * FROM (VALUES(1, 2, 3),(4, 5, 6));", dt);
+      EXPECT_EQ(rows->rowCount(), size_t(2));
+      {
+        const auto row = rows->getNextRow(false, false);
+        EXPECT_EQ(1, v<int64_t>(row[0]));
+        EXPECT_EQ(2, v<int64_t>(row[1]));
+        EXPECT_EQ(3, v<int64_t>(row[2]));
+      }
+      {
+        const auto row = rows->getNextRow(false, false);
+        EXPECT_EQ(4, v<int64_t>(row[0]));
+        EXPECT_EQ(5, v<int64_t>(row[1]));
+        EXPECT_EQ(6, v<int64_t>(row[2]));
+      }
+    }
+    {
+      auto rows = run_multiple_agg(
+          "SELECT SUM(x), AVG(y), MIN(z) FROM (VALUES(1, 2, 3),(4, 5, 6)) as t(x, y, z);",
+          dt);
+      EXPECT_EQ(rows->rowCount(), size_t(1));
+      const auto row = rows->getNextRow(false, false);
+      EXPECT_EQ(5, v<int64_t>(row[0]));
+      ASSERT_NEAR(3.5, v<double>(row[1]), double(0.01));
+      EXPECT_EQ(3, v<int64_t>(row[2]));
+    }
+    EXPECT_ANY_THROW(run_simple_agg("SELECT * FROM (VALUES(1, 'test'));", dt));
+  }
+}
+
 TEST(Select, UnsupportedNodes) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
-    EXPECT_THROW(run_multiple_agg("SELECT 1 + 2;", dt), std::runtime_error);
     // MAT No longer throws a logicalValues gets a regular parse error'
     // EXPECT_THROW(run_multiple_agg("SELECT *;", dt), std::runtime_error);
     EXPECT_THROW(run_multiple_agg("SELECT x, COUNT(*) FROM test GROUP BY ROLLUP(x);", dt),

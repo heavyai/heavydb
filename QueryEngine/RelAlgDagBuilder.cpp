@@ -300,6 +300,18 @@ std::shared_ptr<RelAlgNode> RelProject::deepCopy() const {
   return std::make_shared<RelProject>(exprs_copy, fields_, inputs_[0]);
 }
 
+std::shared_ptr<RelAlgNode> RelLogicalValues::deepCopy() const {
+  RexDeepCopyVisitor copier;
+  std::vector<RelLogicalValues::RowValues> values_copy;
+  for (auto& row : values_) {
+    values_copy.emplace_back(RelLogicalValues::RowValues{});
+    for (auto& value : row) {
+      values_copy.back().push_back(copier.visit(value.get()));
+    }
+  }
+  return std::make_shared<RelLogicalValues>(tuple_type_, values_copy);
+}
+
 std::shared_ptr<RelAlgNode> RelFilter::deepCopy() const {
   RexDeepCopyVisitor copier;
   auto filter_copy = copier.visit(filter_.get());
@@ -511,6 +523,9 @@ std::unique_ptr<RexLiteral> parse_literal(const rapidjson::Value& expr) {
   const auto precision = json_i64(field(expr, "precision"));
   const auto type_scale = json_i64(field(expr, "type_scale"));
   const auto type_precision = json_i64(field(expr, "type_precision"));
+  if (literal.IsNull()) {
+    return std::unique_ptr<RexLiteral>(new RexLiteral(target_type));
+  }
   switch (type) {
     case kDECIMAL:
     case kINTERVAL_DAY_TIME:
@@ -1040,8 +1055,8 @@ std::vector<const Rex*> reproject_targets(
 
 /**
  * The RexInputReplacement visitor visits each node in a given relational algebra
- * expression and replaces the inputs to that expression with inputs from a different node
- * in the RA tree. Used for coalescing nodes with complex expressions.
+ * expression and replaces the inputs to that expression with inputs from a different
+ * node in the RA tree. Used for coalescing nodes with complex expressions.
  */
 class RexInputReplacementVisitor : public RexDeepCopyVisitor {
  public:
@@ -1292,8 +1307,8 @@ bool input_can_be_coalesced(const RelAlgNode* parent_node,
 
 /**
  * CoalesceSecondaryProjectVisitor visits each relational algebra expression node in a
- * given input and determines whether or not the input is a candidate for coalescing into
- * the parent RA node. Intended for use only on the inputs of a RelProject node.
+ * given input and determines whether or not the input is a candidate for coalescing
+ * into the parent RA node. Intended for use only on the inputs of a RelProject node.
  */
 class CoalesceSecondaryProjectVisitor : public RexVisitor<bool> {
  public:
@@ -1480,10 +1495,10 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
 
 /**
  * WindowFunctionDetectionVisitor detects the presence of embedded Window Function Rex
- * Operators and returns a pointer to the WindowFunctionOperator. Only the first detected
- * operator will be returned (e.g. a binary operator that is WindowFunc1 & WindowFunc2
- * would return a pointer to WindowFunc1). Neither the window function operator nor its
- * parent expression are modified.
+ * Operators and returns a pointer to the WindowFunctionOperator. Only the first
+ * detected operator will be returned (e.g. a binary operator that is WindowFunc1 &
+ * WindowFunc2 would return a pointer to WindowFunc1). Neither the window function
+ * operator nor its parent expression are modified.
  */
 class WindowFunctionDetectionVisitor : public RexVisitor<const RexScalar*> {
  protected:
@@ -1511,8 +1526,8 @@ class WindowFunctionDetectionVisitor : public RexVisitor<const RexScalar*> {
   }
 
   // Detect embedded window function expressions in case statements. Note that this may
-  // manifest as a nested case statement inside a top level case statement, as some window
-  // functions (sum, avg) are represented as a case statement. Use the
+  // manifest as a nested case statement inside a top level case statement, as some
+  // window functions (sum, avg) are represented as a case statement. Use the
   // is_window_function_operator helper to detect complete window function expressions.
   const RexScalar* visitCase(const RexCase* rex_case) const final {
     if (is_window_function_operator(rex_case)) {
@@ -1553,8 +1568,8 @@ class WindowFunctionDetectionVisitor : public RexVisitor<const RexScalar*> {
  * `replacement_rex`. Typically used for splitting a complex rex into two simpler
  * rexes, and forwarding one of the rexes to a later node. The forwarded rex
  * is then replaced with a RexInput using this visitor.
- * Note that for window function replacement, the overloads in this visitor must match the
- * overloads in the detection visitor above, to ensure a detected window function
+ * Note that for window function replacement, the overloads in this visitor must match
+ * the overloads in the detection visitor above, to ensure a detected window function
  * expression is properly replaced.
  */
 class RexWindowFuncReplacementVisitor : public RexDeepCopyVisitor {
@@ -1623,8 +1638,8 @@ class RexWindowFuncReplacementVisitor : public RexDeepCopyVisitor {
  * Propagate an input backwards in the RA tree. With the exception of joins, all inputs
  * must be carried through the RA tree. This visitor takes as a parameter a source
  * projection RA Node, then checks to see if any inputs do not reference the source RA
- * node (which implies the inputs reference a node farther back in the tree). The input is
- * then backported to the source projection node, and a new input is generated which
+ * node (which implies the inputs reference a node farther back in the tree). The input
+ * is then backported to the source projection node, and a new input is generated which
  * references the input on the source RA node, thereby carrying the input through the
  * intermediate query step.
  */
@@ -2051,8 +2066,8 @@ class RelAlgDispatcher {
     const auto& row_types_array = row_types.GetArray();
 
     for (size_t i = 0; i < row_types_array.Size(); i++) {
-      // We don't care about the type information in rowType -- replace each output with a
-      // reference to be resolved later in the translator
+      // We don't care about the type information in rowType -- replace each output with
+      // a reference to be resolved later in the translator
       table_function_projected_outputs.emplace_back(std::make_unique<RexRef>(i));
       fields.emplace_back("");
     }
@@ -2082,10 +2097,28 @@ class RelAlgDispatcher {
     const auto& tuples_arr = field(logical_values_ra, "tuples");
     CHECK(tuples_arr.IsArray());
 
-    if (inputs_arr.Size() || tuples_arr.Size()) {
-      throw QueryNotSupported("Non-empty LogicalValues not supported yet");
+    if (inputs_arr.Size()) {
+      throw QueryNotSupported("Inputs not supported in logical values yet.");
     }
-    return std::make_shared<RelLogicalValues>(tuple_type);
+
+    std::vector<RelLogicalValues::RowValues> values;
+    if (tuples_arr.Size()) {
+      for (const auto& row : tuples_arr.GetArray()) {
+        CHECK(row.IsArray());
+        const auto values_json = row.GetArray();
+        if (!values.empty()) {
+          CHECK_EQ(values[0].size(), values_json.Size());
+        }
+        values.emplace_back(RelLogicalValues::RowValues{});
+        for (const auto& value : values_json) {
+          CHECK(value.IsObject());
+          CHECK(value.HasMember("literal"));
+          values.back().emplace_back(parse_literal(value));
+        }
+      }
+    }
+
+    return std::make_shared<RelLogicalValues>(tuple_type, values);
   }
 
   std::vector<std::shared_ptr<const RelAlgNode>> getRelAlgInputs(
@@ -2120,6 +2153,7 @@ RelAlgDagBuilder::RelAlgDagBuilder(const std::string& query_ra,
     : cat_(cat), render_info_(render_info) {
   rapidjson::Document query_ast;
   query_ast.Parse(query_ra.c_str());
+  VLOG(2) << "Parsing query RA JSON: " << query_ra;
   if (query_ast.HasParseError()) {
     query_ast.GetParseError();
     LOG(ERROR) << "Failed to parse RA tree from Calcite (offset "

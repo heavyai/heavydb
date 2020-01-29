@@ -61,9 +61,9 @@ class RelAlgTranslator {
       const RexAgg* rex,
       const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources);
 
- private:
   static std::shared_ptr<Analyzer::Expr> translateLiteral(const RexLiteral*);
 
+ private:
   std::shared_ptr<Analyzer::Expr> translateScalarSubquery(const RexSubQuery*) const;
 
   std::shared_ptr<Analyzer::Expr> translateInput(const RexInput*) const;

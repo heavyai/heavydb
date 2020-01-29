@@ -365,7 +365,9 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       if (g_skip_intermediate_count && step_idx > 0 && !g_cluster) {
         auto prev_exec_desc = seq.getDescriptor(step_idx - 1);
         CHECK(prev_exec_desc);
-        if (dynamic_cast<const RelCompound*>(prev_exec_desc->getBody())) {
+        // If the previous node produced a reliable count, skip the pre-flight count
+        if (dynamic_cast<const RelCompound*>(prev_exec_desc->getBody()) ||
+            dynamic_cast<const RelLogicalValues*>(prev_exec_desc->getBody())) {
           const auto& prev_exe_result = prev_exec_desc->getResult();
           const auto prev_result = prev_exe_result.getRows();
           if (prev_result) {
@@ -1483,24 +1485,28 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
   if (eo.just_explain) {
     throw std::runtime_error("EXPLAIN not supported for LogicalValues");
   }
+
   QueryMemoryDescriptor query_mem_desc(executor_,
-                                       1,
-                                       QueryDescriptionType::NonGroupedAggregate,
+                                       logical_values->getNumRows(),
+                                       QueryDescriptionType::Projection,
                                        /*is_table_function=*/false);
 
-  const auto& tuple_type = logical_values->getTupleType();
+  auto tuple_type = logical_values->getTupleType();
   for (size_t i = 0; i < tuple_type.size(); ++i) {
-    query_mem_desc.addColSlotInfo({std::make_tuple(8, 8)});
+    auto& target_meta_info = tuple_type[i];
+    if (target_meta_info.get_type_info().is_varlen()) {
+      throw std::runtime_error("Variable length types not supported in VALUES yet.");
+    }
+    if (target_meta_info.get_type_info().get_type() == kNULLT) {
+      // replace w/ bigint
+      tuple_type[i] =
+          TargetMetaInfo(target_meta_info.get_resname(), SQLTypeInfo(kBIGINT, false));
+    }
+    query_mem_desc.addColSlotInfo(
+        {std::make_tuple(tuple_type[i].get_type_info().get_size(), 8)});
   }
   logical_values->setOutputMetainfo(tuple_type);
-  std::vector<std::unique_ptr<Analyzer::ColumnVar>> owned_column_expressions;
-  std::vector<Analyzer::Expr*> target_expressions;
-  for (const auto& tuple_component : tuple_type) {
-    const auto column_var =
-        new Analyzer::ColumnVar(tuple_component.get_type_info(), 0, 0, 0);
-    target_expressions.push_back(column_var);
-    owned_column_expressions.emplace_back(column_var);
-  }
+
   std::vector<TargetInfo> target_infos;
   for (const auto& tuple_type_component : tuple_type) {
     target_infos.emplace_back(TargetInfo{false,
@@ -1515,6 +1521,44 @@ ExecutionResult RelAlgExecutor::executeLogicalValues(
                                         query_mem_desc,
                                         executor_->getRowSetMemoryOwner(),
                                         executor_);
+
+  if (logical_values->hasRows()) {
+    CHECK_EQ(logical_values->getRowsSize(), logical_values->size());
+
+    auto storage = rs->allocateStorage();
+    auto buff = storage->getUnderlyingBuffer();
+
+    for (size_t i = 0; i < logical_values->getNumRows(); i++) {
+      std::vector<std::shared_ptr<Analyzer::Expr>> row_literals;
+      int8_t* ptr = buff + i * query_mem_desc.getRowSize();
+
+      for (size_t j = 0; j < logical_values->getRowsSize(); j++) {
+        auto rex_literal =
+            dynamic_cast<const RexLiteral*>(logical_values->getValueAt(i, j));
+        CHECK(rex_literal);
+        const auto expr = RelAlgTranslator::translateLiteral(rex_literal);
+        const auto constant = std::dynamic_pointer_cast<Analyzer::Constant>(expr);
+        CHECK(constant);
+
+        if (constant->get_is_null()) {
+          CHECK(!target_infos[j].sql_type.is_varlen());
+          *reinterpret_cast<int64_t*>(ptr) =
+              inline_int_null_val(target_infos[j].sql_type);
+        } else {
+          const auto ti = constant->get_type_info();
+          const auto datum = constant->get_constval();
+
+          // Initialize the entire 8-byte slot
+          *reinterpret_cast<int64_t*>(ptr) = EMPTY_KEY_64;
+
+          const auto sz = ti.get_size();
+          CHECK_GE(sz, int(0));
+          std::memcpy(ptr, &datum, sz);
+        }
+        ptr += 8;
+      }
+    }
+  }
   return {rs, tuple_type};
 }
 
@@ -1714,8 +1758,8 @@ namespace {
 /**
  *  Upper bound estimation for the number of groups. Not strictly correct and not tight,
  * but if the tables involved are really small we shouldn't waste time doing the NDV
- * estimation. We don't account for cross-joins and / or group by unnested array, which is
- * the reason this estimation isn't entirely reliable.
+ * estimation. We don't account for cross-joins and / or group by unnested array, which
+ * is the reason this estimation isn't entirely reliable.
  */
 size_t groups_approx_upper_bound(const std::vector<InputTableInfo>& table_infos) {
   CHECK(!table_infos.empty());
@@ -1730,10 +1774,10 @@ size_t groups_approx_upper_bound(const std::vector<InputTableInfo>& table_infos)
 }
 
 /**
- * Determines whether a query needs to compute the size of its output buffer. Returns true
- * for projection queries with no LIMIT or a LIMIT that exceeds the high scan limit
- * threshold (meaning it would be cheaper to compute the number of rows passing or use the
- * bump allocator than allocate the current scan limit per GPU)
+ * Determines whether a query needs to compute the size of its output buffer. Returns
+ * true for projection queries with no LIMIT or a LIMIT that exceeds the high scan limit
+ * threshold (meaning it would be cheaper to compute the number of rows passing or use
+ * the bump allocator than allocate the current scan limit per GPU)
  */
 bool compute_output_buffer_size(const RelAlgExecutionUnit& ra_exe_unit) {
   for (const auto target_expr : ra_exe_unit.target_exprs) {
@@ -1931,8 +1975,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       [&](const auto max_groups_buffer_entry_guess_in,
           const bool has_cardinality_estimation) -> ExecutionResult {
     // Note that the groups buffer entry guess may be modified during query execution.
-    // Create a local copy so we can track those changes if we need to attempt a retry due
-    // to OOM
+    // Create a local copy so we can track those changes if we need to attempt a retry
+    // due to OOM
     auto local_groups_buffer_entry_guess = max_groups_buffer_entry_guess_in;
     try {
       return {executor_->executeWorkUnit(local_groups_buffer_entry_guess,
