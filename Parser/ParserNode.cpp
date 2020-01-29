@@ -1725,7 +1725,6 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
     const auto& col_ti = cd->columnType;
     if (col_ti.get_physical_cols() > 0) {
       CHECK(cd->columnType.is_geometry());
-      // auto c = std::dynamic_pointer_cast<const Analyzer::Constant>(e);
       auto c = dynamic_cast<const Analyzer::Constant*>(e.get());
       if (!c) {
         auto uoper = std::dynamic_pointer_cast<Analyzer::UOper>(e);

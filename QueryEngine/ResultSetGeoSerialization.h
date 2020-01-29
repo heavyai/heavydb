@@ -75,8 +75,9 @@ namespace {
 
 template <typename T>
 void unpack_geo_vector(std::vector<T>& output, const int8_t* input_ptr, const size_t sz) {
-  if (sz == 0)
+  if (sz == 0) {
     return;
+  }
   auto elems = reinterpret_cast<const T*>(input_ptr);
   CHECK_EQ(size_t(0), sz % sizeof(T));
   const size_t num_elems = sz / sizeof(T);
@@ -90,8 +91,9 @@ template <typename T>
 void decompress_geo_coords_geoint32(std::vector<T>& dec,
                                     const int8_t* enc,
                                     const size_t sz) {
-  if (sz == 0)
+  if (sz == 0) {
     return;
+  }
   const auto compressed_coords = reinterpret_cast<const int32_t*>(enc);
   const auto num_coords = sz / sizeof(int32_t);
   dec.resize(num_coords);
@@ -159,8 +161,8 @@ template <>
 struct GeoWktSerializer<kPOINT> {
   static inline TargetValue serialize(const SQLTypeInfo& geo_ti,
                                       std::array<VarlenDatumPtr, 1>& vals) {
+    // TODO: support EMPTY geo and serialize it as GEOMETRYCOLLECTION EMPTY
     if (!geo_ti.get_notnull() && vals[0]->is_null) {
-      // May need to generate "POINT EMPTY" instead of NULL
       return NullableString("NULL");
     }
     Geo_namespace::GeoPoint point(
