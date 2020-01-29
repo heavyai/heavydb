@@ -16,8 +16,8 @@
 
 #include "ColumnarResults.h"
 #include "Descriptors/RowSetMemoryOwner.h"
-
-#include "../Shared/thread_count.h"
+#include "Shared/Intervals.h"
+#include "Shared/thread_count.h"
 
 #include <atomic>
 #include <future>
@@ -158,13 +158,7 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
   if (isParallelConversion()) {
     const size_t worker_count = cpu_threads();
     std::vector<std::future<void>> conversion_threads;
-    const auto entry_count = rows.entryCount();
-    for (size_t i = 0,
-                start_entry = 0,
-                stride = (entry_count + worker_count - 1) / worker_count;
-         i < worker_count && start_entry < entry_count;
-         ++i, start_entry += stride) {
-      const auto end_entry = std::min(start_entry + stride, entry_count);
+    for (auto interval : makeIntervals(size_t(0), rows.entryCount(), worker_count)) {
       conversion_threads.push_back(std::async(
           std::launch::async,
           [&rows, &do_work, &row_idx](const size_t start, const size_t end) {
@@ -175,8 +169,8 @@ void ColumnarResults::materializeAllColumnsThroughIteration(const ResultSet& row
               }
             }
           },
-          start_entry,
-          end_entry));
+          interval.begin,
+          interval.end));
     }
     for (auto& child : conversion_threads) {
       child.wait();
@@ -422,26 +416,20 @@ void ColumnarResults::materializeAllLazyColumns(
       };
 
   // parallelized by assigning a chunk of rows to each thread)
-  const bool skip_non_lazy_columns = rows.isPermutationBufferEmpty() ? true : false;
+  const bool skip_non_lazy_columns = rows.isPermutationBufferEmpty();
   if (contains_lazy_fetched_column(lazy_fetch_info)) {
     const size_t worker_count = use_parallel_algorithms(rows) ? cpu_threads() : 1;
     std::vector<std::future<void>> conversion_threads;
-    const auto entry_count = rows.entryCount();
     std::vector<bool> targets_to_skip;
     if (skip_non_lazy_columns) {
       CHECK_EQ(lazy_fetch_info.size(), size_t(num_columns));
       targets_to_skip.reserve(num_columns);
       for (size_t i = 0; i < num_columns; i++) {
         // we process lazy columns (i.e., skip non-lazy columns)
-        targets_to_skip.push_back(lazy_fetch_info[i].is_lazily_fetched ? false : true);
+        targets_to_skip.push_back(!lazy_fetch_info[i].is_lazily_fetched);
       }
     }
-    for (size_t i = 0,
-                start_entry = 0,
-                stride = (entry_count + worker_count - 1) / worker_count;
-         i < worker_count && start_entry < entry_count;
-         ++i, start_entry += stride) {
-      const auto end_entry = std::min(start_entry + stride, entry_count);
+    for (auto interval : makeIntervals(size_t(0), rows.entryCount(), worker_count)) {
       conversion_threads.push_back(std::async(
           std::launch::async,
           [&rows, &do_work_just_lazy_columns, &targets_to_skip](const size_t start,
@@ -451,8 +439,8 @@ void ColumnarResults::materializeAllLazyColumns(
               do_work_just_lazy_columns(crt_row, i, targets_to_skip);
             }
           },
-          start_entry,
-          end_entry));
+          interval.begin,
+          interval.end));
     }
 
     for (auto& child : conversion_threads) {
