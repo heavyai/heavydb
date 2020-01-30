@@ -62,7 +62,6 @@ import org.apache.calcite.sql.SqlAsOperator;
 import org.apache.calcite.sql.SqlBasicCall;
 import org.apache.calcite.sql.SqlBasicTypeNameSpec;
 import org.apache.calcite.sql.SqlCall;
-import org.apache.calcite.sql.SqlCollectionTypeNameSpec;
 import org.apache.calcite.sql.SqlDataTypeSpec;
 import org.apache.calcite.sql.SqlDelete;
 import org.apache.calcite.sql.SqlDialect;
@@ -324,6 +323,8 @@ public final class MapDParser {
                                           .setConformance(SqlConformanceEnum.LENIENT)
                                           .setUnquotedCasing(Casing.UNCHANGED)
                                           .setCaseSensitive(false)
+                                          // allow identifiers of up to 512 chars
+                                          .setIdentifierMaxLength(512)
                                           .build())
                     .sqlToRelConverterConfig(
                             SqlToRelConverter
