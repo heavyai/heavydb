@@ -790,12 +790,10 @@ void ResultSetStorage::reduceOneEntryBaseline(int8_t* this_buff,
   if (isEmptyEntry(that_entry_idx, that_buff)) {
     return;
   }
-  int64_t* this_entry_slots{nullptr};
   auto this_buff_i64 = reinterpret_cast<int64_t*>(this_buff);
   auto that_buff_i64 = reinterpret_cast<const int64_t*>(that_buff);
-  bool empty_entry = false;
   const auto key = make_key(&that_buff_i64[key_off], that_entry_count, key_count);
-  std::tie(this_entry_slots, empty_entry) = get_group_value_columnar_reduction(
+  auto [this_entry_slots, empty_entry] = get_group_value_columnar_reduction(
       this_buff_i64, query_mem_desc_.getEntryCount(), &key[0], key_count);
   CHECK(this_entry_slots);
   if (empty_entry) {

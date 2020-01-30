@@ -615,9 +615,7 @@ std::pair<size_t, size_t> ResultSet::getStorageIndex(const size_t entry_idx) con
 }
 
 ResultSet::StorageLookupResult ResultSet::findStorage(const size_t entry_idx) const {
-  size_t stg_idx;
-  size_t fixedup_entry_idx;
-  std::tie(stg_idx, fixedup_entry_idx) = getStorageIndex(entry_idx);
+  auto [stg_idx, fixedup_entry_idx] = getStorageIndex(entry_idx);
   return {stg_idx ? appended_storage_[stg_idx - 1].get() : storage_.get(),
           fixedup_entry_idx,
           stg_idx};
