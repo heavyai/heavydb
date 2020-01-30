@@ -19,21 +19,26 @@
 
 #include "Logger.h"
 
+#ifndef __CUDACC__
 #include <boost/regex.hpp>
+#endif
 
 #include <algorithm>
 #include <iomanip>
 #include <sstream>
 #include <string>
+#include <vector>
 
 // NOTE: check for C++17 is required here because Parser/ is pinned to C++14.
 #if __cplusplus >= 201703L
 #include <string_view>
 #endif  // __cplusplus >= 201703L
 
+#ifndef __CUDACC__
 void apply_shim(std::string& result,
                 const boost::regex& reg_expr,
                 const std::function<void(std::string&, const boost::smatch&)>& shim_fn);
+#endif
 
 std::vector<std::pair<size_t, size_t>> find_string_literals(const std::string& query);
 
