@@ -666,6 +666,9 @@ set_dpkg_arch(${CMAKE_SYSTEM_PROCESSOR} CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
 
 install(DIRECTORY ThirdParty/licenses DESTINATION "ThirdParty/")
 
+# OmniSciTypes.h local includes (for UDF/UDTF)
+install(FILES Shared/funcannotations.h DESTINATION "Shared/")
+
 # Frontend
 option(MAPD_IMMERSE_DOWNLOAD "Download OmniSci Immerse for packaging" OFF)
 set(MAPD_IMMERSE_URL ${MAPD_IMMERSE_URL} CACHE STRING "URL to bundled frontend")
