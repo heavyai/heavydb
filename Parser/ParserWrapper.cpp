@@ -111,7 +111,6 @@ ParserWrapper::ParserWrapper(std::string query_string) {
                                 boost::regex::extended | boost::regex::icase};
         if (boost::regex_match(query_string, ctas_regex)) {
           is_ctas = true;
-          return;
         }
 
         if (g_enable_fsi) {
