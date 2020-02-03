@@ -79,7 +79,7 @@ std::string parse_to_ra(query_state::QueryStateProxy query_state_proxy,
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto const& cat = session->getCatalog();
   return cat.getCalciteMgr()
-      ->process(query_state_proxy, query_str, {}, true, false, false)
+      ->process(query_state_proxy, query_str, {}, true, false, false, true)
       .plan_result;
 }
 

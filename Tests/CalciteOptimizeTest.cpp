@@ -60,17 +60,17 @@ TEST_F(ViewObject, BasicTest) {
 
   auto qs1 = QR::create_query_state(session, "select i1 from table1");
   TPlanResult tresult = g_calcite->process(
-      qs1->createQueryStateProxy(), qs1->getQueryStr(), {}, true, false, false);
+      qs1->createQueryStateProxy(), qs1->getQueryStr(), {}, true, false, false, true);
 
   auto qs2 = QR::create_query_state(session, "select i1 from view_view_table1");
   TPlanResult vresult = g_calcite->process(
-      qs2->createQueryStateProxy(), qs2->getQueryStr(), {}, true, false, false);
+      qs2->createQueryStateProxy(), qs2->getQueryStr(), {}, true, false, false, true);
 
   EXPECT_EQ(vresult.plan_result, tresult.plan_result);
 
   auto qs3 = QR::create_query_state(session, "select i1 from view_view_table1");
   TPlanResult ovresult = g_calcite->process(
-      qs3->createQueryStateProxy(), qs3->getQueryStr(), {}, true, false, true);
+      qs3->createQueryStateProxy(), qs3->getQueryStr(), {}, true, false, true, true);
 
   EXPECT_EQ(ovresult.plan_result, tresult.plan_result);
 
@@ -79,14 +79,14 @@ TEST_F(ViewObject, BasicTest) {
       "SELECT shape_table.rowid FROM shape_table, attribute_table WHERE "
       "shape_table.block_group_id = attribute_table.block_group_id");
   TPlanResult tab_result = g_calcite->process(
-      qs4->createQueryStateProxy(), qs4->getQueryStr(), {}, true, false, true);
+      qs4->createQueryStateProxy(), qs4->getQueryStr(), {}, true, false, true, true);
 
   auto qs5 = QR::create_query_state(
       session,
       "SELECT shape_view.rowid FROM shape_view, attribute_view WHERE "
       "shape_view.block_group_id = attribute_view.block_group_id");
   TPlanResult view_result = g_calcite->process(
-      qs5->createQueryStateProxy(), qs5->getQueryStr(), {}, true, false, true);
+      qs5->createQueryStateProxy(), qs5->getQueryStr(), {}, true, false, true, true);
   EXPECT_EQ(tab_result.plan_result, view_result.plan_result);
 }
 

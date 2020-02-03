@@ -2289,7 +2289,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   // view optimization
   const auto query_ra =
       calcite_mgr
-          ->process(query_state_proxy, pg_shim(select_stmt), {}, true, false, false)
+          ->process(query_state_proxy, pg_shim(select_stmt), {}, true, false, false, true)
           .plan_result;
   CompilationOptions co = {
       device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
@@ -4427,8 +4427,13 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   const auto query_after_shim = pg_shim(select_query_);
 
   // this now also ensures that access permissions are checked
-  catalog.getCalciteMgr()->process(
-      query_state->createQueryStateProxy(), query_after_shim, {}, true, false, false);
+  catalog.getCalciteMgr()->process(query_state->createQueryStateProxy(),
+                                   query_after_shim,
+                                   {},
+                                   true,
+                                   false,
+                                   false,
+                                   true);
   TableDescriptor td;
   td.tableName = view_name_;
   td.userId = session.get_currentUser().userId;

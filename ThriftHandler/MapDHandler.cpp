@@ -1000,7 +1000,8 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
                                query_str,
                                {},
                                tableNames,
-                               mapd_parameters_);
+                               mapd_parameters_)
+                       .plan_result;
       });
 
       // COPY_TO/SELECT: get read ExecutorOuterLock >> TableReadLock for each table  (note
@@ -1301,7 +1302,8 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                       query_state_proxy.getQueryState().getQueryStr(),
                                       {},
                                       boost::none,
-                                      mapd_parameters_);
+                                      mapd_parameters_)
+                              .plan_result;
     TQueryResult result;
     MapDHandler::execute_rel_alg(result,
                                  query_state_proxy,
@@ -1828,6 +1830,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
   if (!td) {
     THROW_MAPD_EXCEPTION("Table " + table_name + " doesn't exist");
   }
+  bool have_privileges_on_view_sources = true;
   if (td->isView) {
     auto query_state = create_query_state(session_info, td->viewSQL);
     stdlog.setQueryState(query_state);
@@ -1837,11 +1840,20 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
                                           query_state->getQueryStr(),
                                           {},
                                           boost::none,
-                                          mapd_parameters_);
+                                          mapd_parameters_,
+                                          nullptr,
+                                          false);
+        try {
+          calcite_->checkAccessedObjectsPrivileges(query_state->createQueryStateProxy(),
+                                                   query_ra);
+        } catch (const std::runtime_error&) {
+          have_privileges_on_view_sources = false;
+        }
+
         TQueryResult result;
         execute_rel_alg(result,
                         query_state->createQueryStateProxy(),
-                        query_ra,
+                        query_ra.plan_result,
                         true,
                         ExecutorDeviceType::CPU,
                         -1,
@@ -1853,7 +1865,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
                         false);
         _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
       } else {
-        THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
+        THROW_MAPD_EXCEPTION("User has no access privileges to view " + table_name);
       }
     } catch (const std::exception& e) {
       THROW_MAPD_EXCEPTION("View '" + table_name + "' query has failed with an error: '" +
@@ -1884,7 +1896,9 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
   _return.fragment_size = td->maxFragRows;
   _return.page_size = td->fragPageSize;
   _return.max_rows = td->maxRows;
-  _return.view_sql = td->viewSQL;
+  _return.view_sql =
+      (have_privileges_on_view_sources ? td->viewSQL
+                                       : "[Not enough privileges to see the view SQL]");
   _return.shard_count = td->nShards;
   _return.key_metainfo = td->keyMetainfo;
   _return.is_temporary = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
@@ -2025,7 +2039,8 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
                                           td->viewSQL,
                                           {},
                                           boost::none,
-                                          mapd_parameters_);
+                                          mapd_parameters_)
+                                  .plan_result;
         TQueryResult result;
         execute_rel_alg(result,
                         query_state->createQueryStateProxy(),
@@ -5001,7 +5016,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       std::string query_ra;
       _return.execution_time_ms += measure<>::execution([&]() {
         query_ra =
-            parse_to_ra(query_state_proxy, query_str, {}, tableNames, mapd_parameters_);
+            parse_to_ra(query_state_proxy, query_str, {}, tableNames, mapd_parameters_)
+                .plan_result;
       });
 
       std::string query_ra_calcite_explain;
@@ -5013,8 +5029,10 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         // removing the "explain calcite " from the beginning of the "query_str":
         std::string temp_query_str =
             query_str.substr(std::string("explain calcite ").length());
-        query_ra_calcite_explain = parse_to_ra(
-            query_state_proxy, temp_query_str, {}, boost::none, mapd_parameters_);
+        query_ra_calcite_explain =
+            parse_to_ra(
+                query_state_proxy, temp_query_str, {}, boost::none, mapd_parameters_)
+                .plan_result;
       } else if (pw.isCalciteDdl()) {
         // TODO: implement execution logic for FSI DDL commands
         LOG(INFO) << "Calcite response for DDL command:\n" << query_ra;
@@ -5070,7 +5088,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         // no filter push down so we continue with the initial (unchanged) query's calcite
         // explanation.
         query_ra =
-            parse_to_ra(query_state_proxy, query_str, {}, boost::none, mapd_parameters_);
+            parse_to_ra(query_state_proxy, query_str, {}, boost::none, mapd_parameters_)
+                .plan_result;
         convert_explain(_return, ResultSet(query_ra), true);
         return;
       }
@@ -5085,7 +5104,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         // no filter push down so we continue with the initial (unchanged) query's calcite
         // explanation.
         query_ra =
-            parse_to_ra(query_state_proxy, query_str, {}, boost::none, mapd_parameters_);
+            parse_to_ra(query_state_proxy, query_str, {}, boost::none, mapd_parameters_)
+                .plan_result;
         convert_explain(_return, ResultSet(query_ra), true);
         return;
       }
@@ -5259,7 +5279,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
       OptionalTableMap tableNames(table_map);
       const auto query_string = export_stmt->get_select_stmt();
       const auto query_ra =
-          parse_to_ra(query_state_proxy, query_string, {}, tableNames, mapd_parameters_);
+          parse_to_ra(query_state_proxy, query_string, {}, tableNames, mapd_parameters_)
+              .plan_result;
       TableLockMgr::getTableLocks(
           session_ptr->getCatalog(), tableNames.value(), table_locks);
     }
@@ -5321,7 +5342,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         OptionalTableMap tableNames(table_map);
         const auto query_string = stmtp->get_query()->to_string();
         const auto query_ra =
-            parse_to_ra(query_state_proxy, query_str, {}, tableNames, mapd_parameters_);
+            parse_to_ra(query_state_proxy, query_str, {}, tableNames, mapd_parameters_)
+                .plan_result;
         TableLockMgr::getTableLocks(
             session_ptr->getCatalog(), tableNames.value(), table_locks);
 
@@ -5382,7 +5404,8 @@ void MapDHandler::execute_rel_alg_with_filter_push_down(
                            query_state_proxy.getQueryState().getQueryStr(),
                            filter_push_down_info,
                            boost::none,
-                           mapd_parameters_);
+                           mapd_parameters_)
+                   .plan_result;
   });
 
   if (just_calcite_explain) {
@@ -5422,18 +5445,19 @@ void MapDHandler::execute_distributed_copy_statement(
   copy_stmt->execute(session_info, importer_factory);
 }
 
-std::string MapDHandler::parse_to_ra(
+TPlanResult MapDHandler::parse_to_ra(
     QueryStateProxy query_state_proxy,
     const std::string& query_str,
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
     OptionalTableMap tableNames,
     const MapDParameters mapd_parameters,
-    RenderInfo* render_info) {
+    RenderInfo* render_info,
+    bool check_privileges) {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
   ParserWrapper pw{query_str};
   const std::string actual_query{pw.isSelectExplain() ? pw.actual_query : query_str};
+  TPlanResult result;
   if (pw.isCalcitePathPermissable()) {
-    TPlanResult result;
     auto session_cleanup_handler = [&](const auto& session_id) {
       removeInMemoryCalciteSession(session_id);
     };
@@ -5447,6 +5471,7 @@ std::string MapDHandler::parse_to_ra(
                                    legacy_syntax_,
                                    pw.isCalciteExplain(),
                                    mapd_parameters.enable_calcite_view_optimize,
+                                   check_privileges,
                                    in_memory_session_id);
         session_cleanup_handler(in_memory_session_id);
       } catch (std::exception&) {
@@ -5478,9 +5503,8 @@ std::string MapDHandler::parse_to_ra(
       selected_tables = &result.resolved_accessed_objects.tables_selected_from;
       render_info->table_names.insert(selected_tables->begin(), selected_tables->end());
     }
-    return result.plan_result;
   }
-  return "";
+  return result;
 }
 
 void MapDHandler::check_table_consistency(TTableMeta& _return,
