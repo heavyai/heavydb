@@ -385,6 +385,7 @@ TPlanResult Calcite::process(
     const bool legacy_syntax,
     const bool is_explain,
     const bool is_view_optimize,
+    const bool check_privileges,
     const std::string& calcite_session_id) {
   TPlanResult result = processImpl(query_state_proxy,
                                    std::move(sql_string),
@@ -393,31 +394,34 @@ TPlanResult Calcite::process(
                                    is_explain,
                                    is_view_optimize,
                                    calcite_session_id);
-
-  AccessPrivileges NOOP;
-
-  if (!is_explain) {
-    // check the individual tables
-    auto const session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
-    checkPermissionForTables(*session_ptr,
-                             result.primary_accessed_objects.tables_selected_from,
-                             AccessPrivileges::SELECT_FROM_TABLE,
-                             AccessPrivileges::SELECT_FROM_VIEW);
-    checkPermissionForTables(*session_ptr,
-                             result.primary_accessed_objects.tables_inserted_into,
-                             AccessPrivileges::INSERT_INTO_TABLE,
-                             NOOP);
-    checkPermissionForTables(*session_ptr,
-                             result.primary_accessed_objects.tables_updated_in,
-                             AccessPrivileges::UPDATE_IN_TABLE,
-                             NOOP);
-    checkPermissionForTables(*session_ptr,
-                             result.primary_accessed_objects.tables_deleted_from,
-                             AccessPrivileges::DELETE_FROM_TABLE,
-                             NOOP);
+  if (check_privileges && !is_explain) {
+    checkAccessedObjectsPrivileges(query_state_proxy, result);
   }
-
   return result;
+}
+
+void Calcite::checkAccessedObjectsPrivileges(
+    query_state::QueryStateProxy query_state_proxy,
+    TPlanResult plan) const {
+  AccessPrivileges NOOP;
+  // check the individual tables
+  auto const session_ptr = query_state_proxy.getQueryState().getConstSessionInfo();
+  checkPermissionForTables(*session_ptr,
+                           plan.primary_accessed_objects.tables_selected_from,
+                           AccessPrivileges::SELECT_FROM_TABLE,
+                           AccessPrivileges::SELECT_FROM_VIEW);
+  checkPermissionForTables(*session_ptr,
+                           plan.primary_accessed_objects.tables_inserted_into,
+                           AccessPrivileges::INSERT_INTO_TABLE,
+                           NOOP);
+  checkPermissionForTables(*session_ptr,
+                           plan.primary_accessed_objects.tables_updated_in,
+                           AccessPrivileges::UPDATE_IN_TABLE,
+                           NOOP);
+  checkPermissionForTables(*session_ptr,
+                           plan.primary_accessed_objects.tables_deleted_from,
+                           AccessPrivileges::DELETE_FROM_TABLE,
+                           NOOP);
 }
 
 std::vector<TCompletionHint> Calcite::getCompletionHints(

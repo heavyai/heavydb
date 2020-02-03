@@ -562,12 +562,13 @@ class MapDHandler : public MapDIf {
   static TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti);
   static std::string apply_copy_to_shim(const std::string& query_str);
 
-  std::string parse_to_ra(QueryStateProxy,
+  TPlanResult parse_to_ra(QueryStateProxy,
                           const std::string& query_str,
                           const std::vector<TFilterPushDownInfo>& filter_push_down_info,
                           OptionalTableMap tableNames,
                           const MapDParameters mapd_parameters,
-                          RenderInfo* render_info = nullptr);
+                          RenderInfo* render_info = nullptr,
+                          bool check_privileges = true);
 
   void sql_execute_impl(TQueryResult& _return,
                         QueryStateProxy,

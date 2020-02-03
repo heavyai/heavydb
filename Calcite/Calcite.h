@@ -76,7 +76,10 @@ class Calcite final {
                       const bool legacy_syntax,
                       const bool is_explain,
                       const bool is_view_optimize,
+                      const bool check_privileges,
                       const std::string& calcite_session_id = "");
+  void checkAccessedObjectsPrivileges(query_state::QueryStateProxy query_state_prox,
+                                      TPlanResult plan) const;
   std::vector<TCompletionHint> getCompletionHints(
       const Catalog_Namespace::SessionInfo& session_info,
       const std::vector<std::string>& visible_tables,

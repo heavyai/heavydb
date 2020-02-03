@@ -1129,7 +1129,8 @@ TEST_F(ViewObject, CalciteViewResolution) {
                                             {},
                                             true,
                                             false,
-                                            false);
+                                            false,
+                                            true);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -1148,7 +1149,8 @@ TEST_F(ViewObject, CalciteViewResolution) {
                                 {},
                                 true,
                                 false,
-                                false);
+                                false,
+                                true);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);
@@ -1167,7 +1169,8 @@ TEST_F(ViewObject, CalciteViewResolution) {
                                 {},
                                 true,
                                 false,
-                                false);
+                                false,
+                                true);
   EXPECT_EQ(result.primary_accessed_objects.tables_selected_from.size(), (size_t)1);
   EXPECT_EQ(result.primary_accessed_objects.tables_inserted_into.size(), (size_t)0);
   EXPECT_EQ(result.primary_accessed_objects.tables_updated_in.size(), (size_t)0);

@@ -376,7 +376,8 @@ ExecutionResult run_select_query_with_filter_push_down(
                                       {},
                                       true,
                                       false,
-                                      false)
+                                      false,
+                                      true)
                             .plan_result;
   auto result =
       RelAlgExecutor(executor.get(), cat, query_ra).executeRelAlgQuery(co, eo, nullptr);
@@ -396,7 +397,8 @@ ExecutionResult run_select_query_with_filter_push_down(
                                             filter_push_down_info,
                                             true,
                                             false,
-                                            false)
+                                            false,
+                                            true)
                                   .plan_result;
     const ExecutionOptions eo_modified{eo.output_columnar_hint,
                                        eo.allow_multifrag,
@@ -460,7 +462,8 @@ ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
                                       {},
                                       true,
                                       false,
-                                      false)
+                                      false,
+                                      true)
                             .plan_result;
   return RelAlgExecutor(executor.get(), cat, query_ra)
       .executeRelAlgQuery(co, eo, nullptr);

@@ -61,7 +61,8 @@ Planner::RootPlan* QueryRunner::parsePlanCalcite(QueryStateProxy query_state_pro
                     {},
                     true,
                     false,
-                    false)
+                    false,
+                    true)
           .plan_result;  //  if we want to be able to check plans we may want to calc this
   return translate_query(query_ra, cat);
 }
