@@ -992,17 +992,16 @@ void Catalog::buildMaps() {
     if (!td->isView) {
       td->fragmenter = nullptr;
     }
+    td->storageType = sqliteConnector_.getData<string>(r, 17);
+    if (!td->storageType.empty()) {
+      LOG(FATAL) << "Unable to read Catalog metadata: storage type is currently not a "
+                    "supported table option (table "
+                 << td->tableName << " [" << td->tableId << "] in database "
+                 << currentDB_.dbName << ").";
+    }
     td->hasDeletedCol = false;
     tableDescriptorMap_[to_upper(td->tableName)] = td;
     tableDescriptorMapById_[td->tableId] = td;
-    td->storageType = sqliteConnector_.getData<string>(r, 17);
-    if (!td->storageType.empty()) {
-      // TODO: re-enable for persistent foreign storage, drop the table from the catalog /
-      // maps for transient foreign storage
-      /** ForeignStorageInterface::registerTable(
-       *   getCurrentDB().dbId, td->tableId, td->storageType);
-       */
-    }
   }
   string columnQuery(
       "SELECT tableid, columnid, name, coltype, colsubtype, coldim, colscale, "
@@ -2033,6 +2032,9 @@ void Catalog::createTable(
   list<ColumnDescriptor> columns;
 
   if (!td.storageType.empty()) {
+    if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+      throw std::runtime_error("Only temporary tables can be backed by foreign storage.");
+    }
     ForeignStorageInterface::prepareTable(getCurrentDB().dbId, td, cds);
   }
 

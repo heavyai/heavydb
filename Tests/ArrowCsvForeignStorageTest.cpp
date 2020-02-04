@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -139,6 +139,14 @@ TEST_F(NycTaxiTest, GroupByColumnWithNulls) {
       619,
       v<int64_t>(run_simple_agg(
           " select count(*) from (select pickup, count(*) from trips group by pickup)")));
+}
+
+TEST(Unsupported, Syntax) {
+  run_ddl_statement("DROP TABLE IF EXISTS fsi_unsupported;");
+  EXPECT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE fsi_unsupported (x INT, y DOUBLE) WITH "
+                        "(storage_type='CSV:../../Tests/Import/datafiles/"
+                        "trips_with_headers_top1000.csv');"));
 }
 
 }  // namespace
