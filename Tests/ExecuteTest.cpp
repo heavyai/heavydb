@@ -1282,17 +1282,6 @@ TEST(Select, FilterAndSimpleAggregation) {
                                          "(stddev_pop(x) * stddev_pop(y)) FROM test;",
                                          dt)),
                 static_cast<double>(0.01));
-
-    // == Tests related to GPU shared-memory support
-    if ((dt == ExecutorDeviceType::GPU) && g_enable_smem_group_by) {
-      c("SELECT COUNT(*) FROM test GROUP BY x ORDER BY x DESC;", dt);
-      c("SELECT y, COUNT(*) FROM test GROUP BY y ORDER BY y DESC;", dt);
-      c("SELECT str, COUNT(*) FROM test GROUP BY str ORDER BY str DESC;", dt);
-      c("SELECT COUNT(*), z FROM test where x = 7 GROUP BY z ORDER BY z DESC;", dt);
-      c("SELECT z as z0, z as z1, COUNT(*) FROM test GROUP BY z0, z1 ORDER BY z0 DESC;",
-        dt);
-      ;
-    }
   }
 }
 
@@ -6392,9 +6381,49 @@ TEST(Select, SpeculativeTopNSort) {
 }
 
 TEST(Select, GroupByPerfectHash) {
-  // TODO(Saman): add more systematic tests for single-column perfect hash
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
+    // single-column perfect hash:
+    c("SELECT COUNT(*) FROM test GROUP BY x ORDER BY x DESC;", dt);
+    c("SELECT y, COUNT(*) FROM test GROUP BY y ORDER BY y DESC;", dt);
+    c("SELECT str, COUNT(*) FROM test GROUP BY str ORDER BY str DESC;", dt);
+    c("SELECT COUNT(*), z FROM test where x = 7 GROUP BY z ORDER BY z DESC;", dt);
+    c("SELECT z as z0, z as z1, COUNT(*) FROM test GROUP BY z0, z1 ORDER BY z0 DESC;",
+      dt);
+    c("SELECT x, COUNT(y), SUM(y), AVG(y), MIN(y), MAX(y) FROM test GROUP BY x ORDER BY "
+      "x DESC;",
+      dt);
+    c("SELECT y, SUM(fn), AVG(ff), MAX(f) from test GROUP BY y ORDER BY y DESC;", dt);
+
+    {
+      // all these key columns are small ranged to force perfect hash
+      std::vector<std::pair<std::string, std::string>> query_ids;
+      query_ids.push_back({"big_int_null", "SUM(float_null), COUNT(*)"});
+      query_ids.push_back({"id", "AVG(big_int_null), COUNT(*)"});
+      query_ids.push_back({"id_null", "MAX(tiny_int), MIN(tiny_int)"});
+      query_ids.push_back(
+          {"small_int", "SUM(cast (id as double)), SUM(double_not_null)"});
+      query_ids.push_back({"tiny_int", "COUNT(small_int_null), COUNT(*)"});
+      query_ids.push_back({"tiny_int_null", "AVG(small_int), COUNT(tiny_int)"});
+      query_ids.push_back({"case when id = 6 then -17 when id = 5 then 33 else NULL end",
+                           "COUNT(*), AVG(small_int_null)"});
+      query_ids.push_back(
+          {"case when id = 5 then NULL when id = 6 then -57 else cast(61 as tinyint) end",
+           "AVG(big_int), SUM(tiny_int)"});
+      query_ids.push_back(
+          {"case when float_not_null > 2 then -3 when float_null < 4 then "
+           "87 else NULL end",
+           "MAX(id), COUNT(*)"});
+      const std::string table_name("logical_size_test");
+      for (auto& pqid : query_ids) {
+        std::string query("SELECT " + pqid.first + ", " + pqid.second + " FROM ");
+        query += (table_name + " GROUP BY " + pqid.first + " ORDER BY " + pqid.first);
+        query += " ASC";
+        c(query + " NULLS FIRST;", query + ";", dt);
+      }
+    }
+
+    // multi-column perfect hash:
     c("SELECT str, x FROM test GROUP BY x, str ORDER BY str, x;", dt);
     c("SELECT str, x, MAX(smallint_nulls), AVG(y), COUNT(dn) FROM test GROUP BY x, "
       "str ORDER BY str, x;",
