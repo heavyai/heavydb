@@ -986,11 +986,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
           auto builder = cgen_state_->ir_builder_;
           auto array_size_arg =
               builder.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_));
-          int32_t compression = (arg_ti.get_compression() == kENCODING_GEOINT &&
-                                 arg_ti.get_comp_param() == 32)
-                                    ? 1
-                                    : 0;
-          auto compression_val = cgen_state_->llInt(compression);
+          auto compression_val = codegenCompression(arg_ti);
           auto input_srid_val = cgen_state_->llInt(arg_ti.get_input_srid());
           auto output_srid_val = cgen_state_->llInt(arg_ti.get_output_srid());
 
@@ -1031,73 +1027,33 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
             auto builder = cgen_state_->ir_builder_;
             auto array_size_arg =
                 builder.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_));
-            int32_t compression = (arg_ti.get_compression() == kENCODING_GEOINT &&
-                                   arg_ti.get_comp_param() == 32)
-                                      ? 1
-                                      : 0;
-            auto compression_val = cgen_state_->llInt(compression);
+            auto compression_val = codegenCompression(arg_ti);
             auto input_srid_val = cgen_state_->llInt(arg_ti.get_input_srid());
             auto output_srid_val = cgen_state_->llInt(arg_ti.get_output_srid());
-            k++;
-            // Ring Sizes
-            const auto elem_ti = SQLTypeInfo(SQLTypes::kARRAY,
-                                             0,
-                                             0,
-                                             false,
-                                             EncodingType::kENCODING_NONE,
-                                             0,
-                                             SQLTypes::kINT)
-                                     .get_elem_type();
-            const auto ptr_lv = cgen_state_->emitExternalCall(
-                "array_buff",
-                llvm::Type::getInt32PtrTy(cgen_state_->context_),
-                {orig_arg_lvs[k], posArg(arg)});
-            const auto len_lv = cgen_state_->emitExternalCall(
-                "array_size",
-                get_int_type(32, cgen_state_->context_),
-                {orig_arg_lvs[k],
-                 posArg(arg),
-                 cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))});
-            auto ring_size_buf_arg = castArrayPointer(ptr_lv, elem_ti);
-            auto ring_size_arg =
-                builder.CreateZExt(len_lv, get_int_type(64, cgen_state_->context_));
+
+            auto [ring_size_buff, ring_size] =
+                codegenArrayBuff(orig_arg_lvs[k + 1], posArg(arg), SQLTypes::kINT, true);
 
             codegenGeoPolygonArgs(ext_func_sig->getName(),
-                                  k - 1,
+                                  k,
                                   array_buf_arg,
                                   array_size_arg,
-                                  ring_size_buf_arg,
-                                  ring_size_arg,
+                                  ring_size_buff,
+                                  ring_size,
                                   compression_val,
                                   input_srid_val,
                                   output_srid_val,
                                   args);
-
-          } else {
             k++;
+          } else {
             // Ring Sizes
-            const auto elem_ti = SQLTypeInfo(SQLTypes::kARRAY,
-                                             0,
-                                             0,
-                                             false,
-                                             EncodingType::kENCODING_NONE,
-                                             0,
-                                             SQLTypes::kINT)
-                                     .get_elem_type();
-            const auto ptr_lv = cgen_state_->emitExternalCall(
-                "array_buff",
-                llvm::Type::getInt32PtrTy(cgen_state_->context_),
-                {orig_arg_lvs[k], posArg(arg)});
-            const auto len_lv = cgen_state_->emitExternalCall(
-                "array_size",
-                get_int_type(32, cgen_state_->context_),
-                {orig_arg_lvs[k],
-                 posArg(arg),
-                 cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))});
 
-            args.push_back(castArrayPointer(ptr_lv, elem_ti));
-            args.push_back(cgen_state_->ir_builder_.CreateZExt(
-                len_lv, get_int_type(64, cgen_state_->context_)));
+            auto [ring_size_buff, ring_size] =
+                codegenArrayBuff(orig_arg_lvs[k + 1], posArg(arg), SQLTypes::kINT, true);
+
+            args.push_back(ring_size_buff);
+            args.push_back(ring_size);
+            k++;
             j++;
           }
           break;
@@ -1112,15 +1068,11 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
             auto input_srid_val = cgen_state_->llInt(arg_ti.get_input_srid());
             auto output_srid_val = cgen_state_->llInt(arg_ti.get_output_srid());
 
-            std::pair<llvm::Value*, llvm::Value*> ring_size_ret_val =
+            auto [ring_size_buff, ring_size] =
                 codegenArrayBuff(orig_arg_lvs[k + 1], posArg(arg), SQLTypes::kINT, true);
-            auto ring_size_buff = ring_size_ret_val.first;
-            auto ring_size = ring_size_ret_val.second;
 
-            std::pair<llvm::Value*, llvm::Value*> poly_bounds_ret_val =
+            auto [poly_bounds_buff, poly_bounds_size] =
                 codegenArrayBuff(orig_arg_lvs[k + 2], posArg(arg), SQLTypes::kINT, true);
-            auto poly_bounds_buff = poly_bounds_ret_val.first;
-            auto poly_bounds_size = poly_bounds_ret_val.second;
 
             codegenGeoMultiPolygonArgs(ext_func_sig->getName(),
                                        k,
@@ -1140,53 +1092,21 @@ std::vector<llvm::Value*> CodeGenerator::codegenFunctionOperCastArgs(
             k++;
             // Ring Sizes
             {
-              const auto elem_ti = SQLTypeInfo(SQLTypes::kARRAY,
-                                               0,
-                                               0,
-                                               false,
-                                               EncodingType::kENCODING_NONE,
-                                               0,
-                                               SQLTypes::kINT)
-                                       .get_elem_type();
-              const auto ptr_lv = cgen_state_->emitExternalCall(
-                  "array_buff",
-                  llvm::Type::getInt32PtrTy(cgen_state_->context_),
-                  {orig_arg_lvs[k], posArg(arg)});
-              const auto len_lv = cgen_state_->emitExternalCall(
-                  "array_size",
-                  get_int_type(32, cgen_state_->context_),
-                  {orig_arg_lvs[k],
-                   posArg(arg),
-                   cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))});
-              args.push_back(castArrayPointer(ptr_lv, elem_ti));
-              args.push_back(cgen_state_->ir_builder_.CreateZExt(
-                  len_lv, get_int_type(64, cgen_state_->context_)));
+              auto [ring_size_buff, ring_size] =
+                  codegenArrayBuff(orig_arg_lvs[k], posArg(arg), SQLTypes::kINT, true);
+
+              args.push_back(ring_size_buff);
+              args.push_back(ring_size);
             }
             j++, k++;
 
             // Poly Rings
             {
-              const auto elem_ti = SQLTypeInfo(SQLTypes::kARRAY,
-                                               0,
-                                               0,
-                                               false,
-                                               EncodingType::kENCODING_NONE,
-                                               0,
-                                               SQLTypes::kINT)
-                                       .get_elem_type();
-              const auto ptr_lv = cgen_state_->emitExternalCall(
-                  "array_buff",
-                  llvm::Type::getInt32PtrTy(cgen_state_->context_),
-                  {orig_arg_lvs[k], posArg(arg)});
-              const auto len_lv = cgen_state_->emitExternalCall(
-                  "array_size",
-                  get_int_type(32, cgen_state_->context_),
-                  {orig_arg_lvs[k],
-                   posArg(arg),
-                   cgen_state_->llInt(log2_bytes(elem_ti.get_logical_size()))});
-              args.push_back(castArrayPointer(ptr_lv, elem_ti));
-              args.push_back(cgen_state_->ir_builder_.CreateZExt(
-                  len_lv, get_int_type(64, cgen_state_->context_)));
+              auto [poly_bounds_buff, poly_bounds_size] =
+                  codegenArrayBuff(orig_arg_lvs[k], posArg(arg), SQLTypes::kINT, true);
+
+              args.push_back(poly_bounds_buff);
+              args.push_back(poly_bounds_size);
             }
             j++;
           }
