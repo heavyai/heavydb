@@ -25,6 +25,8 @@ JoinLoop::JoinLoop(const JoinLoopKind kind,
                    const JoinType type,
                    const std::function<JoinLoopDomain(const std::vector<llvm::Value*>&)>&
                        iteration_domain_codegen,
+                   const std::function<void(const std::vector<llvm::Value*>&)>&
+                       payload_iterators_codegen,
                    const std::function<llvm::Value*(const std::vector<llvm::Value*>&)>&
                        outer_condition_match,
                    const std::function<void(llvm::Value*)>& found_outer_matches,
@@ -34,6 +36,7 @@ JoinLoop::JoinLoop(const JoinLoopKind kind,
     : kind_(kind)
     , type_(type)
     , iteration_domain_codegen_(iteration_domain_codegen)
+    , payload_iterators_codegen_(payload_iterators_codegen)
     , outer_condition_match_(outer_condition_match)
     , found_outer_matches_(found_outer_matches)
     , is_deleted_(is_deleted)
@@ -95,10 +98,14 @@ llvm::BasicBlock* JoinLoop::codegen(
         auto iteration_val = iteration_counter;
         CHECK(join_loop.kind_ == JoinLoopKind::Set || !iteration_domain.values_buffer);
         if (join_loop.kind_ == JoinLoopKind::Set) {
-          iteration_val =
-              builder.CreateGEP(iteration_domain.values_buffer, iteration_counter);
+          auto offs = builder.CreateMul(iteration_counter,
+                                        ll_int(iteration_domain.entry_size, context));
+          iteration_val = builder.CreateGEP(iteration_domain.values_buffer, offs);
         }
         iterators.push_back(iteration_val);
+        if (join_loop.payload_iterators_codegen_) {
+          join_loop.payload_iterators_codegen_(iterators);
+        }
         const auto have_more_inner_rows = builder.CreateICmpSLT(
             iteration_counter,
             join_loop.kind_ == JoinLoopKind::UpperBound ? iteration_domain.upper_bound
@@ -162,6 +169,9 @@ llvm::BasicBlock* JoinLoop::codegen(
         const auto iteration_domain = join_loop.iteration_domain_codegen_(iterators);
         CHECK(!iteration_domain.values_buffer);
         iterators.push_back(iteration_domain.slot_lookup_result);
+        if (join_loop.payload_iterators_codegen_) {
+          join_loop.payload_iterators_codegen_(iterators);
+        }
         auto match_found = builder.CreateICmpSGE(iteration_domain.slot_lookup_result,
                                                  ll_int<int64_t>(0, context));
         if (join_loop.is_deleted_) {

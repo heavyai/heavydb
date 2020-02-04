@@ -287,6 +287,7 @@ class MapDProgramOptions {
   bool allow_multifrag = true;
   bool read_only = false;
   bool allow_loop_joins = false;
+  bool join_hash_row_payload = false;
   bool enable_legacy_syntax = true;
   AuthMetadata authMetadata;
 
@@ -378,6 +379,11 @@ void MapDProgramOptions::fillOptions() {
                               ->default_value(allow_loop_joins)
                               ->implicit_value(true),
                           "Enable loop joins.");
+  help_desc.add_options()("enable-join-hash-row-payload",
+                          po::value<bool>(&join_hash_row_payload)
+                              ->default_value(join_hash_row_payload)
+                              ->implicit_value(true),
+                          "Enable row payload in join hash indexes");
   help_desc.add_options()("bigint-count",
                           po::value<bool>(&g_bigint_count)
                               ->default_value(g_bigint_count)
@@ -1110,6 +1116,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
                                        prog_config_opts.intel_jit_profile,
                                        prog_config_opts.read_only,
                                        prog_config_opts.allow_loop_joins,
+                                       prog_config_opts.join_hash_row_payload,
                                        prog_config_opts.enable_rendering,
                                        prog_config_opts.enable_auto_clear_render_mem,
                                        prog_config_opts.render_oom_retry_threshold,

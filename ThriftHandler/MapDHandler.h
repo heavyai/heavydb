@@ -169,6 +169,7 @@ class MapDHandler : public MapDIf {
               const bool intel_jit_profile,
               const bool read_only,
               const bool allow_loop_joins,
+              const bool join_hash_row_payload,
               const bool enable_rendering,
               const bool enable_auto_clear_render_mem,
               const int render_oom_retry_threshold,
@@ -499,6 +500,7 @@ class MapDHandler : public MapDIf {
   bool allow_multifrag_;
   const bool read_only_;
   const bool allow_loop_joins_;
+  const bool join_hash_row_payload_;
   bool cpu_mode_only_;
   mapd_shared_mutex sessions_mutex_;
   std::mutex render_mutex_;

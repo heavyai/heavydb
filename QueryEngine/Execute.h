@@ -148,6 +148,12 @@ inline const ColumnDescriptor* get_column_descriptor(
   return col_desc;
 }
 
+inline const ColumnDescriptor* get_column_descriptor(
+    const InputColDescriptor& col,
+    const Catalog_Namespace::Catalog& cat) {
+  return get_column_descriptor(col.getColId(), col.getScanDesc().getTableId(), cat);
+}
+
 inline const Analyzer::Expr* extract_cast_arg(const Analyzer::Expr* expr) {
   const auto cast_expr = dynamic_cast<const Analyzer::UOper*>(expr);
   if (!cast_expr || cast_expr->get_optype() != kCAST) {
@@ -173,6 +179,12 @@ inline const ColumnDescriptor* get_column_descriptor_maybe(
     const Catalog_Namespace::Catalog& cat) {
   CHECK(table_id);
   return table_id > 0 ? get_column_descriptor(col_id, table_id, cat) : nullptr;
+}
+
+inline const ColumnDescriptor* get_column_descriptor_maybe(
+    const InputColDescriptor& col,
+    const Catalog_Namespace::Catalog& cat) {
+  return get_column_descriptor_maybe(col.getColId(), col.getScanDesc().getTableId(), cat);
 }
 
 inline const ResultSetPtr& get_temporary_table(const TemporaryTables* temporary_tables,
@@ -789,12 +801,16 @@ class Executor {
   std::shared_ptr<JoinHashTableInterface> buildCurrentLevelHashTable(
       const JoinCondition& current_level_join_conditions,
       RelAlgExecutionUnit& ra_exe_unit,
+      InputColDescriptorsByScanIdx& payload_cols,
       const CompilationOptions& co,
       const std::vector<InputTableInfo>& query_infos,
       ColumnCacheMap& column_cache,
       std::vector<std::string>& fail_reasons);
   llvm::Value* addJoinLoopIterator(const std::vector<llvm::Value*>& prev_iters,
                                    const size_t level_idx);
+  void addPayloadColumnIterators(const JoinHashTableInterface& hash_table);
+  void codegenPayloadColumnIterators(const std::vector<llvm::Value*>& prev_iters,
+                                     const JoinHashTableInterface& hash_table);
   void codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
                         const RelAlgExecutionUnit& ra_exe_unit,
                         GroupByAndAggregate& group_by_and_aggregate,
@@ -825,7 +841,8 @@ class Executor {
       const std::vector<InputTableInfo>& query_infos,
       const MemoryLevel memory_level,
       const JoinHashTableInterface::HashType preferred_hash_type,
-      ColumnCacheMap& column_cache);
+      ColumnCacheMap& column_cache,
+      InputColDescriptorsByScanIdx& payload_cols);
   void nukeOldState(const bool allow_lazy_fetch,
                     const std::vector<InputTableInfo>& query_infos,
                     const RelAlgExecutionUnit* ra_exe_unit);

@@ -36,11 +36,14 @@ __global__ void fill_hash_join_buff_bucketized_wrapper(
     int* err,
     const int64_t bucket_normalization) {
   int partial_err = SUFFIX(fill_hash_join_buff_bucketized)(buff,
+                                                           1,
                                                            invalid_slot_val,
                                                            join_column,
                                                            type_info,
                                                            NULL,
                                                            NULL,
+                                                           NULL,
+                                                           0,
                                                            -1,
                                                            -1,
                                                            bucket_normalization);
@@ -137,7 +140,7 @@ void fill_hash_join_buff_on_device_sharded(int32_t* buff,
 __global__ void init_hash_join_buff_wrapper(int32_t* buff,
                                             const int32_t hash_entry_count,
                                             const int32_t invalid_slot_val) {
-  SUFFIX(init_hash_join_buff)(buff, hash_entry_count, invalid_slot_val, -1, -1);
+  SUFFIX(init_hash_join_buff)(buff, hash_entry_count, 1, invalid_slot_val, -1, -1);
 }
 
 void init_hash_join_buff_on_device(int32_t* buff,
@@ -227,8 +230,8 @@ void fill_one_to_many_hash_table_on_device(int32_t* buff,
                             invalid_slot_val,
                             join_column,
                             type_info] {
-    SUFFIX(fill_row_ids)<<<grid_size_x, block_size_x>>>(
-        buff, hash_entry_count, invalid_slot_val, join_column, type_info);
+    SUFFIX(fill_row_payload)<<<grid_size_x, block_size_x>>>(
+        buff, hash_entry_count, 1, invalid_slot_val, join_column, type_info);
   };
 
   fill_one_to_many_hash_table_on_device_impl(buff,
@@ -271,12 +274,14 @@ void fill_one_to_many_hash_table_on_device_bucketized(int32_t* buff,
                             join_column,
                             type_info,
                             bucket_normalization = hash_entry_info.bucket_normalization] {
-    SUFFIX(fill_row_ids_bucketized)<<<grid_size_x, block_size_x>>>(buff,
-                                                                   hash_entry_count,
-                                                                   invalid_slot_val,
-                                                                   join_column,
-                                                                   type_info,
-                                                                   bucket_normalization);
+    SUFFIX(fill_row_payload_bucketized)<<<grid_size_x, block_size_x>>>(
+        buff,
+        hash_entry_count,
+        1,
+        invalid_slot_val,
+        join_column,
+        type_info,
+        bucket_normalization);
   };
 
   fill_one_to_many_hash_table_on_device_impl(buff,
