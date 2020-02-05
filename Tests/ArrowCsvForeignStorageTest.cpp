@@ -16,24 +16,24 @@
 
 #include "TestHelpers.h"
 
+#include <gtest/gtest.h>
 #include <algorithm>
+#include <boost/algorithm/string.hpp>
+#include <boost/filesystem.hpp>
+#include <boost/program_options.hpp>
 #include <limits>
 #include <string>
 
-#include <gtest/gtest.h>
+#include "Archive/PosixFileArchive.h"
+#include "Catalog/Catalog.h"
+#include "DataMgr/ForeignStorage/ArrowCsvForeignStorage.h"
+#include "Import/Importer.h"
+#include "Parser/parser.h"
+#include "QueryEngine/ResultSet.h"
+#include "QueryRunner/QueryRunner.h"
+#include "Shared/geo_types.h"
+#include "Shared/scope.h"
 
-#include <boost/algorithm/string.hpp>
-#include <boost/program_options.hpp>
-#include "../Archive/PosixFileArchive.h"
-#include "../Catalog/Catalog.h"
-#include "../DataMgr/ForeignStorage/ArrowCsvForeignStorage.h"
-#include "../Import/Importer.h"
-#include "../Parser/parser.h"
-#include "../QueryEngine/ResultSet.h"
-#include "../QueryRunner/QueryRunner.h"
-#include "../Shared/geo_types.h"
-#include "../Shared/scope.h"
-#include "boost/filesystem.hpp"
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
 #endif
@@ -110,7 +110,7 @@ dropoff_cdeligibil TEXT ENCODING NONE,
 dropoff_ntacode TEXT ENCODING NONE,
 dropoff_ntaname TEXT ENCODING NONE,
 dropoff_puma BIGINT) WITH (storage_type='CSV:../../Tests/Import/datafiles/trips_with_headers_top1000.csv');
-  )";
+)";
 
 class NycTaxiTest : public ::testing::Test {
  protected:
