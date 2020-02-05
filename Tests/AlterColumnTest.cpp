@@ -233,14 +233,13 @@ TEST_F(AlterColumnTest, Add_column_with_null) {
     } else {
       // Geometry column
       // Doesn't throw, no explicit default (default is NULL geo),
-      // NULL should not match the row values expected for the omitted default
-      EXPECT_FALSE(alter_common("trips",
-                                "x" + std::to_string(++cid),
-                                std::get<0>(tv),
-                                std::get<1>(tv),
-                                "",  // no explicit default (NULL geo)
-                                std::get<3>(tv),
-                                false));
+      EXPECT_TRUE(alter_common("trips",
+                               "x" + std::to_string(++cid),
+                               std::get<0>(tv),
+                               std::get<1>(tv),
+                               "",  // no explicit default (NULL geo)
+                               "NULL",
+                               false));
     }
   }
 }
