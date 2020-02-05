@@ -404,7 +404,6 @@ boost::log::record_ostream& Logger::stream(char const* file, int line) {
 }
 
 // DebugTimer-related classes and functions.
-
 using Clock = std::chrono::steady_clock;
 
 class DurationTree;
@@ -435,10 +434,12 @@ class Duration {
       , line_(line)
       , name_(name) {}
   bool stop();
+  // Start time relative to parent DurationTree::start_.
   template <typename Units = std::chrono::milliseconds>
-  typename Units::rep value() const {
-    return std::chrono::duration_cast<Units>(stop_ - start_).count();
-  }
+  typename Units::rep relative_start_time() const;
+  // Duration value = stop_ - start_.
+  template <typename Units = std::chrono::milliseconds>
+  typename Units::rep value() const;
 };
 
 using DurationTreeNode = boost::variant<Duration, DurationTree&>;
@@ -450,11 +451,13 @@ class DurationTree {
 
  public:
   int const depth_;  //< Depth of tree within parent tree, 0 for root tree.
-  std::thread::id const thread_id_;
-  DurationTree(std::thread::id thread_id, int start_depth)
+  Clock::time_point const start_;
+  ThreadId const thread_id_;
+  DurationTree(ThreadId thread_id, int start_depth)
       // Add +1 to current_depth_ for non-root DurationTrees for extra indentation.
       : current_depth_(start_depth + bool(start_depth))
       , depth_(start_depth)
+      , start_(Clock::now())
       , thread_id_(thread_id) {}
   void pushDurationTree(DurationTree& duration_tree) {
     durations_.emplace_back(duration_tree);
@@ -481,25 +484,35 @@ bool Duration::stop() {
   return depth_ == 0;
 }
 
+template <typename Units>
+typename Units::rep Duration::relative_start_time() const {
+  return std::chrono::duration_cast<Units>(start_ - duration_tree_->start_).count();
+}
+
+template <typename Units>
+typename Units::rep Duration::value() const {
+  return std::chrono::duration_cast<Units>(stop_ - start_).count();
+}
+
 struct GetDepth : boost::static_visitor<int> {
   int operator()(Duration const& duration) const { return duration.depth_; }
   int operator()(DurationTree const& duration_tree) const { return duration_tree.depth_; }
 };
 
-using DurationTreeMap =
-    std::unordered_map<std::thread::id, std::unique_ptr<DurationTree>>;
+using DurationTreeMap = std::unordered_map<ThreadId, std::unique_ptr<DurationTree>>;
 
-std::mutex gDurationTreeMapMutex;
-DurationTreeMap gDurationTreeMap;
+std::mutex g_duration_tree_map_mutex;
+DurationTreeMap g_duration_tree_map;
+std::atomic<ThreadId> g_next_thread_id{0};
+ThreadId thread_local const g_thread_id = g_next_thread_id++;
 
 template <typename... Ts>
 Duration* newDuration(Severity severity, Ts&&... args) {
   if (g_enable_debug_timer) {
-    auto const thread_id = std::this_thread::get_id();
-    std::lock_guard<std::mutex> lock_guard(gDurationTreeMapMutex);
-    auto& duration_tree_ptr = gDurationTreeMap[thread_id];
+    std::lock_guard<std::mutex> lock_guard(g_duration_tree_map_mutex);
+    auto& duration_tree_ptr = g_duration_tree_map[g_thread_id];
     if (!duration_tree_ptr) {
-      duration_tree_ptr = std::make_unique<DurationTree>(thread_id, 0);
+      duration_tree_ptr = std::make_unique<DurationTree>(g_thread_id, 0);
     }
     return duration_tree_ptr->newDuration(severity, std::forward<Ts>(args)...);
   }
@@ -507,8 +520,9 @@ Duration* newDuration(Severity severity, Ts&&... args) {
 }
 
 std::ostream& operator<<(std::ostream& os, Duration const& duration) {
-  return os << std::setw(2 * duration.depth_) << ' ' << duration.value() << "ms "
-            << duration.name_ << ' ' << filename(duration.file_) << ':' << duration.line_;
+  return os << std::setw(2 * duration.depth_) << ' ' << duration.value() << "ms start("
+            << duration.relative_start_time() << "ms) " << duration.name_ << ' '
+            << filename(duration.file_) << ':' << duration.line_;
 }
 
 std::ostream& operator<<(std::ostream& os, DurationTree const& duration_tree) {
@@ -562,6 +576,8 @@ class JsonEncoder : boost::static_visitor<rapidjson::Value> {
     rapidjson::Value retval(rapidjson::kObjectType);
     retval.AddMember("type", "duration", alloc_);
     retval.AddMember("duration_ms", rapidjson::Value(duration.value()), alloc_);
+    retval.AddMember(
+        "start_ms", rapidjson::Value(duration.relative_start_time()), alloc_);
     retval.AddMember("name", rapidjson::StringRef(duration.name_), alloc_);
     retval.AddMember("file", filename(duration.file_), alloc_);
     retval.AddMember("line", rapidjson::Value(duration.line_), alloc_);
@@ -625,21 +641,21 @@ struct EraseDurationTrees : boost::static_visitor<> {
     for (auto const& duration_tree_node : itr->second->durations()) {
       apply_visitor(*this, duration_tree_node);
     }
-    gDurationTreeMap.erase(itr);
+    g_duration_tree_map.erase(itr);
   }
   void operator()(Duration const&) const {}
   void operator()(DurationTree const& duration_tree) const {
     for (auto const& duration_tree_node : duration_tree.durations()) {
       apply_visitor(*this, duration_tree_node);
     }
-    gDurationTreeMap.erase(duration_tree.thread_id_);
+    g_duration_tree_map.erase(duration_tree.thread_id_);
   }
 };
 
-void logAndEraseDurationTree(std::thread::id const thread_id, std::string* json_str) {
-  std::lock_guard<std::mutex> lock_guard(gDurationTreeMapMutex);
-  DurationTreeMap::const_iterator const itr = gDurationTreeMap.find(thread_id);
-  CHECK(itr != gDurationTreeMap.cend());
+void logAndEraseDurationTree(ThreadId const thread_id, std::string* json_str) {
+  std::lock_guard<std::mutex> lock_guard(g_duration_tree_map_mutex);
+  DurationTreeMap::const_iterator const itr = g_duration_tree_map.find(thread_id);
+  CHECK(itr != g_duration_tree_map.cend());
   auto const& root_duration = itr->second->rootDuration();
   if (auto log = Logger(root_duration.severity_)) {
     log.stream(root_duration.file_, root_duration.line_) << *itr;
@@ -662,7 +678,7 @@ DebugTimer::~DebugTimer() {
 void DebugTimer::stop(std::string* json_str) {
   if (duration_) {
     if (duration_->stop()) {
-      logAndEraseDurationTree(std::this_thread::get_id(), json_str);
+      logAndEraseDurationTree(g_thread_id, json_str);
     }
     duration_ = nullptr;
   }
@@ -670,23 +686,21 @@ void DebugTimer::stop(std::string* json_str) {
 
 /// Call this when a new thread is spawned that will have timers that need to be
 /// associated with timers on the parent thread.
-void debugTimerNewThread(std::thread::id parent_thread_id) {
+void debug_timer_new_thread(ThreadId parent_thread_id) {
   if (g_enable_debug_timer) {
-    auto const thread_id = std::this_thread::get_id();
-    if (thread_id != parent_thread_id) {
-      std::lock_guard<std::mutex> lock_guard(gDurationTreeMapMutex);
-      auto parent_itr = gDurationTreeMap.find(parent_thread_id);
-      if (parent_itr != gDurationTreeMap.end()) {
-        auto& duration_tree_ptr = gDurationTreeMap[thread_id];
-        if (!duration_tree_ptr) {
-          auto const current_depth = parent_itr->second->currentDepth();
-          duration_tree_ptr =
-              std::make_unique<DurationTree>(thread_id, current_depth + 1);
-          parent_itr->second->pushDurationTree(*duration_tree_ptr);
-        }
-      }
-    }
+    std::lock_guard<std::mutex> lock_guard(g_duration_tree_map_mutex);
+    auto parent_itr = g_duration_tree_map.find(parent_thread_id);
+    CHECK(parent_itr != g_duration_tree_map.end());
+    auto const current_depth = parent_itr->second->currentDepth();
+    auto& duration_tree_ptr = g_duration_tree_map[g_thread_id];
+    CHECK(!duration_tree_ptr);
+    duration_tree_ptr = std::make_unique<DurationTree>(g_thread_id, current_depth + 1);
+    parent_itr->second->pushDurationTree(*duration_tree_ptr);
   }
+}
+
+ThreadId thread_id() {
+  return g_thread_id;
 }
 
 }  // namespace logger

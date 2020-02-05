@@ -302,13 +302,17 @@ class DebugTimer {
   void stop(std::string* json_str = nullptr);
 };
 
-void debugTimerNewThread(std::thread::id parent_thread_id);
+using ThreadId = uint64_t;
+
+void debug_timer_new_thread(ThreadId parent_thread_id);
+
+ThreadId thread_id();
 
 // Typical usage: auto timer = DEBUG_TIMER(__func__);
 #define DEBUG_TIMER(name) logger::DebugTimer(logger::INFO, __FILE__, __LINE__, name)
 
 #define DEBUG_TIMER_NEW_THREAD(parent_thread_id) \
-  logger::debugTimerNewThread(parent_thread_id)
+  logger::debug_timer_new_thread(parent_thread_id)
 
 }  // namespace logger
 

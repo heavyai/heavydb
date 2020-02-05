@@ -1220,7 +1220,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     auto dispatch = [&execution_dispatch,
                      &column_fetcher,
                      &eo,
-                     parent_thread_id = std::this_thread::get_id()](
+                     parent_thread_id = logger::thread_id()](
                         const ExecutorDeviceType chosen_device_type,
                         int chosen_device_id,
                         const QueryCompilationDescriptor& query_comp_desc,
