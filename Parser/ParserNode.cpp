@@ -3371,10 +3371,8 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
           isnull = true;
         }
 
-        // TODO: remove is_geometry below once if null is allowed for geo
         if (isnull) {
-          if (cd->columnType.is_geometry() ||
-              (column_constraint && column_constraint->get_notnull())) {
+          if (column_constraint && column_constraint->get_notnull()) {
             throw std::runtime_error("Default value required for column " +
                                      cd->columnName + " (NULL value not supported)");
           }
@@ -3387,12 +3385,11 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                 skip_physical_cols-- <= 0) {  // skip non-null phy col
               import_buffer->add_value(
                   cd, defaultval, isnull, Importer_NS::CopyParams(), nrows);
-              // tedious non-null geo default value ...
-              if (cd->columnType.is_geometry() && !isnull) {
+              if (cd->columnType.is_geometry()) {
                 std::vector<double> coords, bounds;
                 std::vector<int> ring_sizes, poly_rings;
                 int render_group = 0;
-                SQLTypeInfo tinfo;
+                SQLTypeInfo tinfo{cd->columnType};
                 if (!Geo_namespace::GeoTypesFactory::getGeoColumns(defaultval,
                                                                    tinfo,
                                                                    coords,
