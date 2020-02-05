@@ -15,24 +15,22 @@
  */
 
 #include "ArrowCsvForeignStorage.h"
-#include "ForeignStorageInterface.h"
-
-#include "Shared/Logger.h"
-#include "Shared/measure.h"
 
 #include <arrow/api.h>
+#include <arrow/csv/column-builder.h>
 #include <arrow/csv/reader.h>
 #include <arrow/io/file.h>
 #include <arrow/util/task-group.h>
 #include <arrow/util/thread-pool.h>
-#include "arrow/csv/column-builder.h"
-
-#include "../DataMgr/StringNoneEncoder.h"
-#include "../QueryEngine/ArrowResultSet.h"
-#include "../QueryEngine/ArrowUtil.h"
-
 #include <array>
 #include <future>
+
+#include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
+#include "DataMgr/StringNoneEncoder.h"
+#include "QueryEngine/ArrowResultSet.h"
+#include "QueryEngine/ArrowUtil.h"
+#include "Shared/Logger.h"
+#include "Shared/measure.h"
 
 class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
   void append(const std::vector<ForeignStorageColumnBuffer>& column_buffers) override;
@@ -268,7 +266,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   std::vector<std::pair<int, int>> fragments;
   int start = 0;
   int64_t sz = c0p->chunk(0)->length();
-  // claculate size and boundaries of fragments
+  // calculate size and boundaries of fragments
   for (int i = 1; i < arr_frags; i++) {
     if (sz > td.fragPageSize) {
       fragments.emplace_back(start, i);
@@ -302,7 +300,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
     col.resize(fragments.size());
     auto clp = ARROW_GET_DATA(table.column(cln++)).get();
 
-    StringDictionary* dict;
+    StringDictionary* dict{nullptr};
     if (c.columnType.is_dict_encoded_string()) {
       auto dictDesc = const_cast<DictDescriptor*>(
           catalog->getMetadataForDict(c.columnType.get_comp_param()));
@@ -401,15 +399,12 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   // wait untill all stats have been updated
   r = tg->Finish();
   ARROW_THROW_NOT_OK(r);
-  printf("-- created: %d columns, %d chunks, %d frags\n",
-         num_cols,
-         arr_frags,
-         int(fragments.size()));
+  VLOG(1) << "Created CSV backed temporary table with " << num_cols << " columns, "
+          << arr_frags << " chunks, and " << fragments.size() << " fragments.";
 }
 
 std::string ArrowCsvForeignStorage::getType() const {
-  printf(
-      "CSV importer is activated. Create table `with "
-      "(storage_type='CSV:path/to/file.csv');`\n");
+  LOG(INFO) << "CSV backed temporary tables has been activated. Create table `with "
+               "(storage_type='CSV:path/to/file.csv');`\n";
   return "CSV";
 }
