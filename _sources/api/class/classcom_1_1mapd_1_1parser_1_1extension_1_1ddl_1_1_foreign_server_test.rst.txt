@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::ForeignServerTest
+==========================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::ForeignServerTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

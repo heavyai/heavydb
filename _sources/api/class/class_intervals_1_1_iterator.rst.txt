@@ -1,0 +1,9 @@
+Class Intervals::Iterator
+=========================
+
+.. doxygenclass:: Intervals::Iterator
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

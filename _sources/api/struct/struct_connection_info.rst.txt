@@ -1,0 +1,9 @@
+Struct ConnectionInfo
+=====================
+
+.. doxygenstruct:: ConnectionInfo
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

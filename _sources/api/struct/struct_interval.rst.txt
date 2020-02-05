@@ -1,0 +1,9 @@
+Struct Interval
+===============
+
+.. doxygenstruct:: Interval
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

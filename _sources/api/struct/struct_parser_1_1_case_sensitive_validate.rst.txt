@@ -1,0 +1,9 @@
+Struct Parser::CaseSensitiveValidate
+====================================
+
+.. doxygenstruct:: Parser::CaseSensitiveValidate
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -306,7 +306,7 @@ a global data structure. Same with ``bar2()``.  Once the outer-most ``timer`` ob
 ``timer`` instance.
 
 There is also a ``DebugTimer::stop()`` method that manually stops the timer, and will log the entire
-``DurationTree`` if it is the base timer. The destructor in this case will have no further effect.
+``DurationTree`` if it is the root timer. The destructor in this case will have no further effect.
 
 To embed timers in a spawned child thread, call ``DEBUG_TIMER_NEW_THREAD(parent_thread_id);`` from the child
 thread. This will not start a timer, but will record the child-parent relationship so that subsequent
@@ -327,16 +327,16 @@ thread. This will not start a timer, but will record the child-parent relationsh
 .. note::
 
     Any timer that is created in a thread when no other timers are active in the same or parent thread is
-    called a *base timer*. The timer stack is logged when the base timer destructs, or ``stop()`` is called,
+    called a *root timer*. The timer stack is logged when the root timer destructs, or ``stop()`` is called,
     after which memory used for tracking the timer trees are freed.  The performance cost of this should be
     kept in mind when placing timers within the code.
 
 .. warning::
 
-    Non-base timers that end *after* their base timer ends will result in a **segmentation fault** (but only
+    Non-root timers that end *after* their root timer ends will result in a **segmentation fault** (but only
     when the ``--enable-debug-timer`` option is active). This is easily avoided by not interleaving timer
     lifetimes with one another in the same block of code, and making sure that all child threads end prior
-    to the ending of any corresponding base timer.
+    to the ending of any corresponding root timer.
 
 The high-level class relationships are:
 

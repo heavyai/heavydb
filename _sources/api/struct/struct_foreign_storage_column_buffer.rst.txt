@@ -1,0 +1,9 @@
+Struct ForeignStorageColumnBuffer
+=================================
+
+.. doxygenstruct:: ForeignStorageColumnBuffer
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

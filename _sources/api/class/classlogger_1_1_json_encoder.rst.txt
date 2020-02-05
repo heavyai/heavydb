@@ -1,0 +1,9 @@
+Class logger::JsonEncoder
+=========================
+
+.. doxygenclass:: logger::JsonEncoder
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
