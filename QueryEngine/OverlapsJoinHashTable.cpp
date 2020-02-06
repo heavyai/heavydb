@@ -172,7 +172,7 @@ void OverlapsJoinHashTable::reifyWithLayout(
                                       columns_per_device[device_id],
                                       layout,
                                       device_id,
-                                      std::this_thread::get_id()));
+                                      logger::thread_id()));
   }
   for (auto& init_thread : init_threads) {
     init_thread.wait();

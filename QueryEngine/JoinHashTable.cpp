@@ -534,7 +534,7 @@ void JoinHashTable::reify(const int device_count) {
                      this,
                      fragments,
                      device_id,
-                     std::this_thread::get_id()));
+                     logger::thread_id()));
     }
     for (auto& init_thread : init_threads) {
       init_thread.wait();
@@ -558,7 +558,7 @@ void JoinHashTable::reify(const int device_count) {
                                         this,
                                         fragments,
                                         device_id,
-                                        std::this_thread::get_id()));
+                                        logger::thread_id()));
     }
     for (auto& init_thread : init_threads) {
       init_thread.wait();
@@ -640,7 +640,7 @@ ChunkKey JoinHashTable::genHashTableKey(
 void JoinHashTable::reifyOneToOneForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
-    const std::thread::id parent_thread_id) {
+    const logger::ThreadId parent_thread_id) {
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
   const auto& catalog = *executor_->getCatalog();
   auto& data_mgr = catalog.getDataMgr();
@@ -690,7 +690,7 @@ void JoinHashTable::reifyOneToOneForDevice(
 void JoinHashTable::reifyOneToManyForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
     const int device_id,
-    const std::thread::id parent_thread_id) {
+    const logger::ThreadId parent_thread_id) {
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
   const auto& catalog = *executor_->getCatalog();
   auto& data_mgr = catalog.getDataMgr();

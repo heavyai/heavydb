@@ -163,11 +163,11 @@ class JoinHashTable : public JoinHashTableInterface {
   void reifyOneToOneForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id,
-      const std::thread::id parent_thread_id);
+      const logger::ThreadId parent_thread_id);
   void reifyOneToManyForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id,
-      const std::thread::id parent_thread_id);
+      const logger::ThreadId parent_thread_id);
   void checkHashJoinReplicationConstraint(const int table_id) const;
   void initHashTableForDevice(
       const ChunkKey& chunk_key,

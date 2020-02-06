@@ -376,7 +376,7 @@ void BaselineJoinHashTable::reifyWithLayout(
                                       columns_per_device[device_id],
                                       layout,
                                       device_id,
-                                      std::this_thread::get_id()));
+                                      logger::thread_id()));
   }
   for (auto& init_thread : init_threads) {
     init_thread.wait();
@@ -587,7 +587,7 @@ BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDe
 void BaselineJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_device,
                                            const JoinHashTableInterface::HashType layout,
                                            const int device_id,
-                                           const std::thread::id parent_thread_id) {
+                                           const logger::ThreadId parent_thread_id) {
   DEBUG_TIMER_NEW_THREAD(parent_thread_id);
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
   const auto err = initHashTableForDevice(columns_for_device.join_columns,

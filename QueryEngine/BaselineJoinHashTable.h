@@ -181,7 +181,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   void reifyForDevice(const ColumnsForDevice& columns_for_device,
                       const JoinHashTableInterface::HashType layout,
                       const int device_id,
-                      const std::thread::id parent_thread_id);
+                      const logger::ThreadId parent_thread_id);
 
   void checkHashJoinReplicationConstraint(const int table_id) const;
 
