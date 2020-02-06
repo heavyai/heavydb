@@ -264,7 +264,7 @@ add_custom_command(
         -D__STDC_LIMIT_MACROS
         -D__STDC_CONSTANT_MACROS
         -D_FORCE_INLINES
-        -Xcompiler -Wno-return-type-c-linkage
+        -Xcompiler -Wno-return-type-c-linkage --expt-relaxed-constexpr
         ${MAPD_DEFINITIONS}
         --device-link
         -arch sm_30
