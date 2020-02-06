@@ -61,18 +61,6 @@ class JoinHashTable : public JoinHashTableInterface {
       ColumnCacheMap& column_cache,
       Executor* executor);
 
-  //! Make hash table from named tables and columns (such as for testing).
-  static std::shared_ptr<JoinHashTable> getSyntheticInstance(
-      std::string_view table1,
-      std::string_view column1,
-      std::string_view table2,
-      std::string_view column2,
-      const Data_Namespace::MemoryLevel memory_level,
-      const HashType preferred_hash_type,
-      const int device_count,
-      ColumnCacheMap& column_cache,
-      Executor* executor);
-
   int64_t getJoinHashBuffer(const ExecutorDeviceType device_type,
                             const int device_id) const noexcept override;
 
@@ -80,12 +68,11 @@ class JoinHashTable : public JoinHashTableInterface {
                                const int device_id) const noexcept override;
 
   std::string toString(const ExecutorDeviceType device_type,
-                       const int device_id,
-                       bool raw = false) const noexcept override;
+                       const int device_id = 0,
+                       bool raw = false) const override;
 
-  std::set<DecodedJoinHashBufferEntry> decodeJoinHashBuffer(
-      const ExecutorDeviceType device_type,
-      const int device_id) const noexcept override;
+  std::set<DecodedJoinHashBufferEntry> toSet(const ExecutorDeviceType device_type,
+                                             const int device_id) const override;
 
   llvm::Value* codegenSlot(const CompilationOptions&, const size_t) override;
 
@@ -101,6 +88,10 @@ class JoinHashTable : public JoinHashTableInterface {
   };
 
   HashType getHashType() const noexcept override { return hash_type_; }
+
+  Data_Namespace::MemoryLevel getMemoryLevel() const noexcept override {
+    return memory_level_;
+  };
 
   size_t offsetBufferOff() const noexcept override;
 
@@ -171,10 +162,12 @@ class JoinHashTable : public JoinHashTableInterface {
   void reify(const int device_count);
   void reifyOneToOneForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-      const int device_id);
+      const int device_id,
+      const std::thread::id parent_thread_id);
   void reifyOneToManyForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-      const int device_id);
+      const int device_id,
+      const std::thread::id parent_thread_id);
   void checkHashJoinReplicationConstraint(const int table_id) const;
   void initHashTableForDevice(
       const ChunkKey& chunk_key,

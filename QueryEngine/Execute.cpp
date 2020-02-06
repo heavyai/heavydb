@@ -2917,55 +2917,22 @@ Executor::JoinHashTableOrError Executor::buildHashTableForQualifier(
     const MemoryLevel memory_level,
     const JoinHashTableInterface::HashType preferred_hash_type,
     ColumnCacheMap& column_cache) {
-  std::shared_ptr<JoinHashTableInterface> join_hash_table;
-  const int device_count = deviceCountForMemoryLevel(memory_level);
-  CHECK_GT(device_count, 0);
   if (!g_enable_overlaps_hashjoin && qual_bin_oper->is_overlaps_oper()) {
     return {nullptr, "Overlaps hash join disabled, attempting to fall back to loop join"};
   }
   try {
-    if (qual_bin_oper->is_overlaps_oper()) {
-      join_hash_table = OverlapsJoinHashTable::getInstance(
-          qual_bin_oper, query_infos, memory_level, device_count, column_cache, this);
-    } else if (dynamic_cast<const Analyzer::ExpressionTuple*>(
-                   qual_bin_oper->get_left_operand())) {
-      join_hash_table = BaselineJoinHashTable::getInstance(qual_bin_oper,
-                                                           query_infos,
-                                                           memory_level,
-                                                           preferred_hash_type,
-                                                           device_count,
-                                                           column_cache,
-                                                           this);
-    } else {
-      try {
-        join_hash_table = JoinHashTable::getInstance(qual_bin_oper,
-                                                     query_infos,
-                                                     memory_level,
-                                                     preferred_hash_type,
-                                                     device_count,
-                                                     column_cache,
-                                                     this);
-      } catch (TooManyHashEntries&) {
-        const auto join_quals = coalesce_singleton_equi_join(qual_bin_oper);
-        CHECK_EQ(join_quals.size(), size_t(1));
-        const auto join_qual =
-            std::dynamic_pointer_cast<Analyzer::BinOper>(join_quals.front());
-        join_hash_table = BaselineJoinHashTable::getInstance(join_qual,
-                                                             query_infos,
-                                                             memory_level,
-                                                             preferred_hash_type,
-                                                             device_count,
-                                                             column_cache,
-                                                             this);
-      }
-    }
-    CHECK(join_hash_table);
-    return {join_hash_table, ""};
+    auto tbl =
+        JoinHashTableInterface::getInstance(qual_bin_oper,
+                                            query_infos,
+                                            memory_level,
+                                            preferred_hash_type,
+                                            deviceCountForMemoryLevel(memory_level),
+                                            column_cache,
+                                            this);
+    return {tbl, ""};
   } catch (const HashJoinFail& e) {
     return {nullptr, e.what()};
   }
-  CHECK(false);
-  return {nullptr, ""};
 }
 
 int8_t Executor::warpSize() const {

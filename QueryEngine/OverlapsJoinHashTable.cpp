@@ -35,6 +35,11 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     const int device_count,
     ColumnCacheMap& column_cache,
     Executor* executor) {
+  decltype(std::chrono::steady_clock::now()) ts1, ts2;
+  if (VLOGGING(1)) {
+    VLOG(1) << "Building geo hash table OneToMany for qual: " << condition->toString();
+    ts1 = std::chrono::steady_clock::now();
+  }
   auto inner_outer_pairs = normalize_column_pairs(
       condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
   const auto& query_info =
@@ -70,82 +75,19 @@ std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getInstance(
     LOG(FATAL) << "Fatal error while attempting to build hash tables for join: "
                << e.what();
   }
-  return join_hash_table;
-}
-
-//! Make hash table from named tables and columns (such as for testing).
-std::shared_ptr<OverlapsJoinHashTable> OverlapsJoinHashTable::getSyntheticInstance(
-    std::string_view table1,
-    std::string_view column1,
-    std::string_view table2,
-    std::string_view column2,
-    const Data_Namespace::MemoryLevel memory_level,
-    const int device_count,
-    ColumnCacheMap& column_cache,
-    Executor* executor) {
-  auto catalog = executor->getCatalog();
-  CHECK(catalog);
-
-  auto tmeta1 = catalog->getMetadataForTable(std::string(table1));
-  auto tmeta2 = catalog->getMetadataForTable(std::string(table2));
-
-  CHECK(tmeta1);
-  CHECK(tmeta2);
-
-  auto cmeta1 = catalog->getMetadataForColumn(tmeta1->tableId, std::string(column1));
-  auto cmeta2 = catalog->getMetadataForColumn(tmeta2->tableId, std::string(column2));
-
-  CHECK(cmeta1);
-  CHECK(cmeta2);
-
-  auto ti1 = cmeta1->columnType;
-  auto ti2 = cmeta2->columnType;
-
-  CHECK(ti1.is_geometry());
-  CHECK(ti2.is_geometry());
-
-  int targetColumnId = 0;
-  switch (ti2.get_type()) {
-    case kLINESTRING: {
-      targetColumnId = cmeta2->columnId + 2;
-      break;
-    }
-    case kPOLYGON: {
-      targetColumnId = cmeta2->columnId + 3;
-      break;
-    }
-    case kMULTIPOLYGON: {
-      targetColumnId = cmeta2->columnId + 4;
-      break;
-    }
-    default:
-      CHECK(false);
+  if (VLOGGING(1)) {
+    ts2 = std::chrono::steady_clock::now();
+    VLOG(1) << "Built geo hash table OneToMany in "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count()
+            << " ms";
   }
-
-  auto cmeta3 = catalog->getMetadataForColumn(tmeta2->tableId, targetColumnId);
-  CHECK(cmeta3);
-  auto ti3 = cmeta3->columnType;
-
-  auto a1 = std::make_shared<Analyzer::ColumnVar>(ti1, tmeta1->tableId, 1, 0);
-  auto a2 =
-      std::make_shared<Analyzer::ColumnVar>(ti3, tmeta2->tableId, cmeta3->columnId, 1);
-
-  auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kOVERLAPS, kONE, a1, a2);
-
-  size_t number_of_join_tables{2};
-  std::vector<InputTableInfo> query_infos(number_of_join_tables);
-  query_infos[0].table_id = tmeta1->tableId;
-  query_infos[0].info = tmeta1->fragmenter->getFragmentsForQuery();
-  query_infos[1].table_id = tmeta2->tableId;
-  query_infos[1].info = tmeta2->fragmenter->getFragmentsForQuery();
-
-  return OverlapsJoinHashTable::getInstance(
-      op, query_infos, memory_level, device_count, column_cache, executor);
+  return join_hash_table;
 }
 
 void OverlapsJoinHashTable::reifyWithLayout(
     const int device_count,
     const JoinHashTableInterface::HashType layout) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK(layout == JoinHashTableInterface::HashType::OneToMany);
   layout_ = layout;
   const auto& query_info = get_inner_query_info(getInnerTableId(), query_infos_).info;
@@ -229,7 +171,8 @@ void OverlapsJoinHashTable::reifyWithLayout(
                                       this,
                                       columns_per_device[device_id],
                                       layout,
-                                      device_id));
+                                      device_id,
+                                      std::this_thread::get_id()));
   }
   for (auto& init_thread : init_threads) {
     init_thread.wait();
@@ -485,6 +428,7 @@ int OverlapsJoinHashTable::initHashTableOnCpu(
     const std::vector<JoinColumnTypeInfo>& join_column_types,
     const std::vector<JoinBucketInfo>& join_bucket_info,
     const JoinHashTableInterface::HashType layout) {
+  auto timer = DEBUG_TIMER(__func__);
   const auto composite_key_info = getCompositeKeyInfo();
   CHECK(!join_columns.empty());
   CHECK(!join_bucket_info.empty());
@@ -658,6 +602,7 @@ int OverlapsJoinHashTable::initHashTableOnGpu(
     const size_t key_component_width,
     const size_t key_component_count,
     const int device_id) {
+  auto timer = DEBUG_TIMER(__func__);
   int err = 0;
   // TODO(adb): 4 byte keys
   CHECK_EQ(key_component_width, size_t(8));

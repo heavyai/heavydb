@@ -48,17 +48,6 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
       ColumnCacheMap& column_cache,
       Executor* executor);
 
-  //! Make hash table from named tables and columns (such as for testing).
-  static std::shared_ptr<OverlapsJoinHashTable> getSyntheticInstance(
-      std::string_view table1,
-      std::string_view column1,
-      std::string_view table2,
-      std::string_view column2,
-      const Data_Namespace::MemoryLevel memory_level,
-      const int device_count,
-      ColumnCacheMap& column_cache,
-      Executor* executor);
-
   static auto yieldCacheInvalidator() -> std::function<void()> {
     return []() -> void {
       std::lock_guard<std::mutex> guard(auto_tuner_cache_mutex_);

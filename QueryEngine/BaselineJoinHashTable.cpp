@@ -38,6 +38,15 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
     const int device_count,
     ColumnCacheMap& column_cache,
     Executor* executor) {
+  decltype(std::chrono::steady_clock::now()) ts1, ts2;
+  if (VLOGGING(1)) {
+    VLOG(1) << "Building keyed hash table "
+            << (preferred_hash_type == JoinHashTableInterface::HashType::OneToOne
+                    ? "OneToOne"
+                    : "OneToMany")
+            << " for qual: " << condition->toString();
+    ts1 = std::chrono::steady_clock::now();
+  }
   auto inner_outer_pairs = normalize_column_pairs(
       condition.get(), *executor->getCatalog(), executor->getTemporaryTables());
   const auto& query_info =
@@ -87,60 +96,18 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
         std::string("Fatal error while attempting to build hash tables for join: ") +
         e.what());
   }
+  if (VLOGGING(1)) {
+    ts2 = std::chrono::steady_clock::now();
+    VLOG(1) << "Built keyed hash table "
+            << (join_hash_table->getHashType() ==
+                        JoinHashTableInterface::HashType::OneToOne
+                    ? "OneToOne"
+                    : "OneToMany")
+            << " in "
+            << std::chrono::duration_cast<std::chrono::milliseconds>(ts2 - ts1).count()
+            << " ms";
+  }
   return join_hash_table;
-}
-
-//! Make hash table from named tables and columns (such as for testing).
-std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getSyntheticInstance(
-    std::string_view table1,
-    std::string_view column1,
-    std::string_view table2,
-    std::string_view column2,
-    const Data_Namespace::MemoryLevel memory_level,
-    const HashType preferred_hash_type,
-    const int device_count,
-    ColumnCacheMap& column_cache,
-    Executor* executor) {
-  auto catalog = executor->getCatalog();
-  CHECK(catalog);
-
-  auto tmeta1 = catalog->getMetadataForTable(std::string(table1));
-  auto tmeta2 = catalog->getMetadataForTable(std::string(table2));
-
-  CHECK(tmeta1);
-  CHECK(tmeta2);
-
-  auto cmeta1 = catalog->getMetadataForColumn(tmeta1->tableId, std::string(column1));
-  auto cmeta2 = catalog->getMetadataForColumn(tmeta2->tableId, std::string(column2));
-
-  CHECK(cmeta1);
-  CHECK(cmeta2);
-
-  auto ti1 = cmeta1->columnType;
-  auto ti2 = cmeta2->columnType;
-
-  auto a1 =
-      std::make_shared<Analyzer::ColumnVar>(ti1, tmeta1->tableId, cmeta1->columnId, 0);
-  auto a2 =
-      std::make_shared<Analyzer::ColumnVar>(ti2, tmeta2->tableId, cmeta2->columnId, 1);
-
-  auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, a1, a2);
-
-  size_t number_of_join_tables{2};
-  std::vector<InputTableInfo> query_infos(number_of_join_tables);
-  query_infos[0].table_id = tmeta1->tableId;
-  query_infos[0].info = tmeta1->fragmenter->getFragmentsForQuery();
-  query_infos[1].table_id = tmeta2->tableId;
-  query_infos[1].info = tmeta2->fragmenter->getFragmentsForQuery();
-
-  auto hash_table = BaselineJoinHashTable::getInstance(op,
-                                                       query_infos,
-                                                       memory_level,
-                                                       preferred_hash_type,
-                                                       device_count,
-                                                       column_cache,
-                                                       executor);
-  return hash_table;
 }
 
 BaselineJoinHashTable::BaselineJoinHashTable(
@@ -233,7 +200,7 @@ size_t BaselineJoinHashTable::getJoinHashBufferSize(const ExecutorDeviceType dev
 
 std::string BaselineJoinHashTable::toString(const ExecutorDeviceType device_type,
                                             const int device_id,
-                                            bool raw) const noexcept {
+                                            bool raw) const {
   auto buffer = getJoinHashBuffer(device_type, device_id);
   auto buffer_size = getJoinHashBufferSize(device_type, device_id);
 #ifdef HAVE_CUDA
@@ -254,19 +221,23 @@ std::string BaselineJoinHashTable::toString(const ExecutorDeviceType device_type
   auto ptr2 = ptr1 + offsetBufferOff();
   auto ptr3 = ptr1 + countBufferOff();
   auto ptr4 = ptr1 + payloadBufferOff();
-  return ::decodeJoinHashBufferToString(getKeyComponentCount(),
-                                        getKeyComponentWidth(),
-                                        ptr1,
-                                        ptr2,
-                                        ptr3,
-                                        ptr4,
-                                        buffer_size,
-                                        raw);
+  return JoinHashTableInterface::toString(
+      !condition_->is_overlaps_oper() ? "keyed" : "geo",
+      getKeyComponentCount() +
+          (layout_ == JoinHashTableInterface::HashType::OneToOne ? 1 : 0),
+      getKeyComponentWidth(),
+      entry_count_,
+      ptr1,
+      ptr2,
+      ptr3,
+      ptr4,
+      buffer_size,
+      raw);
 }
 
-std::set<DecodedJoinHashBufferEntry> BaselineJoinHashTable::decodeJoinHashBuffer(
+std::set<DecodedJoinHashBufferEntry> BaselineJoinHashTable::toSet(
     const ExecutorDeviceType device_type,
-    const int device_id) const noexcept {
+    const int device_id) const {
   auto buffer = getJoinHashBuffer(device_type, device_id);
   auto buffer_size = getJoinHashBufferSize(device_type, device_id);
 #ifdef HAVE_CUDA
@@ -287,13 +258,16 @@ std::set<DecodedJoinHashBufferEntry> BaselineJoinHashTable::decodeJoinHashBuffer
   auto ptr2 = ptr1 + offsetBufferOff();
   auto ptr3 = ptr1 + countBufferOff();
   auto ptr4 = ptr1 + payloadBufferOff();
-  return ::decodeJoinHashBuffer(getKeyComponentCount(),
-                                getKeyComponentWidth(),
-                                ptr1,
-                                ptr2,
-                                ptr3,
-                                ptr4,
-                                buffer_size);
+  return JoinHashTableInterface::toSet(
+      getKeyComponentCount() +
+          (layout_ == JoinHashTableInterface::HashType::OneToOne ? 1 : 0),
+      getKeyComponentWidth(),
+      entry_count_,
+      ptr1,
+      ptr2,
+      ptr3,
+      ptr4,
+      buffer_size);
 }
 
 BaselineJoinHashTable::CompositeKeyInfo BaselineJoinHashTable::getCompositeKeyInfo()
@@ -331,6 +305,7 @@ BaselineJoinHashTable::CompositeKeyInfo BaselineJoinHashTable::getCompositeKeyIn
 }
 
 void BaselineJoinHashTable::reify(const int device_count) {
+  auto timer = DEBUG_TIMER(__func__);
   CHECK_LT(0, device_count);
 #ifdef HAVE_CUDA
   gpu_hash_table_buff_.resize(device_count);
@@ -400,7 +375,8 @@ void BaselineJoinHashTable::reifyWithLayout(
                                       this,
                                       columns_per_device[device_id],
                                       layout,
-                                      device_id));
+                                      device_id,
+                                      std::this_thread::get_id()));
   }
   for (auto& init_thread : init_threads) {
     init_thread.wait();
@@ -610,7 +586,9 @@ BaselineJoinHashTable::ColumnsForDevice BaselineJoinHashTable::fetchColumnsForDe
 
 void BaselineJoinHashTable::reifyForDevice(const ColumnsForDevice& columns_for_device,
                                            const JoinHashTableInterface::HashType layout,
-                                           const int device_id) {
+                                           const int device_id,
+                                           const std::thread::id parent_thread_id) {
+  DEBUG_TIMER_NEW_THREAD(parent_thread_id);
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
   const auto err = initHashTableForDevice(columns_for_device.join_columns,
                                           columns_for_device.join_column_types,
@@ -698,6 +676,7 @@ int BaselineJoinHashTable::initHashTableOnCpu(
     const std::vector<JoinColumnTypeInfo>& join_column_types,
     const std::vector<JoinBucketInfo>& join_bucket_info,
     const JoinHashTableInterface::HashType layout) {
+  auto timer = DEBUG_TIMER(__func__);
   const auto composite_key_info = getCompositeKeyInfo();
   CHECK(!join_columns.empty());
   HashTableCacheKey cache_key{join_columns.front().num_elems,
@@ -898,6 +877,7 @@ int BaselineJoinHashTable::initHashTableOnGpu(
     const size_t key_component_width,
     const size_t key_component_count,
     const int device_id) {
+  auto timer = DEBUG_TIMER(__func__);
   int err = 0;
 #ifdef HAVE_CUDA
   auto& data_mgr = catalog_->getDataMgr();
@@ -1031,6 +1011,7 @@ int BaselineJoinHashTable::initHashTableForDevice(
     const JoinHashTableInterface::HashType layout,
     const Data_Namespace::MemoryLevel effective_memory_level,
     const int device_id) {
+  auto timer = DEBUG_TIMER(__func__);
   const auto key_component_width = getKeyComponentWidth();
   const auto key_component_count = getKeyComponentCount();
   int err = 0;
@@ -1158,21 +1139,34 @@ HashJoinMatchingSet BaselineJoinHashTable::codegenMatchingSet(
 }
 
 size_t BaselineJoinHashTable::offsetBufferOff() const noexcept {
-  CHECK(layout_ == JoinHashTableInterface::HashType::OneToMany);
-  const auto key_component_width = getKeyComponentWidth();
-  CHECK(key_component_width == 4 || key_component_width == 8);
-  const auto key_component_count = getKeyComponentCount();
-  return entry_count_ * key_component_count * key_component_width;
+  return getKeyBufferSize();
 }
 
 size_t BaselineJoinHashTable::countBufferOff() const noexcept {
-  CHECK(layout_ == JoinHashTableInterface::HashType::OneToMany);
-  return offsetBufferOff() + getComponentBufferSize();
+  if (layout_ == JoinHashTableInterface::HashType::OneToMany) {
+    return offsetBufferOff() + getComponentBufferSize();
+  } else {
+    return getKeyBufferSize();
+  }
 }
 
 size_t BaselineJoinHashTable::payloadBufferOff() const noexcept {
-  CHECK(layout_ == JoinHashTableInterface::HashType::OneToMany);
-  return countBufferOff() + getComponentBufferSize();
+  if (layout_ == JoinHashTableInterface::HashType::OneToMany) {
+    return countBufferOff() + getComponentBufferSize();
+  } else {
+    return getKeyBufferSize();
+  }
+}
+
+size_t BaselineJoinHashTable::getKeyBufferSize() const noexcept {
+  const auto key_component_width = getKeyComponentWidth();
+  CHECK(key_component_width == 4 || key_component_width == 8);
+  const auto key_component_count = getKeyComponentCount();
+  if (layout_ == JoinHashTableInterface::HashType::OneToMany) {
+    return entry_count_ * key_component_count * key_component_width;
+  } else {
+    return entry_count_ * (key_component_count + 1) * key_component_width;
+  }
 }
 
 size_t BaselineJoinHashTable::getComponentBufferSize() const noexcept {
@@ -1276,6 +1270,7 @@ BaselineJoinHashTable::findHashTableOnCpuInCache(const HashTableCacheKey& key) {
 }
 
 void BaselineJoinHashTable::initHashTableOnCpuFromCache(const HashTableCacheKey& key) {
+  auto timer = DEBUG_TIMER(__func__);
   std::lock_guard<std::mutex> hash_table_cache_lock(hash_table_cache_mutex_);
   for (const auto& kv : hash_table_cache_) {
     if (kv.first == key) {

@@ -29,15 +29,15 @@
 #include "DataMgr/DataMgr.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "QueryEngine/ExternalCacheInvalidators.h"
 #include "QueryEngine/OverlapsJoinHashTable.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryEngine/UDFCompiler.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/Logger.h"
 #include "Shared/MapDParameters.h"
+#include "Shared/thread_count.h"
 #include "TestHelpers.h"
-
-namespace po = boost::program_options;
 
 #ifndef BASE_PATH
 #define BASE_PATH "./tmp"
@@ -82,10 +82,10 @@ int deviceCount(const Catalog_Namespace::Catalog* catalog,
   }
 }
 
-std::shared_ptr<JoinHashTable> buildSyntheticHashJoinTable(std::string_view table1,
-                                                           std::string_view column1,
-                                                           std::string_view table2,
-                                                           std::string_view column2) {
+std::shared_ptr<JoinHashTableInterface> buildPerfect(std::string_view table1,
+                                                     std::string_view column1,
+                                                     std::string_view table2,
+                                                     std::string_view column2) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
@@ -99,52 +99,20 @@ std::shared_ptr<JoinHashTable> buildSyntheticHashJoinTable(std::string_view tabl
 
   ColumnCacheMap column_cache;
 
-  return JoinHashTable::getSyntheticInstance(table1,
-                                             column1,
-                                             table2,
-                                             column2,
-                                             memory_level,
-                                             JoinHashTableInterface::HashType::OneToMany,
-                                             device_count,
-                                             column_cache,
-                                             executor.get());
-}
-
-std::shared_ptr<BaselineJoinHashTable> buildSyntheticBaselineHashJoinTable(
-    std::string_view table1,
-    std::string_view column1,
-    std::string_view table2,
-    std::string_view column2) {
-  auto catalog = QR::get()->getCatalog();
-  CHECK(catalog);
-
-  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
-
-  auto memory_level =
-      (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
-                                                : Data_Namespace::GPU_LEVEL);
-
-  auto device_count = deviceCount(catalog.get(), g_device_type);
-
-  ColumnCacheMap column_cache;
-
-  return BaselineJoinHashTable::getSyntheticInstance(
+  return JoinHashTableInterface::getSyntheticInstance(
       table1,
       column1,
       table2,
       column2,
       memory_level,
-      JoinHashTableInterface::HashType::OneToMany,
+      JoinHashTableInterface::HashType::OneToOne,
       device_count,
       column_cache,
       executor.get());
 }
 
-std::shared_ptr<OverlapsJoinHashTable> buildSyntheticOverlapsHashJoinTable(
-    std::string_view table1,
-    std::string_view column1,
-    std::string_view table2,
-    std::string_view column2) {
+std::shared_ptr<JoinHashTableInterface> buildKeyed(
+    std::shared_ptr<Analyzer::BinOper> op) {
   auto catalog = QR::get()->getCatalog();
   CHECK(catalog);
 
@@ -158,28 +126,480 @@ std::shared_ptr<OverlapsJoinHashTable> buildSyntheticOverlapsHashJoinTable(
 
   ColumnCacheMap column_cache;
 
-  return OverlapsJoinHashTable::getSyntheticInstance(table1,
-                                                     column1,
-                                                     table2,
-                                                     column2,
-                                                     memory_level,
-                                                     device_count,
-                                                     column_cache,
-                                                     executor.get());
+  return JoinHashTableInterface::getSyntheticInstance(
+      op,
+      memory_level,
+      JoinHashTableInterface::HashType::OneToOne,
+      device_count,
+      column_cache,
+      executor.get());
 }
 
-// 0 1 2 3 4 5 6 7 8 9 | 1 1 1 1 1 1 1 1 1 1 | 0 1 2 3 4 5 6 7 8 9
-int32_t hashTable1[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 1, 1, 1, 1, 1,
-                        1, 1, 1, 1, 1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-size_t hashTable1_sizes[] = {
-    0,
-    40,
-    80};  // offsetBufferOff(), countBufferOff(), payloadBufferOff()
-
-TEST(Decode, JoinHashTable1) {
+TEST(Build, PerfectOneToOne1) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
+
+    JoinHashTableCacheInvalidator::invalidateCaches();
+
+    // | perfect one-to-one | payloads 0 1 2 3 4 5 6 7 8 9 |
+    const DecodedJoinHashBufferSet s1 = {{{0}, {0}},
+                                         {{1}, {1}},
+                                         {{2}, {2}},
+                                         {{3}, {3}},
+                                         {{4}, {4}},
+                                         {{5}, {5}},
+                                         {{6}, {6}},
+                                         {{7}, {7}},
+                                         {{8}, {8}},
+                                         {{9}, {9}}};
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+
+      create table table1 (nums1 integer);
+      create table table2 (nums2 integer);
+
+      insert into table1 values (1);
+      insert into table1 values (8);
+
+      insert into table2 values (0);
+      insert into table2 values (1);
+      insert into table2 values (2);
+      insert into table2 values (3);
+      insert into table2 values (4);
+      insert into table2 values (5);
+      insert into table2 values (6);
+      insert into table2 values (7);
+      insert into table2 values (8);
+      insert into table2 values (9);
+    )");
+
+    auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
+    EXPECT_EQ(hash_table->getHashType(), JoinHashTableInterface::HashType::OneToOne);
+
+    auto s2 = hash_table->toSet(g_device_type, 0);
+
+    EXPECT_EQ(s1, s2);
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+    )");
+  }
+}
+
+TEST(Build, PerfectOneToOne2) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    g_device_type = dt;
+
+    JoinHashTableCacheInvalidator::invalidateCaches();
+
+    // | perfect one-to-one | payloads 0 1 2 * 3 4 5 6 * 7 |
+    const DecodedJoinHashBufferSet s1 = {{{0}, {0}},
+                                         {{1}, {1}},
+                                         {{2}, {2}},
+                                         {{4}, {3}},
+                                         {{5}, {4}},
+                                         {{6}, {5}},
+                                         {{7}, {6}},
+                                         {{9}, {7}}};
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+
+      create table table1 (nums1 integer);
+      create table table2 (nums2 integer);
+
+      insert into table1 values (1);
+      insert into table1 values (8);
+
+      insert into table2 values (0);
+      insert into table2 values (1);
+      insert into table2 values (2);
+      insert into table2 values (4);
+      insert into table2 values (5);
+      insert into table2 values (6);
+      insert into table2 values (7);
+      insert into table2 values (9);
+    )");
+
+    auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
+    EXPECT_EQ(hash_table->getHashType(), JoinHashTableInterface::HashType::OneToOne);
+
+    auto s2 = hash_table->toSet(g_device_type, 0);
+
+    EXPECT_EQ(s1, s2);
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+    )");
+  }
+}
+
+TEST(Build, PerfectOneToMany1) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    g_device_type = dt;
+
+    JoinHashTableCacheInvalidator::invalidateCaches();
+
+    // | perfect one-to-many | offsets 0 2 4 6 8 | counts 2 2 2 2 2 | payloads 0 5 1 6 2 7
+    // 3 8 4 9 |
+    const DecodedJoinHashBufferSet s1 = {
+        {{0}, {0, 5}}, {{1}, {1, 6}}, {{2}, {2, 7}}, {{3}, {3, 8}}, {{4}, {4, 9}}};
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+
+      create table table1 (nums1 integer);
+      create table table2 (nums2 integer);
+
+      insert into table1 values (1);
+      insert into table1 values (8);
+
+      insert into table2 values (0);
+      insert into table2 values (1);
+      insert into table2 values (2);
+      insert into table2 values (3);
+      insert into table2 values (4);
+      insert into table2 values (0);
+      insert into table2 values (1);
+      insert into table2 values (2);
+      insert into table2 values (3);
+      insert into table2 values (4);
+    )");
+
+    auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
+    EXPECT_EQ(hash_table->getHashType(), JoinHashTableInterface::HashType::OneToMany);
+
+    auto s2 = hash_table->toSet(g_device_type, 0);
+
+    EXPECT_EQ(s1, s2);
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+    )");
+  }
+}
+
+TEST(Build, PerfectOneToMany2) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    g_device_type = dt;
+
+    JoinHashTableCacheInvalidator::invalidateCaches();
+
+    // | perfect one-to-many | offsets 0 * 2 4 6 | counts 2 * 2 2 2 | payloads 0 4 1 5 2 6
+    // 3 7 |
+    const DecodedJoinHashBufferSet s1 = {
+        {{0}, {0, 4}}, {{2}, {1, 5}}, {{3}, {2, 6}}, {{4}, {3, 7}}};
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+
+      create table table1 (nums1 integer);
+      create table table2 (nums2 integer);
+
+      insert into table1 values (1);
+      insert into table1 values (8);
+
+      insert into table2 values (0);
+      insert into table2 values (2);
+      insert into table2 values (3);
+      insert into table2 values (4);
+      insert into table2 values (0);
+      insert into table2 values (2);
+      insert into table2 values (3);
+      insert into table2 values (4);
+    )");
+
+    auto hash_table = buildPerfect("table1", "nums1", "table2", "nums2");
+    EXPECT_EQ(hash_table->getHashType(), JoinHashTableInterface::HashType::OneToMany);
+
+    auto s2 = hash_table->toSet(g_device_type, 0);
+
+    EXPECT_EQ(s1, s2);
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+    )");
+  }
+}
+
+TEST(Build, KeyedOneToOne) {
+  auto catalog = QR::get()->getCatalog();
+  CHECK(catalog);
+
+  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    g_device_type = dt;
+
+    JoinHashTableCacheInvalidator::invalidateCaches();
+
+    // | keyed one-to-one | keys * (1,1,1) (3,3,2) (0,0,0) * * |
+    const DecodedJoinHashBufferSet s1 = {{{0, 0}, {0}}, {{1, 1}, {1}}, {{3, 3}, {2}}};
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+
+      create table table1 (a1 integer, a2 integer);
+      create table table2 (b integer);
+
+      insert into table1 values (1, 11);
+      insert into table1 values (2, 12);
+      insert into table1 values (3, 13);
+      insert into table1 values (4, 14);
+
+      insert into table2 values (0);
+      insert into table2 values (1);
+      insert into table2 values (3);
+    )");
+
+    auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
+    auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
+    auto b = getSyntheticColumnVar("table2", "b", 1, executor.get());
+
+    using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
+    auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
+    auto et2 = std::make_shared<Analyzer::ExpressionTuple>(VE{b, b});
+
+    // a1 = b and a2 = b
+    auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
+    auto hash_table = buildKeyed(op);
+
+    EXPECT_EQ(hash_table->getHashType(), JoinHashTableInterface::HashType::OneToOne);
+
+    auto s2 = hash_table->toSet(g_device_type, 0);
+
+    EXPECT_EQ(s1, s2);
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+    )");
+  }
+}
+
+TEST(Build, KeyedOneToMany) {
+  auto catalog = QR::get()->getCatalog();
+  CHECK(catalog);
+
+  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    g_device_type = dt;
+
+    JoinHashTableCacheInvalidator::invalidateCaches();
+
+    // | keyed one-to-many | keys * (1,1) (3,3) (0,0) * * | offsets * 0 1 3 * * | counts *
+    // 1 2 1 * * | payloads 1 2 3 0 |
+    const DecodedJoinHashBufferSet s1 = {{{0}, {0}}, {{1}, {1}}, {{3}, {2, 3}}};
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+
+      create table table1 (a1 integer, a2 integer);
+      create table table2 (b integer);
+
+      insert into table1 values (1, 11);
+      insert into table1 values (2, 12);
+      insert into table1 values (3, 13);
+      insert into table1 values (4, 14);
+
+      insert into table2 values (0);
+      insert into table2 values (1);
+      insert into table2 values (3);
+      insert into table2 values (3);
+    )");
+
+    auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
+    auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
+    auto b = getSyntheticColumnVar("table2", "b", 1, executor.get());
+
+    using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
+    auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
+    auto et2 = std::make_shared<Analyzer::ExpressionTuple>(VE{b, b});
+
+    // a1 = b and a2 = b
+    auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
+    auto hash_table = buildKeyed(op);
+
+    EXPECT_EQ(hash_table->getHashType(), JoinHashTableInterface::HashType::OneToMany);
+
+    auto s2 = hash_table->toSet(g_device_type, 0);
+
+    EXPECT_EQ(s1, s2);
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+    )");
+  }
+}
+
+TEST(Build, GeoOneToMany1) {
+  auto catalog = QR::get()->getCatalog();
+  CHECK(catalog);
+
+  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    g_device_type = dt;
+
+    JoinHashTableCacheInvalidator::invalidateCaches();
+
+    // | geo one-to-many | keys * (0,2) * * * (1,1) * * * (0,1) (2,1) (2,0) (2,2) (1,2)
+    // (0,0) * * (1,0) | offsets * 0 * * * 1 * * * 5 7 9 10 11 13 * * 14 | counts * 1 * *
+    // * 4 * * * 2 2 1 1 2 1 * * 2 | payloads 2 0 2 1 3 0 2 1 3 1 3 2 3 0 0 1 |
+    const DecodedJoinHashBufferSet s1 = {{{0}, {0}},
+                                         {{0}, {0, 2}},
+                                         {{0}, {2}},
+                                         {{1}, {0, 1}},
+                                         {{1}, {0, 1, 2, 3}},
+                                         {{1}, {2, 3}},
+                                         {{2}, {1}},
+                                         {{2}, {1, 3}},
+                                         {{2}, {3}}};
+
+    sql(R"(
+      drop table if exists my_points;
+      drop table if exists my_grid;
+
+      create table my_points (locations geometry(point, 4326) encoding none);
+      create table my_grid (cells geometry(multipolygon, 4326) encoding none);
+
+      insert into my_points values ('point(5 5)');
+      insert into my_points values ('point(5 25)');
+      insert into my_points values ('point(10 5)');
+
+      insert into my_grid values ('multipolygon(((0 0,10 0,10 10,0 10,0 0)))');
+      insert into my_grid values ('multipolygon(((10 0,20 0,20 10,10 10,10 0)))');
+      insert into my_grid values ('multipolygon(((0 10,10 10,10 20,0 20,0 10)))');
+      insert into my_grid values ('multipolygon(((10 10,20 10,20 20,10 20,10 10)))');
+    )");
+
+    auto a1 = getSyntheticColumnVar("my_points", "locations", 0, executor.get());
+    auto a2 = getSyntheticColumnVar("my_grid", "cells", 1, executor.get());
+
+    auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kOVERLAPS, kONE, a1, a2);
+
+    auto memory_level =
+        (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
+                                                  : Data_Namespace::GPU_LEVEL);
+
+    auto device_count = deviceCount(catalog.get(), g_device_type);
+
+    ColumnCacheMap column_cache;
+
+    auto hash_table = JoinHashTableInterface::getSyntheticInstance(
+        op,
+        memory_level,
+        JoinHashTableInterface::HashType::OneToMany,
+        device_count,
+        column_cache,
+        executor.get());
+
+    EXPECT_EQ(hash_table->getHashType(), JoinHashTableInterface::HashType::OneToMany);
+
+    auto s2 = hash_table->toSet(g_device_type, 0);
+
+    EXPECT_EQ(s1, s2);
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+    )");
+  }
+}
+
+TEST(Build, GeoOneToMany2) {
+  auto catalog = QR::get()->getCatalog();
+  CHECK(catalog);
+
+  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    g_device_type = dt;
+
+    JoinHashTableCacheInvalidator::invalidateCaches();
+
+    // | geo one-to-many | keys (11,0) (1,1) * * * * (0,0) * (10,0) (10,1) * (1,0) *
+    // (11,1) * (0,1) | offsets 0 1 * * * * 2 * 3 4 * 5 * 6 * 7 | counts 1 1 * * * * 1 * 1
+    // 1 * 1 * 1 * 1 | payloads 1 0 0 1 1 0 1 0 |
+    const DecodedJoinHashBufferSet s1 = {
+        {{0}, {0}}, {{1}, {0}}, {{10}, {1}}, {{11}, {1}}};
+
+    sql(R"(
+      drop table if exists my_points;
+      drop table if exists my_grid;
+
+      create table my_points (locations geometry(point, 4326) encoding none);
+      create table my_grid (cells geometry(multipolygon, 4326) encoding none);
+
+      insert into my_points values ('point(5 5)');
+      insert into my_points values ('point(5 25)');
+      insert into my_points values ('point(10 5)');
+
+      insert into my_grid values ('multipolygon(((0 0,10 0,10 10,0 10,0 0)))');
+      insert into my_grid values ('multipolygon(((100 0,110 0,110 10,100 10,100 0)))');
+    )");
+
+    auto a1 = getSyntheticColumnVar("my_points", "locations", 0, executor.get());
+    auto a2 = getSyntheticColumnVar("my_grid", "cells", 1, executor.get());
+
+    auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kOVERLAPS, kONE, a1, a2);
+
+    auto memory_level =
+        (g_device_type == ExecutorDeviceType::CPU ? Data_Namespace::CPU_LEVEL
+                                                  : Data_Namespace::GPU_LEVEL);
+
+    auto device_count = deviceCount(catalog.get(), g_device_type);
+
+    ColumnCacheMap column_cache;
+
+    auto hash_table = JoinHashTableInterface::getSyntheticInstance(
+        op,
+        memory_level,
+        JoinHashTableInterface::HashType::OneToMany,
+        device_count,
+        column_cache,
+        executor.get());
+
+    EXPECT_EQ(hash_table->getHashType(), JoinHashTableInterface::HashType::OneToMany);
+
+    auto s2 = hash_table->toSet(g_device_type, 0);
+
+    EXPECT_EQ(s1, s2);
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+    )");
+  }
+}
+
+TEST(MultiFragment, PerfectOneToOne) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    g_device_type = dt;
+
+    JoinHashTableCacheInvalidator::invalidateCaches();
 
     sql(R"(
       drop table if exists table1;
@@ -203,99 +623,54 @@ TEST(Decode, JoinHashTable1) {
       insert into table2 values (9);
     )");
 
-    auto hptr = reinterpret_cast<const int8_t*>(hashTable1);
-    auto s1 = ::decodeJoinHashBuffer(1,
-                                     sizeof(*hashTable1),
-                                     hptr,
-                                     hptr + hashTable1_sizes[0],
-                                     hptr + hashTable1_sizes[1],
-                                     hptr + hashTable1_sizes[2],
-                                     sizeof(hashTable1));
+    sql(R"(
+      drop table if exists table3;
+      drop table if exists table4;
 
-    auto hash_table = buildSyntheticHashJoinTable("table1", "nums1", "table2", "nums2");
+      create table table3 (nums3 integer) with (fragment_size = 3);
+      create table table4 (nums4 integer) with (fragment_size = 3);
 
-    auto s2 = hash_table->decodeJoinHashBuffer(g_device_type, 0);
+      insert into table3 values (1);
+      insert into table3 values (7);
 
-    ASSERT_EQ(s1, s2);
+      insert into table4 values (0);
+      insert into table4 values (1);
+      insert into table4 values (2);
+      insert into table4 values (3);
+      insert into table4 values (4);
+      insert into table4 values (5);
+      insert into table4 values (6);
+      insert into table4 values (7);
+      insert into table4 values (8);
+      insert into table4 values (9);
+    )");
+
+    auto hash_table1 = buildPerfect("table1", "nums1", "table2", "nums2");
+    EXPECT_EQ(hash_table1->getHashType(), JoinHashTableInterface::HashType::OneToOne);
+
+    auto hash_table2 = buildPerfect("table3", "nums3", "table4", "nums4");
+    EXPECT_EQ(hash_table2->getHashType(), JoinHashTableInterface::HashType::OneToOne);
+
+    // | perfect one-to-one | payloads 0 1 2 3 4 5 6 7 8 9 |
+    auto s1 = hash_table1->toSet(g_device_type, 0);
+    auto s2 = hash_table2->toSet(g_device_type, 0);
+    EXPECT_EQ(s1, s2);
 
     sql(R"(
       drop table if exists table1;
       drop table if exists table2;
+      drop table if exists table3;
+      drop table if exists table4;
     )");
   }
 }
 
-// 0 1 2 3 4 | 1 1 1 1 1 | 0 1 2 3 4
-int32_t hashTable2[] = {0, 1, 2, 3, 4, 1, 1, 1, 1, 1, 0, 1, 2, 3, 4};
-size_t hashTable2_sizes[] = {
-    0,
-    20,
-    40};  // offsetBufferOff(), countBufferOff(), payloadBufferOff()
-
-TEST(Decode, JoinHashTable2) {
+TEST(MultiFragment, PerfectOneToMany) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
 
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
-
-      create table table1 (vals1 text);
-      create table table2 (vals2 text, shared dictionary (vals2) references table1(vals1));
-
-      insert into table1 values ('a');
-
-      insert into table2 values ('a');
-      insert into table2 values ('b');
-      insert into table2 values ('c');
-      insert into table2 values ('d');
-      insert into table2 values ('e');
-    )");
-
-    auto hptr = reinterpret_cast<const int8_t*>(hashTable2);
-    auto s1 = ::decodeJoinHashBuffer(1,
-                                     sizeof(*hashTable2),
-                                     hptr,
-                                     hptr + hashTable2_sizes[0],
-                                     hptr + hashTable2_sizes[1],
-                                     hptr + hashTable2_sizes[2],
-                                     sizeof(hashTable2));
-
-    auto hash_table = buildSyntheticHashJoinTable("table1", "vals1", "table2", "vals2");
-    auto s2 = hash_table->decodeJoinHashBuffer(g_device_type, 0);
-
-    ASSERT_EQ(s1, s2);
-
-    sql(R"(
-      drop table if exists table1;
-      drop table if exists table2;
-    )");
-  }
-}
-
-// (5) * * (1) * * (6) * (7) (9) (4) (8) * * (3) * * (2) (0) * | 0 * * 1 * * 2 * 3 4 5 6 *
-// * 7 * * 8 9 * | 1 * * 1 * * 1 * 1 1 1 1 * * 1 * * 1 1 * | 5 1 6 7 9 4 8 3 2 0
-int32_t baHashTable1[] = {
-    5,          2147483647, 2147483647, 1,  2147483647, 2147483647, 6,
-    2147483647, 7,          9,          4,  8,          2147483647, 2147483647,
-    3,          2147483647, 2147483647, 2,  0,          2147483647, 0,
-    -1,         -1,         1,          -1, -1,         2,          -1,
-    3,          4,          5,          6,  -1,         -1,         7,
-    -1,         -1,         8,          9,  -1,         1,          0,
-    0,          1,          0,          0,  1,          0,          1,
-    1,          1,          1,          0,  0,          1,          0,
-    0,          1,          1,          0,  5,          1,          6,
-    7,          9,          4,          8,  3,          2,          0};
-size_t baHashTable1_sizes[] = {
-    80,
-    160,
-    240};  // offsetBufferOff(), countBufferOff(), payloadBufferOff()
-
-TEST(Decode, BaselineJoinHashTable1) {
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-    g_device_type = dt;
+    JoinHashTableCacheInvalidator::invalidateCaches();
 
     sql(R"(
       drop table if exists table1;
@@ -304,8 +679,8 @@ TEST(Decode, BaselineJoinHashTable1) {
       create table table1 (nums1 integer);
       create table table2 (nums2 integer);
 
-      insert into table1 values (0);
       insert into table1 values (1);
+      insert into table1 values (7);
 
       insert into table2 values (0);
       insert into table2 values (1);
@@ -317,250 +692,234 @@ TEST(Decode, BaselineJoinHashTable1) {
       insert into table2 values (7);
       insert into table2 values (8);
       insert into table2 values (9);
+      insert into table2 values (9);
     )");
 
-    auto hptr = reinterpret_cast<const int8_t*>(baHashTable1);
-    auto s1 = ::decodeJoinHashBuffer(1,
-                                     sizeof(*baHashTable1),
-                                     hptr,
-                                     hptr + baHashTable1_sizes[0],
-                                     hptr + baHashTable1_sizes[1],
-                                     hptr + baHashTable1_sizes[2],
-                                     sizeof(baHashTable1));
+    sql(R"(
+      drop table if exists table3;
+      drop table if exists table4;
 
-    auto hash_table =
-        buildSyntheticBaselineHashJoinTable("table1", "nums1", "table2", "nums2");
-    auto s2 = hash_table->decodeJoinHashBuffer(g_device_type, 0);
+      create table table3 (nums3 integer) with (fragment_size = 3);
+      create table table4 (nums4 integer) with (fragment_size = 3);
 
-    ASSERT_EQ(s1, s2);
+      insert into table3 values (1);
+      insert into table3 values (7);
+
+      insert into table4 values (0);
+      insert into table4 values (1);
+      insert into table4 values (2);
+      insert into table4 values (3);
+      insert into table4 values (4);
+      insert into table4 values (5);
+      insert into table4 values (6);
+      insert into table4 values (7);
+      insert into table4 values (8);
+      insert into table4 values (9);
+      insert into table4 values (9);
+    )");
+
+    auto hash_table1 = buildPerfect("table1", "nums1", "table2", "nums2");
+    EXPECT_EQ(hash_table1->getHashType(), JoinHashTableInterface::HashType::OneToMany);
+
+    auto hash_table2 = buildPerfect("table3", "nums3", "table4", "nums4");
+    EXPECT_EQ(hash_table2->getHashType(), JoinHashTableInterface::HashType::OneToMany);
+
+    // | perfect one-to-many | offsets 0 1 2 3 4 5 6 7 8 9 | counts 1 1 1 1 1 1 1 1 1 2 |
+    // payloads 0 1 2 3 4 5 6 7 8 9 10 |
+    auto s1 = hash_table1->toSet(g_device_type, 0);
+    auto s2 = hash_table2->toSet(g_device_type, 0);
+    EXPECT_EQ(s1, s2);
 
     sql(R"(
       drop table if exists table1;
       drop table if exists table2;
+      drop table if exists table3;
+      drop table if exists table4;
     )");
   }
 }
 
-// * (0,2) * * * (1,1) * * * (0,1) (2,1) (2,2) (2,0) (1,2) (0,0) * * (1,0) | * 0 * * * 1 *
-// * * 5 7 9 10 11 13 * * 14 | * 1 * * * 4 * * * 2 2 1 1 2 1 * * 2 | 2 0 2 3 1 0 2 3 1 3 1
-// 2 3 0 0 1
-int64_t ovHashTable1[] = {9223372036854775807,
-                          9223372036854775807,
-                          0,
-                          2,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          1,
-                          1,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          0,
-                          1,
-                          2,
-                          1,
-                          2,
-                          0,
-                          2,
-                          2,
-                          1,
-                          2,
-                          0,
-                          0,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          1,
-                          0,
-                          4294967295,
-                          -1,
-                          8589934591,
-                          -1,
-                          25769803775,
-                          38654705671,
-                          47244640266,
-                          -4294967283,
-                          64424509439,
-                          4294967296,
-                          0,
-                          17179869184,
-                          0,
-                          8589934592,
-                          4294967298,
-                          8589934593,
-                          1,
-                          8589934592,
-                          2,
-                          8589934593,
-                          3,
-                          4294967298,
-                          4294967299,
-                          8589934595,
-                          3,
-                          4294967296};
-size_t ovHashTable1_sizes[] = {
-    288,
-    360,
-    432};  // offsetBufferOff(), countBufferOff(), payloadBufferOff()
+TEST(MultiFragment, KeyedOneToOne) {
+  auto catalog = QR::get()->getCatalog();
+  CHECK(catalog);
 
-TEST(Decode, OverlapsJoinHashTable1) {
+  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
 
+    JoinHashTableCacheInvalidator::invalidateCaches();
+
     sql(R"(
-      drop table if exists my_points;
-      drop table if exists my_grid;
+      drop table if exists table1;
+      drop table if exists table2;
 
-      create table my_points (locations geometry(point, 4326) encoding none);
-      create table my_grid (cells geometry(multipolygon, 4326) encoding none);
+      create table table1 (a1 integer, a2 integer);
+      create table table2 (b integer);
 
-      insert into my_points values ('point(5 5)');
-      insert into my_points values ('point(5 25)');
-      insert into my_points values ('point(10 5)');
+      insert into table1 values (1, 11);
+      insert into table1 values (2, 12);
+      insert into table1 values (3, 13);
+      insert into table1 values (4, 14);
 
-      insert into my_grid values ('multipolygon(((0 0,10 0,10 10,0 10,0 0)))');
-      insert into my_grid values ('multipolygon(((10 0,20 0,20 10,10 10,10 0)))');
-      insert into my_grid values ('multipolygon(((0 10,10 10,10 20,0 20,0 10)))');
-      insert into my_grid values ('multipolygon(((10 10,20 10,20 20,10 20,10 10)))');
+      insert into table2 values (0);
+      insert into table2 values (1);
+      insert into table2 values (3);
     )");
 
-    auto hptr = reinterpret_cast<const int8_t*>(ovHashTable1);
-    auto s1 = decodeJoinHashBuffer(2,
-                                   sizeof(*ovHashTable1),
-                                   hptr,
-                                   hptr + ovHashTable1_sizes[0],
-                                   hptr + ovHashTable1_sizes[1],
-                                   hptr + ovHashTable1_sizes[2],
-                                   sizeof(ovHashTable1));
+    auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
+    auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
+    auto b = getSyntheticColumnVar("table2", "b", 1, executor.get());
 
-    auto hash_table =
-        buildSyntheticOverlapsHashJoinTable("my_points", "locations", "my_grid", "cells");
-    auto s2 = hash_table->decodeJoinHashBuffer(g_device_type, 0);
+    using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
+    auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
+    auto et2 = std::make_shared<Analyzer::ExpressionTuple>(VE{b, b});
 
-    ASSERT_EQ(s1, s2);
+    // a1 = b and a2 = b
+    auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
+    auto hash_table1 = buildKeyed(op);
+    EXPECT_EQ(hash_table1->getHashType(), JoinHashTableInterface::HashType::OneToOne);
 
     sql(R"(
-      drop table if exists my_points;
-      drop table if exists my_grid;
+      drop table if exists table3;
+      drop table if exists table4;
+
+      create table table3 (a1 integer, a2 integer) with (fragment_size = 1);
+      create table table4 (b integer) with (fragment_size = 1);
+
+      insert into table3 values (1, 11);
+      insert into table3 values (2, 12);
+      insert into table3 values (3, 13);
+      insert into table3 values (4, 14);
+
+      insert into table4 values (0);
+      insert into table4 values (1);
+      insert into table4 values (3);
+    )");
+
+    a1 = getSyntheticColumnVar("table3", "a1", 0, executor.get());
+    a2 = getSyntheticColumnVar("table3", "a2", 0, executor.get());
+    b = getSyntheticColumnVar("table4", "b", 1, executor.get());
+
+    et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
+    et2 = std::make_shared<Analyzer::ExpressionTuple>(VE{b, b});
+
+    // a1 = b and a2 = b
+    op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
+    auto hash_table2 = buildKeyed(op);
+    EXPECT_EQ(hash_table2->getHashType(), JoinHashTableInterface::HashType::OneToOne);
+
+    //
+    auto s1 = hash_table1->toSet(g_device_type, 0);
+    auto s2 = hash_table2->toSet(g_device_type, 0);
+
+    EXPECT_EQ(s1, s2);
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+      drop table if exists table3;
+      drop table if exists table4;
     )");
   }
 }
 
-// (11,0) (1,1) * * * * (0,0) * (10,0) (10,1) * (1,0) * (11,1) * (0,1) | 0 1 * * * * 2 * 3
-// 4 * 5 * 6 * 7 | 1 1 * * * * 1 * 1 1 * 1 * 1 * 1 | 1 0 0 1 1 0 1 0
-int64_t ovHashTable2[] = {11,
-                          0,
-                          1,
-                          1,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          9223372036854775807,
-                          0,
-                          0,
-                          9223372036854775807,
-                          9223372036854775807,
-                          10,
-                          0,
-                          10,
-                          1,
-                          9223372036854775807,
-                          9223372036854775807,
-                          1,
-                          0,
-                          9223372036854775807,
-                          9223372036854775807,
-                          11,
-                          1,
-                          9223372036854775807,
-                          9223372036854775807,
-                          0,
-                          1,
-                          4294967296,
-                          -1,
-                          -1,
-                          -4294967294,
-                          17179869187,
-                          25769803775,
-                          30064771071,
-                          34359738367,
-                          4294967297,
-                          0,
-                          0,
-                          1,
-                          4294967297,
-                          4294967296,
-                          4294967296,
-                          4294967296,
-                          1,
-                          4294967296,
-                          1,
-                          1};
-size_t ovHashTable2_sizes[] = {
-    256,
-    320,
-    384};  // offsetBufferOff(), countBufferOff(), payloadBufferOff()
+TEST(MultiFragment, KeyedOneToMany) {
+  auto catalog = QR::get()->getCatalog();
+  CHECK(catalog);
 
-TEST(Decode, OverlapsJoinHashTable2) {
+  auto executor = Executor::getExecutor(catalog->getCurrentDB().dbId);
+
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     g_device_type = dt;
 
+    JoinHashTableCacheInvalidator::invalidateCaches();
+
     sql(R"(
-      drop table if exists my_points;
-      drop table if exists my_grid;
+      drop table if exists table1;
+      drop table if exists table2;
 
-      create table my_points (locations geometry(point, 4326) encoding none);
-      create table my_grid (cells geometry(multipolygon, 4326) encoding none);
+      create table table1 (a1 integer, a2 integer);
+      create table table2 (b integer);
 
-      insert into my_points values ('point(5 5)');
-      insert into my_points values ('point(5 25)');
-      insert into my_points values ('point(10 5)');
+      insert into table1 values (1, 11);
+      insert into table1 values (2, 12);
+      insert into table1 values (3, 13);
+      insert into table1 values (4, 14);
 
-      insert into my_grid values ('multipolygon(((0 0,10 0,10 10,0 10,0 0)))');
-      insert into my_grid values ('multipolygon(((100 0,110 0,110 10,100 10,100 0)))');
+      insert into table2 values (0);
+      insert into table2 values (1);
+      insert into table2 values (3);
+      insert into table2 values (3);
     )");
 
-    auto hptr = reinterpret_cast<const int8_t*>(ovHashTable2);
-    auto s1 = decodeJoinHashBuffer(2,
-                                   sizeof(*ovHashTable2),
-                                   hptr,
-                                   hptr + ovHashTable2_sizes[0],
-                                   hptr + ovHashTable2_sizes[1],
-                                   hptr + ovHashTable2_sizes[2],
-                                   sizeof(ovHashTable2));
+    auto a1 = getSyntheticColumnVar("table1", "a1", 0, executor.get());
+    auto a2 = getSyntheticColumnVar("table1", "a2", 0, executor.get());
+    auto b = getSyntheticColumnVar("table2", "b", 1, executor.get());
 
-    auto hash_table =
-        buildSyntheticOverlapsHashJoinTable("my_points", "locations", "my_grid", "cells");
-    auto s2 = hash_table->decodeJoinHashBuffer(g_device_type, 0);
+    using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
+    auto et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
+    auto et2 = std::make_shared<Analyzer::ExpressionTuple>(VE{b, b});
 
-    ASSERT_EQ(s1, s2);
+    // a1 = b and a2 = b
+    auto op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
+    auto hash_table1 = buildKeyed(op);
+    EXPECT_EQ(hash_table1->getHashType(), JoinHashTableInterface::HashType::OneToMany);
 
     sql(R"(
-      drop table if exists my_points;
-      drop table if exists my_grid;
+      drop table if exists table3;
+      drop table if exists table4;
+
+      create table table3 (a1 integer, a2 integer) with (fragment_size = 1);
+      create table table4 (b integer) with (fragment_size = 1);
+
+      insert into table3 values (1, 11);
+      insert into table3 values (2, 12);
+      insert into table3 values (3, 13);
+      insert into table3 values (4, 14);
+
+      insert into table4 values (0);
+      insert into table4 values (1);
+      insert into table4 values (3);
+      insert into table4 values (3);
+    )");
+
+    a1 = getSyntheticColumnVar("table3", "a1", 0, executor.get());
+    a2 = getSyntheticColumnVar("table3", "a2", 0, executor.get());
+    b = getSyntheticColumnVar("table4", "b", 1, executor.get());
+
+    using VE = std::vector<std::shared_ptr<Analyzer::Expr>>;
+    et1 = std::make_shared<Analyzer::ExpressionTuple>(VE{a1, a2});
+    et2 = std::make_shared<Analyzer::ExpressionTuple>(VE{b, b});
+
+    // a1 = b and a2 = b
+    op = std::make_shared<Analyzer::BinOper>(kBOOLEAN, kEQ, kONE, et1, et2);
+    auto hash_table2 = buildKeyed(op);
+    EXPECT_EQ(hash_table2->getHashType(), JoinHashTableInterface::HashType::OneToMany);
+
+    //
+    auto s1 = hash_table1->toSet(g_device_type, 0);
+    auto s2 = hash_table2->toSet(g_device_type, 0);
+
+    EXPECT_EQ(s1, s2);
+
+    sql(R"(
+      drop table if exists table1;
+      drop table if exists table2;
+      drop table if exists table3;
+      drop table if exists table4;
     )");
   }
 }
 
 int main(int argc, char** argv) {
+  ::g_enable_overlaps_hashjoin = true;
   testing::InitGoogleTest(&argc, argv);
 
   logger::LogOptions log_options(argv[0]);
-  log_options.severity_ = logger::Severity::DEBUG1;
+  log_options.severity_ = logger::Severity::FATAL;
   logger::init(log_options);
 
   QR::init(BASE_PATH);
