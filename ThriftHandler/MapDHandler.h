@@ -347,7 +347,8 @@ class MapDHandler : public MapDIf {
                          const std::string& table_name,
                          const std::vector<TRow>& rows) override;
 
-  void prepare_columnar_loader(
+  std::unique_ptr<lockmgr::AbstractLockContainer<const TableDescriptor*>>
+  prepare_columnar_loader(
       const Catalog_Namespace::SessionInfo& session_info,
       const std::string& table_name,
       size_t num_cols,
@@ -564,13 +565,14 @@ class MapDHandler : public MapDIf {
   static TDatum value_to_thrift(const TargetValue& tv, const SQLTypeInfo& ti);
   static std::string apply_copy_to_shim(const std::string& query_str);
 
-  TPlanResult parse_to_ra(QueryStateProxy,
-                          const std::string& query_str,
-                          const std::vector<TFilterPushDownInfo>& filter_push_down_info,
-                          OptionalTableMap tableNames,
-                          const MapDParameters mapd_parameters,
-                          RenderInfo* render_info = nullptr,
-                          bool check_privileges = true);
+  std::pair<TPlanResult, lockmgr::LockedTableDescriptors> parse_to_ra(
+      QueryStateProxy,
+      const std::string& query_str,
+      const std::vector<TFilterPushDownInfo>& filter_push_down_info,
+      const bool acquire_locks,
+      const MapDParameters mapd_parameters,
+      RenderInfo* render_info = nullptr,
+      bool check_privileges = true);
 
   void sql_execute_impl(TQueryResult& _return,
                         QueryStateProxy,

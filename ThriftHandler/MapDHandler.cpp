@@ -44,7 +44,7 @@
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "Import/Importer.h"
-#include "LockMgr/TableLockMgr.h"
+#include "LockMgr/LockMgr.h"
 #include "MapDDistributedHandler.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/ReservedKeywords.h"
@@ -993,6 +993,9 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
   }
   _return.execution_time_ms = 0;
 
+  mapd_shared_lock<mapd_shared_mutex> executeReadLock(
+      *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
+
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
@@ -1001,24 +1004,13 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
     if (!pw.is_ddl && !pw.is_update_dml &&
         !(pw.getExplainType() == ParserWrapper::ExplainType::Other)) {
       std::string query_ra;
-      TableMap table_map;
-      OptionalTableMap tableNames(table_map);
+      lockmgr::LockedTableDescriptors locks;
       _return.execution_time_ms += measure<>::execution([&]() {
-        query_ra = parse_to_ra(query_state->createQueryStateProxy(),
-                               query_str,
-                               {},
-                               tableNames,
-                               mapd_parameters_)
-                       .plan_result;
+        TPlanResult result;
+        std::tie(result, locks) = parse_to_ra(
+            query_state->createQueryStateProxy(), query_str, {}, true, mapd_parameters_);
+        query_ra = result.plan_result;
       });
-
-      // COPY_TO/SELECT: get read ExecutorOuterLock >> TableReadLock for each table  (note
-      // for update/delete this would be a table write lock)
-      mapd_shared_lock<mapd_shared_mutex> executeReadLock(
-          *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
-      std::vector<Lock_Namespace::TableLock> table_locks;
-      TableLockMgr::getTableLocks(
-          session_ptr->getCatalog(), tableNames.value(), table_locks);
 
       if (pw.isCalciteExplain()) {
         throw std::runtime_error("explain is not unsupported by current thrift API");
@@ -1309,9 +1301,9 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
     const auto query_ra = parse_to_ra(query_state_proxy,
                                       query_state_proxy.getQueryState().getQueryStr(),
                                       {},
-                                      boost::none,
+                                      false,
                                       mapd_parameters_)
-                              .plan_result;
+                              .first.plan_result;
     TQueryResult result;
     MapDHandler::execute_rel_alg(result,
                                  query_state_proxy,
@@ -1609,6 +1601,7 @@ void MapDHandler::get_db_object_privs(std::vector<TDBObject>& TDBObjects,
   }
   DBObject object_to_find(objectName, object_type);
 
+  // TODO(adb): Use DatabaseLock to protect method
   try {
     if (object_type == DashboardDBObjectType) {
       if (objectName == "") {
@@ -1832,9 +1825,10 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
                                          const bool get_physical) {
   auto session_info = stdlog.getSessionInfo();
   auto& cat = session_info->getCatalog();
-  auto td = cat.getMetadataForTable(
-      table_name,
-      false);  // don't populate fragmenter on this call since we only want metadata
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+          cat, table_name, false);
+  const auto td = td_with_lock();
   if (!td) {
     THROW_MAPD_EXCEPTION("Table " + table_name + " doesn't exist");
   }
@@ -1844,16 +1838,18 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
     stdlog.setQueryState(query_state);
     try {
       if (hasTableAccessPrivileges(td, *session_info)) {
+        // TODO(adb): we should take schema read locks on all tables making up the view,
+        // at minimum
         const auto query_ra = parse_to_ra(query_state->createQueryStateProxy(),
                                           query_state->getQueryStr(),
                                           {},
-                                          boost::none,
+                                          false,
                                           mapd_parameters_,
                                           nullptr,
                                           false);
         try {
           calcite_->checkAccessedObjectsPrivileges(query_state->createQueryStateProxy(),
-                                                   query_ra);
+                                                   query_ra.first);
         } catch (const std::runtime_error&) {
           have_privileges_on_view_sources = false;
         }
@@ -1861,7 +1857,7 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
         TQueryResult result;
         execute_rel_alg(result,
                         query_state->createQueryStateProxy(),
-                        query_ra.plan_result,
+                        query_ra.first.plan_result,
                         true,
                         ExecutorDeviceType::CPU,
                         -1,
@@ -2046,9 +2042,9 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
         const auto query_ra = parse_to_ra(query_state->createQueryStateProxy(),
                                           td->viewSQL,
                                           {},
-                                          boost::none,
+                                          false,
                                           mapd_parameters_)
-                                  .plan_result;
+                                  .first.plan_result;
         TQueryResult result;
         execute_rel_alg(result,
                         query_state->createQueryStateProxy(),
@@ -2253,8 +2249,7 @@ void MapDHandler::set_execution_mode(const TSessionId& session,
 
 namespace {
 
-void check_table_not_sharded(const Catalog& cat, const std::string& table_name) {
-  const auto td = cat.getMetadataForTable(table_name);
+void check_table_not_sharded(const TableDescriptor* td) {
   if (td && td->nShards) {
     throw std::runtime_error("Cannot import a sharded table directly to a leaf");
   }
@@ -2270,13 +2265,16 @@ void MapDHandler::load_table_binary(const TSessionId& session,
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("load_table_binary");
   auto& cat = session_ptr->getCatalog();
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+          cat, table_name, true);
+  const auto td = td_with_lock();
+  if (!td) {
+    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
+  }
   if (g_cluster && !leaf_aggregator_.leafCount()) {
     // Sharded table rows need to be routed to the leaf by an aggregator.
-    check_table_not_sharded(cat, table_name);
-  }
-  const TableDescriptor* td = cat.getMetadataForTable(table_name);
-  if (td == nullptr) {
-    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
+    check_table_not_sharded(td);
   }
   check_table_load_privileges(*session_ptr, table_name);
   if (rows.empty()) {
@@ -2317,25 +2315,30 @@ void MapDHandler::load_table_binary(const TSessionId& session,
                  << " data :" << row;
     }
   }
-  auto checkpoint_lock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-      session_ptr->getCatalog(), table_name, LockType::CheckpointLock);
+  auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
+      session_ptr->getCatalog(), table_name);
   loader->load(import_buffers, rows.size());
 }
 
-void MapDHandler::prepare_columnar_loader(
+std::unique_ptr<lockmgr::AbstractLockContainer<const TableDescriptor*>>
+MapDHandler::prepare_columnar_loader(
     const Catalog_Namespace::SessionInfo& session_info,
     const std::string& table_name,
     size_t num_cols,
     std::unique_ptr<Importer_NS::Loader>* loader,
     std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers) {
   auto& cat = session_info.getCatalog();
+  auto td_with_lock =
+      std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
+          lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+              cat, table_name, true));
+  const auto td = (*td_with_lock)();
+  if (!td) {
+    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
+  }
   if (g_cluster && !leaf_aggregator_.leafCount()) {
     // Sharded table rows need to be routed to the leaf by an aggregator.
-    check_table_not_sharded(cat, table_name);
-  }
-  const TableDescriptor* td = cat.getMetadataForTable(table_name);
-  if (td == nullptr) {
-    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
+    check_table_not_sharded(td);
   }
   check_table_load_privileges(session_info, table_name);
   if (leaf_aggregator_.leafCount() > 0) {
@@ -2357,6 +2360,7 @@ void MapDHandler::prepare_columnar_loader(
     import_buffers->push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
         new Importer_NS::TypedImportBuffer(cd, (*loader)->getStringDict(cd))));
   }
+  return std::move(td_with_lock);
 }
 
 void MapDHandler::load_table_binary_columnar(const TSessionId& session,
@@ -2370,8 +2374,10 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
 
   std::unique_ptr<Importer_NS::Loader> loader;
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
-  prepare_columnar_loader(
+  auto read_lock = prepare_columnar_loader(
       *session_ptr, table_name, cols.size(), &loader, &import_buffers);
+  auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
+      session_ptr->getCatalog(), table_name);
 
   size_t numRows = 0;
   size_t import_idx = 0;  // index into the TColumn vector being loaded
@@ -2441,8 +2447,6 @@ void MapDHandler::load_table_binary_columnar(const TSessionId& session,
         << ". Issue at column : " << (col_idx + 1) << ". Import aborted";
     THROW_MAPD_EXCEPTION(oss.str());
   }
-  auto checkpoint_lock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-      session_ptr->getCatalog(), table_name, LockType::CheckpointLock);
   loader->load(import_buffers, numRows);
 }
 
@@ -2509,11 +2513,13 @@ void MapDHandler::load_table_binary_arrow(const TSessionId& session,
 
   std::unique_ptr<Importer_NS::Loader> loader;
   std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
-  prepare_columnar_loader(*session_ptr,
-                          table_name,
-                          static_cast<size_t>(batch->num_columns()),
-                          &loader,
-                          &import_buffers);
+  auto read_lock = prepare_columnar_loader(*session_ptr,
+                                           table_name,
+                                           static_cast<size_t>(batch->num_columns()),
+                                           &loader,
+                                           &import_buffers);
+  auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
+      session_ptr->getCatalog(), table_name);
 
   size_t numRows = 0;
   size_t col_idx = 0;
@@ -2532,8 +2538,6 @@ void MapDHandler::load_table_binary_arrow(const TSessionId& session,
     // other import paths
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
-  auto checkpoint_lock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-      session_ptr->getCatalog(), table_name, LockType::CheckpointLock);
   loader->load(import_buffers, numRows);
 }
 
@@ -2545,13 +2549,16 @@ void MapDHandler::load_table(const TSessionId& session,
   auto session_ptr = stdlog.getConstSessionInfo();
   check_read_only("load_table");
   auto& cat = session_ptr->getCatalog();
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+          cat, table_name, true);
+  const auto td = td_with_lock();
+  if (!td) {
+    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
+  }
   if (g_cluster && !leaf_aggregator_.leafCount()) {
     // Sharded table rows need to be routed to the leaf by an aggregator.
-    check_table_not_sharded(cat, table_name);
-  }
-  const TableDescriptor* td = cat.getMetadataForTable(table_name);
-  if (td == nullptr) {
-    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
+    check_table_not_sharded(td);
   }
   check_table_load_privileges(*session_ptr, table_name);
   if (rows.empty()) {
@@ -2642,8 +2649,8 @@ void MapDHandler::load_table(const TSessionId& session,
                  << " data :" << row;
     }
   }
-  auto checkpoint_lock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-      session_ptr->getCatalog(), table_name, LockType::CheckpointLock);
+  auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
+      session_ptr->getCatalog(), table_name);
   loader->load(import_buffers, rows_completed);
 }
 
@@ -3724,9 +3731,11 @@ void MapDHandler::import_table(const TSessionId& session,
   check_read_only("import_table");
   LOG(INFO) << "import_table " << table_name << " from " << file_name_in;
   auto& cat = session_ptr->getCatalog();
-
-  const TableDescriptor* td = cat.getMetadataForTable(table_name);
-  if (td == nullptr) {
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+          cat, table_name);
+  const auto td = td_with_lock();
+  if (!td) {
     THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
   }
   check_table_load_privileges(*session_ptr, table_name);
@@ -3753,6 +3762,8 @@ void MapDHandler::import_table(const TSessionId& session,
     }
   }
 
+  const auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
+      session_ptr->getCatalog(), table_name);
   try {
     std::unique_ptr<Importer_NS::Importer> importer;
     if (leaf_aggregator_.leafCount() > 0) {
@@ -5010,22 +5021,24 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                   DELETE/UPDATE: CheckpointLock >> TableWriteLock
   */
 
-  std::vector<Lock_Namespace::TableLock> table_locks;
-
-  mapd_unique_lock<mapd_shared_mutex> chkptlLock;
+  mapd_unique_lock<mapd_shared_mutex> checkpoint_lock;
   mapd_unique_lock<mapd_shared_mutex> executeWriteLock;
   mapd_shared_lock<mapd_shared_mutex> executeReadLock;
 
+  lockmgr::LockedTableDescriptors locks;
   try {
     ParserWrapper pw{query_str};
-    TableMap table_map;
-    OptionalTableMap tableNames(table_map);
     if (pw.isCalcitePathPermissable(read_only_)) {
+      // read ExecutorOuterLock
+      executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
+          *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
+
       std::string query_ra;
       _return.execution_time_ms += measure<>::execution([&]() {
-        query_ra =
-            parse_to_ra(query_state_proxy, query_str, {}, tableNames, mapd_parameters_)
-                .plan_result;
+        TPlanResult result;
+        std::tie(result, locks) =
+            parse_to_ra(query_state_proxy, query_str, {}, true, mapd_parameters_);
+        query_ra = result.plan_result;
       });
 
       std::string query_ra_calcite_explain;
@@ -5038,27 +5051,13 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         std::string temp_query_str =
             query_str.substr(std::string("explain calcite ").length());
         query_ra_calcite_explain =
-            parse_to_ra(
-                query_state_proxy, temp_query_str, {}, boost::none, mapd_parameters_)
-                .plan_result;
+            parse_to_ra(query_state_proxy, temp_query_str, {}, false, mapd_parameters_)
+                .first.plan_result;
       } else if (pw.isCalciteDdl()) {
         // TODO: implement execution logic for FSI DDL commands
         LOG(INFO) << "Calcite response for DDL command:\n" << query_ra;
         throw std::runtime_error{"FSI DDL commands are currently not supported."};
       }
-
-      // UPDATE/DELETE needs to get a checkpoint lock as the first lock
-      for (const auto& table : tableNames.value()) {
-        if (table.second) {
-          chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-              session_ptr->getCatalog(), table.first, LockType::CheckpointLock);
-        }
-      }
-      // COPY_TO/SELECT: read ExecutorOuterLock >> TableReadLock locks
-      executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
-          *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
-      TableLockMgr::getTableLocks(
-          session_ptr->getCatalog(), tableNames.value(), table_locks);
 
       const auto filter_push_down_requests =
           execute_rel_alg(_return,
@@ -5095,9 +5094,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
         // no filter push down so we continue with the initial (unchanged) query's calcite
         // explanation.
-        query_ra =
-            parse_to_ra(query_state_proxy, query_str, {}, boost::none, mapd_parameters_)
-                .plan_result;
+        query_ra = parse_to_ra(query_state_proxy, query_str, {}, false, mapd_parameters_)
+                       .first.plan_result;
         convert_explain(_return, ResultSet(query_ra), true);
         return;
       }
@@ -5111,9 +5109,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
         // no filter push down so we continue with the initial (unchanged) query's calcite
         // explanation.
-        query_ra =
-            parse_to_ra(query_state_proxy, query_str, {}, boost::none, mapd_parameters_)
-                .plan_result;
+        query_ra = parse_to_ra(query_state_proxy, query_str, {}, false, mapd_parameters_)
+                       .first.plan_result;
         convert_explain(_return, ResultSet(query_ra), true);
         return;
       }
@@ -5136,8 +5133,10 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         CHECK(optimize_stmt);
 
         _return.execution_time_ms += measure<>::execution([&]() {
-          const auto td = cat.getMetadataForTable(optimize_stmt->getTableName(),
-                                                  /*populateFragmenter=*/true);
+          const auto td_with_lock = lockmgr::TableSchemaLockContainer<
+              lockmgr::WriteLock>::acquireTableDescriptor(cat,
+                                                          optimize_stmt->getTableName());
+          const auto td = td_with_lock();
 
           if (!td || !user_can_access_table(
                          *session_ptr, td, AccessPrivileges::DELETE_FROM_TABLE)) {
@@ -5145,9 +5144,9 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                      " does not exist.");
           }
 
-          auto chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-              cat, td->tableName, LockType::CheckpointLock);
-          auto table_write_lock = TableLockMgr::getWriteLockForTable(cat, td->tableName);
+          // acquire write lock on table data
+          auto data_lock =
+              lockmgr::TableDataLockMgr::getWriteLockForTable(cat, td->tableName);
 
           auto executor =
               Executor::getExecutor(cat.getCurrentDB().dbId, "", "", mapd_parameters_);
@@ -5169,6 +5168,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
             dynamic_cast<Parser::ValidateStmt*>(parse_trees.front().get());
         CHECK(validate_stmt);
 
+        // Prevent any other query from running while doing validate
         executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
             *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
 
@@ -5224,9 +5224,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     return root_plan_ptr;
   };
 
-  auto handle_ddl =
-      [&query_state_proxy, &session_ptr, &_return, &chkptlLock, &table_locks, this](
-          Parser::DDLStmt* ddl) -> bool {
+  auto handle_ddl = [&query_state_proxy, &session_ptr, &_return, &locks, this](
+                        Parser::DDLStmt* ddl) -> bool {
     if (!ddl) {
       return false;
     }
@@ -5240,22 +5239,6 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
 
     const auto import_stmt = dynamic_cast<Parser::CopyTableStmt*>(ddl);
     if (import_stmt) {
-      // get the lock if the table exists
-      // thus allowing COPY FROM to execute to create a table
-      // is it safe to do this check without a lock?
-      // if the table doesn't exist, the getTableLock will throw an exception anyway
-      const TableDescriptor* td =
-          session_ptr->getCatalog().getMetadataForTable(import_stmt->get_table());
-      if (td) {
-        // COPY_FROM: CheckpointLock [ >> TableWriteLocks ]
-        chkptlLock =
-            getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_ptr->getCatalog(),
-                                                              import_stmt->get_table(),
-                                                              LockType::CheckpointLock);
-        // [ TableWriteLocks ] lock is deferred in
-        // InsertOrderFragmenter::deleteFragments
-      }
-
       if (g_cluster && !leaf_aggregator_.leafCount()) {
         // Don't allow copy from imports directly on a leaf node
         throw std::runtime_error(
@@ -5283,35 +5266,11 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     // Check for DDL statements requiring locking and get locks
     auto export_stmt = dynamic_cast<Parser::ExportQueryStmt*>(ddl);
     if (export_stmt) {
-      TableMap table_map;
-      OptionalTableMap tableNames(table_map);
       const auto query_string = export_stmt->get_select_stmt();
-      const auto query_ra =
-          parse_to_ra(query_state_proxy, query_string, {}, tableNames, mapd_parameters_)
-              .plan_result;
-      TableLockMgr::getTableLocks(
-          session_ptr->getCatalog(), tableNames.value(), table_locks);
-    }
-    auto truncate_stmt = dynamic_cast<Parser::TruncateTableStmt*>(ddl);
-    if (truncate_stmt) {
-      chkptlLock =
-          getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_ptr->getCatalog(),
-                                                            *truncate_stmt->get_table(),
-                                                            LockType::CheckpointLock);
-      table_locks.emplace_back();
-      table_locks.back().write_lock = TableLockMgr::getWriteLockForTable(
-          session_ptr->getCatalog(), *truncate_stmt->get_table());
-    }
-    auto add_col_stmt = dynamic_cast<Parser::AddColumnStmt*>(ddl);
-    auto drop_col_stmt = dynamic_cast<Parser::DropColumnStmt*>(ddl);
-    if (add_col_stmt || drop_col_stmt) {
-      const auto& table_name =
-          *(add_col_stmt ? add_col_stmt->get_table() : drop_col_stmt->get_table());
-      chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-          session_ptr->getCatalog(), table_name, LockType::CheckpointLock);
-      table_locks.emplace_back();
-      table_locks.back().write_lock =
-          TableLockMgr::getWriteLockForTable(session_ptr->getCatalog(), table_name);
+      TPlanResult result;
+      CHECK(locks.empty());
+      std::tie(result, locks) =
+          parse_to_ra(query_state_proxy, query_string, {}, true, mapd_parameters_);
     }
 
     _return.execution_time_ms += measure<>::execution([&]() {
@@ -5342,33 +5301,26 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         CHECK(root_plan);
       }
       if (auto stmtp = dynamic_cast<Parser::InsertQueryStmt*>(stmt.get())) {
-        // INSERT_SELECT: CheckpointLock >> TableReadLocks [ >> TableWriteLocks ]
-        chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-            session_ptr->getCatalog(), *stmtp->get_table(), LockType::CheckpointLock);
-        // >> TableReadLock locks
-        TableMap table_map;
-        OptionalTableMap tableNames(table_map);
         const auto query_string = stmtp->get_query()->to_string();
-        const auto query_ra =
-            parse_to_ra(query_state_proxy, query_str, {}, tableNames, mapd_parameters_)
-                .plan_result;
-        TableLockMgr::getTableLocks(
-            session_ptr->getCatalog(), tableNames.value(), table_locks);
+        TPlanResult result;
+        CHECK(locks.empty());
+        std::tie(result, locks) =
+            parse_to_ra(query_state_proxy, query_str, {}, true, mapd_parameters_);
+        const auto query_ra = result.plan_result;
 
-        // [ TableWriteLocks ] lock is deferred in
-        // InsertOrderFragmenter::deleteFragments
-        // TODO: this statement is not supported. once supported, it must not go thru
-        // InsertOrderFragmenter::insertData, or deadlock will occur w/o moving the
-        // following lock back to here!!!
+        CHECK(!checkpoint_lock.mutex());
+        checkpoint_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
+            session_ptr->getCatalog(), *stmtp->get_table());
       } else if (auto stmtp = dynamic_cast<Parser::InsertValuesStmt*>(stmt.get())) {
-        // INSERT_VALUES: CheckpointLock >> write ExecutorOuterLock [ >>
-        // TableWriteLocks ]
-        chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-            session_ptr->getCatalog(), *stmtp->get_table(), LockType::CheckpointLock);
+        // TODO(adb): Likely need a schema read lock here, though the blunt instrument
+        // write lock could be saving us for now
+
         executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
             *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
-        // [ TableWriteLocks ] lock is deferred in
-        // InsertOrderFragmenter::deleteFragments
+
+        CHECK(!checkpoint_lock.mutex());
+        checkpoint_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
+            session_ptr->getCatalog(), *stmtp->get_table());
       }
 
       execute_root_plan(_return,
@@ -5411,9 +5363,9 @@ void MapDHandler::execute_rel_alg_with_filter_push_down(
     query_ra = parse_to_ra(query_state_proxy,
                            query_state_proxy.getQueryState().getQueryStr(),
                            filter_push_down_info,
-                           boost::none,
+                           false,
                            mapd_parameters_)
-                   .plan_result;
+                   .first.plan_result;
   });
 
   if (just_calcite_explain) {
@@ -5445,7 +5397,7 @@ void MapDHandler::execute_distributed_copy_statement(
                               const TableDescriptor* td,
                               const std::string& file_path,
                               const Importer_NS::CopyParams& copy_params) {
-    return boost::make_unique<Importer_NS::Importer>(
+    return std::make_unique<Importer_NS::Importer>(
         new DistributedLoader(session_info, td, &leaf_aggregator_),
         file_path,
         copy_params);
@@ -5453,11 +5405,11 @@ void MapDHandler::execute_distributed_copy_statement(
   copy_stmt->execute(session_info, importer_factory);
 }
 
-TPlanResult MapDHandler::parse_to_ra(
+std::pair<TPlanResult, lockmgr::LockedTableDescriptors> MapDHandler::parse_to_ra(
     QueryStateProxy query_state_proxy,
     const std::string& query_str,
     const std::vector<TFilterPushDownInfo>& filter_push_down_info,
-    OptionalTableMap tableNames,
+    const bool acquire_locks,
     const MapDParameters mapd_parameters,
     RenderInfo* render_info,
     bool check_privileges) {
@@ -5466,12 +5418,12 @@ TPlanResult MapDHandler::parse_to_ra(
   const std::string actual_query{pw.isSelectExplain() ? pw.actual_query : query_str};
   TPlanResult result;
   if (pw.isCalcitePathPermissable()) {
+    auto cat = query_state_proxy.getQueryState().getConstSessionInfo()->get_catalog_ptr();
     auto session_cleanup_handler = [&](const auto& session_id) {
       removeInMemoryCalciteSession(session_id);
     };
     auto process_calcite_request = [&] {
-      const auto& in_memory_session_id = createInMemoryCalciteSession(
-          query_state_proxy.getQueryState().getConstSessionInfo()->get_catalog_ptr());
+      const auto& in_memory_session_id = createInMemoryCalciteSession(cat);
       try {
         result = calcite_->process(timer.createQueryStateProxy(),
                                    legacy_syntax_ ? pg_shim(actual_query) : actual_query,
@@ -5488,17 +5440,50 @@ TPlanResult MapDHandler::parse_to_ra(
       }
     };
     process_calcite_request();
-    if (tableNames) {
+    lockmgr::LockedTableDescriptors locks;
+    if (acquire_locks) {
+      std::set<std::string> read_only_tables;
       for (const auto& table : result.resolved_accessed_objects.tables_selected_from) {
-        (tableNames.value())[table] = false;
+        read_only_tables.insert(table);
       }
-      for (const auto& tables :
-           std::vector<decltype(result.resolved_accessed_objects.tables_inserted_into)>{
-               result.resolved_accessed_objects.tables_inserted_into,
-               result.resolved_accessed_objects.tables_updated_in,
-               result.resolved_accessed_objects.tables_deleted_from}) {
-        for (const auto& table : tables) {
-          (tableNames.value())[table] = true;
+      std::vector<std::string> tables;
+      tables.insert(tables.end(),
+                    result.resolved_accessed_objects.tables_selected_from.begin(),
+                    result.resolved_accessed_objects.tables_selected_from.end());
+      tables.insert(tables.end(),
+                    result.resolved_accessed_objects.tables_inserted_into.begin(),
+                    result.resolved_accessed_objects.tables_inserted_into.end());
+      tables.insert(tables.end(),
+                    result.resolved_accessed_objects.tables_updated_in.begin(),
+                    result.resolved_accessed_objects.tables_updated_in.end());
+      tables.insert(tables.end(),
+                    result.resolved_accessed_objects.tables_deleted_from.begin(),
+                    result.resolved_accessed_objects.tables_deleted_from.end());
+      // avoid deadlocks by enforcing a deterministic locking sequence
+      std::sort(tables.begin(), tables.end());
+      for (const auto& table : tables) {
+        // first, obtain table schema locks
+        // then, obtain table data locks
+        if (read_only_tables.count(table)) {
+          locks.emplace_back(
+              std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
+                  lockmgr::TableSchemaLockContainer<
+                      lockmgr::ReadLock>::acquireTableDescriptor(*cat.get(), table)));
+          locks.emplace_back(
+              std::make_unique<lockmgr::TableDataLockContainer<lockmgr::ReadLock>>(
+                  lockmgr::TableDataLockContainer<lockmgr::ReadLock>::acquire(
+                      cat->getDatabaseId(), (*locks.back())())));
+        } else {
+          locks.emplace_back(
+              std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
+                  lockmgr::TableSchemaLockContainer<
+                      lockmgr::WriteLock>::acquireTableDescriptor(*cat.get(), table)));
+          // TODO(adb): Should we be taking this lock for inserts? Are inserts even going
+          // down this path?
+          locks.emplace_back(
+              std::make_unique<lockmgr::TableDataLockContainer<lockmgr::WriteLock>>(
+                  lockmgr::TableDataLockContainer<lockmgr::WriteLock>::acquire(
+                      cat->getDatabaseId(), (*locks.back())())));
         }
       }
     }
@@ -5511,8 +5496,9 @@ TPlanResult MapDHandler::parse_to_ra(
       selected_tables = &result.resolved_accessed_objects.tables_selected_from;
       render_info->table_names.insert(selected_tables->begin(), selected_tables->end());
     }
+    return std::make_pair(result, std::move(locks));
   }
-  return result;
+  return std::make_pair(result, lockmgr::LockedTableDescriptors{});
 }
 
 void MapDHandler::check_table_consistency(TTableMeta& _return,
@@ -5656,15 +5642,14 @@ void MapDHandler::insert_data(const TSessionId& session,
     insert_data.data.push_back(p);
   }
   insert_data.numRows = thrift_insert_data.num_rows;
-  const auto td = cat.getMetadataForTable(insert_data.tableId);
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+          cat, insert_data.tableId);
+  const auto td = td_with_lock();
   try {
     // this should have the same lock seq as COPY FROM
     ChunkKey chunkKey = {insert_data.databaseId, insert_data.tableId};
-    mapd_unique_lock<mapd_shared_mutex> tableLevelWriteLock(
-        *Lock_Namespace::LockMgr<mapd_shared_mutex, ChunkKey>::getMutex(
-            Lock_Namespace::LockType::CheckpointLock, chunkKey));
-    // [ TableWriteLocks ] lock is deferred in
-    // InsertOrderFragmenter::deleteFragments
+    auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(chunkKey);
     td->fragmenter->insertDataNoCheckpoint(insert_data);
   } catch (const std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());

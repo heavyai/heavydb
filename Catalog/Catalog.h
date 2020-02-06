@@ -44,18 +44,18 @@
 #include "DashboardDescriptor.h"
 #include "DictDescriptor.h"
 #include "LinkDescriptor.h"
-#include "TableDescriptor.h"
-
-#include "../DataMgr/DataMgr.h"
-#include "../QueryEngine/CompilationOptions.h"
-#include "../SqliteConnector/SqliteConnector.h"
-#include "LeafHostInfo.h"
-
-#include "../Calcite/Calcite.h"
-#include "../Shared/mapd_shared_mutex.h"
-
 #include "SessionInfo.h"
 #include "SysCatalog.h"
+#include "TableDescriptor.h"
+
+#include "Calcite/Calcite.h"
+#include "DataMgr/DataMgr.h"
+#include "LockMgr/LockMgrImpl.h"
+#include "QueryEngine/CompilationOptions.h"
+#include "Shared/mapd_shared_mutex.h"
+#include "SqliteConnector/SqliteConnector.h"
+
+#include "LeafHostInfo.h"
 
 namespace Parser {
 

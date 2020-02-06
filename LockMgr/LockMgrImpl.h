@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 OmniSci, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,31 +16,18 @@
 
 #pragma once
 
-#include <Shared/mapd_shared_mutex.h>
-#include <Shared/types.h>
-
 #include <map>
 #include <memory>
 #include <string>
+#include <type_traits>
 
-#include "LockMgr.h"
-
-#include <Catalog/Catalog.h>
-
-namespace Lock_Helpers {
-
-template <typename LOCK_TYPE, typename LOCK_MGR_TYPE>
-LOCK_TYPE getLockForTableImpl(const Catalog_Namespace::Catalog& cat,
-                              const std::string& table_name) {
-  const auto chunk_key = Lock_Namespace::getTableChunkKey(cat, table_name);
-
-  auto& table_lock_mgr = LOCK_MGR_TYPE::instance();
-  return LOCK_TYPE(table_lock_mgr.getTableMutex(chunk_key));
-}
-
-}  // namespace Lock_Helpers
-
+#include "Catalog/Catalog.h"
+#include "Shared/mapd_shared_mutex.h"
+#include "Shared/types.h"
 namespace Lock_Namespace {
+void getTableNames(std::map<std::string, bool>& tableNames, const std::string query_ra);
+}
+namespace lockmgr {
 
 using MutexType = mapd_shared_mutex;
 
@@ -51,6 +38,47 @@ struct TableLock {
   WriteLock write_lock;
   ReadLock read_lock;
 };
+
+template <typename T>
+class AbstractLockContainer {
+ public:
+  virtual T operator()() const = 0;
+
+  virtual ~AbstractLockContainer() {}
+};
+
+template <typename T, typename LOCK>
+class LockContainerImpl : public AbstractLockContainer<T> {
+ public:
+  T operator()() const final { return obj_; }
+
+ protected:
+  LockContainerImpl(T obj, LOCK&& lock) : obj_(obj), lock_(std::move(lock)) {}
+
+  T obj_;
+  LOCK lock_;
+};
+
+namespace helpers {
+ChunkKey chunk_key_for_table(const Catalog_Namespace::Catalog& cat,
+                             const std::string& tableName);
+
+template <typename LOCK_TYPE, typename LOCK_MGR_TYPE>
+LOCK_TYPE getLockForKeyImpl(const ChunkKey& chunk_key) {
+  auto& table_lock_mgr = LOCK_MGR_TYPE::instance();
+  return LOCK_TYPE(table_lock_mgr.getTableMutex(chunk_key));
+}
+
+template <typename LOCK_TYPE, typename LOCK_MGR_TYPE>
+LOCK_TYPE getLockForTableImpl(const Catalog_Namespace::Catalog& cat,
+                              const std::string& table_name) {
+  const auto chunk_key = chunk_key_for_table(cat, table_name);
+
+  auto& table_lock_mgr = LOCK_MGR_TYPE::instance();
+  return LOCK_TYPE(table_lock_mgr.getTableMutex(chunk_key));
+}
+
+}  // namespace helpers
 
 template <class T>
 class TableLockMgrImpl {
@@ -79,13 +107,13 @@ class TableLockMgrImpl {
                             std::vector<TableLock>& table_locks) {
     // parse ra to learn involved table names
     std::map<std::string, bool> table_names;
-    getTableNames(table_names, query_ra);
+    Lock_Namespace::getTableNames(table_names, query_ra);
     return T::getTableLocks(cat, table_names, table_locks);
   }
 
   static WriteLock getWriteLockForTable(const Catalog_Namespace::Catalog& cat,
                                         const std::string& table_name) {
-    return Lock_Helpers::getLockForTableImpl<WriteLock, T>(cat, table_name);
+    return helpers::getLockForTableImpl<WriteLock, T>(cat, table_name);
   }
   static WriteLock getWriteLockForTable(const ChunkKey table_key) {
     auto& table_lock_mgr = T::instance();
@@ -94,7 +122,7 @@ class TableLockMgrImpl {
 
   static ReadLock getReadLockForTable(const Catalog_Namespace::Catalog& cat,
                                       const std::string& table_name) {
-    return Lock_Helpers::getLockForTableImpl<ReadLock, T>(cat, table_name);
+    return helpers::getLockForTableImpl<ReadLock, T>(cat, table_name);
   }
   static ReadLock getReadLockForTable(const ChunkKey table_key) {
     auto& table_lock_mgr = T::instance();
@@ -108,15 +136,4 @@ class TableLockMgrImpl {
   std::map<ChunkKey, MutexType> table_mutex_map_;
 };
 
-class TableLockMgr : public TableLockMgrImpl<TableLockMgr> {
- public:
-  static TableLockMgr& instance() {
-    static TableLockMgr table_lock_mgr;
-    return table_lock_mgr;
-  }
-
- private:
-  TableLockMgr() {}
-};
-
-}  // namespace Lock_Namespace
+}  // namespace lockmgr

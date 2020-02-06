@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#include "InsertOrderFragmenter.h"
+#include "Fragmenter/InsertOrderFragmenter.h"
+
 #include <boost/lexical_cast.hpp>
 #include <cassert>
 #include <cmath>
@@ -22,14 +23,13 @@
 #include <limits>
 #include <thread>
 #include <type_traits>
-#include "../DataMgr/AbstractBuffer.h"
-#include "../DataMgr/DataMgr.h"
-#include "../LockMgr/LockMgr.h"
-#include "../Shared/checked_alloc.h"
-#include "../Shared/thread_count.h"
-#include "Shared/Logger.h"
 
-#include <LockMgr/TableLockMgr.h>
+#include "DataMgr/AbstractBuffer.h"
+#include "DataMgr/DataMgr.h"
+#include "LockMgr/LockMgr.h"
+#include "Shared/Logger.h"
+#include "Shared/checked_alloc.h"
+#include "Shared/thread_count.h"
 
 #define DROP_FRAGMENT_FACTOR \
   0.97  // drop to 97% of max so we don't keep adding and dropping fragments
@@ -217,8 +217,8 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
 
   // need to keep lock seq as TableLock >> fragmentInfoMutex_ or
   // SELECT and COPY may enter a deadlock
-  using namespace Lock_Namespace;
-  WriteLock delete_lock = TableLockMgr::getWriteLockForTable(chunkKeyPrefix);
+  const auto delete_lock =
+      lockmgr::TableDataLockMgr::getWriteLockForTable(chunkKeyPrefix);
 
   mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
 

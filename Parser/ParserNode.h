@@ -1265,7 +1265,8 @@ class AddColumnStmt : public DDLStmt {
     delete coldefs;
   }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
-  void check_executable(const Catalog_Namespace::SessionInfo& session);
+  void check_executable(const Catalog_Namespace::SessionInfo& session,
+                        const TableDescriptor* td);
   const std::string* get_table() const { return table.get(); }
 
  private:

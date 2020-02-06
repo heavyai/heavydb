@@ -14,11 +14,32 @@
  * limitations under the License.
  */
 
-#include "LockMgr.h"
+#include "LockMgr/LockMgrImpl.h"
+
+#include "LockMgr/LegacyLockMgr.h"
+
 #include "Fragmenter/InsertOrderFragmenter.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryRunner/QueryRunner.h"
 #include "gen-cpp/CalciteServer.h"
+
+namespace lockmgr {
+
+namespace helpers {
+
+ChunkKey chunk_key_for_table(const Catalog_Namespace::Catalog& cat,
+                             const std::string& tableName) {
+  if (const auto tdp = cat.getMetadataForTable(tableName, false)) {
+    ChunkKey chunk_key{cat.getCurrentDB().dbId, tdp->tableId};
+    return chunk_key;
+  } else {
+    throw std::runtime_error("Table " + tableName + " does not exist.");
+  }
+}
+
+}  // namespace helpers
+
+}  // namespace lockmgr
 
 namespace Lock_Namespace {
 
