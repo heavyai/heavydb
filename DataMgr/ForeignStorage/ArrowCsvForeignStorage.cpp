@@ -288,7 +288,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
     if (c.isSystemCol) {
       continue;  // must be processed by base interface implementation
     }
-  
+
     if (cln >= num_cols) {
       LOG(ERROR) << "Number of columns read from Arrow (" << num_cols
                  << ") mismatch CREATE TABLE request: " << cols.size();
