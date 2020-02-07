@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 01ed32c
+                5.2.0dev ad5b734
               </div>
             
           
@@ -276,6 +276,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_aggregate_reduction_egress.html">Class AggregateReductionEgress</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_aggregate_reduction_egress_3_01_experimental_1_1_meta_type_class_3_01_experimental_1_1_geometry_01_4_01_4.html">Class AggregateReductionEgress&lt; Experimental::MetaTypeClass&lt; Experimental::Geometry &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_aggregated_col_range.html">Class AggregatedColRange</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api/class/class_all_column_vars_visitor.html">Class AllColumnVarsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_all_range_table_index_visitor.html">Class AllRangeTableIndexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_alloca.html">Class Alloca</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../api/class/class_allocator.html">Class Allocator</a></li>
@@ -1625,32 +1626,38 @@ and include the following features:</p>
 <p>Upon the destruction of the <code class="docutils literal notranslate"><span class="pre">timer</span></code> object within <code class="docutils literal notranslate"><span class="pre">foo()</span></code>, a log entry similar to the following will be made:</p>
 <div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="mi">2019</span><span class="o">-</span><span class="mi">10</span><span class="o">-</span><span class="mi">17</span><span class="nl">T15</span><span class="p">:</span><span class="mi">22</span><span class="o">:</span><span class="mf">53.981002</span> <span class="n">I</span> <span class="mi">8980</span> <span class="n">foobar</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">70</span> <span class="n">DEBUG_TIMER</span> <span class="n">thread_id</span><span class="p">(</span><span class="mi">140719710320384</span><span class="p">)</span>
 <span class="mi">19</span><span class="n">ms</span> <span class="n">total</span> <span class="n">duration</span> <span class="k">for</span> <span class="n">foo</span>
-  <span class="mi">17</span><span class="n">ms</span> <span class="n">bar</span> <span class="n">foobar</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">100</span>
-    <span class="mi">13</span><span class="n">ms</span> <span class="n">bar2</span> <span class="n">foobar</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">130</span>
+  <span class="mi">17</span><span class="n">ms</span> <span class="n">start</span><span class="p">(</span><span class="mi">10</span><span class="n">ms</span><span class="p">)</span> <span class="n">bar</span> <span class="n">foobar</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">100</span>
+    <span class="mi">13</span><span class="n">ms</span> <span class="n">start</span><span class="p">(</span><span class="mi">10</span><span class="n">ms</span><span class="p">)</span> <span class="n">bar2</span> <span class="n">foobar</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">130</span>
 </pre></div>
 </div>
-<p>This is assuming that no other <code class="docutils literal notranslate"><span class="pre">DEBUG_TIMER</span></code> instance exists in the thread’s call stack prior to <code class="docutils literal notranslate"><span class="pre">foo()</span></code>.
-Accordingly, when <code class="docutils literal notranslate"><span class="pre">bar()</span></code> is called from <code class="docutils literal notranslate"><span class="pre">foo()</span></code>, <code class="docutils literal notranslate"><span class="pre">bar()</span></code>’s instance of <code class="docutils literal notranslate"><span class="pre">timer</span></code> will NOT cause its
-own log entry to be made, but instead will record its duration and relative depth in the call stack within
-a global data structure. Same with <code class="docutils literal notranslate"><span class="pre">bar2()</span></code>.  Once the outer-most <code class="docutils literal notranslate"><span class="pre">timer</span></code> object destructs, the entire
-<code class="docutils literal notranslate"><span class="pre">DurationTree</span></code> of recorded times are logged together into a single multi-line log entry, one line per
-<code class="docutils literal notranslate"><span class="pre">timer</span></code> instance.</p>
-<p>There is also a <code class="docutils literal notranslate"><span class="pre">DebugTimer::stop()</span></code> method that manually stops the timer, and will log the entire
-<code class="docutils literal notranslate"><span class="pre">DurationTree</span></code> if it is the root timer. The destructor in this case will have no further effect.</p>
+<p>Fields for the <code class="docutils literal notranslate"><span class="pre">Duration</span></code> lines (last two line above) are:</p>
+<ol class="arabic simple">
+<li><p>Lifetime of <code class="docutils literal notranslate"><span class="pre">timer</span></code> object.</p></li>
+<li><p>Time after start of current thread. (This can be used to find gaps in timing coverage.)</p></li>
+<li><p>String parameter to <code class="docutils literal notranslate"><span class="pre">DEBUG_TIMER</span></code> (<code class="docutils literal notranslate"><span class="pre">__func__</span></code> in above examples.)</p></li>
+<li><p>File:Line where <code class="docutils literal notranslate"><span class="pre">DEBUG_TIMER</span></code> was called from.</p></li>
+</ol>
+<p>The first root <code class="docutils literal notranslate"><span class="pre">DEBUG_TIMER</span></code> instance is in <code class="docutils literal notranslate"><span class="pre">foo()</span></code>, and the two others in <code class="docutils literal notranslate"><span class="pre">bar()</span></code> and <code class="docutils literal notranslate"><span class="pre">bar2()</span></code> are initiated
+upon subsequent calls into the call stack, represented by the indentations.  Once the first root <code class="docutils literal notranslate"><span class="pre">timer</span></code> object
+destructs, the entire <code class="docutils literal notranslate"><span class="pre">DurationTree</span></code> of recorded times are logged together into a single multi-line log entry,
+one line per <code class="docutils literal notranslate"><span class="pre">timer</span></code> instance.</p>
+<p>There is a <code class="docutils literal notranslate"><span class="pre">DebugTimer::stop()</span></code> method that manually stops the timer, serving the same function
+as the destructor. The destructor then will have no further effect.</p>
 <p>To embed timers in a spawned child thread, call <code class="docutils literal notranslate"><span class="pre">DEBUG_TIMER_NEW_THREAD(parent_thread_id);</span></code> from the child
-thread. This will not start a timer, but will record the child-parent relationship so that subsequent
-<code class="docutils literal notranslate"><span class="pre">DEBUG_TIMER</span></code> calls are stored in the correct node of the parent tree. An example of a resulting report:</p>
-<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="mi">2019</span><span class="o">-</span><span class="mi">10</span><span class="o">-</span><span class="mi">17</span><span class="nl">T15</span><span class="p">:</span><span class="mi">22</span><span class="o">:</span><span class="mf">53.981002</span> <span class="n">I</span> <span class="mi">8980</span> <span class="n">RelAlgExecutor</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">70</span> <span class="n">DEBUG_TIMER</span> <span class="n">thread_id</span><span class="p">(</span><span class="mi">140719710320384</span><span class="p">)</span>
-<span class="mi">322</span><span class="n">ms</span> <span class="n">total</span> <span class="n">duration</span> <span class="k">for</span> <span class="n">executeRelAlgQuery</span>
-  <span class="mi">232</span><span class="n">ms</span> <span class="n">executeWorkUnit</span> <span class="n">RelAlgExecutor</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">1922</span>
-    <span class="mi">183</span><span class="n">ms</span> <span class="n">compileWorkUnit</span> <span class="n">NativeCodegen</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">1572</span>
-      <span class="n">New</span> <span class="kr">thread</span><span class="p">(</span><span class="mi">140718009964288</span><span class="p">)</span>
-        <span class="mi">2</span><span class="n">ms</span> <span class="n">fetchChunks</span> <span class="n">Execute</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">2028</span>
-        <span class="mi">0</span><span class="n">ms</span> <span class="n">getQueryExecutionContext</span> <span class="n">QueryMemoryDescriptor</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">695</span>
-        <span class="mi">45</span><span class="n">ms</span> <span class="n">executePlanWithGroupBy</span> <span class="n">Execute</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">2423</span>
-          <span class="mi">41</span><span class="n">ms</span> <span class="n">launchGpuCode</span> <span class="n">QueryExecutionContext</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">195</span>
-          <span class="mi">0</span><span class="n">ms</span> <span class="n">reduceMultiDeviceResultSets</span> <span class="n">Execute</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">865</span>
-      <span class="n">End</span> <span class="kr">thread</span><span class="p">(</span><span class="mi">140718009964288</span><span class="p">)</span>
+thread. The <code class="docutils literal notranslate"><span class="pre">parent_thread_id</span></code> must get its value from <code class="docutils literal notranslate"><span class="pre">logger::thread_id()</span></code> before the new thread is spawned.
+This will not start a timer, but will record the child-parent relationship so that subsequent <code class="docutils literal notranslate"><span class="pre">DEBUG_TIMER</span></code>
+calls are stored in the correct node of the parent tree. An example of a resulting report:</p>
+<div class="highlight-cpp notranslate"><div class="highlight"><pre><span></span><span class="mi">2020</span><span class="o">-</span><span class="mo">01</span><span class="o">-</span><span class="mi">30</span><span class="nl">T16</span><span class="p">:</span><span class="mi">58</span><span class="o">:</span><span class="mf">19.926148</span> <span class="n">I</span> <span class="mi">33266</span> <span class="n">MapDHandler</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">956</span> <span class="n">DEBUG_TIMER</span> <span class="n">thread_id</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>
+<span class="mi">591</span><span class="n">ms</span> <span class="n">total</span> <span class="n">duration</span> <span class="k">for</span> <span class="n">sql_execute</span>
+  <span class="mi">511</span><span class="n">ms</span> <span class="n">start</span><span class="p">(</span><span class="mi">41</span><span class="n">ms</span><span class="p">)</span> <span class="n">executeRelAlgQuery</span> <span class="n">RelAlgExecutor</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">71</span>
+    <span class="mi">6</span><span class="n">ms</span> <span class="n">start</span><span class="p">(</span><span class="mi">41</span><span class="n">ms</span><span class="p">)</span> <span class="n">executeWorkUnit</span> <span class="n">RelAlgExecutor</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">1858</span>
+      <span class="mi">4</span><span class="n">ms</span> <span class="n">start</span><span class="p">(</span><span class="mi">41</span><span class="n">ms</span><span class="p">)</span> <span class="n">compileWorkUnit</span> <span class="n">NativeCodegen</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">1571</span>
+        <span class="n">New</span> <span class="kr">thread</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
+          <span class="mi">0</span><span class="n">ms</span> <span class="n">start</span><span class="p">(</span><span class="mi">0</span><span class="n">ms</span><span class="p">)</span> <span class="n">fetchChunks</span> <span class="n">Execute</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">2024</span>
+          <span class="mi">0</span><span class="n">ms</span> <span class="n">start</span><span class="p">(</span><span class="mi">0</span><span class="n">ms</span><span class="p">)</span> <span class="n">getQueryExecutionContext</span> <span class="n">QueryMemoryDescriptor</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">711</span>
+          <span class="mi">0</span><span class="n">ms</span> <span class="n">start</span><span class="p">(</span><span class="mi">0</span><span class="n">ms</span><span class="p">)</span> <span class="n">executePlanWithoutGroupBy</span> <span class="n">Execute</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">2276</span>
+            <span class="mi">0</span><span class="n">ms</span> <span class="n">start</span><span class="p">(</span><span class="mi">0</span><span class="n">ms</span><span class="p">)</span> <span class="n">launchGpuCode</span> <span class="n">QueryExecutionContext</span><span class="p">.</span><span class="nl">cpp</span><span class="p">:</span><span class="mi">195</span>
+        <span class="n">End</span> <span class="kr">thread</span><span class="p">(</span><span class="mi">5</span><span class="p">)</span>
 </pre></div>
 </div>
 <div class="admonition note">
@@ -1670,12 +1677,12 @@ to the ending of any corresponding root timer.</p>
 <p>The high-level class relationships are:</p>
 <div class="figure align-center">
 <p class="plantuml">
-<img src="../_images/plantuml-70527db61766849c19ac3dbc290050a6dd3894c3.png" alt="&#64;startuml
+<img src="../_images/plantuml-96c92eb4ebaa8550af77363f62871d924bebb59c.png" alt="&#64;startuml
 object thread_id
 class DurationTree
 note right: Each node of DurationTree is of type\n**boost::variant&lt;Duration, DurationTree&amp;&gt;**\nto hold both Durations and\nDurationTrees of child threads.
 class DurationTreeMap
-note right: Global singleton:\nlogger::gDurationTreeMap
+note right: Global singleton:\nlogger::g_duration_tree_map
 class Duration {
   int depth_
   Clock::time_point start_

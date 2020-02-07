@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.2.0dev 01ed32c
+                5.2.0dev ad5b734
               </div>
             
           
@@ -275,6 +275,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_aggregate_reduction_egress.html">Class AggregateReductionEgress</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_aggregate_reduction_egress_3_01_experimental_1_1_meta_type_class_3_01_experimental_1_1_geometry_01_4_01_4.html">Class AggregateReductionEgress&lt; Experimental::MetaTypeClass&lt; Experimental::Geometry &gt; &gt;</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_aggregated_col_range.html">Class AggregatedColRange</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_all_column_vars_visitor.html">Class AllColumnVarsVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_all_range_table_index_visitor.html">Class AllRangeTableIndexVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_alloca.html">Class Alloca</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_allocator.html">Class Allocator</a></li>
@@ -1471,6 +1472,14 @@
 </li>
       <li><a href="api/class/class_aggregate_reduction_egress.html#_CPPv4IEN24AggregateReductionEgressI15META_TYPE_CLASSE10ReturnTypeE">AggregateReductionEgress&lt;META_TYPE_CLASS&gt;::ReturnType (C++ type)</a>
 </li>
+      <li><a href="api/class/class_all_column_vars_visitor.html#_CPPv420AllColumnVarsVisitor">AllColumnVarsVisitor (C++ class)</a>
+</li>
+      <li><a href="api/class/class_all_column_vars_visitor.html#_CPPv4NK20AllColumnVarsVisitor15aggregateResultERKNSt3setIPKN8Analyzer9ColumnVarEEERKNSt3setIPKN8Analyzer9ColumnVarEEE">AllColumnVarsVisitor::aggregateResult (C++ function)</a>
+</li>
+      <li><a href="api/class/class_all_column_vars_visitor.html#_CPPv4NK20AllColumnVarsVisitor14visitColumnVarEPKN8Analyzer9ColumnVarE">AllColumnVarsVisitor::visitColumnVar (C++ function)</a>
+</li>
+      <li><a href="api/class/class_all_column_vars_visitor.html#_CPPv4NK20AllColumnVarsVisitor19visitColumnVarTupleEPKN8Analyzer15ExpressionTupleE">AllColumnVarsVisitor::visitColumnVarTuple (C++ function)</a>
+</li>
       <li><a href="api/class/class_alloca.html#_CPPv46Alloca">Alloca (C++ class)</a>
 </li>
       <li><a href="api/class/class_alloca.html#_CPPv4N6Alloca6AllocaEK4TypePK5ValueRKNSt6stringE">Alloca::Alloca (C++ function)</a>
@@ -2155,12 +2164,12 @@
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr12get_is_ilikeEv">Analyzer::LikeExpr::get_is_ilike (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr13get_is_simpleEv">Analyzer::LikeExpr::get_is_simple (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr13get_like_exprEv">Analyzer::LikeExpr::get_like_expr (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr11get_own_argEv">Analyzer::LikeExpr::get_own_arg (C++ function)</a>
 </li>
       <li><a href="api/class/class_analyzer_1_1_like_expr.html#_CPPv4NK8Analyzer8LikeExpr16group_predicatesERNSt4listIPK4ExprEERNSt4listIPK4ExprEERNSt4listIPK4ExprEE">Analyzer::LikeExpr::group_predicates (C++ function)</a>
@@ -3003,8 +3012,6 @@
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable26cpu_hash_table_buff_mutex_E">BaselineJoinHashTable::cpu_hash_table_buff_mutex_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable20decodeJoinHashBufferEK18ExecutorDeviceTypeKi">BaselineJoinHashTable::decodeJoinHashBuffer (C++ function)</a>
-</li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable19emitted_keys_count_E">BaselineJoinHashTable::emitted_keys_count_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable12entry_count_E">BaselineJoinHashTable::entry_count_ (C++ member)</a>
@@ -3049,13 +3056,15 @@
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable21getJoinHashBufferSizeEK18ExecutorDeviceTypeKi">BaselineJoinHashTable::getJoinHashBufferSize (C++ function)</a>
 </li>
+      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable16getKeyBufferSizeEv">BaselineJoinHashTable::getKeyBufferSize (C++ function)</a>
+</li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable20getKeyComponentCountEv">BaselineJoinHashTable::getKeyComponentCount (C++ function)</a>
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable20getKeyComponentWidthEv">BaselineJoinHashTable::getKeyComponentWidth (C++ function)</a>
 </li>
-      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable25getShardCountForConditionEPKN8Analyzer7BinOperEPK8ExecutorRKNSt6vectorI10InnerOuterEE">BaselineJoinHashTable::getShardCountForCondition (C++ function)</a>
+      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable14getMemoryLevelEv">BaselineJoinHashTable::getMemoryLevel (C++ function)</a>
 </li>
-      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable20getSyntheticInstanceENSt11string_viewENSt11string_viewENSt11string_viewENSt11string_viewEKN14Data_Namespace11MemoryLevelEK8HashTypeKiR14ColumnCacheMapP8Executor">BaselineJoinHashTable::getSyntheticInstance (C++ function)</a>
+      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable25getShardCountForConditionEPKN8Analyzer7BinOperEPK8ExecutorRKNSt6vectorI10InnerOuterEE">BaselineJoinHashTable::getShardCountForCondition (C++ function)</a>
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable17hash_table_cache_E">BaselineJoinHashTable::hash_table_cache_ (C++ member)</a>
 </li>
@@ -3123,11 +3132,13 @@
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable5reifyEKi">BaselineJoinHashTable::reify (C++ function)</a>
 </li>
-      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable14reifyForDeviceERK16ColumnsForDeviceKN22JoinHashTableInterface8HashTypeEKi">BaselineJoinHashTable::reifyForDevice (C++ function)</a>
+      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable14reifyForDeviceERK16ColumnsForDeviceKN22JoinHashTableInterface8HashTypeEKiKN6logger8ThreadIdE">BaselineJoinHashTable::reifyForDevice (C++ function)</a>
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4N21BaselineJoinHashTable15reifyWithLayoutEKiKN22JoinHashTableInterface8HashTypeE">BaselineJoinHashTable::reifyWithLayout (C++ function)</a>
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable10shardCountEv">BaselineJoinHashTable::shardCount (C++ function)</a>
+</li>
+      <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable5toSetEK18ExecutorDeviceTypeKi">BaselineJoinHashTable::toSet (C++ function)</a>
 </li>
       <li><a href="api/class/class_baseline_join_hash_table.html#_CPPv4NK21BaselineJoinHashTable8toStringEK18ExecutorDeviceTypeKib">BaselineJoinHashTable::toString (C++ function)</a>
 </li>
@@ -3205,10 +3216,10 @@
 </li>
       <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6Buffer11getPinCountEv">Buffer_Namespace::Buffer::getPinCount (C++ function)</a>
 </li>
-      <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4NK16Buffer_Namespace6Buffer7isDirtyEv">Buffer_Namespace::Buffer::isDirty (C++ function)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4NK16Buffer_Namespace6Buffer7isDirtyEv">Buffer_Namespace::Buffer::isDirty (C++ function)</a>
+</li>
       <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6Buffer4mem_E">Buffer_Namespace::Buffer::mem_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_buffer___namespace_1_1_buffer.html#_CPPv4N16Buffer_Namespace6Buffer10num_pages_E">Buffer_Namespace::Buffer::num_pages_ (C++ member)</a>
@@ -9511,8 +9522,6 @@
 </li>
       <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable26cpu_hash_table_buff_mutex_E">JoinHashTable::cpu_hash_table_buff_mutex_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_join_hash_table.html#_CPPv4NK13JoinHashTable20decodeJoinHashBufferEK18ExecutorDeviceTypeKi">JoinHashTable::decodeJoinHashBuffer (C++ function)</a>
-</li>
       <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable13device_count_E">JoinHashTable::device_count_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable9executor_E">JoinHashTable::executor_ (C++ member)</a>
@@ -9547,9 +9556,9 @@
 </li>
       <li><a href="api/class/class_join_hash_table.html#_CPPv4NK13JoinHashTable21getJoinHashBufferSizeEK18ExecutorDeviceTypeKi">JoinHashTable::getJoinHashBufferSize (C++ function)</a>
 </li>
-      <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable20getOneColumnFragmentERKN8Analyzer9ColumnVarERKN20Fragmenter_Namespace12FragmentInfoEKN14Data_Namespace11MemoryLevelEKiRNSt6vectorINSt10shared_ptrIN8Chunk_NS5ChunkEEEEE">JoinHashTable::getOneColumnFragment (C++ function)</a>
+      <li><a href="api/class/class_join_hash_table.html#_CPPv4NK13JoinHashTable14getMemoryLevelEv">JoinHashTable::getMemoryLevel (C++ function)</a>
 </li>
-      <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable20getSyntheticInstanceENSt11string_viewENSt11string_viewENSt11string_viewENSt11string_viewEKN14Data_Namespace11MemoryLevelEK8HashTypeKiR14ColumnCacheMapP8Executor">JoinHashTable::getSyntheticInstance (C++ function)</a>
+      <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable20getOneColumnFragmentERKN8Analyzer9ColumnVarERKN20Fragmenter_Namespace12FragmentInfoEKN14Data_Namespace11MemoryLevelEKiRNSt6vectorINSt10shared_ptrIN8Chunk_NS5ChunkEEEEE">JoinHashTable::getOneColumnFragment (C++ function)</a>
 </li>
       <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable17hash_entry_count_E">JoinHashTable::hash_entry_count_ (C++ member)</a>
 </li>
@@ -9579,8 +9588,6 @@
 </li>
       <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable21JoinHashTableCacheKey9col_rangeE">JoinHashTable::JoinHashTableCacheKey::col_range (C++ member)</a>, <a href="api/struct/struct_join_hash_table_1_1_join_hash_table_cache_key.html#_CPPv4N13JoinHashTable21JoinHashTableCacheKey9col_rangeE">[1]</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable21JoinHashTableCacheKey9inner_colE">JoinHashTable::JoinHashTableCacheKey::inner_col (C++ member)</a>, <a href="api/struct/struct_join_hash_table_1_1_join_hash_table_cache_key.html#_CPPv4N13JoinHashTable21JoinHashTableCacheKey9inner_colE">[1]</a>
 </li>
       <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable21JoinHashTableCacheKey12num_elementsE">JoinHashTable::JoinHashTableCacheKey::num_elements (C++ member)</a>, <a href="api/struct/struct_join_hash_table_1_1_join_hash_table_cache_key.html#_CPPv4N13JoinHashTable21JoinHashTableCacheKey12num_elementsE">[1]</a>
@@ -9591,6 +9598,8 @@
 </li>
       <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable21JoinHashTableCacheKey9outer_colE">JoinHashTable::JoinHashTableCacheKey::outer_col (C++ member)</a>, <a href="api/struct/struct_join_hash_table_1_1_join_hash_table_cache_key.html#_CPPv4N13JoinHashTable21JoinHashTableCacheKey9outer_colE">[1]</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable28linearized_multifrag_column_E">JoinHashTable::linearized_multifrag_column_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable34linearized_multifrag_column_mutex_E">JoinHashTable::linearized_multifrag_column_mutex_ (C++ member)</a>
@@ -9611,11 +9620,13 @@
 </li>
       <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable5reifyEKi">JoinHashTable::reify (C++ function)</a>
 </li>
-      <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable23reifyOneToManyForDeviceERKNSt5dequeIN20Fragmenter_Namespace12FragmentInfoEEEKi">JoinHashTable::reifyOneToManyForDevice (C++ function)</a>
+      <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable23reifyOneToManyForDeviceERKNSt5dequeIN20Fragmenter_Namespace12FragmentInfoEEEKiKN6logger8ThreadIdE">JoinHashTable::reifyOneToManyForDevice (C++ function)</a>
 </li>
-      <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable22reifyOneToOneForDeviceERKNSt5dequeIN20Fragmenter_Namespace12FragmentInfoEEEKi">JoinHashTable::reifyOneToOneForDevice (C++ function)</a>
+      <li><a href="api/class/class_join_hash_table.html#_CPPv4N13JoinHashTable22reifyOneToOneForDeviceERKNSt5dequeIN20Fragmenter_Namespace12FragmentInfoEEEKiKN6logger8ThreadIdE">JoinHashTable::reifyOneToOneForDevice (C++ function)</a>
 </li>
       <li><a href="api/class/class_join_hash_table.html#_CPPv4NK13JoinHashTable10shardCountEv">JoinHashTable::shardCount (C++ function)</a>
+</li>
+      <li><a href="api/class/class_join_hash_table.html#_CPPv4NK13JoinHashTable5toSetEK18ExecutorDeviceTypeKi">JoinHashTable::toSet (C++ function)</a>
 </li>
       <li><a href="api/class/class_join_hash_table.html#_CPPv4NK13JoinHashTable8toStringEK18ExecutorDeviceTypeKib">JoinHashTable::toString (C++ function)</a>
 </li>
@@ -9631,19 +9642,33 @@
 </li>
       <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4NK22JoinHashTableInterface14countBufferOffEv">JoinHashTableInterface::countBufferOff (C++ function)</a>
 </li>
-      <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4NK22JoinHashTableInterface20decodeJoinHashBufferEK18ExecutorDeviceTypeKi">JoinHashTableInterface::decodeJoinHashBuffer (C++ function)</a>
-</li>
       <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4NK22JoinHashTableInterface11getHashTypeEv">JoinHashTableInterface::getHashType (C++ function)</a>
 </li>
       <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4NK22JoinHashTableInterface15getInnerTableIdEv">JoinHashTableInterface::getInnerTableId (C++ function)</a>
 </li>
       <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4NK22JoinHashTableInterface19getInnerTableRteIdxEv">JoinHashTableInterface::getInnerTableRteIdx (C++ function)</a>
 </li>
+      <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4N22JoinHashTableInterface11getInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEERKNSt6vectorI14InputTableInfoEEKN14Data_Namespace11MemoryLevelEK8HashTypeKiR14ColumnCacheMapP8Executor">JoinHashTableInterface::getInstance (C++ function)</a>
+</li>
       <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4NK22JoinHashTableInterface17getJoinHashBufferEK18ExecutorDeviceTypeKi">JoinHashTableInterface::getJoinHashBuffer (C++ function)</a>
 </li>
       <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4NK22JoinHashTableInterface21getJoinHashBufferSizeEK18ExecutorDeviceTypeKi">JoinHashTableInterface::getJoinHashBufferSize (C++ function)</a>
 </li>
+      <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4NK22JoinHashTableInterface14getMemoryLevelEv">JoinHashTableInterface::getMemoryLevel (C++ function)</a>
+</li>
+      <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4N22JoinHashTableInterface20getSyntheticInstanceEKNSt10shared_ptrIN8Analyzer7BinOperEEEKN14Data_Namespace11MemoryLevelEK8HashTypeKiR14ColumnCacheMapP8Executor">JoinHashTableInterface::getSyntheticInstance (C++ function)</a>, <a href="api/class/class_join_hash_table_interface.html#_CPPv4N22JoinHashTableInterface20getSyntheticInstanceENSt11string_viewENSt11string_viewENSt11string_viewENSt11string_viewEKN14Data_Namespace11MemoryLevelEK8HashTypeKiR14ColumnCacheMapP8Executor">[1]</a>
+</li>
       <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4N22JoinHashTableInterface8HashTypeE">JoinHashTableInterface::HashType (C++ enum)</a>
+</li>
+      <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4N22JoinHashTableInterface34linearized_multifrag_column_mutex_E">JoinHashTableInterface::linearized_multifrag_column_mutex_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4N22JoinHashTableInterface34linearized_multifrag_column_owner_E">JoinHashTableInterface::linearized_multifrag_column_owner_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4N22JoinHashTableInterface29linearized_multifrag_columns_E">JoinHashTableInterface::linearized_multifrag_columns_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4N22JoinHashTableInterface16LinearizedColumnE">JoinHashTableInterface::LinearizedColumn (C++ type)</a>
+</li>
+      <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4N22JoinHashTableInterface24LinearizedColumnCacheKeyE">JoinHashTableInterface::LinearizedColumnCacheKey (C++ type)</a>
 </li>
       <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4NK22JoinHashTableInterface15offsetBufferOffEv">JoinHashTableInterface::offsetBufferOff (C++ function)</a>
 </li>
@@ -9653,7 +9678,9 @@
 </li>
       <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4NK22JoinHashTableInterface16payloadBufferOffEv">JoinHashTableInterface::payloadBufferOff (C++ function)</a>
 </li>
-      <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4NK22JoinHashTableInterface8toStringEK18ExecutorDeviceTypeKib">JoinHashTableInterface::toString (C++ function)</a>
+      <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4N22JoinHashTableInterface5toSetE6size_t6size_t6size_tPK6int8_tPK6int8_tPK6int8_tPK6int8_t6size_t">JoinHashTableInterface::toSet (C++ function)</a>, <a href="api/class/class_join_hash_table_interface.html#_CPPv4NK22JoinHashTableInterface5toSetEK18ExecutorDeviceTypeKi">[1]</a>
+</li>
+      <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4N22JoinHashTableInterface8toStringERKNSt6stringE6size_t6size_t6size_tPK6int8_tPK6int8_tPK6int8_tPK6int8_t6size_tb">JoinHashTableInterface::toString (C++ function)</a>, <a href="api/class/class_join_hash_table_interface.html#_CPPv4NK22JoinHashTableInterface8toStringEK18ExecutorDeviceTypeKib">[1]</a>
 </li>
       <li><a href="api/class/class_join_hash_table_interface.html#_CPPv4NK22JoinHashTableInterface14toStringFlat32EK18ExecutorDeviceTypeKi">JoinHashTableInterface::toStringFlat32 (C++ function)</a>
 </li>
@@ -9943,10 +9970,12 @@
 </li>
       <li><a href="api/class/classlogger_1_1_duration.html#_CPPv4N6logger8Duration5name_E">logger::Duration::name_ (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/classlogger_1_1_duration.html#_CPPv4I0ENK6logger8Duration19relative_start_timeEN5Units3repEv">logger::Duration::relative_start_time (C++ function)</a>
+</li>
       <li><a href="api/class/classlogger_1_1_duration.html#_CPPv4N6logger8Duration9severity_E">logger::Duration::severity_ (C++ member)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/classlogger_1_1_duration.html#_CPPv4N6logger8Duration6start_E">logger::Duration::start_ (C++ member)</a>
 </li>
       <li><a href="api/class/classlogger_1_1_duration.html#_CPPv4N6logger8Duration4stopEv">logger::Duration::stop (C++ function)</a>
@@ -9979,6 +10008,12 @@
 </li>
       <li><a href="api/class/classlogger_1_1_duration_tree.html#_CPPv4NK6logger12DurationTree12rootDurationEv">logger::DurationTree::rootDuration (C++ function)</a>
 </li>
+      <li><a href="api/class/classlogger_1_1_duration_tree.html#_CPPv4N6logger12DurationTree6start_EFN5Clock3nowEvE">logger::DurationTree::start_ (C++ function)</a>
+
+      <ul>
+        <li><a href="api/class/classlogger_1_1_duration_tree.html#_CPPv4N6logger12DurationTree6start_E">(C++ member)</a>
+</li>
+      </ul></li>
       <li><a href="api/class/classlogger_1_1_duration_tree.html#_CPPv4N6logger12DurationTree10thread_id_E9thread_id">logger::DurationTree::thread_id_ (C++ function)</a>
 
       <ul>
@@ -11060,8 +11095,6 @@
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4NK21OverlapsJoinHashTable20getKeyComponentCountEv">OverlapsJoinHashTable::getKeyComponentCount (C++ function)</a>
 </li>
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4NK21OverlapsJoinHashTable20getKeyComponentWidthEv">OverlapsJoinHashTable::getKeyComponentWidth (C++ function)</a>
-</li>
-      <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable20getSyntheticInstanceENSt11string_viewENSt11string_viewENSt11string_viewENSt11string_viewEKN14Data_Namespace11MemoryLevelEKiR14ColumnCacheMapP8Executor">OverlapsJoinHashTable::getSyntheticInstance (C++ function)</a>
 </li>
       <li><a href="api/class/class_overlaps_join_hash_table.html#_CPPv4N21OverlapsJoinHashTable18initHashTableOnCpuERKNSt6vectorI10JoinColumnEERKNSt6vectorI18JoinColumnTypeInfoEERKNSt6vectorI14JoinBucketInfoEEKN22JoinHashTableInterface8HashTypeE">OverlapsJoinHashTable::initHashTableOnCpu (C++ function)</a>
 </li>
