@@ -1920,7 +1920,7 @@ void SQLType::check_type() {
     case kCHAR:
     case kVARCHAR:
       if (param1 <= 0) {
-        throw std::runtime_error("CHAR and VARCHAR must have a positive dimension.");
+        param1 = 1; // set default value according to SQL documentation
       }
       break;
     case kDECIMAL:
