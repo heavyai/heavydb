@@ -1920,7 +1920,7 @@ void SQLType::check_type() {
     case kCHAR:
     case kVARCHAR:
       if (param1 <= 0) {
-        param1 = 1; // set default value according to SQL documentation
+        param1 = 1;  // set default value according to SQL documentation
       }
       break;
     case kDECIMAL:
