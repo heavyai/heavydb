@@ -27,7 +27,8 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
                         const size_t entry_count,
                         ColumnCacheMap& column_cache,
                         Executor* executor,
-                        const std::vector<InnerOuter>& inner_outer_pairs)
+                        const std::vector<InnerOuter>& inner_outer_pairs,
+                        const int device_count)
       : BaselineJoinHashTable(condition,
                               query_infos,
                               memory_level,
@@ -35,7 +36,8 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
                               entry_count,
                               column_cache,
                               executor,
-                              inner_outer_pairs) {}
+                              inner_outer_pairs,
+                              device_count) {}
 
   ~OverlapsJoinHashTable() override {}
 
@@ -56,13 +58,11 @@ class OverlapsJoinHashTable : public BaselineJoinHashTable {
   }
 
  protected:
-  void reifyWithLayout(const int device_count,
-                       const JoinHashTableInterface::HashType layout) override;
+  void reifyWithLayout(const JoinHashTableInterface::HashType layout) override;
 
   std::pair<size_t, size_t> calculateCounts(
       size_t shard_count,
       const Fragmenter_Namespace::TableInfo& query_info,
-      const int device_count,
       std::vector<BaselineJoinHashTable::ColumnsForDevice>& columns_per_device);
 
   size_t calculateHashTableSize(size_t number_of_dimensions,

@@ -93,6 +93,8 @@ class JoinHashTable : public JoinHashTableInterface {
     return memory_level_;
   };
 
+  int getDeviceCount() const noexcept override { return device_count_; };
+
   size_t offsetBufferOff() const noexcept override;
 
   size_t countBufferOff() const noexcept override;
@@ -140,6 +142,7 @@ class JoinHashTable : public JoinHashTableInterface {
       , column_cache_(column_cache)
       , device_count_(device_count) {
     CHECK(col_range.getType() == ExpressionRangeType::Integer);
+    CHECK_GT(device_count_, 0);
   }
 
   std::pair<const int8_t*, size_t> getOneColumnFragment(
@@ -159,7 +162,7 @@ class JoinHashTable : public JoinHashTableInterface {
       const Analyzer::Expr* outer_col,
       const Analyzer::ColumnVar* inner_col) const;
 
-  void reify(const int device_count);
+  void reify();
   void reifyOneToOneForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
       const int device_id,

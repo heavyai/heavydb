@@ -64,7 +64,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
                                const int device_id) const noexcept override;
 
   std::string toString(const ExecutorDeviceType device_type,
-                       const int device_id,
+                       const int device_id = 0,
                        bool raw = false) const override;
 
   std::set<DecodedJoinHashBufferEntry> toSet(const ExecutorDeviceType device_type,
@@ -84,6 +84,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   Data_Namespace::MemoryLevel getMemoryLevel() const noexcept override {
     return memory_level_;
   };
+
+  int getDeviceCount() const noexcept override { return device_count_; };
 
   size_t offsetBufferOff() const noexcept override;
 
@@ -112,12 +114,12 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
                         const size_t entry_count,
                         ColumnCacheMap& column_cache,
                         Executor* executor,
-                        const std::vector<InnerOuter>& inner_outer_pairs);
+                        const std::vector<InnerOuter>& inner_outer_pairs,
+                        const int device_count);
 
   static int getInnerTableId(const std::vector<InnerOuter>& inner_outer_pairs);
 
-  virtual void reifyWithLayout(const int device_count,
-                               const JoinHashTableInterface::HashType layout);
+  virtual void reifyWithLayout(const JoinHashTableInterface::HashType layout);
 
   struct ColumnsForDevice {
     const std::vector<JoinColumn> join_columns;
@@ -170,7 +172,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   CompositeKeyInfo getCompositeKeyInfo() const;
 
-  void reify(const int device_count);
+  void reify();
 
   JoinColumn fetchColumn(const Analyzer::ColumnVar* inner_col,
                          const Data_Namespace::MemoryLevel& effective_memory_level,
@@ -261,6 +263,7 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   RowSetMemoryOwner linearized_multifrag_column_owner_;
   std::vector<InnerOuter> inner_outer_pairs_;
   const Catalog_Namespace::Catalog* catalog_;
+  const int device_count_;
 #ifdef HAVE_CUDA
   unsigned block_size_;
   unsigned grid_size_;

@@ -69,10 +69,11 @@ std::shared_ptr<BaselineJoinHashTable> BaselineJoinHashTable::getInstance(
                                 entries_per_device,
                                 column_cache,
                                 executor,
-                                inner_outer_pairs));
+                                inner_outer_pairs,
+                                device_count));
   join_hash_table->checkHashJoinReplicationConstraint(getInnerTableId(inner_outer_pairs));
   try {
-    join_hash_table->reify(device_count);
+    join_hash_table->reify();
   } catch (const TableMustBeReplicated& e) {
     // Throw a runtime error to abort the query
     join_hash_table->freeHashBufferMemory();
@@ -118,7 +119,8 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     const size_t entry_count,
     ColumnCacheMap& column_cache,
     Executor* executor,
-    const std::vector<InnerOuter>& inner_outer_pairs)
+    const std::vector<InnerOuter>& inner_outer_pairs,
+    const int device_count)
     : condition_(condition)
     , query_infos_(query_infos)
     , memory_level_(memory_level)
@@ -129,6 +131,7 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     , column_cache_(column_cache)
     , inner_outer_pairs_(inner_outer_pairs)
     , catalog_(executor->getCatalog())
+    , device_count_(device_count)
 #ifdef HAVE_CUDA
     , block_size_(memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
                       ? executor->blockSize()
@@ -136,9 +139,11 @@ BaselineJoinHashTable::BaselineJoinHashTable(
     , grid_size_(memory_level == Data_Namespace::MemoryLevel::GPU_LEVEL
                      ? executor->gridSize()
                      : 0) {
+  CHECK_GT(device_count_, 0);
 }
 #else
 {
+  CHECK_GT(device_count_, 0);
 }
 #endif  // HAVE_CUDA
 
@@ -304,11 +309,11 @@ BaselineJoinHashTable::CompositeKeyInfo BaselineJoinHashTable::getCompositeKeyIn
   return {sd_inner_proxy_per_key, sd_outer_proxy_per_key, cache_key_chunks};
 }
 
-void BaselineJoinHashTable::reify(const int device_count) {
+void BaselineJoinHashTable::reify() {
   auto timer = DEBUG_TIMER(__func__);
-  CHECK_LT(0, device_count);
+  CHECK_LT(0, device_count_);
 #ifdef HAVE_CUDA
-  gpu_hash_table_buff_.resize(device_count);
+  gpu_hash_table_buff_.resize(device_count_);
 #endif  // HAVE_CUDA
   const auto composite_key_info = getCompositeKeyInfo();
   const auto type_and_found = HashTypeCache::get(composite_key_info.cache_key_chunks);
@@ -316,7 +321,7 @@ void BaselineJoinHashTable::reify(const int device_count) {
 
   if (condition_->is_overlaps_oper()) {
     try {
-      reifyWithLayout(device_count, JoinHashTableInterface::HashType::OneToMany);
+      reifyWithLayout(JoinHashTableInterface::HashType::OneToMany);
       return;
     } catch (const std::exception& e) {
       VLOG(1) << "Caught exception while building overlaps baseline hash table: "
@@ -326,18 +331,17 @@ void BaselineJoinHashTable::reify(const int device_count) {
   }
 
   try {
-    reifyWithLayout(device_count, layout);
+    reifyWithLayout(layout);
   } catch (const std::exception& e) {
     VLOG(1) << "Caught exception while building baseline hash table: " << e.what();
     freeHashBufferMemory();
     HashTypeCache::set(composite_key_info.cache_key_chunks,
                        JoinHashTableInterface::HashType::OneToMany);
-    reifyWithLayout(device_count, JoinHashTableInterface::HashType::OneToMany);
+    reifyWithLayout(JoinHashTableInterface::HashType::OneToMany);
   }
 }
 
 void BaselineJoinHashTable::reifyWithLayout(
-    const int device_count,
     const JoinHashTableInterface::HashType layout) {
   layout_ = layout;
   const auto& query_info = get_inner_query_info(getInnerTableId(), query_infos_).info;
@@ -346,10 +350,10 @@ void BaselineJoinHashTable::reifyWithLayout(
   }
   std::vector<BaselineJoinHashTable::ColumnsForDevice> columns_per_device;
   const auto shard_count = shardCount();
-  for (int device_id = 0; device_id < device_count; ++device_id) {
+  for (int device_id = 0; device_id < device_count_; ++device_id) {
     const auto fragments =
         shard_count
-            ? only_shards_for_device(query_info.fragments, device_id, device_count)
+            ? only_shards_for_device(query_info.fragments, device_id, device_count_)
             : query_info.fragments;
     const auto columns_for_device = fetchColumnsForDevice(fragments, device_id);
     columns_per_device.push_back(columns_for_device);
@@ -362,13 +366,13 @@ void BaselineJoinHashTable::reifyWithLayout(
     const auto entry_count = 2 * std::max(tuple_count, size_t(1));
 
     entry_count_ =
-        get_entries_per_device(entry_count, shard_count, device_count, memory_level_);
+        get_entries_per_device(entry_count, shard_count, device_count_, memory_level_);
   }
   std::vector<std::future<void>> init_threads;
-  for (int device_id = 0; device_id < device_count; ++device_id) {
+  for (int device_id = 0; device_id < device_count_; ++device_id) {
     const auto fragments =
         shard_count
-            ? only_shards_for_device(query_info.fragments, device_id, device_count)
+            ? only_shards_for_device(query_info.fragments, device_id, device_count_)
             : query_info.fragments;
     init_threads.push_back(std::async(std::launch::async,
                                       &BaselineJoinHashTable::reifyForDevice,
@@ -429,14 +433,13 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
     return std::make_pair(hll_size(hll_result, count_distinct_desc.bitmap_sz_bits), 0);
   }
 #ifdef HAVE_CUDA
-  const int device_count = columns_per_device.size();
   auto& data_mgr = catalog_->getDataMgr();
-  std::vector<std::vector<uint8_t>> host_hll_buffers(device_count);
+  std::vector<std::vector<uint8_t>> host_hll_buffers(device_count_);
   for (auto& host_hll_buffer : host_hll_buffers) {
     host_hll_buffer.resize(count_distinct_desc.bitmapPaddedSizeBytes());
   }
   std::vector<std::future<void>> approximate_distinct_device_threads;
-  for (int device_id = 0; device_id < device_count; ++device_id) {
+  for (int device_id = 0; device_id < device_count_; ++device_id) {
     approximate_distinct_device_threads.emplace_back(std::async(
         std::launch::async,
         [device_id,
@@ -485,7 +488,7 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
   CHECK_EQ(Data_Namespace::MemoryLevel::GPU_LEVEL, effective_memory_level);
   auto& result_hll_buffer = host_hll_buffers.front();
   auto hll_result = reinterpret_cast<int32_t*>(&result_hll_buffer[0]);
-  for (int device_id = 1; device_id < device_count; ++device_id) {
+  for (int device_id = 1; device_id < device_count_; ++device_id) {
     auto& host_hll_buffer = host_hll_buffers[device_id];
     hll_unify(hll_result,
               reinterpret_cast<int32_t*>(&host_hll_buffer[0]),

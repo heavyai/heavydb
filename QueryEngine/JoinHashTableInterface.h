@@ -116,6 +116,8 @@ class JoinHashTableInterface {
 
   virtual Data_Namespace::MemoryLevel getMemoryLevel() const noexcept = 0;
 
+  virtual int getDeviceCount() const noexcept = 0;
+
   virtual size_t offsetBufferOff() const noexcept = 0;
 
   virtual size_t countBufferOff() const noexcept = 0;

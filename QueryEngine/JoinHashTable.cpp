@@ -379,7 +379,7 @@ std::shared_ptr<JoinHashTable> JoinHashTable::getInstance(
                                                        executor,
                                                        device_count));
   try {
-    join_hash_table->reify(device_count);
+    join_hash_table->reify();
   } catch (const TableMustBeReplicated& e) {
     // Throw a runtime error to abort the query
     join_hash_table->freeHashBufferMemory();
@@ -498,9 +498,9 @@ std::deque<Fragmenter_Namespace::FragmentInfo> only_shards_for_device(
   return shards_for_device;
 }
 
-void JoinHashTable::reify(const int device_count) {
+void JoinHashTable::reify() {
   auto timer = DEBUG_TIMER(__func__);
-  CHECK_LT(0, device_count);
+  CHECK_LT(0, device_count_);
   const auto& catalog = *executor_->getCatalog();
   const auto cols = get_cols(qual_bin_oper_.get(), catalog, executor_->temporary_tables_);
   const auto inner_col = cols.first;
@@ -514,17 +514,17 @@ void JoinHashTable::reify(const int device_count) {
     throw TooManyHashEntries();
   }
 #ifdef HAVE_CUDA
-  gpu_hash_table_buff_.resize(device_count);
-  gpu_hash_table_err_buff_.resize(device_count);
+  gpu_hash_table_buff_.resize(device_count_);
+  gpu_hash_table_err_buff_.resize(device_count_);
 #endif  // HAVE_CUDA
   std::vector<std::future<void>> init_threads;
   const int shard_count = shardCount();
 
   try {
-    for (int device_id = 0; device_id < device_count; ++device_id) {
+    for (int device_id = 0; device_id < device_count_; ++device_id) {
       const auto fragments =
           shard_count
-              ? only_shards_for_device(query_info.fragments, device_id, device_count)
+              ? only_shards_for_device(query_info.fragments, device_id, device_count_)
               : query_info.fragments;
       init_threads.push_back(
           std::async(std::launch::async,
@@ -547,10 +547,10 @@ void JoinHashTable::reify(const int device_count) {
     hash_type_ = JoinHashTableInterface::HashType::OneToMany;
     freeHashBufferMemory();
     init_threads.clear();
-    for (int device_id = 0; device_id < device_count; ++device_id) {
+    for (int device_id = 0; device_id < device_count_; ++device_id) {
       const auto fragments =
           shard_count
-              ? only_shards_for_device(query_info.fragments, device_id, device_count)
+              ? only_shards_for_device(query_info.fragments, device_id, device_count_)
               : query_info.fragments;
 
       init_threads.push_back(std::async(std::launch::async,
