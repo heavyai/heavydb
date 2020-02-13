@@ -206,8 +206,6 @@ class ForeignStorageBufferMgr : public Data_Namespace::AbstractBufferMgr {
   }
 
  private:
-  const int db_id_;
-  const int table_id_;
   PersistentForeignStorageInterface* persistent_foreign_storage_;
   std::map<ChunkKey, std::unique_ptr<ForeignStorageBuffer>> chunk_index_;
   mutable mapd_shared_mutex chunk_index_mutex_;

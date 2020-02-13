@@ -20,10 +20,7 @@
 namespace CudaMgr_Namespace {
 
 CudaMgr::CudaMgr(const int, const int)
-    : device_count_(-1)
-    , gpu_driver_version_(-1)
-    , start_gpu_(-1)
-    , max_shared_memory_for_all_(0) {
+    : device_count_(-1), start_gpu_(-1), max_shared_memory_for_all_(0) {
   CHECK(false);
 }
 
