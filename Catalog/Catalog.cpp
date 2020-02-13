@@ -1786,6 +1786,12 @@ void Catalog::getDictionary(const ColumnDescriptor& cd,
 void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
   // caller must handle sqlite/chunk transaction TOGETHER
   cd.tableId = td.tableId;
+  if (td.nShards > 0 && td.shard < 0) {
+    for (const auto shard : getPhysicalTablesDescriptors(&td)) {
+      auto shard_cd = cd;
+      addColumn(*shard, shard_cd);
+    }
+  }
   if (cd.columnType.get_compression() == kENCODING_DICT) {
     addDictionary(cd);
   }

@@ -254,6 +254,14 @@ TEST(AlterColumnTest2, Drop_after_fail_to_add) {
   EXPECT_NO_THROW(run_ddl_statement("drop table t;"););
 }
 
+TEST(AlterColumnTest3, Add_col_to_sharded_table) {
+  EXPECT_NO_THROW(run_ddl_statement("drop table if exists x;"););
+  EXPECT_NO_THROW(run_ddl_statement(
+                      "create table x (i text,SHARD KEY (i)) WITH (SHARD_COUNT = 2);"););
+  EXPECT_NO_THROW(run_ddl_statement("alter table x add column j int;"););
+  EXPECT_NO_THROW(run_query("insert into x values('0',0);"););
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {

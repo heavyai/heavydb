@@ -363,7 +363,8 @@ void InsertOrderFragmenter::replicateData(const InsertData& insertDataStruct) {
         continue;
       }
       auto columnId = insertDataStruct.columnIds[i];
-      auto colDesc = insertDataStruct.columnDescriptors.at(columnId);
+      auto colDesc = catalog_->getMetadataForColumn(physicalTableId_, columnId);
+      CHECK(colDesc);
       CHECK(columnMap_.find(columnId) != columnMap_.end());
 
       ChunkKey chunkKey = chunkKeyPrefix_;
@@ -442,7 +443,6 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
       memset(data_for_deleted_column.get(), 0, insertDataStruct.numRows);
       insertDataStruct.data.emplace_back(DataBlockPtr{data_for_deleted_column.get()});
       insertDataStruct.columnIds.push_back(cit.second.get_column_desc()->columnId);
-      insertDataStruct.columnDescriptors[cit.first] = cit.second.get_column_desc();
       break;
     }
   }
@@ -451,9 +451,10 @@ void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
 
   // insert column to columnMap_ if not yet (ALTER ADD COLUMN)
   for (const auto columnId : insertDataStruct.columnIds) {
+    const auto columnDesc = catalog_->getMetadataForColumn(physicalTableId_, columnId);
+    CHECK(columnDesc);
     if (columnMap_.end() == columnMap_.find(columnId)) {
-      columnMap_.emplace(
-          columnId, Chunk_NS::Chunk(insertDataStruct.columnDescriptors.at(columnId)));
+      columnMap_.emplace(columnId, Chunk_NS::Chunk(columnDesc));
     }
   }
 
