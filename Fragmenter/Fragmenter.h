@@ -66,7 +66,6 @@ struct InsertData {
   int64_t replicate_count =
       0;  /// count to replicate values of column(s); used only for ALTER ADD column
   std::vector<bool> bypass;  // bypass corresponding columnIds[]
-  std::map<int, const ColumnDescriptor*> columnDescriptors;
 };
 
 /**

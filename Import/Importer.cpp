@@ -2677,8 +2677,6 @@ bool Loader::loadToShard(
   if (this->getReplicating()) {
     for (const auto& import_buff : import_buffers) {
       insert_data_.replicate_count = import_buff->get_replicate_count();
-      insert_data_.columnDescriptors[import_buff->getColumnDesc()->columnId] =
-          import_buff->getColumnDesc();
     }
   }
 
