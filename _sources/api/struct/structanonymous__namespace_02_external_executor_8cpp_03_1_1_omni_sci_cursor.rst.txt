@@ -1,0 +1,9 @@
+Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciCursor
+===============================================================
+
+.. doxygenstruct:: anonymous_namespace{ExternalExecutor.cpp}::OmniSciCursor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

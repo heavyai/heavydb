@@ -1,0 +1,9 @@
+Class SqliteMemDatabase
+=======================
+
+.. doxygenclass:: SqliteMemDatabase
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

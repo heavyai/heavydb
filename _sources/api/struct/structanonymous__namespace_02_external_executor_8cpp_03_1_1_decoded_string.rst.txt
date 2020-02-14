@@ -1,0 +1,9 @@
+Struct anonymous_namespace{ExternalExecutor.cpp}::DecodedString
+===============================================================
+
+.. doxygenstruct:: anonymous_namespace{ExternalExecutor.cpp}::DecodedString
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct ExecutionUnitSql
+=======================
+
+.. doxygenstruct:: ExecutionUnitSql
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

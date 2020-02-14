@@ -1,0 +1,9 @@
+Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciVtab
+=============================================================
+
+.. doxygenstruct:: anonymous_namespace{ExternalExecutor.cpp}::OmniSciVtab
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
