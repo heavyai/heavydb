@@ -49,7 +49,8 @@ InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
       throw HashJoinFail("Equijoin types must be identical, found: " +
                          lhs_ti.get_type_name() + ", " + rhs_ti.get_type_name());
     }
-    if (!lhs_ti.is_integer() && !lhs_ti.is_time() && !lhs_ti.is_string()) {
+    if (!lhs_ti.is_integer() && !lhs_ti.is_time() && !lhs_ti.is_string() &&
+        !lhs_ti.is_decimal()) {
       throw HashJoinFail("Cannot apply hash join to inner column type " +
                          lhs_ti.get_type_name());
     }
@@ -128,6 +129,7 @@ InnerOuter normalize_column_pair(const Analyzer::Expr* lhs,
     }
   } else {
     if (!(inner_col_real_ti.is_integer() || inner_col_real_ti.is_time() ||
+          inner_col_real_ti.is_decimal() ||
           (inner_col_real_ti.is_string() &&
            inner_col_real_ti.get_compression() == kENCODING_DICT))) {
       throw HashJoinFail(
