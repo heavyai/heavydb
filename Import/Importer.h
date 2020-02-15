@@ -572,6 +572,7 @@ class Loader {
 
   void setReplicating(const bool replicating) { replicating_ = replicating; }
   bool getReplicating() const { return replicating_; }
+  void dropColumns(const std::vector<int>& columns);
 
  protected:
   void init();

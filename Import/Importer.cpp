@@ -2827,6 +2827,16 @@ bool Loader::loadToShard(
   return success;
 }
 
+void Loader::dropColumns(const std::vector<int>& columnIds) {
+  std::vector<const TableDescriptor*> table_descs(1, table_desc_);
+  if (table_desc_->nShards) {
+    table_descs = catalog_.getPhysicalTablesDescriptors(table_desc_);
+  }
+  for (auto table_desc : table_descs) {
+    table_desc->fragmenter->dropColumns(columnIds);
+  }
+}
+
 void Loader::init() {
   insert_data_.databaseId = catalog_.getCurrentDB().dbId;
   insert_data_.tableId = table_desc_->tableId;

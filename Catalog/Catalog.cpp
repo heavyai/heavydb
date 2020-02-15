@@ -1720,26 +1720,34 @@ DictRef Catalog::addDictionary(ColumnDescriptor& cd) {
   return dd.dictRef;
 }
 
-// TODO this all looks incorrect there is no reference count being checked here
-// this code needs to be fixed
 void Catalog::delDictionary(const ColumnDescriptor& cd) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
   if (!(cd.columnType.is_string() || cd.columnType.is_string_array())) {
     return;
   }
   if (!(cd.columnType.get_compression() == kENCODING_DICT)) {
     return;
   }
-  if (!(cd.columnType.get_comp_param() > 0)) {
+  const auto dictId = cd.columnType.get_comp_param();
+  CHECK_GT(dictId, 0);
+  // decrement and zero check dict ref count
+  const auto td = getMetadataForTable(cd.tableId);
+  CHECK(td);
+  sqliteConnector_.query_with_text_param(
+      "UPDATE mapd_dictionaries SET refcount = refcount - 1 WHERE dictid = ?",
+      std::to_string(dictId));
+  sqliteConnector_.query_with_text_param(
+      "SELECT refcount FROM mapd_dictionaries WHERE dictid = ?", std::to_string(dictId));
+  const auto refcount = sqliteConnector_.getData<int>(0, 0);
+  VLOG(3) << "Dictionary " << dictId << "from dropped table has reference count "
+          << refcount;
+  if (refcount > 0) {
     return;
   }
-
-  const auto& td = *tableDescriptorMapById_[cd.tableId];
-  const auto dictId = cd.columnType.get_comp_param();
   const DictRef dictRef(currentDB_.dbId, dictId);
-  const auto dictName =
-      td.tableName + "_" + cd.columnName + "_dict" + std::to_string(dictId);
-  sqliteConnector_.query_with_text_param("DELETE FROM mapd_dictionaries WHERE name = ?",
-                                         dictName);
+  sqliteConnector_.query_with_text_param("DELETE FROM mapd_dictionaries WHERE dictid = ?",
+                                         std::to_string(dictId));
   File_Namespace::renameForDelete(basePath_ + "/mapd_data/DB_" +
                                   std::to_string(currentDB_.dbId) + "_DICT_" +
                                   std::to_string(dictId));
@@ -1784,6 +1792,7 @@ void Catalog::getDictionary(const ColumnDescriptor& cd,
 }
 
 void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
+  cat_write_lock write_lock(this);
   // caller must handle sqlite/chunk transaction TOGETHER
   cd.tableId = td.tableId;
   if (td.nShards > 0 && td.shard < 0) {
@@ -1839,7 +1848,39 @@ void Catalog::addColumn(const TableDescriptor& td, ColumnDescriptor& cd) {
   columnDescriptorsForRoll.emplace_back(nullptr, ncd);
 }
 
+void Catalog::dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd) {
+  cat_write_lock write_lock(this);
+  cat_sqlite_lock sqlite_lock(this);
+  // caller must handle sqlite/chunk transaction TOGETHER
+  sqliteConnector_.query_with_text_params(
+      "DELETE FROM mapd_columns where tableid = ? and columnid = ?",
+      std::vector<std::string>{std::to_string(td.tableId), std::to_string(cd.columnId)});
+
+  sqliteConnector_.query_with_text_params(
+      "UPDATE mapd_tables SET ncolumns = ncolumns - 1 WHERE tableid = ?",
+      std::vector<std::string>{std::to_string(td.tableId)});
+
+  ColumnDescriptorMap::iterator columnDescIt =
+      columnDescriptorMap_.find(ColumnKey(cd.tableId, to_upper(cd.columnName)));
+  CHECK(columnDescIt != columnDescriptorMap_.end());
+
+  columnDescriptorsForRoll.emplace_back(columnDescIt->second, nullptr);
+
+  columnDescriptorMap_.erase(columnDescIt);
+  columnDescriptorMapById_.erase(ColumnIdKey(cd.tableId, cd.columnId));
+  --tableDescriptorMapById_[td.tableId]->nColumns;
+  // for each shard
+  if (td.nShards > 0 && td.shard < 0) {
+    for (const auto shard : getPhysicalTablesDescriptors(&td)) {
+      const auto shard_cd = getMetadataForColumn(shard->tableId, cd.columnId);
+      CHECK(shard_cd);
+      dropColumn(*shard, *shard_cd);
+    }
+  }
+}
+
 void Catalog::roll(const bool forward) {
+  cat_write_lock write_lock(this);
   std::set<const TableDescriptor*> tds;
 
   for (const auto& cdr : columnDescriptorsForRoll) {
@@ -3126,6 +3167,7 @@ std::vector<const TableDescriptor*> Catalog::getPhysicalTablesDescriptors(
 }
 
 int Catalog::getLogicalTableId(const int physicalTableId) const {
+  cat_read_lock read_lock(this);
   for (const auto& l : logicalToPhysicalTableMapById_) {
     if (l.second.end() != std::find_if(l.second.begin(),
                                        l.second.end(),
@@ -3231,7 +3273,6 @@ void Catalog::remove(const std::string& dbName) {
 
 void Catalog::vacuumDeletedRows(const int logicalTableId) const {
   // shard here to serve request from TableOptimizer and elsewhere
-  cat_read_lock read_lock(this);
   const auto td = getMetadataForTable(logicalTableId);
   const auto shards = getPhysicalTablesDescriptors(td);
   for (const auto shard : shards) {
@@ -3240,7 +3281,6 @@ void Catalog::vacuumDeletedRows(const int logicalTableId) const {
 }
 
 void Catalog::vacuumDeletedRows(const TableDescriptor* td) const {
-  cat_read_lock read_lock(this);
   // "if not a table that supports delete return nullptr,  nothing more to do"
   const ColumnDescriptor* cd = getDeletedColumn(td);
   if (nullptr == cd) {
@@ -3276,4 +3316,13 @@ void Catalog::vacuumDeletedRows(const TableDescriptor* td) const {
   }
 }
 
+// prepare a fresh file reload on next table access
+void Catalog::setForReload(const int32_t tableId) {
+  cat_read_lock read_lock(this);
+  const auto td = getMetadataForTable(tableId);
+  for (const auto shard : getPhysicalTablesDescriptors(td)) {
+    const auto tableEpoch = getTableEpoch(currentDB_.dbId, shard->tableId);
+    setTableEpoch(currentDB_.dbId, shard->tableId, tableEpoch);
+  }
+}
 }  // namespace Catalog_Namespace

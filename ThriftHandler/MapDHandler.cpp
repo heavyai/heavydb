@@ -5300,15 +5300,15 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
           session_ptr->getCatalog(), *truncate_stmt->get_table());
     }
     auto add_col_stmt = dynamic_cast<Parser::AddColumnStmt*>(ddl);
-    if (add_col_stmt) {
-      add_col_stmt->check_executable(*session_ptr);
-      chkptlLock =
-          getTableLock<mapd_shared_mutex, mapd_unique_lock>(session_ptr->getCatalog(),
-                                                            *add_col_stmt->get_table(),
-                                                            LockType::CheckpointLock);
+    auto drop_col_stmt = dynamic_cast<Parser::DropColumnStmt*>(ddl);
+    if (add_col_stmt || drop_col_stmt) {
+      const auto& table_name =
+          *(add_col_stmt ? add_col_stmt->get_table() : drop_col_stmt->get_table());
+      chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
+          session_ptr->getCatalog(), table_name, LockType::CheckpointLock);
       table_locks.emplace_back();
-      table_locks.back().write_lock = TableLockMgr::getWriteLockForTable(
-          session_ptr->getCatalog(), *add_col_stmt->get_table());
+      table_locks.back().write_lock =
+          TableLockMgr::getWriteLockForTable(session_ptr->getCatalog(), table_name);
     }
 
     _return.execution_time_ms += measure<>::execution([&]() {

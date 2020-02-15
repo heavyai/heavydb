@@ -236,6 +236,8 @@ void InsertOrderFragmenter::deleteFragments(const vector<int>& dropFragIds) {
 void InsertOrderFragmenter::updateChunkStats(
     const ColumnDescriptor* cd,
     std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map) {
+  // synchronize concurrent accesses to fragmentInfoVec_
+  mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
   /**
    * WARNING: This method is entirely unlocked. Higher level locks are expected to prevent
    * any table read or write during a chunk metadata update, since we need to modify
@@ -353,6 +355,8 @@ void InsertOrderFragmenter::insertDataNoCheckpoint(InsertData& insertDataStruct)
 }
 
 void InsertOrderFragmenter::replicateData(const InsertData& insertDataStruct) {
+  // synchronize concurrent accesses to fragmentInfoVec_
+  mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
   size_t numRowsLeft = insertDataStruct.numRows;
   for (auto& fragmentInfo : fragmentInfoVec_) {
     fragmentInfo.shadowChunkMetadataMap = fragmentInfo.getChunkMetadataMapPhysical();
@@ -406,10 +410,7 @@ void InsertOrderFragmenter::replicateData(const InsertData& insertDataStruct) {
         }
 
         auto chunkMetadata = chunk.appendData(dataCopy, numRowsToInsert, 0, true);
-        {
-          std::unique_lock<std::mutex> lck(*fragmentInfo.mutex_access_inmem_states);
-          fragmentInfo.shadowChunkMetadataMap[columnId] = chunkMetadata;
-        }
+        fragmentInfo.shadowChunkMetadataMap[columnId] = chunkMetadata;
 
         // update total size of var-len column in (actually the last) fragment
         if (0 > size) {
@@ -425,7 +426,37 @@ void InsertOrderFragmenter::replicateData(const InsertData& insertDataStruct) {
   }
   CHECK(0 == numRowsLeft);
 
+  for (auto& fragmentInfo : fragmentInfoVec_) {
+    fragmentInfo.setChunkMetadataMap(fragmentInfo.shadowChunkMetadataMap);
+  }
+}
+
+void InsertOrderFragmenter::dropColumns(const std::vector<int>& columnIds) {
+  // prevent concurrent insert rows and drop column
+  mapd_unique_lock<mapd_shared_mutex> insertLock(insertMutex_);
+  // synchronize concurrent accesses to fragmentInfoVec_
   mapd_unique_lock<mapd_shared_mutex> writeLock(fragmentInfoMutex_);
+  for (auto& fragmentInfo : fragmentInfoVec_) {
+    fragmentInfo.shadowChunkMetadataMap = fragmentInfo.getChunkMetadataMapPhysical();
+  }
+
+  for (const auto columnId : columnIds) {
+    auto cit = columnMap_.find(columnId);
+    if (columnMap_.end() != cit) {
+      columnMap_.erase(cit);
+    }
+
+    vector<int> fragPrefix = chunkKeyPrefix_;
+    fragPrefix.push_back(columnId);
+    dataMgr_->deleteChunksWithPrefix(fragPrefix);
+
+    for (auto& fragmentInfo : fragmentInfoVec_) {
+      auto cmdit = fragmentInfo.shadowChunkMetadataMap.find(columnId);
+      if (fragmentInfo.shadowChunkMetadataMap.end() != cmdit) {
+        fragmentInfo.shadowChunkMetadataMap.erase(cmdit);
+      }
+    }
+  }
   for (auto& fragmentInfo : fragmentInfoVec_) {
     fragmentInfo.setChunkMetadataMap(fragmentInfo.shadowChunkMetadataMap);
   }

@@ -123,6 +123,7 @@ class Catalog final {
                     const ColumnDescriptor* cd,
                     const std::string& newColumnName);
   void addColumn(const TableDescriptor& td, ColumnDescriptor& cd);
+  void dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd);
   void removeChunks(const int table_id);
 
   /**
@@ -221,7 +222,7 @@ class Catalog final {
   void eraseTablePhysicalData(const TableDescriptor* td);
   void vacuumDeletedRows(const TableDescriptor* td) const;
   void vacuumDeletedRows(const int logicalTableId) const;
-
+  void setForReload(const int32_t tableId);
   // dump & restore
   void dumpTable(const TableDescriptor* td,
                  const std::string& path,

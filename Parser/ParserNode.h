@@ -1274,6 +1274,22 @@ class AddColumnStmt : public DDLStmt {
   std::list<std::unique_ptr<ColumnDef>> coldefs;
 };
 
+class DropColumnStmt : public DDLStmt {
+ public:
+  DropColumnStmt(std::string* tab, std::list<std::string*>* cols) : table(tab) {
+    for (const auto col : *cols) {
+      this->columns.emplace_back(col);
+    }
+    delete cols;
+  }
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  const std::string* get_table() const { return table.get(); }
+
+ private:
+  std::unique_ptr<std::string> table;
+  std::list<std::unique_ptr<std::string>> columns;
+};
+
 /*
  * @type DumpTableStmt
  * @brief DUMP TABLE table TO archive_file_path

@@ -66,6 +66,7 @@
 
 size_t g_leaf_count{0};
 bool g_use_date_in_days_default_encoding{true};
+bool g_test_drop_column_rollback{false};
 extern bool g_enable_experimental_string_functions;
 
 using namespace Lock_Namespace;
@@ -3275,7 +3276,7 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
     throw std::runtime_error("Table " + *table + " does not exist.");
   } else {
     if (td->isView) {
-      throw std::runtime_error("Expecting a table , found view " + *table);
+      throw std::runtime_error("Adding columns to a view is not supported.");
     }
   };
 
@@ -3423,14 +3424,75 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     if (!loader->loadNoCheckpoint(import_buffers, nrows)) {
       throw std::runtime_error("loadNoCheckpoint failed!");
     }
+    catalog.roll(true);
     loader->checkpoint();
+    catalog.getSqliteConnector().query("END TRANSACTION");
   } catch (...) {
     catalog.roll(false);
     catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
     throw;
   }
-  catalog.getSqliteConnector().query("END TRANSACTION");
-  catalog.roll(true);
+}
+
+void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.getCatalog();
+  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+  if (td == nullptr) {
+    throw std::runtime_error("Table " + *table + " does not exist.");
+  }
+  if (td->isView) {
+    throw std::runtime_error("Dropping column from a view is not supported.");
+  }
+
+  check_alter_table_privilege(session, td);
+
+  for (const auto& column : columns) {
+    if (nullptr == catalog.getMetadataForColumn(td->tableId, *column)) {
+      throw std::runtime_error("Column " + *column + " does not exist.");
+    }
+  }
+
+  if (td->nColumns <= (td->hasDeletedCol ? 3 : 2)) {
+    throw std::runtime_error("Table " + *table + " has only one column.");
+  }
+
+  catalog.getSqliteConnector().query("BEGIN TRANSACTION");
+  try {
+    std::vector<int> columnIds;
+    for (const auto& column : columns) {
+      ColumnDescriptor cd = *catalog.getMetadataForColumn(td->tableId, *column);
+      if (td->nShards > 0 && td->shardedColumnId == cd.columnId) {
+        throw std::runtime_error("Dropping sharding column " + cd.columnName +
+                                 " is not supported.");
+      }
+      catalog.dropColumn(*td, cd);
+      columnIds.push_back(cd.columnId);
+      for (int i = 0; i < cd.columnType.get_physical_cols(); i++) {
+        const auto pcd = catalog.getMetadataForColumn(td->tableId, cd.columnId + i + 1);
+        CHECK(pcd);
+        catalog.dropColumn(*td, *pcd);
+        columnIds.push_back(cd.columnId + i + 1);
+      }
+    }
+
+    for (auto shard : catalog.getPhysicalTablesDescriptors(td)) {
+      shard->fragmenter->dropColumns(columnIds);
+    }
+    // if test forces to rollback
+    if (g_test_drop_column_rollback) {
+      throw std::runtime_error("lol!");
+    }
+    catalog.roll(true);
+    if (td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+      catalog.checkpoint(td->tableId);
+    }
+    catalog.getSqliteConnector().query("END TRANSACTION");
+  } catch (...) {
+    catalog.setForReload(td->tableId);
+    catalog.roll(false);
+    catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
+    throw;
+  }
 }
 
 void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {

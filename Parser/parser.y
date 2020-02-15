@@ -127,6 +127,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| rename_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| rename_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| add_column_statement { $<nodeval>$ = $<nodeval>1; }
+	| drop_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| copy_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
@@ -317,6 +318,18 @@ add_column_statement:
 		   $<nodeval>$ = new AddColumnStmt($<stringval>3, reinterpret_cast<std::list<ColumnDef*>*>($<nodeval>6));
 		}
 		;
+
+drop_column_statement:
+		ALTER TABLE table drop_columns { $<nodeval>$ = new DropColumnStmt($<stringval>3, $<slistval>4); }
+		;
+
+drop_columns:
+		 drop_column { $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }
+		|drop_columns ',' drop_column { ($<listval>1)->push_back($<nodeval>3); }
+		;
+		
+drop_column:
+		DROP opt_column column { $<stringval>$ = $<stringval>3; }
 
 copy_table_statement:
 	COPY table FROM STRING opt_with_option_list
