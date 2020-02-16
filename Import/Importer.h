@@ -43,6 +43,7 @@
 #include <set>
 #include <string>
 #include <utility>
+//#include <string_view>
 
 #include "../Catalog/Catalog.h"
 #include "../Catalog/TableDescriptor.h"
@@ -251,30 +252,34 @@ class TypedImportBuffer : boost::noncopyable {
     string_array_buffer_->push_back(arr);
   }
 
-  void addDictEncodedString(const std::vector<std::string>& string_vec) {
-    CHECK(string_dict_);
-    for (const auto& str : string_vec) {
-      if (str.size() > StringDictionary::MAX_STRLEN) {
-        throw std::runtime_error("String too long for dictionary encoding.");
-      }
-    }
-    switch (column_desc_->columnType.get_size()) {
-      case 1:
-        string_dict_i8_buffer_->resize(string_vec.size());
-        string_dict_->getOrAddBulk(string_vec, string_dict_i8_buffer_->data());
-        break;
-      case 2:
-        string_dict_i16_buffer_->resize(string_vec.size());
-        string_dict_->getOrAddBulk(string_vec, string_dict_i16_buffer_->data());
-        break;
-      case 4:
-        string_dict_i32_buffer_->resize(string_vec.size());
-        string_dict_->getOrAddBulk(string_vec, string_dict_i32_buffer_->data());
-        break;
-      default:
-        CHECK(false);
-    }
-  }
+  void addDictEncodedString(const std::vector<std::string>& string_vec);
+  /*{
+   CHECK(string_dict_);
+   std::vector<std::string_view> string_view_vec;
+   string_view_vec.reserve(string_vec.size());
+   for (const auto& str : string_vec) {
+     if (str.size() > StringDictionary::MAX_STRLEN) {
+       throw std::runtime_error("String too long for dictionary encoding.");
+     }
+     string_view_vec.push_back(str);
+   }
+   switch (column_desc_->columnType.get_size()) {
+     case 1:
+       string_dict_i8_buffer_->resize(string_view_vec.size());
+       string_dict_->getOrAddBulk(string_view_vec, string_dict_i8_buffer_->data());
+       break;
+     case 2:
+       string_dict_i16_buffer_->resize(string_view_vec.size());
+       string_dict_->getOrAddBulk(string_view_vec, string_dict_i16_buffer_->data());
+       break;
+     case 4:
+       string_dict_i32_buffer_->resize(string_view_vec.size());
+       string_dict_->getOrAddBulk(string_view_vec, string_dict_i32_buffer_->data());
+       break;
+     default:
+       CHECK(false);
+   }
+ }*/
 
   void addDictEncodedStringArray(
       const std::vector<std::vector<std::string>>& string_array_vec) {
