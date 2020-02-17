@@ -17,9 +17,8 @@
 #include "ExternalExecutor.h"
 #include "OutputBufferInitialization.h"
 
+#include "Shared/Logger.h"
 #include "SqliteConnector/SqliteConnector.h"
-
-#include <glog/logging.h>
 
 namespace {
 
@@ -256,6 +255,7 @@ int vt_column(sqlite3_vtab_cursor* cur, sqlite3_context* ctx, int col_idx) {
             break;
           }
           default: {
+            decoded_string = DecodedString{};
             LOG(FATAL) << "Invalid encoding size: " << col_ti.get_size();
           }
         }
