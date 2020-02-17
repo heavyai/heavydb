@@ -32,6 +32,7 @@
 #include <boost/sort/spreadsort/string_sort.hpp>
 
 #include <future>
+#include <iostream>
 #include <thread>
 
 namespace {
@@ -361,12 +362,14 @@ void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
     }
     // Get the rk_hash for this input_string
     const uint32_t input_string_rk_hash = input_strings_rk_hashes[input_string_idx];
+
     uint32_t hash_bucket = computeBucketFromStorageAndMemory(input_string_rk_hash,
                                                              input_string,
                                                              string_id_hash_table_,
                                                              storage_high_water_mark,
                                                              input_strings,
                                                              string_memory_ids);
+
     // If the hash bucket is not empty, that is our string id
     // (computeBucketFromStorageAndMemory) already checked to ensure the input string and
     // bucket string are equal)
@@ -904,7 +907,7 @@ std::shared_ptr<const std::vector<std::string>> StringDictionary::copyStrings() 
 }
 
 bool StringDictionary::fillRateIsHigh(const size_t num_strings) const noexcept {
-  return string_id_hash_table_.size() < num_strings * 2;
+  return string_id_hash_table_.size() <= num_strings * 2;
 }
 
 void StringDictionary::increaseCapacity() noexcept {
@@ -937,7 +940,6 @@ void StringDictionary::increaseCapacityFromStorageAndMemory(
     const std::vector<size_t>& string_memory_ids,
     const std::vector<uint32_t>& input_strings_rk_hashes) noexcept {
   std::vector<int32_t> new_str_ids(string_id_hash_table_.size() * 2, INVALID_STR_ID);
-
   if (materialize_hashes_) {
     for (size_t i = 0; i < string_id_hash_table_.size(); ++i) {
       if (string_id_hash_table_[i] != INVALID_STR_ID) {
@@ -1061,31 +1063,32 @@ uint32_t StringDictionary::computeBucketFromStorageAndMemory(
         INVALID_STR_ID) {  // In this case it means the slot is available for use
       break;
     }
-    if (materialize_hashes_ && input_string_rk_hash != rk_hashes_[candidate_string_id]) {
-      continue;
-    }
-    if (candidate_string_id >= storage_high_water_mark) {
-      // The candidate string is not in storage yet but in our string_memory_ids temp
-      // buffer
-      size_t memory_offset =
-          static_cast<size_t>(candidate_string_id - storage_high_water_mark);
-      const String candidate_string = input_strings[string_memory_ids[memory_offset]];
-      if (input_string.size() == candidate_string.size() &&
-          !memcmp(input_string.data(), candidate_string.data(), input_string.size())) {
-        // found the string in the temp memory buffer
-        break;
-      }
-    } else {
-      // The candidate string is in storage, need to fetch it for comparison
-      const auto candidate_storage_string = getStringFromStorageFast(candidate_string_id);
-      if (input_string.size() == candidate_storage_string.size() &&
-          !memcmp(input_string.data(),
-                  candidate_storage_string.data(),
-                  input_string.size())) {
-        //! memcmp(input_string.data(), candidate_storage_string.c_str_ptr,
-        //! input_string.size())) {
-        // found the string in storage
-        break;
+    if (!materialize_hashes_ ||
+        (input_string_rk_hash == rk_hashes_[candidate_string_id])) {
+      if (candidate_string_id >= storage_high_water_mark) {
+        // The candidate string is not in storage yet but in our string_memory_ids temp
+        // buffer
+        size_t memory_offset =
+            static_cast<size_t>(candidate_string_id - storage_high_water_mark);
+        const String candidate_string = input_strings[string_memory_ids[memory_offset]];
+        if (input_string.size() == candidate_string.size() &&
+            !memcmp(input_string.data(), candidate_string.data(), input_string.size())) {
+          // found the string in the temp memory buffer
+          break;
+        }
+      } else {
+        // The candidate string is in storage, need to fetch it for comparison
+        const auto candidate_storage_string =
+            getStringFromStorageFast(candidate_string_id);
+        if (input_string.size() == candidate_storage_string.size() &&
+            !memcmp(input_string.data(),
+                    candidate_storage_string.data(),
+                    input_string.size())) {
+          //! memcmp(input_string.data(), candidate_storage_string.c_str_ptr,
+          //! input_string.size())) {
+          // found the string in storage
+          break;
+        }
       }
     }
     if (++bucket == string_id_hash_table.size()) {
@@ -1170,6 +1173,7 @@ void StringDictionary::appendToStorageBulk(
     const std::vector<size_t>& string_memory_ids,
     const size_t sum_new_strings_lengths) noexcept {
   const size_t num_strings = string_memory_ids.size();
+
   checkAndConditionallyIncreasePayloadCapacity(sum_new_strings_lengths);
   checkAndConditionallyIncreaseOffsetCapacity(sizeof(StringIdxEntry) * num_strings);
 
