@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.2.0dev e846a78
+                5.2.0dev 6273c8b
               </div>
             
           
@@ -521,6 +521,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_d_m_l_stmt.html">Class Parser::DMLStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_delete_stmt.html">Class Parser::DeleteStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_double_literal.html">Class Parser::DoubleLiteral</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_drop_column_stmt.html">Class Parser::DropColumnStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_drop_d_b_stmt.html">Class Parser::DropDBStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_drop_role_stmt.html">Class Parser::DropRoleStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_drop_table_stmt.html">Class Parser::DropTableStmt</a></li>
@@ -3743,6 +3744,8 @@
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog15doTruncateTableEPK15TableDescriptor">Catalog_Namespace::Catalog::doTruncateTable (C++ function)</a>
 </li>
+      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog10dropColumnERK15TableDescriptorRK16ColumnDescriptor">Catalog_Namespace::Catalog::dropColumn (C++ function)</a>
+</li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog9dropTableEPK15TableDescriptor">Catalog_Namespace::Catalog::dropTable (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4NK17Catalog_Namespace7Catalog25dropTableFromJsonUnlockedERKNSt6stringE">Catalog_Namespace::Catalog::dropTableFromJsonUnlocked (C++ function)</a>
@@ -3878,6 +3881,8 @@
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog16setDeletedColumnEPK15TableDescriptorPK16ColumnDescriptor">Catalog_Namespace::Catalog::setDeletedColumn (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog24setDeletedColumnUnlockedEPK15TableDescriptorPK16ColumnDescriptor">Catalog_Namespace::Catalog::setDeletedColumnUnlocked (C++ function)</a>
+</li>
+      <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog12setForReloadEK7int32_t">Catalog_Namespace::Catalog::setForReload (C++ function)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1_catalog.html#_CPPv4N17Catalog_Namespace7Catalog13setTableEpochEKiKiKi">Catalog_Namespace::Catalog::setTableEpoch (C++ function)</a>
 </li>
@@ -4485,10 +4490,10 @@
 </li>
       <li><a href="api/struct/struct_chunk_metadata.html#_CPPv4N13ChunkMetadata8numBytesE">ChunkMetadata::numBytes (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_chunk_metadata.html#_CPPv4N13ChunkMetadata11numElementsE">ChunkMetadata::numElements (C++ member)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/struct/struct_chunk_metadata.html#_CPPv4N13ChunkMetadata11numElementsE">ChunkMetadata::numElements (C++ member)</a>
+</li>
       <li><a href="api/struct/struct_chunk_metadata.html#_CPPv4NK13ChunkMetadataeqERK13ChunkMetadata">ChunkMetadata::operator== (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_chunk_metadata.html#_CPPv4N13ChunkMetadata7sqlTypeE">ChunkMetadata::sqlType (C++ member)</a>
@@ -7613,10 +7618,10 @@
 </li>
       <li><a href="api/class/class_for.html#_CPPv4N3For3ForEPK5ValuePK5ValueRKNSt6stringE">For::For (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_for.html#_CPPv4NK3For4iterEv">For::iter (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_for.html#_CPPv4N3For5iter_E">For::iter_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_for.html#_CPPv4N3For3runEP24ReductionInterpreterImpl">For::run (C++ function)</a>
@@ -7742,6 +7747,8 @@
       <li><a href="api/class/class_fragmenter___namespace_1_1_abstract_fragmenter.html#_CPPv4N20Fragmenter_Namespace18AbstractFragmenterE">Fragmenter_Namespace::AbstractFragmenter (C++ class)</a>
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_abstract_fragmenter.html#_CPPv4N20Fragmenter_Namespace18AbstractFragmenter11compactRowsEPKN17Catalog_Namespace7CatalogEPK15TableDescriptorKiRKNSt6vectorI8uint64_tEEKN14Data_Namespace11MemoryLevelER9UpdelRoll">Fragmenter_Namespace::AbstractFragmenter::compactRows (C++ function)</a>
+</li>
+      <li><a href="api/class/class_fragmenter___namespace_1_1_abstract_fragmenter.html#_CPPv4N20Fragmenter_Namespace18AbstractFragmenter11dropColumnsERKNSt6vectorIiEE">Fragmenter_Namespace::AbstractFragmenter::dropColumns (C++ function)</a>
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_abstract_fragmenter.html#_CPPv4N20Fragmenter_Namespace18AbstractFragmenter19dropFragmentsToSizeEK6size_t">Fragmenter_Namespace::AbstractFragmenter::dropFragmentsToSize (C++ function)</a>
 </li>
@@ -7946,6 +7953,8 @@
       <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter19defaultInsertLevel_E">Fragmenter_Namespace::InsertOrderFragmenter::defaultInsertLevel_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter15deleteFragmentsERKNSt6vectorIiEE">Fragmenter_Namespace::InsertOrderFragmenter::deleteFragments (C++ function)</a>
+</li>
+      <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter11dropColumnsERKNSt6vectorIiEE">Fragmenter_Namespace::InsertOrderFragmenter::dropColumns (C++ function)</a>
 </li>
       <li><a href="api/class/class_fragmenter___namespace_1_1_insert_order_fragmenter.html#_CPPv4N20Fragmenter_Namespace21InsertOrderFragmenter19dropFragmentsToSizeEK6size_t">Fragmenter_Namespace::InsertOrderFragmenter::dropFragmentsToSize (C++ function)</a>
 </li>
@@ -9099,6 +9108,8 @@
 </li>
       <li><a href="api/class/class_importer___n_s_1_1_loader.html#_CPPv4N11Importer_NS6Loader18distributeToShardsERNSt6vectorI15OneShardBuffersEERNSt6vectorI6size_tEERK15OneShardBuffersK6size_tK6size_t">Importer_NS::Loader::distributeToShards (C++ function)</a>
 </li>
+      <li><a href="api/class/class_importer___n_s_1_1_loader.html#_CPPv4N11Importer_NS6Loader11dropColumnsERKNSt6vectorIiEE">Importer_NS::Loader::dropColumns (C++ function)</a>
+</li>
       <li><a href="api/class/class_importer___n_s_1_1_loader.html#_CPPv4NK11Importer_NS6Loader16get_column_descsEv">Importer_NS::Loader::get_column_descs (C++ function)</a>
 </li>
       <li><a href="api/class/class_importer___n_s_1_1_loader.html#_CPPv4N11Importer_NS6Loader23get_data_block_pointersERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE">Importer_NS::Loader::get_data_block_pointers (C++ function)</a>
@@ -9119,10 +9130,10 @@
 </li>
       <li><a href="api/class/class_importer___n_s_1_1_loader.html#_CPPv4N11Importer_NS6Loader4loadERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEEK6size_t">Importer_NS::Loader::load (C++ function)</a>
 </li>
-      <li><a href="api/class/class_importer___n_s_1_1_loader.html#_CPPv4N11Importer_NS6Loader6LoaderERN17Catalog_Namespace7CatalogEPK15TableDescriptor">Importer_NS::Loader::Loader (C++ function)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/class/class_importer___n_s_1_1_loader.html#_CPPv4N11Importer_NS6Loader6LoaderERN17Catalog_Namespace7CatalogEPK15TableDescriptor">Importer_NS::Loader::Loader (C++ function)</a>
+</li>
       <li><a href="api/class/class_importer___n_s_1_1_loader.html#_CPPv4N11Importer_NS6Loader13loader_mutex_E">Importer_NS::Loader::loader_mutex_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_importer___n_s_1_1_loader.html#_CPPv4N11Importer_NS6Loader8loadImplERKNSt6vectorINSt10unique_ptrI17TypedImportBufferEEEE6size_tb">Importer_NS::Loader::loadImpl (C++ function)</a>
@@ -11539,6 +11550,18 @@
 </li>
       <li><a href="api/class/class_parser_1_1_double_literal.html#_CPPv4NK6Parser13DoubleLiteral9to_stringEv">Parser::DoubleLiteral::to_string (C++ function)</a>
 </li>
+      <li><a href="api/class/class_parser_1_1_drop_column_stmt.html#_CPPv4N6Parser14DropColumnStmtE">Parser::DropColumnStmt (C++ class)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_drop_column_stmt.html#_CPPv4N6Parser14DropColumnStmt7columnsE">Parser::DropColumnStmt::columns (C++ member)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_drop_column_stmt.html#_CPPv4N6Parser14DropColumnStmt14DropColumnStmtEPNSt6stringEPNSt4listIPNSt6stringEEE">Parser::DropColumnStmt::DropColumnStmt (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_drop_column_stmt.html#_CPPv4N6Parser14DropColumnStmt7executeERKN17Catalog_Namespace11SessionInfoE">Parser::DropColumnStmt::execute (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_drop_column_stmt.html#_CPPv4NK6Parser14DropColumnStmt9get_tableEv">Parser::DropColumnStmt::get_table (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_drop_column_stmt.html#_CPPv4N6Parser14DropColumnStmt5tableE">Parser::DropColumnStmt::table (C++ member)</a>
+</li>
       <li><a href="api/class/class_parser_1_1_drop_d_b_stmt.html#_CPPv4N6Parser10DropDBStmtE">Parser::DropDBStmt (C++ class)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_drop_d_b_stmt.html#_CPPv4N6Parser10DropDBStmt7db_nameE">Parser::DropDBStmt::db_name (C++ member)</a>
@@ -12033,14 +12056,14 @@
 </li>
       <li><a href="api/class/class_parser_1_1_optimize_table_stmt.html#_CPPv4N6Parser17OptimizeTableStmt17OptimizeTableStmtEPNSt6stringEPNSt4listIP15NameValueAssignEE">Parser::OptimizeTableStmt::OptimizeTableStmt (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_parser_1_1_optimize_table_stmt.html#_CPPv4N6Parser17OptimizeTableStmt8options_E">Parser::OptimizeTableStmt::options_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_optimize_table_stmt.html#_CPPv4NK6Parser17OptimizeTableStmt23shouldVacuumDeletedRowsEv">Parser::OptimizeTableStmt::shouldVacuumDeletedRows (C++ function)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_optimize_table_stmt.html#_CPPv4N6Parser17OptimizeTableStmt6table_E">Parser::OptimizeTableStmt::table_ (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_parser_1_1_order_spec.html#_CPPv4N6Parser9OrderSpecE">Parser::OrderSpec (C++ class)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_order_spec.html#_CPPv4N6Parser9OrderSpec5colnoE">Parser::OrderSpec::colno (C++ member)</a>

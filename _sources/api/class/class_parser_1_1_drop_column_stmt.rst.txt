@@ -1,0 +1,9 @@
+Class Parser::DropColumnStmt
+============================
+
+.. doxygenclass:: Parser::DropColumnStmt
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
