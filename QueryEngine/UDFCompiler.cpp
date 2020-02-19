@@ -309,7 +309,7 @@ UdfCompiler::UdfCompiler(const std::string& file_name)
 void UdfCompiler::readCpuCompiledModule() {
   std::string cpu_ir_file(genCpuIrFilename(udf_file_name_.c_str()));
 
-  VLOG(1) << "UDFCompiler cpu bc file = " << cpu_ir_file << std::endl;
+  VLOG(1) << "UDFCompiler cpu bc file = " << cpu_ir_file;
 
   read_udf_cpu_module(cpu_ir_file);
 }
@@ -317,7 +317,7 @@ void UdfCompiler::readCpuCompiledModule() {
 void UdfCompiler::readGpuCompiledModule() {
   std::string gpu_ir_file(genGpuIrFilename(udf_file_name_.c_str()));
 
-  VLOG(1) << "UDFCompiler gpu bc file = " << gpu_ir_file << std::endl;
+  VLOG(1) << "UDFCompiler gpu bc file = " << gpu_ir_file;
 
   read_udf_gpu_module(gpu_ir_file);
 }
@@ -344,7 +344,7 @@ int UdfCompiler::compileForGpu() {
 
 int UdfCompiler::compileUdf() {
   if (on_search_path("clang++")) {
-    LOG(INFO) << "UDFCompiler filename to compiler: " << udf_file_name_ << std::endl;
+    LOG(INFO) << "UDFCompiler filename to compiler: " << udf_file_name_;
     if (!boost::filesystem::exists(udf_file_name_)) {
       LOG(FATAL) << "User defined function file " << udf_file_name_ << " does not exist.";
       return 1;
@@ -368,20 +368,20 @@ int UdfCompiler::compileUdf() {
         if (gpu_compile_result == 0) {
           readGpuCompiledModule();
         } else {
-          LOG(FATAL) << "Unable to compile UDF file for gpu" << std::endl;
+          LOG(FATAL) << "Unable to compile UDF file for gpu";
           return 1;
         }
 #endif
       } else {
-        LOG(FATAL) << "Unable to compile UDF file for cpu" << std::endl;
+        LOG(FATAL) << "Unable to compile UDF file for cpu";
         return 1;
       }
     } else {
-      LOG(FATAL) << "Unable to create AST file for udf compilation" << std::endl;
+      LOG(FATAL) << "Unable to create AST file for udf compilation";
       return 1;
     }
   } else {
-    LOG(FATAL) << "Unable to compile udfs due to absence of clang++" << std::endl;
+    LOG(FATAL) << "Unable to compile udfs due to absence of clang++";
     return 1;
   }
 
