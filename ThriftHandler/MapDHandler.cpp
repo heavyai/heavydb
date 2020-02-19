@@ -39,6 +39,7 @@
 #include "QueryEngine/RelAlgExecutor.h"
 
 #include "Catalog/Catalog.h"
+#include "Catalog/DdlCommandExecutor.h"
 #include "DataMgr/ForeignStorage/ArrowCsvForeignStorage.h"
 #include "DataMgr/ForeignStorage/DummyForeignStorage.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
@@ -5062,9 +5063,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
             parse_to_ra(query_state_proxy, temp_query_str, {}, false, mapd_parameters_)
                 .first.plan_result;
       } else if (pw.isCalciteDdl()) {
-        // TODO: implement execution logic for FSI DDL commands
-        LOG(INFO) << "Calcite response for DDL command:\n" << query_ra;
-        throw std::runtime_error{"FSI DDL commands are currently not supported."};
+        DdlCommandExecutor{query_ra, session_ptr}.execute(_return);
+        return;
       }
 
       const auto filter_push_down_requests =

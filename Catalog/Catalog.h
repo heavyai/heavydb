@@ -43,6 +43,7 @@
 #include "ColumnDescriptor.h"
 #include "DashboardDescriptor.h"
 #include "DictDescriptor.h"
+#include "ForeignServer.h"
 #include "LinkDescriptor.h"
 #include "SessionInfo.h"
 #include "SysCatalog.h"
@@ -240,6 +241,47 @@ class Catalog final {
   std::string getColumnDictDirectory(const ColumnDescriptor* cd) const;
   std::string dumpSchema(const TableDescriptor* td) const;
 
+  /**
+   * Creates a new foreign server DB object.
+   *
+   * @param foreign_server - unique pointer to struct containing foreign server details
+   * @param if_not_exists - flag indicating whether or not an attempt to create a new
+   * foreign server should occur if a server with the same name already exists. An
+   * exception is thrown if this flag is set to "false" and an attempt is made to create
+   * a pre-existing foreign server
+   */
+  void createForeignServer(std::unique_ptr<foreign_storage::ForeignServer> foreign_server,
+                           bool if_not_exists);
+
+  /**
+   * Gets a pointer to a struct containing foreign server details.
+   *
+   * @param server_name - Name of foreign server whose details will be fetched
+   * @param skip_cache - flag indicating whether or not to skip in-memory cache of foreign
+   * server struct when attempting to fetch foreign server details. This flag is mainly
+   * used for testing
+   * @return pointer to a struct containing foreign server details. nullptr is returned if
+   * no foreign server exists with the given name
+   */
+  foreign_storage::ForeignServer* getForeignServer(const std::string& server_name,
+                                                   const bool skip_cache = false);
+
+  /**
+   * Drops/deletes a foreign server DB object.
+   *
+   * @param server_name - Name of foreign server that will be deleted
+   * @param if_exists - flag indicating whether or not an attempt to delete a foreign
+   * server should occur if a server with the same name does not exists. An exception is
+   * thrown if this flag is set to "false" and an attempt is made to delete a nonexistent
+   * foreign server
+   */
+  void dropForeignServer(const std::string& server_name, bool if_exists);
+
+  /**
+   * Creates default local file servers (if they don't already exist).
+   */
+  void createDefaultServersIfNotExists();
+
  protected:
   using TableDescriptorMap = std::map<std::string, TableDescriptor*>;
   using TableDescriptorMapById = std::map<int, TableDescriptor*>;
@@ -255,6 +297,8 @@ class Catalog final {
   using LinkDescriptorMapById = std::map<int, LinkDescriptor*>;
   using DeletedColumnPerTableMap =
       std::unordered_map<const TableDescriptor*, const ColumnDescriptor*>;
+  using ForeignServerMap =
+      std::map<std::string, std::unique_ptr<foreign_storage::ForeignServer>>;
 
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();
@@ -271,6 +315,8 @@ class Catalog final {
   void updatePageSize();
   void updateDeletedColumnIndicator();
   void updateFrontendViewsToDashboards();
+  void createFsiSchemas();
+  void dropFsiSchemas();
   void recordOwnershipOfObjectsInObjectPermissions();
   void checkDateInDaysColumnMigration();
   void createDashboardSystemRoles();
@@ -330,6 +376,8 @@ class Catalog final {
   DashboardDescriptorMap dashboardDescriptorMap_;
   LinkDescriptorMap linkDescriptorMap_;
   LinkDescriptorMapById linkDescriptorMapById_;
+  ForeignServerMap foreignServerMap_;
+
   SqliteConnector sqliteConnector_;
   DBMetadata currentDB_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
@@ -360,6 +408,15 @@ class Catalog final {
   void renameTableDirectories(const std::string& temp_data_dir,
                               const std::vector<std::string>& target_paths,
                               const std::string& name_prefix) const;
+  void buildForeignServerMap();
+
+  /**
+   * Same as createForeignServer() but without acquiring locks. This should only be called
+   * from within a function/code block that already acquires appropriate locks.
+   */
+  void createForeignServerNoLocks(
+      std::unique_ptr<foreign_storage::ForeignServer> foreign_server,
+      bool if_not_exists);
 
  public:
   mutable std::mutex sqliteMutex_;

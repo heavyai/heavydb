@@ -92,18 +92,6 @@ mapd_shared_mutex g_thrift_mutex;
 TThreadedServer* g_thrift_http_server{nullptr};
 TThreadedServer* g_thrift_buf_server{nullptr};
 
-TableGenerations table_generations_from_thrift(
-    const std::vector<TTableGeneration>& thrift_table_generations) {
-  TableGenerations table_generations;
-  for (const auto& thrift_table_generation : thrift_table_generations) {
-    table_generations.setGeneration(
-        thrift_table_generation.table_id,
-        TableGeneration{static_cast<size_t>(thrift_table_generation.tuple_count),
-                        static_cast<size_t>(thrift_table_generation.start_rowid)});
-  }
-  return table_generations;
-}
-
 mapd::shared_ptr<MapDHandler> g_warmup_handler =
     0;  // global "g_warmup_handler" needed to avoid circular dependency
         // between "MapDHandler" & function "run_warmup_queries"
@@ -595,10 +583,12 @@ void MapDProgramOptions::fillOptions() {
                               ->default_value(g_enable_experimental_string_functions)
                               ->implicit_value(true),
                           "Enable experimental string functions.");
+#ifdef ENABLE_FSI
   help_desc.add_options()(
       "enable-fsi",
       po::value<bool>(&g_enable_fsi)->default_value(g_enable_fsi)->implicit_value(true),
       "Enable foreign storage interface.");
+#endif  // ENABLE_FSI
   help_desc.add_options()(
       "enable-interoperability",
       po::value<bool>(&g_enable_interop)

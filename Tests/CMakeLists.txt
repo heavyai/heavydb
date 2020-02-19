@@ -15,6 +15,8 @@ add_executable(StringFunctionsTest StringFunctionsTest.cpp)
 add_executable(PlanTest PlanTest.cpp)
 add_executable(ProfileTest ProfileTest.cpp)
 add_executable(ExperimentalTest ExperimentalTest.cpp)
+add_executable(ForeignServerDdlTest ForeignServerDdlTest.cpp)
+add_executable(CatalogMigrationTest CatalogMigrationTest.cpp)
 
 if(ENABLE_CUDA)
   set(MAPD_DEFINITIONS -DHAVE_CUDA)
@@ -126,6 +128,10 @@ target_link_libraries(DateTimeUtilsTest gtest Shared ${LLVM_LINKER_FLAGS})
 target_link_libraries(CalciteOptimizeTest gtest ${EXECUTE_TEST_LIBS} ${Boost_LIBRARIES})
 target_link_libraries(JoinHashTableTest gtest ${EXECUTE_TEST_LIBS} CsvImport QueryRunner)
 target_link_libraries(CommandLineTest gtest Shared ${Boost_LIBRARIES})
+target_link_libraries(ForeignServerDdlTest gtest thrift_handler ${MAPD_LIBRARIES} ${LLVM_LINKER_FLAGS}
+    ${CURSES_LIBRARIES})
+target_link_libraries(CatalogMigrationTest gtest ${MAPD_LIBRARIES} ${RdKafka_LIBRARIES} ${MAPD_LIBRARIES}
+    ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS} CsvImport QueryRunner)
@@ -171,6 +177,9 @@ add_test(UpdateMetadataTest UpdateMetadataTest ${TEST_ARGS})
 add_test(CalciteOptimizeTest CalciteOptimizeTest ${TEST_ARGS})
 add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
 add_test(CommandLineTest CommandLineTest ${TEST_ARGS})
+add_test(ForeignServerDdlTest ForeignServerDdlTest ${TEST_ARGS})
+add_test(CatalogMigrationTest CatalogMigrationTest ${TEST_ARGS})
+
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_test(UdfTest UdfTest ${TEST_ARGS})
 endif()
@@ -220,6 +229,8 @@ set(TEST_PROGRAMS
   JoinHashTableTest
   StringFunctionsTest
   CommandLineTest
+  ForeignServerDdlTest
+  CatalogMigrationTest
 )
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")

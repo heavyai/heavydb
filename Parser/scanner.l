@@ -176,7 +176,11 @@ WORK          TOK(WORK)
 "CLUSTER"	{ yylval.stringval = new std::string(yytext); TOK(CLUSTER) }
 
 	/* names */
-[A-Za-z_][A-Za-z0-9\$_]*	{ yylval.stringval = new std::string(yytext); TOK(NAME) }
+[A-Za-z_][A-Za-z0-9\$_]*	{
+  yylval.stringval = new std::string(yytext);
+  dynamic_cast<SQLLexer*>(this)->parsed_name_tokens_.emplace_back(yylval.stringval);
+  TOK(NAME)
+}
 
   /* names with dashes */
 [A-Za-z_][A-Za-z0-9\$_\-]*	{ yylval.stringval = new std::string(yytext); TOK(DASHEDNAME) }
