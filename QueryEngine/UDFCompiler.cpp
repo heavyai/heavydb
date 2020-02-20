@@ -330,9 +330,7 @@ void UdfCompiler::readCompiledModules() {
 int UdfCompiler::compileForGpu() {
   int gpu_compile_result = 1;
 
-  if (on_search_path("nvcc")) {
-    gpu_compile_result = compileToGpuByteCode(udf_file_name_.c_str(), false);
-  }
+  gpu_compile_result = compileToGpuByteCode(udf_file_name_.c_str(), false);
 
   // If gpu compilation fails but cpu compilation has succeeded, try compiling
   // for the cpu with the assumption the user does not have the CUDA toolkit
