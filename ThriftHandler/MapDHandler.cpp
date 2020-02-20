@@ -958,6 +958,9 @@ void MapDHandler::sql_execute(TQueryResult& _return,
     });
   }
   timer.stop(&_return.debug);
+  if (g_enable_debug_timer) {
+    _return.__isset.debug = true;
+  }
   stdlog.appendNameValuePairs("execution_time_ms",
                               _return.execution_time_ms,
                               "total_time_ms",  // BE-3420 - Redundant with duration field
