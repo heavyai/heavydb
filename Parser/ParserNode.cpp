@@ -2206,10 +2206,6 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
     ColumnDescriptor cd;
     cd.columnName = *coldef->get_column_name();
     const auto uc_col_name = boost::to_upper_copy<std::string>(cd.columnName);
-    if (reserved_keywords.find(uc_col_name) != reserved_keywords.end()) {
-      throw std::runtime_error("Cannot create column with reserved keyword '" +
-                               cd.columnName + "'");
-    }
     const auto it_ok = uc_col_names.insert(uc_col_name);
     if (!it_ok.second) {
       throw std::runtime_error("Column '" + cd.columnName + "' defined more than once");
@@ -3291,11 +3287,6 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
     if (catalog.getMetadataForColumn(td->tableId, new_column_name) != nullptr) {
       throw std::runtime_error("Column " + new_column_name + " already exists.");
     }
-    if (reserved_keywords.find(boost::to_upper_copy<std::string>(new_column_name)) !=
-        reserved_keywords.end()) {
-      throw std::runtime_error("Cannot add column with reserved keyword '" +
-                               new_column_name + "'");
-    }
   }
 }
 
@@ -3508,11 +3499,6 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   if (catalog.getMetadataForColumn(td->tableId, *new_column_name) != nullptr) {
     throw std::runtime_error("Column " + *new_column_name + " already exists.");
-  }
-  if (reserved_keywords.find(boost::to_upper_copy<std::string>(*new_column_name)) !=
-      reserved_keywords.end()) {
-    throw std::runtime_error("Cannot create column with reserved keyword '" +
-                             *new_column_name + "'");
   }
   catalog.renameColumn(td, cd, *new_column_name);
 }

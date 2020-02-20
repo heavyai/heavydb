@@ -22,11 +22,15 @@
     lexer.switch_streams(&ss,0);                                                                                        \
     yyparse(parseTrees);                                                                                                \
     lastParsed = lexer.YYText();                                                                                        \
+    if (!errors_.empty()) {                                                                                             \
+      throw std::runtime_error(errors_[0]);                                                                             \
+    }                                                                                                                   \
     return yynerrs;                                                                                                     \
   }                                                                                                                     \
  private:                                                                                                               \
   SQLLexer lexer;                                                                                                       \
-  std::mutex mutex_;
+  std::mutex mutex_;                                                                                                    \
+  std::vector<std::string> errors_;
 %define LEX_BODY {return lexer.yylex();}
 %define ERROR_BODY {} /*{ std::cerr << "Syntax error on line " << lexer.lineno() << ". Last word parsed: " << lexer.YYText() << std::endl; } */
 
@@ -45,6 +49,7 @@
 #include <boost/regex.hpp>
 #include <FlexLexer.h>
 #include "ParserNode.h"
+#include "ReservedKeywords.h"
 
 using namespace Parser;
 #define YY_Parser_PARSE_PARAM std::list<std::unique_ptr<Stmt>>& parseTrees
@@ -1270,7 +1275,16 @@ geometry_type:	GEOMETRY '(' geo_type ')'
 
 	/* the various things you can name */
 
-column:		NAME { $<stringval>$ = $<stringval>1; }
+column:
+	NAME
+	{
+		const auto uc_col_name = boost::to_upper_copy<std::string>(*$<stringval>1);
+		if (reserved_keywords.find(uc_col_name) != reserved_keywords.end()) {
+			errors_.push_back("Cannot use a reserved keyword as column name: " + *$<stringval>1);
+		}
+		$<stringval>$ = $<stringval>1; 
+	}
+    | 	QUOTED_IDENTIFIER { $<stringval>$ = $<stringval>1; }
 	;
 
 /*
