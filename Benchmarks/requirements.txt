@@ -1,4 +1,4 @@
 numpy>=1.15
-pymapd>=0.18.0 
+pymapd>=0.20.0 
 pandas>=0.23
 nvidia-ml-py3>=7.352.0
