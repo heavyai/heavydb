@@ -19,8 +19,8 @@
 #include <arrow/api.h>
 #include <arrow/csv/reader.h>
 #include <arrow/io/file.h>
-#include <arrow/util/task_group.h>
-#include <arrow/util/thread_pool.h>
+#include <tbb/parallel_for.h>
+#include <tbb/task_group.h>
 #include <array>
 #include <future>
 
@@ -59,6 +59,15 @@ class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
     int64_t sz;
     std::vector<std::shared_ptr<arrow::ArrayData>> chunks;
   };
+
+  void createDictionaryEncodedColumn(StringDictionary* dict,
+                                     const ColumnDescriptor& c,
+                                     std::vector<ArrowFragment>& col,
+                                     arrow::ChunkedArray* arr_col_chunked_array,
+                                     tbb::task_group& tg,
+                                     const std::vector<std::pair<int, int>>& fragments,
+                                     ChunkKey key,
+                                     Data_Namespace::AbstractBufferMgr* mgr);
 
   std::map<std::array<int, 3>, std::vector<ArrowFragment>> m_columns;
 };
@@ -124,7 +133,22 @@ void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
           varlen_offset += data[(sz / sizeof(uint32_t)) - 1];
         }
       } else {
-        std::memcpy(dest, bp->data(), sz = bp->size());
+        auto fixed_type = dynamic_cast<arrow::FixedWidthType*>(array_data->type.get());
+        if (fixed_type) {
+          // We use array slices to keep dictionary indices buffer, that way can not use
+          // row buffers, as they don't keep information about offsets.
+          // This branch allowes to use slices to all fixed length types
+          std::memcpy(dest,
+                      bp->data() + array_data->offset * (fixed_type->bit_width() / 8),
+                      sz = array_data->length * (fixed_type->bit_width() / 8));
+        } else {
+          // TODO: we can not use array slices for variable lenth arrays,
+          // as it's a bit tricky to calculate there length.
+          // One way do do that is use smth like offset[end] - offset[begin]
+          // However arrow doesn't return slices in there read csv method, so
+          // we don't need to pay much attention to this now.
+          std::memcpy(dest, bp->data(), sz = bp->size());
+        }
       }
     } else {
       // TODO: nullify?
@@ -211,6 +235,100 @@ void ArrowCsvForeignStorage::prepareTable(const int db_id,
   td.hasDeletedCol = false;
 }
 
+void ArrowCsvForeignStorage::createDictionaryEncodedColumn(
+    StringDictionary* dict,
+    const ColumnDescriptor& c,
+    std::vector<ArrowFragment>& col,
+    arrow::ChunkedArray* arr_col_chunked_array,
+    tbb::task_group& tg,
+    const std::vector<std::pair<int, int>>& fragments,
+    ChunkKey key,
+    Data_Namespace::AbstractBufferMgr* mgr) {
+  tg.run([dict, &c, &col, arr_col_chunked_array, &tg, &fragments, k = key, mgr]() {
+    auto key = k;
+    auto full_time = measure<>::execution([&]() {
+      // calculate offsets for every fragment in bulk
+      size_t bulk_size = 0;
+      std::vector<int> offsets(fragments.size() + 1);
+      for (size_t f = 0; f < fragments.size(); f++) {
+        offsets[f] = bulk_size;
+        for (int i = fragments[f].first; i < fragments[f].second; i++) {
+          auto stringArray = std::static_pointer_cast<arrow::StringArray>(arr_col_chunked_array->chunk(i));
+          bulk_size += stringArray->length();
+        }
+      }
+      offsets[fragments.size()] = bulk_size;
+      std::vector<std::string_view> bulk(bulk_size);
+
+      tbb::parallel_for(
+          tbb::blocked_range<size_t>(0, fragments.size()),
+          [&bulk, &fragments, arr_col_chunked_array, &offsets](const tbb::blocked_range<size_t>& r) {
+            for (auto f = r.begin(); f != r.end(); ++f) {
+              auto begin = fragments[f].first;
+              auto end = fragments[f].second;
+              auto offset = offsets[f];
+
+              size_t current_ind = 0;
+              for (int i = begin; i < end; i++) {
+                auto stringArray =
+                    std::static_pointer_cast<arrow::StringArray>(arr_col_chunked_array->chunk(i));
+                for (int i = 0; i < stringArray->length(); i++) {
+                  auto view = stringArray->GetView(i);
+                  bulk[offset + current_ind] = std::string_view(view.data(), view.length());
+                  current_ind++;
+                }
+              }
+            }
+          });
+
+      std::shared_ptr<arrow::Buffer> indices_buf;
+      ARROW_THROW_NOT_OK(
+          arrow::AllocateBuffer(bulk_size * sizeof(int32_t), &indices_buf));
+      auto raw_data = reinterpret_cast<int*>(indices_buf->mutable_data());
+      auto time = measure<>::execution([&]() { dict->getOrAddBulk(bulk, raw_data); });
+
+      VLOG(1) << "FSI dictionary for column created in: " << time
+              << "ms, strings count: " << bulk_size
+              << ", unique_count: " << dict->storageEntryCount();
+
+      for (size_t f = 0; f < fragments.size(); f++) {
+        auto begin = fragments[f].first;
+        auto end = fragments[f].second;
+        auto offset = offsets[f];
+        tg.run([k = key, f, &col, begin, end, mgr, &c, arr_col_chunked_array, offset, indices_buf]() {
+          auto key = k;
+          key[3] = f;
+          auto& frag = col[f];
+          frag.chunks.resize(end - begin);
+          auto b = mgr->createBuffer(key);
+          b->sql_type = c.columnType;
+          b->encoder.reset(Encoder::Create(b, c.columnType));
+          b->has_encoder = true;
+          size_t current_ind = 0;
+          for (int i = begin; i < end; i++) {
+            auto stringArray =
+                std::static_pointer_cast<arrow::StringArray>(arr_col_chunked_array->chunk(i));
+            auto indexArray = std::make_shared<arrow::Int32Array>(
+                stringArray->length(), indices_buf, nullptr, -1, offset + current_ind);
+            frag.chunks[i - begin] = indexArray->data();
+            frag.sz += stringArray->length();
+            current_ind += stringArray->length();
+
+            auto len = frag.chunks[i - begin]->length;
+            auto data = frag.chunks[i - begin]->GetValues<int32_t>(1);
+            b->encoder->updateStats((const int8_t*)data, len);
+          }
+
+          b->setSize(frag.sz * b->sql_type.get_size());
+          b->encoder->setNumElems(frag.sz);
+        });
+      }
+    });
+    VLOG(1) << "FSI: createDictionaryEncodedColumn time: " << full_time << "ms"
+            << std::endl;
+  });
+}
+
 void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
                                            std::pair<int, int> table_key,
                                            const std::string& info,
@@ -285,8 +403,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   ChunkKey key{table_key.first, table_key.second, 0, 0};
   std::array<int, 3> col_key{table_key.first, table_key.second, 0};
 
-  auto tp = arrow::internal::GetCpuThreadPool();
-  auto tg = arrow::internal::TaskGroup::MakeThreaded(tp);
+  tbb::task_group tg;
 
   for (auto& c : cols) {
     if (c.isSystemCol) {
@@ -305,44 +422,20 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
     col.resize(fragments.size());
     auto arr_col_chunked_array = table.column(cln++).get();
 
-    StringDictionary* dict{nullptr};
     if (c.columnType.is_dict_encoded_string()) {
       auto dictDesc = const_cast<DictDescriptor*>(
           catalog->getMetadataForDict(c.columnType.get_comp_param()));
-      dict = dictDesc->stringDict.get();
-    }
-    auto empty = arr_col_chunked_array->null_count() == arr_col_chunked_array->length();
-
-    // fill each fragment
-    for (size_t f = 0; f < fragments.size(); f++) {
-      key[3] = f;
-      auto& frag = col[f];
-      int64_t varlen = 0;
-      // for each arrow chunk
-      for (int i = fragments[f].first, e = fragments[f].second; i < e; i++) {
-        CHECK_LT(i, arr_col_chunked_array->length());
-        if (c.columnType.is_dict_encoded_string()) {
-          arrow::Int32Builder indexBuilder;
-          auto stringArray = std::static_pointer_cast<arrow::StringArray>(
-              arr_col_chunked_array->chunk(i));
-          indexBuilder.Reserve(stringArray->length());
-          for (int i = 0; i < stringArray->length(); i++) {
-            // TODO: use arrow dictionary encoding
-            if (stringArray->IsNull(i) || empty ||
-                stringArray->null_count() == stringArray->length()) {
-              indexBuilder.Append(inline_int_null_value<int32_t>());
-            } else {
-              CHECK(dict);
-              auto curStr = stringArray->GetString(i);
-              indexBuilder.Append(dict->getOrAdd(curStr));
-            }
-          }
-          std::shared_ptr<arrow::Array> indexArray;
-          ARROW_THROW_NOT_OK(indexBuilder.Finish(&indexArray));
-          frag.chunks.emplace_back(indexArray->data());
-          frag.sz += stringArray->length();
-        } else {
-          frag.chunks.emplace_back(arr_col_chunked_array->chunk(i)->data());
+      StringDictionary* dict = dictDesc->stringDict.get();
+      createDictionaryEncodedColumn(dict, c, col, arr_col_chunked_array, tg, fragments, key, mgr);
+    } else {
+      auto empty = arr_col_chunked_array->null_count() == arr_col_chunked_array->length();
+      for (size_t f = 0; f < fragments.size(); f++) {
+        key[3] = f;
+        auto& frag = col[f];
+        frag.chunks.resize(fragments[f].second - fragments[f].first);
+        int64_t varlen = 0;
+        for (int i = fragments[f].first, e = fragments[f].second; i < e; i++) {
+          frag.chunks[i - fragments[f].first] = arr_col_chunked_array->chunk(i)->data();
           frag.sz += arr_col_chunked_array->chunk(i)->length();
           auto& buffers = arr_col_chunked_array->chunk(i)->data()->buffers;
           if (!empty) {
@@ -360,49 +453,49 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
             }
           }
         }
-      }
 
-      // create buffer descriptotrs
-      if (ctype == kTEXT && !c.columnType.is_dict_encoded_string()) {
-        auto k = key;
-        k.push_back(1);
-        {
-          auto b = mgr->createBuffer(k);
-          b->setSize(varlen);
+        // create buffer descriptotrs
+        if (ctype == kTEXT) {
+          auto k = key;
+          k.push_back(1);
+          {
+            auto b = mgr->createBuffer(k);
+            b->setSize(varlen);
+            b->encoder.reset(Encoder::Create(b, c.columnType));
+            b->has_encoder = true;
+            b->sql_type = c.columnType;
+          }
+          k[4] = 2;
+          {
+            auto b = mgr->createBuffer(k);
+            b->sql_type = SQLTypeInfo(kINT, false);
+            b->setSize(frag.sz * b->sql_type.get_size());
+          }
+        } else {
+          auto b = mgr->createBuffer(key);
+          b->sql_type = c.columnType;
+          b->setSize(frag.sz * b->sql_type.get_size());
           b->encoder.reset(Encoder::Create(b, c.columnType));
           b->has_encoder = true;
-          b->sql_type = c.columnType;
+          if (!empty) {
+            // asynchronously update stats for incoming data
+            tg.run([b, fr = &frag]() {
+              for (auto chunk : fr->chunks) {
+                auto len = chunk->length;
+                auto data = chunk->buffers[1]->data();
+                b->encoder->updateStats((const int8_t*)data, len);
+              }
+            });
+          }
+          b->encoder->setNumElems(frag.sz);
         }
-        k[4] = 2;
-        {
-          auto b = mgr->createBuffer(k);
-          b->sql_type = SQLTypeInfo(kINT, false);
-          b->setSize(frag.sz * b->sql_type.get_size());
-        }
-      } else {
-        auto b = mgr->createBuffer(key);
-        b->sql_type = c.columnType;
-        b->setSize(frag.sz * b->sql_type.get_size());
-        b->encoder.reset(Encoder::Create(b, c.columnType));
-        b->has_encoder = true;
-        if (!empty) {
-          // asynchronously update stats for incoming data
-          tg->Append([b, fr = &frag]() {
-            for (auto chunk : fr->chunks) {
-              auto len = chunk->length;
-              auto data = chunk->buffers[1]->data();
-              b->encoder->updateStats((const int8_t*)data, len);
-            }
-            return arrow::Status::OK();
-          });
-        }
-        b->encoder->setNumElems(frag.sz);
       }
     }
   }  // each col and fragment
 
   // wait untill all stats have been updated
-  ARROW_THROW_NOT_OK(tg->Finish());
+  tg.wait();
+
   VLOG(1) << "Created CSV backed temporary table with " << num_cols << " columns, "
           << arr_frags << " chunks, and " << fragments.size() << " fragments.";
 }

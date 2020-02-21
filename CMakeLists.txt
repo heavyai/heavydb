@@ -109,6 +109,8 @@ if( ENABLE_CALCITE_DELETE_PATH )
   add_definitions("-DCALCITE_DELETE_ENABLED")
 endif()
 
+find_package(TBB REQUIRED tbb tbbmalloc tbbmalloc_proxy)
+
 option(ENABLE_CUDA "Enable CUDA support" ON)
 if(ENABLE_CUDA)
   find_package(CUDA REQUIRED)
