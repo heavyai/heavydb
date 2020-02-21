@@ -1,0 +1,9 @@
+Struct GeoPolygon
+=================
+
+.. doxygenstruct:: GeoPolygon
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

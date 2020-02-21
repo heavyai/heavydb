@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.2.0dev 18fcd93
+                5.2.0dev efe1d86
               </div>
             
           
@@ -1052,17 +1052,21 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_function_1_1_named_arg.html">Struct Function::NamedArg</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_generic_key_handler.html">Struct GenericKeyHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_converter_factory.html">Struct GeoConverterFactory</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_line_string.html">Struct GeoLineString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_line_string_target_value.html">Struct GeoLineStringTargetValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_line_string_target_value_ptr.html">Struct GeoLineStringTargetValuePtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_linestring_value_converter.html">Struct GeoLinestringValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_multi_poly_target_value.html">Struct GeoMultiPolyTargetValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_multi_poly_target_value_ptr.html">Struct GeoMultiPolyTargetValuePtr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_multi_polygon.html">Struct GeoMultiPolygon</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_multi_polygon_value_converter.html">Struct GeoMultiPolygonValueConverter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_point.html">Struct GeoPoint</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_point_target_value.html">Struct GeoPointTargetValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_point_target_value_ptr.html">Struct GeoPointTargetValuePtr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_point_value_converter.html">Struct GeoPointValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_poly_target_value.html">Struct GeoPolyTargetValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_poly_target_value_ptr.html">Struct GeoPolyTargetValuePtr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_polygon.html">Struct GeoPolygon</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_polygon_value_converter.html">Struct GeoPolygonValueConverter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_return_type_traits.html">Struct GeoReturnTypeTraits</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_geo_return_type_traits_3_01_result_set_1_1_geo_return_type_1_1_geo_target_value_00_01_g_e_o___s_o_u_r_c_e___t_y_p_e_01_4.html">Struct GeoReturnTypeTraits&lt; ResultSet::GeoReturnType::GeoTargetValue, GEO_SOURCE_TYPE &gt;</a></li>
@@ -8247,35 +8251,25 @@
 </li>
       <li><a href="api/class/class_geo__namespace_1_1_geo_line_string.html#_CPPv4N13Geo_namespace13GeoLineStringE">Geo_namespace::GeoLineString (C++ class)</a>
 </li>
-      <li><a href="api/class/class_geo__namespace_1_1_geo_line_string.html#_CPPv4N13Geo_namespace13GeoLineString13GeoLineStringEP11OGRGeometryKb">Geo_namespace::GeoLineString::GeoLineString (C++ function)</a>, <a href="api/class/class_geo__namespace_1_1_geo_line_string.html#_CPPv4N13Geo_namespace13GeoLineString13GeoLineStringERKNSt6stringE">[1]</a>, <a href="api/class/class_geo__namespace_1_1_geo_line_string.html#_CPPv4N13Geo_namespace13GeoLineString13GeoLineStringERKNSt6vectorIdEE">[2]</a>
-</li>
-      <li><a href="api/class/class_geo__namespace_1_1_geo_line_string.html#_CPPv4NK13Geo_namespace13GeoLineString10getColumnsERNSt6vectorIdEERNSt6vectorIdEE">Geo_namespace::GeoLineString::getColumns (C++ function)</a>
+      <li><a href="api/class/class_geo__namespace_1_1_geo_line_string.html#_CPPv4N13Geo_namespace13GeoLineString13GeoLineStringEP11OGRGeometryKb">Geo_namespace::GeoLineString::GeoLineString (C++ function)</a>
 </li>
       <li><a href="api/class/class_geo__namespace_1_1_geo_line_string.html#_CPPv4NK13Geo_namespace13GeoLineString7getTypeEv">Geo_namespace::GeoLineString::getType (C++ function)</a>
 </li>
       <li><a href="api/class/class_geo__namespace_1_1_geo_multi_polygon.html#_CPPv4N13Geo_namespace15GeoMultiPolygonE">Geo_namespace::GeoMultiPolygon (C++ class)</a>
 </li>
-      <li><a href="api/class/class_geo__namespace_1_1_geo_multi_polygon.html#_CPPv4N13Geo_namespace15GeoMultiPolygon15GeoMultiPolygonEP11OGRGeometryKb">Geo_namespace::GeoMultiPolygon::GeoMultiPolygon (C++ function)</a>, <a href="api/class/class_geo__namespace_1_1_geo_multi_polygon.html#_CPPv4N13Geo_namespace15GeoMultiPolygon15GeoMultiPolygonERKNSt6stringE">[1]</a>, <a href="api/class/class_geo__namespace_1_1_geo_multi_polygon.html#_CPPv4N13Geo_namespace15GeoMultiPolygon15GeoMultiPolygonERKNSt6vectorIdEERKNSt6vectorI7int32_tEERKNSt6vectorI7int32_tEE">[2]</a>
-</li>
-      <li><a href="api/class/class_geo__namespace_1_1_geo_multi_polygon.html#_CPPv4NK13Geo_namespace15GeoMultiPolygon10getColumnsERNSt6vectorIdEERNSt6vectorI7int32_tEERNSt6vectorI7int32_tEERNSt6vectorIdEE">Geo_namespace::GeoMultiPolygon::getColumns (C++ function)</a>
+      <li><a href="api/class/class_geo__namespace_1_1_geo_multi_polygon.html#_CPPv4N13Geo_namespace15GeoMultiPolygon15GeoMultiPolygonEP11OGRGeometryKb">Geo_namespace::GeoMultiPolygon::GeoMultiPolygon (C++ function)</a>
 </li>
       <li><a href="api/class/class_geo__namespace_1_1_geo_multi_polygon.html#_CPPv4NK13Geo_namespace15GeoMultiPolygon7getTypeEv">Geo_namespace::GeoMultiPolygon::getType (C++ function)</a>
 </li>
       <li><a href="api/class/class_geo__namespace_1_1_geo_point.html#_CPPv4N13Geo_namespace8GeoPointE">Geo_namespace::GeoPoint (C++ class)</a>
 </li>
-      <li><a href="api/class/class_geo__namespace_1_1_geo_point.html#_CPPv4N13Geo_namespace8GeoPoint8GeoPointEP11OGRGeometryKb">Geo_namespace::GeoPoint::GeoPoint (C++ function)</a>, <a href="api/class/class_geo__namespace_1_1_geo_point.html#_CPPv4N13Geo_namespace8GeoPoint8GeoPointERKNSt6stringE">[1]</a>, <a href="api/class/class_geo__namespace_1_1_geo_point.html#_CPPv4N13Geo_namespace8GeoPoint8GeoPointERKNSt6vectorIdEE">[2]</a>
-</li>
-      <li><a href="api/class/class_geo__namespace_1_1_geo_point.html#_CPPv4NK13Geo_namespace8GeoPoint10getColumnsERNSt6vectorIdEE">Geo_namespace::GeoPoint::getColumns (C++ function)</a>
+      <li><a href="api/class/class_geo__namespace_1_1_geo_point.html#_CPPv4N13Geo_namespace8GeoPoint8GeoPointEP11OGRGeometryKb">Geo_namespace::GeoPoint::GeoPoint (C++ function)</a>
 </li>
       <li><a href="api/class/class_geo__namespace_1_1_geo_point.html#_CPPv4NK13Geo_namespace8GeoPoint7getTypeEv">Geo_namespace::GeoPoint::getType (C++ function)</a>
 </li>
       <li><a href="api/class/class_geo__namespace_1_1_geo_polygon.html#_CPPv4N13Geo_namespace10GeoPolygonE">Geo_namespace::GeoPolygon (C++ class)</a>
 </li>
-      <li><a href="api/class/class_geo__namespace_1_1_geo_polygon.html#_CPPv4N13Geo_namespace10GeoPolygon10GeoPolygonEP11OGRGeometryKb">Geo_namespace::GeoPolygon::GeoPolygon (C++ function)</a>, <a href="api/class/class_geo__namespace_1_1_geo_polygon.html#_CPPv4N13Geo_namespace10GeoPolygon10GeoPolygonERKNSt6stringE">[1]</a>, <a href="api/class/class_geo__namespace_1_1_geo_polygon.html#_CPPv4N13Geo_namespace10GeoPolygon10GeoPolygonERKNSt6vectorIdEERKNSt6vectorI7int32_tEE">[2]</a>
-</li>
-      <li><a href="api/class/class_geo__namespace_1_1_geo_polygon.html#_CPPv4NK13Geo_namespace10GeoPolygon10getColumnsERNSt6vectorIdEERNSt6vectorI7int32_tEERNSt6vectorIdEE">Geo_namespace::GeoPolygon::getColumns (C++ function)</a>
-</li>
-      <li><a href="api/class/class_geo__namespace_1_1_geo_polygon.html#_CPPv4NK13Geo_namespace10GeoPolygon19getNumInteriorRingsEv">Geo_namespace::GeoPolygon::getNumInteriorRings (C++ function)</a>
+      <li><a href="api/class/class_geo__namespace_1_1_geo_polygon.html#_CPPv4N13Geo_namespace10GeoPolygon10GeoPolygonEP11OGRGeometryKb">Geo_namespace::GeoPolygon::GeoPolygon (C++ function)</a>
 </li>
       <li><a href="api/class/class_geo__namespace_1_1_geo_polygon.html#_CPPv4NK13Geo_namespace10GeoPolygon7getTypeEv">Geo_namespace::GeoPolygon::getType (C++ function)</a>
 </li>
@@ -8305,6 +8299,22 @@
 </li>
       <li><a href="api/class/class_geo_expr_feature.html#_CPPv4NK14GeoExprFeature24isPreflightCountRequiredEv">GeoExprFeature::isPreflightCountRequired (C++ function)</a>
 </li>
+      <li><a href="api/struct/struct_geo_line_string.html#_CPPv413GeoLineString">GeoLineString (C++ class)</a>
+</li>
+      <li><a href="api/struct/struct_geo_line_string.html#_CPPv4N13GeoLineString11compressionE">GeoLineString::compression (C++ member)</a>
+</li>
+      <li><a href="api/class/class_geo__namespace_1_1_geo_line_string.html#_CPPv4N13GeoLineString13GeoLineStringERKNSt6stringE">GeoLineString::GeoLineString (C++ function)</a>, <a href="api/class/class_geo__namespace_1_1_geo_line_string.html#_CPPv4N13GeoLineString13GeoLineStringERKNSt6vectorIdEE">[1]</a>
+</li>
+      <li><a href="api/class/class_geo__namespace_1_1_geo_line_string.html#_CPPv4NK13GeoLineString10getColumnsERNSt6vectorIdEERNSt6vectorIdEE">GeoLineString::getColumns (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_geo_line_string.html#_CPPv4N13GeoLineString10input_sridE">GeoLineString::input_srid (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_line_string.html#_CPPv4N13GeoLineString11output_sridE">GeoLineString::output_srid (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_line_string.html#_CPPv4N13GeoLineString3ptrE">GeoLineString::ptr (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_line_string.html#_CPPv4N13GeoLineString2szE">GeoLineString::sz (C++ member)</a>
+</li>
       <li><a href="api/struct/struct_geo_line_string_target_value.html#_CPPv424GeoLineStringTargetValue">GeoLineStringTargetValue (C++ class)</a>
 </li>
       <li><a href="api/struct/struct_geo_line_string_target_value.html#_CPPv4N24GeoLineStringTargetValue6coordsE">GeoLineStringTargetValue::coords (C++ member)</a>
@@ -8332,6 +8342,30 @@
       <li><a href="api/struct/struct_geo_linestring_value_converter.html#_CPPv4N27GeoLinestringValueConverter27GeoLinestringValueConverterERKN17Catalog_Namespace7CatalogE6size_tPK16ColumnDescriptor">GeoLinestringValueConverter::GeoLinestringValueConverter (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_geo_linestring_value_converter.html#_CPPv4N27GeoLinestringValueConverterD0Ev">GeoLinestringValueConverter::~GeoLinestringValueConverter (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_geo_multi_polygon.html#_CPPv415GeoMultiPolygon">GeoMultiPolygon (C++ class)</a>
+</li>
+      <li><a href="api/struct/struct_geo_multi_polygon.html#_CPPv4N15GeoMultiPolygon11compressionE">GeoMultiPolygon::compression (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_multi_polygon.html#_CPPv4N15GeoMultiPolygon11coords_sizeE">GeoMultiPolygon::coords_size (C++ member)</a>
+</li>
+      <li><a href="api/class/class_geo__namespace_1_1_geo_multi_polygon.html#_CPPv4N15GeoMultiPolygon15GeoMultiPolygonERKNSt6stringE">GeoMultiPolygon::GeoMultiPolygon (C++ function)</a>, <a href="api/class/class_geo__namespace_1_1_geo_multi_polygon.html#_CPPv4N15GeoMultiPolygon15GeoMultiPolygonERKNSt6vectorIdEERKNSt6vectorI7int32_tEERKNSt6vectorI7int32_tEE">[1]</a>
+</li>
+      <li><a href="api/class/class_geo__namespace_1_1_geo_multi_polygon.html#_CPPv4NK15GeoMultiPolygon10getColumnsERNSt6vectorIdEERNSt6vectorI7int32_tEERNSt6vectorI7int32_tEERNSt6vectorIdEE">GeoMultiPolygon::getColumns (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_geo_multi_polygon.html#_CPPv4N15GeoMultiPolygon10input_sridE">GeoMultiPolygon::input_srid (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_multi_polygon.html#_CPPv4N15GeoMultiPolygon9num_polysE">GeoMultiPolygon::num_polys (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_multi_polygon.html#_CPPv4N15GeoMultiPolygon9num_ringsE">GeoMultiPolygon::num_rings (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_multi_polygon.html#_CPPv4N15GeoMultiPolygon11output_sridE">GeoMultiPolygon::output_srid (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_multi_polygon.html#_CPPv4N15GeoMultiPolygon10poly_sizesE">GeoMultiPolygon::poly_sizes (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_multi_polygon.html#_CPPv4N15GeoMultiPolygon10ptr_coordsE">GeoMultiPolygon::ptr_coords (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_multi_polygon.html#_CPPv4N15GeoMultiPolygon10ring_sizesE">GeoMultiPolygon::ring_sizes (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_geo_multi_polygon_value_converter.html#_CPPv429GeoMultiPolygonValueConverter">GeoMultiPolygonValueConverter (C++ class)</a>
 </li>
@@ -8383,6 +8417,22 @@
 </li>
       <li><a href="api/struct/struct_geo_multi_poly_target_value_ptr.html#_CPPv4N26GeoMultiPolyTargetValuePtr15ring_sizes_dataE">GeoMultiPolyTargetValuePtr::ring_sizes_data (C++ member)</a>
 </li>
+      <li><a href="api/struct/struct_geo_point.html#_CPPv48GeoPoint">GeoPoint (C++ class)</a>
+</li>
+      <li><a href="api/struct/struct_geo_point.html#_CPPv4N8GeoPoint11compressionE">GeoPoint::compression (C++ member)</a>
+</li>
+      <li><a href="api/class/class_geo__namespace_1_1_geo_point.html#_CPPv4N8GeoPoint8GeoPointERKNSt6stringE">GeoPoint::GeoPoint (C++ function)</a>, <a href="api/class/class_geo__namespace_1_1_geo_point.html#_CPPv4N8GeoPoint8GeoPointERKNSt6vectorIdEE">[1]</a>
+</li>
+      <li><a href="api/class/class_geo__namespace_1_1_geo_point.html#_CPPv4NK8GeoPoint10getColumnsERNSt6vectorIdEE">GeoPoint::getColumns (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_geo_point.html#_CPPv4N8GeoPoint10input_sridE">GeoPoint::input_srid (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_point.html#_CPPv4N8GeoPoint11output_sridE">GeoPoint::output_srid (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_point.html#_CPPv4N8GeoPoint3ptrE">GeoPoint::ptr (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_point.html#_CPPv4N8GeoPoint2szE">GeoPoint::sz (C++ member)</a>
+</li>
       <li><a href="api/struct/struct_geo_point_target_value.html#_CPPv419GeoPointTargetValue">GeoPointTargetValue (C++ class)</a>
 </li>
       <li><a href="api/struct/struct_geo_point_target_value.html#_CPPv4N19GeoPointTargetValue6coordsE">GeoPointTargetValue::coords (C++ member)</a>
@@ -8417,12 +8467,36 @@
 </li>
       <li><a href="api/struct/struct_geo_point_value_converter.html#_CPPv4N22GeoPointValueConverterD0Ev">GeoPointValueConverter::~GeoPointValueConverter (C++ function)</a>
 </li>
+      <li><a href="api/struct/struct_geo_polygon.html#_CPPv410GeoPolygon">GeoPolygon (C++ class)</a>
+</li>
+      <li><a href="api/struct/struct_geo_polygon.html#_CPPv4N10GeoPolygon11compressionE">GeoPolygon::compression (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_polygon.html#_CPPv4N10GeoPolygon11coords_sizeE">GeoPolygon::coords_size (C++ member)</a>
+</li>
+      <li><a href="api/class/class_geo__namespace_1_1_geo_polygon.html#_CPPv4N10GeoPolygon10GeoPolygonERKNSt6stringE">GeoPolygon::GeoPolygon (C++ function)</a>, <a href="api/class/class_geo__namespace_1_1_geo_polygon.html#_CPPv4N10GeoPolygon10GeoPolygonERKNSt6vectorIdEERKNSt6vectorI7int32_tEE">[1]</a>
+</li>
+      <li><a href="api/class/class_geo__namespace_1_1_geo_polygon.html#_CPPv4NK10GeoPolygon10getColumnsERNSt6vectorIdEERNSt6vectorI7int32_tEERNSt6vectorIdEE">GeoPolygon::getColumns (C++ function)</a>
+</li>
+      <li><a href="api/class/class_geo__namespace_1_1_geo_polygon.html#_CPPv4NK10GeoPolygon19getNumInteriorRingsEv">GeoPolygon::getNumInteriorRings (C++ function)</a>
+</li>
+      <li><a href="api/struct/struct_geo_polygon.html#_CPPv4N10GeoPolygon10input_sridE">GeoPolygon::input_srid (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_polygon.html#_CPPv4N10GeoPolygon9num_ringsE">GeoPolygon::num_rings (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_polygon.html#_CPPv4N10GeoPolygon11output_sridE">GeoPolygon::output_srid (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_polygon.html#_CPPv4N10GeoPolygon10ptr_coordsE">GeoPolygon::ptr_coords (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_geo_polygon.html#_CPPv4N10GeoPolygon10ring_sizesE">GeoPolygon::ring_sizes (C++ member)</a>
+</li>
       <li><a href="api/struct/struct_geo_polygon_value_converter.html#_CPPv424GeoPolygonValueConverter">GeoPolygonValueConverter (C++ class)</a>
 </li>
       <li><a href="api/struct/struct_geo_polygon_value_converter.html#_CPPv4N24GeoPolygonValueConverter25addDataBlocksToInsertDataERN20Fragmenter_Namespace10InsertDataE">GeoPolygonValueConverter::addDataBlocksToInsertData (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_geo_polygon_value_converter.html#_CPPv4N24GeoPolygonValueConverter20allocateColumnarDataE6size_t">GeoPolygonValueConverter::allocateColumnarData (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/struct_geo_polygon_value_converter.html#_CPPv4N24GeoPolygonValueConverter25bounds_column_descriptor_E">GeoPolygonValueConverter::bounds_column_descriptor_ (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_geo_polygon_value_converter.html#_CPPv4N24GeoPolygonValueConverter12bounds_data_E">GeoPolygonValueConverter::bounds_data_ (C++ member)</a>
@@ -8457,8 +8531,6 @@
 </li>
       <li><a href="api/struct/struct_geo_poly_target_value_ptr.html#_CPPv4N21GeoPolyTargetValuePtr11coords_dataE">GeoPolyTargetValuePtr::coords_data (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/struct/struct_geo_poly_target_value_ptr.html#_CPPv4N21GeoPolyTargetValuePtr15ring_sizes_dataE">GeoPolyTargetValuePtr::ring_sizes_data (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_geo_return_type_traits.html#_CPPv4I_N9ResultSet13GeoReturnTypeE_8SQLTypesE19GeoReturnTypeTraits">GeoReturnTypeTraits (C++ class)</a>
