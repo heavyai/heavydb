@@ -1235,9 +1235,13 @@ size_t StringDictionary::addStorageCapacity(
                (min_capacity_requested / SYSTEM_PAGE_SIZE + 1) * SYSTEM_PAGE_SIZE);
   if (!CANARY_BUFFER) {
     CANARY_BUFFER = static_cast<char*>(malloc(canary_buff_size_to_add));
-    CHECK(CANARY_BUFFER);
-    memset(CANARY_BUFFER, 0xff, canary_buff_size_to_add);
   }
+  else {
+    CANARY_BUFFER = static_cast<char*>(realloc(CANARY_BUFFER, canary_buff_size_to_add));
+  }
+  CHECK(CANARY_BUFFER);
+  memset(CANARY_BUFFER, 0xff, canary_buff_size_to_add);
+
   CHECK_NE(lseek(fd, 0, SEEK_END), -1);
   CHECK(write(fd, CANARY_BUFFER, canary_buff_size_to_add) == canary_buff_size_to_add);
   return canary_buff_size_to_add;
@@ -1251,9 +1255,13 @@ void* StringDictionary::addMemoryCapacity(void* addr,
                (min_capacity_requested / SYSTEM_PAGE_SIZE + 1) * SYSTEM_PAGE_SIZE);
   if (!CANARY_BUFFER) {
     CANARY_BUFFER = reinterpret_cast<char*>(malloc(canary_buff_size_to_add));
-    CHECK(CANARY_BUFFER);
-    memset(CANARY_BUFFER, 0xff, canary_buff_size_to_add);
   }
+  else {
+    CANARY_BUFFER = reinterpret_cast<char*>(realloc(CANARY_BUFFER, canary_buff_size_to_add));
+  }
+  CHECK(CANARY_BUFFER);
+  memset(CANARY_BUFFER, 0xff, canary_buff_size_to_add);
+
   void* new_addr = realloc(addr, mem_size + canary_buff_size_to_add);
   CHECK(new_addr);
   void* write_addr = reinterpret_cast<void*>(static_cast<char*>(new_addr) + mem_size);
@@ -1274,8 +1282,6 @@ void StringDictionary::invalidateInvertedIndex() noexcept {
   }
   compare_cache_.invalidateInvertedIndex();
 }
-
-char* StringDictionary::CANARY_BUFFER{nullptr};
 
 bool StringDictionary::checkpoint() noexcept {
   if (client_) {

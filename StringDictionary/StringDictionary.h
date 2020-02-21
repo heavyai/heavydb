@@ -217,7 +217,7 @@ class StringDictionary {
   std::unique_ptr<StringDictionaryClient> client_;
   std::unique_ptr<StringDictionaryClient> client_no_timeout_;
 
-  static char* CANARY_BUFFER;
+  char* CANARY_BUFFER{nullptr};
 };
 
 int32_t truncate_to_generation(const int32_t id, const size_t generation);
