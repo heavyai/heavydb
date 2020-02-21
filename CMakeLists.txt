@@ -433,6 +433,8 @@ if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
     include_directories(ThirdParty/muparserx)
     add_subdirectory(ThirdParty/muparserx)
 
+    option(ENABLE_RENDER_TESTS "Build backend renderer tests" ON)
+
     add_definitions("-DHAVE_RENDERING")
     add_subdirectory(Rendering)
     add_subdirectory(QueryRenderer)
@@ -530,6 +532,11 @@ if (ENABLE_TESTS)
   enable_testing()
   add_subdirectory(Tests)
   add_subdirectory(SampleCode)
+endif()
+
+if(ENABLE_RENDERING AND (ENABLE_TESTS OR ENABLE_RENDER_TESTS))
+  enable_testing()
+  add_subdirectory(Tests/RenderTests)
 endif()
 
 set(initdb_source_files initdb.cpp)
