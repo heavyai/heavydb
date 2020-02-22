@@ -44,10 +44,11 @@ struct Array {
   }
 
   DEVICE T operator()(const unsigned int index) const {
-    if (index < static_cast<unsigned int>(size))
+    if (index < static_cast<unsigned int>(size)) {
       return ptr[index];
-    else
+    } else {
       return 0;  // see array_at
+    }
   }
 
   DEVICE T& operator[](const unsigned int index) { return ptr[index]; }

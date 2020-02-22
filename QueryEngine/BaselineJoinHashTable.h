@@ -256,8 +256,8 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 #ifdef HAVE_CUDA
   std::vector<Data_Namespace::AbstractBuffer*> gpu_hash_table_buff_;
 #endif
-  typedef std::pair<const int8_t*, size_t> LinearizedColumn;
-  typedef std::pair<int, int> LinearizedColumnCacheKey;
+  using LinearizedColumn = std::pair<const int8_t*, size_t>;
+  using LinearizedColumnCacheKey = std::pair<int, int>;
   std::map<LinearizedColumnCacheKey, LinearizedColumn> linearized_multifrag_columns_;
   std::mutex linearized_multifrag_column_mutex_;
   RowSetMemoryOwner linearized_multifrag_column_owner_;

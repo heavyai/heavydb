@@ -360,7 +360,7 @@ class Executor {
 
   static void clearMemory(const Data_Namespace::MemoryLevel memory_level);
 
-  typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, const size_t> AggInfo;
+  using AggInfo = std::tuple<std::string, const Analyzer::Expr*, int64_t, const size_t>;
 
   std::shared_ptr<ResultSet> execute(const Planner::RootPlan* root_plan,
                                      const Catalog_Namespace::SessionInfo& session,

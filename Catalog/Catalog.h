@@ -241,20 +241,20 @@ class Catalog final {
   std::string dumpSchema(const TableDescriptor* td) const;
 
  protected:
-  typedef std::map<std::string, TableDescriptor*> TableDescriptorMap;
-  typedef std::map<int, TableDescriptor*> TableDescriptorMapById;
-  typedef std::map<int32_t, std::vector<int32_t>> LogicalToPhysicalTableMapById;
-  typedef std::tuple<int, std::string> ColumnKey;
-  typedef std::map<ColumnKey, ColumnDescriptor*> ColumnDescriptorMap;
-  typedef std::tuple<int, int> ColumnIdKey;
-  typedef std::map<ColumnIdKey, ColumnDescriptor*> ColumnDescriptorMapById;
-  typedef std::map<DictRef, std::unique_ptr<DictDescriptor>> DictDescriptorMapById;
-  typedef std::map<std::string, std::shared_ptr<DashboardDescriptor>>
-      DashboardDescriptorMap;
-  typedef std::map<std::string, LinkDescriptor*> LinkDescriptorMap;
-  typedef std::map<int, LinkDescriptor*> LinkDescriptorMapById;
-  typedef std::unordered_map<const TableDescriptor*, const ColumnDescriptor*>
-      DeletedColumnPerTableMap;
+  using TableDescriptorMap = std::map<std::string, TableDescriptor*>;
+  using TableDescriptorMapById = std::map<int, TableDescriptor*>;
+  using LogicalToPhysicalTableMapById = std::map<int32_t, std::vector<int32_t>>;
+  using ColumnKey = std::tuple<int, std::string>;
+  using ColumnDescriptorMap = std::map<ColumnKey, ColumnDescriptor*>;
+  using ColumnIdKey = std::tuple<int, int>;
+  using ColumnDescriptorMapById = std::map<ColumnIdKey, ColumnDescriptor*>;
+  using DictDescriptorMapById = std::map<DictRef, std::unique_ptr<DictDescriptor>>;
+  using DashboardDescriptorMap =
+      std::map<std::string, std::shared_ptr<DashboardDescriptor>>;
+  using LinkDescriptorMap = std::map<std::string, LinkDescriptor*>;
+  using LinkDescriptorMapById = std::map<int, LinkDescriptor*>;
+  using DeletedColumnPerTableMap =
+      std::unordered_map<const TableDescriptor*, const ColumnDescriptor*>;
 
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();

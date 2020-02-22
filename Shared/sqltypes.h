@@ -121,7 +121,7 @@ struct DeviceArrayDatum : public VarlenDatum {
 
 using ArrayDatum = std::conditional_t<isCudaCC(), DeviceArrayDatum, HostArrayDatum>;
 
-typedef union {
+union Datum {
   bool boolval;
   int8_t tinyintval;
   int16_t smallintval;
@@ -133,7 +133,7 @@ typedef union {
 #ifndef __CUDACC__
   std::string* stringval;  // string value
 #endif
-} Datum;
+};
 
 #ifndef __CUDACC__
 union DataBlockPtr {

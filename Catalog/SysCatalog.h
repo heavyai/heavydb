@@ -271,8 +271,8 @@ class SysCatalog : private CommonFileOperations {
   void check_for_session_encryption(const std::string& pki_cert, std::string& session);
 
  private:
-  typedef std::map<std::string, Grantee*> GranteeMap;
-  typedef std::multimap<std::string, ObjectRoleDescriptor*> ObjectRoleDescriptorMap;
+  using GranteeMap = std::map<std::string, Grantee*>;
+  using ObjectRoleDescriptorMap = std::multimap<std::string, ObjectRoleDescriptor*>;
 
   SysCatalog()
       : CommonFileOperations(basePath_)
