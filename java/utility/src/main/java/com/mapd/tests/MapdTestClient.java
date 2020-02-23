@@ -17,6 +17,7 @@ package com.mapd.tests;
 
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TClusterHardwareInfo;
+import com.mapd.thrift.server.TColumnType;
 import com.mapd.thrift.server.TDBObject;
 import com.mapd.thrift.server.TDBObjectType;
 import com.mapd.thrift.server.TDashboard;
@@ -56,6 +57,11 @@ public class MapdTestClient {
 
   public TQueryResult runSql(String sql) throws Exception {
     return client.sql_execute(sessionId, sql, true, null, -1, -1);
+  }
+
+  public java.util.Map<java.lang.String, TColumnType> sqlValidate(String sql)
+          throws Exception {
+    return client.sql_validate(sessionId, sql);
   }
 
   public int create_dashboard(String name) throws Exception {
