@@ -7,3 +7,5 @@ race:boost::*::perl_matcher
 race:google::RawLog__SetLastTime
 race:apache::thrift::transport::TServerSocket
 thread:libcuda.so
+# 2020-02-23: resolve thread safety issues when acquiring string dict proxy through resultset 
+race:ResultSet::makeTargetValue 
