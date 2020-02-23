@@ -106,7 +106,6 @@
 
 using Catalog_Namespace::Catalog;
 using Catalog_Namespace::SysCatalog;
-using namespace Lock_Namespace;
 
 #define INVALID_SESSION_ID ""
 
@@ -994,7 +993,8 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
   _return.execution_time_ms = 0;
 
   mapd_shared_lock<mapd_shared_mutex> executeReadLock(
-      *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
 
   SQLParser parser;
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
@@ -1299,7 +1299,8 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                    QueryStateProxy query_state_proxy) {
   try {
     const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
-        *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
+        *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+            legacylockmgr::ExecutorOuterLock, true));
 
     // TODO(adb): for a validate query we do not need write locks, though the lock would
     // generally be short lived.
@@ -5037,7 +5038,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     ParserWrapper pw{query_str};
     if (pw.isCalcitePathPermissable(read_only_)) {
       executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
-          *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
+          *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+              legacylockmgr::ExecutorOuterLock, true));
 
       std::string query_ra;
       _return.execution_time_ms += measure<>::execution([&]() {
@@ -5176,7 +5178,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
 
         // Prevent any other query from running while doing validate
         executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
-            *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
+            *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+                legacylockmgr::ExecutorOuterLock, true));
 
         std::string output{"Result for validate"};
         if (g_cluster && leaf_aggregator_.leafCount()) {
@@ -5322,7 +5325,8 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         // write lock could be saving us for now
 
         executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
-            *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
+            *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+                legacylockmgr::ExecutorOuterLock, true));
 
         CHECK(!checkpoint_lock.mutex());
         checkpoint_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(

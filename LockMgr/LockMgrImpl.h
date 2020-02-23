@@ -24,9 +24,6 @@
 #include "Catalog/Catalog.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/types.h"
-namespace Lock_Namespace {
-void getTableNames(std::map<std::string, bool>& tableNames, const std::string query_ra);
-}
 namespace lockmgr {
 
 using MutexType = mapd_shared_mutex;
@@ -86,29 +83,6 @@ class TableLockMgrImpl {
   MutexType& getTableMutex(const ChunkKey table_key) {
     std::lock_guard<std::mutex> access_map_lock(map_mutex_);
     return table_mutex_map_[table_key];
-  }
-
-  static void getTableLocks(const Catalog_Namespace::Catalog& cat,
-                            const std::map<std::string, bool>& table_names,
-                            std::vector<TableLock>& table_locks) {
-    for (const auto& table_name_itr : table_names) {
-      TableLock table_lock;
-      if (table_name_itr.second) {
-        table_lock.write_lock = T::getWriteLockForTable(cat, table_name_itr.first);
-      } else {
-        table_lock.read_lock = T::getReadLockForTable(cat, table_name_itr.first);
-      }
-      table_locks.emplace_back(std::move(table_lock));
-    }
-  }
-
-  static void getTableLocks(const Catalog_Namespace::Catalog& cat,
-                            const std::string& query_ra,
-                            std::vector<TableLock>& table_locks) {
-    // parse ra to learn involved table names
-    std::map<std::string, bool> table_names;
-    Lock_Namespace::getTableNames(table_names, query_ra);
-    return T::getTableLocks(cat, table_names, table_locks);
   }
 
   static WriteLock getWriteLockForTable(const Catalog_Namespace::Catalog& cat,
