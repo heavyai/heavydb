@@ -128,6 +128,8 @@ class MapDTrackingProcessor : public MapDProcessor {
 
     auto transport = in->getTransport();
     if (transport) {
+      static std::mutex processor_mutex;
+      std::lock_guard lock(processor_mutex);
       const auto origin_str = transport->getOrigin();
       std::vector<std::string> origins;
       boost::split(origins, origin_str, boost::is_any_of(","));
