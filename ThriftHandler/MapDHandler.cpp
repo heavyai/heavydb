@@ -1298,12 +1298,19 @@ std::unordered_set<std::string> MapDHandler::get_uc_compatible_table_names_by_co
 void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                    QueryStateProxy query_state_proxy) {
   try {
-    const auto query_ra = parse_to_ra(query_state_proxy,
-                                      query_state_proxy.getQueryState().getQueryStr(),
-                                      {},
-                                      false,
-                                      mapd_parameters_)
-                              .first.plan_result;
+    const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+        *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
+
+    // TODO(adb): for a validate query we do not need write locks, though the lock would
+    // generally be short lived.
+    const auto [parse_result, locks] =
+        parse_to_ra(query_state_proxy,
+                    query_state_proxy.getQueryState().getQueryStr(),
+                    {},
+                    true,
+                    mapd_parameters_);
+    const auto query_ra = parse_result.plan_result;
+
     TQueryResult result;
     MapDHandler::execute_rel_alg(result,
                                  query_state_proxy,
@@ -5029,7 +5036,6 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
   try {
     ParserWrapper pw{query_str};
     if (pw.isCalcitePathPermissable(read_only_)) {
-      // read ExecutorOuterLock
       executeReadLock = mapd_shared_lock<mapd_shared_mutex>(
           *LockMgr<mapd_shared_mutex, bool>::getMutex(ExecutorOuterLock, true));
 
