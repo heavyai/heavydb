@@ -18,6 +18,8 @@ package com.mapd.tests;
 import com.mapd.thrift.server.MapD;
 import com.mapd.thrift.server.TClusterHardwareInfo;
 import com.mapd.thrift.server.TColumnType;
+import com.mapd.thrift.server.TCopyParams;
+import com.mapd.thrift.server.TCreateParams;
 import com.mapd.thrift.server.TDBObject;
 import com.mapd.thrift.server.TDBObjectType;
 import com.mapd.thrift.server.TDashboard;
@@ -92,6 +94,20 @@ public class MapdTestClient {
 
   public List<TDashboard> get_dashboards() throws Exception {
     return client.get_dashboards(sessionId);
+  }
+
+  public void import_table(String table_name, String file_name, TCopyParams copy_params)
+          throws Exception {
+    client.import_table(sessionId, table_name, file_name, copy_params);
+  }
+
+  public void import_geo_table(String table_name,
+          String file_name,
+          TCopyParams copy_params,
+          java.util.List<TColumnType> row_desc,
+          TCreateParams create_params) throws Exception {
+    client.import_geo_table(
+            sessionId, table_name, file_name, copy_params, row_desc, create_params);
   }
 
   public List<String> get_users() throws Exception {
