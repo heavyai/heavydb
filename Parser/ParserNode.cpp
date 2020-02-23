@@ -2920,6 +2920,13 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
 void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
+
+  // TODO: Removal of the FileMgr is not thread safe. Take a global system write lock when
+  // truncating a table
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *Lock_Namespace::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          Lock_Namespace::ExecutorOuterLock, true));
+
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
           catalog, *table, true);
@@ -3540,6 +3547,11 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   size_t rows_rejected = 0;
   size_t total_time = 0;
   bool load_truncated = false;
+
+  // Prevent simultaneous import / truncate (see TruncateTableStmt::execute)
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *Lock_Namespace::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          Lock_Namespace::ExecutorOuterLock, true));
 
   const TableDescriptor* td{nullptr};
   std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>> td_with_lock;
