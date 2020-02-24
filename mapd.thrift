@@ -496,6 +496,7 @@ service MapD {
   TKrb5Session krb5_connect(1: string inputToken, 2: string dbname) throws (1: TMapDException e)
   void disconnect(1: TSessionId session) throws (1: TMapDException e)
   void switch_database(1: TSessionId session, 2: string dbname) throws(1: TMapDException e)
+  TSessionId clone_session(1: TSessionId session) throws(1: TMapDException e)
   TServerStatus get_server_status(1: TSessionId session) throws (1: TMapDException e)
   list<TServerStatus> get_status(1: TSessionId session) throws (1: TMapDException e)
   TClusterHardwareInfo get_hardware_info(1: TSessionId session) throws (1: TMapDException e)

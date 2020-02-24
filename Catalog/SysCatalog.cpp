@@ -704,8 +704,8 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
                                            const std::string& password,
                                            UserMetadata& user_meta,
                                            bool check_password) {
-  // NOTE: The dbname isn't const because getMetadataWithDefaultDB() can
-  // reset it. The username isn't const because SamlServer's
+  // NOTE(sy): The dbname isn't const because getMetadataWithDefaultDB()
+  // can reset it. The username isn't const because SamlServer's
   // login()/authenticate_user() can reset it.
 
   sys_write_lock write_lock(this);
@@ -751,7 +751,8 @@ std::shared_ptr<Catalog> SysCatalog::switchDatabase(std::string& dbname,
   dbObject.loadKey();
   dbObject.setPrivileges(AccessPrivileges::ACCESS);
   if (!checkPrivileges(user_meta, std::vector<DBObject>{dbObject})) {
-    throw std::runtime_error("Invalid credentials.");
+    throw std::runtime_error("Unauthorized Access: user " + username +
+                             " is not allowed to access database " + dbname + ".");
   }
 
   return cat;

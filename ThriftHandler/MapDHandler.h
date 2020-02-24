@@ -207,6 +207,7 @@ class MapDHandler : public MapDIf {
                const std::string& dbname) override;
   void disconnect(const TSessionId& session) override;
   void switch_database(const TSessionId& session, const std::string& dbname) override;
+  void clone_session(TSessionId& session2, const TSessionId& session1) override;
   void get_server_status(TServerStatus& _return, const TSessionId& session) override;
   void get_status(std::vector<TServerStatus>& _return,
                   const TSessionId& session) override;
@@ -529,7 +530,7 @@ class MapDHandler : public MapDIf {
   void connect_impl(TSessionId& session,
                     const std::string& passwd,
                     const std::string& dbname,
-                    Catalog_Namespace::UserMetadata& user_meta,
+                    const Catalog_Namespace::UserMetadata& user_meta,
                     std::shared_ptr<Catalog_Namespace::Catalog> cat,
                     query_state::StdLog& stdlog);
   void disconnect_impl(const SessionMap::iterator& session_it);

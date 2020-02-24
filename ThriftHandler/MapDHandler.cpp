@@ -396,6 +396,7 @@ void MapDHandler::removeInMemoryCalciteSession(const std::string& session_id) {
   CHECK(it != sessions_.end());
   sessions_.erase(it);
 }
+
 // internal connection for connections with no password
 void MapDHandler::internal_connect(TSessionId& session,
                                    const std::string& username,
@@ -407,8 +408,8 @@ void MapDHandler::internal_connect(TSessionId& session,
   Catalog_Namespace::UserMetadata user_meta;
   std::shared_ptr<Catalog> cat = nullptr;
   try {
-    cat = SysCatalog::instance().login(
-        dbname2, username2, std::string(""), user_meta, false);
+    cat =
+        SysCatalog::instance().login(dbname2, username2, std::string(), user_meta, false);
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
@@ -422,7 +423,7 @@ void MapDHandler::internal_connect(TSessionId& session,
     THROW_MAPD_EXCEPTION("Unauthorized Access: user " + username +
                          " is not allowed to access database " + dbname2 + ".");
   }
-  connect_impl(session, std::string(""), dbname2, user_meta, cat, stdlog);
+  connect_impl(session, std::string(), dbname2, user_meta, cat, stdlog);
 }
 
 void MapDHandler::krb5_connect(TKrb5Session& session,
@@ -469,9 +470,12 @@ void MapDHandler::connect(TSessionId& session,
 void MapDHandler::connect_impl(TSessionId& session,
                                const std::string& passwd,
                                const std::string& dbname,
-                               Catalog_Namespace::UserMetadata& user_meta,
+                               const Catalog_Namespace::UserMetadata& user_meta,
                                std::shared_ptr<Catalog> cat,
                                query_state::StdLog& stdlog) {
+  // TODO(sy): Is there any reason to have dbname as a parameter
+  // here when the cat parameter already provides cat->name()?
+  // Should dbname and cat->name() ever differ?
   do {
     session = generate_random_string(32);
   } while (sessions_.find(session) != sessions_.end());
@@ -535,6 +539,22 @@ void MapDHandler::switch_database(const TSessionId& session, const std::string& 
     std::shared_ptr<Catalog> cat = SysCatalog::instance().switchDatabase(
         dbname2, session_it->second->get_currentUser().userName);
     session_it->second->set_catalog_ptr(cat);
+  } catch (std::exception& e) {
+    THROW_MAPD_EXCEPTION(e.what());
+  }
+}
+
+void MapDHandler::clone_session(TSessionId& session2, const TSessionId& session1) {
+  auto stdlog = STDLOG(get_session_ptr(session1));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+  auto session_it = get_session_it_unsafe(session1, write_lock);
+
+  try {
+    const Catalog_Namespace::UserMetadata& user_meta =
+        session_it->second->get_currentUser();
+    std::shared_ptr<Catalog> cat = session_it->second->get_catalog_ptr();
+    connect_impl(session2, std::string(), cat->name(), user_meta, cat, stdlog);
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
