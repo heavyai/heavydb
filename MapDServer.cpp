@@ -322,6 +322,7 @@ class MapDProgramOptions {
    */
   int max_session_duration = kMinsPerMonth;
   std::string udf_file_name = {""};
+  std::string udf_compiler_path = {""};
 
   void fillOptions();
   void fillAdvancedOptions();
@@ -771,6 +772,11 @@ void MapDProgramOptions::fillAdvancedOptions() {
       po::value<std::string>(&udf_file_name),
       "Load user defined extension functions from this file at startup. The file is "
       "expected to be a C/C++ file with extension .cpp.");
+
+  developer_desc.add_options()(
+      "udf-compiler-path",
+      po::value<std::string>(&udf_compiler_path),
+      "Provide absolute path to clang++ used in udf compilation.");
 }
 
 namespace {
@@ -972,6 +978,10 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
     LOG(INFO) << " User provided extension functions loaded from " << udf_file_name;
   }
 
+  if (vm.count("udf-compiler-path")) {
+    boost::algorithm::trim_if(udf_compiler_path, boost::is_any_of("\"'"));
+  }
+
   if (enable_runtime_udf) {
     LOG(INFO) << " Runtime user defined extension functions enabled globally.";
   }
@@ -1133,7 +1143,8 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
                                        prog_config_opts.idle_session_duration,
                                        prog_config_opts.max_session_duration,
                                        prog_config_opts.enable_runtime_udf,
-                                       prog_config_opts.udf_file_name);
+                                       prog_config_opts.udf_file_name,
+                                       prog_config_opts.udf_compiler_path);
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize service handler: " << e.what();
   }

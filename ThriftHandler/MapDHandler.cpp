@@ -192,7 +192,8 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const int idle_session_duration,
                          const int max_session_duration,
                          const bool enable_runtime_udf_registration,
-                         const std::string& udf_filename)
+                         const std::string& udf_filename,
+                         const std::string& clang_path)
     : leaf_aggregator_(db_leaves)
     , string_leaves_(string_leaves)
     , base_data_path_(base_data_path)
@@ -260,7 +261,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
 
   try {
     if (!udf_filename.empty()) {
-      UdfCompiler compiler(udf_filename);
+      UdfCompiler compiler(udf_filename, clang_path);
       int compile_result = compiler.compileUdf();
 
       if (compile_result == 0) {
