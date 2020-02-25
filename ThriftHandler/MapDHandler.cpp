@@ -957,9 +957,9 @@ void MapDHandler::sql_execute(TQueryResult& _return,
                        create_params);
     });
   }
-  timer.stop(&_return.debug);
-  if (g_enable_debug_timer) {
-    _return.__isset.debug = true;
+  std::string debug_json = timer.stopAndGetJson();
+  if (!debug_json.empty()) {
+    _return.__set_debug(std::move(debug_json));
   }
   stdlog.appendNameValuePairs("execution_time_ms",
                               _return.execution_time_ms,
