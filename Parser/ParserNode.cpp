@@ -2247,6 +2247,11 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
 
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
+
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   // check access privileges
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
                                        AccessPrivileges::CREATE_TABLE)) {
@@ -2882,6 +2887,11 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
+  // TODO(adb): the catalog should be handling this locking.
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   const TableDescriptor* td{nullptr};
   std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
 
@@ -2987,6 +2997,12 @@ void RenameUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
 void RenameDatabaseStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   Catalog_Namespace::DBMetadata db;
+
+  // TODO: use database lock instead
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   if (!SysCatalog::instance().getMetadataForDB(*database_name_, db)) {
     throw std::runtime_error("Database " + *database_name_ + " does not exist.");
   }
@@ -3001,10 +3017,18 @@ void RenameDatabaseStmt::execute(const Catalog_Namespace::SessionInfo& session) 
 
 void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
-  const TableDescriptor* td = catalog.getMetadataForTable(*table);
-  if (td == nullptr) {
-    throw std::runtime_error("Table " + *table + " does not exist.");
-  }
+
+  // TODO(adb): the catalog should be handling this locking (see AddColumStmt)
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, *table, false);
+  const auto td = td_with_lock();
+  CHECK(td);
+
   check_alter_table_privilege(session, td);
   if (catalog.getMetadataForTable(*new_table_name) != nullptr) {
     throw std::runtime_error("Table or View " + *new_table_name + " already exists.");
@@ -3306,6 +3330,12 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
 
 void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
+
+  // TODO(adb): the catalog should be handling this locking.
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
           catalog, *table, true);
@@ -3448,6 +3478,12 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
 void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
+
+  // TODO(adb): the catalog should be handling this locking.
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   const auto td_with_lock =
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
           catalog, *table, true);
@@ -3512,10 +3548,13 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
 void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
-  const TableDescriptor* td = catalog.getMetadataForTable(*table);
-  if (td == nullptr) {
-    throw std::runtime_error("Table " + *table + " does not exist.");
-  }
+
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, *table, false);
+  const auto td = td_with_lock();
+  CHECK(td);
+
   check_alter_table_privilege(session, td);
   const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, *column);
   if (cd == nullptr) {
@@ -4536,6 +4575,12 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                    false,
                                    false,
                                    true);
+
+  // Take write lock after the query is processed to ensure no deadlocks
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   TableDescriptor td;
   td.tableName = view_name_;
   td.userId = session.get_currentUser().userId;
@@ -4560,13 +4605,26 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
 void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
-  const TableDescriptor* td = catalog.getMetadataForTable(*view_name);
-  if (td == nullptr) {
+
+  const TableDescriptor* td{nullptr};
+  std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
+
+  try {
+    td_with_lock =
+        std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
+            lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+                catalog, *view_name, false));
+    td = (*td_with_lock)();
+  } catch (const std::runtime_error& e) {
     if (if_exists) {
       return;
+    } else {
+      throw e;
     }
-    throw std::runtime_error("View " + *view_name + " does not exist.");
   }
+
+  CHECK(td);
+  CHECK(td_with_lock);
 
   if (!session.checkDBAccessPrivileges(
           DBObjectType::ViewDBObjectType, AccessPrivileges::DROP_VIEW, *view_name)) {
@@ -4593,6 +4651,11 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error(
         "CREATE DATABASE command can only be executed by super user.");
   }
+
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   Catalog_Namespace::DBMetadata db_meta;
   if (SysCatalog::instance().getMetadataForDB(*db_name, db_meta) && if_not_exists_) {
     return;
@@ -4622,6 +4685,11 @@ void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("DROP DATABASE command can only be executed by super user.");
   }
+
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   Catalog_Namespace::DBMetadata db;
   if (!SysCatalog::instance().getMetadataForDB(*db_name, db)) {
     if (if_exists_) {
