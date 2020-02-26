@@ -19,6 +19,7 @@
 #include <arrow/api.h>
 #include <arrow/csv/reader.h>
 #include <arrow/io/file.h>
+#include <arrow/util/decimal.h>
 #include <arrow/util/task_group.h>
 #include <arrow/util/thread_pool.h>
 #include <array>
@@ -72,6 +73,12 @@ void ArrowCsvForeignStorage::append(
     const std::vector<ForeignStorageColumnBuffer>& column_buffers) {
   CHECK(false);
 }
+
+template <typename T, typename builderType>
+int64_t appendDecimalData(const std::shared_ptr<arrow::Array>& chunk,
+                          int chunkIdx,
+                          bool empty,
+                          std::shared_ptr<arrow::Array>& arrayOut);
 
 void ArrowCsvForeignStorage::read(const ChunkKey& chunk_key,
                                   const SQLTypeInfo& sql_type,
@@ -341,6 +348,26 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
           ARROW_THROW_NOT_OK(indexBuilder.Finish(&indexArray));
           frag.chunks.emplace_back(indexArray->data());
           frag.sz += stringArray->length();
+        } else if (ctype == kDECIMAL || ctype == kNUMERIC) {
+          std::shared_ptr<arrow::Array> indexArray;
+          switch (c.columnType.get_size()) {
+            case 2:
+              frag.sz += appendDecimalData<int16_t, arrow::Int16Builder>(
+                  arr_col_chunked_array->chunk(i), i, empty, indexArray);
+              break;
+            case 4:
+              frag.sz += appendDecimalData<int32_t, arrow::Int32Builder>(
+                  arr_col_chunked_array->chunk(i), i, empty, indexArray);
+              break;
+            case 8:
+              frag.sz += appendDecimalData<int64_t, arrow::Int64Builder>(
+                  arr_col_chunked_array->chunk(i), i, empty, indexArray);
+              break;
+            default:
+              CHECK(false);
+              break;
+          }
+          frag.chunks.emplace_back(indexArray->data());
         } else {
           frag.chunks.emplace_back(arr_col_chunked_array->chunk(i)->data());
           frag.sz += arr_col_chunked_array->chunk(i)->length();
@@ -411,4 +438,30 @@ std::string ArrowCsvForeignStorage::getType() const {
   LOG(INFO) << "CSV backed temporary tables has been activated. Create table `with "
                "(storage_type='CSV:path/to/file.csv');`\n";
   return "CSV";
+}
+
+template <typename T, typename builderType>
+int64_t appendDecimalData(const std::shared_ptr<arrow::Array>& chunk,
+                          int chunkIdx,
+                          bool empty,
+                          std::shared_ptr<arrow::Array>& arrayOut) {
+  std::shared_ptr<arrow::Decimal128Array> decimalArray =
+      std::static_pointer_cast<arrow::Decimal128Array>(chunk);
+  builderType indexBuilder;
+  indexBuilder.Reserve(decimalArray->length());
+
+  for (int j = 0; j < decimalArray->length(); ++j) {
+    if (decimalArray->IsNull(chunkIdx) || empty ||
+        decimalArray->null_count() == decimalArray->length()) {
+      indexBuilder.Append(inline_int_null_value<T>());
+    } else {
+      auto valPtr = decimalArray->GetValue(j);
+      arrow::Decimal128 valDec128(valPtr);
+      T val = static_cast<int64_t>(valDec128);  // arrow can cast only to int64_t
+      indexBuilder.Append(val);
+    }
+  }
+  ARROW_THROW_NOT_OK(indexBuilder.Finish(&arrayOut));
+
+  return decimalArray->length();
 }
