@@ -9,6 +9,7 @@ hash yay || { echo >&2 "yay is required but is not installed. Aborting."; exit 1
 
 # Install all normal dependencies
 yay -S \
+    aws-sdk-cpp \
     blosc \
     boost \
     clang \
