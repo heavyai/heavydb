@@ -116,27 +116,68 @@ std::string generate_random_string(const size_t len) {
   return str;
 }
 
-std::vector<std::string> split(const std::string& str, const std::string& delim) {
-  CHECK(!delim.empty());
+#ifndef __CUDACC__
+// This version of split works almost exactly like Python's split,
+// which is very convienently-designed.
+// See also: https://docs.python.org/3.8/library/stdtypes.html#str.split
+std::vector<std::string> split(std::string_view str,
+                               std::string_view delim,
+                               std::optional<size_t> maxsplit) {
   std::vector<std::string> result;
-  std::string::size_type i = 0, j = 0;
-  while ((i = str.find(delim, i)) != std::string::npos) {
-    result.emplace_back(str, j, i - j);
-    i += delim.size();
-    j = i;
+
+  // Use an explicit delimiter.
+  if (!delim.empty()) {
+    std::string::size_type i = 0, j = 0;
+    while ((i = str.find(delim, i)) != std::string::npos &&
+           (!maxsplit || result.size() < maxsplit.value())) {
+      result.emplace_back(str, j, i - j);
+      i += delim.size();
+      j = i;
+    }
+    result.emplace_back(str, j, std::string::npos);
+    return result;
+
+    // Treat any number of consecutive whitespace characters as a delimiter.
+  } else {
+    bool prev_ws = true;
+    std::string::size_type i = 0, j = 0;
+    for (; i < str.size(); ++i) {
+      if (prev_ws) {
+        if (!isspace(str[i])) {
+          // start of word
+          prev_ws = false;
+          j = i;
+        }
+      } else {
+        if (isspace(str[i])) {
+          // start of space
+          result.emplace_back(str, j, i - j);
+          prev_ws = true;
+          j = i;
+          if ((maxsplit && result.size() == maxsplit.value())) {
+            // stop early if maxsplit was reached
+            result.emplace_back(str, j, std::string::npos);
+            return result;
+          }
+        }
+      }
+    }
+    if (!prev_ws) {
+      result.emplace_back(str, j, std::string::npos);
+    }
+    return result;
   }
-  result.emplace_back(str, j);
-  return result;
 }
 
-std::string strip(const std::string& str) {
+std::string strip(std::string_view str) {
   std::string::size_type i, j;
   for (i = 0; i < str.size() && std::isspace(str[i]); ++i) {
   }
   for (j = str.size(); j > i && std::isspace(str[j - 1]); --j) {
   }
-  return str.substr(i, j - i);
+  return std::string(str.substr(i, j - i));
 }
+#endif  // __CUDACC__
 
 bool remove_unquoted_newlines_linefeeds_and_tabs_from_sql_string(
     std::string& str) noexcept {

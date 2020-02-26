@@ -338,8 +338,8 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
           data_mgr.getCudaMgr()->zeroDeviceMem(
               device_hll_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), device_id);
           const auto& columns_for_device = columns_per_device[device_id];
-          auto join_columns_gpu =
-              transfer_pod_vector_to_gpu(columns_for_device.join_columns, allocator);
+          auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(
+              columns_for_device.join_columns, allocator);
 
           CHECK_GT(columns_for_device.join_buckets.size(), 0u);
           const auto& bucket_sizes_for_dimension =
@@ -360,7 +360,8 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
               OverlapsKeyHandler(bucket_sizes_for_dimension.size(),
                                  join_columns_gpu,
                                  reinterpret_cast<double*>(bucket_sizes_gpu));
-          const auto key_handler_gpu = transfer_object_to_gpu(key_handler, allocator);
+          const auto key_handler_gpu =
+              transfer_flat_object_to_gpu(key_handler, allocator);
           approximate_distinct_tuples_on_device_overlaps(
               reinterpret_cast<uint8_t*>(device_hll_buffer),
               count_distinct_desc.bitmap_sz_bits,
@@ -635,16 +636,16 @@ int OverlapsJoinHashTable::initHashTableOnGpu(
     default:
       CHECK(false);
   }
-  auto join_columns_gpu = transfer_pod_vector_to_gpu(join_columns, allocator);
+  auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
   auto hash_buff =
       reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr());
   CHECK_EQ(join_columns.size(), 1u);
   auto& bucket_sizes_for_dimension = join_bucket_info[0].bucket_sizes_for_dimension;
   auto bucket_sizes_gpu =
-      transfer_pod_vector_to_gpu(bucket_sizes_for_dimension, allocator);
+      transfer_vector_of_flat_objects_to_gpu(bucket_sizes_for_dimension, allocator);
   const auto key_handler = OverlapsKeyHandler(
       bucket_sizes_for_dimension.size(), join_columns_gpu, bucket_sizes_gpu);
-  const auto key_handler_gpu = transfer_object_to_gpu(key_handler, allocator);
+  const auto key_handler_gpu = transfer_flat_object_to_gpu(key_handler, allocator);
   switch (key_component_width) {
     case 8: {
       overlaps_fill_baseline_hash_join_buff_on_device_64(
@@ -821,8 +822,8 @@ void OverlapsJoinHashTable::computeBucketSizes(
     auto& data_mgr = executor_->getCatalog()->getDataMgr();
     ThrustAllocator allocator(&data_mgr, device_id);
     auto device_bucket_sizes_gpu =
-        transfer_pod_vector_to_gpu(local_bucket_sizes, allocator);
-    auto join_columns_gpu = transfer_object_to_gpu(join_column, allocator);
+        transfer_vector_of_flat_objects_to_gpu(local_bucket_sizes, allocator);
+    auto join_columns_gpu = transfer_flat_object_to_gpu(join_column, allocator);
 
     compute_bucket_sizes_on_device(device_bucket_sizes_gpu,
                                    join_columns_gpu,

@@ -25,14 +25,11 @@
 
 #include <algorithm>
 #include <iomanip>
+#include <optional>
 #include <sstream>
 #include <string>
-#include <vector>
-
-// NOTE: check for C++17 is required here because Parser/ is pinned to C++14.
-#if __cplusplus >= 201703L
 #include <string_view>
-#endif  // __cplusplus >= 201703L
+#include <vector>
 
 #ifndef __CUDACC__
 void apply_shim(std::string& result,
@@ -75,19 +72,35 @@ std::string to_string(char const*&& v);
 template <>
 std::string to_string(std::string&& v);
 
+// NOTE(sy): to_upper/to_lower: As of Feb 2020, this is a solution recommended by Stack
+// Overflow. Boost's to_upper_copy() is many times slower, maybe because it uses
+// locale-aware std::toupper. Probably don't bother converting the input parameters to
+// std::string_view because testing gave a small slowdown for std::string inputs and a
+// small speedup for c-style string inputs for this usage.
+
 inline std::string to_upper(const std::string& str) {
   auto str_uc = str;
   std::transform(str_uc.begin(), str_uc.end(), str_uc.begin(), ::toupper);
   return str_uc;
 }
 
+inline std::string to_lower(const std::string& str) {
+  auto str_lc = str;
+  std::transform(str_lc.begin(), str_lc.end(), str_lc.begin(), ::tolower);
+  return str_lc;
+}
+
 std::string generate_random_string(const size_t len);
 
+#ifndef __CUDACC__
 //! split apart a string into a vector of substrings
-std::vector<std::string> split(const std::string& str, const std::string& delim);
+std::vector<std::string> split(std::string_view str,
+                               std::string_view delim = {},
+                               std::optional<size_t> maxsplit = std::nullopt);
 
 //! trim any whitespace from the left and right ends of a string
-std::string strip(const std::string& str);
+std::string strip(std::string_view str);
+#endif  // __CUDACC__
 
 //! sanitize an SQL string
 bool remove_unquoted_newlines_linefeeds_and_tabs_from_sql_string(
@@ -98,8 +111,7 @@ bool remove_unquoted_newlines_linefeeds_and_tabs_from_sql_string(
 // Does not check for escaped quotes within string.
 bool unquote(std::string&);
 
-// NOTE: this check for C++17 is required because Parser/ is pinned to C++14.
-#if __cplusplus >= 201703L
+#ifndef __CUDACC__
 namespace {
 
 template <typename T>
@@ -172,6 +184,6 @@ std::string concat_with(std::string_view with, Types&&... parms) {
   (j.append(stringlike(std::forward<Types>(parms))), ...);
   return std::move(j.txt);
 }
-#endif  // __cplusplus >= 201703L
+#endif  // __CUDACC__
 
 #endif  // SHARED_STRINGTRANSFORM_H

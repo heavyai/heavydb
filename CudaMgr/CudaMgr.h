@@ -158,6 +158,13 @@ class CudaMgr {
                          void** option_values,
                          const int device_id) const;
   void unloadGpuModuleData(CUmodule* module, const int device_id) const;
+
+  struct CudaMemoryUsage {
+    size_t free;   // available GPU RAM memory on active card in bytes
+    size_t total;  // total GPU RAM memory on active card in bytes
+  };
+
+  static CudaMemoryUsage getCudaMemoryUsage();
 #endif
 
  private:

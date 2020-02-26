@@ -454,10 +454,10 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
           data_mgr.getCudaMgr()->zeroDeviceMem(
               device_hll_buffer, count_distinct_desc.bitmapPaddedSizeBytes(), device_id);
           const auto& columns_for_device = columns_per_device[device_id];
-          auto join_columns_gpu =
-              transfer_pod_vector_to_gpu(columns_for_device.join_columns, allocator);
-          auto join_column_types_gpu =
-              transfer_pod_vector_to_gpu(columns_for_device.join_column_types, allocator);
+          auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(
+              columns_for_device.join_columns, allocator);
+          auto join_column_types_gpu = transfer_vector_of_flat_objects_to_gpu(
+              columns_for_device.join_column_types, allocator);
           const auto key_handler =
               GenericKeyHandler(columns_for_device.join_columns.size(),
                                 true,
@@ -465,7 +465,8 @@ std::pair<size_t, size_t> BaselineJoinHashTable::approximateTupleCount(
                                 join_column_types_gpu,
                                 nullptr,
                                 nullptr);
-          const auto key_handler_gpu = transfer_object_to_gpu(key_handler, allocator);
+          const auto key_handler_gpu =
+              transfer_flat_object_to_gpu(key_handler, allocator);
           approximate_distinct_tuples_on_device(
               reinterpret_cast<uint8_t*>(device_hll_buffer),
               count_distinct_desc.bitmap_sz_bits,
@@ -912,10 +913,11 @@ int BaselineJoinHashTable::initHashTableOnGpu(
     default:
       UNREACHABLE();
   }
-  auto join_columns_gpu = transfer_pod_vector_to_gpu(join_columns, allocator);
+  auto join_columns_gpu = transfer_vector_of_flat_objects_to_gpu(join_columns, allocator);
   auto hash_buff =
       reinterpret_cast<int8_t*>(gpu_hash_table_buff_[device_id]->getMemoryPtr());
-  auto join_column_types_gpu = transfer_pod_vector_to_gpu(join_column_types, allocator);
+  auto join_column_types_gpu =
+      transfer_vector_of_flat_objects_to_gpu(join_column_types, allocator);
 
   const auto key_handler = GenericKeyHandler(key_component_count,
                                              true,
@@ -923,7 +925,7 @@ int BaselineJoinHashTable::initHashTableOnGpu(
                                              join_column_types_gpu,
                                              nullptr,
                                              nullptr);
-  const auto key_handler_gpu = transfer_object_to_gpu(key_handler, allocator);
+  const auto key_handler_gpu = transfer_flat_object_to_gpu(key_handler, allocator);
   switch (key_component_width) {
     case 4: {
       fill_baseline_hash_join_buff_on_device_32(

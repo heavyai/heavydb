@@ -278,7 +278,7 @@ class MapDProgramOptions {
     fillAdvancedOptions();
   }
   int http_port = 6278;
-  size_t reserved_gpu_mem = 1 << 27;
+  size_t reserved_gpu_mem = 384 * 1024 * 1024;
   std::string base_path;
   std::string cluster_file = {"cluster.conf"};
   std::string cluster_topology_file = {"cluster_topology.conf"};
