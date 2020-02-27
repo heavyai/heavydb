@@ -592,6 +592,12 @@ void MapDProgramOptions::fillOptions() {
                               ->default_value(g_enable_experimental_string_functions)
                               ->implicit_value(true),
                           "Enable experimental string functions.");
+  help_desc.add_options()(
+      "calcite-service-timeout",
+      po::value<size_t>(&mapd_parameters.calcite_timeout)
+          ->default_value(mapd_parameters.calcite_timeout),
+      "Calcite server timeout (milliseconds). Increase this on systems with frequent "
+      "schema changes or when running large numbers of parallel queries.");
 
   help_desc.add(log_options_.get_options());
 }

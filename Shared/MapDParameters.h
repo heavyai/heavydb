@@ -52,6 +52,8 @@ struct MapDParameters {
   bool aggregator = false;
   bool enable_calcite_view_optimize =
       true;  // allow calcite to optimize the relalgebra for a view query
+  size_t calcite_timeout =
+      5000;  // calcite send/receive timeout (connect timeout hard coded to 2s)
   MapDParameters() : cuda_block_size(0), cuda_grid_size(0), calcite_max_mem(1024) {}
 };
 

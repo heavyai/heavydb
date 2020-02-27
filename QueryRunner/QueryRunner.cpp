@@ -137,7 +137,8 @@ QueryRunner::QueryRunner(const char* db_path,
 
   register_signal_handler();
   logger::set_once_fatal_func(&calcite_shutdown_handler);
-  g_calcite = std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024, udf_filename);
+  g_calcite =
+      std::make_shared<Calcite>(-1, CALCITEPORT, db_path, 1024, 5000, udf_filename);
   ExtensionFunctionsWhitelist::add(g_calcite->getExtensionFunctionWhitelist());
   if (!udf_filename.empty()) {
     ExtensionFunctionsWhitelist::addUdfs(g_calcite->getUserDefinedFunctionWhitelist());

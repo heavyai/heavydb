@@ -186,7 +186,7 @@ static void start_calcite_server_as_daemon(const int mapd_port,
 std::pair<mapd::shared_ptr<CalciteServerClient>, mapd::shared_ptr<TTransport>>
 Calcite::getClient(int port) {
   const auto transport = connMgr_->open_buffered_client_transport(
-      "localhost", port, ssl_ca_file_, true, 2000, 5000, 5000);
+      "localhost", port, ssl_ca_file_, true, 2000, service_timeout_, service_timeout_);
   try {
     transport->open();
 
@@ -285,8 +285,9 @@ Calcite::Calcite(const int mapd_port,
                  const int calcite_port,
                  const std::string& data_dir,
                  const size_t calcite_max_mem,
+                 const size_t service_timeout,
                  const std::string& udf_filename)
-    : server_available_(false) {
+    : server_available_(false), service_timeout_(service_timeout) {
   init(mapd_port, calcite_port, data_dir, calcite_max_mem, udf_filename);
 }
 
@@ -315,7 +316,8 @@ void Calcite::init(const int mapd_port,
 Calcite::Calcite(const MapDParameters& mapd_parameter,
                  const std::string& data_dir,
                  const std::string& udf_filename)
-    : ssl_trust_store_(mapd_parameter.ssl_trust_store)
+    : service_timeout_(mapd_parameter.calcite_timeout)
+    , ssl_trust_store_(mapd_parameter.ssl_trust_store)
     , ssl_trust_password_(mapd_parameter.ssl_trust_password)
     , ssl_key_file_(mapd_parameter.ssl_key_file)
     , ssl_keystore_(mapd_parameter.ssl_keystore)
