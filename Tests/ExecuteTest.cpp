@@ -13472,8 +13472,6 @@ TEST(Create, QuotedIdentifier) {
     ASSERT_EQ(static_cast<int64_t>(2),
               v<int64_t>(run_simple_agg(
                   "SELECT \"count\" FROM identifier_test where id = 2;", dt)));
-
-    run_ddl_statement("alter table identifier_test drop column \"count\";");
   }
 }
 
