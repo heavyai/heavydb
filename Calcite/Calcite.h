@@ -65,6 +65,7 @@ class Calcite final {
           const int port,
           const std::string& data_dir,
           const size_t calcite_max_mem,
+          const size_t service_timeout,
           const std::string& udf_filename = "");
   Calcite(const MapDParameters& mapd_parameter,
           const std::string& data_dir,
@@ -123,6 +124,7 @@ class Calcite final {
 
   mapd::shared_ptr<ThriftClientConnection> connMgr_;
   bool server_available_;
+  size_t service_timeout_;
   int remote_calcite_port_ = -1;
   std::string ssl_trust_store_;
   std::string ssl_trust_password_;
