@@ -272,8 +272,10 @@ ArrowResultSetConverter::getSerializedArrowOutput() const {
   std::shared_ptr<arrow::RecordBatch> arrow_copy = convertToArrow(dict_memo);
   std::shared_ptr<arrow::Buffer> serialized_records, serialized_schema;
 
-  ARROW_THROW_NOT_OK(arrow::ipc::SerializeSchema(
-      *arrow_copy->schema(), arrow::default_memory_pool(), &serialized_schema));
+  ARROW_THROW_NOT_OK(arrow::ipc::SerializeSchema(*arrow_copy->schema(),
+                                                 &dict_memo,
+                                                 arrow::default_memory_pool(),
+                                                 &serialized_schema));
 
   if (arrow_copy->num_rows()) {
     ARROW_THROW_NOT_OK(arrow_copy->Validate());
@@ -295,7 +297,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::convertToArrow(
     std::shared_ptr<arrow::Array> dict;
     if (ti.is_dict_encoded_string()) {
       const int dict_id = ti.get_comp_param();
-      if (memo.HasDictionaryId(dict_id)) {
+      if (memo.HasDictionary(dict_id)) {
         ARROW_THROW_NOT_OK(memo.GetDictionary(dict_id, &dict));
       } else {
         auto str_list = results_->getStringDictionaryPayloadCopy(dict_id);
@@ -312,11 +314,12 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::convertToArrow(
     }
     fields.push_back(makeField(col_names_.empty() ? "" : col_names_[i], ti, dict));
   }
-  return getArrowBatch(arrow::schema(fields));
+  return getArrowBatch(arrow::schema(fields), memo);
 }
 
 std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
-    const std::shared_ptr<arrow::Schema>& schema) const {
+    const std::shared_ptr<arrow::Schema>& schema,
+    arrow::ipc::DictionaryMemo& memo) const {
   std::vector<std::shared_ptr<arrow::Array>> result_columns;
 
   const size_t entry_count = top_n_ < 0
@@ -471,7 +474,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
   }
 
   for (size_t i = 0; i < col_count; ++i) {
-    result_columns.push_back(finishColumnBuilder(builders[i]));
+    result_columns.push_back(finishColumnBuilder(builders[i], memo));
   }
   return ARROW_RECORDBATCH_MAKE(schema, row_count, result_columns);
 }
@@ -509,7 +512,7 @@ std::shared_ptr<arrow::DataType> ArrowResultSetConverter::getArrowType(
         CHECK(dict_values);
         const auto index_type =
             getArrowType(get_dict_index_type_info(mapd_type), nullptr);
-        return dictionary(index_type, dict_values);
+        return dictionary(index_type, dict_values->type(), false);
       }
       return utf8();
     case kDECIMAL:
@@ -611,11 +614,17 @@ void ArrowResultSetConverter::reserveColumnBuilderSize(ColumnBuilder& column_bui
 }
 
 std::shared_ptr<arrow::Array> ArrowResultSetConverter::finishColumnBuilder(
-    ColumnBuilder& column_builder) const {
+    ColumnBuilder& column_builder,
+    arrow::ipc::DictionaryMemo& memo) const {
   std::shared_ptr<Array> values;
   ARROW_THROW_NOT_OK(column_builder.builder->Finish(&values));
   if (column_builder.field->type()->id() == Type::DICTIONARY) {
-    return std::make_shared<DictionaryArray>(column_builder.field->type(), values);
+    auto type = column_builder.field->type();
+    int64_t id;
+    ARROW_THROW_NOT_OK(memo.GetId(*column_builder.field, &id));
+    std::shared_ptr<arrow::Array> dict;
+    ARROW_THROW_NOT_OK(memo.GetDictionary(id, &dict));
+    return dict;
   } else {
     return values;
   }
@@ -702,7 +711,8 @@ void ArrowResultSetConverter::append(
 void print_serialized_schema(const uint8_t* data, const size_t length) {
   io::BufferReader reader(std::make_shared<arrow::Buffer>(data, length));
   std::shared_ptr<Schema> schema;
-  ARROW_THROW_NOT_OK(ipc::ReadSchema(&reader, &schema));
+  arrow::ipc::DictionaryMemo in_memo;
+  ARROW_THROW_NOT_OK(ipc::ReadSchema(&reader, &in_memo, &schema));
 
   std::cout << "Arrow Schema: " << std::endl;
   const PrettyPrintOptions options{0};
@@ -718,7 +728,8 @@ void print_serialized_records(const uint8_t* data,
   }
   std::shared_ptr<RecordBatch> batch;
 
+  arrow::ipc::DictionaryMemo in_memo;
   io::BufferReader buffer_reader(std::make_shared<arrow::Buffer>(data, length));
-  ARROW_THROW_NOT_OK(ipc::ReadRecordBatch(schema, &buffer_reader, &batch));
+  ARROW_THROW_NOT_OK(ipc::ReadRecordBatch(schema, &in_memo, &buffer_reader, &batch));
 }
 #endif

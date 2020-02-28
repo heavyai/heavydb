@@ -222,11 +222,13 @@ void ArrowResultSet::resultSetArrowLoopback() {
   arrow::io::BufferReader schema_reader(serialized_arrow_output.schema);
 
   std::shared_ptr<arrow::Schema> schema;
-  ARROW_THROW_NOT_OK(arrow::ipc::ReadSchema(&schema_reader, &schema));
+  ARROW_THROW_NOT_OK(
+      arrow::ipc::ReadSchema(&schema_reader, &record_dictionaries_, &schema));
 
   arrow::io::BufferReader records_reader(serialized_arrow_output.records);
-  ARROW_THROW_NOT_OK(
-      arrow::ipc::ReadRecordBatch(schema, &records_reader, &record_batch_));
+
+  ARROW_THROW_NOT_OK(arrow::ipc::ReadRecordBatch(
+      schema, &record_dictionaries_, &records_reader, &record_batch_));
 
   CHECK_EQ(schema->num_fields(), record_batch_->num_columns());
 }

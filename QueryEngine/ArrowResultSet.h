@@ -138,6 +138,7 @@ class ArrowResultSet {
   std::shared_ptr<ResultSet> rows_;
   std::vector<TargetMetaInfo> targets_meta_;
   std::shared_ptr<arrow::RecordBatch> record_batch_;
+  arrow::ipc::DictionaryMemo record_dictionaries_;
 
   // Boxed arrays from the record batch. The result of RecordBatch::column is
   // temporary, so we cache these for better performance
@@ -188,7 +189,8 @@ class ArrowResultSetConverter {
   std::shared_ptr<arrow::RecordBatch> convertToArrow(
       arrow::ipc::DictionaryMemo& memo) const;
   std::shared_ptr<arrow::RecordBatch> getArrowBatch(
-      const std::shared_ptr<arrow::Schema>& schema) const;
+      const std::shared_ptr<arrow::Schema>& schema,
+      arrow::ipc::DictionaryMemo& memo) const;
   ArrowResult getArrowResultImpl() const;
   std::shared_ptr<arrow::Field> makeField(
       const std::string name,
@@ -226,7 +228,8 @@ class ArrowResultSetConverter {
       const std::shared_ptr<std::vector<bool>>& is_valid) const;
 
   inline std::shared_ptr<arrow::Array> finishColumnBuilder(
-      ColumnBuilder& column_builder) const;
+      ColumnBuilder& column_builder,
+      arrow::ipc::DictionaryMemo& memo) const;
 
   std::shared_ptr<ResultSet> results_;
   std::shared_ptr<Data_Namespace::DataMgr> data_mgr_ = nullptr;
