@@ -4746,8 +4746,10 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                                 first_n);
   ArrowResult arrow_result;
 
+  // TODO(adb): properly serialize
+  arrow::ipc::DictionaryMemo memo;
   _return.arrow_conversion_time_ms +=
-      measure<>::execution([&] { arrow_result = converter->getArrowResult(); });
+      measure<>::execution([&] { arrow_result = converter->getArrowResult(&memo); });
   _return.sm_handle =
       std::string(arrow_result.sm_handle.begin(), arrow_result.sm_handle.end());
   _return.sm_size = arrow_result.sm_size;

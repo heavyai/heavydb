@@ -33,10 +33,4 @@ void arrow_status_thrift_throw(const ::arrow::Status& s);
     }                         \
   } while (0)
 
-#if ARROW_VERSION < 15000
-#define ARROW_GET_DATA(x) (x->data())
-#else
-#define ARROW_GET_DATA(x) (x)
-#endif
-
 #endif  // QUERYENGINE_ARROW_UTIL_H
