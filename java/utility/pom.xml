@@ -82,6 +82,7 @@
       <groupId>com.unboundid</groupId>
       <artifactId>unboundid-ldapsdk</artifactId>
       <version>4.0.6</version>
+      <scope>test</scope>
     </dependency>
   </dependencies>
   <build>
