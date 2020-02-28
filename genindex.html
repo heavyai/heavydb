@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.2.0dev e465130
+                5.2.0dev d7e34d4
               </div>
             
           
@@ -367,6 +367,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_d_b_object.html">Class DBObject</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_data___namespace_1_1_abstract_buffer.html">Class Data_Namespace::AbstractBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_data___namespace_1_1_data_mgr.html">Class Data_Namespace::DataMgr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_data___namespace_1_1_proc_meminfo_parser.html">Class Data_Namespace::ProcMeminfoParser</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_date_days_encoder.html">Class DateDaysEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_date_days_overflow_validator.html">Class DateDaysOverflowValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_date_time_facilities.html">Class DateTimeFacilities</a></li>
@@ -997,6 +998,7 @@
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_d_b_object_key.html">Struct DBObjectKey</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_dashboard_descriptor.html">Struct DashboardDescriptor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_dashboard_privileges.html">Struct DashboardPrivileges</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/struct/struct_data___namespace_1_1_data_mgr_1_1_system_memory_usage.html">Struct Data_Namespace::DataMgr::SystemMemoryUsage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_data___namespace_1_1_memory_data.html">Struct Data_Namespace::MemoryData</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_data___namespace_1_1_memory_info.html">Struct Data_Namespace::MemoryInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/struct/struct_database_privileges.html">Struct DatabasePrivileges</a></li>
@@ -3505,7 +3507,7 @@
 </li>
       <li><a href="api/class/class_calcite.html#_CPPv47Calcite">Calcite (C++ class)</a>
 </li>
-      <li><a href="api/class/class_calcite.html#_CPPv4N7Calcite7CalciteEKiKiRKNSt6stringEK6size_tRKNSt6stringE">Calcite::Calcite (C++ function)</a>, <a href="api/class/class_calcite.html#_CPPv4N7Calcite7CalciteERK14MapDParametersRKNSt6stringERKNSt6stringE">[1]</a>
+      <li><a href="api/class/class_calcite.html#_CPPv4N7Calcite7CalciteEKiKiRKNSt6stringEK6size_tK6size_tRKNSt6stringE">Calcite::Calcite (C++ function)</a>, <a href="api/class/class_calcite.html#_CPPv4N7Calcite7CalciteERK14MapDParametersRKNSt6stringERKNSt6stringE">[1]</a>
 </li>
       <li><a href="api/class/class_calcite.html#_CPPv4NK7Calcite30checkAccessedObjectsPrivilegesEN11query_state15QueryStateProxyE11TPlanResult">Calcite::checkAccessedObjectsPrivileges (C++ function)</a>
 </li>
@@ -3546,6 +3548,8 @@
       <li><a href="api/class/class_calcite.html#_CPPv4N7Calcite9runServerEKiKiRKNSt6stringEK6size_tRKNSt6stringE">Calcite::runServer (C++ function)</a>
 </li>
       <li><a href="api/class/class_calcite.html#_CPPv4N7Calcite17server_available_E">Calcite::server_available_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_calcite.html#_CPPv4N7Calcite16service_timeout_E">Calcite::service_timeout_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_calcite.html#_CPPv4N7Calcite28setRuntimeExtensionFunctionsERKNSt6vectorI20TUserDefinedFunctionEERKNSt6vectorI25TUserDefinedTableFunctionEE">Calcite::setRuntimeExtensionFunctions (C++ function)</a>
 </li>
@@ -4495,10 +4499,10 @@
 </li>
       <li><a href="api/struct/struct_chunk_metadata.html#_CPPv4N13ChunkMetadata8numBytesE">ChunkMetadata::numBytes (C++ member)</a>
 </li>
-      <li><a href="api/struct/struct_chunk_metadata.html#_CPPv4N13ChunkMetadata11numElementsE">ChunkMetadata::numElements (C++ member)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api/struct/struct_chunk_metadata.html#_CPPv4N13ChunkMetadata11numElementsE">ChunkMetadata::numElements (C++ member)</a>
+</li>
       <li><a href="api/struct/struct_chunk_metadata.html#_CPPv4NK13ChunkMetadataeqERK13ChunkMetadata">ChunkMetadata::operator== (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_chunk_metadata.html#_CPPv4N13ChunkMetadata7sqlTypeE">ChunkMetadata::sqlType (C++ member)</a>
@@ -5663,9 +5667,11 @@
 </li>
       <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr13getMemoryInfoEK11MemoryLevel">Data_Namespace::DataMgr::getMemoryInfo (C++ function)</a>
 </li>
+      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4NK14Data_Namespace7DataMgr20getSystemMemoryUsageEv">Data_Namespace::DataMgr::getSystemMemoryUsage (C++ function)</a>
+</li>
       <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr13getTableEpochEKiKi">Data_Namespace::DataMgr::getTableEpoch (C++ function)</a>
 </li>
-      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr20getTotalSystemMemoryEv">Data_Namespace::DataMgr::getTotalSystemMemory (C++ function)</a>
+      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4NK14Data_Namespace7DataMgr20getTotalSystemMemoryEv">Data_Namespace::DataMgr::getTotalSystemMemory (C++ function)</a>
 </li>
       <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr11gpusPresentEv">Data_Namespace::DataMgr::gpusPresent (C++ function)</a>
 </li>
@@ -5682,6 +5688,20 @@
       <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr15reservedGpuMem_E">Data_Namespace::DataMgr::reservedGpuMem_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr13setTableEpochEKiKiKi">Data_Namespace::DataMgr::setTableEpoch (C++ function)</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr17SystemMemoryUsageE">Data_Namespace::DataMgr::SystemMemoryUsage (C++ class)</a>, <a href="api/struct/struct_data___namespace_1_1_data_mgr_1_1_system_memory_usage.html#_CPPv4N14Data_Namespace7DataMgr17SystemMemoryUsageE">[1]</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr17SystemMemoryUsage4freeE">Data_Namespace::DataMgr::SystemMemoryUsage::free (C++ member)</a>, <a href="api/struct/struct_data___namespace_1_1_data_mgr_1_1_system_memory_usage.html#_CPPv4N14Data_Namespace7DataMgr17SystemMemoryUsage4freeE">[1]</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr17SystemMemoryUsage7regularE">Data_Namespace::DataMgr::SystemMemoryUsage::regular (C++ member)</a>, <a href="api/struct/struct_data___namespace_1_1_data_mgr_1_1_system_memory_usage.html#_CPPv4N14Data_Namespace7DataMgr17SystemMemoryUsage7regularE">[1]</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr17SystemMemoryUsage8residentE">Data_Namespace::DataMgr::SystemMemoryUsage::resident (C++ member)</a>, <a href="api/struct/struct_data___namespace_1_1_data_mgr_1_1_system_memory_usage.html#_CPPv4N14Data_Namespace7DataMgr17SystemMemoryUsage8residentE">[1]</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr17SystemMemoryUsage6sharedE">Data_Namespace::DataMgr::SystemMemoryUsage::shared (C++ member)</a>, <a href="api/struct/struct_data___namespace_1_1_data_mgr_1_1_system_memory_usage.html#_CPPv4N14Data_Namespace7DataMgr17SystemMemoryUsage6sharedE">[1]</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr17SystemMemoryUsage5totalE">Data_Namespace::DataMgr::SystemMemoryUsage::total (C++ member)</a>, <a href="api/struct/struct_data___namespace_1_1_data_mgr_1_1_system_memory_usage.html#_CPPv4N14Data_Namespace7DataMgr17SystemMemoryUsage5totalE">[1]</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgr17SystemMemoryUsage6vtotalE">Data_Namespace::DataMgr::SystemMemoryUsage::vtotal (C++ member)</a>, <a href="api/struct/struct_data___namespace_1_1_data_mgr_1_1_system_memory_usage.html#_CPPv4N14Data_Namespace7DataMgr17SystemMemoryUsage6vtotalE">[1]</a>
 </li>
       <li><a href="api/class/class_data___namespace_1_1_data_mgr.html#_CPPv4N14Data_Namespace7DataMgrD0Ev">Data_Namespace::DataMgr::~DataMgr (C++ function)</a>
 </li>
@@ -5710,6 +5730,18 @@
       <li><a href="api/struct/struct_data___namespace_1_1_memory_info.html#_CPPv4N14Data_Namespace10MemoryInfo16numPageAllocatedE">Data_Namespace::MemoryInfo::numPageAllocated (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_data___namespace_1_1_memory_info.html#_CPPv4N14Data_Namespace10MemoryInfo8pageSizeE">Data_Namespace::MemoryInfo::pageSize (C++ member)</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_proc_meminfo_parser.html#_CPPv4N14Data_Namespace17ProcMeminfoParserE">Data_Namespace::ProcMeminfoParser (C++ class)</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_proc_meminfo_parser.html#_CPPv4N14Data_Namespace17ProcMeminfoParser5beginEv">Data_Namespace::ProcMeminfoParser::begin (C++ function)</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_proc_meminfo_parser.html#_CPPv4N14Data_Namespace17ProcMeminfoParser3endEv">Data_Namespace::ProcMeminfoParser::end (C++ function)</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_proc_meminfo_parser.html#_CPPv4N14Data_Namespace17ProcMeminfoParser6items_E">Data_Namespace::ProcMeminfoParser::items_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_proc_meminfo_parser.html#_CPPv4N14Data_Namespace17ProcMeminfoParserixERKNSt6stringE">Data_Namespace::ProcMeminfoParser::operator[] (C++ function)</a>
+</li>
+      <li><a href="api/class/class_data___namespace_1_1_proc_meminfo_parser.html#_CPPv4N14Data_Namespace17ProcMeminfoParser17ProcMeminfoParserEv">Data_Namespace::ProcMeminfoParser::ProcMeminfoParser (C++ function)</a>
 </li>
       <li><a href="api/struct/struct_database_privileges.html#_CPPv418DatabasePrivileges">DatabasePrivileges (C++ class)</a>
 </li>
@@ -5855,6 +5887,8 @@
 </li>
       <li><a href="api/class/class_d_b_object.html#_CPPv4NK8DBObject7getTypeEv">DBObject::getType (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_d_b_object.html#_CPPv4N8DBObject15grantPrivilegesERK8DBObject">DBObject::grantPrivileges (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_object.html#_CPPv4N8DBObject7loadKeyERKN17Catalog_Namespace7CatalogE">DBObject::loadKey (C++ function)</a>, <a href="api/class/class_d_b_object.html#_CPPv4N8DBObject7loadKeyEv">[1]</a>
@@ -5869,8 +5903,6 @@
 </li>
       <li><a href="api/class/class_d_b_object.html#_CPPv4N8DBObject8ownerId_E">DBObject::ownerId_ (C++ member)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_d_b_object.html#_CPPv4N8DBObject15resetPrivilegesEv">DBObject::resetPrivileges (C++ function)</a>
 </li>
       <li><a href="api/class/class_d_b_object.html#_CPPv4N8DBObject16revokePrivilegesERK8DBObject">DBObject::revokePrivileges (C++ function)</a>
@@ -10597,10 +10629,10 @@
 </li>
       <li><a href="api/class/class_map_d_handler.html#_CPPv4N11MapDHandler15share_dashboardERK10TSessionIdK7int32_tRKNSt6vectorINSt6stringEEERKNSt6vectorINSt6stringEEERK21TDashboardPermissionsKb">MapDHandler::share_dashboard (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_map_d_handler.html#_CPPv4N11MapDHandler8shutdownEv">MapDHandler::shutdown (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_map_d_handler.html#_CPPv4N11MapDHandler11sql_executeER12TQueryResultRK10TSessionIdRKNSt6stringEKbRKNSt6stringEK7int32_tK7int32_t">MapDHandler::sql_execute (C++ function)</a>
 </li>
       <li><a href="api/class/class_map_d_handler.html#_CPPv4N11MapDHandler14sql_execute_dfER10TDataFrameRK10TSessionIdRKNSt6stringEKN11TDeviceType4typeEK7int32_tK7int32_t">MapDHandler::sql_execute_df (C++ function)</a>
@@ -10666,6 +10698,8 @@
       <li><a href="api/struct/struct_map_d_parameters.html#_CPPv4N14MapDParameters15calcite_max_memE">MapDParameters::calcite_max_mem (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_map_d_parameters.html#_CPPv4N14MapDParameters12calcite_portE">MapDParameters::calcite_port (C++ member)</a>
+</li>
+      <li><a href="api/struct/struct_map_d_parameters.html#_CPPv4N14MapDParameters15calcite_timeoutE">MapDParameters::calcite_timeout (C++ member)</a>
 </li>
       <li><a href="api/struct/struct_map_d_parameters.html#_CPPv4N14MapDParameters11config_fileE">MapDParameters::config_file (C++ member)</a>
 </li>
