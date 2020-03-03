@@ -20,9 +20,13 @@
 
 class QueryRewriter {
  public:
-  QueryRewriter(const std::vector<InputTableInfo>& query_infos, const Executor* executor)
+  QueryRewriter(const std::vector<InputTableInfo>& query_infos, Executor* executor)
       : query_infos_(query_infos), executor_(executor) {}
   RelAlgExecutionUnit rewrite(const RelAlgExecutionUnit& ra_exe_unit_in) const;
+
+  RelAlgExecutionUnit rewriteColumnarUpdate(
+      const RelAlgExecutionUnit& ra_exe_unit_in,
+      std::shared_ptr<Analyzer::Expr> column_to_update) const;
 
  private:
   RelAlgExecutionUnit rewriteOverlapsJoin(
@@ -40,6 +44,6 @@ class QueryRewriter {
       const Analyzer::InValues*);
 
   const std::vector<InputTableInfo>& query_infos_;
-  const Executor* executor_;
+  Executor* executor_;
   mutable std::vector<std::shared_ptr<Analyzer::Expr>> target_exprs_owned_;
 };

@@ -23,6 +23,8 @@ class StringDictionaryGenerations {
  public:
   void setGeneration(const uint32_t id, const size_t generation);
 
+  void updateGeneration(const uint32_t id, const size_t generation);
+
   ssize_t getGeneration(const uint32_t id) const;
 
   const std::unordered_map<uint32_t, size_t>& asMap() const;

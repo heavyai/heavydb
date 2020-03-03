@@ -314,6 +314,8 @@ class UpdateLogForFragment : public RowDataProvider {
 
   using Callback = std::function<void(const UpdateLogForFragment&)>;
 
+  auto getResultSet() const { return rs_; }
+
  private:
   FragmentInfoType const& fragment_info_;
   size_t fragment_index_;

@@ -16,9 +16,17 @@
 
 #include "StringDictionaryGenerations.h"
 
+#include "Shared/Logger.h"
+
 void StringDictionaryGenerations::setGeneration(const uint32_t id,
                                                 const size_t generation) {
   id_to_generation_.emplace(id, generation);
+}
+
+void StringDictionaryGenerations::updateGeneration(const uint32_t id,
+                                                   const size_t generation) {
+  CHECK(id_to_generation_.count(id));
+  id_to_generation_[id] = generation;
 }
 
 ssize_t StringDictionaryGenerations::getGeneration(const uint32_t id) const {

@@ -27,7 +27,7 @@ enum class ExecutorDispatchMode { KernelPerFragment, MultifragmentKernel };
 
 struct CompilationOptions {
   ExecutorDeviceType device_type_;
-  const bool hoist_literals_;
+  bool hoist_literals_;
   const ExecutorOptLevel opt_level_;
   const bool with_dynamic_watchdog_;
   const ExecutorExplainType explain_type_{ExecutorExplainType::Default};
@@ -37,7 +37,7 @@ struct CompilationOptions {
 enum class ExecutorType { Native, Extern };
 
 struct ExecutionOptions {
-  const bool output_columnar_hint;
+  bool output_columnar_hint;
   const bool allow_multifrag;
   const bool just_explain;  // return the generated IR for the first step
   const bool allow_loop_joins;

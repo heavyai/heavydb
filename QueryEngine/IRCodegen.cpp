@@ -53,9 +53,12 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Expr* expr,
                   ? static_cast<llvm::Value*>(executor_->cgen_state_->inlineFpNull(ti))
                   : static_cast<llvm::Value*>(executor_->cgen_state_->inlineIntNull(ti))};
     }
-    // The dictionary encoding case should be handled by the parent expression
-    // (cast, for now), here is too late to know the dictionary id
-    CHECK_NE(kENCODING_DICT, ti.get_compression());
+    if (ti.get_compression() == kENCODING_DICT) {
+      // The dictionary encoding case should be handled by the parent expression
+      // (cast, for now), here is too late to know the dictionary id if not already set
+      CHECK_NE(ti.get_comp_param(), 0);
+      return {codegen(constant, ti.get_compression(), ti.get_comp_param(), co)};
+    }
     return {codegen(constant, ti.get_compression(), 0, co)};
   }
   auto case_expr = dynamic_cast<const Analyzer::CaseExpr*>(expr);

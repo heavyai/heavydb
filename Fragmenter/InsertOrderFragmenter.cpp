@@ -270,7 +270,7 @@ void InsertOrderFragmenter::updateChunkStats(
       auto chunk = Chunk_NS::Chunk::getChunk(cd,
                                              &catalog_->getDataMgr(),
                                              chunk_key,
-                                             Data_Namespace::MemoryLevel::DISK_LEVEL,
+                                             defaultInsertLevel_,
                                              0,
                                              chunk_meta_it->second.numBytes,
                                              chunk_meta_it->second.numElements);
@@ -289,7 +289,9 @@ void InsertOrderFragmenter::updateChunkStats(
 
       const bool didResetStats = encoder->resetChunkStats(chunk_stats);
       // Use the logical type to display data, since the encoding should be ignored
-      const auto logical_ti = get_logical_type_info(cd->columnType);
+      const auto logical_ti = cd->columnType.is_dict_encoded_string()
+                                  ? SQLTypeInfo(kBIGINT)
+                                  : get_logical_type_info(cd->columnType);
       if (!didResetStats) {
         VLOG(3) << "Skipping chunk stats reset for " << showChunk(chunk_key);
         VLOG(3) << "Max: " << DatumToString(old_chunk_stats.max, logical_ti) << " -> "
@@ -312,6 +314,7 @@ void InsertOrderFragmenter::updateChunkStats(
       // Run through fillChunkStats to ensure any transformations to the raw metadata
       // values get applied (e.g. for date in days)
       encoder->getMetadata(new_metadata);
+
       fragment->setChunkMetadata(column_id, new_metadata);
       fragment->shadowChunkMetadataMap =
           fragment->getChunkMetadataMap();  // TODO(adb): needed?

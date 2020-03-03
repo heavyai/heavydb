@@ -15,6 +15,11 @@
  */
 
 #include "QueryRewrite.h"
+
+#include <algorithm>
+#include <memory>
+#include <vector>
+
 #include "ExpressionRange.h"
 #include "ExpressionRewrite.h"
 #include "Shared/Logger.h"
@@ -183,4 +188,140 @@ std::shared_ptr<Analyzer::CaseExpr> QueryRewriter::generateCaseForDomainValues(
   auto else_expr = case_expr_list.front().second;
   return makeExpr<Analyzer::CaseExpr>(
       case_expr_list.front().second->get_type_info(), false, case_expr_list, else_expr);
+}
+
+/* Rewrites an update query of the form `SELECT new_value, OFFSET_IN_FRAGMENT() FROM t
+ * WHERE <update_filter_condition>` to `SELECT CASE WHEN <update_filer_condition> THEN
+ * new_value ELSE existing value END FROM t`
+ */
+RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
+    const RelAlgExecutionUnit& ra_exe_unit_in,
+    std::shared_ptr<Analyzer::Expr> column_to_update) const {
+  CHECK_EQ(ra_exe_unit_in.target_exprs.size(), size_t(2));
+  CHECK(ra_exe_unit_in.groupby_exprs.size() == 1 &&
+        !ra_exe_unit_in.groupby_exprs.front());
+
+  if (ra_exe_unit_in.join_quals.size() > 0) {
+    throw std::runtime_error("Update via join not yet supported for temporary tables.");
+  }
+
+  auto new_column_value = ra_exe_unit_in.target_exprs.front()->deep_copy();
+  const auto& new_column_ti = new_column_value->get_type_info();
+  if (column_to_update->get_type_info().is_dict_encoded_string()) {
+    CHECK(new_column_ti.is_dict_encoded_string());
+    if (new_column_ti.get_comp_param() > 0 &&
+        new_column_ti.get_comp_param() !=
+            column_to_update->get_type_info().get_comp_param()) {
+      throw std::runtime_error(
+          "Updating a dictionary encoded string using another dictionary encoded string "
+          "column is not yet supported, unless both columns share dictionaries.");
+    }
+    if (auto uoper = dynamic_cast<Analyzer::UOper*>(new_column_value.get())) {
+      if (uoper->get_optype() == kCAST &&
+          dynamic_cast<const Analyzer::Constant*>(uoper->get_operand())) {
+        const auto original_constant_expr =
+            dynamic_cast<const Analyzer::Constant*>(uoper->get_operand());
+        CHECK(original_constant_expr);
+        CHECK(original_constant_expr->get_type_info().is_string());
+        // extract the string, insert it into the dict for the table we are updating,
+        // and place the dictionary ID in the oper
+        auto cat = executor_->getCatalog();
+        CHECK(cat);
+
+        CHECK(column_to_update->get_type_info().is_dict_encoded_string());
+        const auto dict_id = column_to_update->get_type_info().get_comp_param();
+        std::map<int, StringDictionary*> string_dicts;
+        const auto dd = cat->getMetadataForDict(dict_id, /*load_dict=*/true);
+        CHECK(dd);
+        auto string_dict = dd->stringDict;
+        CHECK(string_dict);
+
+        auto string_id =
+            string_dict->getOrAdd(*original_constant_expr->get_constval().stringval);
+        // TODO(adb): handle string id invalid or out of bounds
+
+        // Codegen expects a string value. The string will be
+        // resolved to its ID during Constant codegen. Copy the string from the
+        // original expr
+        Datum new_string_datum{.stringval = new std::string(
+                                   *original_constant_expr->get_constval().stringval)};
+        // TODO(adb): handle null
+
+        new_column_value =
+            makeExpr<Analyzer::Constant>(column_to_update->get_type_info(),
+                                         original_constant_expr->get_is_null(),
+                                         new_string_datum);
+
+        // Roll the string dict generation forward, as we have added a string
+        if (executor_->string_dictionary_generations_.getGeneration(dict_id) > -1) {
+          executor_->string_dictionary_generations_.updateGeneration(
+              dict_id, string_dict->storageEntryCount());
+        } else {
+          // Simple update with no filters does not use a CASE, and therefore does not add
+          // a valid generation
+          executor_->string_dictionary_generations_.setGeneration(
+              dict_id, string_dict->storageEntryCount());
+        }
+      }
+    }
+  }
+
+  std::shared_ptr<Analyzer::Expr> filter;
+  std::vector<std::shared_ptr<Analyzer::Expr>> filter_exprs;
+  filter_exprs.insert(filter_exprs.end(),
+                      ra_exe_unit_in.simple_quals.begin(),
+                      ra_exe_unit_in.simple_quals.end());
+  filter_exprs.insert(
+      filter_exprs.end(), ra_exe_unit_in.quals.begin(), ra_exe_unit_in.quals.end());
+
+  if (filter_exprs.size() > 0) {
+    std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
+        case_expr_list;
+    if (filter_exprs.size() == 1) {
+      filter = filter_exprs.front();
+    } else {
+      filter = std::accumulate(
+          std::next(filter_exprs.begin()),
+          filter_exprs.end(),
+          filter_exprs.front(),
+          [](const std::shared_ptr<Analyzer::Expr> a,
+             const std::shared_ptr<Analyzer::Expr> b) {
+            CHECK_EQ(a->get_type_info().get_type(), b->get_type_info().get_type());
+            return makeExpr<Analyzer::BinOper>(a->get_type_info().get_type(),
+                                               SQLOps::kAND,
+                                               SQLQualifier::kONE,
+                                               a->deep_copy(),
+                                               b->deep_copy());
+          });
+    }
+    auto when_expr = filter;  // only one filter, will be a BinOper if multiple filters
+    case_expr_list.emplace_back(std::make_pair(when_expr, new_column_value));
+    const auto& then_ti = case_expr_list.front().second->get_type_info();
+    // const auto& case_ti = column_to_update->get_type_info();
+    auto case_expr =
+        makeExpr<Analyzer::CaseExpr>(then_ti, false, case_expr_list, column_to_update);
+    target_exprs_owned_.emplace_back(case_expr);
+  } else {
+    // no filters, simply project the update value
+    target_exprs_owned_.emplace_back(new_column_value);
+  }
+
+  std::vector<Analyzer::Expr*> target_exprs;
+  CHECK_EQ(target_exprs_owned_.size(), size_t(1));
+  target_exprs.emplace_back(target_exprs_owned_.front().get());
+
+  RelAlgExecutionUnit rewritten_exe_unit{ra_exe_unit_in.input_descs,
+                                         ra_exe_unit_in.input_col_descs,
+                                         {},
+                                         {},
+                                         ra_exe_unit_in.join_quals,
+                                         ra_exe_unit_in.groupby_exprs,
+                                         target_exprs,
+                                         ra_exe_unit_in.estimator,
+                                         ra_exe_unit_in.sort_info,
+                                         ra_exe_unit_in.scan_limit,
+                                         ra_exe_unit_in.query_features,
+                                         ra_exe_unit_in.use_bump_allocator,
+                                         ra_exe_unit_in.query_state};
+  return rewritten_exe_unit;
 }

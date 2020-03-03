@@ -372,7 +372,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     if (compound->isDeleteViaSelect()) {
       executeDeleteViaCompound(compound, co, eo_work_unit, render_info, queue_time_ms);
     } else if (compound->isUpdateViaSelect()) {
-      executeUpdateViaCompound(compound, co, eo_work_unit, render_info, queue_time_ms);
+      executeUpdate(compound, co, eo_work_unit, queue_time_ms);
     } else {
       exec_desc.setResult(
           executeCompound(compound, co, eo_work_unit, render_info, queue_time_ms));
@@ -388,7 +388,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
     if (project->isDeleteViaSelect()) {
       executeDeleteViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
     } else if (project->isUpdateViaSelect()) {
-      executeUpdateViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
+      executeUpdate(project, co, eo_work_unit, queue_time_ms);
     } else {
       ssize_t prev_count = -1;
       // Disabling the intermediate count optimization in distributed, as the previous
@@ -1078,96 +1078,104 @@ std::vector<TargetMetaInfo> get_targets_meta(
 
 }  // namespace
 
-void RelAlgExecutor::executeUpdateViaCompound(const RelCompound* compound,
-                                              const CompilationOptions& co,
-                                              const ExecutionOptions& eo,
-                                              RenderInfo* render_info,
-                                              const int64_t queue_time_ms) {
+void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
+                                   const CompilationOptions& co_in,
+                                   const ExecutionOptions& eo_in,
+                                   const int64_t queue_time_ms) {
+  CHECK(node);
   auto timer = DEBUG_TIMER(__func__);
-  if (!compound->validateTargetColumns(
-          yieldColumnValidator(compound->getModifiedTableDescriptor()))) {
-    throw std::runtime_error(
-        "Unsupported update operation encountered.  (None-encoded string column updates "
-        "are not supported.)");
-  }
 
-  const auto work_unit =
-      createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
-  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-  CompilationOptions co_project = co;
-  co_project.device_type_ = ExecutorDeviceType::CPU;
+  UpdateTriggeredCacheInvalidator::invalidateCaches();
 
-  try {
-    UpdateTriggeredCacheInvalidator::invalidateCaches();
+  auto co = co_in;
+  co.hoist_literals_ = false;  // disable literal hoisting as it interferes with dict
+                               // encoded string updates
 
-    UpdateTransactionParameters update_params(compound->getModifiedTableDescriptor(),
-                                              compound->getTargetColumns(),
-                                              compound->getOutputMetainfo(),
-                                              compound->isVarlenUpdateRequired());
-    auto update_callback = yieldUpdateCallback(update_params);
-    executor_->executeUpdate(work_unit.exe_unit,
-                             table_infos,
-                             co_project,
-                             eo,
-                             cat_,
-                             executor_->row_set_mem_owner_,
-                             update_callback,
-                             compound->isAggregate());
-    update_params.finalizeTransaction();
-  } catch (...) {
-    LOG(INFO) << "Update operation failed.";
-    throw;
-  }
-}
+  auto execute_update_for_node =
+      [this, &co, &eo_in](const auto node, auto& work_unit, const bool is_aggregate) {
+        UpdateTransactionParameters update_params(node->getModifiedTableDescriptor(),
+                                                  node->getTargetColumns(),
+                                                  node->getOutputMetainfo(),
+                                                  node->isVarlenUpdateRequired());
 
-void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
-                                             const CompilationOptions& co,
-                                             const ExecutionOptions& eo,
-                                             RenderInfo* render_info,
-                                             const int64_t queue_time_ms) {
-  auto timer = DEBUG_TIMER(__func__);
-  if (!project->validateTargetColumns(
-          yieldColumnValidator(project->getModifiedTableDescriptor()))) {
-    throw std::runtime_error(
-        "Unsupported update operation encountered.  (None-encoded string column updates "
-        "are not supported.)");
-  }
+        const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
-  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
-  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-  CompilationOptions co_project = co;
-  co_project.device_type_ = ExecutorDeviceType::CPU;
+        auto execute_update_ra_exe_unit =
+            [this, &co, &eo_in, &table_infos, &update_params](
+                const RelAlgExecutionUnit& ra_exe_unit, const bool is_aggregate) {
+              CompilationOptions co_project = co;
+              co_project.device_type_ = ExecutorDeviceType::CPU;
 
-  if (project->isSimple()) {
-    CHECK_EQ(size_t(1), project->inputCount());
-    const auto input_ra = project->getInput(0);
-    if (dynamic_cast<const RelSort*>(input_ra)) {
-      const auto& input_table =
-          get_temporary_table(&temporary_tables_, -input_ra->getId());
-      CHECK(input_table);
-      work_unit.exe_unit.scan_limit = input_table->rowCount();
+              auto eo = eo_in;
+              if (update_params.tableIsTemporary()) {
+                eo.output_columnar_hint = true;
+              }
+
+              auto update_callback = yieldUpdateCallback(update_params);
+              executor_->executeUpdate(ra_exe_unit,
+                                       table_infos,
+                                       co_project,
+                                       eo,
+                                       cat_,
+                                       executor_->row_set_mem_owner_,
+                                       update_callback,
+                                       is_aggregate);
+              update_params.finalizeTransaction();
+            };
+
+        if (update_params.tableIsTemporary()) {
+          // hold owned target exprs during execution if rewriting
+          auto query_rewrite = std::make_unique<QueryRewriter>(table_infos, executor_);
+          // rewrite temp table updates to generate the full column by moving the where
+          // clause into a case if such a rewrite is not possible, bail on the update
+          // operation build an expr for the update target
+          const auto td = update_params.getTableDescriptor();
+          CHECK(td);
+          const auto update_column_names = update_params.getUpdateColumnNames();
+          if (update_column_names.size() > 1) {
+            throw std::runtime_error(
+                "Multi-column update is not yet supported for temporary tables.");
+          }
+
+          auto cd = cat_.getMetadataForColumn(td->tableId, update_column_names.front());
+          CHECK(cd);
+          auto projected_column_to_update =
+              makeExpr<Analyzer::ColumnVar>(cd->columnType, td->tableId, cd->columnId, 0);
+          const auto rewritten_exe_unit = query_rewrite->rewriteColumnarUpdate(
+              work_unit.exe_unit, projected_column_to_update);
+          if (rewritten_exe_unit.target_exprs.front()->get_type_info().is_varlen()) {
+            throw std::runtime_error(
+                "Variable length updates not yet supported on temporary tables.");
+          }
+          execute_update_ra_exe_unit(rewritten_exe_unit, is_aggregate);
+        } else {
+          execute_update_ra_exe_unit(work_unit.exe_unit, is_aggregate);
+        }
+      };
+
+  if (auto compound = dynamic_cast<const RelCompound*>(node)) {
+    auto work_unit =
+        createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
+
+    execute_update_for_node(compound, work_unit, compound->isAggregate());
+  } else if (auto project = dynamic_cast<const RelProject*>(node)) {
+    auto work_unit =
+        createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
+
+    if (project->isSimple()) {
+      CHECK_EQ(size_t(1), project->inputCount());
+      const auto input_ra = project->getInput(0);
+      if (dynamic_cast<const RelSort*>(input_ra)) {
+        const auto& input_table =
+            get_temporary_table(&temporary_tables_, -input_ra->getId());
+        CHECK(input_table);
+        work_unit.exe_unit.scan_limit = input_table->rowCount();
+      }
     }
-  }
 
-  try {
-    UpdateTriggeredCacheInvalidator::invalidateCaches();
-
-    UpdateTransactionParameters update_params(project->getModifiedTableDescriptor(),
-                                              project->getTargetColumns(),
-                                              project->getOutputMetainfo(),
-                                              project->isVarlenUpdateRequired());
-    auto update_callback = yieldUpdateCallback(update_params);
-    executor_->executeUpdate(work_unit.exe_unit,
-                             table_infos,
-                             co_project,
-                             eo,
-                             cat_,
-                             executor_->row_set_mem_owner_,
-                             update_callback);
-    update_params.finalizeTransaction();
-  } catch (...) {
-    LOG(INFO) << "Update operation failed.";
-    throw;
+    execute_update_for_node(project, work_unit, false);
+  } else {
+    throw std::runtime_error("Unsupported parent node for update: " + node->toString());
   }
 }
 
