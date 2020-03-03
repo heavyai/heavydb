@@ -4436,6 +4436,11 @@ std::pair<SQLTypes, bool> ogr_to_type(const OGRFieldType& ogr_type) {
     case OFTDateTime:
       return std::make_pair(kTIMESTAMP, false);
     case OFTBinary:
+      // Interpret binary blobs as byte arrays here
+      // but actual import will store NULL as GDAL will not
+      // extract the blob (OGRFeature::GetFieldAsString will
+      // result in the import buffers having an empty string)
+      return std::make_pair(kTINYINT, true);
     default:
       break;
   }
