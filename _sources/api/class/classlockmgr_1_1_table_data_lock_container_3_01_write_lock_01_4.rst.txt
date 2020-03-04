@@ -1,0 +1,9 @@
+Class lockmgr::TableDataLockContainer< WriteLock >
+==================================================
+
+.. doxygenclass:: lockmgr::TableDataLockContainer< WriteLock >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

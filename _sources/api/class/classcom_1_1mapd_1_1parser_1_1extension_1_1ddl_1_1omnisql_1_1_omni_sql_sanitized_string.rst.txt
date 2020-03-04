@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::omnisql::OmniSqlSanitizedString
+========================================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::omnisql::OmniSqlSanitizedString
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

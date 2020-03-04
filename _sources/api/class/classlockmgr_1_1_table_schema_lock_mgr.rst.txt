@@ -1,0 +1,9 @@
+Class lockmgr::TableSchemaLockMgr
+=================================
+
+.. doxygenclass:: lockmgr::TableSchemaLockMgr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct lockmgr::TableLock
+=========================
+
+.. doxygenstruct:: lockmgr::TableLock
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class lockmgr::TableSchemaLockContainer< ReadLock >
+===================================================
+
+.. doxygenclass:: lockmgr::TableSchemaLockContainer< ReadLock >
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class legacylockmgr::LockMgr
+============================
+
+.. doxygenclass:: legacylockmgr::LockMgr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

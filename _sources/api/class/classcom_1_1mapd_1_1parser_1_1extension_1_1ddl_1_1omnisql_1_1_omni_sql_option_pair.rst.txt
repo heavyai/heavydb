@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::omnisql::OmniSqlOptionPair
+===================================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::omnisql::OmniSqlOptionPair
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

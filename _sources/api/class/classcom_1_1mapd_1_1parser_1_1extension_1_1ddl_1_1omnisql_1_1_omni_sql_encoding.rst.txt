@@ -1,0 +1,9 @@
+Class com::mapd::parser::extension::ddl::omnisql::OmniSqlEncoding
+=================================================================
+
+.. doxygenclass:: com::mapd::parser::extension::ddl::omnisql::OmniSqlEncoding
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

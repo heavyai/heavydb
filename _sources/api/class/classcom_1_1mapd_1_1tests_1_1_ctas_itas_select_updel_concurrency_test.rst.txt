@@ -1,0 +1,9 @@
+Class com::mapd::tests::CtasItasSelectUpdelConcurrencyTest
+==========================================================
+
+.. doxygenclass:: com::mapd::tests::CtasItasSelectUpdelConcurrencyTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Class lockmgr::LockContainerImpl
+================================
+
+.. doxygenclass:: lockmgr::LockContainerImpl
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

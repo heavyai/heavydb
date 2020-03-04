@@ -1,0 +1,9 @@
+Class com::mapd::tests::AlterDropTruncateValidateConcurrencyTest
+================================================================
+
+.. doxygenclass:: com::mapd::tests::AlterDropTruncateValidateConcurrencyTest
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
