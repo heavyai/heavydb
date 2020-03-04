@@ -106,19 +106,20 @@ ParserWrapper::ParserWrapper(std::string query_string) {
   for (std::string ddl : ddl_cmd) {
     is_ddl = boost::istarts_with(query_string, ddl);
     if (is_ddl) {
+      if (g_enable_fsi) {
+        boost::regex fsi_regex{R"((CREATE)|(DROP)\s+(SERVER)|(FOREIGN\s+TABLE).*)",
+                               boost::regex::extended | boost::regex::icase};
+        if (boost::regex_match(query_string, fsi_regex)) {
+          is_calcite_ddl_ = true;
+          is_legacy_ddl_ = false;
+          return;
+        }
+      }
       if (ddl == "CREATE") {
         boost::regex ctas_regex{R"(CREATE\s+TABLE.*AS.*SELECT.*)",
                                 boost::regex::extended | boost::regex::icase};
         if (boost::regex_match(query_string, ctas_regex)) {
           is_ctas = true;
-        }
-
-        if (g_enable_fsi) {
-          boost::regex create_server_regex{R"(CREATE\s+SERVER.*)",
-                                           boost::regex::extended | boost::regex::icase};
-          if (boost::regex_match(query_string, create_server_regex)) {
-            is_calcite_ddl_ = true;
-          }
         }
       } else if (ddl == "COPY") {
         is_copy = true;
@@ -127,12 +128,6 @@ ParserWrapper::ParserWrapper(std::string query_string) {
                              boost::regex::extended | boost::regex::icase};
         if (boost::regex_match(query_string, copy_to)) {
           is_copy_to = true;
-        }
-      } else if (g_enable_fsi && ddl == "DROP") {
-        boost::regex drop_server_regex{R"(DROP\s+SERVER.*)",
-                                       boost::regex::extended | boost::regex::icase};
-        if (boost::regex_match(query_string, drop_server_regex)) {
-          is_calcite_ddl_ = true;
         }
       }
 
