@@ -101,6 +101,7 @@ uint32_t rk_hash(const std::string_view& str) {
 }
 }  // namespace
 
+bool g_enable_stringdict_parallel{false};
 constexpr int32_t StringDictionary::INVALID_STR_ID;
 constexpr size_t StringDictionary::MAX_STRLEN;
 constexpr size_t StringDictionary::MAX_STRCOUNT;
@@ -325,6 +326,65 @@ void StringDictionary::hashStrings(const std::vector<String>& string_vec,
 template <class T, class String>
 void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
                                     T* output_string_ids) {
+  if (g_enable_stringdict_parallel) {
+    getOrAddBulkParallel(input_strings, output_string_ids);
+    return;
+  }
+  // Single-thread path.
+  if (client_no_timeout_) {
+    getOrAddBulkRemote(input_strings, output_string_ids);
+    return;
+  }
+  size_t out_idx{0};
+  mapd_lock_guard<mapd_shared_mutex> write_lock(rw_mutex_);
+
+  for (const auto& str : input_strings) {
+    if (str.empty()) {
+      output_string_ids[out_idx++] = inline_int_null_value<T>();
+      continue;
+    }
+    CHECK(str.size() <= MAX_STRLEN);
+    uint32_t bucket;
+    const uint32_t hash = rk_hash(str);
+    bucket = computeBucket(hash, str, string_id_hash_table_);
+    if (string_id_hash_table_[bucket] != INVALID_STR_ID) {
+      output_string_ids[out_idx++] = string_id_hash_table_[bucket];
+      continue;
+    }
+    // need to add record to dictionary
+    // check there is room
+    if (str_count_ == static_cast<size_t>(max_valid_int_value<T>())) {
+      log_encoding_error<T>(str);
+      output_string_ids[out_idx++] = inline_int_null_value<T>();
+      continue;
+    }
+    if (string_id_hash_table_[bucket] == INVALID_STR_ID) {
+      CHECK_LT(str_count_, MAX_STRCOUNT)
+          << "Maximum number (" << str_count_
+          << ") of Dictionary encoded Strings reached for this column, offset path "
+             "for column is  "
+          << offsets_path_;
+      if (fillRateIsHigh(str_count_)) {
+        // resize when more than 50% is full
+        increaseCapacity();
+        bucket = computeBucket(hash, str, string_id_hash_table_);
+      }
+      appendToStorage(str);
+
+      string_id_hash_table_[bucket] = static_cast<int32_t>(str_count_);
+      if (materialize_hashes_) {
+        rk_hashes_[str_count_] = hash;
+      }
+      ++str_count_;
+    }
+    output_string_ids[out_idx++] = string_id_hash_table_[bucket];
+  }
+  invalidateInvertedIndex();
+}
+
+template <class T, class String>
+void StringDictionary::getOrAddBulkParallel(const std::vector<String>& input_strings,
+                                            T* output_string_ids) {
   if (client_no_timeout_) {
     getOrAddBulkRemote(input_strings, output_string_ids);
     return;
@@ -1018,8 +1078,9 @@ std::pair<char*, size_t> StringDictionary::getStringBytesChecked(
   return std::make_pair(str_canary.c_str_ptr, str_canary.size);
 }
 
+template <class String>
 uint32_t StringDictionary::computeBucket(const uint32_t hash,
-                                         const std::string& str,
+                                         const String& str,
                                          const std::vector<int32_t>& data) const
     noexcept {
   auto bucket = hash & (data.size() - 1);
@@ -1032,9 +1093,8 @@ uint32_t StringDictionary::computeBucket(const uint32_t hash,
     if (materialize_hashes_ && hash != rk_hashes_[candidate_string_id]) {
       continue;
     }
-    const auto old_str = getStringFromStorage(candidate_string_id);
-    if (str.size() == old_str.size &&
-        !memcmp(str.c_str(), old_str.c_str_ptr, str.size())) {
+    const auto old_str = getStringFromStorageFast(candidate_string_id);
+    if (str.size() == old_str.size() && !memcmp(str.data(), old_str.data(), str.size())) {
       // found the string
       break;
     }
@@ -1152,7 +1212,8 @@ void StringDictionary::checkAndConditionallyIncreaseOffsetCapacity(
   }
 }
 
-void StringDictionary::appendToStorage(std::string str) noexcept {
+template <class String>
+void StringDictionary::appendToStorage(String str) noexcept {
   // write the payload
   checkAndConditionallyIncreasePayloadCapacity(str.size());
   memcpy(payload_map_ + payload_file_off_, str.data(), str.size());

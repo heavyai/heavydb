@@ -27,6 +27,8 @@
 #include <tuple>
 #include <vector>
 
+extern bool g_enable_stringdict_parallel;
+
 class StringDictionaryClient;
 
 class DictPayloadUnavailable : public std::runtime_error {
@@ -51,6 +53,8 @@ class StringDictionary {
   int32_t getOrAdd(const std::string& str) noexcept;
   template <class T, class String>
   void getOrAddBulk(const std::vector<String>& string_vec, T* encoded_vec);
+  template <class T, class String>
+  void getOrAddBulkParallel(const std::vector<String>& string_vec, T* encoded_vec);
   template <class String>
   void getOrAddBulkArray(const std::vector<std::vector<String>>& string_array_vec,
                          std::vector<std::vector<int32_t>>& ids_array_vec);
@@ -153,8 +157,9 @@ class StringDictionary {
   std::string getStringUnlocked(int32_t string_id) const noexcept;
   std::string getStringChecked(const int string_id) const noexcept;
   std::pair<char*, size_t> getStringBytesChecked(const int string_id) const noexcept;
+  template <class String>
   uint32_t computeBucket(const uint32_t hash,
-                         const std::string& str,
+                         const String& str,
                          const std::vector<int32_t>& data) const noexcept;
   template <class String>
   uint32_t computeBucketFromStorageAndMemory(
@@ -169,7 +174,8 @@ class StringDictionary {
   void checkAndConditionallyIncreasePayloadCapacity(const size_t write_length);
   void checkAndConditionallyIncreaseOffsetCapacity(const size_t write_length);
 
-  void appendToStorage(std::string str) noexcept;
+  template <class String>
+  void appendToStorage(String str) noexcept;
   template <class String>
   void appendToStorageBulk(const std::vector<String>& input_strings,
                            const std::vector<size_t>& string_memory_ids,

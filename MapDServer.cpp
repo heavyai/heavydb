@@ -602,7 +602,12 @@ void MapDProgramOptions::fillOptions() {
           ->default_value(mapd_parameters.calcite_timeout),
       "Calcite server timeout (milliseconds). Increase this on systems with frequent "
       "schema changes or when running large numbers of parallel queries.");
-
+  help_desc.add_options()(
+      "stringdict-parallelizm",
+      po::value<bool>(&g_enable_stringdict_parallel)
+          ->default_value(g_enable_stringdict_parallel)
+          ->implicit_value(false),
+      "Allow StringDictionary to parallelize loads using multiple threads");
   help_desc.add(log_options_.get_options());
 }
 
