@@ -81,6 +81,7 @@ extern size_t g_min_memory_allocation_size;
 extern bool g_enable_experimental_string_functions;
 extern bool g_enable_table_functions;
 extern bool g_enable_fsi;
+extern bool g_enable_lazy_fetch;
 
 bool g_enable_thrift_logs{false};
 
@@ -768,6 +769,11 @@ void MapDProgramOptions::fillAdvancedOptions() {
       po::value<std::string>(&udf_file_name),
       "Load user defined extension functions from this file at startup. The file is "
       "expected to be a C/C++ file with extension .cpp.");
+  developer_desc.add_options()("enable-lazy-fetch",
+                               po::value<bool>(&g_enable_lazy_fetch)
+                                   ->default_value(g_enable_lazy_fetch)
+                                   ->implicit_value(true),
+                               "Enable lazy fetch columns in ResultSets");
 }
 
 namespace {

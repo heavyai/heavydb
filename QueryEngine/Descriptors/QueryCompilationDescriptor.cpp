@@ -39,7 +39,9 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
         co,
         eo,
         cat->getDataMgr().getCudaMgr(),
-        render_info && render_info->isPotentialInSituRender() ? false : true,
+        !g_enable_lazy_fetch || (render_info && render_info->isPotentialInSituRender())
+            ? false
+            : true,
         executor->row_set_mem_owner_,
         max_groups_buffer_entry_guess,
         crt_min_byte_width,
