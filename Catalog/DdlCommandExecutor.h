@@ -16,11 +16,12 @@
 
 #pragma once
 
-#include <build/gen-cpp/mapd_types.h>
 #include <string>
 
-#include "Catalog/SessionInfo.h"
 #include "rapidjson/document.h"
+
+#include "Catalog/SessionInfo.h"
+#include "gen-cpp/mapd_types.h"
 
 class DdlCommand {
  public:
