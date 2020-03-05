@@ -33,6 +33,7 @@
 
 #include <future>
 #include <iostream>
+#include <string_view>
 #include <thread>
 
 namespace {
@@ -1151,7 +1152,7 @@ void StringDictionary::checkAndConditionallyIncreaseOffsetCapacity(
   }
 }
 
-void StringDictionary::appendToStorage(std::string_view str) noexcept {
+void StringDictionary::appendToStorage(std::string str) noexcept {
   // write the payload
   checkAndConditionallyIncreasePayloadCapacity(str.size());
   memcpy(payload_map_ + payload_file_off_, str.data(), str.size());
@@ -1185,7 +1186,7 @@ void StringDictionary::appendToStorageBulk(
   }
 }
 
-std::string_view StringDictionary::getStringFromStorageFast(const int string_id) const
+std::string StringDictionary::getStringFromStorageFast(const int string_id) const
     noexcept {
   const StringIdxEntry* str_meta = offset_map_ + string_id;
   return {payload_map_ + str_meta->off, str_meta->size};

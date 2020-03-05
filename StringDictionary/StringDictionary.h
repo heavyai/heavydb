@@ -24,7 +24,6 @@
 #include <future>
 #include <map>
 #include <string>
-#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -170,13 +169,13 @@ class StringDictionary {
   void checkAndConditionallyIncreasePayloadCapacity(const size_t write_length);
   void checkAndConditionallyIncreaseOffsetCapacity(const size_t write_length);
 
-  void appendToStorage(std::string_view str) noexcept;
+  void appendToStorage(std::string str) noexcept;
   template <class String>
   void appendToStorageBulk(const std::vector<String>& input_strings,
                            const std::vector<size_t>& string_memory_ids,
                            const size_t sum_new_strings_lengths) noexcept;
   PayloadString getStringFromStorage(const int string_id) const noexcept;
-  std::string_view getStringFromStorageFast(const int string_id) const noexcept;
+  std::string getStringFromStorageFast(const int string_id) const noexcept;
   void addPayloadCapacity(const size_t min_capacity_requested = 0) noexcept;
   void addOffsetCapacity(const size_t min_capacity_requested = 0) noexcept;
   size_t addStorageCapacity(int fd, const size_t min_capacity_requested = 0) noexcept;
