@@ -72,7 +72,8 @@ class MapDHandlerTestFixture : public testing::Test {
                                                    idle_session_duration,
                                                    max_session_duration,
                                                    enable_runtime_udf_registration,
-                                                   udf_filename);
+                                                   udf_filename,
+                                                   udf_compiler_path);
       mapd_handler->connect(session_id, default_user, default_pass, db_name);
     }
   }
@@ -93,6 +94,7 @@ class MapDHandlerTestFixture : public testing::Test {
   static AuthMetadata auth_metadata;
   static MapDParameters mapd_parameters;
   static std::string udf_filename;
+  static std::string udf_compiler_path;
   static std::string default_user;
   static std::string default_pass;
   static std::string db_name;
@@ -104,6 +106,7 @@ std::vector<LeafHostInfo> MapDHandlerTestFixture::db_leaves{};
 std::vector<LeafHostInfo> MapDHandlerTestFixture::string_leaves{};
 AuthMetadata MapDHandlerTestFixture::auth_metadata{};
 std::string MapDHandlerTestFixture::udf_filename{};
+std::string MapDHandlerTestFixture::udf_compiler_path{};
 std::string MapDHandlerTestFixture::default_user{"admin"};
 std::string MapDHandlerTestFixture::default_pass{"HyperInteractive"};
 std::string MapDHandlerTestFixture::db_name{};
