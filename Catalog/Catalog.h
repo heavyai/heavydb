@@ -44,6 +44,7 @@
 #include "DashboardDescriptor.h"
 #include "DictDescriptor.h"
 #include "ForeignServer.h"
+#include "ForeignTable.h"
 #include "LinkDescriptor.h"
 #include "SessionInfo.h"
 #include "SysCatalog.h"
@@ -298,7 +299,9 @@ class Catalog final {
   using DeletedColumnPerTableMap =
       std::unordered_map<const TableDescriptor*, const ColumnDescriptor*>;
   using ForeignServerMap =
-      std::map<std::string, std::unique_ptr<foreign_storage::ForeignServer>>;
+      std::map<std::string, std::shared_ptr<foreign_storage::ForeignServer>>;
+  using ForeignServerMapById =
+      std::map<int, std::shared_ptr<foreign_storage::ForeignServer>>;
 
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();
@@ -315,13 +318,13 @@ class Catalog final {
   void updatePageSize();
   void updateDeletedColumnIndicator();
   void updateFrontendViewsToDashboards();
-  void createFsiSchemas();
-  void dropFsiSchemas();
+  void createFsiSchemasAndDefaultServers();
+  void dropFsiSchemasAndTables();
   void recordOwnershipOfObjectsInObjectPermissions();
   void checkDateInDaysColumnMigration();
   void createDashboardSystemRoles();
   void buildMaps();
-  void addTableToMap(TableDescriptor& td,
+  void addTableToMap(const TableDescriptor* td,
                      const std::list<ColumnDescriptor>& columns,
                      const std::list<DictDescriptor>& dicts);
   void addReferenceToForeignDict(ColumnDescriptor& referencing_column,
@@ -344,6 +347,7 @@ class Catalog final {
                           const int tableId,
                           const bool is_on_error = false);
   void doDropTable(const TableDescriptor* td);
+  void executeDropTableSqliteQueries(const TableDescriptor* td);
   void doTruncateTable(const TableDescriptor* td);
   void renamePhysicalTable(const TableDescriptor* td, const std::string& newTableName);
   void instantiateFragmenter(TableDescriptor* td) const;
@@ -377,6 +381,7 @@ class Catalog final {
   LinkDescriptorMap linkDescriptorMap_;
   LinkDescriptorMapById linkDescriptorMapById_;
   ForeignServerMap foreignServerMap_;
+  ForeignServerMapById foreignServerMapById_;
 
   SqliteConnector sqliteConnector_;
   DBMetadata currentDB_;
@@ -409,6 +414,7 @@ class Catalog final {
                               const std::vector<std::string>& target_paths,
                               const std::string& name_prefix) const;
   void buildForeignServerMap();
+  void addForeignTableDetails();
 
   /**
    * Same as createForeignServer() but without acquiring locks. This should only be called

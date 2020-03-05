@@ -2,7 +2,7 @@
     "statementType": "DDL",
     "payload": {
 	"command": "CREATE_FOREIGN_TABLE",
-	"ifNotExists": "false",
+	"ifNotExists": false,
 	"tableName": "test_table",
 	"serverName": "test_server",
 	"schemaName": "test_schema"

@@ -9,11 +9,11 @@ public class OmniSqlEncoding extends OmniSqlJson {
   @Expose
   private String type;
   @Expose
-  private String size;
+  private Integer size;
 
   public OmniSqlEncoding(String type, Integer size) {
     requireNonNull(type);
     this.type = type;
-    this.size = (size == null) ? null : size.toString();
+    this.size = size;
   }
 }

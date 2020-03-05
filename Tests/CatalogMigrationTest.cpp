@@ -23,6 +23,7 @@
 #include <boost/filesystem.hpp>
 
 #include "Catalog/Catalog.h"
+#include "MapDHandlerTestHelpers.h"
 #include "SqliteConnector/SqliteConnector.h"
 #include "TestHelpers.h"
 
@@ -32,16 +33,24 @@
 
 extern bool g_enable_fsi;
 
-class CatalogMigrationTest : public testing::Test {
+class FsiSchemaTest : public testing::Test {
  protected:
-  CatalogMigrationTest()
+  FsiSchemaTest()
       : sqlite_connector_(
             "omnisci",
             boost::filesystem::absolute("mapd_catalogs", BASE_PATH).string()) {}
 
-  void SetUp() override {
-    sqlite_connector_.query("DROP TABLE IF EXISTS omnisci_foreign_servers;");
+  static void SetUpTestSuite() {
+    Catalog_Namespace::SysCatalog::instance().init(
+        BASE_PATH, nullptr, {}, nullptr, false, false, {});
   }
+
+  void SetUp() override {
+    g_enable_fsi = false;
+    dropFsiTables();
+  }
+
+  void TearDown() override { dropFsiTables(); }
 
   std::vector<std::string> getTables() {
     sqlite_connector_.query("SELECT name FROM sqlite_master WHERE type='table';");
@@ -87,11 +96,18 @@ class CatalogMigrationTest : public testing::Test {
 
  private:
   SqliteConnector sqlite_connector_;
+
+  void dropFsiTables() {
+    sqlite_connector_.query("DROP TABLE IF EXISTS omnisci_foreign_servers;");
+    sqlite_connector_.query("DROP TABLE IF EXISTS omnisci_foreign_tables;");
+  }
 };
 
-TEST_F(CatalogMigrationTest, FsiTablesNotCreatedWhenFsiIsDisabled) {
+TEST_F(FsiSchemaTest, FsiTablesNotCreatedWhenFsiIsDisabled) {
   auto tables = getTables();
   ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_servers") ==
+              tables.end());
+  ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_tables") ==
               tables.end());
 
   auto catalog = initCatalog();
@@ -99,42 +115,96 @@ TEST_F(CatalogMigrationTest, FsiTablesNotCreatedWhenFsiIsDisabled) {
   tables = getTables();
   ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_servers") ==
               tables.end());
+  ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_tables") ==
+              tables.end());
 }
 
-TEST_F(CatalogMigrationTest, FsiTablesAreCreatedWhenFsiIsEnabled) {
+TEST_F(FsiSchemaTest, FsiTablesAreCreatedWhenFsiIsEnabled) {
   auto tables = getTables();
   ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_servers") ==
+              tables.end());
+  ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_tables") ==
               tables.end());
 
   g_enable_fsi = true;
   auto catalog = initCatalog();
-  g_enable_fsi = false;
 
   tables = getTables();
   ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_servers") !=
               tables.end());
+  ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_tables") !=
+              tables.end());
 }
 
-TEST_F(CatalogMigrationTest, FsiTablesAreDroppedWhenFsiIsDisabled) {
+TEST_F(FsiSchemaTest, FsiTablesAreDroppedWhenFsiIsDisabled) {
   auto tables = getTables();
   ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_servers") ==
+              tables.end());
+  ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_tables") ==
               tables.end());
 
   g_enable_fsi = true;
   initCatalog();
-  g_enable_fsi = false;
 
   tables = getTables();
   ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_servers") !=
               tables.end());
+  ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_tables") !=
+              tables.end());
 
+  g_enable_fsi = false;
   initCatalog();
   tables = getTables();
   ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_servers") ==
               tables.end());
+  ASSERT_TRUE(std::find(tables.begin(), tables.end(), "omnisci_foreign_tables") ==
+              tables.end());
 }
 
-TEST_F(CatalogMigrationTest, DefaultServersAreCreatedWhenFsiIsEnabled) {
+class ForeignTablesTest : public MapDHandlerTestFixture {
+ protected:
+  void SetUp() override {
+    g_enable_fsi = true;
+    MapDHandlerTestFixture::SetUp();
+    dropTestTables();
+  }
+
+  void TearDown() override {
+    dropTestTables();
+    MapDHandlerTestFixture::TearDown();
+  }
+
+ private:
+  void dropTestTables() {
+    g_enable_fsi = true;
+    sql("DROP FOREIGN TABLE IF EXISTS test_foreign_table;");
+    sql("DROP TABLE IF EXISTS test_table;");
+    sql("DROP VIEW IF EXISTS test_view;");
+  }
+};
+
+TEST_F(ForeignTablesTest, ForeignTablesAreDroppedWhenFsiIsDisabled) {
+  sql("CREATE FOREIGN TABLE test_foreign_table (c1 int) SERVER omnisci_local_csv "
+      "WITH (file_path = 'test_file.csv');");
+  sql("CREATE TABLE test_table (c1 int);");
+  sql("CREATE VIEW test_view AS SELECT * FROM test_table;");
+
+  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
+  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_table", false));
+  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_view", false));
+
+  g_enable_fsi = false;
+  resetCatalog();
+  loginAdmin();
+
+  ASSERT_EQ(nullptr, getCatalog().getMetadataForTable("test_foreign_table", false));
+  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_table", false));
+  ASSERT_NE(nullptr, getCatalog().getMetadataForTable("test_view", false));
+}
+
+class DefaultForeignServersTest : public FsiSchemaTest {};
+
+TEST_F(DefaultForeignServersTest, DefaultServersAreCreatedWhenFsiIsEnabled) {
   g_enable_fsi = true;
   auto catalog = initCatalog();
   g_enable_fsi = false;

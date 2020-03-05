@@ -602,7 +602,7 @@ void Catalog::updateDictionarySchema() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
-void Catalog::createFsiSchemas() {
+void Catalog::createFsiSchemasAndDefaultServers() {
   cat_sqlite_lock sqlite_lock(this);
   sqliteConnector_.query("BEGIN TRANSACTION");
   try {
@@ -613,6 +613,13 @@ void Catalog::createFsiSchemas() {
         "data_wrapper_type text, "
         "options text)");
     createDefaultServersIfNotExists();
+    sqliteConnector_.query(
+        "CREATE TABLE IF NOT EXISTS omnisci_foreign_tables("
+        "table_id integer unique, "
+        "server_id integer, "
+        "options text, "
+        "FOREIGN KEY(table_id) REFERENCES mapd_tables(tableid), "
+        "FOREIGN KEY(server_id) REFERENCES omnisci_foreign_servers(id))");
   } catch (std::exception& e) {
     sqliteConnector_.query("ROLLBACK TRANSACTION");
     throw;
@@ -620,16 +627,53 @@ void Catalog::createFsiSchemas() {
   sqliteConnector_.query("END TRANSACTION");
 }
 
-void Catalog::dropFsiSchemas() {
-  cat_sqlite_lock sqlite_lock(this);
-  sqliteConnector_.query("BEGIN TRANSACTION");
-  try {
-    sqliteConnector_.query("DROP TABLE IF EXISTS omnisci_foreign_servers");
-  } catch (std::exception& e) {
-    sqliteConnector_.query("ROLLBACK TRANSACTION");
-    throw;
+void Catalog::dropFsiSchemasAndTables() {
+  std::vector<foreign_storage::ForeignTable> foreign_tables{};
+  {
+    cat_sqlite_lock sqlite_lock(this);
+    sqliteConnector_.query("BEGIN TRANSACTION");
+    try {
+      sqliteConnector_.query(
+          "SELECT name FROM sqlite_master WHERE type='table' AND "
+          "name IN ('omnisci_foreign_servers', 'omnisci_foreign_tables')");
+      if (sqliteConnector_.getNumRows() > 0) {
+        sqliteConnector_.query(
+            "SELECT tableid, name, isview, storage_type FROM mapd_tables "
+            "WHERE storage_type = 'FOREIGN_TABLE'");
+        auto num_rows = sqliteConnector_.getNumRows();
+        for (size_t r = 0; r < num_rows; r++) {
+          foreign_storage::ForeignTable foreign_table{};
+          foreign_table.tableId = sqliteConnector_.getData<int>(r, 0);
+          foreign_table.tableName = sqliteConnector_.getData<std::string>(r, 1);
+          foreign_table.isView = sqliteConnector_.getData<bool>(r, 2);
+          foreign_table.storageType = sqliteConnector_.getData<std::string>(r, 3);
+          foreign_tables.emplace_back(foreign_table);
+        }
+        for (auto& foreign_table : foreign_tables) {
+          tableDescriptorMap_[to_upper(foreign_table.tableName)] = &foreign_table;
+          tableDescriptorMapById_[foreign_table.tableId] = &foreign_table;
+          executeDropTableSqliteQueries(&foreign_table);
+        }
+        sqliteConnector_.query("SELECT COUNT(*) FROM omnisci_foreign_tables");
+        CHECK_EQ(size_t(1), sqliteConnector_.getNumRows());
+        CHECK_EQ(0, sqliteConnector_.getData<int>(0, 0));
+
+        sqliteConnector_.query("DROP TABLE omnisci_foreign_tables");
+        sqliteConnector_.query("DROP TABLE omnisci_foreign_servers");
+      }
+    } catch (std::exception& e) {
+      sqliteConnector_.query("ROLLBACK TRANSACTION");
+      throw;
+    }
+    sqliteConnector_.query("END TRANSACTION");
   }
-  sqliteConnector_.query("END TRANSACTION");
+
+  for (auto& foreign_table : foreign_tables) {
+    SysCatalog::instance().revokeDBObjectPrivilegesFromAll(
+        DBObject(foreign_table.tableName, TableDBObjectType), this);
+    tableDescriptorMap_.erase(to_upper(foreign_table.tableName));
+    tableDescriptorMapById_.erase(foreign_table.tableId);
+  }
 }
 
 void Catalog::recordOwnershipOfObjectsInObjectPermissions() {
@@ -954,9 +998,9 @@ void Catalog::CheckAndExecuteMigrations() {
   recordOwnershipOfObjectsInObjectPermissions();
 
   if (g_enable_fsi) {
-    createFsiSchemas();
+    createFsiSchemasAndDefaultServers();
   } else {
-    dropFsiSchemas();
+    dropFsiSchemasAndTables();
   }
 }
 
@@ -1007,7 +1051,25 @@ void Catalog::buildMaps() {
   sqliteConnector_.query(tableQuery);
   numRows = sqliteConnector_.getNumRows();
   for (size_t r = 0; r < numRows; ++r) {
-    TableDescriptor* td = new TableDescriptor();
+    TableDescriptor* td;
+    const auto& storage_type = sqliteConnector_.getData<string>(r, 17);
+    if (!storage_type.empty() &&
+        (!g_enable_fsi || storage_type != StorageType::FOREIGN_TABLE)) {
+      const auto table_id = sqliteConnector_.getData<int>(r, 0);
+      const auto& table_name = sqliteConnector_.getData<string>(r, 1);
+      LOG(FATAL) << "Unable to read Catalog metadata: storage type is currently not a "
+                    "supported table option (table "
+                 << table_name << " [" << table_id << "] in database "
+                 << currentDB_.dbName << ").";
+    }
+
+    if (storage_type == StorageType::FOREIGN_TABLE) {
+      td = new foreign_storage::ForeignTable();
+    } else {
+      td = new TableDescriptor();
+    }
+
+    td->storageType = storage_type;
     td->tableId = sqliteConnector_.getData<int>(r, 0);
     td->tableName = sqliteConnector_.getData<string>(r, 1);
     td->nColumns = sqliteConnector_.getData<int>(r, 2);
@@ -1030,16 +1092,15 @@ void Catalog::buildMaps() {
     if (!td->isView) {
       td->fragmenter = nullptr;
     }
-    td->storageType = sqliteConnector_.getData<string>(r, 17);
-    if (!td->storageType.empty()) {
-      LOG(FATAL) << "Unable to read Catalog metadata: storage type is currently not a "
-                    "supported table option (table "
-                 << td->tableName << " [" << td->tableId << "] in database "
-                 << currentDB_.dbName << ").";
-    }
     td->hasDeletedCol = false;
+
     tableDescriptorMap_[to_upper(td->tableName)] = td;
     tableDescriptorMapById_[td->tableId] = td;
+  }
+
+  if (g_enable_fsi) {
+    buildForeignServerMap();
+    addForeignTableDetails();
   }
 
   string columnQuery(
@@ -1168,21 +1229,27 @@ void Catalog::buildMaps() {
       physicalTableIt->second.push_back(physical_tb_id);
     }
   }
-
-  if (g_enable_fsi) {
-    buildForeignServerMap();
-  }
 }
 
-void Catalog::addTableToMap(TableDescriptor& td,
+void Catalog::addTableToMap(const TableDescriptor* td,
                             const list<ColumnDescriptor>& columns,
                             const list<DictDescriptor>& dicts) {
   cat_write_lock write_lock(this);
-  TableDescriptor* new_td = new TableDescriptor();
-  *new_td = td;
+  TableDescriptor* new_td;
+
+  auto foreign_table = dynamic_cast<const foreign_storage::ForeignTable*>(td);
+  if (foreign_table) {
+    auto new_foreign_table = new foreign_storage::ForeignTable();
+    *new_foreign_table = *foreign_table;
+    new_td = new_foreign_table;
+  } else {
+    new_td = new TableDescriptor();
+    *new_td = *td;
+  }
+
   new_td->mutex_ = std::make_shared<std::mutex>();
-  tableDescriptorMap_[to_upper(td.tableName)] = new_td;
-  tableDescriptorMapById_[td.tableId] = new_td;
+  tableDescriptorMap_[to_upper(td->tableName)] = new_td;
+  tableDescriptorMapById_[td->tableId] = new_td;
   for (auto cd : columns) {
     ColumnDescriptor* new_cd = new ColumnDescriptor();
     *new_cd = cd;
@@ -2121,7 +2188,8 @@ void Catalog::createTable(
   std::set<std::string> toplevel_column_names;
   list<ColumnDescriptor> columns;
 
-  if (!td.storageType.empty()) {
+  if (!td.storageType.empty() &&
+      (!g_enable_fsi || td.storageType != StorageType::FOREIGN_TABLE)) {
     if (td.persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
       throw std::runtime_error("Only temporary tables can be backed by foreign storage.");
     }
@@ -2248,6 +2316,15 @@ void Catalog::createTable(
             "INSERT INTO mapd_views (tableid, sql) VALUES (?,?)",
             std::vector<std::string>{std::to_string(td.tableId), td.viewSQL});
       }
+      if (td.storageType == StorageType::FOREIGN_TABLE) {
+        auto& foreignTable = dynamic_cast<foreign_storage::ForeignTable&>(td);
+        sqliteConnector_.query_with_text_params(
+            "INSERT INTO omnisci_foreign_tables (table_id, server_id, options) VALUES "
+            "(?, ?, ?)",
+            std::vector<std::string>{std::to_string(foreignTable.tableId),
+                                     std::to_string(foreignTable.foreign_server->id),
+                                     foreignTable.getOptionsAsJsonString()});
+      }
     } catch (std::exception& e) {
       sqliteConnector_.query("ROLLBACK TRANSACTION");
       throw;
@@ -2297,9 +2374,9 @@ void Catalog::createTable(
   }
 
   try {
-    addTableToMap(td, cds, dds);
+    addTableToMap(&td, cds, dds);
     calciteMgr_->updateMetadata(currentDB_.dbName, td.tableName);
-    if (!td.storageType.empty()) {
+    if (!td.storageType.empty() && td.storageType != StorageType::FOREIGN_TABLE) {
       ForeignStorageInterface::registerTable(this, td, cds);
     }
   } catch (std::exception& e) {
@@ -2436,7 +2513,10 @@ void Catalog::createForeignServerNoLocks(
                              "\" already exists."};
   }
 
-  foreignServerMap_[foreign_server->name] = std::move(foreign_server);
+  std::shared_ptr<foreign_storage::ForeignServer> foreign_server_shared =
+      std::move(foreign_server);
+  foreignServerMap_[foreign_server_shared->name] = foreign_server_shared;
+  foreignServerMapById_[foreign_server_shared->id] = foreign_server_shared;
 }
 
 foreign_storage::ForeignServer* Catalog::getForeignServer(const std::string& server_name,
@@ -2456,13 +2536,14 @@ foreign_storage::ForeignServer* Catalog::getForeignServer(const std::string& ser
         "FROM omnisci_foreign_servers WHERE name = ?",
         std::vector<std::string>{server_name});
     if (sqliteConnector_.getNumRows() > 0) {
-      auto server = std::make_unique<foreign_storage::ForeignServer>(
+      auto server = std::make_shared<foreign_storage::ForeignServer>(
           foreign_storage::DataWrapper{sqliteConnector_.getData<std::string>(0, 2)});
       server->id = sqliteConnector_.getData<int>(0, 0);
       server->name = sqliteConnector_.getData<std::string>(0, 1);
       server->populateOptionsMap(sqliteConnector_.getData<std::string>(0, 3));
       foreign_server = server.get();
-      foreignServerMap_[server->name] = std::move(server);
+      foreignServerMap_[server->name] = server;
+      foreignServerMapById_[server->id] = server;
     }
   }
   return foreign_server;
@@ -2473,14 +2554,25 @@ void Catalog::dropForeignServer(const std::string& server_name, bool if_exists) 
   cat_sqlite_lock sqlite_lock(this);
 
   sqliteConnector_.query_with_text_params(
-      "SELECT name from omnisci_foreign_servers where name = ?",
+      "SELECT id from omnisci_foreign_servers where name = ?",
       std::vector<std::string>{server_name});
-  if (sqliteConnector_.getNumRows() > 0) {
-    // TODO: only delete servers with no associated foreign tables
+  auto num_rows = sqliteConnector_.getNumRows();
+  if (num_rows > 0) {
+    CHECK_EQ(size_t(1), num_rows);
+    auto server_id = sqliteConnector_.getData<int>(0, 0);
+    sqliteConnector_.query_with_text_param(
+        "SELECT table_id from omnisci_foreign_tables where server_id = ?",
+        std::to_string(server_id));
+    if (sqliteConnector_.getNumRows() > 0) {
+      throw std::runtime_error{"Foreign server \"" + server_name +
+                               "\" is referenced "
+                               "by existing foreign tables and cannot be dropped."};
+    }
     sqliteConnector_.query_with_text_params(
         "DELETE FROM omnisci_foreign_servers WHERE name = ?",
         std::vector<std::string>{server_name});
     foreignServerMap_.erase(server_name);
+    foreignServerMapById_.erase(server_id);
   } else if (!if_exists) {
     throw std::runtime_error{"Foreign server with name \"" + server_name +
                              "\" does not exist."};
@@ -2934,6 +3026,14 @@ void Catalog::dropTable(const TableDescriptor* td) {
 }
 
 void Catalog::doDropTable(const TableDescriptor* td) {
+  executeDropTableSqliteQueries(td);
+  if (g_serialize_temp_tables && table_is_temporary(td)) {
+    dropTableFromJsonUnlocked(td->tableName);
+  }
+  eraseTablePhysicalData(td);
+}
+
+void Catalog::executeDropTableSqliteQueries(const TableDescriptor* td) {
   const int tableId = td->tableId;
   sqliteConnector_.query_with_text_param("DELETE FROM mapd_tables WHERE tableid = ?",
                                          std::to_string(tableId));
@@ -2961,10 +3061,10 @@ void Catalog::doDropTable(const TableDescriptor* td) {
     sqliteConnector_.query_with_text_param("DELETE FROM mapd_views WHERE tableid = ?",
                                            std::to_string(tableId));
   }
-  if (g_serialize_temp_tables && table_is_temporary(td)) {
-    dropTableFromJsonUnlocked(td->tableName);
+  if (td->storageType == StorageType::FOREIGN_TABLE) {
+    sqliteConnector_.query_with_text_param(
+        "DELETE FROM omnisci_foreign_tables WHERE table_id = ?", std::to_string(tableId));
   }
-  eraseTablePhysicalData(td);
 }
 
 void Catalog::renamePhysicalTable(const TableDescriptor* td, const string& newTableName) {
@@ -3447,12 +3547,32 @@ void Catalog::buildForeignServerMap() {
       "SELECT id, name, data_wrapper_type, options FROM omnisci_foreign_servers");
   auto num_rows = sqliteConnector_.getNumRows();
   for (size_t row = 0; row < num_rows; row++) {
-    auto foreign_server = std::make_unique<foreign_storage::ForeignServer>(
+    auto foreign_server = std::make_shared<foreign_storage::ForeignServer>(
         foreign_storage::DataWrapper{sqliteConnector_.getData<std::string>(row, 2)});
     foreign_server->id = sqliteConnector_.getData<int>(row, 0);
     foreign_server->name = sqliteConnector_.getData<std::string>(row, 1);
     foreign_server->populateOptionsMap(sqliteConnector_.getData<std::string>(row, 3));
-    foreignServerMap_[foreign_server->name] = std::move(foreign_server);
+    foreignServerMap_[foreign_server->name] = foreign_server;
+    foreignServerMapById_[foreign_server->id] = foreign_server;
+  }
+}
+
+void Catalog::addForeignTableDetails() {
+  sqliteConnector_.query(
+      "SELECT table_id, server_id, options from omnisci_foreign_tables");
+  auto num_rows = sqliteConnector_.getNumRows();
+  for (size_t r = 0; r < num_rows; r++) {
+    const auto table_id = sqliteConnector_.getData<int>(r, 0);
+    const auto server_id = sqliteConnector_.getData<int>(r, 1);
+    const auto& options = sqliteConnector_.getData<std::string>(r, 2);
+
+    CHECK(tableDescriptorMapById_.find(table_id) != tableDescriptorMapById_.end());
+    auto foreign_table =
+        dynamic_cast<foreign_storage::ForeignTable*>(tableDescriptorMapById_[table_id]);
+    CHECK(foreign_table);
+    foreign_table->foreign_server = foreignServerMapById_[server_id].get();
+    CHECK(foreign_table->foreign_server);
+    foreign_table->populateOptionsMap(options);
   }
 }
 

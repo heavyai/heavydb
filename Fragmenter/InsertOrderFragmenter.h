@@ -28,6 +28,7 @@
 
 #include "Chunk/Chunk.h"
 #include "DataMgr/MemoryLevel.h"
+#include "FragmentDefaultValues.h"
 #include "Fragmenter/AbstractFragmenter.h"
 #include "QueryEngine/TargetValue.h"
 #include "Shared/mapd_shared_mutex.h"
@@ -36,11 +37,6 @@
 namespace Data_Namespace {
 class DataMgr;
 }
-
-#define DEFAULT_FRAGMENT_ROWS 32000000     // in tuples
-#define DEFAULT_PAGE_SIZE 2097152          // in bytes
-#define DEFAULT_MAX_ROWS (1L) << 62        // in rows
-#define DEFAULT_MAX_CHUNK_SIZE 1073741824  // in bytes
 
 namespace Fragmenter_Namespace {
 

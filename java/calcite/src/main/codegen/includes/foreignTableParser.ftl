@@ -129,43 +129,54 @@ OmniSqlArray OmniArray(SqlDataTypeSpec type) :
     |
         <RBRACKET>
     )
-    { return new OmniSqlArray(type, size); }
+    { return new OmniSqlArray(type.toString(), size); }
 }
 
-OmniSqlTypeNameSpec OmniPoint() : {}
+OmniSqlTypeNameSpec OmniSciGeoDataType():
 {
-    <POINT> { return new OmniSqlTypeNameSpec("POINT", SqlTypeName.GEOMETRY, getPos()); }
+    String typeName = null;
+    Integer coordinate = null;
+}
+{
+    (
+        typeName = OmniSciGeoDataTypeName()
+    |
+        <GEOMETRY>
+        <LPAREN>
+        typeName = OmniSciGeoDataTypeName()
+        [
+            <COMMA>
+            coordinate = IntLiteral()
+        ]
+        <RPAREN>
+    )
+    {
+        return new OmniSqlTypeNameSpec(typeName, coordinate, SqlTypeName.GEOMETRY, getPos());
+    }
 }
 
-OmniSqlTypeNameSpec OmniLineString() : {}
+String OmniSciGeoDataTypeName() :
 {
-    <LINESTRING> { return new OmniSqlTypeNameSpec("LINESTRING", SqlTypeName.GEOMETRY, getPos()); }
+    Token type = null;
 }
-
-OmniSqlTypeNameSpec OmniPolygon() : {}
 {
-    <POLYGON> { return new OmniSqlTypeNameSpec("POLYGON", SqlTypeName.GEOMETRY, getPos()); }
-}
-
-OmniSqlTypeNameSpec OmniMultiPolygon() : {}
-{
-    <MULTIPOLYGON> { return new OmniSqlTypeNameSpec("MULTIPOLYGON", SqlTypeName.GEOMETRY, getPos()); }
+    (
+        type = <POINT>
+    |
+        type = <LINESTRING>
+    |
+        type = <POLYGON>
+    |
+        type = <MULTIPOLYGON>
+    )
+    {
+        return type.toString();
+    }
 }
 
 OmniSqlTypeNameSpec OmniText() : {}
 {
     <TEXT> { return new OmniSqlTypeNameSpec("TEXT", SqlTypeName.VARCHAR, getPos()); }
-}
-/*
-OmniSqlTypeNameSpec OmniDecimal() : {}
-{
-    <DECIMAL> { return new OmniSqlTypeNameSpec("DECIMAL", SqlTypeName.DECIMAL, getPos()); }
-}
-*/
-
-OmniSqlTypeNameSpec OmniEpoch() : {}
-{
-    <EPOCH> { return new OmniSqlTypeNameSpec("EPOCH", SqlTypeName.DATE, getPos()); }
 }
 
 /*
@@ -177,42 +188,19 @@ OmniSqlDataType OmniDataType() :
 {
     SqlDataTypeSpec type;
     OmniSqlArray array = null;
-    Integer precision = null;
-    Integer scale = null;
     Integer coordinate = null;
     OmniSqlEncoding encoding = null;
     boolean notNull = false;
 }
 {
     type = DataType()
-    [(
+    [
         array = OmniArray(type)
-    |
-        /* This line causes an ambiguous parser warning when
-           DECIMAL is a custom type, but we have no way of
-           extracting the precision information that we want if
-           we use default DECIMAL parsing.
-        */
-        // TODO:  This is only for GEO.
-        <LPAREN>
-        type = DataType()
-        [ <COMMA> coordinate = UnsignedIntLiteral() ]
-        <RPAREN>
-        // TODO:  This is for custom decimal extension.
-        /*|
-            precision = UnsignedIntLiteral()
-            [
-                <COMMA>
-                scale = UnsignedIntLiteral()
-                ]
-            <RPAREN>
-            )*/
-    )]
+    ]
     [ <NOT> <NULL> { notNull = true; } ]
     [ encoding = Encoding() ]
-    { return new OmniSqlDataType(type, notNull, array, precision, scale, coordinate, encoding); }
+    { return new OmniSqlDataType(type, notNull, array, encoding); }
 }
-
 
 /*
  * Parse a datatype with optional not-null attribute.

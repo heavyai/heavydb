@@ -1084,6 +1084,13 @@ void SysCatalog::createDatabase(const string& name, int owner) {
           "name text unique, "
           "data_wrapper_type text, "
           "options text)");
+      dbConn->query(
+          "CREATE TABLE omnisci_foreign_tables("
+          "table_id integer unique, "
+          "server_id integer, "
+          "options text, "
+          "FOREIGN KEY(table_id) REFERENCES mapd_tables(tableid), "
+          "FOREIGN KEY(server_id) REFERENCES omnisci_foreign_servers(id))");
     }
   } catch (const std::exception&) {
     dbConn->query("ROLLBACK TRANSACTION");

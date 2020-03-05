@@ -24,6 +24,15 @@
 #include "../Shared/sqldefs.h"
 
 /**
+ * @type StorageType
+ * @brief Encapsulates an enumeration of table storage type strings
+ */
+struct StorageType {
+  static constexpr char const* FOREIGN_TABLE = "FOREIGN_TABLE";
+  static constexpr char const* LOCAL_TABLE = "LOCAL_TABLE";
+};
+
+/**
  * @type TableDescriptor
  * @brief specifies the content in-memory of a row in the table metadata table
  *
@@ -75,6 +84,8 @@ struct TableDescriptor {
       , persistenceLevel(Data_Namespace::MemoryLevel::DISK_LEVEL)
       , hasDeletedCol(true)
       , mutex_(std::make_shared<std::mutex>()) {}
+
+  virtual ~TableDescriptor() = default;
 };
 
 inline bool table_is_replicated(const TableDescriptor* td) {

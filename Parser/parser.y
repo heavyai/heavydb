@@ -20,7 +20,12 @@
     }                                                                                                                   \
     std::istringstream ss(inputStr);                                                                                    \
     lexer.switch_streams(&ss,0);                                                                                        \
-    yyparse(parseTrees);                                                                                                \
+    try {                                                                                                               \
+      yyparse(parseTrees);                                                                                              \
+    } catch (...) {                                                                                                     \
+      lexer.in_error_state_ = true;                                                                                     \
+      throw;                                                                                                            \
+    }                                                                                                                   \
     lastParsed = lexer.YYText();                                                                                        \
     lexer.in_error_state_ = (yynerrs > 0);                                                                              \
     if (!errors_.empty()) {                                                                                             \

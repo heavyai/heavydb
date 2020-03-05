@@ -2,15 +2,15 @@
     "statementType": "DDL",
     "payload": {
 	"command": "CREATE_FOREIGN_TABLE",
-	"ifNotExists": "false",
+	"ifNotExists": false,
 	"tableName": "test_table",
 	"serverName": "test_server",
 	"columns": [{
 	    "name": "test_column_1",
             "dataType": {
                 "type": "POINT",
-	        "notNull": "false",
-                "coordinateSystem": "900913"
+	        "notNull": false,
+                "coordinateSystem": 900913
             }
 	}]
     }

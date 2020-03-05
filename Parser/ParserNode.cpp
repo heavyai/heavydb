@@ -1236,82 +1236,6 @@ void SelectStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   query.set_order_by(order_by);
 }
 
-std::string SQLType::to_string() const {
-  std::string str;
-  switch (type) {
-    case kBOOLEAN:
-      str = "BOOLEAN";
-      break;
-    case kCHAR:
-      str = "CHAR(" + boost::lexical_cast<std::string>(param1) + ")";
-      break;
-    case kVARCHAR:
-      str = "VARCHAR(" + boost::lexical_cast<std::string>(param1) + ")";
-      break;
-    case kTEXT:
-      str = "TEXT";
-      break;
-    case kNUMERIC:
-      str = "NUMERIC(" + boost::lexical_cast<std::string>(param1);
-      if (param2 > 0) {
-        str += ", " + boost::lexical_cast<std::string>(param2);
-      }
-      str += ")";
-      break;
-    case kDECIMAL:
-      str = "DECIMAL(" + boost::lexical_cast<std::string>(param1);
-      if (param2 > 0) {
-        str += ", " + boost::lexical_cast<std::string>(param2);
-      }
-      str += ")";
-      break;
-    case kBIGINT:
-      str = "BIGINT";
-      break;
-    case kINT:
-      str = "INT";
-      break;
-    case kTINYINT:
-      str = "TINYINT";
-      break;
-    case kSMALLINT:
-      str = "SMALLINT";
-      break;
-    case kFLOAT:
-      str = "FLOAT";
-      break;
-    case kDOUBLE:
-      str = "DOUBLE";
-      break;
-    case kTIME:
-      str = "TIME";
-      if (param1 < 6) {
-        str += "(" + boost::lexical_cast<std::string>(param1) + ")";
-      }
-      break;
-    case kTIMESTAMP:
-      str = "TIMESTAMP";
-      if (param1 <= 9) {
-        str += "(" + boost::lexical_cast<std::string>(param1) + ")";
-      }
-      break;
-    case kDATE:
-      str = "DATE";
-      break;
-    default:
-      assert(false);
-      break;
-  }
-  if (is_array) {
-    str += "[";
-    if (array_size > 0) {
-      str += boost::lexical_cast<std::string>(array_size);
-    }
-    str += "]";
-  }
-  return str;
-}
-
 std::string SelectEntry::to_string() const {
   std::string str = select_expr->to_string();
   if (alias != nullptr) {
@@ -1914,55 +1838,6 @@ void DeleteStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   throw std::runtime_error("DELETE statement not supported yet.");
 }
 
-void SQLType::check_type() {
-  switch (type) {
-    case kCHAR:
-    case kVARCHAR:
-      if (param1 <= 0) {
-        throw std::runtime_error("CHAR and VARCHAR must have a positive dimension.");
-      }
-      break;
-    case kDECIMAL:
-    case kNUMERIC:
-      if (param1 <= 0) {
-        throw std::runtime_error("DECIMAL and NUMERIC must have a positive precision.");
-      } else if (param1 > 19) {
-        throw std::runtime_error(
-            "DECIMAL and NUMERIC precision cannot be larger than 19.");
-      } else if (param1 <= param2) {
-        throw std::runtime_error(
-            "DECIMAL and NUMERIC must have precision larger than scale.");
-      }
-      break;
-    case kTIMESTAMP:
-      if (param1 == -1) {
-        param1 = 0;  // set default to 0
-      } else if (param1 != 0 && param1 != 3 && param1 != 6 &&
-                 param1 != 9) {  // support ms, us, ns
-        throw std::runtime_error(
-            "Only TIMESTAMP(n) where n = (0,3,6,9) are supported now.");
-      }
-      break;
-    case kTIME:
-      if (param1 == -1) {
-        param1 = 0;  // default precision is 0
-      }
-      if (param1 > 0) {  // @TODO(wei) support sub-second precision later.
-        throw std::runtime_error("Only TIME(0) is supported now.");
-      }
-      break;
-    case kPOINT:
-    case kLINESTRING:
-    case kPOLYGON:
-    case kMULTIPOLYGON:
-      // Storing SRID in param1
-      break;
-    default:
-      param1 = 0;
-      break;
-  }
-}
-
 namespace {
 
 void validate_shard_column_type(const ColumnDescriptor& cd) {
@@ -2203,25 +2078,13 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
     ColumnDef* coldef = static_cast<ColumnDef*>(e.get());
     ColumnDescriptor cd;
     cd.columnName = *coldef->get_column_name();
-    const auto uc_col_name = boost::to_upper_copy<std::string>(cd.columnName);
-    const auto it_ok = uc_col_names.insert(uc_col_name);
-    if (!it_ok.second) {
-      throw std::runtime_error("Column '" + cd.columnName + "' defined more than once");
-    }
-
+    ddl_utils::validate_non_duplicate_column(cd.columnName, uc_col_names);
     setColumnDescriptor(cd, coldef);
     columns.push_back(cd);
   }
 
-  td.tableName = *table_;
-  td.nColumns = columns.size();
-  td.isView = false;
-  td.fragmenter = nullptr;
-  td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
-  td.maxFragRows = DEFAULT_FRAGMENT_ROWS;
-  td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
-  td.fragPageSize = DEFAULT_PAGE_SIZE;
-  td.maxRows = DEFAULT_MAX_ROWS;
+  ddl_utils::set_default_table_attributes(*table_, td, columns.size());
+
   if (shard_key_def) {
     td.shardedColumnId = shard_column_index(shard_key_def->get_column(), columns);
     if (!td.shardedColumnId) {
@@ -2259,12 +2122,10 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              " will not be created. User has no create privileges.");
   }
 
-  if (catalog.getMetadataForTable(*table_) != nullptr) {
-    if (if_not_exists_) {
-      return;
-    }
-    throw std::runtime_error("Table " + *table_ + " already exists.");
+  if (!ddl_utils::validate_nonexistent_table(*table_, catalog, if_not_exists_)) {
+    return;
   }
+
   TableDescriptor td;
   std::list<ColumnDescriptor> columns;
   std::vector<SharedDictionaryDef> shared_dict_defs;
@@ -2919,9 +2780,7 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              " will not be dropped. User has no proper privileges.");
   }
 
-  if (td->isView) {
-    throw std::runtime_error(*table + " is a view.  Use DROP VIEW.");
-  }
+  ddl_utils::validate_drop_table_type(td, ddl_utils::TableType::TABLE);
 
   auto table_data_write_lock =
       lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table);
@@ -3037,270 +2896,18 @@ void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef) {
-  cd.columnName = *coldef->get_column_name();
-  SQLType* t = coldef->get_column_type();
-  t->check_type();
-  if (t->get_is_array()) {
-    cd.columnType.set_type(kARRAY);
-    cd.columnType.set_subtype(t->get_type());
-  } else {
-    cd.columnType.set_type(t->get_type());
-  }
-  if (IS_GEO(t->get_type())) {
-    cd.columnType.set_subtype(static_cast<SQLTypes>(t->get_param1()));
-    cd.columnType.set_input_srid(t->get_param2());
-    cd.columnType.set_output_srid(t->get_param2());
-  } else {
-    cd.columnType.set_dimension(t->get_param1());
-    cd.columnType.set_scale(t->get_param2());
-  }
-  SQLTypes type = cd.columnType.get_type();
+  bool not_null;
   const ColumnConstraintDef* cc = coldef->get_column_constraint();
   if (cc == nullptr) {
-    cd.columnType.set_notnull(false);
+    not_null = false;
   } else {
-    cd.columnType.set_notnull(cc->get_notnull());
+    not_null = cc->get_notnull();
   }
-  const CompressDef* compression = coldef->get_compression();
-  if (compression == nullptr) {
-    // Change default TEXT column behaviour to be DICT encoded
-    if (cd.columnType.is_string() || cd.columnType.is_string_array()) {
-      // default to 32-bits
-      cd.columnType.set_compression(kENCODING_DICT);
-      cd.columnType.set_comp_param(32);
-    } else if (cd.columnType.is_decimal() && cd.columnType.get_precision() <= 4) {
-      cd.columnType.set_compression(kENCODING_FIXED);
-      cd.columnType.set_comp_param(16);
-    } else if (cd.columnType.is_decimal() && cd.columnType.get_precision() <= 9) {
-      cd.columnType.set_compression(kENCODING_FIXED);
-      cd.columnType.set_comp_param(32);
-    } else if (cd.columnType.is_decimal() && cd.columnType.get_precision() > 18) {
-      throw std::runtime_error(cd.columnName + ": Precision too high, max 18.");
-    } else if (cd.columnType.is_geometry() && cd.columnType.get_output_srid() == 4326) {
-      // default to GEOINT 32-bits
-      cd.columnType.set_compression(kENCODING_GEOINT);
-      cd.columnType.set_comp_param(32);
-    } else if (type == kDATE && g_use_date_in_days_default_encoding) {
-      // Days encoding for DATE
-      cd.columnType.set_compression(kENCODING_DATE_IN_DAYS);
-      cd.columnType.set_comp_param(0);
-    } else {
-      cd.columnType.set_compression(kENCODING_NONE);
-      cd.columnType.set_comp_param(0);
-    }
-  } else {
-    const std::string& comp = *compression->get_encoding_name();
-    int comp_param;
-    if (boost::iequals(comp, "fixed")) {
-      if (!cd.columnType.is_integer() && !cd.columnType.is_time() &&
-          !cd.columnType.is_decimal()) {
-        throw std::runtime_error(
-            cd.columnName +
-            ": Fixed encoding is only supported for integer or time columns.");
-      }
-      // fixed-bits encoding
-      if (type == kARRAY) {
-        type = cd.columnType.get_subtype();
-      }
-      switch (type) {
-        case kSMALLINT:
-          if (compression->get_encoding_param() != 8) {
-            throw std::runtime_error(
-                cd.columnName +
-                ": Compression parameter for Fixed encoding on SMALLINT must be 8.");
-          }
-          break;
-        case kINT:
-          if (compression->get_encoding_param() != 8 &&
-              compression->get_encoding_param() != 16) {
-            throw std::runtime_error(cd.columnName +
-                                     ": Compression parameter for Fixed encoding on "
-                                     "INTEGER must be 8 or 16.");
-          }
-          break;
-        case kBIGINT:
-          if (compression->get_encoding_param() != 8 &&
-              compression->get_encoding_param() != 16 &&
-              compression->get_encoding_param() != 32) {
-            throw std::runtime_error(cd.columnName +
-                                     ": Compression parameter for Fixed encoding on "
-                                     "BIGINT must be 8 or 16 or 32.");
-          }
-          break;
-        case kTIMESTAMP:
-        case kTIME:
-          if (compression->get_encoding_param() != 32) {
-            throw std::runtime_error(cd.columnName +
-                                     ": Compression parameter for Fixed encoding on "
-                                     "TIME or TIMESTAMP must be 32.");
-          } else if (cd.columnType.is_high_precision_timestamp()) {
-            throw std::runtime_error(
-                "Fixed encoding is not supported for TIMESTAMP(3|6|9).");
-          }
-          break;
-        case kDECIMAL:
-        case kNUMERIC:
-          if (compression->get_encoding_param() != 32 &&
-              compression->get_encoding_param() != 16) {
-            throw std::runtime_error(cd.columnName +
-                                     ": Compression parameter for Fixed encoding on "
-                                     "DECIMAL must be 16 or 32.");
-          }
-
-          if (compression->get_encoding_param() == 32 &&
-              cd.columnType.get_precision() > 9) {
-            throw std::runtime_error(
-                cd.columnName + ": Precision too high for Fixed(32) encoding, max 9.");
-          }
-
-          if (compression->get_encoding_param() == 16 &&
-              cd.columnType.get_precision() > 4) {
-            throw std::runtime_error(
-                cd.columnName + ": Precision too high for Fixed(16) encoding, max 4.");
-          }
-          break;
-        case kDATE:
-          if (compression->get_encoding_param() != 32 &&
-              compression->get_encoding_param() != 16) {
-            throw std::runtime_error(cd.columnName +
-                                     ": Compression parameter for Fixed encoding on "
-                                     "DATE must be 16 or 32.");
-          }
-          break;
-        default:
-          throw std::runtime_error(cd.columnName + ": Cannot apply FIXED encoding to " +
-                                   t->to_string());
-      }
-      if (type == kDATE) {
-        cd.columnType.set_compression(kENCODING_DATE_IN_DAYS);
-        cd.columnType.set_comp_param(16);
-      } else {
-        cd.columnType.set_compression(kENCODING_FIXED);
-        cd.columnType.set_comp_param(compression->get_encoding_param());
-      }
-    } else if (boost::iequals(comp, "rl")) {
-      // run length encoding
-      cd.columnType.set_compression(kENCODING_RL);
-      cd.columnType.set_comp_param(0);
-      // throw std::runtime_error("RL(Run Length) encoding not supported yet.");
-    } else if (boost::iequals(comp, "diff")) {
-      // differential encoding
-      cd.columnType.set_compression(kENCODING_DIFF);
-      cd.columnType.set_comp_param(0);
-      // throw std::runtime_error("DIFF(differential) encoding not supported yet.");
-    } else if (boost::iequals(comp, "dict")) {
-      if (!cd.columnType.is_string() && !cd.columnType.is_string_array()) {
-        throw std::runtime_error(cd.columnName +
-                                 ": Dictionary encoding is only supported on string or "
-                                 "string array columns.");
-      }
-      if (compression->get_encoding_param() == 0) {
-        comp_param = 32;  // default to 32-bits
-      } else {
-        comp_param = compression->get_encoding_param();
-      }
-      if (cd.columnType.is_string_array() && comp_param != 32) {
-        throw std::runtime_error(cd.columnName +
-                                 ": Compression parameter for string arrays must be 32");
-      }
-      if (comp_param != 8 && comp_param != 16 && comp_param != 32) {
-        throw std::runtime_error(
-            cd.columnName +
-            ": Compression parameter for Dictionary encoding must be 8 or 16 or 32.");
-      }
-      // diciontary encoding
-      cd.columnType.set_compression(kENCODING_DICT);
-      cd.columnType.set_comp_param(comp_param);
-    } else if (boost::iequals(comp, "NONE")) {
-      if (cd.columnType.is_geometry()) {
-        cd.columnType.set_compression(kENCODING_NONE);
-        cd.columnType.set_comp_param(64);
-      } else {
-        if (!cd.columnType.is_string() && !cd.columnType.is_string_array()) {
-          throw std::runtime_error(
-              cd.columnName +
-              ": None encoding is only supported on string or string array columns.");
-        }
-        cd.columnType.set_compression(kENCODING_NONE);
-        cd.columnType.set_comp_param(0);
-      }
-    } else if (boost::iequals(comp, "sparse")) {
-      // sparse column encoding with mostly NULL values
-      if (cd.columnType.get_notnull()) {
-        throw std::runtime_error(
-            cd.columnName + ": Cannot do sparse column encoding on a NOT NULL column.");
-      }
-      if (compression->get_encoding_param() == 0 ||
-          compression->get_encoding_param() % 8 != 0 ||
-          compression->get_encoding_param() > 48) {
-        throw std::runtime_error(
-            cd.columnName +
-            "Must specify number of bits as 8, 16, 24, 32 or 48 as the parameter to "
-            "sparse-column encoding.");
-      }
-      cd.columnType.set_compression(kENCODING_SPARSE);
-      cd.columnType.set_comp_param(compression->get_encoding_param());
-      // throw std::runtime_error("SPARSE encoding not supported yet.");
-    } else if (boost::iequals(comp, "compressed")) {
-      if (!cd.columnType.is_geometry() || cd.columnType.get_output_srid() != 4326) {
-        throw std::runtime_error(
-            cd.columnName +
-            ": COMPRESSED encoding is only supported on WGS84 geo columns.");
-      }
-      if (compression->get_encoding_param() == 0) {
-        comp_param = 32;  // default to 32-bits
-      } else {
-        comp_param = compression->get_encoding_param();
-      }
-      if (comp_param != 32) {
-        throw std::runtime_error(cd.columnName +
-                                 ": only 32-bit COMPRESSED geo encoding is supported");
-      }
-      // encoding longitude/latitude as integers
-      cd.columnType.set_compression(kENCODING_GEOINT);
-      cd.columnType.set_comp_param(comp_param);
-    } else if (boost::iequals(comp, "days")) {
-      // days encoding for dates
-      if (cd.columnType.get_type() != kDATE) {
-        throw std::runtime_error(cd.columnName +
-                                 ": Days encoding is only supported for DATE columns.");
-      }
-      if (compression->get_encoding_param() != 32 &&
-          compression->get_encoding_param() != 16) {
-        throw std::runtime_error(cd.columnName +
-                                 ": Compression parameter for Days encoding on "
-                                 "DATE must be 16 or 32.");
-      }
-      cd.columnType.set_compression(kENCODING_DATE_IN_DAYS);
-      cd.columnType.set_comp_param((compression->get_encoding_param() == 16) ? 16 : 0);
-    } else {
-      throw std::runtime_error(cd.columnName + ": Invalid column compression scheme " +
-                               comp);
-    }
-  }
-  if (cd.columnType.is_string_array() &&
-      cd.columnType.get_compression() != kENCODING_DICT) {
-    throw std::runtime_error(
-        cd.columnName +
-        ": Array of strings must be dictionary encoded. Specify ENCODING DICT");
-  }
-  if (t->get_is_array()) {
-    int s = -1;
-    auto array_size = t->get_array_size();
-    if (array_size > 0) {
-      auto sti = cd.columnType.get_elem_type();
-      s = array_size * sti.get_size();
-      if (s <= 0) {
-        throw std::runtime_error(cd.columnName + ": Unexpected fixed length array size");
-      }
-    }
-    cd.columnType.set_size(s);
-
-  } else {
-    cd.columnType.set_fixed_size();
-  }
-  cd.isSystemCol = false;
-  cd.isVirtualCol = false;
+  ddl_utils::set_column_descriptor(*coldef->get_column_name(),
+                                   cd,
+                                   coldef->get_column_type(),
+                                   not_null,
+                                   coldef->get_compression());
 }
 
 void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& session,
@@ -4552,13 +4159,9 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto stdlog = STDLOG(query_state);
   auto& catalog = session.getCatalog();
 
-  if (catalog.getMetadataForTable(view_name_) != nullptr) {
-    if (if_not_exists_) {
-      return;
-    }
-    throw std::runtime_error("Table or View " + view_name_ + " already exists.");
+  if (!ddl_utils::validate_nonexistent_table(view_name_, catalog, if_not_exists_)) {
+    return;
   }
-
   if (!session.checkDBAccessPrivileges(DBObjectType::ViewDBObjectType,
                                        AccessPrivileges::CREATE_VIEW)) {
     throw std::runtime_error("View " + view_name_ +
@@ -4632,9 +4235,7 @@ void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              " will not be dropped. User has no drop view privileges.");
   }
 
-  if (!td->isView) {
-    throw std::runtime_error(*view_name + " is a table.  Use DROP TABLE.");
-  }
+  ddl_utils::validate_drop_table_type(td, ddl_utils::TableType::VIEW);
   catalog.dropTable(td);
 }
 
