@@ -148,6 +148,57 @@ void create_or_append_validity(const ScalarTargetValue& value,
   null_bitmap->push_back(is_valid);
 }
 
+template <typename TYPE, typename enable = void>
+class null_type {};
+
+template <typename TYPE>
+struct null_type<TYPE, std::enable_if_t<std::is_integral<TYPE>::value>> {
+  using type = typename std::make_signed<TYPE>::type;
+};
+
+template <typename TYPE>
+struct null_type<TYPE, std::enable_if_t<std::is_floating_point<TYPE>::value>> {
+  using type = TYPE;
+};
+
+template <typename TYPE>
+using null_type_t = typename null_type<TYPE>::type;
+
+template <typename TYPE>
+void convert_column(ResultSetPtr result,
+                    size_t col,
+                    std::unique_ptr<int8_t[]>& values,
+                    std::unique_ptr<uint8_t[]>& is_valid,
+                    size_t entry_count) {
+  CHECK(sizeof(TYPE) == result->getColType(col).get_size());
+  CHECK(!values);
+  CHECK(!is_valid);
+
+  values.reset(new int8_t[entry_count * sizeof(TYPE)]);
+  is_valid.reset(new uint8_t[entry_count]);
+  bool has_null = false;
+
+  result->copyColumnIntoBuffer(col, values.get(), entry_count * sizeof(TYPE));
+
+  null_type_t<TYPE> null_val;
+  if constexpr (std::is_integral<TYPE>::value) {
+    null_val = inline_int_null_value<null_type_t<TYPE>>();
+  } else {
+    static_assert(std::is_floating_point<TYPE>::value);
+    null_val = inline_fp_null_value<TYPE>();
+  }
+
+  null_type_t<TYPE>* vals = reinterpret_cast<null_type_t<TYPE>*>(values.get());
+  for (size_t i = 0; i < entry_count; ++i) {
+    bool valid = vals[i] != null_val;
+    is_valid[i] = valid;
+    has_null |= !valid;
+  }
+
+  if (!has_null)
+    is_valid.reset();
+}
+
 }  // namespace
 
 namespace arrow {
@@ -215,6 +266,7 @@ key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
 //
 // TODO(miyu): verify if the server still needs to free its own copies after last uses
 ArrowResult ArrowResultSetConverter::getArrowResultImpl() const {
+  auto timer = DEBUG_TIMER(__func__);
   const auto serialized_arrow_output = getSerializedArrowOutput();
   const auto& serialized_schema = serialized_arrow_output.schema;
   const auto& serialized_records = serialized_arrow_output.records;
@@ -338,6 +390,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
   // TODO(miyu): speed up for columnar buffers
   auto fetch = [&](std::vector<std::shared_ptr<ValueArray>>& value_seg,
                    std::vector<std::shared_ptr<std::vector<bool>>>& null_bitmap_seg,
+                   const std::vector<bool>& non_lazy_cols,
                    const size_t start_entry,
                    const size_t end_entry) -> size_t {
     CHECK_EQ(value_seg.size(), col_count);
@@ -345,12 +398,16 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
     const auto entry_count = end_entry - start_entry;
     size_t seg_row_count = 0;
     for (size_t i = start_entry; i < end_entry; ++i) {
-      auto row = results_->getRowAtNoTranslations(i);
+      auto row = results_->getRowAtNoTranslations(i, non_lazy_cols);
       if (row.empty()) {
         continue;
       }
       ++seg_row_count;
       for (size_t j = 0; j < col_count; ++j) {
+        if (!non_lazy_cols.empty() && non_lazy_cols[j]) {
+          continue;
+        }
+
         auto scalar_value = boost::get<ScalarTargetValue>(&row[j]);
         // TODO(miyu): support more types other than scalar.
         CHECK(scalar_value);
@@ -429,44 +486,168 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
     return seg_row_count;
   };
 
+  auto fetch_columns = [&](std::vector<std::unique_ptr<int8_t[]>>& values,
+                           std::vector<std::unique_ptr<uint8_t[]>>& is_valid,
+                           const size_t start_col,
+                           const size_t end_col) {
+    for (size_t col = start_col; col < end_col; ++col) {
+      const auto& column = builders[col];
+      switch (column.physical_type) {
+        case kBOOLEAN:
+          convert_column<uint8_t>(results_, col, values[col], is_valid[col], entry_count);
+          break;
+        case kTINYINT:
+          convert_column<int8_t>(results_, col, values[col], is_valid[col], entry_count);
+          break;
+        case kSMALLINT:
+          convert_column<int16_t>(results_, col, values[col], is_valid[col], entry_count);
+          break;
+        case kINT:
+          convert_column<int32_t>(results_, col, values[col], is_valid[col], entry_count);
+          break;
+        case kBIGINT:
+          convert_column<int64_t>(results_, col, values[col], is_valid[col], entry_count);
+          break;
+        case kFLOAT:
+          convert_column<float>(results_, col, values[col], is_valid[col], entry_count);
+          break;
+        case kDOUBLE:
+          convert_column<double>(results_, col, values[col], is_valid[col], entry_count);
+          break;
+        case kTIME:
+          convert_column<int32_t>(results_, col, values[col], is_valid[col], entry_count);
+          break;
+        case kDATE:
+          device_type_ == ExecutorDeviceType::GPU
+              ? convert_column<int64_t>(
+                    results_, col, values[col], is_valid[col], entry_count)
+              : convert_column<int32_t>(
+                    results_, col, values[col], is_valid[col], entry_count);
+          break;
+        case kTIMESTAMP:
+          convert_column<int64_t>(results_, col, values[col], is_valid[col], entry_count);
+          break;
+        default:
+          // TODO(miyu): support more scalar types.
+          throw std::runtime_error(column.col_type.get_type_name() +
+                                   " is not supported in Arrow result sets.");
+      }
+    }
+  };
+
   std::vector<std::shared_ptr<ValueArray>> column_values(col_count, nullptr);
   std::vector<std::shared_ptr<std::vector<bool>>> null_bitmaps(col_count, nullptr);
   const bool multithreaded = entry_count > 10000 && !results_->isTruncated();
-  if (multithreaded) {
-    const size_t cpu_count = cpu_threads();
-    std::vector<std::future<size_t>> child_threads;
-    std::vector<std::vector<std::shared_ptr<ValueArray>>> column_value_segs(
-        cpu_count, std::vector<std::shared_ptr<ValueArray>>(col_count, nullptr));
-    std::vector<std::vector<std::shared_ptr<std::vector<bool>>>> null_bitmap_segs(
-        cpu_count, std::vector<std::shared_ptr<std::vector<bool>>>(col_count, nullptr));
-    const auto stride = (entry_count + cpu_count - 1) / cpu_count;
-    for (size_t i = 0, start_entry = 0; start_entry < entry_count;
-         ++i, start_entry += stride) {
-      const auto end_entry = std::min(entry_count, start_entry + stride);
-      child_threads.push_back(std::async(std::launch::async,
-                                         fetch,
-                                         std::ref(column_value_segs[i]),
-                                         std::ref(null_bitmap_segs[i]),
-                                         start_entry,
-                                         end_entry));
-    }
-    for (auto& child : child_threads) {
-      row_count += child.get();
-    }
-    for (int i = 0; i < schema->num_fields(); ++i) {
-      reserveColumnBuilderSize(builders[i], row_count);
-      for (size_t j = 0; j < cpu_count; ++j) {
-        if (!column_value_segs[j][i]) {
-          continue;
+  bool use_columnar_converter = results_->isDirectColumnarConversionPossible() &&
+                                entry_count == results_->entryCount();
+  std::vector<bool> non_lazy_cols;
+  if (use_columnar_converter) {
+    std::vector<size_t> non_lazy_col_pos;
+    size_t non_lazy_col_count = 0;
+    const auto& lazy_fetch_info = results_->getLazyFetchInfo();
+
+    if (lazy_fetch_info.empty()) {
+      non_lazy_col_count = col_count;
+    } else {
+      non_lazy_cols.reserve(col_count);
+      non_lazy_col_pos.reserve(col_count);
+      for (size_t i = 0; i < lazy_fetch_info.size(); ++i) {
+        bool is_lazy = lazy_fetch_info[i].is_lazily_fetched;
+        non_lazy_cols.emplace_back(!is_lazy);
+        if (!is_lazy) {
+          ++non_lazy_col_count;
+          non_lazy_col_pos.emplace_back(i);
         }
-        append(builders[i], *column_value_segs[j][i], null_bitmap_segs[j][i]);
+      }
+      if (non_lazy_col_count == col_count) {
+        non_lazy_cols.clear();
+        non_lazy_col_pos.clear();
+      } else {
+        non_lazy_col_pos.emplace_back(col_count);
       }
     }
-  } else {
-    row_count = fetch(column_values, null_bitmaps, size_t(0), entry_count);
+
+    std::vector<std::unique_ptr<int8_t[]>> values(col_count);
+    std::vector<std::unique_ptr<uint8_t[]>> is_valid(col_count);
+    std::vector<std::future<void>> child_threads;
+    size_t num_threads =
+        std::min(multithreaded ? (size_t)cpu_threads() : (size_t)1, non_lazy_col_count);
+
+    size_t start_col = 0;
+    size_t end_col = 0;
+    for (size_t i = 0; i < num_threads; ++i) {
+      start_col = end_col;
+      end_col = (i + 1) * non_lazy_col_count / num_threads;
+      size_t phys_start_col =
+          non_lazy_col_pos.empty() ? start_col : non_lazy_col_pos[start_col];
+      size_t phys_end_col =
+          non_lazy_col_pos.empty() ? end_col : non_lazy_col_pos[end_col];
+      child_threads.push_back(std::async(std::launch::async,
+                                         fetch_columns,
+                                         std::ref(values),
+                                         std::ref(is_valid),
+                                         phys_start_col,
+                                         phys_end_col));
+    }
+    for (auto& child : child_threads) {
+      child.get();
+    }
+    row_count = entry_count;
     for (int i = 0; i < schema->num_fields(); ++i) {
-      reserveColumnBuilderSize(builders[i], row_count);
-      append(builders[i], *column_values[i], null_bitmaps[i]);
+      if (non_lazy_cols.empty() || non_lazy_cols[i]) {
+        reserveColumnBuilderSize(builders[i], row_count);
+        append(builders[i], values[i].get(), row_count, is_valid[i].get());
+      }
+    }
+  }
+  if (!use_columnar_converter || !non_lazy_cols.empty()) {
+    row_count = 0;
+    if (multithreaded) {
+      const size_t cpu_count = cpu_threads();
+      std::vector<std::future<size_t>> child_threads;
+      std::vector<std::vector<std::shared_ptr<ValueArray>>> column_value_segs(
+          cpu_count, std::vector<std::shared_ptr<ValueArray>>(col_count, nullptr));
+      std::vector<std::vector<std::shared_ptr<std::vector<bool>>>> null_bitmap_segs(
+          cpu_count, std::vector<std::shared_ptr<std::vector<bool>>>(col_count, nullptr));
+      const auto stride = (entry_count + cpu_count - 1) / cpu_count;
+      for (size_t i = 0, start_entry = 0; start_entry < entry_count;
+           ++i, start_entry += stride) {
+        const auto end_entry = std::min(entry_count, start_entry + stride);
+        child_threads.push_back(std::async(std::launch::async,
+                                           fetch,
+                                           std::ref(column_value_segs[i]),
+                                           std::ref(null_bitmap_segs[i]),
+                                           non_lazy_cols,
+                                           start_entry,
+                                           end_entry));
+      }
+      for (auto& child : child_threads) {
+        row_count += child.get();
+      }
+      for (int i = 0; i < schema->num_fields(); ++i) {
+        if (!non_lazy_cols.empty() && non_lazy_cols[i]) {
+          continue;
+        }
+
+        reserveColumnBuilderSize(builders[i], row_count);
+        for (size_t j = 0; j < cpu_count; ++j) {
+          if (!column_value_segs[j][i]) {
+            continue;
+          }
+          append(builders[i], *column_value_segs[j][i], null_bitmap_segs[j][i]);
+        }
+      }
+    } else {
+      row_count =
+          fetch(column_values, null_bitmaps, non_lazy_cols, size_t(0), entry_count);
+      for (int i = 0; i < schema->num_fields(); ++i) {
+        if (!non_lazy_cols.empty() && non_lazy_cols[i]) {
+          continue;
+        }
+
+        reserveColumnBuilderSize(builders[i], row_count);
+        append(builders[i], *column_values[i], null_bitmaps[i]);
+      }
     }
   }
 
@@ -647,6 +828,32 @@ void ArrowResultSetConverter::appendToColumnBuilder(
   }
 }
 
+template <typename BuilderType, typename C_TYPE>
+void ArrowResultSetConverter::appendToColumnBuilder(ColumnBuilder& column_builder,
+                                                    int8_t* data,
+                                                    size_t entry_count,
+                                                    const uint8_t* is_valid) const {
+  C_TYPE* vals = reinterpret_cast<C_TYPE*>(data);
+
+  if (scale_epoch_values<BuilderType>()) {
+    auto scale_sec_to_millisec = [](auto seconds) { return seconds * kMilliSecsPerSec; };
+    auto scale_values = [&](auto epoch) {
+      return std::is_same<BuilderType, Date32Builder>::value
+                 ? DateConverters::get_epoch_days_from_seconds(epoch)
+                 : scale_sec_to_millisec(epoch);
+    };
+    std::transform(vals, vals + entry_count, vals, scale_values);
+  }
+
+  auto typed_builder = static_cast<BuilderType*>(column_builder.builder.get());
+  if (is_valid) {
+    CHECK(column_builder.field->nullable());
+    ARROW_THROW_NOT_OK(typed_builder->APPENDVALUES(vals, entry_count, is_valid));
+  } else {
+    ARROW_THROW_NOT_OK(typed_builder->APPENDVALUES(vals, entry_count));
+  }
+}
+
 void ArrowResultSetConverter::append(
     ColumnBuilder& column_builder,
     const ValueArray& values,
@@ -685,6 +892,64 @@ void ArrowResultSetConverter::append(
                 column_builder, values, is_valid)
           : appendToColumnBuilder<Date32Builder, int32_t>(
                 column_builder, values, is_valid);
+      break;
+    case kCHAR:
+    case kVARCHAR:
+    case kTEXT:
+    default:
+      // TODO(miyu): support more scalar types.
+      throw std::runtime_error(column_builder.col_type.get_type_name() +
+                               " is not supported in Arrow result sets.");
+  }
+}
+
+void ArrowResultSetConverter::append(ColumnBuilder& column_builder,
+                                     int8_t* data,
+                                     size_t entry_count,
+                                     const uint8_t* is_valid) const {
+  switch (column_builder.physical_type) {
+    case kBOOLEAN:
+      appendToColumnBuilder<BooleanBuilder, uint8_t>(
+          column_builder, data, entry_count, is_valid);
+      break;
+    case kTINYINT:
+      appendToColumnBuilder<Int8Builder, int8_t>(
+          column_builder, data, entry_count, is_valid);
+      break;
+    case kSMALLINT:
+      appendToColumnBuilder<Int16Builder, int16_t>(
+          column_builder, data, entry_count, is_valid);
+      break;
+    case kINT:
+      appendToColumnBuilder<Int32Builder, int32_t>(
+          column_builder, data, entry_count, is_valid);
+      break;
+    case kBIGINT:
+      appendToColumnBuilder<Int64Builder, int64_t>(
+          column_builder, data, entry_count, is_valid);
+      break;
+    case kFLOAT:
+      appendToColumnBuilder<FloatBuilder, float>(
+          column_builder, data, entry_count, is_valid);
+      break;
+    case kDOUBLE:
+      appendToColumnBuilder<DoubleBuilder, double>(
+          column_builder, data, entry_count, is_valid);
+      break;
+    case kTIME:
+      appendToColumnBuilder<Time32Builder, int32_t>(
+          column_builder, data, entry_count, is_valid);
+      break;
+    case kTIMESTAMP:
+      appendToColumnBuilder<TimestampBuilder, int64_t>(
+          column_builder, data, entry_count, is_valid);
+      break;
+    case kDATE:
+      device_type_ == ExecutorDeviceType::GPU
+          ? appendToColumnBuilder<Date64Builder, int64_t>(
+                column_builder, data, entry_count, is_valid)
+          : appendToColumnBuilder<Date32Builder, int32_t>(
+                column_builder, data, entry_count, is_valid);
       break;
     case kCHAR:
     case kVARCHAR:

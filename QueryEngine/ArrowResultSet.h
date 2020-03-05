@@ -30,6 +30,7 @@
 
 // TODO(wamsi): ValueArray is not optimal. Remove it and inherrit from base vector class.
 using ValueArray = boost::variant<std::vector<bool>,
+                                  std::vector<uint8_t>,
                                   std::vector<int8_t>,
                                   std::vector<int16_t>,
                                   std::vector<int32_t>,
@@ -218,12 +219,21 @@ class ArrowResultSetConverter {
   void append(ColumnBuilder& column_builder,
               const ValueArray& values,
               const std::shared_ptr<std::vector<bool>>& is_valid) const;
+  void append(ColumnBuilder& column_builder,
+              int8_t* data,
+              size_t entry_count,
+              const uint8_t* is_valid) const;
 
   template <typename BuilderType, typename C_TYPE>
   inline void appendToColumnBuilder(
       ColumnBuilder& column_builder,
       const ValueArray& values,
       const std::shared_ptr<std::vector<bool>>& is_valid) const;
+  template <typename BuilderType, typename C_TYPE>
+  inline void appendToColumnBuilder(ColumnBuilder& column_builder,
+                                    int8_t* data,
+                                    size_t entry_count,
+                                    const uint8_t* is_valid) const;
 
   inline std::shared_ptr<arrow::Array> finishColumnBuilder(
       ColumnBuilder& column_builder) const;
