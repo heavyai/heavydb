@@ -334,6 +334,7 @@ class MapDProgramOptions {
    */
   int max_session_duration = kMinsPerMonth;
   std::string udf_file_name = {""};
+  std::vector<std::string> llvm_opts;
 
   void fillOptions();
   void fillAdvancedOptions();
@@ -781,6 +782,9 @@ void MapDProgramOptions::fillAdvancedOptions() {
       po::value<std::string>(&udf_file_name),
       "Load user defined extension functions from this file at startup. The file is "
       "expected to be a C/C++ file with extension .cpp.");
+  developer_desc.add_options()("llvm-opt",
+                               po::value<std::vector<std::string>>(&llvm_opts),
+                               "Pass specified option to LLVM.");
 }
 
 namespace {
@@ -956,6 +960,16 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
   } catch (po::error& e) {
     std::cerr << "Usage Error: " << e.what() << std::endl;
     return 1;
+  }
+
+  if (!llvm_opts.empty()) {
+    std::vector<const char*> argv;
+    argv.push_back("llc");
+    for (auto& opt : llvm_opts) {
+      argv.push_back(opt.c_str());
+    }
+    bool ok = llvm::cl::ParseCommandLineOptions(argv.size(), argv.data());
+    CHECK(ok);
   }
 
   if (g_hll_precision_bits < 1 || g_hll_precision_bits > 16) {
