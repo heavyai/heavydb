@@ -57,10 +57,6 @@ function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
   extract $ARROW_VERSION.tar.gz
 
-  pushd arrow-$ARROW_VERSION
-  patch -p 1 < ${SCRIPTS_DIR}/ARROW-5517-C-Only-check-header-basename-for-internal.patch
-  popd
-
   mkdir -p arrow-$ARROW_VERSION/cpp/build
   pushd arrow-$ARROW_VERSION/cpp/build
   cmake \
