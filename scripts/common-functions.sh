@@ -51,7 +51,7 @@ function download_make_install() {
     popd
 }
 
-ARROW_VERSION=apache-arrow-0.13.0
+ARROW_VERSION=apache-arrow-0.16.0
 
 function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
@@ -71,10 +71,10 @@ function install_arrow() {
     -DARROW_BUILD_TESTS=OFF \
     -DARROW_BUILD_BENCHMARKS=OFF \
     -DARROW_WITH_BROTLI=OFF \
-    -DARROW_WITH_ZLIB=OFF \
+    -DARROW_WITH_ZLIB=ON \
     -DARROW_WITH_LZ4=OFF \
     -DARROW_WITH_SNAPPY=ON \
-    -DARROW_WITH_ZSTD=OFF \
+    -DARROW_WITH_ZSTD=ON \
     -DARROW_USE_GLOG=OFF \
     -DARROW_JEMALLOC=OFF \
     -DARROW_BOOST_USE_SHARED=${ARROW_BOOST_USE_SHARED:="OFF"} \
