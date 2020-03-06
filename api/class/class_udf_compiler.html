@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 8cf0b82
+                5.2.0dev b6c89c3
               </div>
             
           
@@ -363,6 +363,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_constant_f_p.html">Class ConstantFP</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_constant_int.html">Class ConstantInt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_consume_cb.html">Class ConsumeCb</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_create_foreign_server_command.html">Class CreateForeignServerCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cuda_allocator.html">Class CudaAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cuda_mgr___namespace_1_1_cuda_mgr.html">Class CudaMgr_Namespace::CudaMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_d_b_object.html">Class DBObject</a></li>
@@ -375,6 +376,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_date_time_string_validate.html">Class DateTimeStringValidate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_date_time_translator.html">Class DateTimeTranslator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_date_trunc_expr.html">Class DateTruncExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_ddl_command.html">Class DdlCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_ddl_command_executor.html">Class DdlCommandExecutor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_decimal_overflow_validator.html">Class DecimalOverflowValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_decoder.html">Class Decoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_deep_copy_visitor.html">Class DeepCopyVisitor</a></li>
@@ -386,6 +389,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_distributed_loader.html">Class DistributedLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_distributed_query_runner.html">Class DistributedQueryRunner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_distributed_validate.html">Class DistributedValidate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_drop_foreign_server_command.html">Class DropForeignServerCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_dummy_persistent_foreign_storage.html">Class DummyPersistentForeignStorage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_encoder.html">Class Encoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_event_cb.html">Class EventCb</a></li>
@@ -1251,6 +1255,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02geo__types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{geo_types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02geo__types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{geo_types.cpp}::Coords</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdict__ref__t.html">Struct dict_ref_t</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_data_wrapper.html">Struct foreign_storage::DataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html">Struct foreign_storage::ForeignServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structis__null__order__entry.html">Struct is_null_order_entry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structis__taken__entry.html">Struct is_taken_entry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlockmgr_1_1_table_lock.html">Struct lockmgr::TableLock</a></li>
@@ -1394,8 +1400,8 @@
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N11UdfCompiler11UdfCompilerERKNSt6stringE">
-<span id="_CPPv3N11UdfCompiler11UdfCompilerERKNSt6stringE"></span><span id="_CPPv2N11UdfCompiler11UdfCompilerERKNSt6stringE"></span><span id="UdfCompiler::UdfCompiler__ssCR"></span><span class="target" id="class_udf_compiler_1ae8677a9316597072387461f1de7d21ed"></span><code class="sig-name descname">UdfCompiler</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>file_name</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11UdfCompiler11UdfCompilerERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N11UdfCompiler11UdfCompilerERKNSt6stringERKNSt6stringE">
+<span id="_CPPv3N11UdfCompiler11UdfCompilerERKNSt6stringERKNSt6stringE"></span><span id="_CPPv2N11UdfCompiler11UdfCompilerERKNSt6stringERKNSt6stringE"></span><span id="UdfCompiler::UdfCompiler__ssCR.ssCR"></span><span class="target" id="class_udf_compiler_1ac1a371abf75dd312db52b491dc27a285"></span><code class="sig-name descname">UdfCompiler</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>udf_file_name</em>, <em class="property">const</em> std::string &amp;<em>clang_path</em> = &quot;&quot;<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11UdfCompiler11UdfCompilerERKNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1487,6 +1493,11 @@
 <dl class="member">
 <dt id="_CPPv4N11UdfCompiler18udf_ast_file_name_E">
 <span id="_CPPv3N11UdfCompiler18udf_ast_file_name_E"></span><span id="_CPPv2N11UdfCompiler18udf_ast_file_name_E"></span><span id="UdfCompiler::udf_ast_file_name___ss"></span><span class="target" id="class_udf_compiler_1a4113322c566ebfa26fc7c34a418cef3b"></span>std::string <code class="sig-name descname">udf_ast_file_name_</code><a class="headerlink" href="#_CPPv4N11UdfCompiler18udf_ast_file_name_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N11UdfCompiler11clang_path_E">
+<span id="_CPPv3N11UdfCompiler11clang_path_E"></span><span id="_CPPv2N11UdfCompiler11clang_path_E"></span><span id="UdfCompiler::clang_path___ss"></span><span class="target" id="class_udf_compiler_1aff1fa83988d1990de2ba9f580f8565a3"></span>std::string <code class="sig-name descname">clang_path_</code><a class="headerlink" href="#_CPPv4N11UdfCompiler11clang_path_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

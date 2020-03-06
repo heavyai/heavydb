@@ -1,0 +1,9 @@
+Class DdlCommandExecutor
+========================
+
+.. doxygenclass:: DdlCommandExecutor
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

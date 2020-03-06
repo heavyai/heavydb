@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 8cf0b82
+                5.2.0dev b6c89c3
               </div>
             
           
@@ -363,6 +363,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_constant_f_p.html">Class ConstantFP</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_constant_int.html">Class ConstantInt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_consume_cb.html">Class ConsumeCb</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_create_foreign_server_command.html">Class CreateForeignServerCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cuda_allocator.html">Class CudaAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cuda_mgr___namespace_1_1_cuda_mgr.html">Class CudaMgr_Namespace::CudaMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_d_b_object.html">Class DBObject</a></li>
@@ -375,6 +376,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_date_time_string_validate.html">Class DateTimeStringValidate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_date_time_translator.html">Class DateTimeTranslator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_date_trunc_expr.html">Class DateTruncExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_ddl_command.html">Class DdlCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_ddl_command_executor.html">Class DdlCommandExecutor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_decimal_overflow_validator.html">Class DecimalOverflowValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_decoder.html">Class Decoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_deep_copy_visitor.html">Class DeepCopyVisitor</a></li>
@@ -386,6 +389,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_distributed_loader.html">Class DistributedLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_distributed_query_runner.html">Class DistributedQueryRunner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_distributed_validate.html">Class DistributedValidate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_drop_foreign_server_command.html">Class DropForeignServerCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_dummy_persistent_foreign_storage.html">Class DummyPersistentForeignStorage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_encoder.html">Class Encoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_event_cb.html">Class EventCb</a></li>
@@ -1251,6 +1255,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02geo__types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{geo_types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02geo__types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{geo_types.cpp}::Coords</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdict__ref__t.html">Struct dict_ref_t</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_data_wrapper.html">Struct foreign_storage::DataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html">Struct foreign_storage::ForeignServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structis__null__order__entry.html">Struct is_null_order_entry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structis__taken__entry.html">Struct is_taken_entry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlockmgr_1_1_table_lock.html">Struct lockmgr::TableLock</a></li>
@@ -1440,13 +1446,13 @@
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Types</p>
 <dl class="type">
-<dt id="_CPPv4N8LruCache16key_value_pair_tE">
-<span id="_CPPv3N8LruCache16key_value_pair_tE"></span><span id="_CPPv2N8LruCache16key_value_pair_tE"></span><span id="LruCache::key_value_pair_t"></span><span class="target" id="class_lru_cache_1a03e0b1d8762f180a6c321f776eaebd27"></span><em class="property">typedef </em>std::pair&lt;key_t, value_t&gt; <code class="sig-name descname">key_value_pair_t</code><a class="headerlink" href="#_CPPv4N8LruCache16key_value_pair_tE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4IEN8LruCacheI5key_t7value_t6hash_tE16key_value_pair_tE">
+<span id="_CPPv3IEN8LruCacheI5key_t7value_t6hash_tE16key_value_pair_tE"></span><span id="_CPPv2IEN8LruCacheI5key_t7value_t6hash_tE16key_value_pair_tE"></span>template&lt;&gt;<br /><span class="target" id="class_lru_cache_1a64300700d11514de465c6d2c07164ca1"></span><em class="property">using </em><code class="sig-name descname">key_value_pair_t</code> = <em class="property">typename</em> std::pair&lt;key_t, value_t&gt;<a class="headerlink" href="#_CPPv4IEN8LruCacheI5key_t7value_t6hash_tE16key_value_pair_tE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
 <dt id="_CPPv4IEN8LruCacheI5key_t7value_t6hash_tE12cache_list_tE">
-<span id="_CPPv3IEN8LruCacheI5key_t7value_t6hash_tE12cache_list_tE"></span><span id="_CPPv2IEN8LruCacheI5key_t7value_t6hash_tE12cache_list_tE"></span>template&lt;&gt;<br /><span class="target" id="class_lru_cache_1acbc672173eccd75d6a29ed6c68d0c1b7"></span><em class="property">using </em><code class="sig-name descname">cache_list_t</code> = <em class="property">typename</em> std::list&lt;key_value_pair_t&gt;<a class="headerlink" href="#_CPPv4IEN8LruCacheI5key_t7value_t6hash_tE12cache_list_tE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3IEN8LruCacheI5key_t7value_t6hash_tE12cache_list_tE"></span><span id="_CPPv2IEN8LruCacheI5key_t7value_t6hash_tE12cache_list_tE"></span>template&lt;&gt;<br /><span class="target" id="class_lru_cache_1acbc672173eccd75d6a29ed6c68d0c1b7"></span><em class="property">using </em><code class="sig-name descname">cache_list_t</code> = <em class="property">typename</em> std::list&lt;<a class="reference internal" href="#_CPPv4IEN8LruCacheI5key_t7value_t6hash_tE16key_value_pair_tE" title="LruCache&lt;key_t, value_t, hash_t&gt;::key_value_pair_t">key_value_pair_t</a>&gt;<a class="headerlink" href="#_CPPv4IEN8LruCacheI5key_t7value_t6hash_tE12cache_list_tE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
@@ -1455,13 +1461,13 @@
 <dd></dd></dl>
 
 <dl class="type">
-<dt id="_CPPv4N8LruCache5map_tE">
-<span id="_CPPv3N8LruCache5map_tE"></span><span id="_CPPv2N8LruCache5map_tE"></span><span id="LruCache::map_t"></span><span class="target" id="class_lru_cache_1a3ff7a7fe73845fde1ec4bc7298940fba"></span><em class="property">typedef </em>std::unordered_map&lt;key_t, list_iterator_t, hash_t&gt; <code class="sig-name descname">map_t</code><a class="headerlink" href="#_CPPv4N8LruCache5map_tE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4IEN8LruCacheI5key_t7value_t6hash_tE5map_tE">
+<span id="_CPPv3IEN8LruCacheI5key_t7value_t6hash_tE5map_tE"></span><span id="_CPPv2IEN8LruCacheI5key_t7value_t6hash_tE5map_tE"></span>template&lt;&gt;<br /><span class="target" id="class_lru_cache_1ab15fe451580b90b69f35763d3c462756"></span><em class="property">using </em><code class="sig-name descname">map_t</code> = <em class="property">typename</em> std::unordered_map&lt;key_t, <a class="reference internal" href="#_CPPv4IEN8LruCacheI5key_t7value_t6hash_tE15list_iterator_tE" title="LruCache&lt;key_t, value_t, hash_t&gt;::list_iterator_t">list_iterator_t</a>, hash_t&gt;<a class="headerlink" href="#_CPPv4IEN8LruCacheI5key_t7value_t6hash_tE5map_tE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
 <dt id="_CPPv4IEN8LruCacheI5key_t7value_t6hash_tE14map_t_iteratorE">
-<span id="_CPPv3IEN8LruCacheI5key_t7value_t6hash_tE14map_t_iteratorE"></span><span id="_CPPv2IEN8LruCacheI5key_t7value_t6hash_tE14map_t_iteratorE"></span>template&lt;&gt;<br /><span class="target" id="class_lru_cache_1a7b08ffb6b24d335a4bcb9de125d8489d"></span><em class="property">using </em><code class="sig-name descname">map_t_iterator</code> = <em class="property">typename</em> map_t::iterator<a class="headerlink" href="#_CPPv4IEN8LruCacheI5key_t7value_t6hash_tE14map_t_iteratorE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3IEN8LruCacheI5key_t7value_t6hash_tE14map_t_iteratorE"></span><span id="_CPPv2IEN8LruCacheI5key_t7value_t6hash_tE14map_t_iteratorE"></span>template&lt;&gt;<br /><span class="target" id="class_lru_cache_1a7b08ffb6b24d335a4bcb9de125d8489d"></span><em class="property">using </em><code class="sig-name descname">map_t_iterator</code> = <em class="property">typename</em> <a class="reference internal" href="#_CPPv4IEN8LruCacheI5key_t7value_t6hash_tE5map_tE" title="LruCache&lt;key_t, value_t, hash_t&gt;::map_t">map_t</a>::iterator<a class="headerlink" href="#_CPPv4IEN8LruCacheI5key_t7value_t6hash_tE14map_t_iteratorE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -1482,7 +1488,7 @@
 
 <dl class="member">
 <dt id="_CPPv4N8LruCache16cache_items_map_E">
-<span id="_CPPv3N8LruCache16cache_items_map_E"></span><span id="_CPPv2N8LruCache16cache_items_map_E"></span><span id="LruCache::cache_items_map___map_t"></span><span class="target" id="class_lru_cache_1ae4f947017238d9a006241a4a7ec381d6"></span><a class="reference internal" href="#_CPPv4N8LruCache5map_tE" title="LruCache::map_t">map_t</a> <code class="sig-name descname">cache_items_map_</code><a class="headerlink" href="#_CPPv4N8LruCache16cache_items_map_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N8LruCache16cache_items_map_E"></span><span id="_CPPv2N8LruCache16cache_items_map_E"></span><span id="LruCache::cache_items_map___map_t"></span><span class="target" id="class_lru_cache_1ae4f947017238d9a006241a4a7ec381d6"></span>map_t <code class="sig-name descname">cache_items_map_</code><a class="headerlink" href="#_CPPv4N8LruCache16cache_items_map_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">

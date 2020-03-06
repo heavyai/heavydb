@@ -1,0 +1,9 @@
+Class DropForeignServerCommand
+==============================
+
+.. doxygenclass:: DropForeignServerCommand
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

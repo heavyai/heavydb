@@ -1,0 +1,9 @@
+Struct foreign_storage::DataWrapper
+===================================
+
+.. doxygenstruct:: foreign_storage::DataWrapper
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

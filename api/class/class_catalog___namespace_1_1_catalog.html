@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 8cf0b82
+                5.2.0dev b6c89c3
               </div>
             
           
@@ -363,6 +363,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_constant_f_p.html">Class ConstantFP</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_constant_int.html">Class ConstantInt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_consume_cb.html">Class ConsumeCb</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_create_foreign_server_command.html">Class CreateForeignServerCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cuda_allocator.html">Class CudaAllocator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_cuda_mgr___namespace_1_1_cuda_mgr.html">Class CudaMgr_Namespace::CudaMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_d_b_object.html">Class DBObject</a></li>
@@ -375,6 +376,8 @@
 <li class="toctree-l2"><a class="reference internal" href="class_date_time_string_validate.html">Class DateTimeStringValidate</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_date_time_translator.html">Class DateTimeTranslator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_date_trunc_expr.html">Class DateTruncExpr</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_ddl_command.html">Class DdlCommand</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_ddl_command_executor.html">Class DdlCommandExecutor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_decimal_overflow_validator.html">Class DecimalOverflowValidator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_decoder.html">Class Decoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_deep_copy_visitor.html">Class DeepCopyVisitor</a></li>
@@ -386,6 +389,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_distributed_loader.html">Class DistributedLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_distributed_query_runner.html">Class DistributedQueryRunner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_distributed_validate.html">Class DistributedValidate</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_drop_foreign_server_command.html">Class DropForeignServerCommand</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_dummy_persistent_foreign_storage.html">Class DummyPersistentForeignStorage</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_encoder.html">Class Encoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_event_cb.html">Class EventCb</a></li>
@@ -1251,6 +1255,8 @@
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02geo__types_8cpp_03_1_1_bounding_box.html">Struct anonymous_namespace{geo_types.cpp}::BoundingBox</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structanonymous__namespace_02geo__types_8cpp_03_1_1_coords.html">Struct anonymous_namespace{geo_types.cpp}::Coords</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structdict__ref__t.html">Struct dict_ref_t</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_data_wrapper.html">Struct foreign_storage::DataWrapper</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html">Struct foreign_storage::ForeignServer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structis__null__order__entry.html">Struct is_null_order_entry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structis__taken__entry.html">Struct is_taken_entry</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../struct/structlockmgr_1_1_table_lock.html">Struct lockmgr::TableLock</a></li>
@@ -1756,6 +1762,56 @@
 <span id="_CPPv3NK17Catalog_Namespace7Catalog10dumpSchemaEPK15TableDescriptor"></span><span id="_CPPv2NK17Catalog_Namespace7Catalog10dumpSchemaEPK15TableDescriptor"></span><span id="Catalog_Namespace::Catalog::dumpSchema__TableDescriptorCPC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a7a554c3f9dedcd2f02bd5e8cad69ec57"></span>std::string <code class="sig-name descname">dumpSchema</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *<em>td</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17Catalog_Namespace7Catalog10dumpSchemaEPK15TableDescriptor" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog19createForeignServerENSt10unique_ptrIN15foreign_storage13ForeignServerEEEb">
+<span id="_CPPv3N17Catalog_Namespace7Catalog19createForeignServerENSt10unique_ptrIN15foreign_storage13ForeignServerEEEb"></span><span id="_CPPv2N17Catalog_Namespace7Catalog19createForeignServerENSt10unique_ptrIN15foreign_storage13ForeignServerEEEb"></span><span id="Catalog_Namespace::Catalog::createForeignServer__std::unique_ptr:foreign_storage::ForeignServer:.b"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a6188fa85342645021044f900a8f719c1"></span>void <code class="sig-name descname">createForeignServer</code><span class="sig-paren">(</span>std::unique_ptr&lt;foreign_storage::<a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a>&gt; <em>foreign_server</em>, bool <em>if_not_exists</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog19createForeignServerENSt10unique_ptrIN15foreign_storage13ForeignServerEEEb" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Creates a new foreign server DB object.</p>
+<p><dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">foreign_server</span></code>: - unique pointer to struct containing foreign server details </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">if_not_exists</span></code>: - flag indicating whether or not an attempt to create a new foreign server should occur if a server with the same name already exists. An exception is thrown if this flag is set to “false” and an attempt is made to create a pre-existing foreign server </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog16getForeignServerERKNSt6stringEKb">
+<span id="_CPPv3N17Catalog_Namespace7Catalog16getForeignServerERKNSt6stringEKb"></span><span id="_CPPv2N17Catalog_Namespace7Catalog16getForeignServerERKNSt6stringEKb"></span><span id="Catalog_Namespace::Catalog::getForeignServer__ssCR.bC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a7106d52cb6b96d995a127cbbe348158d"></span>foreign_storage::<a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a> *<code class="sig-name descname">getForeignServer</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>server_name</em>, <em class="property">const</em> bool <em>skip_cache</em> = false<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog16getForeignServerERKNSt6stringEKb" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Gets a pointer to a struct containing foreign server details.</p>
+<p><dl class="simple">
+<dt><strong>Return</strong></dt><dd><p>pointer to a struct containing foreign server details. nullptr is returned if no foreign server exists with the given name </p>
+</dd>
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">server_name</span></code>: - Name of foreign server whose details will be fetched </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">skip_cache</span></code>: - flag indicating whether or not to skip in-memory cache of foreign server struct when attempting to fetch foreign server details. This flag is mainly used for testing </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog17dropForeignServerERKNSt6stringEb">
+<span id="_CPPv3N17Catalog_Namespace7Catalog17dropForeignServerERKNSt6stringEb"></span><span id="_CPPv2N17Catalog_Namespace7Catalog17dropForeignServerERKNSt6stringEb"></span><span id="Catalog_Namespace::Catalog::dropForeignServer__ssCR.b"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1aefee0c40a23ada126497eca399eb001f"></span>void <code class="sig-name descname">dropForeignServer</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>server_name</em>, bool <em>if_exists</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog17dropForeignServerERKNSt6stringEb" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Drops/deletes a foreign server DB object.</p>
+<p><dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">server_name</span></code>: - Name of foreign server that will be deleted </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">if_exists</span></code>: - flag indicating whether or not an attempt to delete a foreign server should occur if a server with the same name does not exists. An exception is thrown if this flag is set to “false” and an attempt is made to delete a nonexistent foreign server </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog31createDefaultServersIfNotExistsEv">
+<span id="_CPPv3N17Catalog_Namespace7Catalog31createDefaultServersIfNotExistsEv"></span><span id="_CPPv2N17Catalog_Namespace7Catalog31createDefaultServersIfNotExistsEv"></span><span id="Catalog_Namespace::Catalog::createDefaultServersIfNotExists"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a5524e5a7f3bf8d81f7f37d7691a77e84"></span>void <code class="sig-name descname">createDefaultServersIfNotExists</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog31createDefaultServersIfNotExistsEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Creates default local file servers (if they don’t already exist). </p>
+</dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Members</p>
@@ -1820,62 +1876,67 @@
 <p class="breathe-sectiondef-title rubric">Protected Types</p>
 <dl class="type">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog18TableDescriptorMapE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog18TableDescriptorMapE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog18TableDescriptorMapE"></span><span id="Catalog_Namespace::Catalog::TableDescriptorMap"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1ac604c00efc2ae523c69c3e702bf21892"></span><em class="property">typedef </em>std::map&lt;std::string, <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *&gt; <code class="sig-name descname">TableDescriptorMap</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog18TableDescriptorMapE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N17Catalog_Namespace7Catalog18TableDescriptorMapE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog18TableDescriptorMapE"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1aac4edfaf8ce17bb3da26da15f3509a07"></span><em class="property">using </em><code class="sig-name descname">TableDescriptorMap</code> = std::map&lt;std::string, <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *&gt;<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog18TableDescriptorMapE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog22TableDescriptorMapByIdE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog22TableDescriptorMapByIdE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog22TableDescriptorMapByIdE"></span><span id="Catalog_Namespace::Catalog::TableDescriptorMapById"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a865c386514ca1c56fa4b5be0dfc5bb76"></span><em class="property">typedef </em>std::map&lt;int, <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *&gt; <code class="sig-name descname">TableDescriptorMapById</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog22TableDescriptorMapByIdE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N17Catalog_Namespace7Catalog22TableDescriptorMapByIdE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog22TableDescriptorMapByIdE"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a91161925ff16bb4ee41a8db4bbd656c2"></span><em class="property">using </em><code class="sig-name descname">TableDescriptorMapById</code> = std::map&lt;int, <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *&gt;<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog22TableDescriptorMapByIdE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog29LogicalToPhysicalTableMapByIdE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog29LogicalToPhysicalTableMapByIdE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog29LogicalToPhysicalTableMapByIdE"></span><span id="Catalog_Namespace::Catalog::LogicalToPhysicalTableMapById"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a7a0e3d83f9e1e4f148e8595310dd894f"></span><em class="property">typedef </em>std::map&lt;int32_t, std::vector&lt;int32_t&gt;&gt; <code class="sig-name descname">LogicalToPhysicalTableMapById</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog29LogicalToPhysicalTableMapByIdE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N17Catalog_Namespace7Catalog29LogicalToPhysicalTableMapByIdE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog29LogicalToPhysicalTableMapByIdE"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1af9366764abc2e98a06b63b1c62fd7225"></span><em class="property">using </em><code class="sig-name descname">LogicalToPhysicalTableMapById</code> = std::map&lt;int32_t, std::vector&lt;int32_t&gt;&gt;<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog29LogicalToPhysicalTableMapByIdE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog9ColumnKeyE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog9ColumnKeyE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog9ColumnKeyE"></span><span id="Catalog_Namespace::Catalog::ColumnKey"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a664d74255080d201aaae7a33833bfe2d"></span><em class="property">typedef </em>std::tuple&lt;int, std::string&gt; <code class="sig-name descname">ColumnKey</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog9ColumnKeyE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N17Catalog_Namespace7Catalog9ColumnKeyE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog9ColumnKeyE"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a31c2663733961fe472e3f63496f7bb63"></span><em class="property">using </em><code class="sig-name descname">ColumnKey</code> = std::tuple&lt;int, std::string&gt;<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog9ColumnKeyE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog19ColumnDescriptorMapE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog19ColumnDescriptorMapE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog19ColumnDescriptorMapE"></span><span id="Catalog_Namespace::Catalog::ColumnDescriptorMap"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a4e25319151c451d1e60b9709a08a5a30"></span><em class="property">typedef </em>std::map&lt;<a class="reference internal" href="#_CPPv4N17Catalog_Namespace7Catalog9ColumnKeyE" title="Catalog_Namespace::Catalog::ColumnKey">ColumnKey</a>, <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *&gt; <code class="sig-name descname">ColumnDescriptorMap</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog19ColumnDescriptorMapE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N17Catalog_Namespace7Catalog19ColumnDescriptorMapE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog19ColumnDescriptorMapE"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a782ce62f790e9783e27b819cbfee15f2"></span><em class="property">using </em><code class="sig-name descname">ColumnDescriptorMap</code> = std::map&lt;<a class="reference internal" href="#_CPPv4N17Catalog_Namespace7Catalog9ColumnKeyE" title="Catalog_Namespace::Catalog::ColumnKey">ColumnKey</a>, <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *&gt;<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog19ColumnDescriptorMapE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog11ColumnIdKeyE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog11ColumnIdKeyE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog11ColumnIdKeyE"></span><span id="Catalog_Namespace::Catalog::ColumnIdKey"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a49a1749c41a931cc8de46ffb4371d262"></span><em class="property">typedef </em>std::tuple&lt;int, int&gt; <code class="sig-name descname">ColumnIdKey</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog11ColumnIdKeyE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N17Catalog_Namespace7Catalog11ColumnIdKeyE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog11ColumnIdKeyE"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a156c001e52e7ec23caf8e45aec30f340"></span><em class="property">using </em><code class="sig-name descname">ColumnIdKey</code> = std::tuple&lt;int, int&gt;<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog11ColumnIdKeyE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog23ColumnDescriptorMapByIdE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog23ColumnDescriptorMapByIdE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog23ColumnDescriptorMapByIdE"></span><span id="Catalog_Namespace::Catalog::ColumnDescriptorMapById"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a8672ad406ca463f5c3f7f53611008d88"></span><em class="property">typedef </em>std::map&lt;<a class="reference internal" href="#_CPPv4N17Catalog_Namespace7Catalog11ColumnIdKeyE" title="Catalog_Namespace::Catalog::ColumnIdKey">ColumnIdKey</a>, <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *&gt; <code class="sig-name descname">ColumnDescriptorMapById</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog23ColumnDescriptorMapByIdE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N17Catalog_Namespace7Catalog23ColumnDescriptorMapByIdE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog23ColumnDescriptorMapByIdE"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a339017421f17575c7d955778c74aa02f"></span><em class="property">using </em><code class="sig-name descname">ColumnDescriptorMapById</code> = std::map&lt;<a class="reference internal" href="#_CPPv4N17Catalog_Namespace7Catalog11ColumnIdKeyE" title="Catalog_Namespace::Catalog::ColumnIdKey">ColumnIdKey</a>, <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *&gt;<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog23ColumnDescriptorMapByIdE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog21DictDescriptorMapByIdE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog21DictDescriptorMapByIdE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog21DictDescriptorMapByIdE"></span><span id="Catalog_Namespace::Catalog::DictDescriptorMapById"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1ab347713b9e477e0e00b1787629247cbc"></span><em class="property">typedef </em>std::map&lt;DictRef, std::unique_ptr&lt;<a class="reference internal" href="../struct/struct_dict_descriptor.html#_CPPv414DictDescriptor" title="DictDescriptor">DictDescriptor</a>&gt;&gt; <code class="sig-name descname">DictDescriptorMapById</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog21DictDescriptorMapByIdE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N17Catalog_Namespace7Catalog21DictDescriptorMapByIdE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog21DictDescriptorMapByIdE"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1ac0ef8048c3709ccd539988a890454b6d"></span><em class="property">using </em><code class="sig-name descname">DictDescriptorMapById</code> = std::map&lt;DictRef, std::unique_ptr&lt;<a class="reference internal" href="../struct/struct_dict_descriptor.html#_CPPv414DictDescriptor" title="DictDescriptor">DictDescriptor</a>&gt;&gt;<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog21DictDescriptorMapByIdE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog22DashboardDescriptorMapE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog22DashboardDescriptorMapE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog22DashboardDescriptorMapE"></span><span id="Catalog_Namespace::Catalog::DashboardDescriptorMap"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a58ad8ecf84bca392efbc5900c8e04b1d"></span><em class="property">typedef </em>std::map&lt;std::string, std::shared_ptr&lt;<a class="reference internal" href="../struct/struct_dashboard_descriptor.html#_CPPv419DashboardDescriptor" title="DashboardDescriptor">DashboardDescriptor</a>&gt;&gt; <code class="sig-name descname">DashboardDescriptorMap</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog22DashboardDescriptorMapE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N17Catalog_Namespace7Catalog22DashboardDescriptorMapE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog22DashboardDescriptorMapE"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1aaf5465b0b777161efc8a95f121e5691d"></span><em class="property">using </em><code class="sig-name descname">DashboardDescriptorMap</code> = std::map&lt;std::string, std::shared_ptr&lt;<a class="reference internal" href="../struct/struct_dashboard_descriptor.html#_CPPv419DashboardDescriptor" title="DashboardDescriptor">DashboardDescriptor</a>&gt;&gt;<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog22DashboardDescriptorMapE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog17LinkDescriptorMapE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog17LinkDescriptorMapE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog17LinkDescriptorMapE"></span><span id="Catalog_Namespace::Catalog::LinkDescriptorMap"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a725613455f42574f75fbdad0fae038fe"></span><em class="property">typedef </em>std::map&lt;std::string, <a class="reference internal" href="../struct/struct_link_descriptor.html#_CPPv414LinkDescriptor" title="LinkDescriptor">LinkDescriptor</a> *&gt; <code class="sig-name descname">LinkDescriptorMap</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog17LinkDescriptorMapE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N17Catalog_Namespace7Catalog17LinkDescriptorMapE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog17LinkDescriptorMapE"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1ac221e2d2d3bf270f698600c964fe851d"></span><em class="property">using </em><code class="sig-name descname">LinkDescriptorMap</code> = std::map&lt;std::string, <a class="reference internal" href="../struct/struct_link_descriptor.html#_CPPv414LinkDescriptor" title="LinkDescriptor">LinkDescriptor</a> *&gt;<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog17LinkDescriptorMapE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog21LinkDescriptorMapByIdE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog21LinkDescriptorMapByIdE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog21LinkDescriptorMapByIdE"></span><span id="Catalog_Namespace::Catalog::LinkDescriptorMapById"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a0b3984e0a9115b669bb8cdb5e1f48bed"></span><em class="property">typedef </em>std::map&lt;int, <a class="reference internal" href="../struct/struct_link_descriptor.html#_CPPv414LinkDescriptor" title="LinkDescriptor">LinkDescriptor</a> *&gt; <code class="sig-name descname">LinkDescriptorMapById</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog21LinkDescriptorMapByIdE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N17Catalog_Namespace7Catalog21LinkDescriptorMapByIdE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog21LinkDescriptorMapByIdE"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1ae59cc372e1a2d147a7391ffd2971a81a"></span><em class="property">using </em><code class="sig-name descname">LinkDescriptorMapById</code> = std::map&lt;int, <a class="reference internal" href="../struct/struct_link_descriptor.html#_CPPv414LinkDescriptor" title="LinkDescriptor">LinkDescriptor</a> *&gt;<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog21LinkDescriptorMapByIdE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog24DeletedColumnPerTableMapE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog24DeletedColumnPerTableMapE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog24DeletedColumnPerTableMapE"></span><span id="Catalog_Namespace::Catalog::DeletedColumnPerTableMap"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a48a4e1b668d11237dd064d1dbf0b4f63"></span><em class="property">typedef </em>std::unordered_map&lt;<em class="property">const</em> <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *, <em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *&gt; <code class="sig-name descname">DeletedColumnPerTableMap</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog24DeletedColumnPerTableMapE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N17Catalog_Namespace7Catalog24DeletedColumnPerTableMapE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog24DeletedColumnPerTableMapE"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1ae521757bb82e215e85449e094c03a45c"></span><em class="property">using </em><code class="sig-name descname">DeletedColumnPerTableMap</code> = std::unordered_map&lt;<em class="property">const</em> <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *, <em class="property">const</em> <a class="reference internal" href="../struct/struct_column_descriptor.html#_CPPv416ColumnDescriptor" title="ColumnDescriptor">ColumnDescriptor</a> *&gt;<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog24DeletedColumnPerTableMapE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="type">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog16ForeignServerMapE">
+<span id="_CPPv3N17Catalog_Namespace7Catalog16ForeignServerMapE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog16ForeignServerMapE"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a74848c339663bce6be19df15f25cf5b7"></span><em class="property">using </em><code class="sig-name descname">ForeignServerMap</code> = std::map&lt;std::string, std::unique_ptr&lt;foreign_storage::<a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a>&gt;&gt;<a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog16ForeignServerMapE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="type">
@@ -1959,6 +2020,16 @@
 <dl class="function">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog31updateFrontendViewsToDashboardsEv">
 <span id="_CPPv3N17Catalog_Namespace7Catalog31updateFrontendViewsToDashboardsEv"></span><span id="_CPPv2N17Catalog_Namespace7Catalog31updateFrontendViewsToDashboardsEv"></span><span id="Catalog_Namespace::Catalog::updateFrontendViewsToDashboards"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a3877496221fb75ea222833c525c66420"></span>void <code class="sig-name descname">updateFrontendViewsToDashboards</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog31updateFrontendViewsToDashboardsEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog16createFsiSchemasEv">
+<span id="_CPPv3N17Catalog_Namespace7Catalog16createFsiSchemasEv"></span><span id="_CPPv2N17Catalog_Namespace7Catalog16createFsiSchemasEv"></span><span id="Catalog_Namespace::Catalog::createFsiSchemas"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a1f0415e2a590a6178e69343f1136462e"></span>void <code class="sig-name descname">createFsiSchemas</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog16createFsiSchemasEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog14dropFsiSchemasEv">
+<span id="_CPPv3N17Catalog_Namespace7Catalog14dropFsiSchemasEv"></span><span id="_CPPv2N17Catalog_Namespace7Catalog14dropFsiSchemasEv"></span><span id="Catalog_Namespace::Catalog::dropFsiSchemas"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a1e6ccccda5f9bfc6c5f6de28226a94f3"></span>void <code class="sig-name descname">dropFsiSchemas</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog14dropFsiSchemasEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -2130,6 +2201,11 @@
 <dd></dd></dl>
 
 <dl class="member">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog17foreignServerMap_E">
+<span id="_CPPv3N17Catalog_Namespace7Catalog17foreignServerMap_E"></span><span id="_CPPv2N17Catalog_Namespace7Catalog17foreignServerMap_E"></span><span id="Catalog_Namespace::Catalog::foreignServerMap___ForeignServerMap"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1ad7df0638ed0edba27a2c07b25bc2f61d"></span><a class="reference internal" href="#_CPPv4N17Catalog_Namespace7Catalog16ForeignServerMapE" title="Catalog_Namespace::Catalog::ForeignServerMap">ForeignServerMap</a> <code class="sig-name descname">foreignServerMap_</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog17foreignServerMap_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog16sqliteConnector_E">
 <span id="_CPPv3N17Catalog_Namespace7Catalog16sqliteConnector_E"></span><span id="_CPPv2N17Catalog_Namespace7Catalog16sqliteConnector_E"></span><span id="Catalog_Namespace::Catalog::sqliteConnector___SqliteConnector"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a764dc186dd13bf7760a828647e6c3e07"></span><a class="reference internal" href="class_sqlite_connector.html#_CPPv415SqliteConnector" title="SqliteConnector">SqliteConnector</a> <code class="sig-name descname">sqliteConnector_</code><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog16sqliteConnector_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -2194,6 +2270,17 @@
 <dt id="_CPPv4NK17Catalog_Namespace7Catalog22renameTableDirectoriesERKNSt6stringERKNSt6vectorINSt6stringEEERKNSt6stringE">
 <span id="_CPPv3NK17Catalog_Namespace7Catalog22renameTableDirectoriesERKNSt6stringERKNSt6vectorINSt6stringEEERKNSt6stringE"></span><span id="_CPPv2NK17Catalog_Namespace7Catalog22renameTableDirectoriesERKNSt6stringERKNSt6vectorINSt6stringEEERKNSt6stringE"></span><span id="Catalog_Namespace::Catalog::renameTableDirectories__ssCR.std::vector:ss:CR.ssCRC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a81183bbe60f72938e7f1aca8318d6037"></span>void <code class="sig-name descname">renameTableDirectories</code><span class="sig-paren">(</span><em class="property">const</em> std::string &amp;<em>temp_data_dir</em>, <em class="property">const</em> std::vector&lt;std::string&gt; &amp;<em>target_paths</em>, <em class="property">const</em> std::string &amp;<em>name_prefix</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17Catalog_Namespace7Catalog22renameTableDirectoriesERKNSt6stringERKNSt6vectorINSt6stringEEERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog21buildForeignServerMapEv">
+<span id="_CPPv3N17Catalog_Namespace7Catalog21buildForeignServerMapEv"></span><span id="_CPPv2N17Catalog_Namespace7Catalog21buildForeignServerMapEv"></span><span id="Catalog_Namespace::Catalog::buildForeignServerMap"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a2720949e0be8805c2e0610652a6849b4"></span>void <code class="sig-name descname">buildForeignServerMap</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog21buildForeignServerMapEv" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N17Catalog_Namespace7Catalog26createForeignServerNoLocksENSt10unique_ptrIN15foreign_storage13ForeignServerEEEb">
+<span id="_CPPv3N17Catalog_Namespace7Catalog26createForeignServerNoLocksENSt10unique_ptrIN15foreign_storage13ForeignServerEEEb"></span><span id="_CPPv2N17Catalog_Namespace7Catalog26createForeignServerNoLocksENSt10unique_ptrIN15foreign_storage13ForeignServerEEEb"></span><span id="Catalog_Namespace::Catalog::createForeignServerNoLocks__std::unique_ptr:foreign_storage::ForeignServer:.b"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1af05e27d67691c09a06115729e5905af5"></span>void <code class="sig-name descname">createForeignServerNoLocks</code><span class="sig-paren">(</span>std::unique_ptr&lt;foreign_storage::<a class="reference internal" href="../struct/structforeign__storage_1_1_foreign_server.html#_CPPv4N15foreign_storage13ForeignServerE" title="foreign_storage::ForeignServer">ForeignServer</a>&gt; <em>foreign_server</em>, bool <em>if_not_exists</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog26createForeignServerNoLocksENSt10unique_ptrIN15foreign_storage13ForeignServerEEEb" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Same as <a class="reference internal" href="#class_catalog___namespace_1_1_catalog_1a6188fa85342645021044f900a8f719c1"><span class="std std-ref">createForeignServer()</span></a> but without acquiring locks. This should only be called from within a function/code block that already acquires appropriate locks. </p>
+</dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
