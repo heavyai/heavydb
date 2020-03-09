@@ -65,10 +65,11 @@ class ArrayNoneEncoder : public Encoder {
     return n - start_idx;
   }
 
-  ChunkMetadata appendData(int8_t*& srcData,
-                           const size_t numAppendElems,
-                           const SQLTypeInfo&,
-                           const bool replicating = false) override {
+  ChunkMetadata appendData(int8_t*& src_data,
+                           const size_t num_elems_to_append,
+                           const SQLTypeInfo& ti,
+                           const bool replicating = false,
+                           const int64_t offset = -1) override {
     UNREACHABLE();  // should never be called for arrays
     return ChunkMetadata{};
   }

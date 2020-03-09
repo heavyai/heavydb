@@ -37,16 +37,17 @@ class NoneEncoder : public Encoder {
       , dataMax(std::numeric_limits<T>::lowest())
       , has_nulls(false) {}
 
-  ChunkMetadata appendData(int8_t*& srcData,
-                           const size_t numAppendElems,
+  ChunkMetadata appendData(int8_t*& src_data,
+                           const size_t num_elems_to_append,
                            const SQLTypeInfo&,
-                           const bool replicating = false) override {
-    T* unencodedData = reinterpret_cast<T*>(srcData);
+                           const bool replicating = false,
+                           const int64_t offset = -1) override {
+    T* unencodedData = reinterpret_cast<T*>(src_data);
     std::vector<T> encoded_data;
     if (replicating) {
-      encoded_data.resize(numAppendElems);
+      encoded_data.resize(num_elems_to_append);
     }
-    for (size_t i = 0; i < numAppendElems; ++i) {
+    for (size_t i = 0; i < num_elems_to_append; ++i) {
       size_t ri = replicating ? 0 : i;
       T data = unencodedData[ri];
       if (replicating) {
@@ -60,15 +61,24 @@ class NoneEncoder : public Encoder {
         dataMax = std::max(dataMax, data);
       }
     }
-    num_elems_ += numAppendElems;
-    buffer_->append(
-        replicating ? reinterpret_cast<int8_t*>(encoded_data.data()) : srcData,
-        numAppendElems * sizeof(T));
+    if (offset == -1) {
+      num_elems_ += num_elems_to_append;
+      buffer_->append(
+          replicating ? reinterpret_cast<int8_t*>(encoded_data.data()) : src_data,
+          num_elems_to_append * sizeof(T));
+      if (!replicating) {
+        src_data += num_elems_to_append * sizeof(T);
+      }
+    } else {
+      num_elems_ = offset + num_elems_to_append;
+      CHECK(!replicating);
+      CHECK_GE(offset, 0);
+      buffer_->write(
+          src_data, num_elems_to_append * sizeof(T), static_cast<size_t>(offset));
+    }
     ChunkMetadata chunkMetadata;
     getMetadata(chunkMetadata);
-    if (!replicating) {
-      srcData += numAppendElems * sizeof(T);
-    }
+
     return chunkMetadata;
   }
 
