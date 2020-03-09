@@ -41,6 +41,8 @@ build(){
                                       -DARROW_GANDIVA=OFF \
                                       -DARROW_PROTOBUF_USE_SHARED=OFF \
                                       -DARROW_NO_DEPRECATED_API=ON \
+                                      -DARROW_CSV=ON \
+                                      -DARROW_JSON=ON \
                                       -DARROW_USE_GLOG=OFF \
                                       -DARROW_WITH_BROTLI=OFF \
                                       -DARROW_WITH_ZLIB=ON \
