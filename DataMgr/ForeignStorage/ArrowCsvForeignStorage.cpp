@@ -33,6 +33,9 @@
 #include "Shared/measure.h"
 
 class ArrowCsvForeignStorage : public PersistentForeignStorageInterface {
+ public:
+  ArrowCsvForeignStorage() {}
+
   void append(const std::vector<ForeignStorageColumnBuffer>& column_buffers) override;
 
   void read(const ChunkKey& chunk_key,
