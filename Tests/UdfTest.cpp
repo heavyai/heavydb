@@ -15,6 +15,7 @@
  */
 
 #include <gtest/gtest.h>
+#include <llvm/Support/Program.h>
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/operations.hpp>
 #include <csignal>
@@ -169,6 +170,15 @@ class UDFCompilerTest : public ::testing::Test {
 
 TEST_F(UDFCompilerTest, CompileTest) {
   UdfCompiler compiler(getUdfFileName());
+  auto compile_result = compiler.compileUdf();
+
+  EXPECT_EQ(compile_result, 0);
+  // TODO cannot test invalid file path because the compileUdf function uses
+  // LOG(FATAL) which stops the process and does not return
+}
+
+TEST_F(UDFCompilerTest, CompilerPathTest) {
+  UdfCompiler compiler(getUdfFileName(), llvm::sys::findProgramByName("clang++").get());
   auto compile_result = compiler.compileUdf();
 
   EXPECT_EQ(compile_result, 0);

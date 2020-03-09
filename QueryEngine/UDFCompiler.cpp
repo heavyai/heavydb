@@ -301,6 +301,8 @@ UdfCompiler::UdfCompiler(const std::string& file_name, const std::string& clang_
           "Unable to find clang++ to compile user defined functions");
     }
   } else {
+    clang_path_.assign(clang_path);
+
     if (!boost::filesystem::exists(clang_path)) {
       throw std::runtime_error("Path provided for udf compiler " + clang_path +
                                " does not exist.");
