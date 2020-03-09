@@ -1293,7 +1293,10 @@ size_t StringDictionary::addStorageCapacity(
       std::max(static_cast<size_t>(1024 * SYSTEM_PAGE_SIZE),
                (min_capacity_requested / SYSTEM_PAGE_SIZE + 1) * SYSTEM_PAGE_SIZE);
 
-  CANARY_BUFFER = static_cast<char*>(realloc(CANARY_BUFFER, canary_buff_size_to_add));
+  if (canary_buffer_size != canary_buff_size_to_add) {
+    CANARY_BUFFER = static_cast<char*>(realloc(CANARY_BUFFER, canary_buff_size_to_add));
+    canary_buffer_size = canary_buff_size_to_add;
+  }
   CHECK(CANARY_BUFFER);
   memset(CANARY_BUFFER, 0xff, canary_buff_size_to_add);
 
@@ -1308,8 +1311,11 @@ void* StringDictionary::addMemoryCapacity(void* addr,
   const size_t canary_buff_size_to_add =
       std::max(static_cast<size_t>(1024 * SYSTEM_PAGE_SIZE),
                (min_capacity_requested / SYSTEM_PAGE_SIZE + 1) * SYSTEM_PAGE_SIZE);
-  CANARY_BUFFER =
-      reinterpret_cast<char*>(realloc(CANARY_BUFFER, canary_buff_size_to_add));
+  if (canary_buffer_size != canary_buff_size_to_add) {
+    CANARY_BUFFER =
+        reinterpret_cast<char*>(realloc(CANARY_BUFFER, canary_buff_size_to_add));
+    canary_buffer_size = canary_buff_size_to_add;
+  }
   CHECK(CANARY_BUFFER);
   memset(CANARY_BUFFER, 0xff, canary_buff_size_to_add);
   void* new_addr = realloc(addr, mem_size + canary_buff_size_to_add);
