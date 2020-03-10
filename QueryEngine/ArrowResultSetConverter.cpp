@@ -154,49 +154,93 @@ class null_type {};
 template <typename TYPE>
 struct null_type<TYPE, std::enable_if_t<std::is_integral<TYPE>::value>> {
   using type = typename std::make_signed<TYPE>::type;
+  static constexpr type value = inline_int_null_value<type>();
 };
 
 template <typename TYPE>
 struct null_type<TYPE, std::enable_if_t<std::is_floating_point<TYPE>::value>> {
   using type = TYPE;
+  static constexpr type value = inline_fp_null_value<type>();
 };
 
 template <typename TYPE>
 using null_type_t = typename null_type<TYPE>::type;
 
-template <typename TYPE>
+template <typename C_TYPE, typename ARROW_TYPE = typename CTypeTraits<C_TYPE>::ArrowType>
 void convert_column(ResultSetPtr result,
                     size_t col,
                     std::unique_ptr<int8_t[]>& values,
                     std::unique_ptr<uint8_t[]>& is_valid,
-                    size_t entry_count) {
-  CHECK(sizeof(TYPE) == result->getColType(col).get_size());
+                    size_t entry_count,
+                    std::shared_ptr<Array>& out) {
+  CHECK(sizeof(C_TYPE) == result->getColType(col).get_size());
   CHECK(!values);
   CHECK(!is_valid);
 
-  values.reset(new int8_t[entry_count * sizeof(TYPE)]);
-  is_valid.reset(new uint8_t[entry_count]);
-  bool has_null = false;
+  values.reset(new int8_t[entry_count * sizeof(C_TYPE)]);
+  is_valid.reset(new uint8_t[(entry_count + 7) / 8]);
+  int64_t null_count = 0;
 
-  result->copyColumnIntoBuffer(col, values.get(), entry_count * sizeof(TYPE));
+  result->copyColumnIntoBuffer(col, values.get(), entry_count * sizeof(C_TYPE));
 
-  null_type_t<TYPE> null_val;
-  if constexpr (std::is_integral<TYPE>::value) {
-    null_val = inline_int_null_value<null_type_t<TYPE>>();
-  } else {
-    static_assert(std::is_floating_point<TYPE>::value);
-    null_val = inline_fp_null_value<TYPE>();
+  null_type_t<C_TYPE>* vals = reinterpret_cast<null_type_t<C_TYPE>*>(values.get());
+  null_type_t<C_TYPE> null_val = null_type<C_TYPE>::value;
+
+  size_t unroll_count = entry_count & 0xFFFFFFFFFFFFFFF8ULL;
+  for (size_t i = 0; i < unroll_count; i += 8) {
+    uint8_t valid_byte = 0;
+    uint8_t valid;
+    valid = vals[i + 0] != null_val;
+    valid_byte |= valid << 0;
+    null_count += !valid;
+    valid = vals[i + 1] != null_val;
+    valid_byte |= valid << 1;
+    null_count += !valid;
+    valid = vals[i + 2] != null_val;
+    valid_byte |= valid << 2;
+    null_count += !valid;
+    valid = vals[i + 3] != null_val;
+    valid_byte |= valid << 3;
+    null_count += !valid;
+    valid = vals[i + 4] != null_val;
+    valid_byte |= valid << 4;
+    null_count += !valid;
+    valid = vals[i + 5] != null_val;
+    valid_byte |= valid << 5;
+    null_count += !valid;
+    valid = vals[i + 6] != null_val;
+    valid_byte |= valid << 6;
+    null_count += !valid;
+    valid = vals[i + 7] != null_val;
+    valid_byte |= valid << 7;
+    null_count += !valid;
+    is_valid[i >> 3] = valid_byte;
+  }
+  if (unroll_count != entry_count) {
+    uint8_t valid_byte = 0;
+    for (size_t i = unroll_count; i < entry_count; ++i) {
+      bool valid = vals[i] != null_val;
+      valid_byte |= valid << (i & 7);
+      null_count += !valid;
+    }
+    is_valid[unroll_count >> 3] = valid_byte;
   }
 
-  null_type_t<TYPE>* vals = reinterpret_cast<null_type_t<TYPE>*>(values.get());
-  for (size_t i = 0; i < entry_count; ++i) {
-    bool valid = vals[i] != null_val;
-    is_valid[i] = valid;
-    has_null |= !valid;
-  }
-
-  if (!has_null)
+  if (!null_count)
     is_valid.reset();
+
+  // TODO: support date/time + scaling
+  // TODO: support booleans
+  // TODO: support strings (dictionaries)
+  std::shared_ptr<Buffer> data(
+      new Buffer(reinterpret_cast<uint8_t*>(values.get()), entry_count * sizeof(C_TYPE)));
+  if (null_count) {
+    std::shared_ptr<Buffer> null_bitmap(
+        new Buffer(is_valid.get(), (entry_count + 7) / 8));
+    out.reset(new NumericArray<ARROW_TYPE>(entry_count, data, null_bitmap, null_count));
+  } else {
+    out.reset(new NumericArray<ARROW_TYPE>(entry_count, data));
+  }
 }
 
 }  // namespace
@@ -271,14 +315,22 @@ ArrowResult ArrowResultSetConverter::getArrowResultImpl() const {
   const auto& serialized_schema = serialized_arrow_output.schema;
   const auto& serialized_records = serialized_arrow_output.records;
 
-  const auto schema_key = arrow::get_and_copy_to_shm(serialized_schema);
+  key_t schema_key;
+  {
+    auto timer = DEBUG_TIMER("get and copy schema to shm");
+    schema_key = arrow::get_and_copy_to_shm(serialized_schema);
+  }
   CHECK(schema_key != IPC_PRIVATE);
   std::vector<char> schema_handle_buffer(sizeof(key_t), 0);
   memcpy(&schema_handle_buffer[0],
          reinterpret_cast<const unsigned char*>(&schema_key),
          sizeof(key_t));
   if (device_type_ == ExecutorDeviceType::CPU) {
-    const auto record_key = arrow::get_and_copy_to_shm(serialized_records);
+    key_t record_key;
+    {
+      auto timer = DEBUG_TIMER("get and copy record to shm");
+      record_key = arrow::get_and_copy_to_shm(serialized_records);
+    }
     std::vector<char> record_handle_buffer(sizeof(key_t), 0);
     memcpy(&record_handle_buffer[0],
            reinterpret_cast<const unsigned char*>(&record_key),
@@ -320,6 +372,7 @@ ArrowResult ArrowResultSetConverter::getArrowResultImpl() const {
 
 ArrowResultSetConverter::SerializedArrowOutput
 ArrowResultSetConverter::getSerializedArrowOutput() const {
+  auto timer = DEBUG_TIMER(__func__);
   arrow::ipc::DictionaryMemo dict_memo;
   std::shared_ptr<arrow::RecordBatch> arrow_copy = convertToArrow(dict_memo);
   std::shared_ptr<arrow::Buffer> serialized_records, serialized_schema;
@@ -339,6 +392,7 @@ ArrowResultSetConverter::getSerializedArrowOutput() const {
 
 std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::convertToArrow(
     arrow::ipc::DictionaryMemo& memo) const {
+  auto timer = DEBUG_TIMER(__func__);
   const auto col_count = results_->colCount();
   std::vector<std::shared_ptr<arrow::Field>> fields;
   CHECK(col_names_.empty() || col_names_.size() == col_count);
@@ -380,6 +434,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
   const auto col_count = results_->colCount();
   size_t row_count = 0;
 
+  result_columns.resize(col_count);
   std::vector<ColumnBuilder> builders(col_count);
 
   // Create array builders
@@ -486,49 +541,60 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
     return seg_row_count;
   };
 
-  auto fetch_columns = [&](std::vector<std::unique_ptr<int8_t[]>>& values,
-                           std::vector<std::unique_ptr<uint8_t[]>>& is_valid,
-                           const size_t start_col,
-                           const size_t end_col) {
+  auto convert_columns = [&](std::vector<std::unique_ptr<int8_t[]>>& values,
+                             std::vector<std::unique_ptr<uint8_t[]>>& is_valid,
+                             std::vector<std::shared_ptr<arrow::Array>>& result,
+                             const size_t start_col,
+                             const size_t end_col) {
     for (size_t col = start_col; col < end_col; ++col) {
       const auto& column = builders[col];
       switch (column.physical_type) {
-        case kBOOLEAN:
-          convert_column<uint8_t>(results_, col, values[col], is_valid[col], entry_count);
-          break;
+        // TODO: support booleans
+        // case kBOOLEAN:
+        // convert_column<uint8_t, BooleanType>(
+        //    results_, col, values[col], is_valid[col], entry_count, result[col]);
+        // break;
         case kTINYINT:
-          convert_column<int8_t>(results_, col, values[col], is_valid[col], entry_count);
+          convert_column<int8_t>(
+              results_, col, values[col], is_valid[col], entry_count, result[col]);
           break;
         case kSMALLINT:
-          convert_column<int16_t>(results_, col, values[col], is_valid[col], entry_count);
+          convert_column<int16_t>(
+              results_, col, values[col], is_valid[col], entry_count, result[col]);
           break;
         case kINT:
-          convert_column<int32_t>(results_, col, values[col], is_valid[col], entry_count);
+          convert_column<int32_t>(
+              results_, col, values[col], is_valid[col], entry_count, result[col]);
           break;
         case kBIGINT:
-          convert_column<int64_t>(results_, col, values[col], is_valid[col], entry_count);
+          convert_column<int64_t>(
+              results_, col, values[col], is_valid[col], entry_count, result[col]);
           break;
         case kFLOAT:
-          convert_column<float>(results_, col, values[col], is_valid[col], entry_count);
+          convert_column<float>(
+              results_, col, values[col], is_valid[col], entry_count, result[col]);
           break;
         case kDOUBLE:
-          convert_column<double>(results_, col, values[col], is_valid[col], entry_count);
+          convert_column<double>(
+              results_, col, values[col], is_valid[col], entry_count, result[col]);
           break;
-        case kTIME:
-          convert_column<int32_t>(results_, col, values[col], is_valid[col], entry_count);
-          break;
-        case kDATE:
-          device_type_ == ExecutorDeviceType::GPU
-              ? convert_column<int64_t>(
-                    results_, col, values[col], is_valid[col], entry_count)
-              : convert_column<int32_t>(
-                    results_, col, values[col], is_valid[col], entry_count);
-          break;
-        case kTIMESTAMP:
-          convert_column<int64_t>(results_, col, values[col], is_valid[col], entry_count);
-          break;
+        // case kTIME:
+        //  convert_column<int32_t>(
+        //      results_, col, values[col], is_valid[col], entry_count, result[col]);
+        //  break;
+        // case kDATE:
+        //  device_type_ == ExecutorDeviceType::GPU
+        //      ? convert_column<int64_t>(
+        //            results_, col, values[col], is_valid[col], entry_count, result[col])
+        //      : convert_column<int32_t>(
+        //            results_, col, values[col], is_valid[col], entry_count,
+        //            result[col]);
+        //  break;
+        // case kTIMESTAMP:
+        //  convert_column<int64_t>(
+        //      results_, col, values[col], is_valid[col], entry_count, result[col]);
+        //  break;
         default:
-          // TODO(miyu): support more scalar types.
           throw std::runtime_error(column.col_type.get_type_name() +
                                    " is not supported in Arrow result sets.");
       }
@@ -542,33 +608,46 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
                                 entry_count == results_->entryCount();
   std::vector<bool> non_lazy_cols;
   if (use_columnar_converter) {
+    auto timer = DEBUG_TIMER("columnar converter");
     std::vector<size_t> non_lazy_col_pos;
     size_t non_lazy_col_count = 0;
     const auto& lazy_fetch_info = results_->getLazyFetchInfo();
 
-    if (lazy_fetch_info.empty()) {
-      non_lazy_col_count = col_count;
-    } else {
-      non_lazy_cols.reserve(col_count);
-      non_lazy_col_pos.reserve(col_count);
-      for (size_t i = 0; i < lazy_fetch_info.size(); ++i) {
-        bool is_lazy = lazy_fetch_info[i].is_lazily_fetched;
-        non_lazy_cols.emplace_back(!is_lazy);
-        if (!is_lazy) {
-          ++non_lazy_col_count;
-          non_lazy_col_pos.emplace_back(i);
-        }
+    non_lazy_cols.reserve(col_count);
+    non_lazy_col_pos.reserve(col_count);
+    for (size_t i = 0; i < col_count; ++i) {
+      bool is_lazy =
+          lazy_fetch_info.empty() ? false : lazy_fetch_info[i].is_lazily_fetched;
+      // Currently column converter cannot handle some data types.
+      // Treat them as lazy for a while.
+      switch (builders[i].physical_type) {
+        case kBOOLEAN:
+        case kTIME:
+        case kDATE:
+        case kTIMESTAMP:
+          is_lazy = true;
+          break;
+        default:
+          break;
       }
-      if (non_lazy_col_count == col_count) {
-        non_lazy_cols.clear();
-        non_lazy_col_pos.clear();
-      } else {
-        non_lazy_col_pos.emplace_back(col_count);
+      if (builders[i].field->type()->id() == Type::DICTIONARY) {
+        is_lazy = true;
+      }
+      non_lazy_cols.emplace_back(!is_lazy);
+      if (!is_lazy) {
+        ++non_lazy_col_count;
+        non_lazy_col_pos.emplace_back(i);
       }
     }
+    if (non_lazy_col_count == col_count) {
+      non_lazy_cols.clear();
+      non_lazy_col_pos.clear();
+    } else {
+      non_lazy_col_pos.emplace_back(col_count);
+    }
 
-    std::vector<std::unique_ptr<int8_t[]>> values(col_count);
-    std::vector<std::unique_ptr<uint8_t[]>> is_valid(col_count);
+    values_.resize(col_count);
+    is_valid_.resize(col_count);
     std::vector<std::future<void>> child_threads;
     size_t num_threads =
         std::min(multithreaded ? (size_t)cpu_threads() : (size_t)1, non_lazy_col_count);
@@ -583,24 +662,19 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
       size_t phys_end_col =
           non_lazy_col_pos.empty() ? end_col : non_lazy_col_pos[end_col];
       child_threads.push_back(std::async(std::launch::async,
-                                         fetch_columns,
-                                         std::ref(values),
-                                         std::ref(is_valid),
+                                         convert_columns,
+                                         std::ref(values_),
+                                         std::ref(is_valid_),
+                                         std::ref(result_columns),
                                          phys_start_col,
                                          phys_end_col));
     }
     for (auto& child : child_threads) {
       child.get();
     }
-    row_count = entry_count;
-    for (int i = 0; i < schema->num_fields(); ++i) {
-      if (non_lazy_cols.empty() || non_lazy_cols[i]) {
-        reserveColumnBuilderSize(builders[i], row_count);
-        append(builders[i], values[i].get(), row_count, is_valid[i].get());
-      }
-    }
   }
   if (!use_columnar_converter || !non_lazy_cols.empty()) {
+    auto timer = DEBUG_TIMER("row converter");
     row_count = 0;
     if (multithreaded) {
       const size_t cpu_count = cpu_threads();
@@ -624,36 +698,50 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
       for (auto& child : child_threads) {
         row_count += child.get();
       }
-      for (int i = 0; i < schema->num_fields(); ++i) {
-        if (!non_lazy_cols.empty() && non_lazy_cols[i]) {
-          continue;
-        }
-
-        reserveColumnBuilderSize(builders[i], row_count);
-        for (size_t j = 0; j < cpu_count; ++j) {
-          if (!column_value_segs[j][i]) {
+      {
+        auto timer = DEBUG_TIMER("append rows to arrow");
+        for (int i = 0; i < schema->num_fields(); ++i) {
+          if (!non_lazy_cols.empty() && non_lazy_cols[i]) {
             continue;
           }
-          append(builders[i], *column_value_segs[j][i], null_bitmap_segs[j][i]);
+
+          reserveColumnBuilderSize(builders[i], row_count);
+          for (size_t j = 0; j < cpu_count; ++j) {
+            if (!column_value_segs[j][i]) {
+              continue;
+            }
+            append(builders[i], *column_value_segs[j][i], null_bitmap_segs[j][i]);
+          }
         }
       }
     } else {
       row_count =
           fetch(column_values, null_bitmaps, non_lazy_cols, size_t(0), entry_count);
-      for (int i = 0; i < schema->num_fields(); ++i) {
+      {
+        auto timer = DEBUG_TIMER("append rows to arrow");
+        for (int i = 0; i < schema->num_fields(); ++i) {
+          if (!non_lazy_cols.empty() && non_lazy_cols[i]) {
+            continue;
+          }
+
+          reserveColumnBuilderSize(builders[i], row_count);
+          append(builders[i], *column_values[i], null_bitmaps[i]);
+        }
+      }
+    }
+
+    {
+      auto timer = DEBUG_TIMER("finish builders");
+      for (size_t i = 0; i < col_count; ++i) {
         if (!non_lazy_cols.empty() && non_lazy_cols[i]) {
           continue;
         }
 
-        reserveColumnBuilderSize(builders[i], row_count);
-        append(builders[i], *column_values[i], null_bitmaps[i]);
+        result_columns[i] = finishColumnBuilder(builders[i]);
       }
     }
   }
 
-  for (size_t i = 0; i < col_count; ++i) {
-    result_columns.push_back(finishColumnBuilder(builders[i]));
-  }
   return ARROW_RECORDBATCH_MAKE(schema, row_count, result_columns);
 }
 

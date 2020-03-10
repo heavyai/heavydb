@@ -245,6 +245,9 @@ class ArrowResultSetConverter {
   std::vector<std::string> col_names_;
   int32_t top_n_;
 
+  mutable std::vector<std::unique_ptr<int8_t[]>> values_;
+  mutable std::vector<std::unique_ptr<uint8_t[]>> is_valid_;
+
   friend class ArrowResultSet;
 };
 
