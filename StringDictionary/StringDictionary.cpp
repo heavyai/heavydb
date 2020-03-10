@@ -1249,7 +1249,7 @@ void StringDictionary::appendToStorageBulk(
   }
 }
 
-std::string StringDictionary::getStringFromStorageFast(const int string_id) const
+std::string_view StringDictionary::getStringFromStorageFast(const int string_id) const
     noexcept {
   const StringIdxEntry* str_meta = offset_map_ + string_id;
   return {payload_map_ + str_meta->off, str_meta->size};
