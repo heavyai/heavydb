@@ -335,7 +335,7 @@ ArrowResult ArrowResultSetConverter::getArrowResultImpl() const {
   if (device_type_ == ExecutorDeviceType::CPU) {
     key_t record_key;
     {
-      auto timer = DEBUG_TIMER("get and copy record to shm");
+      auto timer = DEBUG_TIMER("get and copy records to shm");
       record_key = arrow::get_and_copy_to_shm(serialized_records);
     }
     std::vector<char> record_handle_buffer(sizeof(key_t), 0);
@@ -384,13 +384,22 @@ ArrowResultSetConverter::getSerializedArrowOutput() const {
   std::shared_ptr<arrow::RecordBatch> arrow_copy = convertToArrow(dict_memo);
   std::shared_ptr<arrow::Buffer> serialized_records, serialized_schema;
 
-  ARROW_THROW_NOT_OK(arrow::ipc::SerializeSchema(
-      *arrow_copy->schema(), arrow::default_memory_pool(), &serialized_schema));
+  {
+    auto timer = DEBUG_TIMER("serialize schema");
+    ARROW_THROW_NOT_OK(arrow::ipc::SerializeSchema(
+        *arrow_copy->schema(), arrow::default_memory_pool(), &serialized_schema));
+  }
 
   if (arrow_copy->num_rows()) {
-    ARROW_THROW_NOT_OK(arrow_copy->Validate());
-    ARROW_THROW_NOT_OK(arrow::ipc::SerializeRecordBatch(
-        *arrow_copy, arrow::default_memory_pool(), &serialized_records));
+    {
+      auto timer = DEBUG_TIMER("validate batch");
+      ARROW_THROW_NOT_OK(arrow_copy->Validate());
+    }
+    {
+      auto timer = DEBUG_TIMER("serialize records");
+      ARROW_THROW_NOT_OK(arrow::ipc::SerializeRecordBatch(
+          *arrow_copy, arrow::default_memory_pool(), &serialized_records));
+    }
   } else {
     ARROW_THROW_NOT_OK(arrow::AllocateBuffer(0, &serialized_records));
   }
