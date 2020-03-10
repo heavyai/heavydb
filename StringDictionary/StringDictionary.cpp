@@ -385,8 +385,6 @@ void StringDictionary::getOrAddBulk(const std::vector<String>& input_strings,
 template <class T, class String>
 void StringDictionary::getOrAddBulkParallel(const std::vector<String>& input_strings,
                                             T* output_string_ids) {
-  UNREACHABLE();  //-temp
-
   if (client_no_timeout_) {
     getOrAddBulkRemote(input_strings, output_string_ids);
     return;
