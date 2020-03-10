@@ -177,13 +177,20 @@ void convert_column(ResultSetPtr result,
   CHECK(!values);
   CHECK(!is_valid);
 
-  values.reset(new int8_t[entry_count * sizeof(C_TYPE)]);
-  is_valid.reset(new uint8_t[(entry_count + 7) / 8]);
+  const int8_t* data_ptr;
+  if (result->isZeroCopyColumnarConversionPossible(col)) {
+    data_ptr = result->getColumnarBuffer(col);
+  } else {
+    values.reset(new int8_t[entry_count * sizeof(C_TYPE)]);
+    result->copyColumnIntoBuffer(col, values.get(), entry_count * sizeof(C_TYPE));
+    data_ptr = values.get();
+  }
+
   int64_t null_count = 0;
+  is_valid.reset(new uint8_t[(entry_count + 7) / 8]);
 
-  result->copyColumnIntoBuffer(col, values.get(), entry_count * sizeof(C_TYPE));
-
-  null_type_t<C_TYPE>* vals = reinterpret_cast<null_type_t<C_TYPE>*>(values.get());
+  const null_type_t<C_TYPE>* vals =
+      reinterpret_cast<const null_type_t<C_TYPE>*>(data_ptr);
   null_type_t<C_TYPE> null_val = null_type<C_TYPE>::value;
 
   size_t unroll_count = entry_count & 0xFFFFFFFFFFFFFFF8ULL;
@@ -232,8 +239,8 @@ void convert_column(ResultSetPtr result,
   // TODO: support date/time + scaling
   // TODO: support booleans
   // TODO: support strings (dictionaries)
-  std::shared_ptr<Buffer> data(
-      new Buffer(reinterpret_cast<uint8_t*>(values.get()), entry_count * sizeof(C_TYPE)));
+  std::shared_ptr<Buffer> data(new Buffer(reinterpret_cast<const uint8_t*>(data_ptr),
+                                          entry_count * sizeof(C_TYPE)));
   if (null_count) {
     std::shared_ptr<Buffer> null_bitmap(
         new Buffer(is_valid.get(), (entry_count + 7) / 8));
@@ -672,6 +679,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
     for (auto& child : child_threads) {
       child.get();
     }
+    row_count = entry_count;
   }
   if (!use_columnar_converter || !non_lazy_cols.empty()) {
     auto timer = DEBUG_TIMER("row converter");
