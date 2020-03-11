@@ -756,7 +756,7 @@ class MapDHandler : public MapDIf {
 
   // Only for IPC device memory deallocation
   mutable std::mutex handle_to_dev_ptr_mutex_;
-  mutable std::unordered_map<std::string, int8_t*> ipc_handle_to_dev_ptr_;
+  mutable std::unordered_map<std::string, std::string> ipc_handle_to_dev_ptr_;
 
   friend void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler,
                                  std::string base_path,

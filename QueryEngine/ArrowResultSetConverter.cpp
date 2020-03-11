@@ -25,6 +25,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <future>
 #include <string>
 
 #include "arrow/api.h"
@@ -34,9 +35,9 @@
 #include "ArrowUtil.h"
 
 #ifdef HAVE_CUDA
+#include <arrow/gpu/cuda_api.h>
 #include <cuda.h>
 #endif  // HAVE_CUDA
-#include <future>
 
 #define ARROW_RECORDBATCH_MAKE arrow::RecordBatch::Make
 
@@ -196,35 +197,26 @@ key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
 
 }  // namespace arrow
 
-// WARN(ptaylor): users are responsible for detaching and removing shared memory segments,
-// e.g.,
-//   int shmid = shmget(...);
-//   auto ipc_ptr = shmat(shmid, ...);
-//   ...
-//   shmdt(ipc_ptr);
-//   shmctl(shmid, IPC_RMID, 0);
-// WARN(miyu): users are responsible to free all device copies, e.g.,
-//   cudaIpcMemHandle_t mem_handle = ...
-//   void* dev_ptr;
-//   cudaIpcOpenMemHandle(&dev_ptr, mem_handle, cudaIpcMemLazyEnablePeerAccess);
-//   ...
-//   cudaIpcCloseMemHandle(dev_ptr);
-//   cudaFree(dev_ptr);
-//
-// TODO(miyu): verify if the server still needs to free its own copies after last uses
-ArrowResult ArrowResultSetConverter::getArrowResultImpl(
-    arrow::ipc::DictionaryMemo* memo) const {
-  const auto serialized_arrow_output = getSerializedArrowOutput(memo);
-  const auto& serialized_schema = serialized_arrow_output.schema;
-  const auto& serialized_records = serialized_arrow_output.records;
+//! Serialize an Arrow result to IPC memory. Users are responsible for freeing all CPU IPC
+//! buffers using deallocateArrowResultBuffer. GPU buffers will become owned by the caller
+//! upon deserialization, and will be automatically freed when they go out of scope.
+ArrowResult ArrowResultSetConverter::getArrowResult() const {
+  std::shared_ptr<arrow::RecordBatch> record_batch = convertToArrow();
 
-  const auto schema_key = arrow::get_and_copy_to_shm(serialized_schema);
-  CHECK(schema_key != IPC_PRIVATE);
-  std::vector<char> schema_handle_buffer(sizeof(key_t), 0);
-  memcpy(&schema_handle_buffer[0],
-         reinterpret_cast<const unsigned char*>(&schema_key),
-         sizeof(key_t));
   if (device_type_ == ExecutorDeviceType::CPU) {
+    auto out_stream_result = arrow::io::BufferOutputStream::Create(1024);
+    ARROW_THROW_NOT_OK(out_stream_result.status());
+    auto out_stream = std::move(out_stream_result).ValueOrDie();
+
+    ARROW_THROW_NOT_OK(arrow::ipc::WriteRecordBatchStream(
+        {record_batch}, ipc::IpcOptions::Defaults(), out_stream.get()));
+
+    auto complete_ipc_stream = out_stream->Finish();
+    ARROW_THROW_NOT_OK(complete_ipc_stream.status());
+    auto serialized_records = std::move(complete_ipc_stream).ValueOrDie();
+
+    std::vector<char> schema_handle_buffer;
+
     const auto record_key = arrow::get_and_copy_to_shm(serialized_records);
     std::vector<char> record_handle_buffer(sizeof(key_t), 0);
     memcpy(&record_handle_buffer[0],
@@ -232,37 +224,102 @@ ArrowResult ArrowResultSetConverter::getArrowResultImpl(
            sizeof(key_t));
 
     return {schema_handle_buffer,
-            serialized_schema->size(),
+            0,
             record_handle_buffer,
             serialized_records->size(),
-            nullptr};
+            std::string{""}};
   }
 #ifdef HAVE_CUDA
-  if (serialized_records->size()) {
-    CHECK(data_mgr_);
-    const auto cuda_mgr = data_mgr_->getCudaMgr();
-    CHECK(cuda_mgr);
-    auto dev_ptr = reinterpret_cast<CUdeviceptr>(
-        cuda_mgr->allocateDeviceMem(serialized_records->size(), device_id_));
-    CUipcMemHandle record_handle;
-    cuIpcGetMemHandle(&record_handle, dev_ptr);
-    cuda_mgr->copyHostToDevice(
-        reinterpret_cast<int8_t*>(dev_ptr),
-        reinterpret_cast<const int8_t*>(serialized_records->data()),
-        serialized_records->size(),
-        device_id_);
-    std::vector<char> record_handle_buffer(sizeof(record_handle), 0);
-    memcpy(&record_handle_buffer[0],
-           reinterpret_cast<unsigned char*>(&record_handle),
-           sizeof(CUipcMemHandle));
-    return {schema_handle_buffer,
-            serialized_schema->size(),
-            record_handle_buffer,
-            serialized_records->size(),
-            reinterpret_cast<int8_t*>(dev_ptr)};
+  CHECK(device_type_ == ExecutorDeviceType::GPU);
+
+  // Copy the schema to the schema handle
+  auto out_stream_result = arrow::io::BufferOutputStream::Create(1024);
+  ARROW_THROW_NOT_OK(out_stream_result.status());
+  auto out_stream = std::move(out_stream_result).ValueOrDie();
+
+  arrow::ipc::DictionaryMemo current_memo;
+  arrow::ipc::DictionaryMemo serialized_memo;
+
+  arrow::ipc::internal::IpcPayload schema_payload;
+  ARROW_THROW_NOT_OK(
+      arrow::ipc::internal::GetSchemaPayload(*record_batch->schema(),
+                                             arrow::ipc::IpcOptions::Defaults(),
+                                             &serialized_memo,
+                                             &schema_payload));
+  int32_t schema_payload_length = 0;
+  ARROW_THROW_NOT_OK(
+      arrow::ipc::internal::WriteIpcPayload(schema_payload,
+                                            arrow::ipc::IpcOptions::Defaults(),
+                                            out_stream.get(),
+                                            &schema_payload_length));
+
+  ARROW_THROW_NOT_OK(CollectDictionaries(*record_batch, &current_memo));
+
+  // now try a dictionary
+  std::shared_ptr<arrow::Schema> dummy_schema;
+  std::vector<std::shared_ptr<arrow::RecordBatch>> dict_batches;
+  for (int i = 0; i < record_batch->schema()->num_fields(); i++) {
+    auto field = record_batch->schema()->field(i);
+    if (field->type()->id() == arrow::Type::DICTIONARY) {
+      int64_t dict_id = -1;
+      ARROW_THROW_NOT_OK(current_memo.GetId(*field, &dict_id));
+      CHECK_GE(dict_id, 0);
+      std::shared_ptr<Array> dict;
+      ARROW_THROW_NOT_OK(current_memo.GetDictionary(dict_id, &dict));
+      CHECK(dict);
+
+      if (!dummy_schema) {
+        auto dummy_field = std::make_shared<arrow::Field>("", dict->type());
+        dummy_schema = std::make_shared<arrow::Schema>(
+            std::vector<std::shared_ptr<arrow::Field>>{dummy_field});
+      }
+      dict_batches.emplace_back(
+          arrow::RecordBatch::Make(dummy_schema, dict->length(), {dict}));
+    }
   }
+  ARROW_THROW_NOT_OK(arrow::ipc::WriteRecordBatchStream(
+      dict_batches, ipc::IpcOptions::Defaults(), out_stream.get()));
+
+  auto complete_ipc_stream = out_stream->Finish();
+  ARROW_THROW_NOT_OK(complete_ipc_stream.status());
+  auto serialized_records = std::move(complete_ipc_stream).ValueOrDie();
+
+  const auto record_key = arrow::get_and_copy_to_shm(serialized_records);
+  std::vector<char> schema_record_key_buffer(sizeof(key_t), 0);
+  memcpy(&schema_record_key_buffer[0],
+         reinterpret_cast<const unsigned char*>(&record_key),
+         sizeof(key_t));
+
+  arrow::cuda::CudaDeviceManager* manager;
+  ARROW_THROW_NOT_OK(arrow::cuda::CudaDeviceManager::GetInstance(&manager));
+  std::shared_ptr<arrow::cuda::CudaContext> context;
+  ARROW_THROW_NOT_OK(manager->GetContext(device_id_, &context));
+
+  std::shared_ptr<arrow::cuda::CudaBuffer> device_serialized;
+  ARROW_THROW_NOT_OK(
+      SerializeRecordBatch(*record_batch, context.get(), &device_serialized));
+
+  std::shared_ptr<arrow::cuda::CudaIpcMemHandle> cuda_handle;
+  ARROW_THROW_NOT_OK(device_serialized->ExportForIpc(&cuda_handle));
+
+  std::shared_ptr<arrow::Buffer> serialized_cuda_handle;
+  ARROW_THROW_NOT_OK(
+      cuda_handle->Serialize(arrow::default_memory_pool(), &serialized_cuda_handle));
+
+  std::vector<char> record_handle_buffer(serialized_cuda_handle->size(), 0);
+  memcpy(&record_handle_buffer[0],
+         serialized_cuda_handle->data(),
+         serialized_cuda_handle->size());
+
+  return {schema_record_key_buffer,
+          serialized_records->size(),
+          record_handle_buffer,
+          serialized_cuda_handle->size(),
+          serialized_cuda_handle->ToString()};
+#else
+  UNREACHABLE();
+  return {std::vector<char>{}, 0, std::vector<char>{}, 0, ""};
 #endif
-  return {schema_handle_buffer, serialized_schema->size(), {}, 0, nullptr};
 }
 
 ArrowResultSetConverter::SerializedArrowOutput
@@ -532,17 +589,20 @@ void ArrowResultSet::deallocateArrowResultBuffer(
     const ExecutorDeviceType device_type,
     const size_t device_id,
     std::shared_ptr<Data_Namespace::DataMgr>& data_mgr) {
+  // CPU buffers skip the sm handle, serializing the entire RecordBatch to df.
   // Remove shared memory on sysmem
-  CHECK_EQ(sizeof(key_t), result.sm_handle.size());
-  const key_t& schema_key = *(key_t*)(&result.sm_handle[0]);
-  auto shm_id = shmget(schema_key, result.sm_size, 0666);
-  if (shm_id < 0) {
-    throw std::runtime_error(
-        "failed to get an valid shm ID w/ given shm key of the schema");
-  }
-  if (-1 == shmctl(shm_id, IPC_RMID, 0)) {
-    throw std::runtime_error("failed to deallocate Arrow schema on errorno(" +
-                             std::to_string(errno) + ")");
+  if (!result.sm_handle.empty()) {
+    CHECK_EQ(sizeof(key_t), result.sm_handle.size());
+    const key_t& schema_key = *(key_t*)(&result.sm_handle[0]);
+    auto shm_id = shmget(schema_key, result.sm_size, 0666);
+    if (shm_id < 0) {
+      throw std::runtime_error(
+          "failed to get an valid shm ID w/ given shm key of the schema");
+    }
+    if (-1 == shmctl(shm_id, IPC_RMID, 0)) {
+      throw std::runtime_error("failed to deallocate Arrow schema on errorno(" +
+                               std::to_string(errno) + ")");
+    }
   }
 
   if (device_type == ExecutorDeviceType::CPU) {
@@ -556,15 +616,10 @@ void ArrowResultSet::deallocateArrowResultBuffer(
     if (-1 == shmctl(shm_id, IPC_RMID, 0)) {
       throw std::runtime_error("failed to deallocate Arrow data frame");
     }
-    return;
   }
-
-  CHECK(device_type == ExecutorDeviceType::GPU);
-  if (!result.df_dev_ptr) {
-    throw std::runtime_error("null pointer to data frame on device");
-  }
-
-  data_mgr->getCudaMgr()->freeDeviceMem(result.df_dev_ptr);
+  // CUDA buffers become owned by the caller, and will automatically be freed
+  // TODO: What if the client never takes ownership of the result? we may want to
+  // establish a check to see if the GPU buffer still exists, and then free it.
 }
 
 void ArrowResultSetConverter::initializeColumnBuilder(

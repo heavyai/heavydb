@@ -27,6 +27,9 @@
 
 #include "arrow/api.h"
 #include "arrow/ipc/api.h"
+#ifdef HAVE_CUDA
+#include <arrow/gpu/cuda_api.h>
+#endif  // HAVE_CUDA
 
 static_assert(ARROW_VERSION >= 16000, "Apache Arrow v0.16.0 or above is required.");
 
@@ -83,7 +86,7 @@ struct ArrowResult {
   int64_t sm_size;
   std::vector<char> df_handle;
   int64_t df_size;
-  int8_t* df_dev_ptr;  // Only for device memory deallocation
+  std::string serialized_cuda_handle;  // Only for GPU memory deallocation
 };
 
 // Expose Arrow buffers as a subset of the ResultSet interface
@@ -181,9 +184,7 @@ class ArrowResultSetConverter {
       , col_names_(col_names)
       , top_n_(first_n) {}
 
-  ArrowResult getArrowResult(arrow::ipc::DictionaryMemo* memo) const {
-    return getArrowResultImpl(memo);
-  }
+  ArrowResult getArrowResult() const;
 
   // TODO(adb): Proper namespacing for this set of functionality. For now, make this
   // public and leverage the converter class as namespace
@@ -204,8 +205,6 @@ class ArrowResultSetConverter {
 
   std::shared_ptr<arrow::RecordBatch> getArrowBatch(
       const std::shared_ptr<arrow::Schema>& schema) const;
-
-  ArrowResult getArrowResultImpl(arrow::ipc::DictionaryMemo* memo) const;
 
   std::shared_ptr<arrow::Field> makeField(const std::string name,
                                           const SQLTypeInfo& target_type) const;

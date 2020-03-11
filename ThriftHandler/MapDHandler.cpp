@@ -1058,12 +1058,8 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
                                                          : ExecutorDeviceType::GPU,
                          static_cast<size_t>(device_id),
                          first_n);
-      if (!_return.sm_size) {
-        throw std::runtime_error("schema is missing in returned result");
-      }
       return;
     }
-    LOG(INFO) << "passing query to legacy processor";
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
@@ -1086,7 +1082,7 @@ void MapDHandler::deallocate_df(const TSessionId& session,
                                 const TDeviceType::type device_type,
                                 const int32_t device_id) {
   auto stdlog = STDLOG(get_session_ptr(session));
-  int8_t* dev_ptr{0};
+  std::string serialized_cuda_handle = "";
   if (device_type == TDeviceType::GPU) {
     std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
     if (ipc_handle_to_dev_ptr_.count(df.df_handle) != size_t(1)) {
@@ -1096,12 +1092,13 @@ void MapDHandler::deallocate_df(const TSessionId& session,
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    dev_ptr = ipc_handle_to_dev_ptr_[df.df_handle];
+    serialized_cuda_handle = ipc_handle_to_dev_ptr_[df.df_handle];
     ipc_handle_to_dev_ptr_.erase(df.df_handle);
   }
   std::vector<char> sm_handle(df.sm_handle.begin(), df.sm_handle.end());
   std::vector<char> df_handle(df.df_handle.begin(), df.df_handle.end());
-  ArrowResult result{sm_handle, df.sm_size, df_handle, df.df_size, dev_ptr};
+  ArrowResult result{
+      sm_handle, df.sm_size, df_handle, df.df_size, serialized_cuda_handle};
   ArrowResultSet::deallocateArrowResultBuffer(
       result,
       device_type == TDeviceType::CPU ? ExecutorDeviceType::CPU : ExecutorDeviceType::GPU,
@@ -4745,11 +4742,8 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                                 getTargetNames(result.getTargetsMeta()),
                                                 first_n);
   ArrowResult arrow_result;
-
-  // TODO(adb): properly serialize
-  arrow::ipc::DictionaryMemo memo;
   _return.arrow_conversion_time_ms +=
-      measure<>::execution([&] { arrow_result = converter->getArrowResult(&memo); });
+      measure<>::execution([&] { arrow_result = converter->getArrowResult(); });
   _return.sm_handle =
       std::string(arrow_result.sm_handle.begin(), arrow_result.sm_handle.end());
   _return.sm_size = arrow_result.sm_size;
@@ -4759,7 +4753,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
     std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
     CHECK(!ipc_handle_to_dev_ptr_.count(_return.df_handle));
     ipc_handle_to_dev_ptr_.insert(
-        std::make_pair(_return.df_handle, arrow_result.df_dev_ptr));
+        std::make_pair(_return.df_handle, arrow_result.serialized_cuda_handle));
   }
   _return.df_size = arrow_result.df_size;
 }
