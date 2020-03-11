@@ -48,7 +48,8 @@ build(){
                                       -DARROW_WITH_ZLIB=ON \
                                       -DARROW_WITH_LZ4=OFF \
                                       -DARROW_WITH_SNAPPY=ON \
-                                      -DARROW_WITH_ZSTD=ON
+                                      -DARROW_WITH_ZSTD=ON \
+                                      -DARROW_CUDA=ON
 
   make
 }
