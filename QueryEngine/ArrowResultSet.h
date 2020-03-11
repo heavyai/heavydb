@@ -23,6 +23,7 @@
 #include "TargetMetaInfo.h"
 #include "TargetValue.h"
 
+#include <sys/ipc.h>
 #include <type_traits>
 
 #include "arrow/api.h"
@@ -202,6 +203,7 @@ class ArrowResultSetConverter {
   struct SerializedArrowOutput {
     std::shared_ptr<arrow::Buffer> schema;
     std::shared_ptr<arrow::Buffer> records;
+    key_t records_shm_key = IPC_PRIVATE;
   };
   SerializedArrowOutput getSerializedArrowOutput() const;
 
