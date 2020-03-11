@@ -527,6 +527,11 @@ class MapDHandler : public MapDIf {
       const TSessionId& session);
 
  private:
+  std::shared_ptr<Catalog_Namespace::SessionInfo> create_new_session(
+      TSessionId& session,
+      const std::string& dbname,
+      const Catalog_Namespace::UserMetadata& user_meta,
+      std::shared_ptr<Catalog_Namespace::Catalog> cat);
   void connect_impl(TSessionId& session,
                     const std::string& passwd,
                     const std::string& dbname,

@@ -467,15 +467,11 @@ void MapDHandler::connect(TSessionId& session,
   SysCatalog::instance().check_for_session_encryption(passwd, session);
 }
 
-void MapDHandler::connect_impl(TSessionId& session,
-                               const std::string& passwd,
-                               const std::string& dbname,
-                               const Catalog_Namespace::UserMetadata& user_meta,
-                               std::shared_ptr<Catalog> cat,
-                               query_state::StdLog& stdlog) {
-  // TODO(sy): Is there any reason to have dbname as a parameter
-  // here when the cat parameter already provides cat->name()?
-  // Should dbname and cat->name() ever differ?
+std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::create_new_session(
+    TSessionId& session,
+    const std::string& dbname,
+    const Catalog_Namespace::UserMetadata& user_meta,
+    std::shared_ptr<Catalog> cat) {
   do {
     session = generate_random_string(32);
   } while (sessions_.find(session) != sessions_.end());
@@ -485,6 +481,21 @@ void MapDHandler::connect_impl(TSessionId& session,
                             cat, user_meta, executor_device_type_, session));
   CHECK(emplace_retval.second);
   auto& session_ptr = emplace_retval.first->second;
+  LOG(INFO) << "User " << user_meta.userName << " connected to database " << dbname
+            << " with public_session_id " << session_ptr->get_public_session_id();
+  return session_ptr;
+}
+
+void MapDHandler::connect_impl(TSessionId& session,
+                               const std::string& passwd,
+                               const std::string& dbname,
+                               const Catalog_Namespace::UserMetadata& user_meta,
+                               std::shared_ptr<Catalog> cat,
+                               query_state::StdLog& stdlog) {
+  // TODO(sy): Is there any reason to have dbname as a parameter
+  // here when the cat parameter already provides cat->name()?
+  // Should dbname and cat->name() ever differ?
+  auto session_ptr = create_new_session(session, dbname, user_meta, cat);
   stdlog.setSessionInfo(session_ptr);
   if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time while
                               // doing warmup
@@ -498,8 +509,6 @@ void MapDHandler::connect_impl(TSessionId& session,
                          : SysCatalog::instance().getRoles(
                                false, false, session_ptr->get_currentUser().userName);
   stdlog.appendNameValuePairs("roles", boost::algorithm::join(roles, ","));
-  LOG(INFO) << "User " << user_meta.userName << " connected to database " << dbname
-            << " with public_session_id " << session_ptr->get_public_session_id();
 }
 
 void MapDHandler::disconnect(const TSessionId& session) {
@@ -554,7 +563,11 @@ void MapDHandler::clone_session(TSessionId& session2, const TSessionId& session1
     const Catalog_Namespace::UserMetadata& user_meta =
         session_it->second->get_currentUser();
     std::shared_ptr<Catalog> cat = session_it->second->get_catalog_ptr();
-    connect_impl(session2, std::string(), cat->name(), user_meta, cat, stdlog);
+    auto session2_ptr = create_new_session(session2, cat->name(), user_meta, cat);
+    if (leaf_aggregator_.leafCount() > 0) {
+      leaf_aggregator_.clone_session(session1, session2);
+      return;
+    }
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
