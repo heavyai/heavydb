@@ -578,9 +578,14 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
   auto convert_columns = [&](std::vector<std::unique_ptr<int8_t[]>>& values,
                              std::vector<std::unique_ptr<uint8_t[]>>& is_valid,
                              std::vector<std::shared_ptr<arrow::Array>>& result,
+                             const std::vector<bool>& non_lazy_cols,
                              const size_t start_col,
                              const size_t end_col) {
     for (size_t col = start_col; col < end_col; ++col) {
+      if (!non_lazy_cols.empty() && !non_lazy_cols[col]) {
+        continue;
+      }
+
       const auto& column = builders[col];
       switch (column.physical_type) {
         // TODO: support booleans
@@ -630,7 +635,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
         //  break;
         default:
           throw std::runtime_error(column.col_type.get_type_name() +
-                                   " is not supported in Arrow result sets.");
+                                   " is not supported in Arrow column converter.");
       }
     }
   };
@@ -700,6 +705,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
                                          std::ref(values_),
                                          std::ref(is_valid_),
                                          std::ref(result_columns),
+                                         non_lazy_cols,
                                          phys_start_col,
                                          phys_end_col));
     }
