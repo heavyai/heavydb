@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,20 +18,20 @@
  * @file	InsertOrderFragmenter.h
  * @author	Todd Mostak <todd@mapd.com>
  */
-#ifndef INSERT_ORDER_FRAGMENTER_H
-#define INSERT_ORDER_FRAGMENTER_H
 
-#include "../Chunk/Chunk.h"
-#include "../DataMgr/MemoryLevel.h"
-#include "../QueryEngine/TargetValue.h"
-#include "../Shared/mapd_shared_mutex.h"
-#include "../Shared/types.h"
-#include "AbstractFragmenter.h"
+#pragma once
 
 #include <map>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
+
+#include "Chunk/Chunk.h"
+#include "DataMgr/MemoryLevel.h"
+#include "Fragmenter/AbstractFragmenter.h"
+#include "QueryEngine/TargetValue.h"
+#include "Shared/mapd_shared_mutex.h"
+#include "Shared/types.h"
 
 namespace Data_Namespace {
 class DataMgr;
@@ -95,6 +95,8 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   void updateChunkStats(
       const ColumnDescriptor* cd,
       std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map) override;
+
+  FragmentInfo* getFragmentInfo(const int fragment_id) const override;
 
   /**
    * @brief get fragmenter's id
@@ -183,7 +185,7 @@ class InsertOrderFragmenter : public AbstractFragmenter {
   std::vector<int> chunkKeyPrefix_;
   std::map<int, Chunk_NS::Chunk>
       columnMap_; /**< stores a map of column id to metadata about that column */
-  std::deque<FragmentInfo>
+  std::deque<std::unique_ptr<FragmentInfo>>
       fragmentInfoVec_; /**< data about each fragment stored - id and number of rows */
   // int currentInsertBufferFragmentId_;
   Data_Namespace::DataMgr* dataMgr_;
@@ -244,5 +246,3 @@ class InsertOrderFragmenter : public AbstractFragmenter {
 };
 
 }  // namespace Fragmenter_Namespace
-
-#endif  // INSERT_ORDER_FRAGMENTER_H

@@ -45,15 +45,6 @@ inline void wait_cleanup_threads(std::vector<std::future<void>>& threads) {
   threads.clear();
 }
 
-FragmentInfo& InsertOrderFragmenter::getFragmentInfoFromId(const int fragment_id) {
-  auto fragment_it = std::find_if(
-      fragmentInfoVec_.begin(), fragmentInfoVec_.end(), [=](const auto& f) -> bool {
-        return f.fragmentId == fragment_id;
-      });
-  CHECK(fragment_it != fragmentInfoVec_.end());
-  return *fragment_it;
-}
-
 inline bool is_integral(const SQLTypeInfo& t) {
   return t.is_integer() || t.is_boolean() || t.is_time() || t.is_timeinterval();
 }
@@ -326,7 +317,8 @@ void InsertOrderFragmenter::updateColumns(
 
   TargetValueConverterFactory factory;
 
-  auto& fragment = getFragmentInfoFromId(fragmentId);
+  auto fragment_ptr = getFragmentInfo(fragmentId);
+  auto& fragment = *fragment_ptr;
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks;
   get_chunks(catalog, td, fragment, memoryLevel, chunks);
   std::vector<std::unique_ptr<TargetValueConverter>> sourceDataConverters(
@@ -628,7 +620,8 @@ void InsertOrderFragmenter::updateColumn(const Catalog_Namespace::Catalog* catal
   }
   CHECK(nrow == n_rhs_values || 1 == n_rhs_values);
 
-  auto& fragment = getFragmentInfoFromId(fragment_id);
+  auto fragment_ptr = getFragmentInfo(fragment_id);
+  auto& fragment = *fragment_ptr;
   auto chunk_meta_it = fragment.getChunkMetadataMapPhysical().find(cd->columnId);
   CHECK(chunk_meta_it != fragment.getChunkMetadataMapPhysical().end());
   ChunkKey chunk_key{
@@ -1212,7 +1205,8 @@ void InsertOrderFragmenter::compactRows(const Catalog_Namespace::Catalog* catalo
                                         const std::vector<uint64_t>& frag_offsets,
                                         const Data_Namespace::MemoryLevel memory_level,
                                         UpdelRoll& updel_roll) {
-  auto& fragment = getFragmentInfoFromId(fragment_id);
+  auto fragment_ptr = getFragmentInfo(fragment_id);
+  auto& fragment = *fragment_ptr;
   auto chunks = getChunksForAllColumns(td, fragment, memory_level);
   const auto ncol = chunks.size();
 
