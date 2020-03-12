@@ -202,6 +202,13 @@ int64_t udf_range_int(const int64_t high_price, const int64_t low_price) {
   return high_price - low_price;
 }
 
+#ifdef UDF_COMPILER_OPTION
+EXTENSION_NOINLINE
+int64_t udf_range_int2(const int64_t high_price, const int64_t low_price) {
+  return high_price - low_price;
+}
+#endif
+
 EXTENSION_NOINLINE
 double udf_truehigh(const double high_price, const double prev_close_price) {
   return (high_price < prev_close_price) ? prev_close_price : high_price;

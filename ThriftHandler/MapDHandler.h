@@ -186,7 +186,8 @@ class MapDHandler : public MapDIf {
               const int max_session_duration,
               const bool enable_runtime_udf_registration,
               const std::string& udf_filename,
-              const std::string& clang_path);
+              const std::string& clang_path,
+              const std::vector<std::string>& clang_options);
 
   ~MapDHandler() override;
 

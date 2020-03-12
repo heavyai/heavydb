@@ -76,7 +76,9 @@ class MapDHandlerTestFixture : public testing::Test {
                                                    max_session_duration,
                                                    enable_runtime_udf_registration,
                                                    udf_filename,
-                                                   udf_compiler_path);
+                                                   udf_compiler_path,
+                                                   udf_compiler_options);
+      mapd_handler->connect(session_id, default_user, default_pass, db_name);
     }
     loginAdmin();
   }
@@ -131,6 +133,7 @@ class MapDHandlerTestFixture : public testing::Test {
   static std::string default_user;
   static std::string default_pass;
   static std::string db_name;
+  static std::vector<std::string> udf_compiler_options;
 };
 
 TSessionId MapDHandlerTestFixture::session_id{};
@@ -144,3 +147,4 @@ std::string MapDHandlerTestFixture::default_user{"admin"};
 std::string MapDHandlerTestFixture::default_pass{"HyperInteractive"};
 std::string MapDHandlerTestFixture::db_name{};
 MapDParameters MapDHandlerTestFixture::mapd_parameters{};
+std::vector<std::string> MapDHandlerTestFixture::udf_compiler_options{};
