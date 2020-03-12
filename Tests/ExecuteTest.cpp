@@ -5303,6 +5303,24 @@ void import_random_test() {
   }
 }
 
+void import_varlen_lazy_fetch() {
+  const std::string table_name("varlen_table");
+  const std::string drop_varlen_table("DROP TABLE IF EXISTS " + table_name + ";");
+  run_ddl_statement(drop_varlen_table);
+  std::string create_query("CREATE TABLE " + table_name +
+                           " (t tinyint, p POINT, real_str TEXT ENCODING NONE, "
+                           "array_i16 smallint[]) with (FRAGMENT_SIZE = 256);");
+  run_ddl_statement(create_query);
+  std::string insert_query("INSERT INTO " + table_name + " VALUES(");
+  for (int i = 0; i < 255; i++) {
+    run_multiple_agg(
+        insert_query + std::to_string(i - 127) + ", \'POINT(" + std::to_string(i) + " " +
+            std::to_string(i) + ")\', " + "\'number" + std::to_string(i) + "\', " + "{" +
+            std::to_string(2 * i) + ", " + std::to_string(2 * i + 1) + "}" + ");",
+        ExecutorDeviceType::CPU);
+  }
+}
+
 void import_query_rewrite_test() {
   const std::string drop_old_query_rewrite_test{
       "DROP TABLE IF EXISTS query_rewrite_test;"};
@@ -16565,6 +16583,24 @@ TEST(Select, Interop) {
   g_enable_interop = false;
 }
 
+TEST(Select, VarlenLazyFetch) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    {
+      const auto query(
+          "SELECT t, p, real_str, array_i16 FROM varlen_table where rowid = 222;");
+      auto result = run_multiple_agg(query, dt);
+      const auto first_row = result->getNextRow(true, true);
+      ASSERT_EQ(size_t(4), first_row.size());
+      ASSERT_EQ(int64_t(95), v<int64_t>(first_row[0]));
+      ASSERT_EQ(boost::get<std::string>(v<NullableString>(first_row[1])),
+                "POINT (222 222)");
+      ASSERT_EQ(boost::get<std::string>(v<NullableString>(first_row[2])), "number222");
+      compare_array(first_row[3], std::vector<int64_t>({444, 445}));
+    }
+  }
+}
+
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,
@@ -17419,6 +17455,12 @@ int create_and_populate_tables(const bool use_temporary_tables,
     return -EEXIST;
   }
   try {
+    import_varlen_lazy_fetch();
+  } catch (...) {
+    LOG(ERROR) << "Failed to (re-)create table 'varlen_table'";
+    return -EEXIST;
+  }
+  try {
     import_query_rewrite_test();
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'query_rewrite_test'";
@@ -17717,6 +17759,8 @@ void drop_tables() {
   run_ddl_statement(drop_gpu_sort_test);
   const std::string drop_random_test{"DROP TABLE random_test;"};
   run_ddl_statement(drop_random_test);
+  const std::string drop_varlen_lazy_fetch_test{"DROP TABLE varlen_table;"};
+  run_ddl_statement(drop_varlen_lazy_fetch_test);
   g_sqlite_comparator.query(drop_gpu_sort_test);
   const std::string drop_query_rewrite_test{"DROP TABLE query_rewrite_test;"};
   run_ddl_statement(drop_query_rewrite_test);
