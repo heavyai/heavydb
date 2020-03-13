@@ -1,0 +1,9 @@
+Struct foreign_storage::ForeignTable
+====================================
+
+.. doxygenstruct:: foreign_storage::ForeignTable
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

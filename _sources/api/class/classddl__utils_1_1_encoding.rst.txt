@@ -1,0 +1,9 @@
+Class ddl_utils::Encoding
+=========================
+
+.. doxygenclass:: ddl_utils::Encoding
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
