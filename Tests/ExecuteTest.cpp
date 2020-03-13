@@ -16587,6 +16587,8 @@ TEST(Select, VarlenLazyFetch) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     {
+      // rowid not meaningful in dstributed mode
+      SKIP_ALL_ON_AGGREGATOR();
       const auto query(
           "SELECT t, p, real_str, array_i16 FROM varlen_table where rowid = 222;");
       auto result = run_multiple_agg(query, dt);
