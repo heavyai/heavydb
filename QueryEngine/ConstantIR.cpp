@@ -21,9 +21,9 @@ std::vector<llvm::Value*> CodeGenerator::codegen(const Analyzer::Constant* const
                                                  const EncodingType enc_type,
                                                  const int dict_id,
                                                  const CompilationOptions& co) {
-  if (co.hoist_literals_) {
+  if (co.hoist_literals) {
     std::vector<const Analyzer::Constant*> constants(
-        executor()->deviceCount(co.device_type_), constant);
+        executor()->deviceCount(co.device_type), constant);
     return codegenHoistedConstants(constants, enc_type, dict_id);
   }
   const auto& type_info = constant->get_type_info();

@@ -291,7 +291,7 @@ Executor::ExecutionDispatch::compile(const size_t max_groups_buffer_entry_guess,
   auto query_comp_desc = std::make_unique<QueryCompilationDescriptor>();
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
 
-  switch (co.device_type_) {
+  switch (co.device_type) {
     case ExecutorDeviceType::CPU: {
       query_mem_desc = query_comp_desc->compile(max_groups_buffer_entry_guess,
                                                 crt_min_byte_width,

@@ -109,7 +109,7 @@ void Executor::executeUpdate(const RelAlgExecutionUnit& ra_exe_unit_in,
     fragments[0] = {table_id, {fragment_index}};
 
     current_fragment_execution_dispatch.run(
-        co.device_type_,
+        co.device_type,
         0,
         eo,
         column_fetcher,

@@ -114,7 +114,7 @@ void optimize_ir(llvm::Function* query_func,
   pass_manager.add(llvm::createGlobalOptimizerPass());
 
   pass_manager.add(llvm::createLICMPass());
-  if (co.opt_level_ == ExecutorOptLevel::LoopStrengthReduction) {
+  if (co.opt_level == ExecutorOptLevel::LoopStrengthReduction) {
     pass_manager.add(llvm::createLoopStrengthReducePass());
   }
   pass_manager.run(*module);
@@ -134,7 +134,7 @@ ExecutionEngineWrapper::ExecutionEngineWrapper(llvm::ExecutionEngine* execution_
                                                const CompilationOptions& co)
     : execution_engine_(execution_engine) {
   if (execution_engine_) {
-    if (co.register_intel_jit_listener_) {
+    if (co.register_intel_jit_listener) {
       intel_jit_listener_.reset(llvm::JITEventListener::createIntelJITEventListener());
       CHECK(intel_jit_listener_);
       execution_engine_->RegisterJITEventListener(intel_jit_listener_.get());
@@ -235,7 +235,7 @@ ExecutionEngineWrapper CodeGenerator::generateNativeCPUCode(
   llvm::TargetOptions to;
   to.EnableFastISel = true;
   eb.setTargetOptions(to);
-  if (co.opt_level_ == ExecutorOptLevel::ReductionJIT) {
+  if (co.opt_level == ExecutorOptLevel::ReductionJIT) {
     eb.setOptLevel(llvm::CodeGenOpt::None);
   }
 
@@ -1572,7 +1572,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   nukeOldState(allow_lazy_fetch, query_infos, &ra_exe_unit);
 
   GroupByAndAggregate group_by_and_aggregate(
-      this, co.device_type_, ra_exe_unit, query_infos, row_set_mem_owner);
+      this, co.device_type, ra_exe_unit, query_infos, row_set_mem_owner);
   auto query_mem_desc =
       group_by_and_aggregate.initQueryMemoryDescriptor(eo.allow_multifrag,
                                                        max_groups_buffer_entry_guess,
@@ -1589,7 +1589,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   const bool output_columnar = query_mem_desc->didOutputColumnar();
 
-  if (co.device_type_ == ExecutorDeviceType::GPU) {
+  if (co.device_type == ExecutorDeviceType::GPU) {
     const size_t num_count_distinct_descs =
         query_mem_desc->getCountDistinctDescriptorsSize();
     for (size_t i = 0; i < num_count_distinct_descs; i++) {
@@ -1597,7 +1597,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
           query_mem_desc->getCountDistinctDescriptor(i);
       if (count_distinct_descriptor.impl_type_ == CountDistinctImplType::StdSet ||
           (count_distinct_descriptor.impl_type_ != CountDistinctImplType::Invalid &&
-           !co.hoist_literals_)) {
+           !co.hoist_literals)) {
         throw QueryMustRunOnCpu();
       }
     }
@@ -1623,7 +1623,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
                 CodeGenerator::alwaysCloneRuntimeFunction(func));
       });
 
-  if (co.device_type_ == ExecutorDeviceType::CPU) {
+  if (co.device_type == ExecutorDeviceType::CPU) {
     if (is_udf_module_present(true)) {
       CodeGenerator::link_udf_module(udf_cpu_module, *rt_module_copy, cgen_state_.get());
     }
@@ -1659,13 +1659,13 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   const bool is_group_by{query_mem_desc->isGroupBy()};
   auto query_func = is_group_by ? query_group_by_template(cgen_state_->module_,
-                                                          co.hoist_literals_,
+                                                          co.hoist_literals,
                                                           *query_mem_desc,
-                                                          co.device_type_,
+                                                          co.device_type,
                                                           ra_exe_unit.scan_limit)
                                 : query_template(cgen_state_->module_,
                                                  agg_slot_count,
-                                                 co.hoist_literals_,
+                                                 co.hoist_literals,
                                                  !!ra_exe_unit.estimator);
   bind_pos_placeholders("pos_start", true, query_func, cgen_state_->module_);
   bind_pos_placeholders("group_buff_idx", false, query_func, cgen_state_->module_);
@@ -1679,7 +1679,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
   std::tie(cgen_state_->row_func_, col_heads) =
       create_row_function(ra_exe_unit.input_col_descs.size(),
                           is_group_by ? 0 : agg_slot_count,
-                          co.hoist_literals_,
+                          co.hoist_literals,
                           query_func,
                           cgen_state_->module_,
                           cgen_state_->context_);
@@ -1711,19 +1711,19 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
     const bool can_return_error =
         compileBody(ra_exe_unit, group_by_and_aggregate, *query_mem_desc, co);
     if (can_return_error || cgen_state_->needs_error_check_ || eo.with_dynamic_watchdog) {
-      createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog, co.device_type_);
+      createErrorCheckControlFlow(query_func, eo.with_dynamic_watchdog, co.device_type);
     }
   }
   std::vector<llvm::Value*> hoisted_literals;
 
-  if (co.hoist_literals_) {
+  if (co.hoist_literals) {
     VLOG(1) << "number of hoisted literals: "
             << cgen_state_->query_func_literal_loads_.size()
             << " / literal buffer usage: " << cgen_state_->getLiteralBufferUsage(0)
             << " bytes";
   }
 
-  if (co.hoist_literals_ && !cgen_state_->query_func_literal_loads_.empty()) {
+  if (co.hoist_literals && !cgen_state_->query_func_literal_loads_.empty()) {
     // we have some hoisted literals...
     hoisted_literals = inlineHoistedLiterals();
   }
@@ -1754,11 +1754,11 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
       init_agg_val_vec(ra_exe_unit.target_exprs, ra_exe_unit.quals, *query_mem_desc);
 
   auto multifrag_query_func = cgen_state_->module_->getFunction(
-      "multifrag_query" + std::string(co.hoist_literals_ ? "_hoisted_literals" : ""));
+      "multifrag_query" + std::string(co.hoist_literals ? "_hoisted_literals" : ""));
   CHECK(multifrag_query_func);
 
   bind_query(query_func,
-             "query_stub" + std::string(co.hoist_literals_ ? "_hoisted_literals" : ""),
+             "query_stub" + std::string(co.hoist_literals ? "_hoisted_literals" : ""),
              multifrag_query_func,
              cgen_state_->module_);
 
@@ -1769,7 +1769,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   std::string llvm_ir;
   if (eo.just_explain) {
-    if (co.explain_type_ == ExecutorExplainType::Optimized) {
+    if (co.explain_type == ExecutorExplainType::Optimized) {
 #ifdef WITH_JIT_DEBUG
       throw std::runtime_error(
           "Explain optimized not available when JIT runtime debug symbols are enabled");
@@ -1788,7 +1788,7 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 
   return std::make_tuple(
       Executor::CompilationResult{
-          co.device_type_ == ExecutorDeviceType::CPU
+          co.device_type == ExecutorDeviceType::CPU
               ? optimizeAndCodegenCPU(query_func, multifrag_query_func, live_funcs, co)
               : optimizeAndCodegenGPU(query_func,
                                       multifrag_query_func,

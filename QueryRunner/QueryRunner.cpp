@@ -346,8 +346,9 @@ ExecutionResult run_select_query_with_filter_push_down(
   auto const& query_state = query_state_proxy.getQueryState();
   const auto& cat = query_state.getConstSessionInfo()->getCatalog();
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
-  CompilationOptions co = {
-      device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
+  CompilationOptions co = CompilationOptions::defaults(device_type);
+  co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
+
   ExecutionOptions eo = {g_enable_columnar_output,
                          true,
                          just_explain,
@@ -432,8 +433,9 @@ ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
 
   const auto& cat = session_info_->getCatalog();
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
-  CompilationOptions co = {
-      device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
+  CompilationOptions co = CompilationOptions::defaults(device_type);
+  co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
+
   ExecutionOptions eo = {g_enable_columnar_output,
                          true,
                          just_explain,

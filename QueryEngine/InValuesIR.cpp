@@ -36,7 +36,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InValues* expr,
     result = cgen_state_->llInt(int8_t(0));
   }
   CHECK(result);
-  if (co.hoist_literals_) {  // TODO(alex): remove this constraint
+  if (co.hoist_literals) {  // TODO(alex): remove this constraint
     auto in_vals_bitmap = createInValuesBitmap(expr, co);
     if (in_vals_bitmap) {
       if (in_vals_bitmap->isEmpty()) {
@@ -75,7 +75,7 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set
   }
   const auto& ti = in_integer_set->get_arg()->get_type_info();
   const auto needle_null_val = inline_int_null_val(ti);
-  if (!co.hoist_literals_) {
+  if (!co.hoist_literals) {
     // We never run without literal hoisting in real world scenarios, this avoids a crash
     // when testing.
     throw std::runtime_error(
@@ -85,9 +85,9 @@ llvm::Value* CodeGenerator::codegen(const Analyzer::InIntegerSet* in_integer_set
   auto in_vals_bitmap = boost::make_unique<InValuesBitmap>(
       in_integer_set->get_value_list(),
       needle_null_val,
-      co.device_type_ == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
-                                                 : Data_Namespace::CPU_LEVEL,
-      executor()->deviceCount(co.device_type_),
+      co.device_type == ExecutorDeviceType::GPU ? Data_Namespace::GPU_LEVEL
+                                                : Data_Namespace::CPU_LEVEL,
+      executor()->deviceCount(co.device_type),
       &executor()->getCatalog()->getDataMgr());
   const auto& in_integer_set_ti = in_integer_set->get_type_info();
   CHECK(in_integer_set_ti.is_boolean());
@@ -187,10 +187,10 @@ std::unique_ptr<InValuesBitmap> CodeGenerator::createInValuesBitmap(
     try {
       return boost::make_unique<InValuesBitmap>(values,
                                                 needle_null_val,
-                                                co.device_type_ == ExecutorDeviceType::GPU
+                                                co.device_type == ExecutorDeviceType::GPU
                                                     ? Data_Namespace::GPU_LEVEL
                                                     : Data_Namespace::CPU_LEVEL,
-                                                executor()->deviceCount(co.device_type_),
+                                                executor()->deviceCount(co.device_type),
                                                 &executor()->getCatalog()->getDataMgr());
     } catch (...) {
       return nullptr;

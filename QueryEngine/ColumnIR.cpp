@@ -104,7 +104,7 @@ std::vector<llvm::Value*> CodeGenerator::codegenColVar(const Analyzer::ColumnVar
                                                        const bool fetch_column,
                                                        const bool update_query_plan,
                                                        const CompilationOptions& co) {
-  const bool hoist_literals = co.hoist_literals_;
+  const bool hoist_literals = co.hoist_literals;
   auto col_id = col_var->get_column_id();
   const int rte_idx = adjusted_range_table_index(col_var);
   CHECK_LT(static_cast<size_t>(rte_idx), cgen_state_->frag_offsets_.size());

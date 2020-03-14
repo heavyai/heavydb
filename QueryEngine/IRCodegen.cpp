@@ -424,8 +424,8 @@ std::shared_ptr<JoinHashTableInterface> Executor::buildCurrentLevelHashTable(
       hash_table_or_error = buildHashTableForQualifier(
           qual_bin_oper,
           query_infos,
-          co.device_type_ == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
-                                                     : MemoryLevel::CPU_LEVEL,
+          co.device_type == ExecutorDeviceType::GPU ? MemoryLevel::GPU_LEVEL
+                                                    : MemoryLevel::CPU_LEVEL,
           JoinHashTableInterface::HashType::OneToOne,
           column_cache);
       current_level_hash_table = hash_table_or_error.hash_table;
@@ -494,7 +494,7 @@ void Executor::codegenJoinLoops(const std::vector<JoinLoop>& join_loops,
         if (can_return_error || cgen_state_->needs_error_check_ ||
             eo.with_dynamic_watchdog) {
           createErrorCheckControlFlow(
-              query_func, eo.with_dynamic_watchdog, co.device_type_);
+              query_func, eo.with_dynamic_watchdog, co.device_type);
         }
         return loop_body_bb;
       },
@@ -577,7 +577,7 @@ Executor::GroupColLLVMValue Executor::groupByColumnCodegen(
         ar_ret_ty,
         {group_key, code_generator.posArg(arr_expr), array_idx});
     if (need_patch_unnest_double(
-            elem_ti, isArchMaxwell(co.device_type_), thread_mem_shared)) {
+            elem_ti, isArchMaxwell(co.device_type), thread_mem_shared)) {
       key_to_cache = spillDoubleElement(group_key, ar_ret_ty);
     } else {
       key_to_cache = group_key;

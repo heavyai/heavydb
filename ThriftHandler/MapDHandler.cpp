@@ -4615,6 +4615,7 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                            true,
                            ExecutorOptLevel::Default,
                            g_enable_dynamic_watchdog,
+                           true,
                            explain_optimized_ir ? ExecutorExplainType::Optimized
                                                 : ExecutorExplainType::Default,
                            intel_jit_profile_};
@@ -4680,6 +4681,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                            true,
                            ExecutorOptLevel::Default,
                            g_enable_dynamic_watchdog,
+                           true,
                            ExecutorExplainType::Default,
                            intel_jit_profile_};
   ExecutionOptions eo = {false,

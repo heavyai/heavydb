@@ -210,7 +210,7 @@ llvm::Value* CodeGenerator::codegenFunctionOper(
   const auto& ret_ti = function_oper->get_type_info();
   CHECK(ret_ti.is_integer() || ret_ti.is_fp() || ret_ti.is_boolean() ||
         ret_ti.is_array());
-  if (ret_ti.is_array() && co.device_type_ == ExecutorDeviceType::GPU) {
+  if (ret_ti.is_array() && co.device_type == ExecutorDeviceType::GPU) {
     throw QueryMustRunOnCpu();
   }
   auto ret_ty = ext_arg_type_to_llvm_type(ext_func_sig.getRet(), cgen_state_->context_);

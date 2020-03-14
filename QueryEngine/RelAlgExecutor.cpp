@@ -82,12 +82,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
     }
   }
   LOG(INFO) << "Query unable to run in GPU mode, retrying on CPU";
-  CompilationOptions co_cpu{ExecutorDeviceType::CPU,
-                            co.hoist_literals_,
-                            co.opt_level_,
-                            co.with_dynamic_watchdog_,
-                            co.explain_type_,
-                            co.register_intel_jit_listener_};
+  auto co_cpu = CompilationOptions::makeCpuOnly(co);
+
   if (render_info) {
     render_info->setForceNonInSituData();
   }
@@ -1088,8 +1084,8 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
   UpdateTriggeredCacheInvalidator::invalidateCaches();
 
   auto co = co_in;
-  co.hoist_literals_ = false;  // disable literal hoisting as it interferes with dict
-                               // encoded string updates
+  co.hoist_literals = false;  // disable literal hoisting as it interferes with dict
+                              // encoded string updates
 
   auto execute_update_for_node =
       [this, &co, &eo_in](const auto node, auto& work_unit, const bool is_aggregate) {
@@ -1103,8 +1099,7 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
         auto execute_update_ra_exe_unit =
             [this, &co, &eo_in, &table_infos, &update_params](
                 const RelAlgExecutionUnit& ra_exe_unit, const bool is_aggregate) {
-              CompilationOptions co_project = co;
-              co_project.device_type_ = ExecutorDeviceType::CPU;
+              CompilationOptions co_project = CompilationOptions::makeCpuOnly(co);
 
               auto eo = eo_in;
               if (update_params.tableIsTemporary()) {
@@ -1197,8 +1192,7 @@ void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
   const auto work_unit =
       createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-  CompilationOptions co_project = co;
-  co_project.device_type_ = ExecutorDeviceType::CPU;
+  CompilationOptions co_project = CompilationOptions::makeCpuOnly(co);
 
   try {
     DeleteTriggeredCacheInvalidator::invalidateCaches();
@@ -1238,8 +1232,7 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
 
   auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-  CompilationOptions co_project = co;
-  co_project.device_type_ = ExecutorDeviceType::CPU;
+  CompilationOptions co_project = CompilationOptions::makeCpuOnly(co);
 
   if (project->isSimple()) {
     CHECK_EQ(size_t(1), project->inputCount());
@@ -1333,7 +1326,7 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
     CHECK_EQ(size_t(1), project->inputCount());
     const auto input_ra = project->getInput(0);
     if (dynamic_cast<const RelSort*>(input_ra)) {
-      co_project.device_type_ = ExecutorDeviceType::CPU;
+      co_project.device_type = ExecutorDeviceType::CPU;
       const auto& input_table =
           get_temporary_table(&temporary_tables_, -input_ra->getId());
       CHECK(input_table);
@@ -1375,7 +1368,7 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
       get_table_infos(table_func_work_unit.exe_unit.input_descs, executor_);
 
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                                     co.device_type_,
+                                                     co.device_type,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
                                                      executor_),
@@ -1477,7 +1470,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
     const std::vector<InputTableInfo>& query_infos,
     const CompilationOptions& co,
     ColumnCacheMap& column_cache_map) {
-  const auto memory_level = co.device_type_ == ExecutorDeviceType::GPU
+  const auto memory_level = co.device_type == ExecutorDeviceType::GPU
                                 ? MemoryLevel::GPU_LEVEL
                                 : MemoryLevel::CPU_LEVEL;
   const auto join_table_or_err =
@@ -1495,7 +1488,7 @@ std::unique_ptr<WindowFunctionContext> RelAlgExecutor::createWindowFunctionConte
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   const size_t elem_count = query_infos.front().info.fragments.front().getNumTuples();
   auto context = std::make_unique<WindowFunctionContext>(
-      window_func, join_table_or_err.hash_table, elem_count, co.device_type_);
+      window_func, join_table_or_err.hash_table, elem_count, co.device_type);
   for (const auto& order_key : order_keys) {
     const auto order_col =
         std::dynamic_pointer_cast<const Analyzer::ColumnVar>(order_key);
@@ -2100,7 +2093,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
   }
   CHECK(false);
   return {std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                      co.device_type_,
+                                      co.device_type,
                                       QueryMemoryDescriptor(),
                                       nullptr,
                                       executor_),
@@ -2287,7 +2280,7 @@ void build_render_targets(RenderInfo& render_info,
 inline bool can_use_bump_allocator(const RelAlgExecutionUnit& ra_exe_unit,
                                    const CompilationOptions& co,
                                    const ExecutionOptions& eo) {
-  return g_enable_bump_allocator && (co.device_type_ == ExecutorDeviceType::GPU) &&
+  return g_enable_bump_allocator && (co.device_type == ExecutorDeviceType::GPU) &&
          !eo.output_columnar_hint && ra_exe_unit.sort_info.order_entries.empty();
 }
 
@@ -2315,7 +2308,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     if (!g_enable_window_functions) {
       throw std::runtime_error("Window functions support is disabled");
     }
-    co.device_type_ = ExecutorDeviceType::CPU;
+    co.device_type = ExecutorDeviceType::CPU;
     computeWindow(work_unit.exe_unit, co, eo, column_cache, queue_time_ms);
   }
   if (!eo.just_explain && eo.find_push_down_candidates) {
@@ -2324,6 +2317,9 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
     if (!selected_filters.empty() || eo.just_calcite_explain) {
       return ExecutionResult(selected_filters, eo.find_push_down_candidates);
     }
+  }
+  if (render_info && render_info->isPotentialInSituRender()) {
+    co.allow_lazy_fetch = false;
   }
   const auto body = work_unit.body;
   CHECK(body);
@@ -2343,7 +2339,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
   auto ra_exe_unit = decide_approx_count_distinct_implementation(
-      work_unit.exe_unit, table_infos, executor_, co.device_type_, target_exprs_owned_);
+      work_unit.exe_unit, table_infos, executor_, co.device_type, target_exprs_owned_);
   auto max_groups_buffer_entry_guess = work_unit.max_groups_buffer_entry_guess;
   if (is_window_execution_unit(ra_exe_unit)) {
     CHECK_EQ(table_infos.size(), size_t(1));
@@ -2371,7 +2367,7 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   }
 
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                                     co.device_type_,
+                                                     co.device_type,
                                                      QueryMemoryDescriptor(),
                                                      nullptr,
                                                      executor_),
@@ -2536,7 +2532,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
   ra_exe_unit_in.use_bump_allocator = false;
 
   auto result = ExecutionResult{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                                            co.device_type_,
+                                                            co.device_type,
                                                             QueryMemoryDescriptor(),
                                                             nullptr,
                                                             executor_),
@@ -2564,7 +2560,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
       LOG(WARNING) << "Multifrag query ran out of memory, retrying with multifragment "
                       "kernels disabled.";
       const auto ra_exe_unit = decide_approx_count_distinct_implementation(
-          ra_exe_unit_in, table_infos, executor_, co.device_type_, target_exprs_owned_);
+          ra_exe_unit_in, table_infos, executor_, co.device_type, target_exprs_owned_);
       ColumnCacheMap column_cache;
       result = {executor_->executeWorkUnit(max_groups_buffer_entry_guess,
                                            is_agg,
@@ -2589,11 +2585,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
     render_info->setForceNonInSituData();
   }
 
-  CompilationOptions co_cpu{ExecutorDeviceType::CPU,
-                            co.hoist_literals_,
-                            co.opt_level_,
-                            co.with_dynamic_watchdog_};
-
+  const auto co_cpu = CompilationOptions::makeCpuOnly(co);
   // Only reset the group buffer entry guess if we ran out of slots, which
   // suggests a
   // highly pathological input which prevented a good estimation of distinct tuple
@@ -2606,7 +2598,7 @@ ExecutionResult RelAlgExecutor::handleOutOfMemoryRetry(
   while (true) {
     iteration_ctr++;
     auto ra_exe_unit = decide_approx_count_distinct_implementation(
-        ra_exe_unit_in, table_infos, executor_, co_cpu.device_type_, target_exprs_owned_);
+        ra_exe_unit_in, table_infos, executor_, co_cpu.device_type, target_exprs_owned_);
     ColumnCacheMap column_cache;
     try {
       result = {executor_->executeWorkUnit(max_groups_buffer_entry_guess,

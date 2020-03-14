@@ -167,7 +167,7 @@ void TargetExprCodegen::codegen(
   uint32_t col_off{0};
   const bool is_simple_count =
       target_info.is_agg && target_info.agg_kind == kCOUNT && !target_info.is_distinct;
-  if (co.device_type_ == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory() &&
+  if (co.device_type == ExecutorDeviceType::GPU && query_mem_desc.threadsShareMemory() &&
       is_simple_count && (!arg_expr || arg_expr->get_type_info().get_notnull())) {
     CHECK_EQ(size_t(1), agg_fn_names.size());
     const auto chosen_bytes = query_mem_desc.getPaddedSlotWidthBytes(slot_index);
@@ -355,7 +355,7 @@ void TargetExprCodegen::codegen(
       CHECK_EQ(agg_chosen_bytes, sizeof(int64_t));
       CHECK(!chosen_type.is_fp());
       group_by_and_agg->codegenCountDistinct(
-          target_idx, target_expr, agg_args, query_mem_desc, co.device_type_);
+          target_idx, target_expr, agg_args, query_mem_desc, co.device_type);
     } else {
       const auto& arg_ti = target_info.agg_arg_type;
       if (need_skip_null && !arg_ti.is_geometry()) {
@@ -380,7 +380,7 @@ void TargetExprCodegen::codegen(
         agg_args.push_back(null_lv);
       }
       if (!target_info.is_distinct) {
-        if (co.device_type_ == ExecutorDeviceType::GPU &&
+        if (co.device_type == ExecutorDeviceType::GPU &&
             query_mem_desc.threadsShareMemory()) {
           agg_fname += "_shared";
           if (needs_unnest_double_patch) {
@@ -481,7 +481,7 @@ void TargetExprCodegenBuilder::operator()(const Analyzer::Expr* target_expr,
 
   if (!(query_mem_desc.getQueryDescriptionType() ==
         QueryDescriptionType::NonGroupedAggregate) &&
-      (co.device_type_ == ExecutorDeviceType::GPU) && target_info.is_agg &&
+      (co.device_type == ExecutorDeviceType::GPU) && target_info.is_agg &&
       (target_info.agg_kind == kSAMPLE)) {
     sample_exprs_to_codegen.emplace_back(target_expr,
                                          target_info,
@@ -565,7 +565,7 @@ void TargetExprCodegenBuilder::codegenSampleExpressions(
     llvm::Value* out_row_idx,
     GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
   CHECK(!sample_exprs_to_codegen.empty());
-  CHECK(co.device_type_ == ExecutorDeviceType::GPU);
+  CHECK(co.device_type == ExecutorDeviceType::GPU);
   if (sample_exprs_to_codegen.size() == 1 &&
       !sample_exprs_to_codegen.front().target_info.sql_type.is_varlen()) {
     codegenSingleSlotSampleExpression(group_by_and_agg,
@@ -602,7 +602,7 @@ void TargetExprCodegenBuilder::codegenSingleSlotSampleExpression(
     GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
   CHECK_EQ(size_t(1), sample_exprs_to_codegen.size());
   CHECK(!sample_exprs_to_codegen.front().target_info.sql_type.is_varlen());
-  CHECK(co.device_type_ == ExecutorDeviceType::GPU);
+  CHECK(co.device_type == ExecutorDeviceType::GPU);
   // no need for the atomic if we only have one SAMPLE target
   sample_exprs_to_codegen.front().codegen(group_by_and_agg,
                                           executor,
@@ -627,7 +627,7 @@ void TargetExprCodegenBuilder::codegenMultiSlotSampleExpressions(
     GroupByAndAggregate::DiamondCodegen& diamond_codegen) const {
   CHECK(sample_exprs_to_codegen.size() > 1 ||
         sample_exprs_to_codegen.front().target_info.sql_type.is_varlen());
-  CHECK(co.device_type_ == ExecutorDeviceType::GPU);
+  CHECK(co.device_type == ExecutorDeviceType::GPU);
   const auto& first_sample_expr = sample_exprs_to_codegen.front();
   auto target_lvs = group_by_and_agg->codegenAggArg(first_sample_expr.target_expr, co);
   CHECK_GE(target_lvs.size(), size_t(1));

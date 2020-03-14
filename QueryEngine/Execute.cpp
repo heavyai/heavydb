@@ -1172,7 +1172,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     ColumnCacheMap& column_cache) {
   INJECT_TIMER(Exec_executeWorkUnit);
   const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
-  const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type_);
+  const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type);
   CHECK(!query_infos.empty());
   if (!max_groups_buffer_entry_guess) {
     // The query has failed the first execution attempt because of running out
@@ -1196,11 +1196,12 @@ ResultSetPtr Executor::executeWorkUnitImpl(
             execution_dispatch.compile(max_groups_buffer_entry_guess,
                                        crt_min_byte_width,
                                        {device_type,
-                                        co.hoist_literals_,
-                                        co.opt_level_,
-                                        co.with_dynamic_watchdog_,
-                                        co.explain_type_,
-                                        co.register_intel_jit_listener_},
+                                        co.hoist_literals,
+                                        co.opt_level,
+                                        co.with_dynamic_watchdog,
+                                        co.allow_lazy_fetch,
+                                        co.explain_type,
+                                        co.register_intel_jit_listener},
                                        eo,
                                        column_fetcher,
                                        has_cardinality_estimation);
@@ -1343,7 +1344,7 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
        ++fragment_index) {
     // We may want to consider in the future allowing this to execute on devices other
     // than CPU
-    execution_dispatch.run(co.device_type_,
+    execution_dispatch.run(co.device_type,
                            0,
                            eo,
                            column_fetcher,
@@ -1385,7 +1386,7 @@ ResultSetPtr Executor::executeTableFunction(
                              table_infos.front(),
                              &compilation_context,
                              column_fetcher,
-                             co.device_type_,
+                             co.device_type,
                              this);
 }
 

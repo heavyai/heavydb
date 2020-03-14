@@ -73,7 +73,7 @@ void TableFunctionCompilationContext::compile(const TableFunctionExecutionUnit& 
                                               const CompilationOptions& co,
                                               Executor* executor) {
   generateEntryPoint(exe_unit);
-  if (co.device_type_ == ExecutorDeviceType::GPU) {
+  if (co.device_type == ExecutorDeviceType::GPU) {
     generateGpuKernel();
   }
   finalize(co, executor);
@@ -218,7 +218,7 @@ void TableFunctionCompilationContext::finalize(const CompilationOptions& co,
   LOG(IR) << "Table Function Entry Point IR\n"
           << serialize_llvm_object(entry_point_func_);
 
-  if (co.device_type_ == ExecutorDeviceType::GPU) {
+  if (co.device_type == ExecutorDeviceType::GPU) {
     LOG(IR) << "Table Function Kernel IR\n" << serialize_llvm_object(kernel_func_);
 
     CHECK(executor);

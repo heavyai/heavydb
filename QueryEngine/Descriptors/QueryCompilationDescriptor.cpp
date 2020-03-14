@@ -27,8 +27,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
     const ExecutionOptions& eo,
     RenderInfo* render_info,
     Executor* executor) {
-  compilation_device_type_ = co.device_type_;
-  hoist_literals_ = co.hoist_literals_;
+  compilation_device_type_ = co.device_type;
+  hoist_literals_ = co.hoist_literals;
   CHECK(executor);
   std::unique_ptr<QueryMemoryDescriptor> query_mem_desc;
   const auto cat = executor->getCatalog();
@@ -39,7 +39,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryCompilationDescriptor::compile(
         co,
         eo,
         cat->getDataMgr().getCudaMgr(),
-        render_info && render_info->isPotentialInSituRender() ? false : true,
+        co.allow_lazy_fetch,  // TODO(adb): remove param and just read from CO
         executor->row_set_mem_owner_,
         max_groups_buffer_entry_guess,
         crt_min_byte_width,

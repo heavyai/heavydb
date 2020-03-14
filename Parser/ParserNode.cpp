@@ -2186,8 +2186,8 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
       calcite_mgr
           ->process(query_state_proxy, pg_shim(select_stmt), {}, true, false, false, true)
           .plan_result;
-  CompilationOptions co = {
-      device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
+  CompilationOptions co = CompilationOptions::defaults(device_type);
+  co.opt_level = ExecutorOptLevel::LoopStrengthReduction;
   // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
   // struct
   ExecutionOptions eo = {false,

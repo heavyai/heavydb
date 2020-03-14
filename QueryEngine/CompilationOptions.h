@@ -26,12 +26,34 @@ enum class ExecutorExplainType { Default, Optimized };
 enum class ExecutorDispatchMode { KernelPerFragment, MultifragmentKernel };
 
 struct CompilationOptions {
-  ExecutorDeviceType device_type_;
-  bool hoist_literals_;
-  const ExecutorOptLevel opt_level_;
-  const bool with_dynamic_watchdog_;
-  const ExecutorExplainType explain_type_{ExecutorExplainType::Default};
-  const bool register_intel_jit_listener_{false};
+  ExecutorDeviceType device_type;
+  bool hoist_literals;
+  ExecutorOptLevel opt_level;
+  bool with_dynamic_watchdog;
+  bool allow_lazy_fetch;
+  ExecutorExplainType explain_type{ExecutorExplainType::Default};
+  bool register_intel_jit_listener{false};
+
+  static CompilationOptions makeCpuOnly(const CompilationOptions& in) {
+    return CompilationOptions{ExecutorDeviceType::CPU,
+                              in.hoist_literals,
+                              in.opt_level,
+                              in.with_dynamic_watchdog,
+                              in.allow_lazy_fetch,
+                              in.explain_type,
+                              in.register_intel_jit_listener};
+  }
+
+  static CompilationOptions defaults(
+      const ExecutorDeviceType device_type = ExecutorDeviceType::GPU) {
+    return CompilationOptions{device_type,
+                              true,
+                              ExecutorOptLevel::Default,
+                              false,
+                              true,
+                              ExecutorExplainType::Default,
+                              false};
+  }
 };
 
 enum class ExecutorType { Native, Extern };
