@@ -3,6 +3,12 @@
 HTTP_DEPS="https://dependencies.mapd.com/thirdparty"
 SCRIPTS_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
+if [ "$TSAN" = "false" ]; then
+  ARROW_TSAN="-DARROW_USE_TSAN=ON"
+elif [ "$TSAN" = "false" ]; then
+  ARROW_TSAN=""
+fi
+
 function download() {
     wget --continue "$1"
 }
@@ -79,6 +85,7 @@ function install_arrow() {
     -DARROW_PARQUET=ON \
     -DARROW_CUDA=ON \
     -DTHRIFT_HOME=${THRIFT_HOME:-$PREFIX} \
+    ${ARROW_TSAN} \
     ..
   makej
   make_install
