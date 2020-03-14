@@ -26,8 +26,7 @@
  *
  */
 
-#ifndef CATALOG_H
-#define CATALOG_H
+#pragma once
 
 #include <atomic>
 #include <cstdint>
@@ -40,17 +39,17 @@
 #include <utility>
 #include <vector>
 
-#include "ColumnDescriptor.h"
-#include "DashboardDescriptor.h"
-#include "DictDescriptor.h"
-#include "ForeignServer.h"
-#include "ForeignTable.h"
-#include "LinkDescriptor.h"
-#include "SessionInfo.h"
-#include "SysCatalog.h"
-#include "TableDescriptor.h"
-
 #include "Calcite/Calcite.h"
+#include "Catalog/ColumnDescriptor.h"
+#include "Catalog/DashboardDescriptor.h"
+#include "Catalog/DictDescriptor.h"
+#include "Catalog/ForeignServer.h"
+#include "Catalog/ForeignTable.h"
+#include "Catalog/LinkDescriptor.h"
+#include "Catalog/SessionInfo.h"
+#include "Catalog/SysCatalog.h"
+#include "Catalog/TableDescriptor.h"
+#include "Catalog/Types.h"
 #include "DataMgr/DataMgr.h"
 #include "LockMgr/LockMgrImpl.h"
 #include "QueryEngine/CompilationOptions.h"
@@ -284,25 +283,6 @@ class Catalog final {
   void createDefaultServersIfNotExists();
 
  protected:
-  using TableDescriptorMap = std::map<std::string, TableDescriptor*>;
-  using TableDescriptorMapById = std::map<int, TableDescriptor*>;
-  using LogicalToPhysicalTableMapById = std::map<int32_t, std::vector<int32_t>>;
-  using ColumnKey = std::tuple<int, std::string>;
-  using ColumnDescriptorMap = std::map<ColumnKey, ColumnDescriptor*>;
-  using ColumnIdKey = std::tuple<int, int>;
-  using ColumnDescriptorMapById = std::map<ColumnIdKey, ColumnDescriptor*>;
-  using DictDescriptorMapById = std::map<DictRef, std::unique_ptr<DictDescriptor>>;
-  using DashboardDescriptorMap =
-      std::map<std::string, std::shared_ptr<DashboardDescriptor>>;
-  using LinkDescriptorMap = std::map<std::string, LinkDescriptor*>;
-  using LinkDescriptorMapById = std::map<int, LinkDescriptor*>;
-  using DeletedColumnPerTableMap =
-      std::unordered_map<const TableDescriptor*, const ColumnDescriptor*>;
-  using ForeignServerMap =
-      std::map<std::string, std::shared_ptr<foreign_storage::ForeignServer>>;
-  using ForeignServerMapById =
-      std::map<int, std::shared_ptr<foreign_storage::ForeignServer>>;
-
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();
   void updateDictionaryNames();
@@ -434,5 +414,3 @@ class Catalog final {
 };
 
 }  // namespace Catalog_Namespace
-
-#endif  // CATALOG_H

@@ -43,7 +43,6 @@
 
 #include "Grantee.h"
 #include "LdapServer.h"
-#include "LinkDescriptor.h"
 #include "ObjectRoleDescriptor.h"
 #include "PkiServer.h"
 #include "RestServer.h"
