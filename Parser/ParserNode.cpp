@@ -2944,6 +2944,10 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
     if (td->isView) {
       throw std::runtime_error("Adding columns to a view is not supported.");
     }
+    if (table_is_temporary(td)) {
+      throw std::runtime_error(
+          "Adding columns to temporary tables is not yet supported.");
+    }
   };
 
   check_alter_table_privilege(session, td);
@@ -3124,7 +3128,11 @@ void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Table " + *table + " does not exist.");
   }
   if (td->isView) {
-    throw std::runtime_error("Dropping column from a view is not supported.");
+    throw std::runtime_error("Dropping a column from a view is not supported.");
+  }
+  if (table_is_temporary(td)) {
+    throw std::runtime_error(
+        "Dropping a column from a temporary table is not yet supported.");
   }
 
   check_alter_table_privilege(session, td);

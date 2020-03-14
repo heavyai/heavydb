@@ -375,7 +375,10 @@ TEST(AlterColumnTest5, Drop_sharding_column) {
   EXPECT_THROW(run_ddl_statement("alter table x drop column i;"), std::runtime_error);
 }
 
-TEST(AlterColumnTest5, Drop_temp_table_column) {
+TEST(AlterColumnTest5, DISABLED_Drop_temp_table_column) {
+  // TODO(adb): The Catalog still runs SQLite queries with drop column. While they are
+  // essentially no-op queries, we should disable running the queries for both alter and
+  // drop in a consistent way. Currently Alter/drop are disabled on temp tables.
   EXPECT_NO_THROW(run_ddl_statement("drop table if exists x;"););
   EXPECT_NO_THROW(run_ddl_statement("create TEMPORARY table x (i int, j int);"););
   EXPECT_NO_THROW(run_query("insert into x values (0,0);"););
