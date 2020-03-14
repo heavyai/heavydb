@@ -700,21 +700,9 @@ if(MAPD_IMMERSE_DOWNLOAD)
 endif()
 
 ## Go web server
-find_program(GO_EXECUTABLE NAMES go)
-if(NOT GO_EXECUTABLE)
-  message(FATAL_ERROR "go not found. Install Go(lang).")
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/Immerse")
+  add_subdirectory(Immerse)
 endif()
-file(GLOB_RECURSE GOLANG_SOURCES RELATIVE ${CMAKE_SOURCE_DIR} ThirdParty/go/src/mapd/vendor/**/*.go)
-add_custom_command(
-  OUTPUT ${CMAKE_BINARY_DIR}/bin/omnisci_web_server
-  COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/ThirdParty/go/src/mapd/vendor/ ${CMAKE_BINARY_DIR}/go/src/
-  COMMAND GOPATH=${CMAKE_BINARY_DIR}/go ${GO_EXECUTABLE} build -ldflags "-X main.version=${CPACK_PACKAGE_VERSION}" -o ${CMAKE_BINARY_DIR}/bin/omnisci_web_server ${CMAKE_SOURCE_DIR}/OmniSciWebServer.go
-  DEPENDS OmniSciWebServer.go ${GOLANG_SOURCES}
-  )
-add_custom_target(omnisci_web_server ALL DEPENDS ${CMAKE_BINARY_DIR}/bin/omnisci_web_server)
-install(PROGRAMS ${CMAKE_BINARY_DIR}/bin/omnisci_web_server DESTINATION bin)
-list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/bin/omnisci_web_server)
-list(APPEND ADDITIONAL_MAKE_CLEAN_FILES ${CMAKE_BINARY_DIR}/go)
 
 add_subdirectory(ThirdParty/generate_cert)
 
@@ -746,7 +734,6 @@ if(${CMAKE_SYSTEM_NAME} STREQUAL "Linux")
     install(FILES systemd/omnisci-sds.conf.in DESTINATION systemd)
   endif()
   install(FILES systemd/omnisci_server.service.in systemd/omnisci_server@.service.in DESTINATION systemd)
-  install(FILES systemd/omnisci_web_server.service.in systemd/omnisci_web_server@.service.in DESTINATION systemd)
   install(FILES systemd/omnisci.conf.in DESTINATION systemd)
   install(PROGRAMS systemd/install_omnisci_systemd.sh DESTINATION systemd)
 endif()
@@ -838,13 +825,11 @@ install(FILES docker/Dockerfile docker/Dockerfile.mapd docker/README.md DESTINAT
 execute_process(
   COMMAND ln -sf omnisql mapdql
   COMMAND ln -sf omnisci_server mapd_server
-  COMMAND ln -sf omnisci_web_server mapd_web_server
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin
   )
 install(FILES
   ${CMAKE_BINARY_DIR}/bin/mapdql
   ${CMAKE_BINARY_DIR}/bin/mapd_server
-  ${CMAKE_BINARY_DIR}/bin/mapd_web_server
   DESTINATION "bin"
   )
 execute_process(
