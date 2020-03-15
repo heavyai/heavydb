@@ -154,6 +154,7 @@ class BufferMgr : public AbstractBufferMgr {  // implements
                             const size_t num_bytes = 0) override;
   void checkpoint() override;
   void checkpoint(const int db_id, const int tb_id) override;
+  void removeTableRelatedDS(const int db_id, const int table_id) override;
 
   // Buffer API
   AbstractBuffer* alloc(const size_t num_bytes = 0) override;

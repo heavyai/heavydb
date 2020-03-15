@@ -49,8 +49,7 @@ class CreateForeignServerTest : public DBHandlerTestFixture {
 
     ASSERT_GT(foreign_server->id, 0);
     ASSERT_EQ("test_server", foreign_server->name);
-    ASSERT_EQ(foreign_storage::DataWrapper::CSV_WRAPPER_NAME,
-              foreign_server->data_wrapper.name);
+    ASSERT_EQ(foreign_storage::DataWrapperType::CSV, foreign_server->data_wrapper_type);
     ASSERT_EQ(OMNISCI_ROOT_USER_ID, foreign_server->user_id);
 
     ASSERT_TRUE(
@@ -156,7 +155,7 @@ TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
       "CREATE SERVER test_server FOREIGN DATA WRAPPER invalid_wrapper WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
   std::string error_message{
-      "Exception: Invalid data wrapper type \"invalid_wrapper\". "
+      "Exception: Invalid data wrapper type \"INVALID_WRAPPER\". "
       "Data wrapper type must be one of the following: OMNISCI_CSV, OMNISCI_PARQUET."};
   queryAndAssertException(query, error_message);
 }

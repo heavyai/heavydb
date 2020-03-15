@@ -17,12 +17,129 @@
 #pragma once
 
 #include <gtest/gtest.h>
+#include <boost/format.hpp>
+#include <boost/optional.hpp>
 
 #include "Catalog/Catalog.h"
 #include "ThriftHandler/DBHandler.h"
 
+constexpr int64_t True = 1;
+constexpr int64_t False = 0;
+constexpr void* Null = nullptr;
+constexpr int64_t Null_i = NULL_INT;
+
 /**
- * Helper gtest fixture class for executing SQL queries through DBHandler.
+ * Helper class for asserting equality between a result set represented as a boost variant
+ * and a thrift result set (TRowSet).
+ */
+class AssertValueEqualsVisitor : public boost::static_visitor<> {
+ public:
+  AssertValueEqualsVisitor(const TDatum& datum,
+                           const TColumnType& column_type,
+                           const size_t row,
+                           const size_t column)
+      : datum_(datum), column_type_(column_type), row_(row), column_(column) {}
+
+  template <typename T>
+  void operator()(const T& value) const {
+    throw std::runtime_error{"Unexpected type used in test assertion. Type id: "s +
+                             typeid(value).name()};
+  }
+
+  void operator()(const int64_t value) const {
+    EXPECT_EQ(datum_.val.int_val, value)
+        << boost::format("At row: %d, column: %d") % row_ % column_;
+  }
+
+  void operator()(const double value) const {
+    EXPECT_DOUBLE_EQ(datum_.val.real_val, value)
+        << boost::format("At row: %d, column: %d") % row_ % column_;
+  }
+
+  void operator()(const float value) const {
+    EXPECT_FLOAT_EQ(datum_.val.real_val, value)
+        << boost::format("At row: %d, column: %d") % row_ % column_;
+  }
+
+  void operator()(const std::string& value) const {
+    auto str_value = datum_.val.str_val;
+    auto type = column_type_.col_type.type;
+    if (isGeo(type) && !datum_.val.arr_val.empty()) {
+      throw std::runtime_error{
+          "Test assertions on non-WKT Geospatial data type projections are currently not "
+          "supported"};
+    } else if (isDateOrTime(type)) {
+      auto type_info = SQLTypeInfo(getDatetimeSqlType(type),
+                                   column_type_.col_type.precision,
+                                   column_type_.col_type.scale);
+      auto datetime_datum = StringToDatum(value, type_info);
+      EXPECT_EQ(datetime_datum.bigintval, datum_.val.int_val)
+          << boost::format("At row: %d, column: %d") % row_ % column_;
+    } else {
+      EXPECT_EQ(str_value, value)
+          << boost::format("At row: %d, column: %d") % row_ % column_;
+    }
+  }
+
+  void operator()(const ScalarTargetValue& value) const {
+    boost::apply_visitor(AssertValueEqualsVisitor{datum_, column_type_, row_, column_},
+                         value);
+  }
+
+  void operator()(const NullableString& value) const {
+    if (value.which() == 0) {
+      boost::apply_visitor(AssertValueEqualsVisitor{datum_, column_type_, row_, column_},
+                           value);
+    } else {
+      EXPECT_TRUE(datum_.is_null)
+          << boost::format("At row: %d, column: %d") % row_ % column_;
+    }
+  }
+
+  void operator()(const ArrayTargetValue& values_optional) const {
+    const auto& values = values_optional.get();
+    ASSERT_EQ(values.size(), datum_.val.arr_val.size());
+    for (size_t i = 0; i < values.size(); i++) {
+      boost::apply_visitor(
+          AssertValueEqualsVisitor{datum_.val.arr_val[i], column_type_, row_, column_},
+          values[i]);
+    }
+  }
+
+ private:
+  bool isGeo(const TDatumType::type type) const {
+    return (type == TDatumType::type::POINT || type == TDatumType::type::LINESTRING ||
+            type == TDatumType::type::POLYGON || type == TDatumType::type::MULTIPOLYGON);
+  }
+
+  bool isDateOrTime(const TDatumType::type type) const {
+    return (type == TDatumType::type::TIME || type == TDatumType::type::TIMESTAMP ||
+            type == TDatumType::type::DATE);
+  }
+
+  SQLTypes getDatetimeSqlType(const TDatumType::type type) const {
+    if (type == TDatumType::type::TIME) {
+      return kTIME;
+    }
+    if (type == TDatumType::type::TIMESTAMP) {
+      return kTIMESTAMP;
+    }
+    if (type == TDatumType::type::DATE) {
+      return kDATE;
+    }
+    throw std::runtime_error{"Unexpected type TDatumType::type : " +
+                             std::to_string(type)};
+  }
+
+  const TDatum& datum_;
+  const TColumnType& column_type_;
+  const size_t row_;
+  const size_t column_;
+};
+
+/**
+ * Helper gtest fixture class for executing SQL queries through DBHandler
+ * and asserting result sets.
  */
 class DBHandlerTestFixture : public testing::Test {
  public:
@@ -172,7 +289,128 @@ class DBHandlerTestFixture : public testing::Test {
     }
   }
 
+  void assertResultSetEqual(
+      const std::vector<std::vector<TargetValue>>& expected_result_set,
+      const TQueryResult actual_result) {
+    auto& row_set = actual_result.row_set;
+    auto row_count = getRowCount(row_set);
+    ASSERT_EQ(expected_result_set.size(), row_count)
+        << "Returned result set does not have the expected number of rows";
+
+    if (row_count == 0) {
+      return;
+    }
+
+    auto expected_column_count = expected_result_set[0].size();
+    size_t column_count = getColumnCount(row_set);
+    ASSERT_EQ(expected_column_count, column_count)
+        << "Returned result set does not have the expected number of columns";
+
+    for (size_t r = 0; r < row_count; r++) {
+      auto row = getRow(row_set, r);
+      for (size_t c = 0; c < column_count; c++) {
+        auto column_value = row[c];
+        auto expected_column_value = expected_result_set[r][c];
+        boost::apply_visitor(
+            AssertValueEqualsVisitor{column_value, row_set.row_desc[c], r, c},
+            expected_column_value);
+      }
+    }
+  }
+
+  /**
+   * Helper method used to cast a vector of scalars to an optional of the same object.
+   */
+  boost::optional<std::vector<ScalarTargetValue>> array(
+      std::vector<ScalarTargetValue> array) {
+    return array;
+  }
+
+  /**
+   * Helper method used to cast an integer literal to an int64_t (in order to
+   * avoid compiler ambiguity).
+   */
+  constexpr int64_t i(int64_t i) { return i; }
+
  private:
+  size_t getRowCount(const TRowSet& row_set) {
+    size_t row_count;
+    if (row_set.is_columnar) {
+      row_count = row_set.columns.empty() ? 0 : row_set.columns[0].nulls.size();
+    } else {
+      row_count = row_set.rows.size();
+    }
+    return row_count;
+  }
+
+  size_t getColumnCount(const TRowSet& row_set) {
+    size_t column_count;
+    if (row_set.is_columnar) {
+      column_count = row_set.columns.size();
+    } else {
+      column_count = row_set.rows.empty() ? 0 : row_set.rows[0].cols.size();
+    }
+    return column_count;
+  }
+
+  void setDatumArray(std::vector<TDatum>& datum_array, const TColumnData& column_data) {
+    if (!column_data.int_col.empty()) {
+      for (auto& item : column_data.int_col) {
+        TDatum datum_item{};
+        datum_item.val.int_val = item;
+        datum_array.emplace_back(datum_item);
+      }
+    } else if (!column_data.real_col.empty()) {
+      for (auto& item : column_data.real_col) {
+        TDatum datum_item{};
+        datum_item.val.real_val = item;
+        datum_array.emplace_back(datum_item);
+      }
+    } else if (!column_data.str_col.empty()) {
+      for (auto& item : column_data.str_col) {
+        TDatum datum_item{};
+        datum_item.val.str_val = item;
+        datum_array.emplace_back(datum_item);
+      }
+    } else {
+      throw std::runtime_error{"Unexpected column data"};
+    }
+  }
+
+  void setDatum(TDatum& datum, const TColumnData& column_data, const size_t index) {
+    if (!column_data.int_col.empty()) {
+      datum.val.int_val = column_data.int_col[index];
+    } else if (!column_data.real_col.empty()) {
+      datum.val.real_val = column_data.real_col[index];
+    } else if (!column_data.str_col.empty()) {
+      datum.val.str_val = column_data.str_col[index];
+    } else if (!column_data.arr_col.empty()) {
+      std::vector<TDatum> datum_array{};
+      setDatumArray(datum_array, column_data.arr_col[index].data);
+      datum.val.arr_val = datum_array;
+    } else {
+      throw std::runtime_error{"Unexpected column data"};
+    }
+  }
+
+  std::vector<TDatum> getRow(const TRowSet& row_set, const size_t index) {
+    if (row_set.is_columnar) {
+      std::vector<TDatum> row{};
+      for (auto& column : row_set.columns) {
+        TDatum datum{};
+        if (column.nulls[index]) {
+          datum.is_null = true;
+        } else {
+          setDatum(datum, column.data, index);
+        }
+        row.emplace_back(datum);
+      }
+      return row;
+    } else {
+      return row_set.rows[index].cols;
+    }
+  }
+
   static std::unique_ptr<DBHandler> db_handler_;
   static TSessionId session_id_;
   static TSessionId admin_session_id_;

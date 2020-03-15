@@ -509,11 +509,19 @@ class TypedImportBuffer : boost::noncopyable {
 };
 
 class Loader {
+  using LoadCallbackType =
+      std::function<bool(const std::vector<std::unique_ptr<TypedImportBuffer>>&,
+                         std::vector<DataBlockPtr>&,
+                         size_t)>;
+
  public:
-  Loader(Catalog_Namespace::Catalog& c, const TableDescriptor* t)
+  Loader(Catalog_Namespace::Catalog& c,
+         const TableDescriptor* t,
+         LoadCallbackType load_callback = nullptr)
       : catalog_(c)
       , table_desc_(t)
-      , column_descs_(c.getAllColumnMetadataForTable(t->tableId, false, false, true)) {
+      , column_descs_(c.getAllColumnMetadataForTable(t->tableId, false, false, true))
+      , load_callback_(load_callback) {
     init();
   }
 
@@ -566,6 +574,7 @@ class Loader {
   Catalog_Namespace::Catalog& catalog_;
   const TableDescriptor* table_desc_;
   std::list<const ColumnDescriptor*> column_descs_;
+  LoadCallbackType load_callback_;
   Fragmenter_Namespace::InsertData insert_data_;
   std::map<int, StringDictionary*> dict_map_;
 

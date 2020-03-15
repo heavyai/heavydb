@@ -2630,6 +2630,10 @@ bool Loader::loadImpl(
     const std::vector<std::unique_ptr<TypedImportBuffer>>& import_buffers,
     size_t row_count,
     bool checkpoint) {
+  if (load_callback_) {
+    auto data_blocks = get_data_block_pointers(import_buffers);
+    return load_callback_(import_buffers, data_blocks, row_count);
+  }
   if (table_desc_->nShards) {
     std::vector<OneShardBuffers> all_shard_import_buffers;
     std::vector<size_t> all_shard_row_counts;
@@ -3173,11 +3177,13 @@ void Importer::load(const std::vector<std::unique_ptr<TypedImportBuffer>>& impor
 }
 
 void Importer::checkpoint(const int32_t start_epoch) {
-  if (load_failed) {
-    // rollback to starting epoch - undo all the added records
-    loader->setTableEpoch(start_epoch);
-  } else {
-    loader->checkpoint();
+  if (loader->getTableDesc()->storageType != StorageType::FOREIGN_TABLE) {
+    if (load_failed) {
+      // rollback to starting epoch - undo all the added records
+      loader->setTableEpoch(start_epoch);
+    } else {
+      loader->checkpoint();
+    }
   }
 
   if (loader->getTableDesc()->persistenceLevel ==
@@ -4931,16 +4937,25 @@ void RenderGroupAnalyzer::seedFromExistingTableContents(
   // start timer
   auto seedTimer = timer_start();
 
+  // start with a fresh tree
+  _rtree = nullptr;
+  _numRenderGroups = 0;
+
   // get the table descriptor
   const auto& cat = loader->getCatalog();
+  if (loader->getTableDesc()->storageType == StorageType::FOREIGN_TABLE) {
+    if (DEBUG_RENDER_GROUP_ANALYZER) {
+      LOG(INFO) << "DEBUG: Table is a foreign table";
+    }
+    _rtree = std::make_unique<RTree>();
+    CHECK(_rtree);
+    return;
+  }
+
   const std::string& tableName = loader->getTableDesc()->tableName;
   const auto td = cat.getMetadataForTable(tableName);
   CHECK(td);
   CHECK(td->fragmenter);
-
-  // start with a fresh tree
-  _rtree = nullptr;
-  _numRenderGroups = 0;
 
   // if the table is empty, just make an empty tree
   if (td->fragmenter->getFragmentsForQuery().getPhysicalNumTuples() == 0) {

@@ -230,6 +230,8 @@ class FileMgr : public AbstractBufferMgr {  // implements
   std::string getFileMgrBasePath() const { return fileMgrBasePath_; }
   void closeRemovePhysical();
 
+  void removeTableRelatedDS(const int db_id, const int table_id) override;
+
   void free_page(std::pair<FileInfo*, int>&& page);
   const std::pair<const int, const int> get_fileMgrKey() const { return fileMgrKey_; }
 

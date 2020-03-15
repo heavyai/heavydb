@@ -202,6 +202,17 @@ public class ForeignTableTest extends DDLTest {
   }
 
   @Test
+  public void createForeignTableEscapeOption() throws Exception {
+    final JsonObject expectedJsonObject = getJsonFromFile("cft_EscapeOption.json");
+    final TPlanResult result =
+            processDdlCommand("CREATE FOREIGN TABLE test_table (test_column_1 INTEGER) "
+                    + "SERVER test_server WITH ( escape = '\\');");
+    final JsonObject actualJsonObject =
+            gson.fromJson(result.plan_result, JsonObject.class);
+    assertEquals(expectedJsonObject, actualJsonObject);
+  }
+
+  @Test
   public void createForeignTableSchema() throws Exception {
     final JsonObject expectedJsonObject = getJsonFromFile("cft_Schema.json");
     final TPlanResult result =

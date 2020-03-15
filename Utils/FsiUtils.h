@@ -16,14 +16,13 @@
 
 #pragma once
 
-#include "ForeignServer.h"
-
-#include "OptionsContainer.h"
-#include "TableDescriptor.h"
+#include "Catalog/TableDescriptor.h"
 
 namespace foreign_storage {
-struct ForeignTable : public TableDescriptor, public OptionsContainer {
-  ForeignServer* foreign_server;
-  static constexpr std::array<char const*, 1> supported_options{"FRAGMENT_SIZE"};
-};
+void inline validate_non_foreign_table_write(const TableDescriptor* table_descriptor) {
+  if (table_descriptor && table_descriptor->storageType == StorageType::FOREIGN_TABLE) {
+    throw std::runtime_error{
+        "DELETE, INSERT, OR UPDATE commands are not supported for foreign tables."};
+  }
+}
 }  // namespace foreign_storage

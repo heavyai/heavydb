@@ -878,4 +878,8 @@ void BufferMgr::getChunkMetadataVecForKeyPrefix(
 const std::vector<BufferList>& BufferMgr::getSlabSegments() {
   return slab_segments_;
 }
+
+void BufferMgr::removeTableRelatedDS(const int db_id, const int table_id) {
+  UNREACHABLE();
+}
 }  // namespace Buffer_Namespace

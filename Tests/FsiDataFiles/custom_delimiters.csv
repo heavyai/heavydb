@@ -1,0 +1,4 @@
+boolean|int|float|time|timestamp|date|text|quoted_text|int_array|quoted_text_array
+true|30000|10.1|00:00:10|1/1/2000 00:00:59|1/1/2000|text_1|"quoted text"|{1}|{"quoted text"}
+false|30500|100.12|00:10:00|6/15/2020 00:59:59|6/15/2020|text_2|"quoted text 2"|{1_2_3}|{"quoted text 2"_"quoted text 3"}
+true|31000|1000.123|10:00:00|12/31/2500 23:59:59|12/31/2500|text_3|"quoted text 3"|{10_20_30}|{"quoted_text_4"_"quoted_text_5"}

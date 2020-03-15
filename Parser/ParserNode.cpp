@@ -62,6 +62,7 @@
 #include "Shared/measure.h"
 #include "Shared/shard_key.h"
 #include "TableArchiver/TableArchiver.h"
+#include "Utils/FsiUtils.h"
 #include "gen-cpp/CalciteServer.h"
 #include "parser.h"
 
@@ -1473,6 +1474,7 @@ void InsertStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   if (td->isView) {
     throw std::runtime_error("Insert to views is not supported yet.");
   }
+  foreign_storage::validate_non_foreign_table_write(td);
   query.set_result_table_id(td->tableId);
   std::list<int> result_col_list;
   if (column_list.empty()) {
@@ -2435,8 +2437,14 @@ std::list<ColumnDescriptor> LocalConnector::getColumnDescriptors(AggregatedResul
 void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy,
                                                bool validate_table) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
-  LocalConnector local_connector;
+  auto& catalog = session->getCatalog();
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+          catalog, table_name_);
+  const auto td = td_with_lock();
+  foreign_storage::validate_non_foreign_table_write(td);
 
+  LocalConnector local_connector;
   bool populate_table = false;
 
   if (leafs_connector_) {
@@ -2448,7 +2456,6 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
     }
   }
 
-  auto& catalog = session->getCatalog();
   auto get_target_column_descriptors = [this, &catalog](const TableDescriptor* td) {
     std::vector<const ColumnDescriptor*> target_column_descriptors;
     if (column_list_.empty()) {
@@ -2467,11 +2474,6 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
     return target_column_descriptors;
   };
-
-  const auto td_with_lock =
-      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-          catalog, table_name_);
-  const auto td = td_with_lock();
 
   bool is_temporary = table_is_temporary(td);
 

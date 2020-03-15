@@ -20,6 +20,7 @@
 
 #include "Catalog/Catalog.h"
 #include "Catalog/SysCatalog.h"
+#include "DataMgr/ForeignStorage/CsvDataWrapper.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserNode.h"
 #include "Shared/StringTransform.h"
@@ -123,8 +124,8 @@ void CreateForeignServerCommand::execute(TQueryResult& _return) {
   }
 
   auto& current_user = session_ptr_->get_currentUser();
-  auto foreign_server = std::make_unique<foreign_storage::ForeignServer>(
-      foreign_storage::DataWrapper{ddl_payload_["dataWrapper"].GetString()});
+  auto foreign_server = std::make_unique<foreign_storage::ForeignServer>();
+  foreign_server->data_wrapper_type = to_upper(ddl_payload_["dataWrapper"].GetString());
   foreign_server->name = server_name;
   foreign_server->user_id = current_user.userId;
   foreign_server->populateOptionsMap(ddl_payload_["options"]);
@@ -383,6 +384,16 @@ void CreateForeignTableCommand::setTableDetails(const std::string& table_name,
   if (ddl_payload_.HasMember("options") && !ddl_payload_["options"].IsNull()) {
     CHECK(ddl_payload_["options"].IsObject());
     foreign_table.populateOptionsMap(ddl_payload_["options"]);
+
+    if (foreign_table.foreign_server->data_wrapper_type ==
+        foreign_storage::DataWrapperType::CSV) {
+      foreign_storage::CsvDataWrapper::validateOptions(&foreign_table);
+    }
+  }
+
+  if (const auto it = foreign_table.options.find("FRAGMENT_SIZE");
+      it != foreign_table.options.end()) {
+    foreign_table.maxFragRows = std::stoi(it->second);
   }
 }
 

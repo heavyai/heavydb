@@ -1,0 +1,4 @@
+text,quoted_text,int_array
+NIL,|quoted \|text\||,[1]
+text_1,|quoted text|,[1,2]
+NIL,|"quoted" "text"|,[3,4,5]

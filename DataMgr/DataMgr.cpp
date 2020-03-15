@@ -24,6 +24,7 @@
 #include "BufferMgr/CpuBufferMgr/CpuBufferMgr.h"
 #include "BufferMgr/GpuCudaBufferMgr/GpuCudaBufferMgr.h"
 #include "FileMgr/GlobalFileMgr.h"
+#include "PersistentStorageMgr/PersistentStorageMgr.h"
 
 #ifdef __APPLE__
 #include <sys/sysctl.h>
@@ -40,6 +41,8 @@
 using namespace std;
 using namespace Buffer_Namespace;
 using namespace File_Namespace;
+
+extern bool g_enable_fsi;
 
 namespace Data_Namespace {
 
@@ -153,7 +156,13 @@ size_t DataMgr::getTotalSystemMemory() const {
 void DataMgr::populateMgrs(const SystemParameters& system_parameters,
                            const size_t userSpecifiedNumReaderThreads) {
   bufferMgrs_.resize(2);
-  bufferMgrs_[0].push_back(new GlobalFileMgr(0, dataDir_, userSpecifiedNumReaderThreads));
+  if (g_enable_fsi) {
+    bufferMgrs_[0].push_back(
+        new PersistentStorageMgr(dataDir_, userSpecifiedNumReaderThreads));
+  } else {
+    bufferMgrs_[0].push_back(
+        new GlobalFileMgr(0, dataDir_, userSpecifiedNumReaderThreads));
+  }
   levelSizes_.push_back(1);
   size_t cpuBufferSize = system_parameters.cpu_buffer_mem_bytes;
   if (cpuBufferSize == 0) {  // if size is not specified
@@ -209,7 +218,12 @@ void DataMgr::convertDB(const std::string basePath) {
     LOG(FATAL) << "Path to directory mapd_data to convert DB does not exist.";
   }
 
-  GlobalFileMgr* gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
+  GlobalFileMgr* gfm;
+  if (g_enable_fsi) {
+    gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
+  } else {
+    gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
+  }
   size_t defaultPageSize = gfm->getDefaultPageSize();
   LOG(INFO) << "Database conversion started.";
   FileMgr* fm_base_db =
@@ -229,7 +243,12 @@ void DataMgr::createTopLevelMetadata()
   chunkKey[0] = 0;  // top level db_id
   chunkKey[1] = 0;  // top level tb_id
 
-  GlobalFileMgr* gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
+  GlobalFileMgr* gfm;
+  if (g_enable_fsi) {
+    gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
+  } else {
+    gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
+  }
   auto fm_top = gfm->getFileMgr(chunkKey);
   if (dynamic_cast<File_Namespace::FileMgr*>(fm_top)) {
     static_cast<File_Namespace::FileMgr*>(fm_top)->createTopLevelMetadata();
@@ -485,20 +504,37 @@ void DataMgr::checkpoint() {
 }
 
 void DataMgr::removeTableRelatedDS(const int db_id, const int tb_id) {
-  dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->removeTableRelatedDS(db_id, tb_id);
+  bufferMgrs_[0][0]->removeTableRelatedDS(db_id, tb_id);
 }
 
 void DataMgr::setTableEpoch(const int db_id, const int tb_id, const int start_epoch) {
-  dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])
-      ->setTableEpoch(db_id, tb_id, start_epoch);
+  GlobalFileMgr* gfm;
+  if (g_enable_fsi) {
+    gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
+  } else {
+    gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
+  }
+  gfm->setTableEpoch(db_id, tb_id, start_epoch);
 }
 
 size_t DataMgr::getTableEpoch(const int db_id, const int tb_id) {
-  return dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0])->getTableEpoch(db_id, tb_id);
+  GlobalFileMgr* gfm;
+  if (g_enable_fsi) {
+    gfm = dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
+  } else {
+    gfm = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
+  }
+  return gfm->getTableEpoch(db_id, tb_id);
 }
 
 GlobalFileMgr* DataMgr::getGlobalFileMgr() const {
-  auto global_file_mgr = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
+  GlobalFileMgr* global_file_mgr;
+  if (g_enable_fsi) {
+    global_file_mgr =
+        dynamic_cast<PersistentStorageMgr*>(bufferMgrs_[0][0])->getGlobalFileMgr();
+  } else {
+    global_file_mgr = dynamic_cast<GlobalFileMgr*>(bufferMgrs_[0][0]);
+  }
   CHECK(global_file_mgr);
   return global_file_mgr;
 }
