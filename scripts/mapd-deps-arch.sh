@@ -31,6 +31,7 @@ yay -S \
     python-numpy \
     snappy \
     thrift \
+    vulkan-headers \
     wget \
     zlib
 
