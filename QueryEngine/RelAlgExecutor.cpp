@@ -1104,6 +1104,7 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
               auto eo = eo_in;
               if (update_params.tableIsTemporary()) {
                 eo.output_columnar_hint = true;
+                co_project.allow_lazy_fetch = false;
               }
 
               auto update_callback = yieldUpdateCallback(update_params);

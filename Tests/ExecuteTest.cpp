@@ -12811,8 +12811,6 @@ TEST(Update, UsingDateColumns) {
     return;
   }
 
-  SKIP_WITH_TEMP_TABLES();  // disable lazy fetch
-
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
     run_ddl_statement("drop table if exists chelsea_updates;");
