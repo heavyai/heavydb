@@ -2779,7 +2779,9 @@ void Catalog::createShardedTable(
         logicalToPhysicalTableMapById_.emplace(logical_tb_id, physicalTables);
     CHECK(it_ok.second);
     /* update sqlite mapd_logical_to_physical in sqlite database */
-    updateLogicalToPhysicalTableMap(logical_tb_id);
+    if (!table_is_temporary(&td)) {
+      updateLogicalToPhysicalTableMap(logical_tb_id);
+    }
   }
 }
 
