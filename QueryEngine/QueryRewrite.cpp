@@ -190,6 +190,26 @@ std::shared_ptr<Analyzer::CaseExpr> QueryRewriter::generateCaseForDomainValues(
       case_expr_list.front().second->get_type_info(), false, case_expr_list, else_expr);
 }
 
+namespace {
+
+// TODO(adb): centralize and share (e..g with insert_one_dict_str)
+bool check_string_id_overflow(const int32_t string_id, const SQLTypeInfo& ti) {
+  switch (ti.get_size()) {
+    case 1:
+      return string_id > max_valid_int_value<int8_t>();
+    case 2:
+      return string_id > max_valid_int_value<int16_t>();
+    case 4:
+      return string_id > max_valid_int_value<int32_t>();
+    default:
+      UNREACHABLE();
+  }
+  UNREACHABLE();
+  return false;
+}
+
+}  // namespace
+
 /* Rewrites an update query of the form `SELECT new_value, OFFSET_IN_FRAGMENT() FROM t
  * WHERE <update_filter_condition>` to `SELECT CASE WHEN <update_filer_condition> THEN
  * new_value ELSE existing value END FROM t`
@@ -238,14 +258,21 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
 
         auto string_id =
             string_dict->getOrAdd(*original_constant_expr->get_constval().stringval);
-        // TODO(adb): handle string id invalid or out of bounds
+        if (check_string_id_overflow(string_id, column_to_update->get_type_info())) {
+          throw std::runtime_error(
+              "Ran out of space in dictionary, cannot update column with dictionary "
+              "encoded string value. Dictionary ID: " +
+              std::to_string(dict_id));
+        }
+        if (string_id == inline_int_null_value<int32_t>()) {
+          string_id = inline_fixed_encoding_null_val(column_to_update->get_type_info());
+        }
 
         // Codegen expects a string value. The string will be
         // resolved to its ID during Constant codegen. Copy the string from the
         // original expr
         Datum new_string_datum{.stringval = new std::string(
                                    *original_constant_expr->get_constval().stringval)};
-        // TODO(adb): handle null
 
         new_column_value =
             makeExpr<Analyzer::Constant>(column_to_update->get_type_info(),
