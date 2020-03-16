@@ -57,6 +57,8 @@ RUN mkdir -p /usr/share/glvnd/egl_vendor.d && \
 RUN mkdir -p /usr/local/share/glvnd/egl_vendor.d && \
     echo '{ "file_format_version" : "1.0.0", "ICD" : { "library_path" : "libEGL_nvidia.so.0" } }' > /usr/local/share/glvnd/egl_vendor.d/10_nvidia.json
 
+RUN echo > /etc/ld.so.preload
+
 RUN curl -OJ https://internal-dependencies.mapd.com/mapd-deps/mapd-deps-prebuilt.sh \
     && USER=root sudo bash ./mapd-deps-prebuilt.sh \
     && rm mapd-deps-prebuilt.sh
