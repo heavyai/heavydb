@@ -140,7 +140,7 @@ TEST_F(HighCardinalityStringEnv, PerfectHashNoFallback) {
                                 *cat,
                                 nullptr,
                                 /*has_cardinality_estimation=*/false,
-                                column_cache);
+                                column_cache)[0];
   EXPECT_TRUE(result);
   EXPECT_EQ(result->rowCount(), size_t(1));
   auto row = result->getNextRow(false, false);
@@ -249,7 +249,7 @@ TEST_F(HighCardinalityStringEnv, BaselineFallbackTest) {
                                 *cat,
                                 nullptr,
                                 /*has_cardinality_estimation=*/true,
-                                column_cache);
+                                column_cache)[0];
   EXPECT_TRUE(result);
   EXPECT_EQ(result->rowCount(), size_t(1));
   auto row = result->getNextRow(false, false);
@@ -317,7 +317,7 @@ TEST_F(HighCardinalityStringEnv, BaselineNoFilters) {
                                 *cat,
                                 nullptr,
                                 /*has_cardinality_estimation=*/false,
-                                column_cache);
+                                column_cache)[0];
   EXPECT_TRUE(result);
   EXPECT_EQ(result->rowCount(), size_t(2));
   {

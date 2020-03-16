@@ -96,6 +96,7 @@ class ColumnFetcher {
       const size_t thread_idx) const;
 
   const int8_t* getResultSetColumn(const InputColDescriptor* col_desc,
+                                   const int frag_id,
                                    const Data_Namespace::MemoryLevel memory_level,
                                    const int device_id,
                                    DeviceAllocator* device_allocator,
@@ -171,6 +172,7 @@ class ColumnFetcher {
 
   const int8_t* getResultSetColumn(const ResultSetPtr& buffer,
                                    const int table_id,
+                                   const int frag_id,
                                    const int col_id,
                                    const Data_Namespace::MemoryLevel memory_level,
                                    const int device_id,

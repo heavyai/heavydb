@@ -223,8 +223,8 @@ inline const ColumnDescriptor* get_column_descriptor_maybe(
   return table_id > 0 ? get_column_descriptor(col_id, table_id, cat) : nullptr;
 }
 
-inline const ResultSetPtr& get_temporary_table(const TemporaryTables* temporary_tables,
-                                               const int table_id) {
+inline const TemporaryTable& get_temporary_table(const TemporaryTables* temporary_tables,
+                                                 const int table_id) {
   CHECK_LT(table_id, 0);
   const auto it = temporary_tables->find(table_id);
   CHECK(it != temporary_tables->end());
@@ -242,7 +242,7 @@ inline const SQLTypeInfo get_column_type(const int col_id,
     return cd->columnType;
   }
   const auto& temp = get_temporary_table(temporary_tables, table_id);
-  return temp->getColType(col_id);
+  return temp.getColType(col_id);
 }
 
 // TODO(alex): Adjust interfaces downstream and make this not needed.
@@ -413,7 +413,7 @@ class Executor {
   /**
    * Returns pointer to the intermediate tables vector currently stored by this executor.
    */
-  const TemporaryTables* getTemporaryTables() { return temporary_tables_; }
+  const TemporaryTables* getTemporaryTables() const;
 
   /**
    * Returns a string dictionary proxy using the currently active row set memory owner.
@@ -452,8 +452,6 @@ class Executor {
 
   const std::shared_ptr<RowSetMemoryOwner> getRowSetMemoryOwner() const;
 
-  const TemporaryTables* getTemporaryTables() const;
-
   Fragmenter_Namespace::TableInfo getTableInfo(const int table_id) const;
 
   const TableGeneration& getTableGeneration(const int table_id) const;
@@ -484,7 +482,7 @@ class Executor {
   unsigned blockSize() const;
   size_t maxGpuSlabSize() const;
 
-  ResultSetPtr executeWorkUnit(size_t& max_groups_buffer_entry_guess,
+  TemporaryTable executeWorkUnit(size_t& max_groups_buffer_entry_guess,
                                const bool is_agg,
                                const std::vector<InputTableInfo>&,
                                const RelAlgExecutionUnit&,
@@ -789,18 +787,18 @@ class Executor {
       std::shared_ptr<RowSetMemoryOwner>,
       const QueryMemoryDescriptor&) const;
 
-  ResultSetPtr executeWorkUnitImpl(size_t& max_groups_buffer_entry_guess,
-                                   const bool is_agg,
-                                   const bool allow_single_frag_table_opt,
-                                   const std::vector<InputTableInfo>&,
-                                   const RelAlgExecutionUnit&,
-                                   const CompilationOptions&,
-                                   const ExecutionOptions& options,
-                                   const Catalog_Namespace::Catalog&,
-                                   std::shared_ptr<RowSetMemoryOwner>,
-                                   RenderInfo* render_info,
-                                   const bool has_cardinality_estimation,
-                                   ColumnCacheMap& column_cache);
+  TemporaryTable executeWorkUnitImpl(size_t& max_groups_buffer_entry_guess,
+                                     const bool is_agg,
+                                     const bool allow_single_frag_table_opt,
+                                     const std::vector<InputTableInfo>&,
+                                     const RelAlgExecutionUnit&,
+                                     const CompilationOptions&,
+                                     const ExecutionOptions& options,
+                                     const Catalog_Namespace::Catalog&,
+                                     std::shared_ptr<RowSetMemoryOwner>,
+                                     RenderInfo* render_info,
+                                     const bool has_cardinality_estimation,
+                                     ColumnCacheMap& column_cache);
 
   std::vector<llvm::Value*> inlineHoistedLiterals();
 

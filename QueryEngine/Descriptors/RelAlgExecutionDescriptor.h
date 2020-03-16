@@ -30,10 +30,16 @@ class ExecutionResult {
  public:
   ExecutionResult();
 
-  ExecutionResult(const std::shared_ptr<ResultSet>& rows,
+  ExecutionResult(const ResultSetPtr& rows,
                   const std::vector<TargetMetaInfo>& targets_meta);
 
   ExecutionResult(ResultSetPtr&& result, const std::vector<TargetMetaInfo>& targets_meta);
+
+  ExecutionResult(const TemporaryTable& results,
+                  const std::vector<TargetMetaInfo>& targets_meta);
+
+  ExecutionResult(TemporaryTable&& results,
+                  const std::vector<TargetMetaInfo>& targets_meta);
 
   ExecutionResult(const ExecutionResult& that);
 
@@ -44,11 +50,18 @@ class ExecutionResult {
 
   ExecutionResult& operator=(const ExecutionResult& that);
 
-  const std::shared_ptr<ResultSet>& getRows() const { return result_; }
+  const ResultSetPtr& getRows() const {
+    return results_[0];
+  }
 
-  bool empty() const { return !result_; }
+  bool empty() const { return results_.empty(); }
 
-  const ResultSetPtr& getDataPtr() const { return result_; }
+  const ResultSetPtr& getDataPtr() const {
+    CHECK_EQ(results_.getFragCount(), 1);
+    return results_[0];
+  }
+
+  const TemporaryTable& getTable() const { return results_; }
 
   const std::vector<TargetMetaInfo>& getTargetsMeta() const { return targets_meta_; }
 
@@ -57,12 +70,12 @@ class ExecutionResult {
   const bool isFilterPushDownEnabled() const { return filter_push_down_enabled_; }
 
   void setQueueTime(const int64_t queue_time_ms) {
-    CHECK(result_);
-    result_->setQueueTime(queue_time_ms);
+    CHECK(!results_.empty());
+    results_[0]->setQueueTime(queue_time_ms);
   }
 
   std::string toString() const {
-    return ::typeName(this) + "(" + ::toString(result_) + ", " +
+    return ::typeName(this) + "(" + ::toString(results_) + ", " +
            ::toString(targets_meta_) + ")";
   }
 
@@ -81,7 +94,7 @@ class ExecutionResult {
   }
 
  private:
-  ResultSetPtr result_;
+  TemporaryTable results_;
   std::vector<TargetMetaInfo> targets_meta_;
   // filters chosen to be pushed down
   std::vector<PushedDownFilterInfo> pushed_down_filter_info_;

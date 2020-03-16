@@ -354,6 +354,12 @@ class RelAlgExecutor : private StorageIOFacility {
     CHECK(it_ok.second);
   }
 
+  void addTemporaryTable(const int table_id, const TemporaryTable& table) {
+    CHECK_LT(table_id, 0);
+    const auto it_ok = temporary_tables_.emplace(table_id, table);
+    CHECK(it_ok.second);
+  }
+
   void eraseFromTemporaryTables(const int table_id) { temporary_tables_.erase(table_id); }
 
   void handleNop(RaExecutionDesc& ed);
