@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 8d66fad
+                5.2.0dev 2878cc0
               </div>
             
           
@@ -1416,7 +1416,8 @@
 <dl class="function">
 <dt id="_CPPv4NK23ArrowResultSetConverter14getArrowResultEv">
 <span id="_CPPv3NK23ArrowResultSetConverter14getArrowResultEv"></span><span id="_CPPv2NK23ArrowResultSetConverter14getArrowResultEv"></span><span id="ArrowResultSetConverter::getArrowResultC"></span><span class="target" id="class_arrow_result_set_converter_1aa044af6ece3e6475e4cc9c7bffbaec16"></span><a class="reference internal" href="../struct/struct_arrow_result.html#_CPPv411ArrowResult" title="ArrowResult">ArrowResult</a> <code class="sig-name descname">getArrowResult</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK23ArrowResultSetConverter14getArrowResultEv" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dd><p>Serialize an Arrow result to IPC memory. Users are responsible for freeing all CPU IPC buffers using deallocateArrowResultBuffer. GPU buffers will become owned by the caller upon deserialization, and will be automatically freed when they go out of scope. </p>
+</dd></dl>
 
 </div>
 <div class="breathe-sectiondef docutils container">
@@ -1427,8 +1428,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK23ArrowResultSetConverter14convertToArrowERN5arrow3ipc14DictionaryMemoE">
-<span id="_CPPv3NK23ArrowResultSetConverter14convertToArrowERN5arrow3ipc14DictionaryMemoE"></span><span id="_CPPv2NK23ArrowResultSetConverter14convertToArrowERN5arrow3ipc14DictionaryMemoE"></span><span id="ArrowResultSetConverter::convertToArrow__arrow::ipc::DictionaryMemoRC"></span><span class="target" id="class_arrow_result_set_converter_1ad65fd2238cae2d33ef7a2a1ecca0353e"></span>std::shared_ptr&lt;arrow::RecordBatch&gt; <code class="sig-name descname">convertToArrow</code><span class="sig-paren">(</span>arrow::ipc::DictionaryMemo &amp;<em>memo</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK23ArrowResultSetConverter14convertToArrowERN5arrow3ipc14DictionaryMemoE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK23ArrowResultSetConverter14convertToArrowEv">
+<span id="_CPPv3NK23ArrowResultSetConverter14convertToArrowEv"></span><span id="_CPPv2NK23ArrowResultSetConverter14convertToArrowEv"></span><span id="ArrowResultSetConverter::convertToArrowC"></span><span class="target" id="class_arrow_result_set_converter_1aa215f5fce3286fe49cdaaa5e24732d90"></span>std::shared_ptr&lt;arrow::RecordBatch&gt; <code class="sig-name descname">convertToArrow</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK23ArrowResultSetConverter14convertToArrowEv" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1437,23 +1438,13 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK23ArrowResultSetConverter18getArrowResultImplEv">
-<span id="_CPPv3NK23ArrowResultSetConverter18getArrowResultImplEv"></span><span id="_CPPv2NK23ArrowResultSetConverter18getArrowResultImplEv"></span><span id="ArrowResultSetConverter::getArrowResultImplC"></span><span class="target" id="class_arrow_result_set_converter_1a3540a655e89b26fadb37789f1a2b5481"></span><a class="reference internal" href="../struct/struct_arrow_result.html#_CPPv411ArrowResult" title="ArrowResult">ArrowResult</a> <code class="sig-name descname">getArrowResultImpl</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK23ArrowResultSetConverter18getArrowResultImplEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK23ArrowResultSetConverter9makeFieldEKNSt6stringERK11SQLTypeInfo">
+<span id="_CPPv3NK23ArrowResultSetConverter9makeFieldEKNSt6stringERK11SQLTypeInfo"></span><span id="_CPPv2NK23ArrowResultSetConverter9makeFieldEKNSt6stringERK11SQLTypeInfo"></span><span id="ArrowResultSetConverter::makeField__ssC.SQLTypeInfoCRC"></span><span class="target" id="class_arrow_result_set_converter_1acaf9437c8f0af5ef3ed3d93a3a70d376"></span>std::shared_ptr&lt;arrow::Field&gt; <code class="sig-name descname">makeField</code><span class="sig-paren">(</span><em class="property">const</em> std::string <em>name</em>, <em class="property">const</em> SQLTypeInfo &amp;<em>target_type</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK23ArrowResultSetConverter9makeFieldEKNSt6stringERK11SQLTypeInfo" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK23ArrowResultSetConverter9makeFieldEKNSt6stringERK11SQLTypeInfoRKNSt10shared_ptrIN5arrow5ArrayEEE">
-<span id="_CPPv3NK23ArrowResultSetConverter9makeFieldEKNSt6stringERK11SQLTypeInfoRKNSt10shared_ptrIN5arrow5ArrayEEE"></span><span id="_CPPv2NK23ArrowResultSetConverter9makeFieldEKNSt6stringERK11SQLTypeInfoRKNSt10shared_ptrIN5arrow5ArrayEEE"></span><span id="ArrowResultSetConverter::makeField__ssC.SQLTypeInfoCR.std::shared_ptr:arrow::Array:CRC"></span><span class="target" id="class_arrow_result_set_converter_1afc4f4b6e2aca71b9094f673a693e95e3"></span>std::shared_ptr&lt;arrow::Field&gt; <code class="sig-name descname">makeField</code><span class="sig-paren">(</span><em class="property">const</em> std::string <em>name</em>, <em class="property">const</em> SQLTypeInfo &amp;<em>target_type</em>, <em class="property">const</em> std::shared_ptr&lt;arrow::Array&gt; &amp;<em>dictionary</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK23ArrowResultSetConverter9makeFieldEKNSt6stringERK11SQLTypeInfoRKNSt10shared_ptrIN5arrow5ArrayEEE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK23ArrowResultSetConverter12getArrowTypeERK11SQLTypeInfoRKNSt10shared_ptrIN5arrow5ArrayEEE">
-<span id="_CPPv3NK23ArrowResultSetConverter12getArrowTypeERK11SQLTypeInfoRKNSt10shared_ptrIN5arrow5ArrayEEE"></span><span id="_CPPv2NK23ArrowResultSetConverter12getArrowTypeERK11SQLTypeInfoRKNSt10shared_ptrIN5arrow5ArrayEEE"></span><span id="ArrowResultSetConverter::getArrowType__SQLTypeInfoCR.std::shared_ptr:arrow::Array:CRC"></span><span class="target" id="class_arrow_result_set_converter_1a4a47b979e50fea2ec16ec584564cc64c"></span>std::shared_ptr&lt;arrow::DataType&gt; <code class="sig-name descname">getArrowType</code><span class="sig-paren">(</span><em class="property">const</em> SQLTypeInfo &amp;<em>mapd_type</em>, <em class="property">const</em> std::shared_ptr&lt;arrow::Array&gt; &amp;<em>dict_values</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK23ArrowResultSetConverter12getArrowTypeERK11SQLTypeInfoRKNSt10shared_ptrIN5arrow5ArrayEEE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK23ArrowResultSetConverter24getSerializedArrowOutputEv">
-<span id="_CPPv3NK23ArrowResultSetConverter24getSerializedArrowOutputEv"></span><span id="_CPPv2NK23ArrowResultSetConverter24getSerializedArrowOutputEv"></span><span id="ArrowResultSetConverter::getSerializedArrowOutputC"></span><span class="target" id="class_arrow_result_set_converter_1a413a34f053c8345cd38fa44a68bc133c"></span><a class="reference internal" href="#_CPPv423ArrowResultSetConverter" title="ArrowResultSetConverter">ArrowResultSetConverter</a>::<a class="reference internal" href="#_CPPv4N23ArrowResultSetConverter21SerializedArrowOutputE" title="ArrowResultSetConverter::SerializedArrowOutput">SerializedArrowOutput</a> <code class="sig-name descname">getSerializedArrowOutput</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK23ArrowResultSetConverter24getSerializedArrowOutputEv" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4NK23ArrowResultSetConverter24getSerializedArrowOutputEPN5arrow3ipc14DictionaryMemoE">
+<span id="_CPPv3NK23ArrowResultSetConverter24getSerializedArrowOutputEPN5arrow3ipc14DictionaryMemoE"></span><span id="_CPPv2NK23ArrowResultSetConverter24getSerializedArrowOutputEPN5arrow3ipc14DictionaryMemoE"></span><span id="ArrowResultSetConverter::getSerializedArrowOutput__arrow::ipc::DictionaryMemoPC"></span><span class="target" id="class_arrow_result_set_converter_1a600f2daa08a0222b49e60edb233e87d9"></span><a class="reference internal" href="#_CPPv423ArrowResultSetConverter" title="ArrowResultSetConverter">ArrowResultSetConverter</a>::<a class="reference internal" href="#_CPPv4N23ArrowResultSetConverter21SerializedArrowOutputE" title="ArrowResultSetConverter::SerializedArrowOutput">SerializedArrowOutput</a> <code class="sig-name descname">getSerializedArrowOutput</code><span class="sig-paren">(</span>arrow::ipc::DictionaryMemo *<em>memo</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK23ArrowResultSetConverter24getSerializedArrowOutputEPN5arrow3ipc14DictionaryMemoE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
@@ -1462,18 +1453,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4NK23ArrowResultSetConverter24reserveColumnBuilderSizeER13ColumnBuilderK6size_t">
-<span id="_CPPv3NK23ArrowResultSetConverter24reserveColumnBuilderSizeER13ColumnBuilderK6size_t"></span><span id="_CPPv2NK23ArrowResultSetConverter24reserveColumnBuilderSizeER13ColumnBuilderK6size_t"></span><span id="ArrowResultSetConverter::reserveColumnBuilderSize__ColumnBuilderR.sCC"></span><span class="target" id="class_arrow_result_set_converter_1a484a2358d9ea4eef33593428c2e96848"></span>void <code class="sig-name descname">reserveColumnBuilderSize</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N23ArrowResultSetConverter13ColumnBuilderE" title="ArrowResultSetConverter::ColumnBuilder">ColumnBuilder</a> &amp;<em>column_builder</em>, <em class="property">const</em> size_t <em>row_count</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK23ArrowResultSetConverter24reserveColumnBuilderSizeER13ColumnBuilderK6size_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4NK23ArrowResultSetConverter6appendER13ColumnBuilderRK10ValueArrayRKNSt10shared_ptrINSt6vectorIbEEEE">
 <span id="_CPPv3NK23ArrowResultSetConverter6appendER13ColumnBuilderRK10ValueArrayRKNSt10shared_ptrINSt6vectorIbEEEE"></span><span id="_CPPv2NK23ArrowResultSetConverter6appendER13ColumnBuilderRK10ValueArrayRKNSt10shared_ptrINSt6vectorIbEEEE"></span><span id="ArrowResultSetConverter::append__ColumnBuilderR.ValueArrayCR.std::shared_ptr:std::vector:b::CRC"></span><span class="target" id="class_arrow_result_set_converter_1a1bee321902e79d27dcd0a05de940a3ec"></span>void <code class="sig-name descname">append</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N23ArrowResultSetConverter13ColumnBuilderE" title="ArrowResultSetConverter::ColumnBuilder">ColumnBuilder</a> &amp;<em>column_builder</em>, <em class="property">const</em> ValueArray &amp;<em>values</em>, <em class="property">const</em> std::shared_ptr&lt;std::vector&lt;bool&gt;&gt; &amp;<em>is_valid</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK23ArrowResultSetConverter6appendER13ColumnBuilderRK10ValueArrayRKNSt10shared_ptrINSt6vectorIbEEEE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4I00ENK23ArrowResultSetConverter21appendToColumnBuilderEvR13ColumnBuilderRK10ValueArrayRKNSt10shared_ptrINSt6vectorIbEEEE">
-<span id="_CPPv3I00ENK23ArrowResultSetConverter21appendToColumnBuilderER13ColumnBuilderRK10ValueArrayRKNSt10shared_ptrINSt6vectorIbEEEE"></span><span id="_CPPv2I00ENK23ArrowResultSetConverter21appendToColumnBuilderER13ColumnBuilderRK10ValueArrayRKNSt10shared_ptrINSt6vectorIbEEEE"></span><span class="target" id="class_arrow_result_set_converter_1a06ab089e6cbca32d01d26994b58db109"></span>template&lt;typename <code class="sig-name descname">BuilderType</code>, typename <code class="sig-name descname">C_TYPE</code>&gt;<br />void <code class="sig-name descname">appendToColumnBuilder</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N23ArrowResultSetConverter13ColumnBuilderE" title="ArrowResultSetConverter::ColumnBuilder">ColumnBuilder</a> &amp;<em>column_builder</em>, <em class="property">const</em> ValueArray &amp;<em>values</em>, <em class="property">const</em> std::shared_ptr&lt;std::vector&lt;bool&gt;&gt; &amp;<em>is_valid</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4I00ENK23ArrowResultSetConverter21appendToColumnBuilderEvR13ColumnBuilderRK10ValueArrayRKNSt10shared_ptrINSt6vectorIbEEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
