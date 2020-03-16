@@ -72,12 +72,14 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
       }
       auto& frag_id_to_result = column_cache[table_id];
       if (frag_id_to_result.empty() || !frag_id_to_result.count(frag_id)) {
-        frag_id_to_result.insert(std::make_pair(
-            frag_id,
-            std::shared_ptr<const ColumnarResults>(columnarize_result(
-                executor->row_set_mem_owner_,
-                get_temporary_table(executor->temporary_tables_, hash_col.get_table_id()),
-                frag_id))));
+        auto& tmp_table =
+            get_temporary_table(executor->temporary_tables_, hash_col.get_table_id());
+        frag_id_to_result.insert(
+            std::make_pair(frag_id,
+                           std::shared_ptr<const ColumnarResults>(
+                               columnarize_result(executor->row_set_mem_owner_,
+                                                  tmp_table.getResultSet(frag_id),
+                                                  frag_id))));
       }
       col_frag = column_cache[table_id][frag_id].get();
     }
@@ -142,6 +144,10 @@ const int8_t* ColumnFetcher::getOneTableColumnFragment(
     std::list<ChunkIter>& chunk_iter_holder,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_id) const {
+  if (table_id < 0) {
+    return getResultSetColumn(table_id, frag_id, col_id, memory_level, device_id);
+  }
+
   static std::mutex varlen_chunk_mutex;  // TODO(alex): remove
   static std::mutex chunk_list_mutex;
   const auto fragments_it = all_tables_fragments.find(table_id);
@@ -266,16 +272,18 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
 }
 
 const int8_t* ColumnFetcher::getResultSetColumn(
-    const InputColDescriptor* col_desc,
+    const int table_id,
+    const int frag_id,
+    const int col_id,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_id) const {
-  CHECK(col_desc);
-  const auto table_id = col_desc->getScanDesc().getTableId();
-  return getResultSetColumn(get_temporary_table(executor_->temporary_tables_, table_id),
-                            table_id,
-                            col_desc->getColId(),
-                            memory_level,
-                            device_id);
+  return getResultSetColumn(
+      get_temporary_table(executor_->temporary_tables_, table_id).getResultSet(frag_id),
+      table_id,
+      frag_id,
+      col_id,
+      memory_level,
+      device_id);
 }
 
 const int8_t* ColumnFetcher::transferColumnIfNeeded(
@@ -306,6 +314,7 @@ const int8_t* ColumnFetcher::transferColumnIfNeeded(
 const int8_t* ColumnFetcher::getResultSetColumn(
     const ResultSetPtr& buffer,
     const int table_id,
+    const int frag_id,
     const int col_id,
     const Data_Namespace::MemoryLevel memory_level,
     const int device_id) const {
@@ -317,7 +326,6 @@ const int8_t* ColumnFetcher::getResultSetColumn(
           table_id, std::unordered_map<int, std::shared_ptr<const ColumnarResults>>()));
     }
     auto& frag_id_to_result = columnarized_table_cache_[table_id];
-    int frag_id = 0;
     if (frag_id_to_result.empty() || !frag_id_to_result.count(frag_id)) {
       frag_id_to_result.insert(
           std::make_pair(frag_id,

@@ -777,6 +777,11 @@ void MapDProgramOptions::fillAdvancedOptions() {
       "udf-compiler-path",
       po::value<std::string>(&udf_compiler_path),
       "Provide absolute path to clang++ used in udf compilation.");
+  developer_desc.add_options()("enable-multifrag-rs",
+                               po::value<bool>(&g_enable_multifrag_rs)
+                                   ->default_value(g_enable_multifrag_rs)
+                                   ->implicit_value(true),
+                               "Enable multifragment intermediate result sets");
 }
 
 namespace {

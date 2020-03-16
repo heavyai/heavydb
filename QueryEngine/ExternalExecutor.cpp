@@ -352,9 +352,9 @@ std::vector<TargetMetaInfo> create_table_schema(const PlanState* plan_state) {
     const int column_id = kv.first.getColId();
     SQLTypeInfo column_type;
     if (table_id < 0) {
-      const auto result_set =
+      const auto& table =
           get_temporary_table(plan_state->executor_->getTemporaryTables(), table_id);
-      column_type = result_set->getColType(column_id);
+      column_type = table.getColType(column_id);
     } else {
       const auto cd = catalog->getMetadataForColumn(table_id, column_id);
       column_type = cd->columnType;

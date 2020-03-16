@@ -51,6 +51,13 @@ struct ExecutionOptions {
   const bool just_calcite_explain;
   const double gpu_input_mem_limit_percent;  // punt to CPU if input memory exceeds this
   ExecutorType executor_type = ExecutorType::Native;
+  bool multifrag_result = false;
+
+  ExecutionOptions with_multifrag_result(bool enable = true) const {
+    ExecutionOptions eo = *this;
+    eo.multifrag_result = enable;
+    return eo;
+  }
 };
 
 #endif  // QUERYENGINE_COMPILATIONOPTIONS_H
