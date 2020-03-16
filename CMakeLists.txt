@@ -317,7 +317,8 @@ add_definitions("-DARROW_NO_DEPRECATED_API")
 include_directories(${Arrow_INCLUDE_DIRS})
 
 option(ENABLE_IMPORT_PARQUET "Enable Parquet Importer support" ON)
-if(ENABLE_IMPORT_PARQUET)
+# temporarily disable parquet if static linking due to issues with arrow+zstd
+if(ENABLE_IMPORT_PARQUET AND NOT PREFER_STATIC_LIBS)
   find_package(Parquet)
   if(NOT Parquet_FOUND)
     set(ENABLE_IMPORT_PARQUET OFF CACHE BOOL "Enable Parquet Importer support" FORCE)
