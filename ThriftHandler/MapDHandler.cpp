@@ -5758,6 +5758,17 @@ void MapDHandler::emergency_shutdown() {
 
 extern std::map<std::string, std::string> get_device_parameters();
 
+#define EXPOSE_THRIFT_MAP(TYPENAME)                                             \
+  {                                                                             \
+    std::map<int, const char*>::const_iterator it =                             \
+        _##TYPENAME##_VALUES_TO_NAMES.begin();                                  \
+    while (it != _##TYPENAME##_VALUES_TO_NAMES.end()) {                         \
+      _return.insert(std::pair<std::string, std::string>(                       \
+          #TYPENAME "." + std::string(it->second), std::to_string(it->first))); \
+      it++;                                                                     \
+    }                                                                           \
+  }
+
 void MapDHandler::get_device_parameters(std::map<std::string, std::string>& _return,
                                         const TSessionId& session) {
   const auto session_info = get_session_copy(session);
@@ -5765,6 +5776,11 @@ void MapDHandler::get_device_parameters(std::map<std::string, std::string>& _ret
   for (auto item : params) {
     _return.insert(item);
   }
+  EXPOSE_THRIFT_MAP(TDeviceType);
+  EXPOSE_THRIFT_MAP(TDatumType);
+  EXPOSE_THRIFT_MAP(TEncodingType);
+  EXPOSE_THRIFT_MAP(TExtArgumentType);
+  EXPOSE_THRIFT_MAP(TOutputBufferSizeType);
 }
 
 ExtArgumentType mapfrom(const TExtArgumentType::type& t) {
@@ -5795,6 +5811,8 @@ ExtArgumentType mapfrom(const TExtArgumentType::type& t) {
       return ExtArgumentType::PFloat;
     case TExtArgumentType::PDouble:
       return ExtArgumentType::PDouble;
+    case TExtArgumentType::PBool:
+      return ExtArgumentType::PBool;
     case TExtArgumentType::Bool:
       return ExtArgumentType::Bool;
     case TExtArgumentType::ArrayInt8:
@@ -5809,10 +5827,18 @@ ExtArgumentType mapfrom(const TExtArgumentType::type& t) {
       return ExtArgumentType::ArrayFloat;
     case TExtArgumentType::ArrayDouble:
       return ExtArgumentType::ArrayDouble;
+    case TExtArgumentType::ArrayBool:
+      return ExtArgumentType::ArrayBool;
     case TExtArgumentType::GeoPoint:
       return ExtArgumentType::GeoPoint;
+    case TExtArgumentType::GeoLineString:
+      return ExtArgumentType::GeoLineString;
     case TExtArgumentType::Cursor:
       return ExtArgumentType::Cursor;
+    case TExtArgumentType::GeoPolygon:
+      return ExtArgumentType::GeoPolygon;
+    case TExtArgumentType::GeoMultiPolygon:
+      return ExtArgumentType::GeoMultiPolygon;
   }
   UNREACHABLE();
   return ExtArgumentType{};
