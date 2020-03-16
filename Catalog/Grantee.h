@@ -30,7 +30,7 @@ class User;
 class Role;
 
 class Grantee {
-  typedef std::map<DBObjectKey, std::unique_ptr<DBObject>> DBObjectMap;
+  using DBObjectMap = std::map<DBObjectKey, std::unique_ptr<DBObject>>;
 
  public:
   Grantee(const std::string& name);

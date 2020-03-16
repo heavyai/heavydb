@@ -46,7 +46,4 @@ AggregatedColRange column_ranges_from_thrift(
 StringDictionaryGenerations string_dictionary_generations_from_thrift(
     const std::vector<TDictionaryGeneration>& thrift_string_dictionary_generations);
 
-TableGenerations table_generations_from_thrift(
-    const std::vector<TTableGeneration>& table_generations);
-
 #endif  // MAPDSERVER_H

@@ -24,6 +24,7 @@
 #include "EquiJoinCondition.h"
 #include "ErrorHandling.h"
 #include "ExpressionRewrite.h"
+#include "ExternalExecutor.h"
 #include "FromTableReordering.h"
 #include "InputMetadata.h"
 #include "JoinFilterPushDown.h"
@@ -42,6 +43,8 @@
 
 bool g_skip_intermediate_count{true};
 extern bool g_enable_bump_allocator;
+bool g_enable_interop{false};
+
 namespace {
 
 bool node_is_aggregate(const RelAlgNode* ra) {
@@ -94,6 +97,8 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
                                                           const ExecutionOptions& eo,
                                                           RenderInfo* render_info) {
   INJECT_TIMER(executeRelAlgQueryNoRetry);
+  auto timer = DEBUG_TIMER(__func__);
+  auto timer_setup = DEBUG_TIMER("Query pre-execution steps");
 
   query_dag_->resetQueryExecutionState();
   const auto& ra = query_dag_->getRootNode();
@@ -130,6 +135,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
     return executeRelAlgQueryWithFilterPushDown(
         ed_seq, co, eo, render_info, queue_time_ms);
   }
+  timer_setup.stop();
 
   // Dispatch the subqueries first
   for (auto subquery : getSubqueries()) {
@@ -203,7 +209,7 @@ FirstStepExecutionResult RelAlgExecutor::executeRelAlgQuerySingleStep(
 
   if (sort) {
     check_sort_node_source_constraint(sort);
-    const auto source_work_unit = createSortInputWorkUnit(sort, eo.just_explain);
+    const auto source_work_unit = createSortInputWorkUnit(sort, eo);
     shard_count = GroupByAndAggregate::shard_count_for_top_groups(
         source_work_unit.exe_unit, *executor_->getCatalog());
     if (!shard_count) {
@@ -255,6 +261,7 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
                                                  const int64_t queue_time_ms,
                                                  const bool with_existing_temp_tables) {
   INJECT_TIMER(executeRelAlgSeq);
+  auto timer = DEBUG_TIMER(__func__);
   if (!with_existing_temp_tables) {
     decltype(temporary_tables_)().swap(temporary_tables_);
   }
@@ -268,12 +275,33 @@ ExecutionResult RelAlgExecutor::executeRelAlgSeq(const RaExecutionSequence& seq,
 
   for (size_t i = 0; i < exec_desc_count; i++) {
     // only render on the last step
-    executeRelAlgStep(seq,
-                      i,
-                      co,
-                      eo,
-                      (i == exec_desc_count - 1) ? render_info : nullptr,
-                      queue_time_ms);
+    try {
+      executeRelAlgStep(seq,
+                        i,
+                        co,
+                        eo,
+                        (i == exec_desc_count - 1) ? render_info : nullptr,
+                        queue_time_ms);
+    } catch (const NativeExecutionError&) {
+      if (!g_enable_interop) {
+        throw;
+      }
+      auto eo_extern = eo;
+      eo_extern.executor_type = ::ExecutorType::Extern;
+      auto exec_desc_ptr = seq.getDescriptor(i);
+      const auto body = exec_desc_ptr->getBody();
+      const auto compound = dynamic_cast<const RelCompound*>(body);
+      if (compound && (compound->getGroupByCount() || compound->isAggregate())) {
+        LOG(INFO) << "Also failed to run the query using interoperability";
+        throw;
+      }
+      executeRelAlgStep(seq,
+                        i,
+                        co,
+                        eo_extern,
+                        (i == exec_desc_count - 1) ? render_info : nullptr,
+                        queue_time_ms);
+    }
   }
 
   return seq.getDescriptor(exec_desc_count - 1)->getResult();
@@ -313,6 +341,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
                                        RenderInfo* render_info,
                                        const int64_t queue_time_ms) {
   INJECT_TIMER(executeRelAlgStep);
+  auto timer = DEBUG_TIMER(__func__);
   WindowProjectNodeContext::reset();
   auto exec_desc_ptr = seq.getDescriptor(step_idx);
   CHECK(exec_desc_ptr);
@@ -334,7 +363,8 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       eo.dynamic_watchdog_time_limit,
       eo.find_push_down_candidates,
       eo.just_calcite_explain,
-      eo.gpu_input_mem_limit_percent};
+      eo.gpu_input_mem_limit_percent,
+      eo.executor_type};
 
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
@@ -830,10 +860,20 @@ void set_transient_dict_maybe(
   }
 }
 
+std::shared_ptr<Analyzer::Expr> cast_dict_to_none(
+    const std::shared_ptr<Analyzer::Expr>& input) {
+  const auto& input_ti = input->get_type_info();
+  if (input_ti.is_string() && input_ti.get_compression() == kENCODING_DICT) {
+    return input->add_cast(SQLTypeInfo(kTEXT, input_ti.get_notnull()));
+  }
+  return input;
+}
+
 template <class RA>
 std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
     const RA* ra_node,
-    const RelAlgTranslator& translator) {
+    const RelAlgTranslator& translator,
+    const ::ExecutorType executor_type) {
   std::vector<std::shared_ptr<Analyzer::Expr>> scalar_sources;
   for (size_t i = 0; i < get_scalar_sources_size(ra_node); ++i) {
     const auto scalar_rex = scalar_at(i, ra_node);
@@ -846,7 +886,11 @@ std::vector<std::shared_ptr<Analyzer::Expr>> translate_scalar_sources(
     const auto scalar_expr =
         rewrite_array_elements(translator.translateScalarRex(scalar_rex).get());
     const auto rewritten_expr = rewrite_expr(scalar_expr.get());
-    set_transient_dict_maybe(scalar_sources, rewritten_expr);
+    if (executor_type == ExecutorType::Native) {
+      set_transient_dict_maybe(scalar_sources, rewritten_expr);
+    } else {
+      scalar_sources.push_back(cast_dict_to_none(fold_expr(rewritten_expr.get())));
+    }
   }
 
   return scalar_sources;
@@ -923,7 +967,8 @@ std::vector<Analyzer::Expr*> translate_targets(
     const std::vector<std::shared_ptr<Analyzer::Expr>>& scalar_sources,
     const std::list<std::shared_ptr<Analyzer::Expr>>& groupby_exprs,
     const RelCompound* compound,
-    const RelAlgTranslator& translator) {
+    const RelAlgTranslator& translator,
+    const ExecutorType executor_type) {
   std::vector<Analyzer::Expr*> target_exprs;
   for (size_t i = 0; i < compound->size(); ++i) {
     const auto target_rex = compound->getTargetExpr(i);
@@ -945,10 +990,14 @@ std::vector<Analyzer::Expr*> translate_targets(
         target_expr = translator.translateScalarRex(target_rex_scalar);
         auto rewritten_expr = rewrite_expr(target_expr.get());
         target_expr = fold_expr(rewritten_expr.get());
-        try {
-          target_expr = set_transient_dict(target_expr);
-        } catch (...) {
-          // noop
+        if (executor_type == ExecutorType::Native) {
+          try {
+            target_expr = set_transient_dict(target_expr);
+          } catch (...) {
+            // noop
+          }
+        } else {
+          target_expr = cast_dict_to_none(target_expr);
         }
       }
     }
@@ -1033,6 +1082,7 @@ void RelAlgExecutor::executeUpdateViaCompound(const RelCompound* compound,
                                               const ExecutionOptions& eo,
                                               RenderInfo* render_info,
                                               const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   if (!compound->validateTargetColumns(
           yieldColumnValidator(compound->getModifiedTableDescriptor()))) {
     throw std::runtime_error(
@@ -1040,8 +1090,8 @@ void RelAlgExecutor::executeUpdateViaCompound(const RelCompound* compound,
         "are not supported.)");
   }
 
-  const auto work_unit = createCompoundWorkUnit(
-      compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  const auto work_unit =
+      createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
   co_project.device_type_ = ExecutorDeviceType::CPU;
@@ -1074,6 +1124,7 @@ void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
                                              const ExecutionOptions& eo,
                                              RenderInfo* render_info,
                                              const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   if (!project->validateTargetColumns(
           yieldColumnValidator(project->getModifiedTableDescriptor()))) {
     throw std::runtime_error(
@@ -1081,8 +1132,7 @@ void RelAlgExecutor::executeUpdateViaProject(const RelProject* project,
         "are not supported.)");
   }
 
-  auto work_unit =
-      createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
   co_project.device_type_ = ExecutorDeviceType::CPU;
@@ -1125,6 +1175,7 @@ void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
                                               const ExecutionOptions& eo,
                                               RenderInfo* render_info,
                                               const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   auto* table_descriptor = compound->getModifiedTableDescriptor();
   if (!table_descriptor->hasDeletedCol) {
     throw std::runtime_error(
@@ -1134,8 +1185,8 @@ void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
     throw std::runtime_error("DELETE not yet supported on temporary tables.");
   }
 
-  const auto work_unit = createCompoundWorkUnit(
-      compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  const auto work_unit =
+      createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
   co_project.device_type_ = ExecutorDeviceType::CPU;
@@ -1166,6 +1217,7 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
                                              const ExecutionOptions& eo,
                                              RenderInfo* render_info,
                                              const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   auto* table_descriptor = project->getModifiedTableDescriptor();
   if (!table_descriptor->hasDeletedCol) {
     throw std::runtime_error(
@@ -1175,8 +1227,7 @@ void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
     throw std::runtime_error("DELETE not yet supported on temporary tables.");
   }
 
-  auto work_unit =
-      createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
   const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
   CompilationOptions co_project = co;
   co_project.device_type_ = ExecutorDeviceType::CPU;
@@ -1217,8 +1268,9 @@ ExecutionResult RelAlgExecutor::executeCompound(const RelCompound* compound,
                                                 const ExecutionOptions& eo,
                                                 RenderInfo* render_info,
                                                 const int64_t queue_time_ms) {
-  const auto work_unit = createCompoundWorkUnit(
-      compound, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  auto timer = DEBUG_TIMER(__func__);
+  const auto work_unit =
+      createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
   CompilationOptions co_compound = co;
   return executeWorkUnit(work_unit,
                          compound->getOutputMetainfo(),
@@ -1234,6 +1286,7 @@ ExecutionResult RelAlgExecutor::executeAggregate(const RelAggregate* aggregate,
                                                  const ExecutionOptions& eo,
                                                  RenderInfo* render_info,
                                                  const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   const auto work_unit = createAggregateWorkUnit(
       aggregate, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   return executeWorkUnit(work_unit,
@@ -1264,8 +1317,8 @@ ExecutionResult RelAlgExecutor::executeProject(const RelProject* project,
                                                RenderInfo* render_info,
                                                const int64_t queue_time_ms,
                                                const ssize_t previous_count) {
-  auto work_unit =
-      createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
+  auto timer = DEBUG_TIMER(__func__);
+  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
   CompilationOptions co_project = co;
   if (project->isSimple()) {
     CHECK_EQ(size_t(1), project->inputCount());
@@ -1294,6 +1347,7 @@ ExecutionResult RelAlgExecutor::executeTableFunction(const RelTableFunction* tab
                                                      const ExecutionOptions& eo,
                                                      const int64_t queue_time_ms) {
   INJECT_TIMER(executeTableFunction);
+  auto timer = DEBUG_TIMER(__func__);
 
   auto co = co_in;
 
@@ -1366,6 +1420,9 @@ void RelAlgExecutor::computeWindow(const RelAlgExecutionUnit& ra_exe_unit,
   if (query_infos.front().info.fragments.size() != 1) {
     throw std::runtime_error(
         "Only single fragment tables supported for window functions for now");
+  }
+  if (eo.executor_type == ::ExecutorType::Extern) {
+    return;
   }
   query_infos.push_back(query_infos.front());
   auto window_project_node_context = WindowProjectNodeContext::create();
@@ -1457,6 +1514,7 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
                                               const ExecutionOptions& eo,
                                               RenderInfo* render_info,
                                               const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   const auto work_unit =
       createFilterWorkUnit(filter, {{}, SortAlgorithm::Default, 0, 0}, eo.just_explain);
   return executeWorkUnit(
@@ -1465,6 +1523,7 @@ ExecutionResult RelAlgExecutor::executeFilter(const RelFilter* filter,
 
 ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
                                               const ExecutionOptions& eo) {
+  auto timer = DEBUG_TIMER(__func__);
   if (eo.just_explain) {
     throw std::runtime_error("EXPLAIN not supported for ModifyTable");
   }
@@ -1482,6 +1541,7 @@ ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
 ExecutionResult RelAlgExecutor::executeLogicalValues(
     const RelLogicalValues* logical_values,
     const ExecutionOptions& eo) {
+  auto timer = DEBUG_TIMER(__func__);
   if (eo.just_explain) {
     throw std::runtime_error("EXPLAIN not supported for LogicalValues");
   }
@@ -1597,16 +1657,16 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
                                             const ExecutionOptions& eo,
                                             RenderInfo* render_info,
                                             const int64_t queue_time_ms) {
+  auto timer = DEBUG_TIMER(__func__);
   check_sort_node_source_constraint(sort);
   const auto source = sort->getInput(0);
   const bool is_aggregate = node_is_aggregate(source);
   auto it = leaf_results_.find(sort->getId());
   if (it != leaf_results_.end()) {
     // Add any transient string literals to the sdp on the agg
-    const auto source_work_unit = createSortInputWorkUnit(sort, eo.just_explain);
+    const auto source_work_unit = createSortInputWorkUnit(sort, eo);
     GroupByAndAggregate::addTransientStringLiterals(
         source_work_unit.exe_unit, executor_, executor_->row_set_mem_owner_);
-
     // Handle push-down for LIMIT for multi-node
     auto& aggregated_result = it->second;
     auto& result_rows = aggregated_result.rs;
@@ -1624,14 +1684,13 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
     }
     ExecutionResult result(result_rows, aggregated_result.targets_meta);
     sort->setOutputMetainfo(aggregated_result.targets_meta);
-
     return result;
   }
   while (true) {
     std::list<std::shared_ptr<Analyzer::Expr>> groupby_exprs;
     bool is_desc{false};
     try {
-      const auto source_work_unit = createSortInputWorkUnit(sort, eo.just_explain);
+      const auto source_work_unit = createSortInputWorkUnit(sort, eo);
       is_desc = first_oe_is_desc(source_work_unit.exe_unit.sort_info.order_entries);
       ExecutionOptions eo_copy = {
           eo.output_columnar_hint,
@@ -1646,6 +1705,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
           eo.find_push_down_candidates,
           eo.just_calcite_explain,
           eo.gpu_input_mem_limit_percent,
+          eo.executor_type,
       };
 
       groupby_exprs = source_work_unit.exe_unit.groupby_exprs;
@@ -1705,7 +1765,7 @@ ExecutionResult RelAlgExecutor::executeSort(const RelSort* sort,
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
     const RelSort* sort,
-    const bool just_explain) {
+    const ExecutionOptions& eo) {
   const auto source = sort->getInput(0);
   const size_t limit = sort->getLimit();
   const size_t offset = sort->getOffset();
@@ -1717,7 +1777,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createSortInputWorkUnit(
   SortAlgorithm sort_algorithm{SortAlgorithm::SpeculativeTopN};
   const auto order_entries = get_order_entries(sort);
   SortInfo sort_info{order_entries, sort_algorithm, limit, offset};
-  auto source_work_unit = createWorkUnit(source, sort_info, just_explain);
+  auto source_work_unit = createWorkUnit(source, sort_info, eo);
   const auto& source_exe_unit = source_work_unit.exe_unit;
   if (source_exe_unit.groupby_exprs.size() == 1) {
     if (!source_exe_unit.groupby_exprs.front()) {
@@ -1955,6 +2015,8 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
       if (can_use_bump_allocator(ra_exe_unit, co, eo) && !render_info) {
         ra_exe_unit.scan_limit = 0;
         ra_exe_unit.use_bump_allocator = true;
+      } else if (eo.executor_type == ::ExecutorType::Extern) {
+        ra_exe_unit.scan_limit = 0;
       } else if (!eo.just_explain) {
         const auto filter_count_all = getFilteredCountAll(work_unit, true, co, eo);
         if (filter_count_all >= 0) {
@@ -2300,22 +2362,22 @@ std::string RelAlgExecutor::getErrorMessageFromCode(const int32_t error_code) {
 
 RelAlgExecutor::WorkUnit RelAlgExecutor::createWorkUnit(const RelAlgNode* node,
                                                         const SortInfo& sort_info,
-                                                        const bool just_explain) {
+                                                        const ExecutionOptions& eo) {
   const auto compound = dynamic_cast<const RelCompound*>(node);
   if (compound) {
-    return createCompoundWorkUnit(compound, sort_info, just_explain);
+    return createCompoundWorkUnit(compound, sort_info, eo);
   }
   const auto project = dynamic_cast<const RelProject*>(node);
   if (project) {
-    return createProjectWorkUnit(project, sort_info, just_explain);
+    return createProjectWorkUnit(project, sort_info, eo);
   }
   const auto aggregate = dynamic_cast<const RelAggregate*>(node);
   if (aggregate) {
-    return createAggregateWorkUnit(aggregate, sort_info, just_explain);
+    return createAggregateWorkUnit(aggregate, sort_info, eo.just_explain);
   }
   const auto filter = dynamic_cast<const RelFilter*>(node);
   CHECK(filter);
-  return createFilterWorkUnit(filter, sort_info, just_explain);
+  return createFilterWorkUnit(filter, sort_info, eo.just_explain);
 }
 
 namespace {
@@ -2470,7 +2532,7 @@ std::list<std::shared_ptr<Analyzer::Expr>> rewrite_quals(
 RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
     const RelCompound* compound,
     const SortInfo& sort_info,
-    const bool just_explain) {
+    const ExecutionOptions& eo) {
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   auto input_to_nest_level = get_input_nest_levels(compound, {});
@@ -2488,7 +2550,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
   if (left_deep_join) {
     left_deep_join_input_sizes = get_left_deep_join_input_sizes(left_deep_join);
     left_deep_join_quals = translateLeftDeepJoinFilter(
-        left_deep_join, input_descs, input_to_nest_level, just_explain);
+        left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
     if (g_from_table_reordering &&
         std::find(join_types.begin(), join_types.end(), JoinType::LEFT) ==
             join_types.end()) {
@@ -2503,7 +2565,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
       std::tie(input_descs, input_col_descs, std::ignore) =
           get_input_desc(compound, input_to_nest_level, input_permutation, cat_);
       left_deep_join_quals = translateLeftDeepJoinFilter(
-          left_deep_join, input_descs, input_to_nest_level, just_explain);
+          left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
     }
   }
   QueryFeatureDescriptor query_features;
@@ -2512,13 +2574,18 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createCompoundWorkUnit(
                               input_to_nest_level,
                               join_types,
                               now_,
-                              just_explain,
+                              eo.just_explain,
                               query_features);
-  const auto scalar_sources = translate_scalar_sources(compound, translator);
+  const auto scalar_sources =
+      translate_scalar_sources(compound, translator, eo.executor_type);
   const auto groupby_exprs = translate_groupby_exprs(compound, scalar_sources);
   const auto quals_cf = translate_quals(compound, translator);
-  const auto target_exprs = translate_targets(
-      target_exprs_owned_, scalar_sources, groupby_exprs, compound, translator);
+  const auto target_exprs = translate_targets(target_exprs_owned_,
+                                              scalar_sources,
+                                              groupby_exprs,
+                                              compound,
+                                              translator,
+                                              eo.executor_type);
   CHECK_EQ(compound->size(), target_exprs.size());
   const RelAlgExecutionUnit exe_unit = {input_descs,
                                         input_col_descs,
@@ -2789,9 +2856,10 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createAggregateWorkUnit(
           nullptr};
 }
 
-RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject* project,
-                                                               const SortInfo& sort_info,
-                                                               const bool just_explain) {
+RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(
+    const RelProject* project,
+    const SortInfo& sort_info,
+    const ExecutionOptions& eo) {
   std::vector<InputDescriptor> input_descs;
   std::list<std::shared_ptr<const InputColDescriptor>> input_col_descs;
   auto input_to_nest_level = get_input_nest_levels(project, {});
@@ -2810,7 +2878,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
     left_deep_join_input_sizes = get_left_deep_join_input_sizes(left_deep_join);
     const auto query_infos = get_table_infos(input_descs, executor_);
     left_deep_join_quals = translateLeftDeepJoinFilter(
-        left_deep_join, input_descs, input_to_nest_level, just_explain);
+        left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
     if (g_from_table_reordering) {
       input_permutation = do_table_reordering(input_descs,
                                               input_col_descs,
@@ -2823,7 +2891,7 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
       std::tie(input_descs, input_col_descs, std::ignore) =
           get_input_desc(project, input_to_nest_level, input_permutation, cat_);
       left_deep_join_quals = translateLeftDeepJoinFilter(
-          left_deep_join, input_descs, input_to_nest_level, just_explain);
+          left_deep_join, input_descs, input_to_nest_level, eo.just_explain);
     }
   }
 
@@ -2833,9 +2901,10 @@ RelAlgExecutor::WorkUnit RelAlgExecutor::createProjectWorkUnit(const RelProject*
                               input_to_nest_level,
                               join_types,
                               now_,
-                              just_explain,
+                              eo.just_explain,
                               query_features);
-  const auto target_exprs_owned = translate_scalar_sources(project, translator);
+  const auto target_exprs_owned =
+      translate_scalar_sources(project, translator, eo.executor_type);
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), target_exprs_owned.begin(), target_exprs_owned.end());
   const auto target_exprs = get_exprs_not_owned(target_exprs_owned);
@@ -2878,7 +2947,8 @@ RelAlgExecutor::TableFunctionWorkUnit RelAlgExecutor::createTableFunctionWorkUni
   QueryFeatureDescriptor query_features;  // TODO(adb): remove/make optional
   RelAlgTranslator translator(
       cat_, executor_, input_to_nest_level, {}, now_, just_explain, query_features);
-  const auto input_exprs_owned = translate_scalar_sources(table_func, translator);
+  const auto input_exprs_owned =
+      translate_scalar_sources(table_func, translator, ::ExecutorType::Native);
   target_exprs_owned_.insert(
       target_exprs_owned_.end(), input_exprs_owned.begin(), input_exprs_owned.end());
   const auto input_exprs = get_exprs_not_owned(input_exprs_owned);

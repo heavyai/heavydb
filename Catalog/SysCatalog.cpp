@@ -56,6 +56,8 @@ using std::runtime_error;
 using std::string;
 using std::vector;
 
+extern bool g_enable_fsi;
+
 namespace {
 
 std::string hash_with_bcrypt(const std::string& pwd) {
@@ -1073,6 +1075,15 @@ void SysCatalog::createDatabase(const string& name, int owner) {
     dbConn->query_with_text_params(
         "INSERT INTO mapd_record_ownership_marker (dummy) VALUES (?1)",
         std::vector<std::string>{std::to_string(owner)});
+
+    if (g_enable_fsi) {
+      dbConn->query(
+          "CREATE TABLE omnisci_foreign_servers("
+          "id integer primary key, "
+          "name text unique, "
+          "data_wrapper_type text, "
+          "options text)");
+    }
   } catch (const std::exception&) {
     dbConn->query("ROLLBACK TRANSACTION");
     boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
@@ -1080,6 +1091,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
   }
   dbConn->query("END TRANSACTION");
 
+  std::shared_ptr<Catalog> cat;
   // Now update SysCatalog with privileges and the new database
   sqliteConnector_->query("BEGIN TRANSACTION");
   try {
@@ -1088,8 +1100,7 @@ void SysCatalog::createDatabase(const string& name, int owner) {
             ")",
         name);
     CHECK(getMetadataForDB(name, db));
-    auto cat =
-        Catalog::get(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, true);
+    cat = Catalog::get(basePath_, db, dataMgr_, string_dict_hosts_, calciteMgr_, true);
     if (owner != OMNISCI_ROOT_USER_ID) {
       DBObject object(name, DBObjectType::DatabaseDBObjectType);
       object.loadKey(*cat);
@@ -1103,6 +1114,15 @@ void SysCatalog::createDatabase(const string& name, int owner) {
     throw;
   }
   sqliteConnector_->query("END TRANSACTION");
+
+  if (g_enable_fsi) {
+    try {
+      cat->createDefaultServersIfNotExists();
+    } catch (...) {
+      boost::filesystem::remove(basePath_ + "/mapd_catalogs/" + name);
+      throw;
+    }
+  }
 }
 
 void SysCatalog::dropDatabase(const DBMetadata& db) {

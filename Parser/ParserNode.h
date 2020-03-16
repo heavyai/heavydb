@@ -1265,13 +1265,30 @@ class AddColumnStmt : public DDLStmt {
     delete coldefs;
   }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
-  void check_executable(const Catalog_Namespace::SessionInfo& session);
+  void check_executable(const Catalog_Namespace::SessionInfo& session,
+                        const TableDescriptor* td);
   const std::string* get_table() const { return table.get(); }
 
  private:
   std::unique_ptr<std::string> table;
   std::unique_ptr<ColumnDef> coldef;
   std::list<std::unique_ptr<ColumnDef>> coldefs;
+};
+
+class DropColumnStmt : public DDLStmt {
+ public:
+  DropColumnStmt(std::string* tab, std::list<std::string*>* cols) : table(tab) {
+    for (const auto col : *cols) {
+      this->columns.emplace_back(col);
+    }
+    delete cols;
+  }
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
+  const std::string* get_table() const { return table.get(); }
+
+ private:
+  std::unique_ptr<std::string> table;
+  std::list<std::unique_ptr<std::string>> columns;
 };
 
 /*

@@ -57,6 +57,17 @@ TargetValue run_simple_agg(const string& query_str) {
   return crt_row[0];
 }
 
+template <typename T>
+void check_query(const std::string& query, const std::vector<T>& expects) {
+  auto rows = QR::get()->runSQL(query, ExecutorDeviceType::CPU, false);
+  CHECK_EQ(expects.size(), rows->rowCount());
+  for (auto exp : expects) {
+    auto crt_row = rows->getNextRow(true, true);
+    CHECK_EQ(size_t(1), crt_row.size());
+    CHECK_EQ(exp, v<T>(crt_row[0]));
+  }
+}
+
 const char* trips_table_ddl = R"( 
 CREATE TEMPORARY TABLE trips (
 trip_id BIGINT,
@@ -139,6 +150,58 @@ TEST_F(NycTaxiTest, GroupByColumnWithNulls) {
       619,
       v<int64_t>(run_simple_agg(
           " select count(*) from (select pickup, count(*) from trips group by pickup)")));
+}
+
+TEST_F(NycTaxiTest, CheckGroupBy) {
+  check_query<NullableString>(
+      "select pickup_ntaname from trips where pickup_ntaname IS NOT NULL group by "
+      "pickup_ntaname limit 5;",
+      {"Queensbridge-Ravenswood-Long Island City",
+       "Steinway",
+       "Claremont-Bathgate",
+       "Washington Heights South",
+       "Spuyten Duyvil-Kingsbridge"});
+
+  check_query<double>("select tip_amount from trips group by tip_amount limit 5;",
+                      {0.47, 0.05, 3.96, 5, 1.22});
+
+  check_query<NullableString>(
+      "select store_and_fwd_flag from trips group by store_and_fwd_flag limit 5;",
+      {"N", "Y"});
+}
+
+TEST_F(NycTaxiTest, RunSelects) {
+  check_query<int64_t>("select rate_code_id from trips limit 5;", {1, 1, 5, 1, 1});
+}
+
+TEST_F(NycTaxiTest, RunSelectsEncodingNoneNotNull) {
+  check_query<NullableString>(
+      "select dropoff_ntaname from trips where dropoff_ntaname is not NULL limit 10 "
+      "offset 100;",
+      {"Queensbridge-Ravenswood-Long Island City",
+       "Queensbridge-Ravenswood-Long Island City",
+       "West Village",
+       "Hunters Point-Sunnyside-West Maspeth",
+       "Hunters Point-Sunnyside-West Maspeth",
+       "Hunters Point-Sunnyside-West Maspeth",
+       "Hunters Point-Sunnyside-West Maspeth",
+       "Manhattanville",
+       "Central Harlem South",
+       "Washington Heights South"});
+}
+
+TEST_F(NycTaxiTest, RunSelectsEncodingNoneWhereGreater) {
+  check_query<NullableString>(
+      "select dropoff_ntaname from trips where dropoff_ntaname > "
+      "'Queensbridge-Ravenswood-Long Island City' limit 3 offset 100;",
+      {"Woodside", "park-cemetery-etc-Manhattan", "West Concourse"});
+}
+
+TEST_F(NycTaxiTest, RunSelectsEncodingDictWhereGreater) {
+  check_query<NullableString>(
+      "select pickup_ntaname from trips where pickup_ntaname is not NULL and "
+      "pickup_ntaname > 'Queensbridge-Ravenswood-Long Island City' limit 3 offset 100;",
+      {"West Farms-Bronx River", "Washington Heights South", "Steinway"});
 }
 
 TEST(Unsupported, Syntax) {

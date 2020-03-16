@@ -5,30 +5,14 @@ import static org.junit.Assert.assertEquals;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.mapd.common.SockTransportProperties;
-import com.mapd.parser.server.CalciteServerHandler;
 import com.mapd.thrift.calciteserver.TPlanResult;
 
-import org.junit.Before;
 import org.junit.Test;
 
-import java.io.FileReader;
-import java.util.ArrayList;
-
-public class ForeignServerTest {
-  private static final String RESOURCE_DIRECTORY_PATH =
-          ForeignServerTest.class.getClassLoader().getResource("").getPath();
-
-  private static final Gson gson = new Gson();
-
-  CalciteServerHandler calciteServerHandler;
-
-  @Before
-  public void setup() throws Exception {
-    calciteServerHandler = new CalciteServerHandler(0,
-            "",
-            RESOURCE_DIRECTORY_PATH + "ast/test_extension_functions.ast",
-            SockTransportProperties.getUnencryptedClient(),
-            "");
+public class ForeignServerTest extends DDLTest {
+  public ForeignServerTest() {
+    resourceDirPath = ForeignServerTest.class.getClassLoader().getResource("").getPath();
+    jsonTestDir = "foreignserver";
   }
 
   @Test
@@ -80,16 +64,5 @@ public class ForeignServerTest {
             gson.fromJson(result.plan_result, JsonObject.class);
 
     assertEquals(expectedJsonObject, actualJsonObject);
-  }
-
-  TPlanResult processDdlCommand(final String ddlCommand) throws Exception {
-    return calciteServerHandler.process(
-            "", "", "", ddlCommand, new ArrayList<>(), false, false, false);
-  }
-
-  JsonObject getJsonFromFile(final String fileName) throws Exception {
-    final String filePath =
-            RESOURCE_DIRECTORY_PATH + "json/ddl/foreignserver/" + fileName;
-    return gson.fromJson(new FileReader(filePath), JsonObject.class);
   }
 }

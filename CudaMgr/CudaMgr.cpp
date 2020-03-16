@@ -28,8 +28,9 @@ namespace CudaMgr_Namespace {
 std::string errorMessage(CUresult const status) {
   const char* errorString{nullptr};
   cuGetErrorString(status, &errorString);
-  return errorString ? "CUDA Error: " + std::string(errorString)
-                     : "CUDA Driver API error code " + std::to_string(status);
+  return errorString
+             ? "CUDA Error (" + std::to_string(status) + "): " + std::string(errorString)
+             : "CUDA Driver API error code " + std::to_string(status);
 }
 
 CudaMgr::CudaMgr(const int num_gpus, const int start_gpu)
@@ -148,6 +149,12 @@ void CudaMgr::unloadGpuModuleData(CUmodule* module, const int device_id) const {
   } catch (const std::runtime_error& e) {
     LOG(ERROR) << "CUDA Error: " << e.what();
   }
+}
+
+CudaMgr::CudaMemoryUsage CudaMgr::getCudaMemoryUsage() {
+  CudaMemoryUsage usage;
+  cuMemGetInfo(&usage.free, &usage.total);
+  return usage;
 }
 
 void CudaMgr::fillDeviceProperties() {

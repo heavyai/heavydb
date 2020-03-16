@@ -165,70 +165,6 @@ double ST_Area_MultiPolygon(int8_t* mpoly_coords,
                             int32_t isr,
                             int32_t osr);
 
-struct GeoPoint {
-  int8_t* ptr;
-  std::size_t sz;
-  int32_t compression;
-  int32_t input_srid;
-  int32_t output_srid;
-
-  DEVICE std::size_t getSize() const { return sz; }
-
-  DEVICE int32_t getCompression() const { return compression; }
-
-  DEVICE int32_t getInputSrid() const { return input_srid; }
-
-  DEVICE int32_t getOutputSrid() const { return output_srid; }
-};
-
-struct GeoPolygon {
-  int8_t* ptr_coords;
-  std::size_t coords_size;
-  int32_t* ring_sizes;
-  std::size_t num_rings;
-  int32_t compression;
-  int32_t input_srid;
-  int32_t output_srid;
-
-  DEVICE int32_t* getRingSizes() { return ring_sizes; }
-  DEVICE std::size_t getCoordsSize() const { return coords_size; }
-
-  DEVICE std::size_t getNumRings() const { return num_rings; }
-
-  DEVICE int32_t getCompression() const { return compression; }
-
-  DEVICE int32_t getInputSrid() const { return input_srid; }
-
-  DEVICE int32_t getOutputSrid() const { return output_srid; }
-};
-
-struct GeoMultiPolygon {
-  int8_t* ptr_coords;
-  std::size_t coords_size;
-  int32_t* ring_sizes;
-  std::size_t num_rings;
-  int32_t* poly_sizes;
-  std::size_t num_polys;
-  int32_t compression;
-  int32_t input_srid;
-  int32_t output_srid;
-
-  DEVICE int32_t* getRingSizes() { return ring_sizes; }
-  DEVICE std::size_t getCoordsSize() const { return coords_size; }
-
-  DEVICE std::size_t getNumRings() const { return num_rings; }
-
-  DEVICE int32_t* getPolygonSizes() { return poly_sizes; }
-
-  DEVICE std::size_t getNumPolygons() const { return num_polys; }
-
-  DEVICE int32_t getCompression() const { return compression; }
-
-  DEVICE int32_t getInputSrid() const { return input_srid; }
-
-  DEVICE int32_t getOutputSrid() const { return output_srid; }
-};
-
 EXTENSION_NOINLINE
 double point_x(GeoPoint p) {
   return ST_X_Point(
@@ -306,22 +242,6 @@ double ST_Length_LineString(int8_t* coords,
                             int32_t ic,
                             int32_t isr,
                             int32_t osr);
-
-struct GeoLineString {
-  int8_t* ptr;
-  std::size_t sz;
-  int32_t compression;
-  int32_t input_srid;
-  int32_t output_srid;
-
-  DEVICE std::size_t getSize() const { return sz; }
-
-  DEVICE int32_t getCompression() const { return compression; }
-
-  DEVICE int32_t getInputSrid() const { return input_srid; }
-
-  DEVICE int32_t getOutputSrid() const { return output_srid; }
-};
 
 // LineString udf
 

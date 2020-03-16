@@ -177,6 +177,8 @@ class InsertOrderFragmenter : public AbstractFragmenter {
                               const FragmentInfo& fragment,
                               const Data_Namespace::MemoryLevel memory_level);
 
+  void dropColumns(const std::vector<int>& columnIds) override;
+
  protected:
   std::vector<int> chunkKeyPrefix_;
   std::map<int, Chunk_NS::Chunk>

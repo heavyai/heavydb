@@ -2795,8 +2795,6 @@ bool Loader::loadToShard(
   if (this->getReplicating()) {
     for (const auto& import_buff : import_buffers) {
       insert_data_.replicate_count = import_buff->get_replicate_count();
-      insert_data_.columnDescriptors[import_buff->getColumnDesc()->columnId] =
-          import_buff->getColumnDesc();
     }
   }
 
@@ -2827,6 +2825,16 @@ bool Loader::loadToShard(
     }
   }
   return success;
+}
+
+void Loader::dropColumns(const std::vector<int>& columnIds) {
+  std::vector<const TableDescriptor*> table_descs(1, table_desc_);
+  if (table_desc_->nShards) {
+    table_descs = catalog_.getPhysicalTablesDescriptors(table_desc_);
+  }
+  for (auto table_desc : table_descs) {
+    table_desc->fragmenter->dropColumns(columnIds);
+  }
 }
 
 void Loader::init() {
@@ -4428,6 +4436,11 @@ std::pair<SQLTypes, bool> ogr_to_type(const OGRFieldType& ogr_type) {
     case OFTDateTime:
       return std::make_pair(kTIMESTAMP, false);
     case OFTBinary:
+      // Interpret binary blobs as byte arrays here
+      // but actual import will store NULL as GDAL will not
+      // extract the blob (OGRFeature::GetFieldAsString will
+      // result in the import buffers having an empty string)
+      return std::make_pair(kTINYINT, true);
     default:
       break;
   }

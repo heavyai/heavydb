@@ -514,7 +514,7 @@ std::shared_ptr<Analyzer::ColumnVar> getSyntheticColumnVar(std::string_view tabl
   auto ti = cmeta->columnType;
 
   if (ti.is_geometry() && ti.get_type() != kPOINT) {
-    int geoColumnId;
+    int geoColumnId{0};
     switch (ti.get_type()) {
       case kLINESTRING: {
         geoColumnId = cmeta->columnId + 2;

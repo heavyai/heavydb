@@ -193,6 +193,8 @@ class AbstractFragmenter {
 
   virtual const std::vector<uint64_t> getVacuumOffsets(
       const std::shared_ptr<Chunk_NS::Chunk>& chunk) = 0;
+
+  virtual void dropColumns(const std::vector<int>& columnIds) = 0;
 };
 
 }  // namespace Fragmenter_Namespace

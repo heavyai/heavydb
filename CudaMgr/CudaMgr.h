@@ -158,6 +158,13 @@ class CudaMgr {
                          void** option_values,
                          const int device_id) const;
   void unloadGpuModuleData(CUmodule* module, const int device_id) const;
+
+  struct CudaMemoryUsage {
+    size_t free;   // available GPU RAM memory on active card in bytes
+    size_t total;  // total GPU RAM memory on active card in bytes
+  };
+
+  static CudaMemoryUsage getCudaMemoryUsage();
 #endif
 
  private:
@@ -167,10 +174,11 @@ class CudaMgr {
   void createDeviceContexts();
   size_t computeMaxSharedMemoryForAll() const;
   void checkError(CUresult cu_result) const;
+
+  int gpu_driver_version_;
 #endif
 
   int device_count_;
-  int gpu_driver_version_;
   int start_gpu_;
   size_t max_shared_memory_for_all_;
   std::vector<DeviceProperties> device_properties_;

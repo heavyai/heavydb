@@ -253,7 +253,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
     const RelAlgNode* body;
   };
 
-  WorkUnit createSortInputWorkUnit(const RelSort*, const bool just_explain);
+  WorkUnit createSortInputWorkUnit(const RelSort*, const ExecutionOptions& eo);
 
   ExecutionResult executeWorkUnit(const WorkUnit& work_unit,
                                   const std::vector<TargetMetaInfo>& targets_meta,
@@ -299,11 +299,11 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
   // appropriate exception corresponding to the query error code.
   static void handlePersistentError(const int32_t error_code);
 
-  WorkUnit createWorkUnit(const RelAlgNode*, const SortInfo&, const bool just_explain);
+  WorkUnit createWorkUnit(const RelAlgNode*, const SortInfo&, const ExecutionOptions& eo);
 
   WorkUnit createCompoundWorkUnit(const RelCompound*,
                                   const SortInfo&,
-                                  const bool just_explain);
+                                  const ExecutionOptions& eo);
 
   WorkUnit createAggregateWorkUnit(const RelAggregate*,
                                    const SortInfo&,
@@ -311,7 +311,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
 
   WorkUnit createProjectWorkUnit(const RelProject*,
                                  const SortInfo&,
-                                 const bool just_explain);
+                                 const ExecutionOptions& eo);
 
   WorkUnit createFilterWorkUnit(const RelFilter*,
                                 const SortInfo&,

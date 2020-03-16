@@ -291,9 +291,9 @@ void CodeGenerator::link_udf_module(const std::unique_ptr<llvm::Module>& udf_mod
           "link_udf_module: *** attempt to overwrite a runtime function with a UDF "
           "function ***");
     } else {
-      LOG(INFO) << "  Adding " << f.getName().str() << " to "
-                << module.getModuleIdentifier() << " from `"
-                << udf_module->getModuleIdentifier() << "`" << std::endl;
+      VLOG(1) << "  Adding " << f.getName().str() << " to "
+              << module.getModuleIdentifier() << " from `"
+              << udf_module->getModuleIdentifier() << "`" << std::endl;
     }
   }
 

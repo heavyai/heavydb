@@ -82,6 +82,7 @@ extern bool g_enable_experimental_string_functions;
 extern bool g_enable_table_functions;
 extern bool g_enable_fsi;
 extern bool g_enable_lazy_fetch;
+extern bool g_enable_interop;
 
 bool g_enable_thrift_logs{false};
 
@@ -91,18 +92,6 @@ std::atomic<int> g_saw_signal{-1};
 mapd_shared_mutex g_thrift_mutex;
 TThreadedServer* g_thrift_http_server{nullptr};
 TThreadedServer* g_thrift_buf_server{nullptr};
-
-TableGenerations table_generations_from_thrift(
-    const std::vector<TTableGeneration>& thrift_table_generations) {
-  TableGenerations table_generations;
-  for (const auto& thrift_table_generation : thrift_table_generations) {
-    table_generations.setGeneration(
-        thrift_table_generation.table_id,
-        TableGeneration{static_cast<size_t>(thrift_table_generation.tuple_count),
-                        static_cast<size_t>(thrift_table_generation.start_rowid)});
-  }
-  return table_generations;
-}
 
 mapd::shared_ptr<MapDHandler> g_warmup_handler =
     0;  // global "g_warmup_handler" needed to avoid circular dependency
@@ -278,7 +267,7 @@ class MapDProgramOptions {
     fillAdvancedOptions();
   }
   int http_port = 6278;
-  size_t reserved_gpu_mem = 1 << 27;
+  size_t reserved_gpu_mem = 384 * 1024 * 1024;
   std::string base_path;
   std::string cluster_file = {"cluster.conf"};
   std::string cluster_topology_file = {"cluster_topology.conf"};
@@ -334,6 +323,7 @@ class MapDProgramOptions {
    */
   int max_session_duration = kMinsPerMonth;
   std::string udf_file_name = {""};
+  std::string udf_compiler_path = {""};
 
   void fillOptions();
   void fillAdvancedOptions();
@@ -595,10 +585,24 @@ void MapDProgramOptions::fillOptions() {
                               ->default_value(g_enable_experimental_string_functions)
                               ->implicit_value(true),
                           "Enable experimental string functions.");
+#ifdef ENABLE_FSI
   help_desc.add_options()(
       "enable-fsi",
       po::value<bool>(&g_enable_fsi)->default_value(g_enable_fsi)->implicit_value(true),
       "Enable foreign storage interface.");
+#endif  // ENABLE_FSI
+  help_desc.add_options()(
+      "enable-interoperability",
+      po::value<bool>(&g_enable_interop)
+          ->default_value(g_enable_interop)
+          ->implicit_value(true),
+      "Enable offloading of query portions to an external execution engine.");
+  help_desc.add_options()(
+      "calcite-service-timeout",
+      po::value<size_t>(&mapd_parameters.calcite_timeout)
+          ->default_value(mapd_parameters.calcite_timeout),
+      "Calcite server timeout (milliseconds). Increase this on systems with frequent "
+      "schema changes or when running large numbers of parallel queries.");
 
   help_desc.add(log_options_.get_options());
 }
@@ -774,6 +778,10 @@ void MapDProgramOptions::fillAdvancedOptions() {
                                    ->default_value(g_enable_lazy_fetch)
                                    ->implicit_value(true),
                                "Enable lazy fetch columns in ResultSets");
+  developer_desc.add_options()(
+      "udf-compiler-path",
+      po::value<std::string>(&udf_compiler_path),
+      "Provide absolute path to clang++ used in udf compilation.");
 }
 
 namespace {
@@ -975,6 +983,10 @@ boost::optional<int> MapDProgramOptions::parse_command_line(int argc,
     LOG(INFO) << " User provided extension functions loaded from " << udf_file_name;
   }
 
+  if (vm.count("udf-compiler-path")) {
+    boost::algorithm::trim_if(udf_compiler_path, boost::is_any_of("\"'"));
+  }
+
   if (enable_runtime_udf) {
     LOG(INFO) << " Runtime user defined extension functions enabled globally.";
   }
@@ -1136,7 +1148,8 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
                                        prog_config_opts.idle_session_duration,
                                        prog_config_opts.max_session_duration,
                                        prog_config_opts.enable_runtime_udf,
-                                       prog_config_opts.udf_file_name);
+                                       prog_config_opts.udf_file_name,
+                                       prog_config_opts.udf_compiler_path);
   } catch (const std::exception& e) {
     LOG(FATAL) << "Failed to initialize service handler: " << e.what();
   }

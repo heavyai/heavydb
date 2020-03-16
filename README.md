@@ -13,7 +13,7 @@ For more details, see the [OmniSciDB Developer Documentation](https://omnisci.gi
 - Read up about [building, running tests, and basic usage and configuration](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#building).
 - [Download and install](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#DownloadsandInstallationInstructions) the package.
 - Initialize servers [using a wrapper](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#starting-using-the-startomnisci-wrapper) or [manually](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#starting-manually)
-- [Load sample data.](#working-with-data) Sample sets can be found in the [Data Set Library](https://community.omnisci.com/browse/dataset-library).
+- [Load sample data.](#working-with-data) Sample sets can be found in the [Data Set Library](https://github.com/omnisci/community_datasets).
 - Perform a sample query
 
 For complete [download and installation instructions](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation#downloads-and-installation-instructions), please visit the [Documentation](https://github.com/omnisci/omniscidb/wiki/OmniSciDB-Documentation) page.
@@ -60,7 +60,7 @@ Check out [contribution wishlist](https://github.com/omnisci/omniscidb/contribut
 In order to clarify the intellectual property license granted with Contributions from any person or entity, OmniSci must have a Contributor License Agreement ("CLA") on file that has been signed by each Contributor, indicating agreement to the [Contributor License Agreement](CLA.txt). After making a pull request, a bot will notify you if a signed CLA is required and provide instructions for how to sign it. Please read the agreement carefully before signing and retain a copy for your records.
 
 ## Need Help?
-Have questions? Post questions and get answers on the official [online forum and community](https://community.omnisci.com/home) or create an issue in the repo.
+Have questions? Post questions and get answers on the official [online forum and community](https://community.omnisci.com/) or create an issue in the repo.
 
 # Copyright & License
 This project is licensed under the [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0).

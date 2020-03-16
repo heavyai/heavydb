@@ -57,6 +57,7 @@ extern double g_gpu_mem_limit_percent;
 
 extern bool g_enable_window_functions;
 extern bool g_enable_bump_allocator;
+extern bool g_enable_interop;
 
 extern size_t g_leaf_count;
 
@@ -7182,6 +7183,27 @@ TEST(Select, Joins_InnerJoin_Sharded) {
   }
 }
 
+TEST(Select, Joins_Sharded_Empty_Last_Appended_Storage) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    size_t num_shards = choose_shard_count();
+
+    // we make a query filtering out all tuples in the last shard
+    // and force project it
+
+    // id of the last shard
+    int id_filtered_shard = num_shards - 1;
+
+    std::stringstream query;
+    // i % num_shards != id_filtered_shard is a filter condition
+    // to remove all tuples in the last shard
+    query << "SELECT t1.i, t1.j, t1.s FROM (SELECT i, j, s FROM st4 WHERE i % "
+          << num_shards << " != " << id_filtered_shard
+          << ") t1, st4 t2 WHERE t1.i = t2.i ORDER BY t1.i, t1.j, t1.s;";
+    SKIP_ON_AGGREGATOR(c(query.str(), dt));
+  }
+}
+
 TEST(Select, Joins_Negative_ShardKey) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -13545,6 +13567,36 @@ TEST(Select, Correlated_In) {
   }
 }
 
+TEST(Create, QuotedIdentifier) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("drop table if exists identifier_test;");
+    EXPECT_ANY_THROW(
+        run_ddl_statement("create table identifier_test (id integer, sum bigint);"));
+
+    run_ddl_statement("create table identifier_test (id integer, \"sum\" bigint);");
+
+    run_multiple_agg("insert into identifier_test values(1, 1);", dt);
+    run_multiple_agg("insert into identifier_test values(2, 2);", dt);
+    run_multiple_agg("insert into identifier_test values(3, 3);", dt);
+
+    EXPECT_ANY_THROW(run_simple_agg("SELECT sum FROM identifier_test;", dt));
+
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg(
+                  "SELECT \"sum\" FROM identifier_test where id = 1;", dt)));
+
+    run_ddl_statement("alter table identifier_test rename column \"sum\" to \"count\";");
+
+    ASSERT_EQ(static_cast<int64_t>(2),
+              v<int64_t>(run_simple_agg(
+                  "SELECT \"count\" FROM identifier_test where id = 2;", dt)));
+
+    run_ddl_statement("alter table identifier_test drop column \"count\";");
+  }
+}
+
 TEST(Create, Delete) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
@@ -16470,6 +16522,49 @@ TEST(TemporaryTables, Unsupported) {
                           "DICTIONARY(str) REFERENCES test(null_str));"));
   }
 }
+
+TEST(Select, Interop) {
+  SKIP_ALL_ON_AGGREGATOR();
+  g_enable_interop = true;
+  ScopeGuard interop_guard = [] { g_enable_interop = false; };
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+    c("SELECT 'dict_' || str c1, 'fake_' || substring(real_str, 6) c2, x + 56 c3, f c4, "
+      "-d c5, smallint_nulls c6 FROM test WHERE ('fake_' || substring(real_str, 6)) LIKE "
+      "'%_ba%' ORDER BY c1 ASC, c2 ASC, c3 ASC, c4 ASC, c5 ASC, c6 ASC;",
+      "SELECT 'dict_' || str c1, 'fake_' || substr(real_str, 6) c2, x + 56 c3, f c4, -d "
+      "c5, smallint_nulls c6 FROM test WHERE ('fake_' || substr(real_str, 6)) LIKE "
+      "'%_ba%' ORDER BY c1 ASC, c2 ASC, c3 ASC, c4 ASC, c5 ASC, c6 ASC;",
+      dt);
+    c("SELECT 'dict_' || str c1, 'fake_' || substring(real_str, 6) c2, x + 56 c3, f c4, "
+      "-d c5, smallint_nulls c6 FROM test ORDER BY c1 ASC, c2 ASC, c3 ASC, c4 ASC, c5 "
+      "ASC, c6 ASC;",
+      "SELECT 'dict_' || str c1, 'fake_' || substr(real_str, 6) c2, x + 56 c3, f c4, -d "
+      "c5, smallint_nulls c6 FROM test ORDER BY c1 ASC, c2 ASC, c3 ASC, c4 ASC, c5 ASC, "
+      "c6 ASC;",
+      dt);
+    c("SELECT str || '_dict' AS c1, COUNT(*) c2 FROM test GROUP BY str ORDER BY c1 ASC, "
+      "c2 ASC;",
+      dt);
+    c("SELECT str || '_dict' AS c1, COUNT(*) c2 FROM test WHERE x <> 8 GROUP BY str "
+      "ORDER BY c1 ASC, c2 ASC;",
+      dt);
+    {
+      std::string part1 =
+          "SELECT x, y, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC) - 1 r1, RANK() "
+          "OVER (PARTITION BY y ORDER BY x ASC) r2, DENSE_RANK() OVER (PARTITION BY y "
+          "ORDER BY x DESC) r3 FROM test_window_func ORDER BY x ASC";
+      std::string part2 = ", y ASC, r1 ASC, r2 ASC, r3 ASC;";
+      c(part1 + " NULLS FIRST" + part2, part1 + part2, dt);
+    }
+    c("SELECT CAST(('fake_' || SUBSTRING(real_str, 6)) LIKE '%_ba%' AS INT) b from test "
+      "ORDER BY b;",
+      "SELECT ('fake_' || SUBSTR(real_str, 6)) LIKE '%_ba%' b from test ORDER BY b;",
+      dt);
+  }
+  g_enable_interop = false;
+}
+
 namespace {
 
 int create_sharded_join_table(const std::string& table_name,
@@ -17264,6 +17359,8 @@ int create_and_populate_tables(const bool use_temporary_tables,
         "st2", fragment_size, num_shards * fragment_size, shard_info, delete_support);
     create_sharded_join_table(
         "st3", fragment_size, 8 * num_shards, shard_info, delete_support);
+    create_sharded_join_table(
+        "st4", fragment_size, num_shards, shard_info, delete_support);
 
   } catch (...) {
     LOG(ERROR) << "Failed to (re-)create table 'array_test_inner'";
@@ -17801,6 +17898,7 @@ int main(int argc, char** argv) {
   }
 
   g_enable_window_functions = true;
+  g_enable_interop = false;
 
   QR::init(BASE_PATH);
   if (vm.count("with-sharding")) {

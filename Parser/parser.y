@@ -22,11 +22,16 @@
     lexer.switch_streams(&ss,0);                                                                                        \
     yyparse(parseTrees);                                                                                                \
     lastParsed = lexer.YYText();                                                                                        \
+    lexer.in_error_state_ = (yynerrs > 0);                                                                              \
+    if (!errors_.empty()) {                                                                                             \
+      throw std::runtime_error(errors_[0]);                                                                             \
+    }                                                                                                                   \
     return yynerrs;                                                                                                     \
   }                                                                                                                     \
  private:                                                                                                               \
   SQLLexer lexer;                                                                                                       \
-  std::mutex mutex_;
+  std::mutex mutex_;                                                                                                    \
+  std::vector<std::string> errors_;
 %define LEX_BODY {return lexer.yylex();}
 %define ERROR_BODY {} /*{ std::cerr << "Syntax error on line " << lexer.lineno() << ". Last word parsed: " << lexer.YYText() << std::endl; } */
 
@@ -45,6 +50,7 @@
 #include <boost/regex.hpp>
 #include <FlexLexer.h>
 #include "ParserNode.h"
+#include "ReservedKeywords.h"
 
 using namespace Parser;
 #define YY_Parser_PARSE_PARAM std::list<std::unique_ptr<Stmt>>& parseTrees
@@ -67,7 +73,23 @@ using namespace Parser;
 	class SQLLexer : public yyFlexLexer {
 		public:
 			SQLLexer(YY_Parser_STYPE &lval) : yylval(lval) {};
+			~SQLLexer() {
+				/**
+				 * Free allocated heap memory for name tokens when a parse error occurs.
+				 * In the happy case, memory is expected to be freed by related DDLStmt class.
+				 */
+				if (in_error_state_) {
+					for (auto& token : parsed_name_tokens_) {
+						if (token) {
+							delete token;
+							token = nullptr;
+						}
+					}
+				}
+			}
 			YY_Parser_STYPE &yylval;
+			bool in_error_state_{false};
+			std::vector<std::string*> parsed_name_tokens_{};
 	};
 %}
 
@@ -127,6 +149,7 @@ sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
 	| rename_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| rename_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| add_column_statement { $<nodeval>$ = $<nodeval>1; }
+	| drop_column_statement { $<nodeval>$ = $<nodeval>1; }
 	| copy_table_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_database_statement { $<nodeval>$ = $<nodeval>1; }
 	| drop_database_statement { $<nodeval>$ = $<nodeval>1; }
@@ -317,6 +340,18 @@ add_column_statement:
 		   $<nodeval>$ = new AddColumnStmt($<stringval>3, reinterpret_cast<std::list<ColumnDef*>*>($<nodeval>6));
 		}
 		;
+
+drop_column_statement:
+		ALTER TABLE table drop_columns { $<nodeval>$ = new DropColumnStmt($<stringval>3, $<slistval>4); }
+		;
+
+drop_columns:
+		 drop_column { $<listval>$ = new std::list<Node*>(1, $<nodeval>1); }
+		|drop_columns ',' drop_column { ($<listval>1)->push_back($<nodeval>3); }
+		;
+		
+drop_column:
+		DROP opt_column column { $<stringval>$ = $<stringval>3; }
 
 copy_table_statement:
 	COPY table FROM STRING opt_with_option_list
@@ -1257,7 +1292,16 @@ geometry_type:	GEOMETRY '(' geo_type ')'
 
 	/* the various things you can name */
 
-column:		NAME { $<stringval>$ = $<stringval>1; }
+column:
+	NAME
+	{
+		const auto uc_col_name = boost::to_upper_copy<std::string>(*$<stringval>1);
+		if (reserved_keywords.find(uc_col_name) != reserved_keywords.end()) {
+			errors_.push_back("Cannot use a reserved keyword as column name: " + *$<stringval>1);
+		}
+		$<stringval>$ = $<stringval>1; 
+	}
+    | 	QUOTED_IDENTIFIER { $<stringval>$ = $<stringval>1; }
 	;
 
 /*

@@ -327,6 +327,12 @@ using LLVMValueVector = std::vector<llvm::Value*>;
 
 class QueryCompilationDescriptor;
 
+struct FetchResult {
+  std::vector<std::vector<const int8_t*>> col_buffers;
+  std::vector<std::vector<int64_t>> num_rows;
+  std::vector<std::vector<uint64_t>> frag_offsets;
+};
+
 class Executor {
   static_assert(sizeof(float) == 4 && sizeof(double) == 8,
                 "Host hardware not supported, unexpected size of float / double.");
@@ -355,7 +361,7 @@ class Executor {
 
   static void clearMemory(const Data_Namespace::MemoryLevel memory_level);
 
-  typedef std::tuple<std::string, const Analyzer::Expr*, int64_t, const size_t> AggInfo;
+  using AggInfo = std::tuple<std::string, const Analyzer::Expr*, int64_t, const size_t>;
 
   std::shared_ptr<ResultSet> execute(const Planner::RootPlan* root_plan,
                                      const Catalog_Namespace::SessionInfo& session,
@@ -465,12 +471,6 @@ class Executor {
     }
     return false;
   }
-
-  struct FetchResult {
-    std::vector<std::vector<const int8_t*>> col_buffers;
-    std::vector<std::vector<int64_t>> num_rows;
-    std::vector<std::vector<uint64_t>> frag_offsets;
-  };
 
   bool needFetchAllFragments(const InputColDescriptor& col_desc,
                              const RelAlgExecutionUnit& ra_exe_unit,

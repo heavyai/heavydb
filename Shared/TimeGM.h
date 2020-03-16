@@ -72,7 +72,7 @@ class DateTimeStringValidate {
  private:
   constexpr int64_t parseDateTimeString() {
     char* tp = nullptr;
-    if constexpr (SQL_TYPE == kTIME) {
+    if constexpr (SQL_TYPE == kTIME) {  // NOLINT
       char const* x = str_.c_str();
       parseTimePart(x, tp);
       tm_.tm_mday = 1;
@@ -87,7 +87,7 @@ class DateTimeStringValidate {
     }
     char* p = nullptr;
     parseTimePart(tp, p);
-    if constexpr (SQL_TYPE == kDATE) {
+    if constexpr (SQL_TYPE == kDATE) {  // NOLINT
       return static_cast<int64_t>(TimeGM::instance().my_timegm(&tm_));
     }
     // handle fractional seconds
@@ -112,13 +112,13 @@ class DateTimeStringValidate {
 
   template <typename T>
   constexpr void parseTimePart(T*& s, std::remove_const_t<T>*& p) {
-    if constexpr (SQL_TYPE == kDATE) {
+    if constexpr (SQL_TYPE == kDATE) {  // NOLINT
       if (*s == 'T' || *s == ' ') {
         ++s;
       }
       detectFormatFromString(s, p, "%z");
       return;
-    } else if constexpr (SQL_TYPE == kTIME) {
+    } else if constexpr (SQL_TYPE == kTIME) {  // NOLINT
       if (*s == 'T') {
         ++s;
       }

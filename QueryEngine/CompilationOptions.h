@@ -34,6 +34,8 @@ struct CompilationOptions {
   const bool register_intel_jit_listener_{false};
 };
 
+enum class ExecutorType { Native, Extern };
+
 struct ExecutionOptions {
   const bool output_columnar_hint;
   const bool allow_multifrag;
@@ -48,6 +50,7 @@ struct ExecutionOptions {
   const bool find_push_down_candidates;
   const bool just_calcite_explain;
   const double gpu_input_mem_limit_percent;  // punt to CPU if input memory exceeds this
+  ExecutorType executor_type = ExecutorType::Native;
 };
 
 #endif  // QUERYENGINE_COMPILATIONOPTIONS_H

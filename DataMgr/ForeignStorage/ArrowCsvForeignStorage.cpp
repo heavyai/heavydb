@@ -285,13 +285,14 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   auto tg = arrow::internal::TaskGroup::MakeThreaded(tp);
 
   for (auto& c : cols) {
+    if (c.isSystemCol) {
+      continue;  // must be processed by base interface implementation
+    }
+
     if (cln >= num_cols) {
       LOG(ERROR) << "Number of columns read from Arrow (" << num_cols
                  << ") mismatch CREATE TABLE request: " << cols.size();
       break;
-    }
-    if (c.isSystemCol) {
-      continue;  // must be processed by base interface implementation
     }
 
     auto ctype = c.columnType.get_type();

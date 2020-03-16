@@ -48,10 +48,7 @@ ForeignStorageBufferMgr::ForeignStorageBufferMgr(
     const int db_id,
     const int table_id,
     PersistentForeignStorageInterface* persistent_foreign_storage)
-    : AbstractBufferMgr(0)
-    , db_id_(db_id)
-    , table_id_(table_id)
-    , persistent_foreign_storage_(persistent_foreign_storage) {}
+    : AbstractBufferMgr(0), persistent_foreign_storage_(persistent_foreign_storage) {}
 
 void ForeignStorageBufferMgr::checkpoint() {
   // TODO(alex)

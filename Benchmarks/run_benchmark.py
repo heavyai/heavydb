@@ -387,6 +387,7 @@ def execute_query(**kwargs):
     # Calculate times
     query_elapsed_time = (timeit.default_timer() - start_time) * 1000
     execution_time = query_result._result.execution_time_ms
+    debug_info = query_result._result.debug
     connect_time = round((query_elapsed_time - execution_time), 1)
     # Iterate through each result from the query
     logging.debug(
@@ -408,6 +409,7 @@ def execute_query(**kwargs):
         "connect_time": connect_time,
         "results_iter_time": results_iter_time,
         "total_time": execution_time + connect_time + results_iter_time,
+        "debug_info": debug_info,
     }
     logging.debug(
         "Execution results for query"
@@ -817,6 +819,18 @@ def create_results_dataset(**kwargs):
                 total_times.append(noninitial_result["total_time"])
                 # Overwrite result count, same for each iteration
                 result_count = noninitial_result["result_count"]
+
+            # If available, getting the last iteration's component-wise timing information as a json structure
+            detailed_timing_last_iteration = {}
+            if (
+                query_results["noninitial_iteration_results"][-1]["debug_info"]
+                is not None
+            ):
+                detailed_timing_last_iteration = json.loads(
+                    query_results["noninitial_iteration_results"][-1][
+                        "debug_info"
+                    ]
+                )["timer"]
             # Calculate query times
             logging.debug(
                 "Calculating times from query " + query_results["query_id"]
@@ -914,6 +928,7 @@ def create_results_dataset(**kwargs):
                 "debug": {
                     "query_exec_times": query_times["execution_times"],
                     "query_total_times": query_times["total_times"],
+                    "detailed_timing_last_iteration": detailed_timing_last_iteration,
                 },
             }
         elif not query_results["query_succeeded"]:

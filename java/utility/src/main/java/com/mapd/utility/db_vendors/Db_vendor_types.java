@@ -17,7 +17,13 @@ abstract public class Db_vendor_types {
   static protected HashSet<Integer> valid_srid =
           new HashSet<>(Arrays.asList(4326, 900913));
 
-  public abstract String find_gis_type(
+  public static class GisType {
+    public String subtype;
+    public String type;
+    public int srid;
+  };
+
+  public abstract GisType find_gis_type(
           Connection conn, ResultSetMetaData metadata, int column_number)
           throws SQLException;
   public abstract String get_wkt(ResultSet rs, int column_number, String gis_type_name)
@@ -29,6 +35,20 @@ abstract public class Db_vendor_types {
     else if (connection_str.toLowerCase().contains("omnisci"))
       return new com.mapd.utility.db_vendors.OmniSciGeo_types();
     return null;
+  }
+  public static String gis_type_to_str(GisType type) {
+    StringBuffer column_sql_definition = new StringBuffer();
+    if (!type.subtype.isEmpty()) {
+      column_sql_definition.append(type.subtype + "(");
+    }
+    column_sql_definition.append(type.type);
+    if (type.srid != 0) {
+      column_sql_definition.append("," + type.srid);
+    }
+    if (!type.subtype.isEmpty()) {
+      column_sql_definition.append(")");
+    }
+    return column_sql_definition.toString();
   }
 }
 
@@ -52,7 +72,7 @@ class OmniSciGeo_types extends com.mapd.utility.db_vendors.Db_vendor_types {
     return rs.getString(column_number);
   }
 
-  public String find_gis_type(
+  public GisType find_gis_type(
           Connection conn, ResultSetMetaData metadata, int column_number)
           throws SQLException {
     String column_name = metadata.getColumnName(column_number);
@@ -68,15 +88,11 @@ class OmniSciGeo_types extends com.mapd.utility.db_vendors.Db_vendor_types {
     if (!subtypes.containsKey(subtype))
       throw new SQLException(
               "Subtype is not supported: " + subtype + " for column " + column_name);
-
-    StringBuffer column_sql_definition = new StringBuffer();
-    column_sql_definition.append(subtypes.get(subtype) + "(");
-    column_sql_definition.append(column_type_name.toUpperCase());
-    if (srid != 0) {
-      column_sql_definition.append("," + srid);
-    }
-    column_sql_definition.append(")");
-    return column_sql_definition.toString();
+    GisType result = new GisType();
+    result.srid = srid;
+    result.subtype = subtypes.get(subtype);
+    result.type = column_type_name.toUpperCase();
+    return result;
   }
 }
 
@@ -136,7 +152,7 @@ class PostGis_types extends com.mapd.utility.db_vendors.Db_vendor_types {
     return WKT_string.toString();
   }
 
-  public String find_gis_type(
+  public GisType find_gis_type(
           Connection conn, ResultSetMetaData metadata, int column_number)
           throws SQLException {
     String column_name = metadata.getColumnName(column_number);
@@ -149,10 +165,12 @@ class PostGis_types extends com.mapd.utility.db_vendors.Db_vendor_types {
     if (!extra_types.containsKey(column_type_name))
       throw new SQLException(
               "type not supported: " + column_type_name + " for column " + column_name);
-    return extra_types.get(column_type_name);
+    GisType result = new GisType();
+    result.type = extra_types.get(column_type_name);
+    return result;
   }
 
-  private String find_type_detail(Connection conn,
+  private GisType find_type_detail(Connection conn,
           String ref_table_name,
           String ref_column_name,
           String column_name) throws SQLException {
@@ -184,12 +202,10 @@ class PostGis_types extends com.mapd.utility.db_vendors.Db_vendor_types {
     }
     if (!extra_types.containsKey(ps_column_type.toLowerCase()))
       throw new SQLException("type not supported");
-    omnisci_type = extra_types.get(ps_column_type.toLowerCase());
-    if (ps_srid != 0) {
-      if (!valid_srid.contains(new Integer(ps_srid)))
-        throw new SQLException("type not supported");
-      omnisci_type = omnisci_type + "," + ps_srid;
-    }
-    return new String("geometry(" + omnisci_type + ")");
+    GisType result = new GisType();
+    result.subtype = "GEOMETRY";
+    result.srid = ps_srid;
+    result.type = extra_types.get(ps_column_type.toLowerCase()).toUpperCase();
+    return result;
   }
 }

@@ -395,7 +395,6 @@ class ExternalCall : public Instruction {
                const std::string& label)
       : Instruction(ret_type, label)
       , callee_name_(callee_name)
-      , ret_type_(ret_type)
       , arguments_(arguments)
       , cached_callee_(nullptr) {}
 
@@ -413,7 +412,6 @@ class ExternalCall : public Instruction {
 
  private:
   const std::string callee_name_;
-  const Type ret_type_;
   const std::vector<const Value*> arguments_;
   mutable void* cached_callee_;
 };

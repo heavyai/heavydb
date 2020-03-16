@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,112 +14,201 @@
  * limitations under the License.
  */
 
-#ifndef LOCKMGR_H
-#define LOCKMGR_H
+#pragma once
+
+#include "LockMgr/LegacyLockMgr.h"
+#include "LockMgr/LockMgrImpl.h"
+
+#include <map>
+#include <memory>
+#include <string>
 
 #include "Catalog/Catalog.h"
 #include "Shared/mapd_shared_mutex.h"
 #include "Shared/types.h"
-#include "ThriftHandler/QueryState.h"
 
-#include <map>
-#include <mutex>
-#include <tuple>
-#include "boost/variant.hpp"
+namespace lockmgr {
 
-#include <rapidjson/document.h>
-
-namespace Lock_Namespace {
-using namespace rapidjson;
-using LockTypeContainer = boost::variant<mapd_shared_lock<mapd_shared_mutex>,
-                                         mapd_unique_lock<mapd_shared_mutex>>;
-
-enum LockType { TableMetadataLock, CheckpointLock, ExecutorOuterLock, LockMax };
-
-template <typename MutexType, typename KeyType>
-class LockMgr {
+/**
+ * @brief Locks protecting a physical table object returned from the catalog.
+ * Table Metadata Locks prevent incompatible concurrent operations on table objects.
+ * For example, before dropping or altering a table, a metadata write lock must be
+ * acquired. This prevents concurrent read + drop, concurrent drops, etc.
+ */
+class TableSchemaLockMgr : public TableLockMgrImpl<TableSchemaLockMgr> {
  public:
-  static std::shared_ptr<MutexType> getMutex(const LockType lockType, const KeyType& key);
+  static TableSchemaLockMgr& instance() {
+    static TableSchemaLockMgr table_lock_mgr;
+    return table_lock_mgr;
+  }
 
  private:
-  static std::mutex aMutex_;
-  static std::map<std::tuple<LockType, KeyType>, std::shared_ptr<MutexType>> mutexMap_;
+  TableSchemaLockMgr() {}
 };
 
-template <typename MutexType, typename KeyType>
-std::mutex LockMgr<MutexType, KeyType>::aMutex_;
-template <typename MutexType, typename KeyType>
-std::map<std::tuple<LockType, KeyType>, std::shared_ptr<MutexType>>
-    LockMgr<MutexType, KeyType>::mutexMap_;
-
-template <typename MutexType, typename KeyType>
-std::shared_ptr<MutexType> LockMgr<MutexType, KeyType>::getMutex(const LockType lock_type,
-                                                                 const KeyType& key) {
-  auto lock_key = std::make_tuple(lock_type, key);
-
-  std::unique_lock<std::mutex> lck(aMutex_);
-  auto mit = mutexMap_.find(lock_key);
-  if (mit != mutexMap_.end()) {
-    return mit->second;
+/**
+ * @brief Prevents simultaneous inserts into the same table.
+ * To allow concurrent Insert/Select queries, Insert queries only obtain a write lock on
+ * table data when checkpointing (flushing chunks to disk). Inserts/Data load will take an
+ * exclusive (write) lock to ensure only one insert proceeds on each table at a time.
+ */
+class InsertDataLockMgr : public TableLockMgrImpl<InsertDataLockMgr> {
+ public:
+  static InsertDataLockMgr& instance() {
+    static InsertDataLockMgr insert_data_lock_mgr;
+    return insert_data_lock_mgr;
   }
 
-  auto tMutex = std::make_shared<MutexType>();
-  mutexMap_[lock_key] = tMutex;
-  return tMutex;
-}
+ protected:
+  InsertDataLockMgr() {}
+};
 
-ChunkKey getTableChunkKey(const Catalog_Namespace::Catalog& cat,
-                          const std::string& tableName);
-void getTableNames(std::map<std::string, bool>& tableNames, const Value& value);
-void getTableNames(std::map<std::string, bool>& tableNames, const std::string query_ra);
-std::string parse_to_ra(query_state::QueryStateProxy, const std::string& query_str);
+/**
+ * @brief Locks protecting table data.
+ * Read queries take a read lock, while write queries (update, delete) obtain a write
+ * lock. Note that insert queries do not currently take a write lock (to allow concurrent
+ * inserts). Instead, insert queries obtain a write lock on the table metadata to allow
+ * existing read queries to finish (and block new ones) before flushing the inserted data
+ * to disk.
+ */
+class TableDataLockMgr : public TableLockMgrImpl<TableDataLockMgr> {
+ public:
+  static TableDataLockMgr& instance() {
+    static TableDataLockMgr data_lock_mgr;
+    return data_lock_mgr;
+  }
 
-template <typename MutexType>
-std::shared_ptr<MutexType> getTableMutex(const Catalog_Namespace::Catalog& cat,
-                                         const std::string& tableName,
-                                         const Lock_Namespace::LockType lockType) {
-  return Lock_Namespace::LockMgr<MutexType, ChunkKey>::getMutex(
-      lockType, getTableChunkKey(cat, tableName));
-}
+ protected:
+  TableDataLockMgr() {}
+};
 
-template <typename MutexType, template <typename> class LockType>
-LockType<MutexType> getTableLock(const Catalog_Namespace::Catalog& cat,
-                                 const std::string& tableName,
-                                 const Lock_Namespace::LockType lockType) {
-  auto lock = LockType<MutexType>(*getTableMutex<MutexType>(cat, tableName, lockType));
-  // "... we need to make sure that the table (and after alter column) the columns are
-  // still around after obtaining our locks ..."
-  auto chunkKey = getTableChunkKey(cat, tableName);
-  return lock;
-}
+class TableLockContainerImpl {
+  std::string getTableName() const { return table_name_; }
 
-template <typename MutexType>
-void getTableLocks(const Catalog_Namespace::Catalog& cat,
-                   const std::map<std::string, bool>& tableNames,
-                   std::vector<std::shared_ptr<LockTypeContainer>>& tableLocks,
-                   const Lock_Namespace::LockType lockType) {
-  for (const auto& tableName : tableNames) {
-    if (tableName.second) {
-      tableLocks.emplace_back(std::make_shared<LockTypeContainer>(
-          getTableLock<MutexType, mapd_unique_lock>(cat, tableName.first, lockType)));
-    } else {
-      tableLocks.emplace_back(std::make_shared<LockTypeContainer>(
-          getTableLock<MutexType, mapd_shared_lock>(cat, tableName.first, lockType)));
+ protected:
+  TableLockContainerImpl(const std::string& table_name) : table_name_(table_name) {}
+
+  std::string table_name_;
+};
+
+template <typename LOCK_TYPE>
+class TableSchemaLockContainer
+    : public LockContainerImpl<const TableDescriptor*, LOCK_TYPE>,
+      public TableLockContainerImpl {
+  static_assert(std::is_same<LOCK_TYPE, ReadLock>::value ||
+                std::is_same<LOCK_TYPE, WriteLock>::value);
+
+ public:
+  TableSchemaLockContainer(const TableSchemaLockContainer&) = delete;  // non-copyable
+};
+
+template <>
+class TableSchemaLockContainer<ReadLock>
+    : public LockContainerImpl<const TableDescriptor*, ReadLock>,
+      public TableLockContainerImpl {
+ public:
+  static auto acquireTableDescriptor(const Catalog_Namespace::Catalog& cat,
+                                     const std::string& table_name,
+                                     const bool populate_fragmenter = true) {
+    return TableSchemaLockContainer<ReadLock>(
+        cat.getMetadataForTable(table_name, populate_fragmenter),
+        TableSchemaLockMgr::getReadLockForTable(cat, table_name));
+  }
+
+  static auto acquireTableDescriptor(const Catalog_Namespace::Catalog& cat,
+                                     const int table_id) {
+    const auto td = cat.getMetadataForTable(table_id);
+    if (!td) {
+      throw std::runtime_error("Table ID " + std::to_string(table_id) +
+                               " does not exist.");
     }
+    return TableSchemaLockContainer<ReadLock>(
+        td, TableSchemaLockMgr::getReadLockForTable(cat, td->tableName));
   }
-}
 
-template <typename MutexType>
-void getTableLocks(const Catalog_Namespace::Catalog& cat,
-                   const std::string& query_ra,
-                   std::vector<std::shared_ptr<LockTypeContainer>>& tableLocks,
-                   const Lock_Namespace::LockType lockType) {
-  // parse ra to learn involved table names
-  std::map<std::string, bool> tableNames;
-  getTableNames(tableNames, query_ra);
-  getTableLocks<MutexType>(cat, tableNames, tableLocks, lockType);
-}
+ private:
+  TableSchemaLockContainer<ReadLock>(const TableDescriptor* obj, ReadLock&& lock)
+      : LockContainerImpl<const TableDescriptor*, ReadLock>(obj, std::move(lock))
+      , TableLockContainerImpl(obj ? obj->tableName : "") {}
+};
 
-}  // namespace Lock_Namespace
+template <>
+class TableSchemaLockContainer<WriteLock>
+    : public LockContainerImpl<const TableDescriptor*, WriteLock>,
+      public TableLockContainerImpl {
+ public:
+  static auto acquireTableDescriptor(const Catalog_Namespace::Catalog& cat,
+                                     const std::string& table_name,
+                                     const bool populate_fragmenter = true) {
+    return TableSchemaLockContainer<WriteLock>(
+        cat.getMetadataForTable(table_name, populate_fragmenter),
+        TableSchemaLockMgr::getWriteLockForTable(cat, table_name));
+  }
 
-#endif  // LOCKMGR_H
+  static auto acquireTableDescriptor(const Catalog_Namespace::Catalog& cat,
+                                     const int table_id) {
+    const auto td = cat.getMetadataForTable(table_id);
+    if (!td) {
+      throw std::runtime_error("Table ID " + std::to_string(table_id) +
+                               " does not exist.");
+    }
+    return TableSchemaLockContainer<WriteLock>(
+        td, TableSchemaLockMgr::getWriteLockForTable(cat, td->tableName));
+  }
+
+ private:
+  TableSchemaLockContainer<WriteLock>(const TableDescriptor* obj, WriteLock&& lock)
+      : LockContainerImpl<const TableDescriptor*, WriteLock>(obj, std::move(lock))
+      , TableLockContainerImpl(obj ? obj->tableName : "") {}
+};
+
+template <typename LOCK_TYPE>
+class TableDataLockContainer
+    : public LockContainerImpl<const TableDescriptor*, LOCK_TYPE>,
+      public TableLockContainerImpl {
+  static_assert(std::is_same<LOCK_TYPE, ReadLock>::value ||
+                std::is_same<LOCK_TYPE, WriteLock>::value);
+
+ public:
+  TableDataLockContainer(const TableDataLockContainer&) = delete;  // non-copyable
+};
+template <>
+class TableDataLockContainer<WriteLock>
+    : public LockContainerImpl<const TableDescriptor*, WriteLock>,
+      public TableLockContainerImpl {
+ public:
+  static auto acquire(const int db_id, const TableDescriptor* td) {
+    CHECK(td);
+    ChunkKey chunk_key{db_id, td->tableId};
+    return TableDataLockContainer<WriteLock>(
+        td, TableDataLockMgr::getWriteLockForTable(chunk_key));
+  }
+
+ private:
+  TableDataLockContainer<WriteLock>(const TableDescriptor* obj, WriteLock&& lock)
+      : LockContainerImpl<const TableDescriptor*, WriteLock>(obj, std::move(lock))
+      , TableLockContainerImpl(obj->tableName) {}
+};
+
+template <>
+class TableDataLockContainer<ReadLock>
+    : public LockContainerImpl<const TableDescriptor*, ReadLock>,
+      public TableLockContainerImpl {
+ public:
+  static auto acquire(const int db_id, const TableDescriptor* td) {
+    CHECK(td);
+    ChunkKey chunk_key{db_id, td->tableId};
+    return TableDataLockContainer<ReadLock>(
+        td, TableDataLockMgr::getReadLockForTable(chunk_key));
+  }
+
+ private:
+  TableDataLockContainer<ReadLock>(const TableDescriptor* obj, ReadLock&& lock)
+      : LockContainerImpl<const TableDescriptor*, ReadLock>(obj, std::move(lock))
+      , TableLockContainerImpl(obj->tableName) {}
+};
+
+using LockedTableDescriptors =
+    std::vector<std::unique_ptr<lockmgr::AbstractLockContainer<const TableDescriptor*>>>;
+
+}  // namespace lockmgr

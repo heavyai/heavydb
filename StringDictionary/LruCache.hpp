@@ -15,10 +15,10 @@
 template <typename key_t, typename value_t, class hash_t = std::hash<key_t>>
 class LruCache {
  private:
-  typedef typename std::pair<key_t, value_t> key_value_pair_t;
+  using key_value_pair_t = typename std::pair<key_t, value_t>;
   using cache_list_t = typename std::list<key_value_pair_t>;
   using list_iterator_t = typename cache_list_t::iterator;
-  typedef typename std::unordered_map<key_t, list_iterator_t, hash_t> map_t;
+  using map_t = typename std::unordered_map<key_t, list_iterator_t, hash_t>;
   using map_t_iterator = typename map_t::iterator;
 
  public:

@@ -78,6 +78,9 @@ set(parser_source_files
 add_library(ParserGenerated ${ParserPatched} ${ScannerPatched})
 add_library(Parser ${CMAKE_CURRENT_BINARY_DIR}/parser.h ${parser_source_files})
 
+add_dependencies(PatchParser ParserFiles)
+add_dependencies(PatchScanner ScannerFiles)
+
 add_dependencies(Parser PatchParser PatchScanner)
 
 target_link_libraries(Parser ParserGenerated Shared QueryEngine Catalog DataMgr LockMgr)

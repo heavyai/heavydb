@@ -76,7 +76,60 @@ DataMgr::~DataMgr() {
   }
 }
 
-size_t DataMgr::getTotalSystemMemory() {
+DataMgr::SystemMemoryUsage DataMgr::getSystemMemoryUsage() const {
+  SystemMemoryUsage usage;
+
+#ifdef __linux__
+
+  // Determine Linux available memory and total memory.
+  // Available memory is different from free memory because
+  // when Linux sees free memory, it tries to use it for
+  // stuff like disk caching. However, the memory is not
+  // reserved and is still available to be allocated by
+  // user processes.
+  // Parsing /proc/meminfo for this info isn't very elegant
+  // but as a virtual file it should be reasonably fast.
+  // See also:
+  //   https://github.com/torvalds/linux/commit/34e431b0ae398fc54ea69ff85ec700722c9da773
+  ProcMeminfoParser mi;
+  usage.free = mi["MemAvailable"];
+  usage.total = mi["MemTotal"];
+
+  // Determine process memory in use.
+  // See also:
+  //   https://stackoverflow.com/questions/669438/how-to-get-memory-usage-at-runtime-using-c
+  //   http://man7.org/linux/man-pages/man5/proc.5.html
+  int64_t size = 0;
+  int64_t resident = 0;
+  int64_t shared = 0;
+
+  std::ifstream fstatm("/proc/self/statm");
+  fstatm >> size >> resident >> shared;
+  fstatm.close();
+
+  long page_size =
+      sysconf(_SC_PAGE_SIZE);  // in case x86-64 is configured to use 2MB pages
+
+  usage.resident = resident * page_size;
+  usage.vtotal = size * page_size;
+  usage.regular = (resident - shared) * page_size;
+  usage.shared = shared * page_size;
+
+#else
+
+  usage.total = 0;
+  usage.free = 0;
+  usage.resident = 0;
+  usage.vtotal = 0;
+  usage.regular = 0;
+  usage.shared = 0;
+
+#endif
+
+  return usage;
+}
+
+size_t DataMgr::getTotalSystemMemory() const {
 #ifdef __APPLE__
   int mib[2];
   size_t physical_memory;
@@ -88,7 +141,7 @@ size_t DataMgr::getTotalSystemMemory() {
   sysctl(mib, 2, &physical_memory, &length, NULL, 0);
   return physical_memory;
 
-#else
+#else  // Linux
   long pages = sysconf(_SC_PHYS_PAGES);
   long page_size = sysconf(_SC_PAGE_SIZE);
   return pages * page_size;

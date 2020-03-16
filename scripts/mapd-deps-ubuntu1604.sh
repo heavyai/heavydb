@@ -111,6 +111,7 @@ CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure \
     --with-ruby=no \
     --with-qt4=no \
     --with-qt5=no \
+    --with-java=no \
     --prefix=$PREFIX \
     --with-boost=$PREFIX
 make -j $(nproc)

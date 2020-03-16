@@ -315,6 +315,7 @@ void shutdown() {
 std::istream& operator>>(std::istream& in, Channels& channels) {
   std::string line;
   std::getline(in, line);
+  unquote(line);
   std::regex const rex(R"(\w+)");
   using TokenItr = std::regex_token_iterator<std::string::iterator>;
   TokenItr const end;
@@ -343,6 +344,7 @@ std::ostream& operator<<(std::ostream& out, Channels const& channels) {
 std::istream& operator>>(std::istream& in, Severity& sev) {
   std::string token;
   in >> token;
+  unquote(token);
   auto itr = std::find(SeverityNames.cbegin(), SeverityNames.cend(), token);
   if (itr == SeverityNames.cend()) {
     in.setstate(std::ios_base::failbit);
@@ -652,9 +654,9 @@ struct EraseDurationTrees : boost::static_visitor<> {
   }
 };
 
-void logAndEraseDurationTree(ThreadId const thread_id, std::string* json_str) {
+void logAndEraseDurationTree(std::string* json_str) {
   std::lock_guard<std::mutex> lock_guard(g_duration_tree_map_mutex);
-  DurationTreeMap::const_iterator const itr = g_duration_tree_map.find(thread_id);
+  DurationTreeMap::const_iterator const itr = g_duration_tree_map.find(g_thread_id);
   CHECK(itr != g_duration_tree_map.cend());
   auto const& root_duration = itr->second->rootDuration();
   if (auto log = Logger(root_duration.severity_)) {
@@ -675,13 +677,24 @@ DebugTimer::~DebugTimer() {
   stop();
 }
 
-void DebugTimer::stop(std::string* json_str) {
+void DebugTimer::stop() {
   if (duration_) {
     if (duration_->stop()) {
-      logAndEraseDurationTree(g_thread_id, json_str);
+      logAndEraseDurationTree(nullptr);
     }
     duration_ = nullptr;
   }
+}
+
+std::string DebugTimer::stopAndGetJson() {
+  std::string json_str;
+  if (duration_) {
+    if (duration_->stop()) {
+      logAndEraseDurationTree(&json_str);
+    }
+    duration_ = nullptr;
+  }
+  return json_str;
 }
 
 /// Call this when a new thread is spawned that will have timers that need to be

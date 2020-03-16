@@ -21,9 +21,10 @@
 #include "GpuMemUtils.h"
 
 template <class T>
-T* transfer_pod_vector_to_gpu(const std::vector<T>& vec, ThrustAllocator& allocator) {
-  static_assert(std::is_pod<T>::value,
-                "Transferring a vector to GPU only works for POD elements");
+T* transfer_vector_of_flat_objects_to_gpu(const std::vector<T>& vec,
+                                          ThrustAllocator& allocator) {
+  static_assert(std::is_trivially_copyable<T>::value && std::is_standard_layout<T>::value,
+                "Transferring a vector to GPU only works for flat object elements");
   const auto vec_bytes = vec.size() * sizeof(T);
   auto gpu_vec = allocator.allocateScopedBuffer(vec_bytes);
   copy_to_gpu(allocator.getDataMgr(),
@@ -35,7 +36,7 @@ T* transfer_pod_vector_to_gpu(const std::vector<T>& vec, ThrustAllocator& alloca
 }
 
 template <class T>
-T* transfer_object_to_gpu(const T& object, ThrustAllocator& allocator) {
+T* transfer_flat_object_to_gpu(const T& object, ThrustAllocator& allocator) {
   static_assert(std::is_standard_layout<T>::value,
                 "Transferring an object to GPU only works for standard layout elements");
   const auto bytes = sizeof(T);

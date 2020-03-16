@@ -43,19 +43,20 @@
 #include "ColumnDescriptor.h"
 #include "DashboardDescriptor.h"
 #include "DictDescriptor.h"
+#include "ForeignServer.h"
 #include "LinkDescriptor.h"
-#include "TableDescriptor.h"
-
-#include "../DataMgr/DataMgr.h"
-#include "../QueryEngine/CompilationOptions.h"
-#include "../SqliteConnector/SqliteConnector.h"
-#include "LeafHostInfo.h"
-
-#include "../Calcite/Calcite.h"
-#include "../Shared/mapd_shared_mutex.h"
-
 #include "SessionInfo.h"
 #include "SysCatalog.h"
+#include "TableDescriptor.h"
+
+#include "Calcite/Calcite.h"
+#include "DataMgr/DataMgr.h"
+#include "LockMgr/LockMgrImpl.h"
+#include "QueryEngine/CompilationOptions.h"
+#include "Shared/mapd_shared_mutex.h"
+#include "SqliteConnector/SqliteConnector.h"
+
+#include "LeafHostInfo.h"
 
 namespace Parser {
 
@@ -123,6 +124,7 @@ class Catalog final {
                     const ColumnDescriptor* cd,
                     const std::string& newColumnName);
   void addColumn(const TableDescriptor& td, ColumnDescriptor& cd);
+  void dropColumn(const TableDescriptor& td, const ColumnDescriptor& cd);
   void removeChunks(const int table_id);
 
   /**
@@ -221,7 +223,7 @@ class Catalog final {
   void eraseTablePhysicalData(const TableDescriptor* td);
   void vacuumDeletedRows(const TableDescriptor* td) const;
   void vacuumDeletedRows(const int logicalTableId) const;
-
+  void setForReload(const int32_t tableId);
   // dump & restore
   void dumpTable(const TableDescriptor* td,
                  const std::string& path,
@@ -239,21 +241,64 @@ class Catalog final {
   std::string getColumnDictDirectory(const ColumnDescriptor* cd) const;
   std::string dumpSchema(const TableDescriptor* td) const;
 
+  /**
+   * Creates a new foreign server DB object.
+   *
+   * @param foreign_server - unique pointer to struct containing foreign server details
+   * @param if_not_exists - flag indicating whether or not an attempt to create a new
+   * foreign server should occur if a server with the same name already exists. An
+   * exception is thrown if this flag is set to "false" and an attempt is made to create
+   * a pre-existing foreign server
+   */
+  void createForeignServer(std::unique_ptr<foreign_storage::ForeignServer> foreign_server,
+                           bool if_not_exists);
+
+  /**
+   * Gets a pointer to a struct containing foreign server details.
+   *
+   * @param server_name - Name of foreign server whose details will be fetched
+   * @param skip_cache - flag indicating whether or not to skip in-memory cache of foreign
+   * server struct when attempting to fetch foreign server details. This flag is mainly
+   * used for testing
+   * @return pointer to a struct containing foreign server details. nullptr is returned if
+   * no foreign server exists with the given name
+   */
+  foreign_storage::ForeignServer* getForeignServer(const std::string& server_name,
+                                                   const bool skip_cache = false);
+
+  /**
+   * Drops/deletes a foreign server DB object.
+   *
+   * @param server_name - Name of foreign server that will be deleted
+   * @param if_exists - flag indicating whether or not an attempt to delete a foreign
+   * server should occur if a server with the same name does not exists. An exception is
+   * thrown if this flag is set to "false" and an attempt is made to delete a nonexistent
+   * foreign server
+   */
+  void dropForeignServer(const std::string& server_name, bool if_exists);
+
+  /**
+   * Creates default local file servers (if they don't already exist).
+   */
+  void createDefaultServersIfNotExists();
+
  protected:
-  typedef std::map<std::string, TableDescriptor*> TableDescriptorMap;
-  typedef std::map<int, TableDescriptor*> TableDescriptorMapById;
-  typedef std::map<int32_t, std::vector<int32_t>> LogicalToPhysicalTableMapById;
-  typedef std::tuple<int, std::string> ColumnKey;
-  typedef std::map<ColumnKey, ColumnDescriptor*> ColumnDescriptorMap;
-  typedef std::tuple<int, int> ColumnIdKey;
-  typedef std::map<ColumnIdKey, ColumnDescriptor*> ColumnDescriptorMapById;
-  typedef std::map<DictRef, std::unique_ptr<DictDescriptor>> DictDescriptorMapById;
-  typedef std::map<std::string, std::shared_ptr<DashboardDescriptor>>
-      DashboardDescriptorMap;
-  typedef std::map<std::string, LinkDescriptor*> LinkDescriptorMap;
-  typedef std::map<int, LinkDescriptor*> LinkDescriptorMapById;
-  typedef std::unordered_map<const TableDescriptor*, const ColumnDescriptor*>
-      DeletedColumnPerTableMap;
+  using TableDescriptorMap = std::map<std::string, TableDescriptor*>;
+  using TableDescriptorMapById = std::map<int, TableDescriptor*>;
+  using LogicalToPhysicalTableMapById = std::map<int32_t, std::vector<int32_t>>;
+  using ColumnKey = std::tuple<int, std::string>;
+  using ColumnDescriptorMap = std::map<ColumnKey, ColumnDescriptor*>;
+  using ColumnIdKey = std::tuple<int, int>;
+  using ColumnDescriptorMapById = std::map<ColumnIdKey, ColumnDescriptor*>;
+  using DictDescriptorMapById = std::map<DictRef, std::unique_ptr<DictDescriptor>>;
+  using DashboardDescriptorMap =
+      std::map<std::string, std::shared_ptr<DashboardDescriptor>>;
+  using LinkDescriptorMap = std::map<std::string, LinkDescriptor*>;
+  using LinkDescriptorMapById = std::map<int, LinkDescriptor*>;
+  using DeletedColumnPerTableMap =
+      std::unordered_map<const TableDescriptor*, const ColumnDescriptor*>;
+  using ForeignServerMap =
+      std::map<std::string, std::unique_ptr<foreign_storage::ForeignServer>>;
 
   void CheckAndExecuteMigrations();
   void CheckAndExecuteMigrationsPostBuildMaps();
@@ -270,6 +315,8 @@ class Catalog final {
   void updatePageSize();
   void updateDeletedColumnIndicator();
   void updateFrontendViewsToDashboards();
+  void createFsiSchemas();
+  void dropFsiSchemas();
   void recordOwnershipOfObjectsInObjectPermissions();
   void checkDateInDaysColumnMigration();
   void createDashboardSystemRoles();
@@ -329,6 +376,8 @@ class Catalog final {
   DashboardDescriptorMap dashboardDescriptorMap_;
   LinkDescriptorMap linkDescriptorMap_;
   LinkDescriptorMapById linkDescriptorMapById_;
+  ForeignServerMap foreignServerMap_;
+
   SqliteConnector sqliteConnector_;
   DBMetadata currentDB_;
   std::shared_ptr<Data_Namespace::DataMgr> dataMgr_;
@@ -359,6 +408,15 @@ class Catalog final {
   void renameTableDirectories(const std::string& temp_data_dir,
                               const std::vector<std::string>& target_paths,
                               const std::string& name_prefix) const;
+  void buildForeignServerMap();
+
+  /**
+   * Same as createForeignServer() but without acquiring locks. This should only be called
+   * from within a function/code block that already acquires appropriate locks.
+   */
+  void createForeignServerNoLocks(
+      std::unique_ptr<foreign_storage::ForeignServer> foreign_server,
+      bool if_not_exists);
 
  public:
   mutable std::mutex sqliteMutex_;

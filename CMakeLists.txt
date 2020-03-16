@@ -433,6 +433,8 @@ if(NOT "${MAPD_EDITION_LOWER}" STREQUAL "os")
     include_directories(ThirdParty/muparserx)
     add_subdirectory(ThirdParty/muparserx)
 
+    option(ENABLE_RENDER_TESTS "Build backend renderer tests" ON)
+
     add_definitions("-DHAVE_RENDERING")
     add_subdirectory(Rendering)
     add_subdirectory(QueryRenderer)
@@ -474,8 +476,6 @@ add_subdirectory(Calcite)
 get_target_property(CalciteThrift_BINARY_DIR calciteserver_thrift BINARY_DIR)
 include_directories(${CalciteThrift_BINARY_DIR})
 
-add_subdirectory(Distributed)
-
 add_subdirectory(Catalog)
 add_subdirectory(Parser)
 add_subdirectory(Analyzer)
@@ -492,6 +492,8 @@ add_subdirectory(Utils)
 add_subdirectory(QueryRunner)
 add_subdirectory(SQLFrontend)
 add_subdirectory(ThriftHandler)
+
+add_subdirectory(Distributed)
 
 option(ENABLE_ODBC "Build ODBC driver" OFF)
 if(ENABLE_ODBC)
@@ -530,6 +532,11 @@ if (ENABLE_TESTS)
   enable_testing()
   add_subdirectory(Tests)
   add_subdirectory(SampleCode)
+endif()
+
+if(ENABLE_RENDERING AND (ENABLE_TESTS OR ENABLE_RENDER_TESTS))
+  enable_testing()
+  add_subdirectory(Tests/RenderTests)
 endif()
 
 set(initdb_source_files initdb.cpp)
@@ -861,3 +868,8 @@ if(DOXYGEN_FOUND)
 
   add_dependencies(sphinx doxygen)
 endif(DOXYGEN_FOUND)
+
+option(ENABLE_FSI "Enable Foreign Storage Interface" OFF)
+if(ENABLE_FSI)
+  add_definitions("-DENABLE_FSI")
+endif()

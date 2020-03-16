@@ -27,12 +27,26 @@ data: {
         "org.apache.calcite.sql.SqlDrop"
         "com.mapd.parser.extension.ddl.SqlCreateServer"
         "com.mapd.parser.extension.ddl.SqlDropServer"
+        "com.mapd.parser.extension.ddl.SqlCreateForeignTable"
+        "com.mapd.parser.extension.ddl.SqlDropForeignTable"
+        "com.mapd.parser.extension.ddl.omnisql.*"
+        "java.util.Map"
+        "java.util.HashMap"
       ]
 
       # List of keywords.
       keywords: [
         # New keywords introduced by the extended parser that are absent in Calcite core.
         "IF"
+        "FIXED"
+        "DICT"
+        "DAYS"
+        "COMPRESSED"
+        "POINT"
+        "POLYGON"
+        "LINESTRING"
+        "MULTIPOLYGON"
+        "TEXT"
       ]
 
       # List of keywords from "keywords" section that are not reserved.
@@ -125,6 +139,7 @@ data: {
         "FINAL"
         "FIRST"
         "FOLLOWING"
+        "FOREIGN"
         "FORMAT"
         "FORTRAN"
         "FOUND"
@@ -364,6 +379,12 @@ data: {
 
       # List of methods for parsing custom data types.
       dataTypeParserMethods: [
+          "OmniPoint()"
+          "OmniLineString()"
+          "OmniPolygon()"
+          "OmniMultiPolygon()"
+          "OmniText()"
+          "OmniEpoch()"
       ]
 
       # List of methods for parsing builtin function calls.
@@ -381,12 +402,14 @@ data: {
       # Each must accept arguments "(SqlParserPos pos, boolean replace)".
       createStatementParserMethods: [
         "SqlCreateServer"
+        "SqlCreateForeignTable"
       ]
 
       # List of methods for parsing extensions to "DROP" calls.
       # Each must accept arguments "(SqlParserPos pos)".
       dropStatementParserMethods: [
         "SqlDropServer"
+        "SqlDropForeignTable"
       ]
 
       # Binary operators tokens
@@ -403,6 +426,7 @@ data: {
       # "dataTypeParserMethods".
       implementationFiles: [
         "foreignServerParser.ftl"
+        "foreignTableParser.ftl"
       ]
 
       includePosixOperators: false

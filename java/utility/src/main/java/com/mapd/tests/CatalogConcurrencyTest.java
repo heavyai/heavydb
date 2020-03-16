@@ -161,5 +161,7 @@ public class CatalogConcurrencyTest {
     su.runSql("DROP DATABASE db1;");
     su.runSql("DROP USER bob;");
     su.runSql("DROP USER dba;");
+
+    logger.info("testCatalogConcurrency() done");
   }
 }

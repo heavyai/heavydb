@@ -44,10 +44,11 @@ struct Array {
   }
 
   DEVICE T operator()(const unsigned int index) const {
-    if (index < static_cast<unsigned int>(size))
+    if (index < static_cast<unsigned int>(size)) {
       return ptr[index];
-    else
+    } else {
       return 0;  // see array_at
+    }
   }
 
   DEVICE T& operator[](const unsigned int index) { return ptr[index]; }
@@ -60,4 +61,84 @@ struct Array {
     return std::is_signed<T>::value ? std::numeric_limits<T>::min()
                                     : std::numeric_limits<T>::max();
   }
+};
+
+struct GeoLineString {
+  int8_t* ptr;
+  int64_t sz;
+  int32_t compression;
+  int32_t input_srid;
+  int32_t output_srid;
+
+  DEVICE int64_t getSize() const { return sz; }
+
+  DEVICE int32_t getCompression() const { return compression; }
+
+  DEVICE int32_t getInputSrid() const { return input_srid; }
+
+  DEVICE int32_t getOutputSrid() const { return output_srid; }
+};
+
+struct GeoPoint {
+  int8_t* ptr;
+  int64_t sz;
+  int32_t compression;
+  int32_t input_srid;
+  int32_t output_srid;
+
+  DEVICE int64_t getSize() const { return sz; }
+
+  DEVICE int32_t getCompression() const { return compression; }
+
+  DEVICE int32_t getInputSrid() const { return input_srid; }
+
+  DEVICE int32_t getOutputSrid() const { return output_srid; }
+};
+
+struct GeoPolygon {
+  int8_t* ptr_coords;
+  int64_t coords_size;
+  int32_t* ring_sizes;
+  int64_t num_rings;
+  int32_t compression;
+  int32_t input_srid;
+  int32_t output_srid;
+
+  DEVICE int32_t* getRingSizes() { return ring_sizes; }
+  DEVICE int64_t getCoordsSize() const { return coords_size; }
+
+  DEVICE int64_t getNumRings() const { return num_rings; }
+
+  DEVICE int32_t getCompression() const { return compression; }
+
+  DEVICE int32_t getInputSrid() const { return input_srid; }
+
+  DEVICE int32_t getOutputSrid() const { return output_srid; }
+};
+
+struct GeoMultiPolygon {
+  int8_t* ptr_coords;
+  int64_t coords_size;
+  int32_t* ring_sizes;
+  int64_t num_rings;
+  int32_t* poly_sizes;
+  int64_t num_polys;
+  int32_t compression;
+  int32_t input_srid;
+  int32_t output_srid;
+
+  DEVICE int32_t* getRingSizes() { return ring_sizes; }
+  DEVICE int64_t getCoordsSize() const { return coords_size; }
+
+  DEVICE int64_t getNumRings() const { return num_rings; }
+
+  DEVICE int32_t* getPolygonSizes() { return poly_sizes; }
+
+  DEVICE int64_t getNumPolygons() const { return num_polys; }
+
+  DEVICE int32_t getCompression() const { return compression; }
+
+  DEVICE int32_t getInputSrid() const { return input_srid; }
+
+  DEVICE int32_t getOutputSrid() const { return output_srid; }
 };

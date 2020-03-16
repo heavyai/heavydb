@@ -34,7 +34,6 @@
 #include "Catalog.h"
 #include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "LockMgr/LockMgr.h"
-#include "LockMgr/TableLockMgr.h"
 #include "Parser/ParseDDL.h"
 #include "Parser/ParserNode.h"
 #include "Parser/parser.h"
@@ -230,14 +229,13 @@ void Catalog::dumpTable(const TableDescriptor* td,
     }
     file_paths.push_back(file_name);
   };
-  // grab table read lock for concurrent SELECT (but would block capped COPY or INSERT)
+  // Prevent modification of the table schema during a dump operation, while allowing
+  // concurrent inserts.
   auto table_read_lock =
-      Lock_Namespace::TableLockMgr::getReadLockForTable(*this, td->tableName);
-
-  // grab catalog read lock only. no need table read or checkpoint lock
-  // because want to allow concurrent inserts while this dump proceeds.
+      lockmgr::TableSchemaLockMgr::getReadLockForTable(*this, td->tableName);
   const auto table_name = td->tableName;
   {
+    // TODO(adb): duplicate locks, can we remove?
     cat_read_lock read_lock(this);
     // - gen schema file
     const auto schema_str = dumpSchema(td);
@@ -457,14 +455,14 @@ void Catalog::restoreTable(const SessionInfo& session,
   if (td->isView || td->persistenceLevel != Data_Namespace::MemoryLevel::DISK_LEVEL) {
     throw std::runtime_error("Restoring view or temporary table is not supported.");
   }
-  // should get checkpoint lock to block any data injection which is meaningless
-  // once after the table is restored from data in the source table files.
-  auto checkpoint_lock =
-      Lock_Namespace::getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-          *this, td->tableName, Lock_Namespace::LockType::CheckpointLock);
-  // grab table read lock for concurrent SELECT
-  auto table_read_lock =
-      Lock_Namespace::TableLockMgr::getReadLockForTable(*this, td->tableName);
+  // Obtain table schema read lock to prevent modification of the schema during
+  // restoration
+  const auto table_read_lock =
+      lockmgr::TableSchemaLockMgr::getReadLockForTable(*this, td->tableName);
+  // prevent concurrent inserts into table during restoration
+  const auto insert_data_lock =
+      lockmgr::InsertDataLockMgr::getWriteLockForTable(*this, td->tableName);
+
   // untar takes time. no grab of cat lock to yield to concurrent CREATE stmts.
   const auto global_file_mgr = getDataMgr().getGlobalFileMgr();
   // dirs where src files are untarred and dst files are backed up

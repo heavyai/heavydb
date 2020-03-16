@@ -43,6 +43,7 @@ set(query_engine_source_files
     ExtensionFunctionsWhitelist.cpp
     ExtensionFunctions.ast
     ExtensionsIR.cpp
+    ExternalExecutor.cpp
     FromTableReordering.cpp
     GeoIR.cpp
     GpuInterrupt.cpp
@@ -89,6 +90,7 @@ set(query_engine_source_files
     RuntimeFunctions.bc
     DynamicWatchdog.cpp
     ScalarCodeGenerator.cpp
+    SerializeToSql.cpp
     SpeculativeTopN.cpp
     StreamingTopN.cpp
     StringDictionaryGenerations.cpp
@@ -201,18 +203,32 @@ add_custom_command(
     ${CMAKE_CURRENT_SOURCE_DIR}/ExtensionFunctions.hpp | grep FunctionDecl | grep ExtensionFunctions |
     sed -E "s/\\-FunctionDecl.*line:[0-9]+:[0-9]+//g" > ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast)
 
+add_custom_target(QueryEngineFunctionsTargets
+    DEPENDS
+        ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc
+        ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast
+    )
+
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/OmniSciTypes.h DESTINATION ${CMAKE_BINARY_DIR}/QueryEngine/)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/OmniSciTypes.h ${CMAKE_CURRENT_BINARY_DIR}/RuntimeFunctions.bc ${CMAKE_CURRENT_BINARY_DIR}/ExtensionFunctions.ast DESTINATION QueryEngine)
 
 if(ENABLE_CUDA)
   add_library(QueryEngine ${query_engine_source_files} ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o)
+  add_dependencies(QueryEngine QueryEngineFunctionsTargets QueryEngineCudaTargets)
 else()
   add_library(QueryEngine ${query_engine_source_files})
+  add_dependencies(QueryEngine QueryEngineFunctionsTargets)
 endif()
 
 set(ARROW_LIBS ${Arrow_LIBRARIES})
 
-target_link_libraries(QueryEngine Planner StringDictionary Utils ${ARROW_LIBS}
+target_link_libraries(
+  QueryEngine
+  Planner
+  StringDictionary
+  Utils
+  sqlite3
+  ${ARROW_LIBS}
   clangFrontend
   clangSerialization
   clangDriver
@@ -256,7 +272,7 @@ add_custom_command(
         -D__STDC_LIMIT_MACROS
         -D__STDC_CONSTANT_MACROS
         -D_FORCE_INLINES
-        -Xcompiler -Wno-return-type-c-linkage
+        -Xcompiler -Wno-return-type-c-linkage --expt-relaxed-constexpr
         ${MAPD_DEFINITIONS}
         --device-link
         -arch sm_30
@@ -338,6 +354,16 @@ add_custom_command(
         -std=c++14
         ${NVCC_BUILD_TYPE_ARGS}
         -c ${CMAKE_CURRENT_SOURCE_DIR}/HashJoinRuntimeGpu.cu
+    )
+
+add_custom_target(QueryEngineCudaTargets
+    DEPENDS
+        ${CMAKE_CURRENT_BINARY_DIR}/cuda_mapd_rt.a
+        ${CMAKE_CURRENT_BINARY_DIR}/TopKSort.o
+        ${CMAKE_CURRENT_BINARY_DIR}/InPlaceSortImpl.o
+        ${CMAKE_CURRENT_BINARY_DIR}/ResultSetSortImpl.o
+        ${CMAKE_CURRENT_BINARY_DIR}/GpuInitGroups.o
+        ${CMAKE_CURRENT_BINARY_DIR}/HashJoinRuntimeGpu.o
     )
 
 add_executable(group_by_hash_test ${group_by_hash_test_files})

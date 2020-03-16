@@ -14,6 +14,13 @@
  limitations under the License.
 -->
 
+/*
+ * Create a new foreign server using the following syntax:
+ *
+ * CREATE SERVER [IF NOT EXISTS] <server_name>
+ *   FOREIGN DATA WRAPPER <foreign_data_wrapper_name>
+ *   WITH ( <option> = <value> [, ... ] )
+ */
 SqlCreate SqlCreateServer(Span s, boolean replace) :
 {
     SqlCreateServer.Builder sqlCreateServerBuilder = new SqlCreateServer.Builder();
@@ -42,6 +49,11 @@ SqlCreate SqlCreateServer(Span s, boolean replace) :
     }
 }
 
+/*
+ * Drop a foreign server using the following syntax:
+ *
+ * DROP SERVER [ IF EXISTS ] <server_name>
+ */
 SqlDrop SqlDropServer(Span s, boolean replace) :
 {
     final boolean ifExists;
@@ -56,6 +68,11 @@ SqlDrop SqlDropServer(Span s, boolean replace) :
     }
 }
 
+/*
+ * Parse the IF NOT EXISTS keyphrase.
+ *
+ * [ IF NOT EXISTS ]
+ */
 boolean IfNotExistsOpt() :
 {
 }
@@ -65,6 +82,11 @@ boolean IfNotExistsOpt() :
     { return false; }
 }
 
+/*
+ * Parse the IF EXISTS keyphrase.
+ *
+ * [ IF EXISTS ]
+ */
 boolean IfExistsOpt() :
 {
 }
@@ -74,21 +96,29 @@ boolean IfExistsOpt() :
     { return false; }
 }
 
+/*
+ * Parse the IF NOT EXISTS keyphrase.
+ *
+ * WITH ( <option> = <value> [, ... ] )
+ */
 void Options(SqlCreateServer.Builder sqlCreateServerBuilder) :
 {
 }
 {
     <WITH> <LPAREN>
-    [
+    Option(sqlCreateServerBuilder)
+    (
+        <COMMA>
         Option(sqlCreateServerBuilder)
-        (
-            <COMMA>
-            Option(sqlCreateServerBuilder)
-        )*
-    ]
+    )*
     <RPAREN>
 }
 
+/*
+ * Parse the IF NOT EXISTS keyphrase.
+ *
+ * WITH ( <option> = <value> [, ... ] )
+ */
 void Option(SqlCreateServer.Builder sqlCreateServerBuilder) :
 {
     final SqlIdentifier attribute;

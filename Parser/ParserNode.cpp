@@ -24,29 +24,6 @@
 
 #include "ParserNode.h"
 
-#include "../Analyzer/RangeTableEntry.h"
-#include "../Catalog/Catalog.h"
-#include "../Catalog/SharedDictionaryValidator.h"
-#include "../Fragmenter/InsertOrderFragmenter.h"
-#include "../Fragmenter/TargetValueConvertersFactories.h"
-#include "../Import/Importer.h"
-#include "../Planner/Planner.h"
-#include "../QueryEngine/CalciteAdapter.h"
-#include "../QueryEngine/Execute.h"
-#include "../QueryEngine/ExtensionFunctionsWhitelist.h"
-#include "../QueryEngine/RelAlgExecutor.h"
-#include "../Shared/StringTransform.h"
-#include "../Shared/TimeGM.h"
-#include "../Shared/geo_types.h"
-#include "../Shared/mapd_glob.h"
-#include "../Shared/measure.h"
-#include "../Shared/shard_key.h"
-#include "LockMgr/LockMgr.h"
-#include "LockMgr/TableLockMgr.h"
-#include "ReservedKeywords.h"
-#include "gen-cpp/CalciteServer.h"
-#include "parser.h"
-
 #include <boost/algorithm/string.hpp>
 #include <boost/core/null_deleter.hpp>
 #include <boost/filesystem.hpp>
@@ -64,11 +41,33 @@
 #include <type_traits>
 #include <typeinfo>
 
+#include "Analyzer/RangeTableEntry.h"
+#include "Catalog/Catalog.h"
+#include "Catalog/SharedDictionaryValidator.h"
+#include "Fragmenter/InsertOrderFragmenter.h"
+#include "Fragmenter/TargetValueConvertersFactories.h"
+#include "Import/Importer.h"
+#include "LockMgr/LockMgr.h"
+#include "Planner/Planner.h"
+#include "QueryEngine/CalciteAdapter.h"
+#include "QueryEngine/Execute.h"
+#include "QueryEngine/ExtensionFunctionsWhitelist.h"
+#include "QueryEngine/RelAlgExecutor.h"
+#include "ReservedKeywords.h"
+#include "Shared/StringTransform.h"
+#include "Shared/TimeGM.h"
+#include "Shared/geo_types.h"
+#include "Shared/mapd_glob.h"
+#include "Shared/measure.h"
+#include "Shared/shard_key.h"
+#include "gen-cpp/CalciteServer.h"
+#include "parser.h"
+
 size_t g_leaf_count{0};
 bool g_use_date_in_days_default_encoding{true};
+bool g_test_drop_column_rollback{false};
 extern bool g_enable_experimental_string_functions;
 
-using namespace Lock_Namespace;
 using Catalog_Namespace::SysCatalog;
 using namespace std::string_literals;
 
@@ -2205,10 +2204,6 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
     ColumnDescriptor cd;
     cd.columnName = *coldef->get_column_name();
     const auto uc_col_name = boost::to_upper_copy<std::string>(cd.columnName);
-    if (reserved_keywords.find(uc_col_name) != reserved_keywords.end()) {
-      throw std::runtime_error("Cannot create column with reserved keyword '" +
-                               cd.columnName + "'");
-    }
     const auto it_ok = uc_col_names.insert(uc_col_name);
     if (!it_ok.second) {
       throw std::runtime_error("Column '" + cd.columnName + "' defined more than once");
@@ -2252,6 +2247,11 @@ void CreateTableStmt::executeDryRun(const Catalog_Namespace::SessionInfo& sessio
 
 void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
+
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   // check access privileges
   if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
                                        AccessPrivileges::CREATE_TABLE)) {
@@ -2334,18 +2334,10 @@ AggregatedResult InsertIntoTableAsSelectStmt::LocalConnector::query(
     std::string& sql_query_string,
     bool validate_only) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
+  // TODO(PS): Should we be using the shimmed query in getResultSet?
   std::string pg_shimmed_select_query = pg_shim(sql_query_string);
-  const auto query_ra = parse_to_ra(query_state_proxy, pg_shimmed_select_query);
-
-  // Note that the below command should *only* get read locks on the source table for
-  // InsertIntoAsSelect. Write locks will be taken on the target table in
-  // InsertOrderFragmenter::deleteFragments. This potentially leaves a small window where
-  // the target table is not locked, and should be investigated.
-  std::vector<TableLock> table_locks;
-  TableLockMgr::getTableLocks(session->getCatalog(), query_ra, table_locks);
 
   std::vector<TargetMetaInfo> target_metainfos;
-
   auto result_rows =
       getResultSet(query_state_proxy, sql_query_string, target_metainfos, validate_only);
   AggregatedResult res = {result_rows, target_metainfos};
@@ -2365,14 +2357,9 @@ void InsertIntoTableAsSelectStmt::LocalConnector::insertDataToLeaf(
   CHECK(leaf_idx == 0);
   auto& catalog = session.getCatalog();
   auto created_td = catalog.getMetadataForTable(insert_data.tableId);
-  // get CheckpointLock on the table before trying to create
-  // its 1st fragment
   ChunkKey chunkKey = {catalog.getCurrentDB().dbId, created_td->tableId};
-  mapd_unique_lock<mapd_shared_mutex> chkptlLock(
-      *Lock_Namespace::LockMgr<mapd_shared_mutex, ChunkKey>::getMutex(
-          Lock_Namespace::LockType::CheckpointLock, chunkKey));
-  // [ TableWriteLock ] lock is deferred in
-  // InsertOrderFragmenter::deleteFragments
+  // TODO(adb): Ensure that we have previously obtained a write lock for this table's
+  // data.
   created_td->fragmenter->insertDataNoCheckpoint(insert_data);
 }
 
@@ -2468,11 +2455,18 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
     return target_column_descriptors;
   };
 
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+          catalog, table_name_);
+  const auto td = td_with_lock();
+
+  // Don't allow simultaneous inserts
+  const auto insert_data_lock =
+      lockmgr::InsertDataLockMgr::getWriteLockForTable(catalog, table_name_);
+
   if (validate_table) {
     // check access privileges
-    const TableDescriptor* td = catalog.getMetadataForTable(table_name_);
-
-    if (td == nullptr) {
+    if (!td) {
       throw std::runtime_error("Table " + table_name_ + " does not exist.");
     }
     if (td->isView) {
@@ -2581,10 +2575,9 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
     return;
   }
 
-  const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);
   Fragmenter_Namespace::InsertDataLoader insertDataLoader(*leafs_connector_);
   AggregatedResult res = leafs_connector_->query(query_state_proxy, select_query_);
-  auto target_column_descriptors = get_target_column_descriptors(created_td);
+  auto target_column_descriptors = get_target_column_descriptors(td);
   auto result_rows = res.rs;
   result_rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
   const auto num_rows = result_rows->rowCount();
@@ -2759,8 +2752,8 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
       Fragmenter_Namespace::InsertData insert_data;
       insert_data.databaseId = catalog.getCurrentDB().dbId;
-      CHECK(created_td);
-      insert_data.tableId = created_td->tableId;
+      CHECK(td);
+      insert_data.tableId = td->tableId;
       insert_data.numRows = num_rows_to_process;
 
       for (int col_idx = 0; col_idx < target_column_descriptors.size(); col_idx++) {
@@ -2770,13 +2763,13 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
       insertDataLoader.insertData(*session, insert_data);
     } catch (...) {
       try {
-        if (created_td->nShards) {
-          const auto shard_tables = catalog.getPhysicalTablesDescriptors(created_td);
+        if (td->nShards) {
+          const auto shard_tables = catalog.getPhysicalTablesDescriptors(td);
           for (const auto ptd : shard_tables) {
             leafs_connector_->rollback(*session, ptd->tableId);
           }
         }
-        leafs_connector_->rollback(*session, created_td->tableId);
+        leafs_connector_->rollback(*session, td->tableId);
       } catch (...) {
         // eat it
       }
@@ -2787,13 +2780,13 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
   }
 
   if (!is_temporary) {
-    if (created_td->nShards) {
-      const auto shard_tables = catalog.getPhysicalTablesDescriptors(created_td);
+    if (td->nShards) {
+      const auto shard_tables = catalog.getPhysicalTablesDescriptors(td);
       for (const auto ptd : shard_tables) {
         leafs_connector_->checkpoint(*session, ptd->tableId);
       }
     }
-    leafs_connector_->checkpoint(*session, created_td->tableId);
+    leafs_connector_->checkpoint(*session, td->tableId);
   }
 }
 
@@ -2894,13 +2887,30 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
 
-  const TableDescriptor* td = catalog.getMetadataForTable(*table, false);
-  if (td == nullptr) {
+  // TODO(adb): the catalog should be handling this locking.
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  const TableDescriptor* td{nullptr};
+  std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
+
+  try {
+    td_with_lock =
+        std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
+            lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+                catalog, *table, false));
+    td = (*td_with_lock)();
+  } catch (const std::runtime_error& e) {
     if (if_exists) {
       return;
+    } else {
+      throw e;
     }
-    throw std::runtime_error("Table " + *table + " does not exist.");
   }
+
+  CHECK(td);
+  CHECK(td_with_lock);
 
   // check access privileges
   if (!session.checkDBAccessPrivileges(
@@ -2913,16 +2923,25 @@ void DropTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error(*table + " is a view.  Use DROP VIEW.");
   }
 
-  auto chkptlLock = getTableLock<mapd_shared_mutex, mapd_unique_lock>(
-      catalog, *table, LockType::CheckpointLock);
-  auto table_write_lock = TableLockMgr::getWriteLockForTable(catalog, *table);
+  auto table_data_write_lock =
+      lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table);
   catalog.dropTable(td);
 }
 
 void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
-  const TableDescriptor* td = catalog.getMetadataForTable(*table);
-  if (td == nullptr) {
+
+  // TODO: Removal of the FileMgr is not thread safe. Take a global system write lock when
+  // truncating a table
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, *table, true);
+  const auto td = td_with_lock();
+  if (!td) {
     throw std::runtime_error("Table " + *table + " does not exist.");
   }
 
@@ -2941,6 +2960,8 @@ void TruncateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (td->isView) {
     throw std::runtime_error(*table + " is a view.  Cannot Truncate.");
   }
+  auto table_data_write_lock =
+      lockmgr::TableDataLockMgr::getWriteLockForTable(catalog, *table);
   catalog.truncateTable(td);
 }
 
@@ -2976,6 +2997,12 @@ void RenameUserStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
 void RenameDatabaseStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   Catalog_Namespace::DBMetadata db;
+
+  // TODO: use database lock instead
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   if (!SysCatalog::instance().getMetadataForDB(*database_name_, db)) {
     throw std::runtime_error("Database " + *database_name_ + " does not exist.");
   }
@@ -2990,10 +3017,18 @@ void RenameDatabaseStmt::execute(const Catalog_Namespace::SessionInfo& session) 
 
 void RenameTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
-  const TableDescriptor* td = catalog.getMetadataForTable(*table);
-  if (td == nullptr) {
-    throw std::runtime_error("Table " + *table + " does not exist.");
-  }
+
+  // TODO(adb): the catalog should be handling this locking (see AddColumStmt)
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, *table, false);
+  const auto td = td_with_lock();
+  CHECK(td);
+
   check_alter_table_privilege(session, td);
   if (catalog.getMetadataForTable(*new_table_name) != nullptr) {
     throw std::runtime_error("Table or View " + *new_table_name + " already exists.");
@@ -3078,9 +3113,9 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
         case kINT:
           if (compression->get_encoding_param() != 8 &&
               compression->get_encoding_param() != 16) {
-            throw std::runtime_error(
-                cd.columnName +
-                ": Compression parameter for Fixed encoding on INTEGER must be 8 or 16.");
+            throw std::runtime_error(cd.columnName +
+                                     ": Compression parameter for Fixed encoding on "
+                                     "INTEGER must be 8 or 16.");
           }
           break;
         case kBIGINT:
@@ -3155,9 +3190,9 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
       // throw std::runtime_error("DIFF(differential) encoding not supported yet.");
     } else if (boost::iequals(comp, "dict")) {
       if (!cd.columnType.is_string() && !cd.columnType.is_string_array()) {
-        throw std::runtime_error(
-            cd.columnName +
-            ": Dictionary encoding is only supported on string or string array columns.");
+        throw std::runtime_error(cd.columnName +
+                                 ": Dictionary encoding is only supported on string or "
+                                 "string array columns.");
       }
       if (compression->get_encoding_param() == 0) {
         comp_param = 32;  // default to 32-bits
@@ -3268,14 +3303,14 @@ void DDLStmt::setColumnDescriptor(ColumnDescriptor& cd, const ColumnDef* coldef)
   cd.isVirtualCol = false;
 }
 
-void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& session) {
+void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& session,
+                                     const TableDescriptor* td) {
   auto& catalog = session.getCatalog();
-  const TableDescriptor* td = catalog.getMetadataForTable(*table);
-  if (nullptr == td) {
+  if (!td) {
     throw std::runtime_error("Table " + *table + " does not exist.");
   } else {
     if (td->isView) {
-      throw std::runtime_error("Expecting a table , found view " + *table);
+      throw std::runtime_error("Adding columns to a view is not supported.");
     }
   };
 
@@ -3290,18 +3325,26 @@ void AddColumnStmt::check_executable(const Catalog_Namespace::SessionInfo& sessi
     if (catalog.getMetadataForColumn(td->tableId, new_column_name) != nullptr) {
       throw std::runtime_error("Column " + new_column_name + " already exists.");
     }
-    if (reserved_keywords.find(boost::to_upper_copy<std::string>(new_column_name)) !=
-        reserved_keywords.end()) {
-      throw std::runtime_error("Cannot add column with reserved keyword '" +
-                               new_column_name + "'");
-    }
   }
 }
 
 void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
-  const TableDescriptor* td = catalog.getMetadataForTable(*table);
-  check_executable(session);
+
+  // TODO(adb): the catalog should be handling this locking.
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, *table, true);
+  const auto td = td_with_lock();
+  check_executable(session, td);
+
+  // Do not take a data write lock, as the fragmenter may call `deleteFragments` during
+  // a cap operation. Note that the schema write lock will prevent concurrent inserts
+  // along with all other queries.
 
   catalog.getSqliteConnector().query("BEGIN TRANSACTION");
   try {
@@ -3423,22 +3466,95 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     if (!loader->loadNoCheckpoint(import_buffers, nrows)) {
       throw std::runtime_error("loadNoCheckpoint failed!");
     }
+    catalog.roll(true);
     loader->checkpoint();
+    catalog.getSqliteConnector().query("END TRANSACTION");
   } catch (...) {
     catalog.roll(false);
     catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
     throw;
   }
-  catalog.getSqliteConnector().query("END TRANSACTION");
-  catalog.roll(true);
+}
+
+void DropColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.getCatalog();
+
+  // TODO(adb): the catalog should be handling this locking.
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, *table, true);
+  const auto td = td_with_lock();
+  if (!td) {
+    throw std::runtime_error("Table " + *table + " does not exist.");
+  }
+  if (td->isView) {
+    throw std::runtime_error("Dropping column from a view is not supported.");
+  }
+
+  check_alter_table_privilege(session, td);
+
+  for (const auto& column : columns) {
+    if (nullptr == catalog.getMetadataForColumn(td->tableId, *column)) {
+      throw std::runtime_error("Column " + *column + " does not exist.");
+    }
+  }
+
+  if (td->nColumns <= (td->hasDeletedCol ? 3 : 2)) {
+    throw std::runtime_error("Table " + *table + " has only one column.");
+  }
+
+  catalog.getSqliteConnector().query("BEGIN TRANSACTION");
+  try {
+    std::vector<int> columnIds;
+    for (const auto& column : columns) {
+      ColumnDescriptor cd = *catalog.getMetadataForColumn(td->tableId, *column);
+      if (td->nShards > 0 && td->shardedColumnId == cd.columnId) {
+        throw std::runtime_error("Dropping sharding column " + cd.columnName +
+                                 " is not supported.");
+      }
+      catalog.dropColumn(*td, cd);
+      columnIds.push_back(cd.columnId);
+      for (int i = 0; i < cd.columnType.get_physical_cols(); i++) {
+        const auto pcd = catalog.getMetadataForColumn(td->tableId, cd.columnId + i + 1);
+        CHECK(pcd);
+        catalog.dropColumn(*td, *pcd);
+        columnIds.push_back(cd.columnId + i + 1);
+      }
+    }
+
+    for (auto shard : catalog.getPhysicalTablesDescriptors(td)) {
+      shard->fragmenter->dropColumns(columnIds);
+    }
+    // if test forces to rollback
+    if (g_test_drop_column_rollback) {
+      throw std::runtime_error("lol!");
+    }
+    catalog.roll(true);
+    if (td->persistenceLevel == Data_Namespace::MemoryLevel::DISK_LEVEL) {
+      catalog.checkpoint(td->tableId);
+    }
+    catalog.getSqliteConnector().query("END TRANSACTION");
+  } catch (...) {
+    catalog.setForReload(td->tableId);
+    catalog.roll(false);
+    catalog.getSqliteConnector().query("ROLLBACK TRANSACTION");
+    throw;
+  }
 }
 
 void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
-  const TableDescriptor* td = catalog.getMetadataForTable(*table);
-  if (td == nullptr) {
-    throw std::runtime_error("Table " + *table + " does not exist.");
-  }
+
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, *table, false);
+  const auto td = td_with_lock();
+  CHECK(td);
+
   check_alter_table_privilege(session, td);
   const ColumnDescriptor* cd = catalog.getMetadataForColumn(td->tableId, *column);
   if (cd == nullptr) {
@@ -3446,11 +3562,6 @@ void RenameColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   if (catalog.getMetadataForColumn(td->tableId, *new_column_name) != nullptr) {
     throw std::runtime_error("Column " + *new_column_name + " already exists.");
-  }
-  if (reserved_keywords.find(boost::to_upper_copy<std::string>(*new_column_name)) !=
-      reserved_keywords.end()) {
-    throw std::runtime_error("Cannot create column with reserved keyword '" +
-                             *new_column_name + "'");
   }
   catalog.renameColumn(td, cd, *new_column_name);
 }
@@ -3460,7 +3571,7 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                              const TableDescriptor* td,
                              const std::string& file_path,
                              const Importer_NS::CopyParams& copy_params) {
-    return boost::make_unique<Importer_NS::Importer>(catalog, td, file_path, copy_params);
+    return std::make_unique<Importer_NS::Importer>(catalog, td, file_path, copy_params);
   };
   return execute(session, importer_factory);
 }
@@ -3476,8 +3587,28 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
   size_t total_time = 0;
   bool load_truncated = false;
 
+  // Prevent simultaneous import / truncate (see TruncateTableStmt::execute)
+  const auto execute_read_lock = mapd_shared_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  const TableDescriptor* td{nullptr};
+  std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>> td_with_lock;
+  lockmgr::WriteLock insert_data_lock;
+
   auto& catalog = session.getCatalog();
-  const TableDescriptor* td = catalog.getMetadataForTable(*table);
+
+  try {
+    td_with_lock = std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>>(
+        lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+            catalog, *table));
+    td = (*td_with_lock)();
+    insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(catalog, *table);
+  } catch (const std::runtime_error& e) {
+    // noop
+    // TODO(adb): We're really only interested in whether the table exists or not.
+    // Create a more refined exception.
+  }
 
   // if the table already exists, it's locked, so check access privileges
   if (td) {
@@ -3780,6 +3911,8 @@ void CopyTableStmt::execute(const Catalog_Namespace::SessionInfo& session,
     }
   } else {
     if (td) {
+      CHECK(td_with_lock);
+
       // regular import
       auto importer = importer_factory(catalog, td, file_path, copy_params);
       auto ms = measure<>::execution([&]() {
@@ -3998,7 +4131,8 @@ void GrantPrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session)
   if (!currentUser.isSuper) {
     if (!SysCatalog::instance().verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
       throw std::runtime_error(
-          "GRANT failed. It can only be executed by super user or owner of the object.");
+          "GRANT failed. It can only be executed by super user or owner of the "
+          "object.");
     }
   }
   /* set proper values of privileges & grant them to the object */
@@ -4025,7 +4159,8 @@ void RevokePrivilegesStmt::execute(const Catalog_Namespace::SessionInfo& session
   if (!currentUser.isSuper) {
     if (!SysCatalog::instance().verifyDBObjectOwnership(currentUser, dbObject, catalog)) {
       throw std::runtime_error(
-          "REVOKE failed. It can only be executed by super user or owner of the object.");
+          "REVOKE failed. It can only be executed by super user or owner of the "
+          "object.");
     }
   }
   /* set proper values of privileges & grant them to the object */
@@ -4440,6 +4575,12 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
                                    false,
                                    false,
                                    true);
+
+  // Take write lock after the query is processed to ensure no deadlocks
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   TableDescriptor td;
   td.tableName = view_name_;
   td.userId = session.get_currentUser().userId;
@@ -4464,13 +4605,26 @@ void CreateViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
 void DropViewStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   auto& catalog = session.getCatalog();
-  const TableDescriptor* td = catalog.getMetadataForTable(*view_name);
-  if (td == nullptr) {
+
+  const TableDescriptor* td{nullptr};
+  std::unique_ptr<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>> td_with_lock;
+
+  try {
+    td_with_lock =
+        std::make_unique<lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>>(
+            lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+                catalog, *view_name, false));
+    td = (*td_with_lock)();
+  } catch (const std::runtime_error& e) {
     if (if_exists) {
       return;
+    } else {
+      throw e;
     }
-    throw std::runtime_error("View " + *view_name + " does not exist.");
   }
+
+  CHECK(td);
+  CHECK(td_with_lock);
 
   if (!session.checkDBAccessPrivileges(
           DBObjectType::ViewDBObjectType, AccessPrivileges::DROP_VIEW, *view_name)) {
@@ -4497,6 +4651,11 @@ void CreateDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error(
         "CREATE DATABASE command can only be executed by super user.");
   }
+
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   Catalog_Namespace::DBMetadata db_meta;
   if (SysCatalog::instance().getMetadataForDB(*db_name, db_meta) && if_not_exists_) {
     return;
@@ -4526,6 +4685,11 @@ void DropDBStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   if (!session.get_currentUser().isSuper) {
     throw std::runtime_error("DROP DATABASE command can only be executed by super user.");
   }
+
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
   Catalog_Namespace::DBMetadata db;
   if (!SysCatalog::instance().getMetadataForDB(*db_name, db)) {
     if (if_exists_) {
