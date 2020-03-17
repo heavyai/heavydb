@@ -1712,7 +1712,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
           const auto dd = cat_.getMetadataForDict(cd->columnType.get_comp_param());
           CHECK(dd);
           const auto it_ok = col_buffers.emplace(
-              col_id, std::unique_ptr<uint8_t[]>(new uint8_t[cd->columnType.get_size()]));
+              col_id, std::make_unique<uint8_t[]>(cd->columnType.get_size()));
           CHECK(it_ok.second);
           break;
         }

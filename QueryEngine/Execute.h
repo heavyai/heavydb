@@ -37,7 +37,6 @@
 #include "WindowContext.h"
 
 #include "../Chunk/Chunk.h"
-#include "../Planner/Planner.h"
 #include "../Shared/Logger.h"
 #include "../Shared/MapDParameters.h"
 #include "../Shared/measure.h"

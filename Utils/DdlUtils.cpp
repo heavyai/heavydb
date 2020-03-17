@@ -23,7 +23,7 @@
 #include "Fragmenter/FragmentDefaultValues.h"
 #include "Parser/ReservedKeywords.h"
 
-extern bool g_use_date_in_days_default_encoding;
+bool g_use_date_in_days_default_encoding{true};
 
 namespace ddl_utils {
 SqlType::SqlType(SQLTypes type, int param1, int param2, bool is_array, int array_size)

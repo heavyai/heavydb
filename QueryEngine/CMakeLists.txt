@@ -28,6 +28,7 @@ set(query_engine_source_files
     DateTimeIR.cpp
     DateTimePlusRewrite.cpp
     DateTimeTranslator.cpp
+    DateTruncate.cpp
     Descriptors/ColSlotContext.cpp
     Descriptors/QueryCompilationDescriptor.cpp
     Descriptors/QueryFragmentDescriptor.cpp
@@ -44,6 +45,7 @@ set(query_engine_source_files
     ExtensionFunctions.ast
     ExtensionsIR.cpp
     ExternalExecutor.cpp
+    ExtractFromTime.cpp
     FromTableReordering.cpp
     GeoIR.cpp
     GpuInterrupt.cpp
@@ -226,9 +228,10 @@ endif()
 
 target_link_libraries(
   QueryEngine
-  Planner
+  Analyzer
   StringDictionary
   Utils
+  Shared
   sqlite3
   ${ARROW_LIBS}
   clangFrontend

@@ -48,7 +48,6 @@
 #include "Fragmenter/TargetValueConvertersFactories.h"
 #include "Import/Importer.h"
 #include "LockMgr/LockMgr.h"
-#include "Planner/Planner.h"
 #include "QueryEngine/CalciteAdapter.h"
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/ExtensionFunctionsWhitelist.h"
@@ -64,7 +63,6 @@
 #include "parser.h"
 
 size_t g_leaf_count{0};
-bool g_use_date_in_days_default_encoding{true};
 bool g_test_drop_column_rollback{false};
 extern bool g_enable_experimental_string_functions;
 

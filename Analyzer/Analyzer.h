@@ -228,7 +228,7 @@ class ColumnVar : public Expr {
  protected:
   int table_id;   // the global table id
   int column_id;  // the column id
-  int rte_idx;    // 0-based range table index. only used by the analyzer and planner.
+  int rte_idx;    // 0-based range table index, used for table ordering in multi-joins
 };
 
 /*

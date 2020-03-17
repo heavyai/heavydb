@@ -26,7 +26,6 @@
 #include "Rendering/RenderInfo.h"
 #include "RuntimeFunctions.h"
 
-#include "../Planner/Planner.h"
 #include "../Shared/sqltypes.h"
 #include "Shared/Logger.h"
 
