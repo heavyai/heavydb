@@ -1938,6 +1938,8 @@ class InsertValuesStmt : public InsertStmt {
 
   size_t determineLeafIndex(const Catalog_Namespace::Catalog& catalog, size_t num_leafs);
 
+  void execute(const Catalog_Namespace::SessionInfo& session);
+
  private:
   std::list<std::unique_ptr<Expr>> value_list;
 };

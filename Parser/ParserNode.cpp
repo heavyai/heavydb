@@ -1822,6 +1822,41 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   }
 }
 
+void InsertValuesStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.getCatalog();
+
+  if (!session.checkDBAccessPrivileges(
+          DBObjectType::TableDBObjectType, AccessPrivileges::INSERT_INTO_TABLE, *table)) {
+    throw std::runtime_error("User has no insert privileges on " + *table + ".");
+  }
+
+  auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  Analyzer::Query query;
+  analyze(catalog, query);
+
+  //  Acquire schema write lock -- leave data lock so the fragmenter can checkpoint. For
+  //  singleton inserts we just take a write lock on the schema, which prevents concurrent
+  //  inserts.
+  auto result_table_id = query.get_result_table_id();
+  const auto td_with_lock =
+      lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
+          catalog, result_table_id);
+  auto td = td_with_lock();
+  CHECK(td);
+
+  if (td->isView) {
+    throw std::runtime_error("Singleton inserts on views is not supported.");
+  }
+
+  auto executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
+  RelAlgExecutor ra_executor(executor.get(), catalog);
+
+  ra_executor.executeSimpleInsert(query);
+}
+
 void UpdateStmt::analyze(const Catalog_Namespace::Catalog& catalog,
                          Analyzer::Query& query) const {
   throw std::runtime_error("UPDATE statement not supported yet.");

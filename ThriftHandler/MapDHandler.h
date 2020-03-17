@@ -675,14 +675,6 @@ class MapDHandler : public MapDIf {
                             const bool column_format,
                             const std::string label) const;
 
-  void execute_root_plan(TQueryResult& _return,
-                         QueryStateProxy query_state_proxy,
-                         const Planner::RootPlan* root_plan,
-                         const bool column_format,
-                         const Catalog_Namespace::SessionInfo& session_info,
-                         const ExecutorDeviceType executor_device_type,
-                         const int32_t first_n) const;
-
   std::vector<TargetMetaInfo> getTargetMetaInfo(
       const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const;
 
@@ -708,10 +700,6 @@ class MapDHandler : public MapDIf {
                                    std::vector<std::string>& visible_tables,
                                    const std::string& sql,
                                    const int cursor);
-  Planner::RootPlan* parse_to_plan_legacy(
-      const std::string& query_str,
-      const Catalog_Namespace::SessionInfo& session_info,
-      const std::string& action /* render or validate */);
 
   std::unordered_map<std::string, std::unordered_set<std::string>>
   fill_column_names_by_table(std::vector<std::string>& table_names,

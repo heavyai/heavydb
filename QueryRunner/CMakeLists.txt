@@ -1,6 +1,5 @@
 set(query_runner_source_files
     QueryRunner.cpp
-    ParserUtils.cpp
 )
 
 set(MAPD_LIBRARIES Catalog mapd_thrift)

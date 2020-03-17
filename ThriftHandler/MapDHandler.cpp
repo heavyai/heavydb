@@ -3193,39 +3193,6 @@ void MapDHandler::detect_column_types(TDetectResult& _return,
   }
 }
 
-Planner::RootPlan* MapDHandler::parse_to_plan_legacy(
-    const std::string& query_str,
-    const Catalog_Namespace::SessionInfo& session_info,
-    const std::string& action /* render or validate */) {
-  auto& cat = session_info.getCatalog();
-  LOG(INFO) << action << ": " << hide_sensitive_data_from_query(query_str);
-  SQLParser parser;
-  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
-  std::string last_parsed;
-  int num_parse_errors = 0;
-  try {
-    num_parse_errors = parser.parse(query_str, parse_trees, last_parsed);
-  } catch (std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
-  }
-  if (num_parse_errors > 0) {
-    THROW_MAPD_EXCEPTION("Syntax error at: " + last_parsed);
-  }
-  if (parse_trees.size() != 1) {
-    THROW_MAPD_EXCEPTION("Can only " + action + " a single query at a time.");
-  }
-  Parser::Stmt* stmt = parse_trees.front().get();
-  Parser::DDLStmt* ddl = dynamic_cast<Parser::DDLStmt*>(stmt);
-  if (ddl != nullptr) {
-    THROW_MAPD_EXCEPTION("Can only " + action + " SELECT statements.");
-  }
-  auto dml = static_cast<Parser::DMLStmt*>(stmt);
-  Analyzer::Query query;
-  dml->analyze(cat, query);
-  Planner::Optimizer optimizer(query, cat);
-  return optimizer.optimize();
-}
-
 void MapDHandler::render_vega(TRenderResult& _return,
                               const TSessionId& session,
                               const int64_t widget_id,
@@ -4758,45 +4725,6 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
   _return.df_size = arrow_result.df_size;
 }
 
-void MapDHandler::execute_root_plan(TQueryResult& _return,
-                                    QueryStateProxy query_state_proxy,
-                                    const Planner::RootPlan* root_plan,
-                                    const bool column_format,
-                                    const Catalog_Namespace::SessionInfo& session_info,
-                                    const ExecutorDeviceType executor_device_type,
-                                    const int32_t first_n) const {
-  auto executor = Executor::getExecutor(root_plan->getCatalog().getCurrentDB().dbId,
-                                        jit_debug_ ? "/tmp" : "",
-                                        jit_debug_ ? "mapdquery" : "",
-                                        mapd_parameters_);
-  std::shared_ptr<ResultSet> results;
-  _return.execution_time_ms += measure<>::execution([&]() {
-    results = executor->execute(root_plan,
-                                session_info,
-                                true,
-                                executor_device_type,
-                                ExecutorOptLevel::Default,
-                                allow_multifrag_,
-                                allow_loop_joins_);
-  });
-  // reduce execution time by the time spent during queue waiting
-  _return.execution_time_ms -= results->getQueueTime();
-  if (root_plan->get_plan_dest() == Planner::RootPlan::Dest::kEXPLAIN) {
-    convert_explain(_return, *results, column_format);
-    return;
-  }
-  const auto plan = root_plan->get_plan();
-  CHECK(plan);
-  const auto& targets = plan->get_targetlist();
-  convert_rows(_return,
-               query_state_proxy,
-               getTargetMetaInfo(targets),
-               *results,
-               column_format,
-               -1,
-               -1);
-}
-
 std::vector<TargetMetaInfo> MapDHandler::getTargetMetaInfo(
     const std::vector<std::shared_ptr<Analyzer::TargetEntry>>& targets) const {
   std::vector<TargetMetaInfo> result;
@@ -5049,7 +4977,6 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
   std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
   std::string last_parsed;
   int num_parse_errors = 0;
-  std::unique_ptr<Planner::RootPlan> root_plan;
 
   /*
      Use this seq to simplify locking:
@@ -5249,20 +5176,6 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
     THROW_MAPD_EXCEPTION("Syntax error at: " + last_parsed);
   }
 
-  auto get_legacy_plan =
-      [&cat](const Parser::DMLStmt* dml,
-             const bool is_explain) -> std::unique_ptr<Planner::RootPlan> {
-    Analyzer::Query query;
-    dml->analyze(cat, query);
-    Planner::Optimizer optimizer(query, cat);
-    auto root_plan_ptr = std::unique_ptr<Planner::RootPlan>(optimizer.optimize());
-    CHECK(root_plan_ptr);
-    if (is_explain) {
-      root_plan_ptr->set_plan_dest(Planner::RootPlan::Dest::kEXPLAIN);
-    }
-    return root_plan_ptr;
-  };
-
   auto handle_ddl = [&query_state_proxy, &session_ptr, &_return, &locks, this](
                         Parser::DDLStmt* ddl) -> bool {
     if (!ddl) {
@@ -5330,35 +5243,17 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         if (render_handler_) {
           render_handler_->handle_ddl(ddl);
         }
-        continue;
-      }
-      if (!root_plan) {
-        // assume DML / non-explain plan (an insert or copy statement)
-        const auto dml = dynamic_cast<Parser::DMLStmt*>(stmt.get());
-        CHECK(dml);
-        root_plan = get_legacy_plan(dml, false);
-        CHECK(root_plan);
-      }
-      if (auto stmtp = dynamic_cast<Parser::InsertValuesStmt*>(stmt.get())) {
-        // TODO(adb): Likely need a schema read lock here, though the blunt instrument
-        // write lock could be saving us for now
+      } else {
+        auto stmtp = dynamic_cast<Parser::InsertValuesStmt*>(stmt.get());
+        CHECK(stmtp);  // no other statements supported
 
-        executeWriteLock = mapd_unique_lock<mapd_shared_mutex>(
-            *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
-                legacylockmgr::ExecutorOuterLock, true));
+        if (parse_trees.size() != 1) {
+          THROW_MAPD_EXCEPTION("Can only run one INSERT INTO query at a time.");
+        }
 
-        CHECK(!checkpoint_lock.mutex());
-        checkpoint_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
-            session_ptr->getCatalog(), *stmtp->get_table());
+        _return.execution_time_ms +=
+            measure<>::execution([&]() { stmtp->execute(*session_ptr); });
       }
-
-      execute_root_plan(_return,
-                        query_state_proxy,
-                        root_plan.get(),
-                        column_format,
-                        *session_ptr,
-                        executor_device_type,
-                        first_n);
     } catch (std::exception& e) {
       const auto thrift_exception = dynamic_cast<const apache::thrift::TException*>(&e);
       THROW_MAPD_EXCEPTION(thrift_exception ? std::string(thrift_exception->what())

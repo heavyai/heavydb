@@ -36,10 +36,6 @@ struct UserMetadata;
 class ResultSet;
 class ExecutionResult;
 
-namespace Planner {
-class RootPlan;
-}
-
 namespace Parser {
 class CopyTableStmt;
 }
@@ -178,10 +174,6 @@ class QueryRunner {
               const int reserved_gpu_mem,
               const bool create_user,
               const bool create_db);
-
-  Planner::RootPlan* parsePlanLegacy(const std::string& query_str);
-  Planner::RootPlan* parsePlanCalcite(QueryStateProxy);
-  Planner::RootPlan* parsePlan(QueryStateProxy);
 
   static std::unique_ptr<QueryRunner> qr_instance_;
 

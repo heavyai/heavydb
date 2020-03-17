@@ -54,35 +54,7 @@ std::shared_ptr<ResultSet> Executor::execute(
       throw std::runtime_error("The legacy SELECT path has been fully deprecated.");
     }
     case kINSERT: {
-      if (root_plan->get_plan_dest() == Planner::RootPlan::kEXPLAIN) {
-        auto explanation_rs = std::make_shared<ResultSet>("No explanation available.");
-        explanation_rs->setQueueTime(queue_time_ms);
-        return explanation_rs;
-      }
-      auto& cat = session.getCatalog();
-      auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-      auto user_metadata = session.get_currentUser();
-      const int table_id = root_plan->get_result_table_id();
-      auto td = cat.getMetadataForTable(table_id);
-      DBObject dbObject(td->tableName, TableDBObjectType);
-      dbObject.loadKey(cat);
-      dbObject.setPrivileges(AccessPrivileges::INSERT_INTO_TABLE);
-      std::vector<DBObject> privObjects;
-      privObjects.push_back(dbObject);
-      if (!sys_cat.checkPrivileges(user_metadata, privObjects)) {
-        throw std::runtime_error(
-            "Violation of access privileges: user " + user_metadata.userName +
-            " has no insert privileges for table " + td->tableName + ".");
-        break;
-      }
-      executeSimpleInsert(root_plan);
-      auto empty_rs = std::make_shared<ResultSet>(std::vector<TargetInfo>{},
-                                                  ExecutorDeviceType::CPU,
-                                                  QueryMemoryDescriptor(),
-                                                  nullptr,
-                                                  this);
-      empty_rs->setQueueTime(queue_time_ms);
-      return empty_rs;
+      throw std::runtime_error("The legacy INSERT path has been fully deprecated.");
     }
     default:
       CHECK(false);

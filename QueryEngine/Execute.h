@@ -738,7 +738,6 @@ class Executor {
       std::vector<std::pair<ResultSetPtr, std::vector<size_t>>>& all_fragment_results,
       std::shared_ptr<RowSetMemoryOwner>,
       const QueryMemoryDescriptor&) const;
-  void executeSimpleInsert(const Planner::RootPlan* root_plan);
 
   ResultSetPtr executeWorkUnitImpl(size_t& max_groups_buffer_entry_guess,
                                    const bool is_agg,

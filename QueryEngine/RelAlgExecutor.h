@@ -138,6 +138,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
     return query_dag_->getSubqueries();
   };
 
+  ExecutionResult executeSimpleInsert(const Analyzer::Query& insert_query);
+
   AggregatedColRange computeColRangesCache();
   StringDictionaryGenerations computeStringDictionaryGenerations();
   TableGenerations computeTableGenerations();
@@ -235,6 +237,7 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                               const int64_t queue_time_ms);
 
   ExecutionResult executeLogicalValues(const RelLogicalValues*, const ExecutionOptions&);
+
   ExecutionResult executeModify(const RelModify* modify, const ExecutionOptions& eo);
 
   // TODO(alex): just move max_groups_buffer_entry_guess to RelAlgExecutionUnit once

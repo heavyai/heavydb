@@ -276,29 +276,16 @@ std::shared_ptr<ResultSet> QueryRunner::runSQL(const std::string& query_str,
   auto query_state = create_query_state(session_info_, query_str);
   auto stdlog = STDLOG(query_state);
 
-  const auto& cat = session_info_->getCatalog();
-  auto executor = Executor::getExecutor(cat.getCurrentDB().dbId);
-
-  auto plan =
-      std::unique_ptr<Planner::RootPlan>(parsePlan(query_state->createQueryStateProxy()));
-
-#ifdef HAVE_CUDA
-  return executor->execute(plan.get(),
-                           *session_info_,
-                           hoist_literals,
-                           device_type,
-                           ExecutorOptLevel::LoopStrengthReduction,
-                           true,
-                           allow_loop_joins);
-#else
-  return executor->execute(plan.get(),
-                           *session_info_,
-                           hoist_literals,
-                           device_type,
-                           ExecutorOptLevel::LoopStrengthReduction,
-                           false,
-                           allow_loop_joins);
-#endif
+  SQLParser parser;
+  std::list<std::unique_ptr<Parser::Stmt>> parse_trees;
+  std::string last_parsed;
+  CHECK_EQ(parser.parse(query_str, parse_trees, last_parsed), 0) << query_str;
+  CHECK_EQ(parse_trees.size(), size_t(1));
+  auto stmt = parse_trees.front().get();
+  auto insert_values_stmt = dynamic_cast<InsertValuesStmt*>(stmt);
+  CHECK(insert_values_stmt);
+  insert_values_stmt->execute(*session_info_);
+  return nullptr;
 }
 
 std::vector<std::shared_ptr<ResultSet>> QueryRunner::runMultipleStatements(
