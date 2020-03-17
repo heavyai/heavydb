@@ -1134,8 +1134,16 @@ opt_literal_commalist:
 	/* miscellaneous */
 
 table:
-		NAME { $<stringval>$ = $<stringval>1; }
+	NAME
+	{
+		const auto uc_col_name = boost::to_upper_copy<std::string>(*$<stringval>1);
+		if (reserved_keywords.find(uc_col_name) != reserved_keywords.end()) {
+			errors_.push_back("Cannot use a reserved keyword as table name: " + *$<stringval>1);
+		}
+		$<stringval>$ = $<stringval>1; 
+	}
 	/* |	NAME '.' NAME { $$ = new TableRef($<stringval>1, $<stringval>3); } */
+    | 	QUOTED_IDENTIFIER { $<stringval>$ = $<stringval>1; }
 	;
 
 opt_table:

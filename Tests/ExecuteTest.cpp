@@ -13585,7 +13585,7 @@ TEST(Select, Correlated_In) {
   }
 }
 
-TEST(Create, QuotedIdentifier) {
+TEST(Create, QuotedColumnIdentifier) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
@@ -13612,6 +13612,38 @@ TEST(Create, QuotedIdentifier) {
                   "SELECT \"count\" FROM identifier_test where id = 2;", dt)));
 
     run_ddl_statement("alter table identifier_test drop column \"count\";");
+  }
+}
+
+TEST(Create, QuotedTableIdentifier) {
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("drop table if exists \"sum\";");
+    EXPECT_ANY_THROW(run_ddl_statement("create table sum (id integer, val integer);"));
+
+    run_ddl_statement("create table \"sum\" (id integer, val integer);");
+
+    EXPECT_ANY_THROW(run_multiple_agg("insert into sum values(1, 1);", dt));
+    run_multiple_agg("insert into \"sum\" values(1, 1);", dt);
+
+    EXPECT_ANY_THROW(run_simple_agg("SELECT val FROM sum;", dt));
+
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT val FROM \"sum\";", dt)));
+
+    EXPECT_ANY_THROW(run_ddl_statement("alter table sum rename to count;"));
+
+    run_ddl_statement("alter table \"sum\" rename to \"count\";");
+
+    ASSERT_EQ(static_cast<int64_t>(1),
+              v<int64_t>(run_simple_agg("SELECT val FROM \"count\";", dt)));
+
+    EXPECT_ANY_THROW(run_ddl_statement("alter table count drop column val;"));
+    run_ddl_statement("alter table \"count\" drop column val;");
+
+    EXPECT_ANY_THROW(run_ddl_statement("drop table count;"));
+    run_ddl_statement("drop table \"count\";");
   }
 }
 
