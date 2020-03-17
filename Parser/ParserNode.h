@@ -1943,22 +1943,6 @@ class InsertValuesStmt : public InsertStmt {
 };
 
 /*
- * @type InsertQueryStmt
- * @brief INSERT INTO ... SELECT ...
- */
-class InsertQueryStmt : public InsertStmt {
- public:
-  InsertQueryStmt(std::string* t, std::list<std::string*>* c, QuerySpec* q)
-      : InsertStmt(t, c), query(q) {}
-  const QuerySpec* get_query() const { return query.get(); }
-  void analyze(const Catalog_Namespace::Catalog& catalog,
-               Analyzer::Query& query) const override;
-
- private:
-  std::unique_ptr<QuerySpec> query;
-};
-
-/*
  * @type Assignment
  * @brief assignment in UPDATE statement
  */

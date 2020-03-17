@@ -1822,12 +1822,6 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
   }
 }
 
-void InsertQueryStmt::analyze(const Catalog_Namespace::Catalog& catalog,
-                              Analyzer::Query& insert_query) const {
-  InsertStmt::analyze(catalog, insert_query);
-  query->analyze(catalog, insert_query);
-}
-
 void UpdateStmt::analyze(const Catalog_Namespace::Catalog& catalog,
                          Analyzer::Query& query) const {
   throw std::runtime_error("UPDATE statement not supported yet.");

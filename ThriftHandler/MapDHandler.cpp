@@ -5339,18 +5339,7 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         root_plan = get_legacy_plan(dml, false);
         CHECK(root_plan);
       }
-      if (auto stmtp = dynamic_cast<Parser::InsertQueryStmt*>(stmt.get())) {
-        const auto query_string = stmtp->get_query()->to_string();
-        TPlanResult result;
-        CHECK(locks.empty());
-        std::tie(result, locks) =
-            parse_to_ra(query_state_proxy, query_str, {}, true, mapd_parameters_);
-        const auto query_ra = result.plan_result;
-
-        CHECK(!checkpoint_lock.mutex());
-        checkpoint_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
-            session_ptr->getCatalog(), *stmtp->get_table());
-      } else if (auto stmtp = dynamic_cast<Parser::InsertValuesStmt*>(stmt.get())) {
+      if (auto stmtp = dynamic_cast<Parser::InsertValuesStmt*>(stmt.get())) {
         // TODO(adb): Likely need a schema read lock here, though the blunt instrument
         // write lock could be saving us for now
 
