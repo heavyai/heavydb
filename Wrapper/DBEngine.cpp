@@ -38,9 +38,9 @@ namespace EmbeddedDatabase {
 
     enum class ColumnType : uint32_t {eUNK, eINT, eDBL, eFLT, eSTR, eARR};
 
-	/**
-	 * Cursor internal implementation
-	 */
+    /**
+     * Cursor internal implementation
+     */
     class CursorImpl : public Cursor {
     public:
         CursorImpl(std::shared_ptr<ResultSet> resultSet, std::shared_ptr<Data_Namespace::DataMgr> dataMgr)
@@ -99,25 +99,25 @@ namespace EmbeddedDatabase {
         std::weak_ptr<Data_Namespace::DataMgr> m_DataMgr;
     };
 
-	/**
+    /**
      * DBEngine internal implementation
      */
     class DBEngineImpl : public DBEngine {
     public:
-		const int CALCITEPORT = 3279;
+        const int CALCITEPORT = 3279;
         const std::string OMNISCI_DEFAULT_DB = "omnisci";
         const std::string OMNISCI_ROOT_USER = "admin";
         const std::string OMNISCI_DATA_PATH = "//mapd_data";
 
         void Reset() {
           // TODO: Destroy all cursors in the m_Cursors
-			if (m_pQueryRunner != nullptr) {
-				m_pQueryRunner->reset();
-			}
+            if (m_pQueryRunner != nullptr) {
+                m_pQueryRunner->reset();
+            }
         }
 
         void ExecuteDDL(const std::string& sQuery) {
-			if (m_pQueryRunner != nullptr) {
+            if (m_pQueryRunner != nullptr) {
                 m_pQueryRunner->runDDLStatement(sQuery);
             }
         }
@@ -141,7 +141,7 @@ namespace EmbeddedDatabase {
                 MapDParameters mapdParms;
                 std::string sDataPath = m_sBasePath + OMNISCI_DATA_PATH;
                 m_DataMgr = std::make_shared<Data_Namespace::DataMgr>(sDataPath, mapdParms, false, 0);
-                auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, m_sBasePath, 1024);
+                auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, m_sBasePath, 1024, 5000);
                 auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
                 sys_cat.init(m_sBasePath, m_DataMgr, {}, calcite, false, false, {});
                 if (!sys_cat.getSqliteConnector()) {
@@ -165,15 +165,15 @@ namespace EmbeddedDatabase {
         std::vector<CursorImpl*> m_Cursors;
     };
 
-	/********************************************* DBEngine external methods*/
+    /********************************************* DBEngine external methods*/
 
-	/**
+    /**
      * Creates DBEngine instance
-	 *
-	 * @param sPath Path to the existing database
+     *
+     * @param sPath Path to the existing database
      */
     DBEngine* DBEngine::Create(std::string sPath) {
-		return new DBEngineImpl(sPath);
+        return new DBEngineImpl(sPath);
     }
 
     /** DBEngine downcasting methods */
@@ -181,9 +181,9 @@ namespace EmbeddedDatabase {
     inline const DBEngineImpl * GetImpl(const DBEngine* ptr) { return (const DBEngineImpl *)ptr; }
 
     void DBEngine::Reset() {
-		// TODO: Make sure that dbengine does not released twice
-		/DBEngineImpl* pEngine = GetImpl(this);
-		pEngine->Reset();
+        // TODO: Make sure that dbengine does not released twice
+        DBEngineImpl* pEngine = GetImpl(this);
+        pEngine->Reset();
     }
 
     void DBEngine::ExecuteDDL(std::string sQuery) {
@@ -196,7 +196,7 @@ namespace EmbeddedDatabase {
         return pEngine->ExecuteDML(sQuery);
     }
 
-	/********************************************* Row methods */
+    /********************************************* Row methods */
 
     Row::Row() {}
 
@@ -235,7 +235,7 @@ namespace EmbeddedDatabase {
       return "Out of range";
     }
 
-	/********************************************* Сursor external methods*/
+    /********************************************* Сursor external methods*/
 
     /** Cursor downcasting methods */
     inline CursorImpl * GetImpl(Cursor* ptr) { return (CursorImpl *)ptr; }
