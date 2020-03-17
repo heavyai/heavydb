@@ -239,7 +239,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
         continue;
       }
       demangledNames.add(demangledName);
-      opTab.addOperator(new ExtFunction(extSig.getKey(), extSig.getValue()));
+      opTab.addOperator(new ExtFunction(demangledName, extSig.getValue()));
     }
   }
 
@@ -249,7 +249,7 @@ public class MapDSqlOperatorTable extends ChainedSqlOperatorTable {
       return str;
     }
     assert suffix_idx > 0;
-    return str.substring(0, suffix_idx - 1);
+    return str.substring(0, suffix_idx);
   }
 
   public static class SqlArrayValueConstructorAllowingEmpty
