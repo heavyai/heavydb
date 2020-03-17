@@ -145,18 +145,6 @@ class JoinHashTable : public JoinHashTableInterface {
     CHECK_GT(device_count_, 0);
   }
 
-  std::pair<const int8_t*, size_t> getOneColumnFragment(
-      const Analyzer::ColumnVar& hash_col,
-      const Fragmenter_Namespace::FragmentInfo& fragment,
-      const Data_Namespace::MemoryLevel effective_mem_lvl,
-      const int device_id,
-      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner);
-
-  std::pair<const int8_t*, size_t> getAllColumnFragments(
-      const Analyzer::ColumnVar& hash_col,
-      const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner);
-
   ChunkKey genHashTableKey(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
       const Analyzer::Expr* outer_col,
@@ -172,17 +160,15 @@ class JoinHashTable : public JoinHashTableInterface {
       const int device_id,
       const logger::ThreadId parent_thread_id);
   void checkHashJoinReplicationConstraint(const int table_id) const;
-  void initHashTableForDevice(
+  void initOneToOneHashTable(
       const ChunkKey& chunk_key,
-      const int8_t* col_buff,
-      const size_t num_elements,
+      const JoinColumn& join_column,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
       const Data_Namespace::MemoryLevel effective_memory_level,
       const int device_id);
   void initOneToManyHashTable(
       const ChunkKey& chunk_key,
-      const int8_t* col_buff,
-      const size_t num_elements,
+      const JoinColumn& join_column,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
       const Data_Namespace::MemoryLevel effective_memory_level,
       const int device_id);
@@ -194,15 +180,13 @@ class JoinHashTable : public JoinHashTableInterface {
       const ChunkKey& chunk_key,
       const size_t num_elements,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols);
-  void initHashTableOnCpu(
-      const int8_t* col_buff,
-      const size_t num_elements,
+  void initOneToOneHashTableOnCpu(
+      const JoinColumn& join_column,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
       const HashEntryInfo hash_entry_info,
       const int32_t hash_join_invalid_val);
   void initOneToManyHashTableOnCpu(
-      const int8_t* col_buff,
-      const size_t num_elements,
+      const JoinColumn& join_column,
       const std::pair<const Analyzer::ColumnVar*, const Analyzer::Expr*>& cols,
       const HashEntryInfo hash_entry_info,
       const int32_t hash_join_invalid_val);
@@ -217,14 +201,6 @@ class JoinHashTable : public JoinHashTableInterface {
                                             const Analyzer::Expr* key_col,
                                             const int shard_count,
                                             const CompilationOptions& co);
-
-  std::pair<const int8_t*, size_t> fetchFragments(
-      const Analyzer::ColumnVar* hash_col,
-      const std::deque<Fragmenter_Namespace::FragmentInfo>& fragment_info,
-      const Data_Namespace::MemoryLevel effective_memory_level,
-      const int device_id,
-      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-      ThrustAllocator& dev_buff_owner);
 
   bool isBitwiseEq() const;
 
@@ -250,9 +226,6 @@ class JoinHashTable : public JoinHashTableInterface {
   Executor* executor_;
   ColumnCacheMap& column_cache_;
   const int device_count_;
-  std::pair<const int8_t*, size_t> linearized_multifrag_column_;
-  std::mutex linearized_multifrag_column_mutex_;
-  RowSetMemoryOwner linearized_multifrag_column_owner_;
 
   struct JoinHashTableCacheKey {
     const ExpressionRange col_range;

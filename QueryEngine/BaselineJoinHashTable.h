@@ -126,11 +126,13 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
     const std::vector<JoinColumnTypeInfo> join_column_types;
     const std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
     const std::vector<JoinBucketInfo> join_buckets;
+    const std::vector<std::shared_ptr<void>> malloc_owner;
   };
 
   virtual ColumnsForDevice fetchColumnsForDevice(
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-      const int device_id);
+      const int device_id,
+      ThrustAllocator& dev_buff_owner);
 
   virtual std::pair<size_t, size_t> approximateTupleCount(
       const std::vector<ColumnsForDevice>&) const;
@@ -154,11 +156,6 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 
   virtual llvm::Value* codegenKey(const CompilationOptions&);
 
-  std::pair<const int8_t*, size_t> getAllColumnFragments(
-      const Analyzer::ColumnVar& hash_col,
-      const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-      std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner);
-
   size_t shardCount() const;
 
   Data_Namespace::MemoryLevel getEffectiveMemoryLevel(
@@ -173,12 +170,6 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
   CompositeKeyInfo getCompositeKeyInfo() const;
 
   void reify();
-
-  JoinColumn fetchColumn(const Analyzer::ColumnVar* inner_col,
-                         const Data_Namespace::MemoryLevel& effective_memory_level,
-                         const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-                         std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
-                         const int device_id);
 
   void reifyForDevice(const ColumnsForDevice& columns_for_device,
                       const JoinHashTableInterface::HashType layout,
@@ -256,11 +247,6 @@ class BaselineJoinHashTable : public JoinHashTableInterface {
 #ifdef HAVE_CUDA
   std::vector<Data_Namespace::AbstractBuffer*> gpu_hash_table_buff_;
 #endif
-  using LinearizedColumn = std::pair<const int8_t*, size_t>;
-  using LinearizedColumnCacheKey = std::pair<int, int>;
-  std::map<LinearizedColumnCacheKey, LinearizedColumn> linearized_multifrag_columns_;
-  std::mutex linearized_multifrag_column_mutex_;
-  RowSetMemoryOwner linearized_multifrag_column_owner_;
   std::vector<InnerOuter> inner_outer_pairs_;
   const Catalog_Namespace::Catalog* catalog_;
   const int device_count_;

@@ -185,12 +185,19 @@ std::pair<size_t, size_t> OverlapsJoinHashTable::calculateCounts(
     size_t shard_count,
     const Fragmenter_Namespace::TableInfo& query_info,
     std::vector<BaselineJoinHashTable::ColumnsForDevice>& columns_per_device) {
+  auto& data_mgr = catalog_->getDataMgr();
+  auto dev_buff_owners =
+      std::make_unique<std::unique_ptr<ThrustAllocator>[]>(device_count_);
+  for (int device_id = 0; device_id < device_count_; ++device_id) {
+    dev_buff_owners[device_id] = std::make_unique<ThrustAllocator>(&data_mgr, device_id);
+  }
   for (int device_id = 0; device_id < device_count_; ++device_id) {
     const auto fragments =
         shard_count
             ? only_shards_for_device(query_info.fragments, device_id, device_count_)
             : query_info.fragments;
-    const auto columns_for_device = fetchColumnsForDevice(fragments, device_id);
+    const auto columns_for_device =
+        fetchColumnsForDevice(fragments, device_id, *dev_buff_owners[device_id]);
     columns_per_device.push_back(columns_for_device);
   }
 
@@ -219,7 +226,8 @@ size_t OverlapsJoinHashTable::calculateHashTableSize(size_t number_of_dimensions
 
 BaselineJoinHashTable::ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDevice(
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
-    const int device_id) {
+    const int device_id,
+    ThrustAllocator& dev_buff_owner) {
   const auto& catalog = *executor_->getCatalog();
   const auto effective_memory_level = getEffectiveMemoryLevel(inner_outer_pairs_);
 
@@ -227,6 +235,7 @@ BaselineJoinHashTable::ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDe
   std::vector<std::shared_ptr<Chunk_NS::Chunk>> chunks_owner;
   std::vector<JoinColumnTypeInfo> join_column_types;
   std::vector<JoinBucketInfo> join_bucket_info;
+  std::vector<std::shared_ptr<void>> malloc_owner;
   for (const auto& inner_outer_pair : inner_outer_pairs_) {
     const auto inner_col = inner_outer_pair.first;
     const auto inner_cd = get_column_descriptor_maybe(
@@ -234,12 +243,18 @@ BaselineJoinHashTable::ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDe
     if (inner_cd && inner_cd->isVirtualCol) {
       throw FailedToJoinOnVirtualColumn();
     }
-    const auto join_column_info = fetchColumn(
-        inner_col, effective_memory_level, fragments, chunks_owner, device_id);
-    join_columns.emplace_back(
-        JoinColumn{join_column_info.col_buff, join_column_info.num_elems});
+    join_columns.emplace_back(fetchJoinColumn(inner_col,
+                                              fragments,
+                                              effective_memory_level,
+                                              device_id,
+                                              chunks_owner,
+                                              dev_buff_owner,
+                                              malloc_owner,
+                                              executor_,
+                                              &column_cache_));
     const auto& ti = inner_col->get_type_info();
     join_column_types.emplace_back(JoinColumnTypeInfo{static_cast<size_t>(ti.get_size()),
+                                                      0,
                                                       0,
                                                       inline_int_null_value<int64_t>(),
                                                       isBitwiseEq(),
@@ -248,15 +263,17 @@ BaselineJoinHashTable::ColumnsForDevice OverlapsJoinHashTable::fetchColumnsForDe
     CHECK(ti.is_array()) << "Overlaps join currently only supported for arrays.";
 
     if (bucket_sizes_for_dimension_.empty()) {
-      computeBucketSizes(
-          bucket_sizes_for_dimension_, join_columns.back(), inner_outer_pairs_);
+      computeBucketSizes(bucket_sizes_for_dimension_,
+                         join_columns.back(),
+                         join_column_types.back(),
+                         inner_outer_pairs_);
     }
     const auto elem_ti = ti.get_elem_type();
     CHECK(elem_ti.is_fp());
     join_bucket_info.emplace_back(
         JoinBucketInfo{bucket_sizes_for_dimension_, elem_ti.get_type() == kDOUBLE});
   }
-  return {join_columns, join_column_types, chunks_owner, join_bucket_info};
+  return {join_columns, join_column_types, chunks_owner, join_bucket_info, malloc_owner};
 }
 
 std::pair<size_t, size_t> OverlapsJoinHashTable::approximateTupleCount(
@@ -781,6 +798,7 @@ llvm::Value* OverlapsJoinHashTable::codegenKey(const CompilationOptions& co) {
 void OverlapsJoinHashTable::computeBucketSizes(
     std::vector<double>& bucket_sizes_for_dimension,
     const JoinColumn& join_column,
+    const JoinColumnTypeInfo& join_column_type,
     const std::vector<InnerOuter>& inner_outer_pairs) {
   // No coalesced keys for overlaps joins yet
   CHECK_EQ(inner_outer_pairs.size(), 1u);
@@ -812,6 +830,7 @@ void OverlapsJoinHashTable::computeBucketSizes(
     const int thread_count = cpu_threads();
     compute_bucket_sizes(local_bucket_sizes,
                          join_column,
+                         join_column_type,
                          overlaps_hashjoin_bucket_threshold_,
                          thread_count);
   }
@@ -823,10 +842,12 @@ void OverlapsJoinHashTable::computeBucketSizes(
     ThrustAllocator allocator(&data_mgr, device_id);
     auto device_bucket_sizes_gpu =
         transfer_vector_of_flat_objects_to_gpu(local_bucket_sizes, allocator);
-    auto join_columns_gpu = transfer_flat_object_to_gpu(join_column, allocator);
+    auto join_column_gpu = transfer_flat_object_to_gpu(join_column, allocator);
+    auto join_column_type_gpu = transfer_flat_object_to_gpu(join_column_type, allocator);
 
     compute_bucket_sizes_on_device(device_bucket_sizes_gpu,
-                                   join_columns_gpu,
+                                   join_column_gpu,
+                                   join_column_type_gpu,
                                    overlaps_hashjoin_bucket_threshold_,
                                    executor_->blockSize(),
                                    executor_->gridSize());

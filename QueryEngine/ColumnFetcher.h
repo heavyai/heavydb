@@ -22,6 +22,7 @@ class ColumnFetcher {
  public:
   ColumnFetcher(Executor* executor, const ColumnCacheMap& column_cache);
 
+  //! Gets one chunk's pointer and element count on either CPU or GPU.
   static std::pair<const int8_t*, size_t> getOneColumnFragment(
       Executor* executor,
       const Analyzer::ColumnVar& hash_col,
@@ -31,11 +32,15 @@ class ColumnFetcher {
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
       ColumnCacheMap& column_cache);
 
-  static std::pair<const int8_t*, size_t> getAllColumnFragments(
+  //! Creates a JoinColumn struct containing an array of JoinChunk structs.
+  static JoinColumn makeJoinColumn(
       Executor* executor,
       const Analyzer::ColumnVar& hash_col,
       const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+      const Data_Namespace::MemoryLevel effective_mem_lvl,
+      const int device_id,
       std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+      std::vector<std::shared_ptr<void>>& malloc_owner,
       ColumnCacheMap& column_cache);
 
   const int8_t* getOneTableColumnFragment(

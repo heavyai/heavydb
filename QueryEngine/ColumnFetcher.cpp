@@ -23,6 +23,9 @@
 ColumnFetcher::ColumnFetcher(Executor* executor, const ColumnCacheMap& column_cache)
     : executor_(executor), columnarized_table_cache_(column_cache) {}
 
+//! Gets a column fragment chunk on CPU or on GPU depending on the effective
+//! memory level parameter. For temporary tables, the chunk will be copied to
+//! the GPU if needed. Returns a buffer pointer and an element count.
 std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
     Executor* executor,
     const Analyzer::ColumnVar& hash_col,
@@ -42,7 +45,7 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
       hash_col.get_column_id(), hash_col.get_table_id(), catalog);
   CHECK(!cd || !(cd->isVirtualCol));
   const int8_t* col_buff = nullptr;
-  if (cd) {
+  if (cd) {  // real table
     ChunkKey chunk_key{catalog.getCurrentDB().dbId,
                        fragment.physicalTableId,
                        hash_col.get_column_id(),
@@ -60,7 +63,7 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
     auto ab = chunk->get_buffer();
     CHECK(ab->getMemoryPtr());
     col_buff = reinterpret_cast<int8_t*>(ab->getMemoryPtr());
-  } else {
+  } else {  // temporary table
     const ColumnarResults* col_frag{nullptr};
     {
       std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex);
@@ -91,46 +94,59 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
   return {col_buff, fragment.getNumTuples()};
 }
 
-std::pair<const int8_t*, size_t> ColumnFetcher::getAllColumnFragments(
+//! makeJoinColumn() creates a JoinColumn struct containing a array of
+//! JoinChunk structs, col_chunks_buff, malloced in CPU memory. Although
+//! the col_chunks_buff array is in CPU memory here, each JoinChunk struct
+//! contains an int8_t* pointer from getOneColumnFragment(), col_buff,
+//! that can point to either CPU memory or GPU memory depending on the
+//! effective_mem_lvl parameter. See also the fetchJoinColumn() function
+//! where col_chunks_buff is copied into GPU memory if needed. The
+//! malloc_owner parameter will have the malloced array appended. The
+//! chunks_owner parameter will be appended with the chunks.
+JoinColumn ColumnFetcher::makeJoinColumn(
     Executor* executor,
     const Analyzer::ColumnVar& hash_col,
     const std::deque<Fragmenter_Namespace::FragmentInfo>& fragments,
+    const Data_Namespace::MemoryLevel effective_mem_lvl,
+    const int device_id,
     std::vector<std::shared_ptr<Chunk_NS::Chunk>>& chunks_owner,
+    std::vector<std::shared_ptr<void>>& malloc_owner,
     ColumnCacheMap& column_cache) {
   CHECK(!fragments.empty());
-  const size_t elem_width = hash_col.get_type_info().get_size();
-  std::vector<const int8_t*> col_frags;
-  std::vector<size_t> elem_counts;
+
+  size_t col_chunks_buff_sz = sizeof(struct JoinChunk) * fragments.size();
+  auto col_chunks_buff = reinterpret_cast<int8_t*>(
+      malloc_owner.emplace_back(checked_malloc(col_chunks_buff_sz), free).get());
+  auto join_chunk_array = reinterpret_cast<struct JoinChunk*>(col_chunks_buff);
+
+  size_t num_elems = 0;
+  size_t num_chunks = 0;
   for (auto& frag : fragments) {
-    const int8_t* col_frag = nullptr;
-    size_t elem_count = 0;
-    std::tie(col_frag, elem_count) = getOneColumnFragment(executor,
-                                                          hash_col,
-                                                          frag,
-                                                          Data_Namespace::CPU_LEVEL,
-                                                          0,
-                                                          chunks_owner,
-                                                          column_cache);
-    if (col_frag == nullptr) {
+    auto [col_buff, elem_count] = getOneColumnFragment(
+        executor,
+        hash_col,
+        frag,
+        effective_mem_lvl,
+        effective_mem_lvl == Data_Namespace::CPU_LEVEL ? 0 : device_id,
+        chunks_owner,
+        column_cache);
+    if (col_buff != nullptr) {
+      num_elems += elem_count;
+      join_chunk_array[num_chunks] = JoinChunk{col_buff, elem_count};
+    } else {
       continue;
     }
-    CHECK_NE(elem_count, size_t(0));
-    col_frags.push_back(col_frag);
-    elem_counts.push_back(elem_count);
+    ++num_chunks;
   }
-  if (col_frags.empty()) {
-    return {nullptr, 0};
-  }
-  CHECK_EQ(col_frags.size(), elem_counts.size());
-  const auto total_elem_count =
-      std::accumulate(elem_counts.begin(), elem_counts.end(), size_t(0));
-  auto col_buff =
-      reinterpret_cast<int8_t*>(checked_malloc(total_elem_count * elem_width));
-  for (size_t i = 0, offset = 0; i < col_frags.size(); ++i) {
-    memcpy(col_buff + offset, col_frags[i], elem_counts[i] * elem_width);
-    offset += elem_counts[i] * elem_width;
-  }
-  return {col_buff, total_elem_count};
+
+  int elem_sz = hash_col.get_type_info().get_size();
+  CHECK_GT(elem_sz, 0);
+
+  return {col_chunks_buff,
+          col_chunks_buff_sz,
+          num_chunks,
+          num_elems,
+          static_cast<size_t>(elem_sz)};
 }
 
 const int8_t* ColumnFetcher::getOneTableColumnFragment(

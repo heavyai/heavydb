@@ -30,6 +30,13 @@
 #include "../Shared/SqlTypesLayout.h"
 #include "../Shared/sqltypes.h"
 
+#ifdef __CUDACC__
+#include "DecodersImpl.h"
+#else
+#include "RuntimeFunctions.h"
+#endif
+#include "../Shared/funcannotations.h"
+
 struct GenericKeyHandler;
 struct OverlapsKeyHandler;
 
@@ -96,11 +103,21 @@ void init_baseline_hash_join_buff_on_device_64(int8_t* hash_join_buff,
                                                const size_t block_size_x,
                                                const size_t grid_size_x);
 
-enum ColumnType { SmallDate = 0, Signed = 1, Unsigned = 2 };
+enum ColumnType { SmallDate = 0, Signed = 1, Unsigned = 2, Double = 3 };
+
+struct JoinChunk {
+  const int8_t*
+      col_buff;  // actually from AbstractBuffer::getMemoryPtr() via Chunk_NS::Chunk
+  size_t num_elems;
+};
 
 struct JoinColumn {
-  const int8_t* col_buff;
-  const size_t num_elems;
+  const int8_t*
+      col_chunks_buff;  // actually a JoinChunk* from ColumnFetcher::makeJoinColumn()
+  size_t col_chunks_buff_sz;
+  size_t num_chunks;
+  size_t num_elems;
+  size_t elem_sz;
 };
 
 struct JoinColumnTypeInfo {
@@ -405,11 +422,13 @@ void approximate_distinct_tuples_on_device_overlaps(uint8_t* hll_buffer,
 
 void compute_bucket_sizes(std::vector<double>& bucket_sizes_for_dimension,
                           const JoinColumn& join_column,
+                          const JoinColumnTypeInfo& type_info,
                           const double bucket_size_threshold,
                           const int thread_count);
 
 void compute_bucket_sizes_on_device(double* bucket_sizes_buffer,
-                                    const JoinColumn* join_column_for_key,
+                                    const JoinColumn* join_column,
+                                    const JoinColumnTypeInfo* type_info,
                                     const double bucket_sz_threshold,
                                     const size_t block_size_x,
                                     const size_t grid_size_x);
