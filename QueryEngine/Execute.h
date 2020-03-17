@@ -359,17 +359,6 @@ class Executor {
 
   static void clearMemory(const Data_Namespace::MemoryLevel memory_level);
 
-  using AggInfo = std::tuple<std::string, const Analyzer::Expr*, int64_t, const size_t>;
-
-  std::shared_ptr<ResultSet> execute(const Planner::RootPlan* root_plan,
-                                     const Catalog_Namespace::SessionInfo& session,
-                                     const bool hoist_literals,
-                                     const ExecutorDeviceType device_type,
-                                     const ExecutorOptLevel,
-                                     const bool allow_multifrag,
-                                     const bool allow_loop_joins,
-                                     RenderInfo* render_query_data = nullptr);
-
   StringDictionaryProxy* getStringDictionaryProxy(
       const int dictId,
       const std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
