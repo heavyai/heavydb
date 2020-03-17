@@ -98,6 +98,8 @@ class LeafAggregator {
 
   void disconnect(const TSessionId session) { CHECK(false); }
 
+  void clone_session(const TSessionId session1, const TSessionId session2);
+
   void interrupt(const TSessionId session) { CHECK(false); }
 
   void set_execution_mode(const TSessionId session, const TExecuteMode::type mode) {

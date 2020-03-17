@@ -11,12 +11,16 @@ import org.apache.calcite.sql.SqlIdentifier;
 
 public class OmniSqlArray extends OmniSqlJson {
   @Expose
-  private SqlDataTypeSpec elementType;
+  private String elementType;
   @Expose
-  private String size;
+  private Integer size;
 
-  public OmniSqlArray(final SqlDataTypeSpec elementType, final Integer size) {
+  public OmniSqlArray(final String elementType, final Integer size) {
     this.elementType = elementType;
-    this.size = (size == null) ? null : size.toString();
+    this.size = size;
+  }
+
+  Integer getSize() {
+    return size;
   }
 }

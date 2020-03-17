@@ -27,6 +27,7 @@ yay -S \
     llvm \
     lz4 \
     maven \
+    ninja \
     python-numpy \
     snappy \
     thrift \

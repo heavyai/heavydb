@@ -396,6 +396,7 @@ void MapDHandler::removeInMemoryCalciteSession(const std::string& session_id) {
   CHECK(it != sessions_.end());
   sessions_.erase(it);
 }
+
 // internal connection for connections with no password
 void MapDHandler::internal_connect(TSessionId& session,
                                    const std::string& username,
@@ -407,8 +408,8 @@ void MapDHandler::internal_connect(TSessionId& session,
   Catalog_Namespace::UserMetadata user_meta;
   std::shared_ptr<Catalog> cat = nullptr;
   try {
-    cat = SysCatalog::instance().login(
-        dbname2, username2, std::string(""), user_meta, false);
+    cat =
+        SysCatalog::instance().login(dbname2, username2, std::string(), user_meta, false);
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
@@ -422,7 +423,7 @@ void MapDHandler::internal_connect(TSessionId& session,
     THROW_MAPD_EXCEPTION("Unauthorized Access: user " + username +
                          " is not allowed to access database " + dbname2 + ".");
   }
-  connect_impl(session, std::string(""), dbname2, user_meta, cat, stdlog);
+  connect_impl(session, std::string(), dbname2, user_meta, cat, stdlog);
 }
 
 void MapDHandler::krb5_connect(TKrb5Session& session,
@@ -466,12 +467,11 @@ void MapDHandler::connect(TSessionId& session,
   SysCatalog::instance().check_for_session_encryption(passwd, session);
 }
 
-void MapDHandler::connect_impl(TSessionId& session,
-                               const std::string& passwd,
-                               const std::string& dbname,
-                               Catalog_Namespace::UserMetadata& user_meta,
-                               std::shared_ptr<Catalog> cat,
-                               query_state::StdLog& stdlog) {
+std::shared_ptr<Catalog_Namespace::SessionInfo> MapDHandler::create_new_session(
+    TSessionId& session,
+    const std::string& dbname,
+    const Catalog_Namespace::UserMetadata& user_meta,
+    std::shared_ptr<Catalog> cat) {
   do {
     session = generate_random_string(32);
   } while (sessions_.find(session) != sessions_.end());
@@ -481,6 +481,21 @@ void MapDHandler::connect_impl(TSessionId& session,
                             cat, user_meta, executor_device_type_, session));
   CHECK(emplace_retval.second);
   auto& session_ptr = emplace_retval.first->second;
+  LOG(INFO) << "User " << user_meta.userName << " connected to database " << dbname
+            << " with public_session_id " << session_ptr->get_public_session_id();
+  return session_ptr;
+}
+
+void MapDHandler::connect_impl(TSessionId& session,
+                               const std::string& passwd,
+                               const std::string& dbname,
+                               const Catalog_Namespace::UserMetadata& user_meta,
+                               std::shared_ptr<Catalog> cat,
+                               query_state::StdLog& stdlog) {
+  // TODO(sy): Is there any reason to have dbname as a parameter
+  // here when the cat parameter already provides cat->name()?
+  // Should dbname and cat->name() ever differ?
+  auto session_ptr = create_new_session(session, dbname, user_meta, cat);
   stdlog.setSessionInfo(session_ptr);
   if (!super_user_rights_) {  // no need to connect to leaf_aggregator_ at this time while
                               // doing warmup
@@ -494,8 +509,6 @@ void MapDHandler::connect_impl(TSessionId& session,
                          : SysCatalog::instance().getRoles(
                                false, false, session_ptr->get_currentUser().userName);
   stdlog.appendNameValuePairs("roles", boost::algorithm::join(roles, ","));
-  LOG(INFO) << "User " << user_meta.userName << " connected to database " << dbname
-            << " with public_session_id " << session_ptr->get_public_session_id();
 }
 
 void MapDHandler::disconnect(const TSessionId& session) {
@@ -535,6 +548,26 @@ void MapDHandler::switch_database(const TSessionId& session, const std::string& 
     std::shared_ptr<Catalog> cat = SysCatalog::instance().switchDatabase(
         dbname2, session_it->second->get_currentUser().userName);
     session_it->second->set_catalog_ptr(cat);
+  } catch (std::exception& e) {
+    THROW_MAPD_EXCEPTION(e.what());
+  }
+}
+
+void MapDHandler::clone_session(TSessionId& session2, const TSessionId& session1) {
+  auto stdlog = STDLOG(get_session_ptr(session1));
+  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+  auto session_it = get_session_it_unsafe(session1, write_lock);
+
+  try {
+    const Catalog_Namespace::UserMetadata& user_meta =
+        session_it->second->get_currentUser();
+    std::shared_ptr<Catalog> cat = session_it->second->get_catalog_ptr();
+    auto session2_ptr = create_new_session(session2, cat->name(), user_meta, cat);
+    if (leaf_aggregator_.leafCount() > 0) {
+      leaf_aggregator_.clone_session(session1, session2);
+      return;
+    }
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
@@ -1025,12 +1058,8 @@ void MapDHandler::sql_execute_df(TDataFrame& _return,
                                                          : ExecutorDeviceType::GPU,
                          static_cast<size_t>(device_id),
                          first_n);
-      if (!_return.sm_size) {
-        throw std::runtime_error("schema is missing in returned result");
-      }
       return;
     }
-    LOG(INFO) << "passing query to legacy processor";
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
   }
@@ -1053,7 +1082,7 @@ void MapDHandler::deallocate_df(const TSessionId& session,
                                 const TDeviceType::type device_type,
                                 const int32_t device_id) {
   auto stdlog = STDLOG(get_session_ptr(session));
-  int8_t* dev_ptr{0};
+  std::string serialized_cuda_handle = "";
   if (device_type == TDeviceType::GPU) {
     std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
     if (ipc_handle_to_dev_ptr_.count(df.df_handle) != size_t(1)) {
@@ -1063,12 +1092,13 @@ void MapDHandler::deallocate_df(const TSessionId& session,
       LOG(ERROR) << ex.error_msg;
       throw ex;
     }
-    dev_ptr = ipc_handle_to_dev_ptr_[df.df_handle];
+    serialized_cuda_handle = ipc_handle_to_dev_ptr_[df.df_handle];
     ipc_handle_to_dev_ptr_.erase(df.df_handle);
   }
   std::vector<char> sm_handle(df.sm_handle.begin(), df.sm_handle.end());
   std::vector<char> df_handle(df.df_handle.begin(), df.df_handle.end());
-  ArrowResult result{sm_handle, df.sm_size, df_handle, df.df_size, dev_ptr};
+  ArrowResult result{
+      sm_handle, df.sm_size, df_handle, df.df_size, serialized_cuda_handle};
   ArrowResultSet::deallocateArrowResultBuffer(
       result,
       device_type == TDeviceType::CPU ? ExecutorDeviceType::CPU : ExecutorDeviceType::GPU,
@@ -4712,7 +4742,6 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                                 getTargetNames(result.getTargetsMeta()),
                                                 first_n);
   ArrowResult arrow_result;
-
   _return.arrow_conversion_time_ms +=
       measure<>::execution([&] { arrow_result = converter->getArrowResult(); });
   _return.sm_handle =
@@ -4724,7 +4753,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
     std::lock_guard<std::mutex> map_lock(handle_to_dev_ptr_mutex_);
     CHECK(!ipc_handle_to_dev_ptr_.count(_return.df_handle));
     ipc_handle_to_dev_ptr_.insert(
-        std::make_pair(_return.df_handle, arrow_result.df_dev_ptr));
+        std::make_pair(_return.df_handle, arrow_result.serialized_cuda_handle));
   }
   _return.df_size = arrow_result.df_size;
 }

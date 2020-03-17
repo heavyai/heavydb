@@ -19,10 +19,12 @@
 #include <string>
 #include <unordered_map>
 
-#include "Shared/StringTransform.h"
 #include "rapidjson/document.h"
 #include "rapidjson/stringbuffer.h"
 #include "rapidjson/writer.h"
+
+#include "Catalog/OptionsContainer.h"
+#include "Shared/StringTransform.h"
 
 namespace foreign_storage {
 struct DataWrapper {
@@ -44,7 +46,7 @@ struct DataWrapper {
   }
 };
 
-struct ForeignServer {
+struct ForeignServer : public OptionsContainer {
   static constexpr std::string_view STORAGE_TYPE_KEY = "STORAGE_TYPE";
   static constexpr std::string_view BASE_PATH_KEY = "BASE_PATH";
   static constexpr std::string_view LOCAL_FILE_STORAGE_TYPE = "LOCAL_FILE";
@@ -54,39 +56,8 @@ struct ForeignServer {
   int id;
   std::string name;
   DataWrapper data_wrapper;
-  std::map<std::string, std::string, std::less<>> options;
 
   ForeignServer(const DataWrapper& data_wrapper) : data_wrapper(data_wrapper) {}
-
-  void populateOptionsMap(const rapidjson::Value& ddl_options) {
-    for (const auto& member : ddl_options.GetObject()) {
-      options[to_upper(member.name.GetString())] = member.value.GetString();
-    }
-  }
-
-  void populateOptionsMap(const std::string& options_json) {
-    rapidjson::Document options;
-    options.Parse(options_json);
-    populateOptionsMap(options);
-  }
-
-  std::string getOptionsAsJsonString() const {
-    rapidjson::Document document;
-    document.SetObject();
-
-    for (const auto& [key, value] : options) {
-      document.AddMember(rapidjson::Value().SetString(
-                             key.c_str(), key.length(), document.GetAllocator()),
-                         rapidjson::Value().SetString(
-                             value.c_str(), value.length(), document.GetAllocator()),
-                         document.GetAllocator());
-    }
-
-    rapidjson::StringBuffer buffer;
-    rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-    document.Accept(writer);
-    return buffer.GetString();
-  }
 
   void validate() {
     if (options.find(STORAGE_TYPE_KEY) == options.end()) {
@@ -115,4 +86,4 @@ struct ForeignServer {
     }
   }
 };
-}
+}  // namespace foreign_storage

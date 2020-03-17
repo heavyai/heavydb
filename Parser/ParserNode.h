@@ -38,6 +38,7 @@
 #include "../Shared/sqldefs.h"
 #include "../Shared/sqltypes.h"
 #include "ThriftHandler/QueryState.h"
+#include "Utils/DdlUtils.h"
 
 #include "../Fragmenter/InsertDataLoader.h"
 
@@ -67,30 +68,11 @@ class Node {
  * @type SQLType
  * @brief class that captures type, predication and scale.
  */
-class SQLType : public Node {
+class SQLType : public Node, public ddl_utils::SqlType {
  public:
-  explicit SQLType(SQLTypes t)
-      : type(t), param1(-1), param2(0), is_array(false), array_size(-1) {}
-  SQLType(SQLTypes t, int p1)
-      : type(t), param1(p1), param2(0), is_array(false), array_size(-1) {}
-  SQLType(SQLTypes t, int p1, int p2, bool a)
-      : type(t), param1(p1), param2(p2), is_array(a), array_size(-1) {}
-  SQLTypes get_type() const { return type; }
-  int get_param1() const { return param1; }
-  int get_param2() const { return param2; }
-  bool get_is_array() const { return is_array; }
-  void set_is_array(bool a) { is_array = a; }
-  int get_array_size() const { return array_size; }
-  void set_array_size(int s) { array_size = s; }
-  std::string to_string() const;
-  void check_type();
-
- private:
-  SQLTypes type;
-  int param1;  // e.g. for NUMERIC(10).  -1 means unspecified.
-  int param2;  // e.g. for NUMERIC(10,3). 0 is default value.
-  bool is_array;
-  int array_size;
+  explicit SQLType(SQLTypes t) : ddl_utils::SqlType(t, -1, 0, false, -1) {}
+  SQLType(SQLTypes t, int p1) : ddl_utils::SqlType(t, p1, 0, false, -1) {}
+  SQLType(SQLTypes t, int p1, int p2, bool a) : ddl_utils::SqlType(t, p1, p2, a, -1) {}
 };
 
 /*
@@ -793,15 +775,9 @@ class ColumnConstraintDef : public Node {
  * @type CompressDef
  * @brief Node for compression scheme definition
  */
-class CompressDef : public Node {
+class CompressDef : public Node, public ddl_utils::Encoding {
  public:
-  CompressDef(std::string* n, int p) : encoding_name(n), encoding_param(p) {}
-  const std::string* get_encoding_name() const { return encoding_name.get(); }
-  int get_encoding_param() const { return encoding_param; }
-
- private:
-  std::unique_ptr<std::string> encoding_name;
-  int encoding_param;
+  CompressDef(std::string* n, int p) : ddl_utils::Encoding(n, p) {}
 };
 
 /*

@@ -47,6 +47,7 @@ brew install opensaml
 brew cask install java
 brew install gdal
 brew install maven
+brew install ninja
 
 # compile and install bison++ (default location under /usr/local is fine)
 curl -O https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/flexpp-bisonpp/bisonpp-1.21-45.tar.gz

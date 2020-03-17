@@ -83,7 +83,10 @@ popd
 export CC=$PREFIX/bin/gcc
 export CXX=$PREFIX/bin/g++
 
+install_ninja
+
 download_make_install ftp://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz
+
 # http://zlib.net/zlib-1.2.8.tar.xz
 download_make_install ${HTTP_DEPS}/zlib-1.2.8.tar.xz
 
@@ -96,8 +99,8 @@ makej
 make install PREFIX=$PREFIX
 popd
 
-# https://www.openssl.org/source/openssl-1.0.2p.tar.gz
-download_make_install ${HTTP_DEPS}/openssl-1.0.2p.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
+# https://www.openssl.org/source/openssl-1.0.2u.tar.gz
+download_make_install ${HTTP_DEPS}/openssl-1.0.2u.tar.gz "" "linux-$(uname -m) no-shared no-dso -fPIC"
 
 # libarchive
 download_make_install ${HTTP_DEPS}/xz-5.2.4.tar.xz "" "--disable-shared"
@@ -105,7 +108,7 @@ download_make_install ${HTTP_DEPS}/libarchive-3.3.2.tar.gz "" "--without-openssl
 
 CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/pub/gnu/ncurses/ncurses-6.1.tar.gz # "" "--build=powerpc64le-unknown-linux-gnu"
 
-download_make_install ftp://ftp.gnu.org/gnu/bison/bison-3.0.4.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"
+download_make_install ftp://ftp.gnu.org/gnu/bison/bison-3.4.2.tar.xz # "" "--build=powerpc64le-unknown-linux-gnu"
 
 # https://storage.googleapis.com/google-code-archive-downloads/v2/code.google.com/flexpp-bisonpp/bisonpp-1.21-45.tar.gz
 download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
@@ -166,7 +169,7 @@ download_make_install ${HTTP_DEPS}/libedit-20170329-3.1.tar.gz
 # (see common-functions.sh)
 install_llvm
 
-VERS=7.65.1
+VERS=7.69.0
 # https://curl.haxx.se/download/curl-$VERS.tar.xz
 download_make_install ${HTTP_DEPS}/curl-$VERS.tar.xz "" "--disable-ldap --disable-ldaps"
 
@@ -184,6 +187,7 @@ CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure \
     --with-ruby=no \
     --with-qt4=no \
     --with-qt5=no \
+    --with-java=no \
     --with-boost-libdir=$PREFIX/lib
 makej
 make install

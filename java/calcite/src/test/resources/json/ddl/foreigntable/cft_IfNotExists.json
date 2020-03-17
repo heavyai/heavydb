@@ -2,14 +2,14 @@
     "statementType": "DDL",
     "payload": {
 	"command": "CREATE_FOREIGN_TABLE",
-	"ifNotExists": "true",
+	"ifNotExists": true,
 	"tableName": "test_table",
 	"serverName": "test_server",
 	"columns": [{
 	    "name": "test_column_1",
             "dataType": {
                 "type": "INTEGER",
-	        "notNull": "false"
+	        "notNull": false
             }
 	}]
     }

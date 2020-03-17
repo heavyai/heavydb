@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_ARROW_UTIL_H
-#define QUERYENGINE_ARROW_UTIL_H
+#pragma once
 
-#include "arrow/status.h"
-#include "arrow/util/macros.h"
+#include "ForeignServer.h"
 
-#include "Shared/likely.h"
+#include "OptionsContainer.h"
+#include "TableDescriptor.h"
 
-void arrow_status_throw(const ::arrow::Status& s);
-void arrow_status_thrift_throw(const ::arrow::Status& s);
-
-#define ARROW_THROW_NOT_OK(s) \
-  do {                        \
-    ::arrow::Status _s = (s); \
-    if (UNLIKELY(!_s.ok())) { \
-      arrow_status_throw(_s); \
-    }                         \
-  } while (0)
-
-#endif  // QUERYENGINE_ARROW_UTIL_H
+namespace foreign_storage {
+struct ForeignTable : public TableDescriptor, public OptionsContainer {
+  ForeignServer* foreign_server;
+};
+}  // namespace foreign_storage

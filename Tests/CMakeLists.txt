@@ -17,6 +17,7 @@ add_executable(ProfileTest ProfileTest.cpp)
 add_executable(ExperimentalTest ExperimentalTest.cpp)
 add_executable(ForeignServerDdlTest ForeignServerDdlTest.cpp)
 add_executable(CatalogMigrationTest CatalogMigrationTest.cpp)
+add_executable(CreateAndDropTableDdlTest CreateAndDropTableDdlTest.cpp)
 
 if(ENABLE_CUDA)
   set(MAPD_DEFINITIONS -DHAVE_CUDA)
@@ -117,6 +118,9 @@ target_link_libraries(UpdateMetadataTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(StoragePerfTest gtest ${EXECUTE_TEST_LIBS})
 target_link_libraries(TopKTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(OmniSQLCommandTest gtest ${Boost_LIBRARIES} mapd_thrift)
+if(ENABLE_KRB5)
+	target_link_libraries(OmniSQLCommandTest krb5_gss Shared)
+endif()
 target_link_libraries(OmniSQLUtilitiesTest gtest ${Boost_LIBRARIES})
 target_link_libraries(ExperimentalTest gtest Shared)
 target_link_libraries(DBObjectPrivilegesTest gtest ${EXECUTE_TEST_LIBS})
@@ -130,8 +134,10 @@ target_link_libraries(JoinHashTableTest gtest ${EXECUTE_TEST_LIBS} CsvImport Que
 target_link_libraries(CommandLineTest gtest Shared ${Boost_LIBRARIES})
 target_link_libraries(ForeignServerDdlTest gtest thrift_handler ${MAPD_LIBRARIES} ${LLVM_LINKER_FLAGS}
     ${CURSES_LIBRARIES})
-target_link_libraries(CatalogMigrationTest gtest ${MAPD_LIBRARIES} ${RdKafka_LIBRARIES} ${MAPD_LIBRARIES}
+target_link_libraries(CatalogMigrationTest gtest thrift_handler ${MAPD_LIBRARIES} ${RdKafka_LIBRARIES} ${MAPD_LIBRARIES}
     ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES})
+target_link_libraries(CreateAndDropTableDdlTest gtest thrift_handler ${MAPD_LIBRARIES} ${LLVM_LINKER_FLAGS}
+    ${CURSES_LIBRARIES})
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS} CsvImport QueryRunner)
@@ -179,9 +185,17 @@ add_test(JoinHashTableTest JoinHashTableTest ${TEST_ARGS})
 add_test(CommandLineTest CommandLineTest ${TEST_ARGS})
 add_test(ForeignServerDdlTest ForeignServerDdlTest ${TEST_ARGS})
 add_test(CatalogMigrationTest CatalogMigrationTest ${TEST_ARGS})
+add_test(CreateAndDropTableDdlTest CreateAndDropTableDdlTest ${TEST_ARGS})
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   add_test(UdfTest UdfTest ${TEST_ARGS})
+endif()
+
+option(ENABLE_ARROW_IPC_TEST "Enable Arrow IPC Test" OFF)
+if(ENABLE_ARROW_IPC_TEST)
+  add_executable(ArrowIpcIntegrationTest ArrowIpcIntegrationTest.cpp)
+  target_link_libraries(ArrowIpcIntegrationTest gtest QueryEngine Shared mapd_thrift ${Arrow_LIBRARIES})
+  add_test(ArrowIpcIntegrationTest ArrowIpcIntegrationTest ${TEST_ARGS})
 endif()
 
 # parse s3 credentials
@@ -231,6 +245,7 @@ set(TEST_PROGRAMS
   CommandLineTest
   ForeignServerDdlTest
   CatalogMigrationTest
+  CreateAndDropTableDdlTest
 )
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")

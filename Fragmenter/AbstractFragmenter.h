@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,21 +16,22 @@
 
 /**
  * @file    AbstractFragmenter.h
- * @author  Todd Mostak <todd@map-d.com
+ * @author  Todd Mostak <todd@omnisci.com>
  */
 
-#ifndef _ABSTRACT_FRAGMENTER_H
-#define _ABSTRACT_FRAGMENTER_H
+#pragma once
+
+#include "Fragmenter/Fragmenter.h"
 
 #include <boost/variant.hpp>
 #include <string>
 #include <vector>
-#include "../QueryEngine/TargetMetaInfo.h"
-#include "../QueryEngine/TargetValue.h"
-#include "../Shared/UpdelRoll.h"
-#include "../Shared/sqltypes.h"
-#include "../StringDictionary/StringDictionaryProxy.h"
-#include "Fragmenter.h"
+
+#include "QueryEngine/TargetMetaInfo.h"
+#include "QueryEngine/TargetValue.h"
+#include "Shared/UpdelRoll.h"
+#include "Shared/sqltypes.h"
+#include "StringDictionary/StringDictionaryProxy.h"
 
 // Should the ColumnInfo and FragmentInfo structs be in
 // AbstractFragmenter?
@@ -126,6 +127,11 @@ class AbstractFragmenter {
       std::unordered_map</*fragment_id*/ int, ChunkStats>& stats_map) = 0;
 
   /**
+   * @brief Retrieve the fragment info object for an individual fragment for editing.
+   */
+  virtual FragmentInfo* getFragmentInfo(const int fragment_id) const = 0;
+
+  /**
    * @brief Gets the id of the partitioner
    */
   virtual int getFragmenterId() = 0;
@@ -198,5 +204,3 @@ class AbstractFragmenter {
 };
 
 }  // namespace Fragmenter_Namespace
-
-#endif  // _ABSTRACT_FRAGMENTER_H

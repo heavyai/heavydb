@@ -1989,9 +1989,11 @@ class RelAlgDispatcher {
       }
       case RelModify::ModifyOperation::Update: {
         modify_node->applyUpdateModificationsToInputNode();
+        break;
       }
       default:
-        break;
+        throw std::runtime_error("Unsupported RelModify operation: " +
+                                 json_node_to_string(logical_modify_ra));
     }
 
     return modify_node;

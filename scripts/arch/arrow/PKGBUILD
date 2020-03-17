@@ -1,20 +1,20 @@
 # Maintainer: Guillaume Horel <guillaume.horel@gmail.com>
 
 pkgname='arrow'
-pkgver=0.13.0
-pkgrel=10
+pkgver=0.16.0
+pkgrel=3
 pkgdesc="A columnar in-memory analytics layer for big data."
 arch=('x86_64')
 url="https://arrow.apache.org"
 license=('Apache')
-depends=('boost-libs' 'protobuf' 'rapidjson' 'google-glog' 'double-conversion')
-checkdepends=('gflags')
+depends=('boost-libs' 'brotli' 'double-conversion' 'gflags' 'google-glog' 'lz4' 'protobuf' 'rapidjson' 'snappy' 'thrift' 'zstd')
+checkdepends=('git')
 optdepends=()
 provides=('parquet-cpp')
 conflicts=('parquet-cpp')
 makedepends=('cmake' 'boost')
 source=("https://github.com/apache/arrow/archive/apache-arrow-$pkgver.tar.gz")
-sha256sums=('380fcc51f0bf98e13148300c87833e734cbcd7b74dddc4bce93829e7f7e4208b')
+sha256sums=('d7b3838758a365c8c47d55ab0df1006a70db951c6964440ba354f81f518b8d8d')
 
 prepare(){
   cd "${srcdir}/$pkgname-apache-$pkgname-$pkgver"
@@ -41,7 +41,16 @@ build(){
                                       -DARROW_GANDIVA=OFF \
                                       -DARROW_PROTOBUF_USE_SHARED=OFF \
                                       -DARROW_NO_DEPRECATED_API=ON \
-                                      -DARROW_USE_GLOG=OFF
+                                      -DARROW_CSV=ON \
+                                      -DARROW_JSON=ON \
+                                      -DARROW_USE_GLOG=OFF \
+                                      -DARROW_WITH_BROTLI=OFF \
+                                      -DARROW_WITH_ZLIB=ON \
+                                      -DARROW_WITH_LZ4=OFF \
+                                      -DARROW_WITH_SNAPPY=ON \
+                                      -DARROW_WITH_ZSTD=ON \
+                                      -DARROW_CUDA=ON
+
   make
 }
 

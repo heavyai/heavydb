@@ -207,6 +207,7 @@ class MapDHandler : public MapDIf {
                const std::string& dbname) override;
   void disconnect(const TSessionId& session) override;
   void switch_database(const TSessionId& session, const std::string& dbname) override;
+  void clone_session(TSessionId& session2, const TSessionId& session1) override;
   void get_server_status(TServerStatus& _return, const TSessionId& session) override;
   void get_status(std::vector<TServerStatus>& _return,
                   const TSessionId& session) override;
@@ -526,10 +527,15 @@ class MapDHandler : public MapDIf {
       const TSessionId& session);
 
  private:
+  std::shared_ptr<Catalog_Namespace::SessionInfo> create_new_session(
+      TSessionId& session,
+      const std::string& dbname,
+      const Catalog_Namespace::UserMetadata& user_meta,
+      std::shared_ptr<Catalog_Namespace::Catalog> cat);
   void connect_impl(TSessionId& session,
                     const std::string& passwd,
                     const std::string& dbname,
-                    Catalog_Namespace::UserMetadata& user_meta,
+                    const Catalog_Namespace::UserMetadata& user_meta,
                     std::shared_ptr<Catalog_Namespace::Catalog> cat,
                     query_state::StdLog& stdlog);
   void disconnect_impl(const SessionMap::iterator& session_it);
@@ -750,7 +756,7 @@ class MapDHandler : public MapDIf {
 
   // Only for IPC device memory deallocation
   mutable std::mutex handle_to_dev_ptr_mutex_;
-  mutable std::unordered_map<std::string, int8_t*> ipc_handle_to_dev_ptr_;
+  mutable std::unordered_map<std::string, std::string> ipc_handle_to_dev_ptr_;
 
   friend void run_warmup_queries(mapd::shared_ptr<MapDHandler> handler,
                                  std::string base_path,

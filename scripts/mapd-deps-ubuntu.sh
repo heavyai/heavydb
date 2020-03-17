@@ -60,7 +60,7 @@ sudo apt install -y \
     autoconf-archive \
     automake \
     bison \
-    flex-old \
+    flex \
     libpng-dev \
     rsync \
     unzip \
@@ -75,6 +75,8 @@ sudo apt install -y \
 # Needed to find sqlite3, xmltooling, and xml_security_c
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG_PATH
 export PATH=$PREFIX/bin:$PATH
+
+install_ninja
 
 # llvm
 # (see common-functions.sh)
@@ -97,6 +99,7 @@ CFLAGS="-fPIC" CXXFLAGS="-fPIC" JAVA_PREFIX=$PREFIX/lib ./configure \
     --with-ruby=no \
     --with-qt4=no \
     --with-qt5=no \
+    --with-java=no \
     --prefix=$PREFIX
 make -j $(nproc)
 make install

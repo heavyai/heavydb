@@ -28,6 +28,11 @@
 
 #include "arrow/api.h"
 #include "arrow/ipc/api.h"
+#ifdef HAVE_CUDA
+#include <arrow/gpu/cuda_api.h>
+#endif  // HAVE_CUDA
+
+static_assert(ARROW_VERSION >= 16000, "Apache Arrow v0.16.0 or above is required.");
 
 // TODO(wamsi): ValueArray is not optimal. Remove it and inherrit from base vector class.
 using ValueArray = boost::variant<std::vector<bool>,
@@ -83,7 +88,7 @@ struct ArrowResult {
   int64_t sm_size;
   std::vector<char> df_handle;
   int64_t df_size;
-  int8_t* df_dev_ptr;  // Only for device memory deallocation
+  std::string serialized_cuda_handle;  // Only for GPU memory deallocation
 };
 
 // Expose Arrow buffers as a subset of the ResultSet interface
@@ -140,6 +145,7 @@ class ArrowResultSet {
   std::shared_ptr<ResultSet> rows_;
   std::vector<TargetMetaInfo> targets_meta_;
   std::shared_ptr<arrow::RecordBatch> record_batch_;
+  arrow::ipc::DictionaryMemo dictionary_memo_;
 
   // Boxed arrays from the record batch. The result of RecordBatch::column is
   // temporary, so we cache these for better performance
@@ -180,62 +186,45 @@ class ArrowResultSetConverter {
       , col_names_(col_names)
       , top_n_(first_n) {}
 
-  ArrowResult getArrowResult() const { return getArrowResultImpl(); }
+  ArrowResult getArrowResult() const;
 
- private:
-  ArrowResultSetConverter(const std::shared_ptr<ResultSet>& results,
-                          const std::vector<std::string>& col_names,
-                          const int32_t first_n)
-      : results_(results), col_names_(col_names), top_n_(first_n) {}
-  std::shared_ptr<arrow::RecordBatch> convertToArrow(
-      arrow::ipc::DictionaryMemo& memo) const;
-  std::shared_ptr<arrow::RecordBatch> getArrowBatch(
-      const std::shared_ptr<arrow::Schema>& schema) const;
-  ArrowResult getArrowResultImpl() const;
-  std::shared_ptr<arrow::Field> makeField(
-      const std::string name,
-      const SQLTypeInfo& target_type,
-      const std::shared_ptr<arrow::Array>& dictionary) const;
-  std::shared_ptr<arrow::DataType> getArrowType(
-      const SQLTypeInfo& mapd_type,
-      const std::shared_ptr<arrow::Array>& dict_values) const;
-
-  struct SerializedArrowOutput {
-    std::shared_ptr<arrow::Buffer> schema;
-    std::shared_ptr<arrow::Buffer> records;
-    key_t records_shm_key = IPC_PRIVATE;
-  };
-  SerializedArrowOutput getSerializedArrowOutput() const;
-
+  // TODO(adb): Proper namespacing for this set of functionality. For now, make this
+  // public and leverage the converter class as namespace
   struct ColumnBuilder {
     std::shared_ptr<arrow::Field> field;
     std::unique_ptr<arrow::ArrayBuilder> builder;
     SQLTypeInfo col_type;
     SQLTypes physical_type;
   };
+
+ private:
+  ArrowResultSetConverter(const std::shared_ptr<ResultSet>& results,
+                          const std::vector<std::string>& col_names,
+                          const int32_t first_n)
+      : results_(results), col_names_(col_names), top_n_(first_n) {}
+
+  std::shared_ptr<arrow::RecordBatch> convertToArrow() const;
+
+  std::shared_ptr<arrow::RecordBatch> getArrowBatch(
+      const std::shared_ptr<arrow::Schema>& schema) const;
+
+  std::shared_ptr<arrow::Field> makeField(const std::string name,
+                                          const SQLTypeInfo& target_type) const;
+
+  struct SerializedArrowOutput {
+    std::shared_ptr<arrow::Buffer> schema;
+    std::shared_ptr<arrow::Buffer> records;
+    key_t records_shm_key = IPC_PRIVATE;
+  };
+  SerializedArrowOutput getSerializedArrowOutput(arrow::ipc::DictionaryMemo* memo) const;
+
   void initializeColumnBuilder(ColumnBuilder& column_builder,
                                const SQLTypeInfo& col_type,
                                const std::shared_ptr<arrow::Field>& field) const;
-  inline void reserveColumnBuilderSize(ColumnBuilder& column_builder,
-                                       const size_t row_count) const;
+
   void append(ColumnBuilder& column_builder,
               const ValueArray& values,
               const std::shared_ptr<std::vector<bool>>& is_valid) const;
-  void append(ColumnBuilder& column_builder,
-              int8_t* data,
-              size_t entry_count,
-              const uint8_t* is_valid) const;
-
-  template <typename BuilderType, typename C_TYPE>
-  inline void appendToColumnBuilder(
-      ColumnBuilder& column_builder,
-      const ValueArray& values,
-      const std::shared_ptr<std::vector<bool>>& is_valid) const;
-  template <typename BuilderType, typename C_TYPE>
-  inline void appendToColumnBuilder(ColumnBuilder& column_builder,
-                                    int8_t* data,
-                                    size_t entry_count,
-                                    const uint8_t* is_valid) const;
 
   inline std::shared_ptr<arrow::Array> finishColumnBuilder(
       ColumnBuilder& column_builder) const;

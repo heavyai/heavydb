@@ -16,11 +16,13 @@
 
 #include "LockMgr/LockMgrImpl.h"
 
-#include "LockMgr/LegacyLockMgr.h"
+#include <string>
 
-#include "Fragmenter/InsertOrderFragmenter.h"
+#include "Catalog/Catalog.h"
+#include "LockMgr/LegacyLockMgr.h"
 #include "QueryEngine/JsonAccessors.h"
 #include "QueryRunner/QueryRunner.h"
+#include "Shared/types.h"
 #include "gen-cpp/CalciteServer.h"
 
 namespace lockmgr {

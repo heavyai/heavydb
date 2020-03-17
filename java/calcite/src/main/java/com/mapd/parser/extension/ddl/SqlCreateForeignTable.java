@@ -24,7 +24,7 @@ public class SqlCreateForeignTable extends SqlCreate implements JsonSerializable
   @Expose
   private String command;
   @Expose
-  private String ifNotExists;
+  private boolean ifNotExists;
   @Expose
   private String tableName;
   @Expose
@@ -47,7 +47,7 @@ public class SqlCreateForeignTable extends SqlCreate implements JsonSerializable
     requireNonNull(tableName);
     requireNonNull(serverName);
     this.command = OPERATOR.getName();
-    this.ifNotExists = ifNotExists ? "true" : "false";
+    this.ifNotExists = ifNotExists;
     this.tableName = tableName.toString();
     this.serverName = serverName.toString();
     // Schema is optional and could be null.

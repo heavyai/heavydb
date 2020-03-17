@@ -18,7 +18,7 @@ public class SqlDropForeignTable extends SqlDrop implements JsonSerializableDdl 
   @Expose
   private String command;
   @Expose
-  private String ifExists;
+  private boolean ifExists;
   @Expose
   private String tableName;
 
@@ -26,7 +26,7 @@ public class SqlDropForeignTable extends SqlDrop implements JsonSerializableDdl 
           final SqlParserPos pos, final boolean ifExists, final String tableName) {
     super(OPERATOR, pos, ifExists);
     this.command = OPERATOR.getName();
-    this.ifExists = ifExists ? "true" : "false";
+    this.ifExists = ifExists;
     this.tableName = tableName;
   }
 

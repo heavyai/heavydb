@@ -379,12 +379,8 @@ data: {
 
       # List of methods for parsing custom data types.
       dataTypeParserMethods: [
-          "OmniPoint()"
-          "OmniLineString()"
-          "OmniPolygon()"
-          "OmniMultiPolygon()"
+          "OmniSciGeoDataType()"
           "OmniText()"
-          "OmniEpoch()"
       ]
 
       # List of methods for parsing builtin function calls.

@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,9 @@
  * limitations under the License.
  */
 
-#ifndef QUERYENGINE_ARROW_UTIL_H
-#define QUERYENGINE_ARROW_UTIL_H
+#pragma once
 
-#include "arrow/status.h"
-#include "arrow/util/macros.h"
-
-#include "Shared/likely.h"
-
-void arrow_status_throw(const ::arrow::Status& s);
-void arrow_status_thrift_throw(const ::arrow::Status& s);
-
-#define ARROW_THROW_NOT_OK(s) \
-  do {                        \
-    ::arrow::Status _s = (s); \
-    if (UNLIKELY(!_s.ok())) { \
-      arrow_status_throw(_s); \
-    }                         \
-  } while (0)
-
-#endif  // QUERYENGINE_ARROW_UTIL_H
+#define DEFAULT_FRAGMENT_ROWS 32000000     // in tuples
+#define DEFAULT_PAGE_SIZE 2097152          // in bytes
+#define DEFAULT_MAX_ROWS (1L) << 62        // in rows
+#define DEFAULT_MAX_CHUNK_SIZE 1073741824  // in bytes

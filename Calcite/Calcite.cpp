@@ -241,9 +241,9 @@ void Calcite::runServer(const int mapd_port,
                                  mapd_config_file_,
                                  udf_filename);
 
-  // check for new server for 5 seconds max
+  // check for new server for 30 seconds max
   std::this_thread::sleep_for(std::chrono::milliseconds(200));
-  int retry_max = 50;
+  int retry_max = 300;
   for (int i = 2; i <= retry_max; i++) {
     int ping_time = ping(i, retry_max);
     if (ping_time > -1) {

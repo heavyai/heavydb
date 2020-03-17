@@ -51,15 +51,11 @@ function download_make_install() {
     popd
 }
 
-ARROW_VERSION=apache-arrow-0.13.0
+ARROW_VERSION=apache-arrow-0.16.0
 
 function install_arrow() {
   download https://github.com/apache/arrow/archive/$ARROW_VERSION.tar.gz
   extract $ARROW_VERSION.tar.gz
-
-  pushd arrow-$ARROW_VERSION
-  patch -p 1 < ${SCRIPTS_DIR}/ARROW-5517-C-Only-check-header-basename-for-internal.patch
-  popd
 
   mkdir -p arrow-$ARROW_VERSION/cpp/build
   pushd arrow-$ARROW_VERSION/cpp/build
@@ -71,10 +67,12 @@ function install_arrow() {
     -DARROW_BUILD_TESTS=OFF \
     -DARROW_BUILD_BENCHMARKS=OFF \
     -DARROW_WITH_BROTLI=OFF \
-    -DARROW_WITH_ZLIB=OFF \
+    -DARROW_CSV=ON \
+    -DARROW_JSON=ON \
+    -DARROW_WITH_ZLIB=ON \
     -DARROW_WITH_LZ4=OFF \
     -DARROW_WITH_SNAPPY=ON \
-    -DARROW_WITH_ZSTD=OFF \
+    -DARROW_WITH_ZSTD=ON \
     -DARROW_USE_GLOG=OFF \
     -DARROW_JEMALLOC=OFF \
     -DARROW_BOOST_USE_SHARED=${ARROW_BOOST_USE_SHARED:="OFF"} \
@@ -227,7 +225,7 @@ function install_rdkafka() {
     popd
 }
 
-GO_VERSION=1.12.6
+GO_VERSION=1.14
 
 function install_go() {
     VERS=${GO_VERSION}
@@ -239,4 +237,13 @@ function install_go() {
     extract go$VERS.linux-$ARCH.tar.gz
     rm -rf $PREFIX/go || true
     mv go $PREFIX
+}
+
+NINJA_VERSION=1.10.0
+
+function install_ninja() {
+  download https://github.com/ninja-build/ninja/releases/download/v${NINJA_VERSION}/ninja-linux.zip
+  unzip -u ninja-linux.zip
+  mkdir -p $PREFIX/bin/
+  mv ninja $PREFIX/bin/
 }

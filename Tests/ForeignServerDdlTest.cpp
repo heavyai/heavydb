@@ -32,6 +32,12 @@ extern bool g_enable_fsi;
 
 class CreateForeignServerTest : public MapDHandlerTestFixture {
  protected:
+  void SetUp() override {
+    g_enable_fsi = true;
+    MapDHandlerTestFixture::SetUp();
+    getCatalog().dropForeignServer("test_server", true);
+  }
+
   void TearDown() override {
     getCatalog().dropForeignServer("test_server", true);
     MapDHandlerTestFixture::TearDown();
@@ -64,158 +70,109 @@ class CreateForeignServerTest : public MapDHandlerTestFixture {
 };
 
 TEST_F(CreateForeignServerTest, AllValidParameters) {
-  TQueryResult result;
-  std::string query{
-      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-      "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
-  sql(result, query);
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   assertExpectedForeignServer();
 }
 
 TEST_F(CreateForeignServerTest, AllValidParametersAndReadFromCache) {
-  TQueryResult result;
-  std::string query{
-      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-      "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
-  sql(result, query);
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   assertExpectedForeignServer();
 }
 
 TEST_F(CreateForeignServerTest, ExistingServerWithIfNotExists) {
-  TQueryResult result;
-  std::string query{
-      "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-      "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
-  sql(result, query);
-
-  query =
-      "CREATE SERVER IF NOT EXISTS test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-      "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');";
-  sql(result, query);
+  sql("CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
+  sql("CREATE SERVER IF NOT EXISTS test_server FOREIGN DATA WRAPPER omnisci_csv "
+      "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   assertExpectedForeignServer();
 }
 
 TEST_F(CreateForeignServerTest, ExistingServerWithoutIfNotExists) {
-  TQueryResult result;
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
-  sql(result, query);
+  sql(query);
+  queryAndAssertException(
+      query, "Exception: A foreign server with name \"test_server\" already exists.");
+}
 
-  try {
-    sql(result, query);
-    FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TMapDException& e) {
-    ASSERT_EQ("Exception: A foreign server with name \"test_server\" already exists.",
-              e.error_msg);
-  }
+TEST_F(CreateForeignServerTest, OmniSciPrefix) {
+  std::string query{
+      "CREATE SERVER omnisci_server FOREIGN DATA WRAPPER omnisci_csv WITH "
+      "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
+  queryAndAssertException(query,
+                          "Exception: Server names cannot start with \"omnisci\".");
 }
 
 TEST_F(CreateForeignServerTest, MissingStorageType) {
-  TQueryResult result;
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(base_path = '/test_path/');"};
-  try {
-    sql(result, query);
-    FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TMapDException& e) {
-    ASSERT_EQ("Exception: Foreign server options must contain \"STORAGE_TYPE\".",
-              e.error_msg);
-  }
+  queryAndAssertException(
+      query, "Exception: Foreign server options must contain \"STORAGE_TYPE\".");
 }
 
 TEST_F(CreateForeignServerTest, MissingBasePath) {
-  TQueryResult result;
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'LOCAL_FILE');"};
-  try {
-    sql(result, query);
-    FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TMapDException& e) {
-    ASSERT_EQ("Exception: Foreign server options must contain \"BASE_PATH\".",
-              e.error_msg);
-  }
+  queryAndAssertException(
+      query, "Exception: Foreign server options must contain \"BASE_PATH\".");
 }
 
 TEST_F(CreateForeignServerTest, InvalidOption) {
-  TQueryResult result;
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(invalid_key = 'value', storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
-  try {
-    sql(result, query);
-    FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TMapDException& e) {
-    ASSERT_EQ(
-        "Exception: Invalid option \"INVALID_KEY\". "
-        "Option must be one of the following: STORAGE_TYPE, BASE_PATH.",
-        e.error_msg);
-  }
+  std::string error_message{
+      "Exception: Invalid option \"INVALID_KEY\". "
+      "Option must be one of the following: STORAGE_TYPE, BASE_PATH."};
+  queryAndAssertException(query, error_message);
 }
 
 TEST_F(CreateForeignServerTest, InvalidStorageType) {
-  TQueryResult result;
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'INVALID_TYPE', base_path = '/test_path/');"};
-  try {
-    sql(result, query);
-    FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TMapDException& e) {
-    ASSERT_EQ(
-        "Exception: Invalid storage type value. Value must be one of the following: "
-        "LOCAL_FILE.",
-        e.error_msg);
-  }
+  std::string error_message{
+      "Exception: Invalid storage type value. Value must be one of the following: "
+      "LOCAL_FILE."};
+  queryAndAssertException(query, error_message);
 }
 
 TEST_F(CreateForeignServerTest, FsiDisabled) {
-  TQueryResult result;
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
-  try {
-    g_enable_fsi = false;
-    sql(result, query);
-    FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TMapDException& e) {
-    g_enable_fsi = true;
-    ASSERT_EQ("Syntax error at: test_server", e.error_msg);
-  } catch (...) {
-    g_enable_fsi = true;
-  }
+  g_enable_fsi = false;
+  queryAndAssertException(query, "Syntax error at: test_server");
 }
 
 TEST_F(CreateForeignServerTest, InvalidDataWrapper) {
-  TQueryResult result;
   std::string query{
       "CREATE SERVER test_server FOREIGN DATA WRAPPER invalid_wrapper WITH "
       "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
-  try {
-    sql(result, query);
-    FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TMapDException& e) {
-    ASSERT_EQ(
-        "Exception: Invalid data wrapper type \"invalid_wrapper\". "
-        "Data wrapper type must be one of the following: OMNISCI_CSV, OMNISCI_PARQUET.",
-        e.error_msg);
-  }
+  std::string error_message{
+      "Exception: Invalid data wrapper type \"invalid_wrapper\". "
+      "Data wrapper type must be one of the following: OMNISCI_CSV, OMNISCI_PARQUET."};
+  queryAndAssertException(query, error_message);
 }
 
 class DropForeignServerTest : public MapDHandlerTestFixture {
  protected:
   void SetUp() override {
+    g_enable_fsi = true;
     MapDHandlerTestFixture::SetUp();
-    TQueryResult result;
-    std::string query{
-        "CREATE SERVER test_server FOREIGN DATA WRAPPER omnisci_csv WITH "
-        "(storage_type = 'LOCAL_FILE', base_path = '/test_path/');"};
-    sql(result, query);
+    dropTestTable();
+    sql("CREATE SERVER IF NOT EXISTS test_server FOREIGN DATA WRAPPER omnisci_csv "
+        "WITH (storage_type = 'LOCAL_FILE', base_path = '/test_path/');");
   }
 
   void TearDown() override {
+    g_enable_fsi = true;
+    dropTestTable();
     getCatalog().dropForeignServer("test_server", true);
     MapDHandlerTestFixture::TearDown();
   }
@@ -223,74 +180,48 @@ class DropForeignServerTest : public MapDHandlerTestFixture {
   void assertNullForeignServer(const std::string& server_name) {
     auto& catalog = getCatalog();
     auto foreign_server = catalog.getForeignServer(server_name, true);
-
     ASSERT_EQ(nullptr, foreign_server);
   }
+
+ private:
+  void dropTestTable() { sql("DROP FOREIGN TABLE IF EXISTS test_table;"); }
 };
 
 TEST_F(DropForeignServerTest, ExistingServer) {
-  TQueryResult result;
-  std::string query{"DROP SERVER test_server;"};
-  sql(result, query);
-
+  sql("DROP SERVER test_server;");
   assertNullForeignServer("test_server");
 }
 
 TEST_F(DropForeignServerTest, NonExistingServerWithIfExists) {
-  TQueryResult result;
-  std::string query{"DROP SERVER IF EXISTS test_server_2;"};
-  sql(result, query);
-
+  sql("DROP SERVER IF EXISTS test_server_2;");
   assertNullForeignServer("test_server_2");
 }
 
 TEST_F(DropForeignServerTest, NonExistingServerWithoutIfExists) {
-  TQueryResult result;
-  std::string query{"DROP SERVER test_server_2;"};
-
-  try {
-    sql(result, query);
-    FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TMapDException& e) {
-    ASSERT_EQ("Exception: Foreign server with name \"test_server_2\" does not exist.",
-              e.error_msg);
-  }
+  queryAndAssertException(
+      "DROP SERVER test_server_2;",
+      "Exception: Foreign server with name \"test_server_2\" does not exist.");
 }
 
 TEST_F(DropForeignServerTest, DefaultServers) {
-  TQueryResult result;
-  std::string query{"DROP SERVER omnisci_local_csv;"};
+  queryAndAssertException("DROP SERVER omnisci_local_csv;",
+                          "Exception: OmniSci default servers cannot be dropped.");
+  queryAndAssertException("DROP SERVER omnisci_local_parquet;",
+                          "Exception: OmniSci default servers cannot be dropped.");
+}
 
-  try {
-    sql(result, query);
-    FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TMapDException& e) {
-    ASSERT_EQ("Exception: OmniSci default servers cannot be dropped.", e.error_msg);
-  }
-
-  query = "DROP SERVER omnisci_local_parquet;";
-  try {
-    sql(result, query);
-    FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TMapDException& e) {
-    ASSERT_EQ("Exception: OmniSci default servers cannot be dropped.", e.error_msg);
-  }
+TEST_F(DropForeignServerTest, ForeignTableReferencingServer) {
+  sql("CREATE FOREIGN TABLE test_table (c1 int) SERVER test_server "
+      "WITH (file_path = 'test_file.csv');");
+  std::string error_message{
+      "Exception: Foreign server \"test_server\" is referenced by existing "
+      "foreign tables and cannot be dropped."};
+  queryAndAssertException("DROP SERVER test_server;", error_message);
 }
 
 TEST_F(DropForeignServerTest, FsiDisabled) {
-  TQueryResult result;
-  std::string query{"DROP SERVER test_server;"};
-
-  try {
-    g_enable_fsi = false;
-    sql(result, query);
-    FAIL() << "An exception should have been thrown for this test case.";
-  } catch (const TMapDException& e) {
-    g_enable_fsi = true;
-    ASSERT_EQ("Syntax error at: SERVER", e.error_msg);
-  } catch (...) {
-    g_enable_fsi = true;
-  }
+  g_enable_fsi = false;
+  queryAndAssertException("DROP SERVER test_server;", "Syntax error at: SERVER");
 }
 
 int main(int argc, char** argv) {

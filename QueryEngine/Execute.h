@@ -37,7 +37,6 @@
 #include "WindowContext.h"
 
 #include "../Chunk/Chunk.h"
-#include "../Fragmenter/InsertOrderFragmenter.h"
 #include "../Planner/Planner.h"
 #include "../Shared/Logger.h"
 #include "../Shared/MapDParameters.h"

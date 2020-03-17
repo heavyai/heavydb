@@ -704,8 +704,8 @@ std::shared_ptr<Catalog> SysCatalog::login(std::string& dbname,
                                            const std::string& password,
                                            UserMetadata& user_meta,
                                            bool check_password) {
-  // NOTE: The dbname isn't const because getMetadataWithDefaultDB() can
-  // reset it. The username isn't const because SamlServer's
+  // NOTE(sy): The dbname isn't const because getMetadataWithDefaultDB()
+  // can reset it. The username isn't const because SamlServer's
   // login()/authenticate_user() can reset it.
 
   sys_write_lock write_lock(this);
@@ -751,7 +751,8 @@ std::shared_ptr<Catalog> SysCatalog::switchDatabase(std::string& dbname,
   dbObject.loadKey();
   dbObject.setPrivileges(AccessPrivileges::ACCESS);
   if (!checkPrivileges(user_meta, std::vector<DBObject>{dbObject})) {
-    throw std::runtime_error("Invalid credentials.");
+    throw std::runtime_error("Unauthorized Access: user " + username +
+                             " is not allowed to access database " + dbname + ".");
   }
 
   return cat;
@@ -1083,6 +1084,13 @@ void SysCatalog::createDatabase(const string& name, int owner) {
           "name text unique, "
           "data_wrapper_type text, "
           "options text)");
+      dbConn->query(
+          "CREATE TABLE omnisci_foreign_tables("
+          "table_id integer unique, "
+          "server_id integer, "
+          "options text, "
+          "FOREIGN KEY(table_id) REFERENCES mapd_tables(tableid), "
+          "FOREIGN KEY(server_id) REFERENCES omnisci_foreign_servers(id))");
     }
   } catch (const std::exception&) {
     dbConn->query("ROLLBACK TRANSACTION");

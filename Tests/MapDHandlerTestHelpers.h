@@ -48,6 +48,7 @@ class MapDHandlerTestFixture : public testing::Test {
       const int max_session_duration{43200};
       const bool enable_runtime_udf_registration{false};
       mapd_parameters.omnisci_server_port = -1;
+      mapd_parameters.calcite_port = 3279;
 
       mapd_handler = std::make_unique<MapDHandler>(db_leaves,
                                                    string_leaves,
@@ -74,8 +75,13 @@ class MapDHandlerTestFixture : public testing::Test {
                                                    enable_runtime_udf_registration,
                                                    udf_filename,
                                                    udf_compiler_path);
-      mapd_handler->connect(session_id, default_user, default_pass, db_name);
     }
+    loginAdmin();
+  }
+
+  void sql(const std::string& query) {
+    TQueryResult result;
+    sql(result, query);
   }
 
   void sql(TQueryResult& result, const std::string& query) {
@@ -84,6 +90,31 @@ class MapDHandlerTestFixture : public testing::Test {
 
   Catalog_Namespace::Catalog& getCatalog() {
     return mapd_handler->get_session_copy_ptr(session_id)->getCatalog();
+  }
+
+  void resetCatalog() {
+    auto& catalog = getCatalog();
+    catalog.remove(catalog.getCurrentDB().dbName);
+  }
+
+  void loginAdmin() {
+    session_id = {};
+    mapd_handler->connect(session_id, default_user, default_pass, db_name);
+  }
+
+  void login(const std::string& user, const std::string& pass) {
+    session_id = {};
+    mapd_handler->connect(session_id, user, pass, db_name);
+  }
+
+  void queryAndAssertException(const std::string& sql_statement,
+                               const std::string& error_message) {
+    try {
+      sql(sql_statement);
+      FAIL() << "An exception should have been thrown for this test case.";
+    } catch (const TMapDException& e) {
+      ASSERT_EQ(error_message, e.error_msg);
+    }
   }
 
  private:

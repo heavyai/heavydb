@@ -21,14 +21,14 @@
 
 #ifndef __CUDACC__
 #include <boost/regex.hpp>
+#include <optional>
+#include <string_view>
 #endif
 
 #include <algorithm>
 #include <iomanip>
-#include <optional>
 #include <sstream>
 #include <string>
-#include <string_view>
 #include <vector>
 
 #ifndef __CUDACC__

@@ -221,6 +221,9 @@ else()
 endif()
 
 set(ARROW_LIBS ${Arrow_LIBRARIES})
+if (ENABLE_CUDA)
+  list(APPEND ARROW_LIBS ${Arrow_GPU_CUDA_LIBRARIES})
+endif()
 
 target_link_libraries(
   QueryEngine

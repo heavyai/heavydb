@@ -24,6 +24,7 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <future>
 #include <string>
 
 #include "arrow/api.h"
@@ -33,13 +34,11 @@
 #include "ArrowUtil.h"
 
 #ifdef HAVE_CUDA
+#include <arrow/gpu/cuda_api.h>
 #include <cuda.h>
 #endif  // HAVE_CUDA
-#include <future>
 
 #define ARROW_RECORDBATCH_MAKE arrow::RecordBatch::Make
-
-#define APPENDVALUES AppendValues
 
 using namespace arrow;
 
@@ -98,11 +97,11 @@ inline SQLTypes get_physical_type(const SQLTypeInfo& ti) {
   return logical_type;
 }
 
-template <typename TYPE, typename C_TYPE>
+template <typename TYPE, typename VALUE_ARRAY_TYPE>
 void create_or_append_value(const ScalarTargetValue& val_cty,
                             std::shared_ptr<ValueArray>& values,
                             const size_t max_size) {
-  auto pval_cty = boost::get<C_TYPE>(&val_cty);
+  auto pval_cty = boost::get<VALUE_ARRAY_TYPE>(&val_cty);
   CHECK(pval_cty);
   auto val_ty = static_cast<TYPE>(*pval_cty);
   if (!values) {
@@ -310,90 +309,136 @@ key_t get_and_copy_to_shm(const std::shared_ptr<Buffer>& data) {
 
 }  // namespace arrow
 
-// WARN(ptaylor): users are responsible for detaching and removing shared memory segments,
-// e.g.,
-//   int shmid = shmget(...);
-//   auto ipc_ptr = shmat(shmid, ...);
-//   ...
-//   shmdt(ipc_ptr);
-//   shmctl(shmid, IPC_RMID, 0);
-// WARN(miyu): users are responsible to free all device copies, e.g.,
-//   cudaIpcMemHandle_t mem_handle = ...
-//   void* dev_ptr;
-//   cudaIpcOpenMemHandle(&dev_ptr, mem_handle, cudaIpcMemLazyEnablePeerAccess);
-//   ...
-//   cudaIpcCloseMemHandle(dev_ptr);
-//   cudaFree(dev_ptr);
-//
-// TODO(miyu): verify if the server still needs to free its own copies after last uses
-ArrowResult ArrowResultSetConverter::getArrowResultImpl() const {
-  auto timer = DEBUG_TIMER(__func__);
-  const auto serialized_arrow_output = getSerializedArrowOutput();
-  const auto& serialized_schema = serialized_arrow_output.schema;
-  const auto& serialized_records = serialized_arrow_output.records;
-  key_t record_key = serialized_arrow_output.records_shm_key;
-  key_t schema_key;
+//! Serialize an Arrow result to IPC memory. Users are responsible for freeing all CPU IPC
+//! buffers using deallocateArrowResultBuffer. GPU buffers will become owned by the caller
+//! upon deserialization, and will be automatically freed when they go out of scope.
+ArrowResult ArrowResultSetConverter::getArrowResult() const {
+  std::shared_ptr<arrow::RecordBatch> record_batch = convertToArrow();
 
-  {
-    auto timer = DEBUG_TIMER("get and copy schema to shm");
-    schema_key = arrow::get_and_copy_to_shm(serialized_schema);
-  }
-  CHECK(schema_key != IPC_PRIVATE);
-  std::vector<char> schema_handle_buffer(sizeof(key_t), 0);
-  memcpy(&schema_handle_buffer[0],
-         reinterpret_cast<const unsigned char*>(&schema_key),
-         sizeof(key_t));
   if (device_type_ == ExecutorDeviceType::CPU) {
-    if (record_key == IPC_PRIVATE) {
-      auto timer = DEBUG_TIMER("get and copy records to shm");
-      record_key = arrow::get_and_copy_to_shm(serialized_records);
-    } else {
-      shmdt(serialized_records->data());
-    }
+    auto out_stream_result = arrow::io::BufferOutputStream::Create(1024);
+    ARROW_THROW_NOT_OK(out_stream_result.status());
+    auto out_stream = std::move(out_stream_result).ValueOrDie();
+
+    ARROW_THROW_NOT_OK(arrow::ipc::WriteRecordBatchStream(
+        {record_batch}, ipc::IpcOptions::Defaults(), out_stream.get()));
+
+    auto complete_ipc_stream = out_stream->Finish();
+    ARROW_THROW_NOT_OK(complete_ipc_stream.status());
+    auto serialized_records = std::move(complete_ipc_stream).ValueOrDie();
+
+    std::vector<char> schema_handle_buffer;
+
+    const auto record_key = arrow::get_and_copy_to_shm(serialized_records);
     std::vector<char> record_handle_buffer(sizeof(key_t), 0);
     memcpy(&record_handle_buffer[0],
            reinterpret_cast<const unsigned char*>(&record_key),
            sizeof(key_t));
 
     return {schema_handle_buffer,
-            serialized_schema->size(),
+            0,
             record_handle_buffer,
             serialized_records->size(),
-            nullptr};
+            std::string{""}};
   }
 #ifdef HAVE_CUDA
-  if (serialized_records->size()) {
-    CHECK(data_mgr_);
-    const auto cuda_mgr = data_mgr_->getCudaMgr();
-    CHECK(cuda_mgr);
-    auto dev_ptr = reinterpret_cast<CUdeviceptr>(
-        cuda_mgr->allocateDeviceMem(serialized_records->size(), device_id_));
-    CUipcMemHandle record_handle;
-    cuIpcGetMemHandle(&record_handle, dev_ptr);
-    cuda_mgr->copyHostToDevice(
-        reinterpret_cast<int8_t*>(dev_ptr),
-        reinterpret_cast<const int8_t*>(serialized_records->data()),
-        serialized_records->size(),
-        device_id_);
-    std::vector<char> record_handle_buffer(sizeof(record_handle), 0);
-    memcpy(&record_handle_buffer[0],
-           reinterpret_cast<unsigned char*>(&record_handle),
-           sizeof(CUipcMemHandle));
-    return {schema_handle_buffer,
-            serialized_schema->size(),
-            record_handle_buffer,
-            serialized_records->size(),
-            reinterpret_cast<int8_t*>(dev_ptr)};
-  }
-#endif
-  return {schema_handle_buffer, serialized_schema->size(), {}, 0, nullptr};
-}
+  CHECK(device_type_ == ExecutorDeviceType::GPU);
 
+  // Copy the schema to the schema handle
+  auto out_stream_result = arrow::io::BufferOutputStream::Create(1024);
+  ARROW_THROW_NOT_OK(out_stream_result.status());
+  auto out_stream = std::move(out_stream_result).ValueOrDie();
+
+  arrow::ipc::DictionaryMemo current_memo;
+  arrow::ipc::DictionaryMemo serialized_memo;
+
+  arrow::ipc::internal::IpcPayload schema_payload;
+  ARROW_THROW_NOT_OK(
+      arrow::ipc::internal::GetSchemaPayload(*record_batch->schema(),
+                                             arrow::ipc::IpcOptions::Defaults(),
+                                             &serialized_memo,
+                                             &schema_payload));
+  int32_t schema_payload_length = 0;
+  ARROW_THROW_NOT_OK(
+      arrow::ipc::internal::WriteIpcPayload(schema_payload,
+                                            arrow::ipc::IpcOptions::Defaults(),
+                                            out_stream.get(),
+                                            &schema_payload_length));
+
+  ARROW_THROW_NOT_OK(CollectDictionaries(*record_batch, &current_memo));
+
+  // now try a dictionary
+  std::shared_ptr<arrow::Schema> dummy_schema;
+  std::vector<std::shared_ptr<arrow::RecordBatch>> dict_batches;
+  for (int i = 0; i < record_batch->schema()->num_fields(); i++) {
+    auto field = record_batch->schema()->field(i);
+    if (field->type()->id() == arrow::Type::DICTIONARY) {
+      int64_t dict_id = -1;
+      ARROW_THROW_NOT_OK(current_memo.GetId(*field, &dict_id));
+      CHECK_GE(dict_id, 0);
+      std::shared_ptr<Array> dict;
+      ARROW_THROW_NOT_OK(current_memo.GetDictionary(dict_id, &dict));
+      CHECK(dict);
+
+      if (!dummy_schema) {
+        auto dummy_field = std::make_shared<arrow::Field>("", dict->type());
+        dummy_schema = std::make_shared<arrow::Schema>(
+            std::vector<std::shared_ptr<arrow::Field>>{dummy_field});
+      }
+      dict_batches.emplace_back(
+          arrow::RecordBatch::Make(dummy_schema, dict->length(), {dict}));
+    }
+  }
+  ARROW_THROW_NOT_OK(arrow::ipc::WriteRecordBatchStream(
+      dict_batches, ipc::IpcOptions::Defaults(), out_stream.get()));
+
+  auto complete_ipc_stream = out_stream->Finish();
+  ARROW_THROW_NOT_OK(complete_ipc_stream.status());
+  auto serialized_records = std::move(complete_ipc_stream).ValueOrDie();
+
+  const auto record_key = arrow::get_and_copy_to_shm(serialized_records);
+  std::vector<char> schema_record_key_buffer(sizeof(key_t), 0);
+  memcpy(&schema_record_key_buffer[0],
+         reinterpret_cast<const unsigned char*>(&record_key),
+         sizeof(key_t));
+
+  arrow::cuda::CudaDeviceManager* manager;
+  ARROW_THROW_NOT_OK(arrow::cuda::CudaDeviceManager::GetInstance(&manager));
+  std::shared_ptr<arrow::cuda::CudaContext> context;
+  ARROW_THROW_NOT_OK(manager->GetContext(device_id_, &context));
+
+  std::shared_ptr<arrow::cuda::CudaBuffer> device_serialized;
+  ARROW_THROW_NOT_OK(
+      SerializeRecordBatch(*record_batch, context.get(), &device_serialized));
+
+  std::shared_ptr<arrow::cuda::CudaIpcMemHandle> cuda_handle;
+  ARROW_THROW_NOT_OK(device_serialized->ExportForIpc(&cuda_handle));
+
+  std::shared_ptr<arrow::Buffer> serialized_cuda_handle;
+  ARROW_THROW_NOT_OK(
+      cuda_handle->Serialize(arrow::default_memory_pool(), &serialized_cuda_handle));
+
+  std::vector<char> record_handle_buffer(serialized_cuda_handle->size(), 0);
+  memcpy(&record_handle_buffer[0],
+         serialized_cuda_handle->data(),
+         serialized_cuda_handle->size());
+
+  return {schema_record_key_buffer,
+          serialized_records->size(),
+          record_handle_buffer,
+          serialized_cuda_handle->size(),
+          serialized_cuda_handle->ToString()};
+#else
+  UNREACHABLE();
+  return {std::vector<char>{}, 0, std::vector<char>{}, 0, ""};
+#endif
+}
+/*
 ArrowResultSetConverter::SerializedArrowOutput
-ArrowResultSetConverter::getSerializedArrowOutput() const {
+ArrowResultSetConverter::getSerializedArrowOutput(
+    arrow::ipc::DictionaryMemo* memo) const {
   auto timer = DEBUG_TIMER(__func__);
-  arrow::ipc::DictionaryMemo dict_memo;
-  std::shared_ptr<arrow::RecordBatch> arrow_copy = convertToArrow(dict_memo);
+  std::shared_ptr<arrow::RecordBatch> arrow_copy = convertToArrow();
   std::shared_ptr<arrow::Buffer> serialized_records, serialized_schema;
   key_t records_shm_key = IPC_PRIVATE;
 
@@ -401,6 +446,11 @@ ArrowResultSetConverter::getSerializedArrowOutput() const {
     auto timer = DEBUG_TIMER("serialize schema");
     ARROW_THROW_NOT_OK(arrow::ipc::SerializeSchema(
         *arrow_copy->schema(), arrow::default_memory_pool(), &serialized_schema));
+  }
+
+  {
+    auto timer = DEBUG_TIMER("collect dicts");
+    ARROW_THROW_NOT_OK(CollectDictionaries(*arrow_copy, memo));
   }
 
   if (arrow_copy->num_rows()) {
@@ -423,34 +473,16 @@ ArrowResultSetConverter::getSerializedArrowOutput() const {
   }
   return {serialized_schema, serialized_records, records_shm_key};
 }
+*/
 
-std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::convertToArrow(
-    arrow::ipc::DictionaryMemo& memo) const {
+std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::convertToArrow() const {
   auto timer = DEBUG_TIMER(__func__);
   const auto col_count = results_->colCount();
   std::vector<std::shared_ptr<arrow::Field>> fields;
   CHECK(col_names_.empty() || col_names_.size() == col_count);
   for (size_t i = 0; i < col_count; ++i) {
     const auto ti = results_->getColType(i);
-    std::shared_ptr<arrow::Array> dict;
-    if (ti.is_dict_encoded_string()) {
-      const int dict_id = ti.get_comp_param();
-      if (memo.HasDictionaryId(dict_id)) {
-        ARROW_THROW_NOT_OK(memo.GetDictionary(dict_id, &dict));
-      } else {
-        auto str_list = results_->getStringDictionaryPayloadCopy(dict_id);
-
-        arrow::StringBuilder builder;
-        // TODO(andrewseidl): replace with AppendValues() once Arrow 0.7.1 support is
-        // fully deprecated
-        for (const std::string& val : *str_list) {
-          ARROW_THROW_NOT_OK(builder.Append(val));
-        }
-        ARROW_THROW_NOT_OK(builder.Finish(&dict));
-        ARROW_THROW_NOT_OK(memo.AddDictionary(dict_id, dict));
-      }
-    }
-    fields.push_back(makeField(col_names_.empty() ? "" : col_names_[i], ti, dict));
+    fields.push_back(makeField(col_names_.empty() ? "" : col_names_[i], ti));
   }
   return getArrowBatch(arrow::schema(fields));
 }
@@ -746,7 +778,6 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
             continue;
           }
 
-          reserveColumnBuilderSize(builders[i], row_count);
           for (size_t j = 0; j < cpu_count; ++j) {
             if (!column_value_segs[j][i]) {
               continue;
@@ -765,7 +796,6 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
             continue;
           }
 
-          reserveColumnBuilderSize(builders[i], row_count);
           append(builders[i], *column_values[i], null_bitmaps[i]);
         }
       }
@@ -786,17 +816,10 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
   return ARROW_RECORDBATCH_MAKE(schema, row_count, result_columns);
 }
 
-std::shared_ptr<arrow::Field> ArrowResultSetConverter::makeField(
-    const std::string name,
-    const SQLTypeInfo& target_type,
-    const std::shared_ptr<arrow::Array>& dictionary) const {
-  return arrow::field(
-      name, getArrowType(target_type, dictionary), !target_type.get_notnull());
-}
+namespace {
 
-std::shared_ptr<arrow::DataType> ArrowResultSetConverter::getArrowType(
-    const SQLTypeInfo& mapd_type,
-    const std::shared_ptr<arrow::Array>& dict_values) const {
+std::shared_ptr<arrow::DataType> get_arrow_type(const SQLTypeInfo& mapd_type,
+                                                const ExecutorDeviceType device_type) {
   switch (get_physical_type(mapd_type)) {
     case kBOOLEAN:
       return boolean();
@@ -816,10 +839,8 @@ std::shared_ptr<arrow::DataType> ArrowResultSetConverter::getArrowType(
     case kVARCHAR:
     case kTEXT:
       if (mapd_type.is_dict_encoded_string()) {
-        CHECK(dict_values);
-        const auto index_type =
-            getArrowType(get_dict_index_type_info(mapd_type), nullptr);
-        return dictionary(index_type, dict_values);
+        auto value_type = std::make_shared<StringType>();
+        return dictionary(int32(), value_type, false);
       }
       return utf8();
     case kDECIMAL:
@@ -831,7 +852,7 @@ std::shared_ptr<arrow::DataType> ArrowResultSetConverter::getArrowType(
       // TODO(wamsi) : Remove date64() once date32() support is added in cuDF. date32()
       // Currently support for date32() is missing in cuDF.Hence, if client requests for
       // date on GPU, return date64() for the time being, till support is added.
-      return device_type_ == ExecutorDeviceType::GPU ? date64() : date32();
+      return device_type == ExecutorDeviceType::GPU ? date64() : date32();
     case kTIMESTAMP:
       switch (mapd_type.get_precision()) {
         case 0:
@@ -857,22 +878,34 @@ std::shared_ptr<arrow::DataType> ArrowResultSetConverter::getArrowType(
   return nullptr;
 }
 
+}  // namespace
+
+std::shared_ptr<arrow::Field> ArrowResultSetConverter::makeField(
+    const std::string name,
+    const SQLTypeInfo& target_type) const {
+  return arrow::field(
+      name, get_arrow_type(target_type, device_type_), !target_type.get_notnull());
+}
+
 void ArrowResultSet::deallocateArrowResultBuffer(
     const ArrowResult& result,
     const ExecutorDeviceType device_type,
     const size_t device_id,
     std::shared_ptr<Data_Namespace::DataMgr>& data_mgr) {
+  // CPU buffers skip the sm handle, serializing the entire RecordBatch to df.
   // Remove shared memory on sysmem
-  CHECK_EQ(sizeof(key_t), result.sm_handle.size());
-  const key_t& schema_key = *(key_t*)(&result.sm_handle[0]);
-  auto shm_id = shmget(schema_key, result.sm_size, 0666);
-  if (shm_id < 0) {
-    throw std::runtime_error(
-        "failed to get an valid shm ID w/ given shm key of the schema");
-  }
-  if (-1 == shmctl(shm_id, IPC_RMID, 0)) {
-    throw std::runtime_error("failed to deallocate Arrow schema on errorno(" +
-                             std::to_string(errno) + ")");
+  if (!result.sm_handle.empty()) {
+    CHECK_EQ(sizeof(key_t), result.sm_handle.size());
+    const key_t& schema_key = *(key_t*)(&result.sm_handle[0]);
+    auto shm_id = shmget(schema_key, result.sm_size, 0666);
+    if (shm_id < 0) {
+      throw std::runtime_error(
+          "failed to get an valid shm ID w/ given shm key of the schema");
+    }
+    if (-1 == shmctl(shm_id, IPC_RMID, 0)) {
+      throw std::runtime_error("failed to deallocate Arrow schema on errorno(" +
+                               std::to_string(errno) + ")");
+    }
   }
 
   if (device_type == ExecutorDeviceType::CPU) {
@@ -886,15 +919,10 @@ void ArrowResultSet::deallocateArrowResultBuffer(
     if (-1 == shmctl(shm_id, IPC_RMID, 0)) {
       throw std::runtime_error("failed to deallocate Arrow data frame");
     }
-    return;
   }
-
-  CHECK(device_type == ExecutorDeviceType::GPU);
-  if (!result.df_dev_ptr) {
-    throw std::runtime_error("null pointer to data frame on device");
-  }
-
-  data_mgr->getCudaMgr()->freeDeviceMem(result.df_dev_ptr);
+  // CUDA buffers become owned by the caller, and will automatically be freed
+  // TODO: What if the client never takes ownership of the result? we may want to
+  // establish a check to see if the GPU buffer still exists, and then free it.
 }
 
 void ArrowResultSetConverter::initializeColumnBuilder(
@@ -908,85 +936,108 @@ void ArrowResultSetConverter::initializeColumnBuilder(
                                      : get_physical_type(col_type);
 
   auto value_type = field->type();
-  if (value_type->id() == Type::DICTIONARY) {
-    value_type = static_cast<const DictionaryType&>(*value_type).index_type();
-  }
-  ARROW_THROW_NOT_OK(
-      arrow::MakeBuilder(default_memory_pool(), value_type, &column_builder.builder));
-}
+  if (col_type.is_dict_encoded_string()) {
+    column_builder.builder.reset(new StringDictionary32Builder());
+    // add values to the builder
+    const int dict_id = col_type.get_comp_param();
+    auto str_list = results_->getStringDictionaryPayloadCopy(dict_id);
 
-void ArrowResultSetConverter::reserveColumnBuilderSize(ColumnBuilder& column_builder,
-                                                       const size_t row_count) const {
-  ARROW_THROW_NOT_OK(column_builder.builder->Reserve(static_cast<int64_t>(row_count)));
+    arrow::StringBuilder str_array_builder;
+    ARROW_THROW_NOT_OK(str_array_builder.AppendValues(*str_list));
+    std::shared_ptr<StringArray> string_array;
+    ARROW_THROW_NOT_OK(str_array_builder.Finish(&string_array));
+
+    auto dict_builder =
+        dynamic_cast<arrow::StringDictionary32Builder*>(column_builder.builder.get());
+    CHECK(dict_builder);
+
+    dict_builder->InsertMemoValues(*string_array);
+  } else {
+    ARROW_THROW_NOT_OK(
+        arrow::MakeBuilder(default_memory_pool(), value_type, &column_builder.builder));
+  }
 }
 
 std::shared_ptr<arrow::Array> ArrowResultSetConverter::finishColumnBuilder(
     ColumnBuilder& column_builder) const {
   std::shared_ptr<Array> values;
   ARROW_THROW_NOT_OK(column_builder.builder->Finish(&values));
-  if (column_builder.field->type()->id() == Type::DICTIONARY) {
-    return std::make_shared<DictionaryArray>(column_builder.field->type(), values);
-  } else {
-    return values;
-  }
+  return values;
 }
 
-template <typename BuilderType, typename C_TYPE>
-void ArrowResultSetConverter::appendToColumnBuilder(
-    ColumnBuilder& column_builder,
-    const ValueArray& values,
-    const std::shared_ptr<std::vector<bool>>& is_valid) const {
-  std::vector<C_TYPE> vals = boost::get<std::vector<C_TYPE>>(values);
+namespace {
 
-  if (scale_epoch_values<BuilderType>()) {
+template <typename BUILDER_TYPE, typename VALUE_ARRAY_TYPE>
+void appendToColumnBuilder(ArrowResultSetConverter::ColumnBuilder& column_builder,
+                           const ValueArray& values,
+                           const std::shared_ptr<std::vector<bool>>& is_valid) {
+  static_assert(!std::is_same<BUILDER_TYPE, arrow::StringDictionary32Builder>::value,
+                "Dictionary encoded string builder requires function specialization.");
+
+  std::vector<VALUE_ARRAY_TYPE> vals = boost::get<std::vector<VALUE_ARRAY_TYPE>>(values);
+
+  if (scale_epoch_values<BUILDER_TYPE>()) {
     auto scale_sec_to_millisec = [](auto seconds) { return seconds * kMilliSecsPerSec; };
     auto scale_values = [&](auto epoch) {
-      return std::is_same<BuilderType, Date32Builder>::value
+      return std::is_same<BUILDER_TYPE, Date32Builder>::value
                  ? DateConverters::get_epoch_days_from_seconds(epoch)
                  : scale_sec_to_millisec(epoch);
     };
     std::transform(vals.begin(), vals.end(), vals.begin(), scale_values);
   }
 
-  auto typed_builder = static_cast<BuilderType*>(column_builder.builder.get());
+  auto typed_builder = dynamic_cast<BUILDER_TYPE*>(column_builder.builder.get());
+  CHECK(typed_builder);
   if (column_builder.field->nullable()) {
     CHECK(is_valid.get());
-    ARROW_THROW_NOT_OK(typed_builder->APPENDVALUES(vals, *is_valid));
+    ARROW_THROW_NOT_OK(typed_builder->AppendValues(vals, *is_valid));
   } else {
-    ARROW_THROW_NOT_OK(typed_builder->APPENDVALUES(vals));
+    ARROW_THROW_NOT_OK(typed_builder->AppendValues(vals));
   }
 }
 
-template <typename BuilderType, typename C_TYPE>
-void ArrowResultSetConverter::appendToColumnBuilder(ColumnBuilder& column_builder,
-                                                    int8_t* data,
-                                                    size_t entry_count,
-                                                    const uint8_t* is_valid) const {
-  C_TYPE* vals = reinterpret_cast<C_TYPE*>(data);
+template <>
+void appendToColumnBuilder<arrow::StringDictionary32Builder, int32_t>(
+    ArrowResultSetConverter::ColumnBuilder& column_builder,
+    const ValueArray& values,
+    const std::shared_ptr<std::vector<bool>>& is_valid) {
+  auto typed_builder =
+      dynamic_cast<arrow::StringDictionary32Builder*>(column_builder.builder.get());
+  CHECK(typed_builder);
 
-  if (scale_epoch_values<BuilderType>()) {
-    auto scale_sec_to_millisec = [](auto seconds) { return seconds * kMilliSecsPerSec; };
-    auto scale_values = [&](auto epoch) {
-      return std::is_same<BuilderType, Date32Builder>::value
-                 ? DateConverters::get_epoch_days_from_seconds(epoch)
-                 : scale_sec_to_millisec(epoch);
-    };
-    std::transform(vals, vals + entry_count, vals, scale_values);
-  }
+  std::vector<int32_t> vals = boost::get<std::vector<int32_t>>(values);
 
-  auto typed_builder = static_cast<BuilderType*>(column_builder.builder.get());
-  if (is_valid) {
-    CHECK(column_builder.field->nullable());
-    ARROW_THROW_NOT_OK(typed_builder->APPENDVALUES(vals, entry_count, is_valid));
+  if (column_builder.field->nullable()) {
+    CHECK(is_valid.get());
+    // TODO(adb): Generate this instead of the boolean bitmap
+    std::vector<uint8_t> transformed_bitmap;
+    transformed_bitmap.reserve(is_valid->size());
+    std::for_each(
+        is_valid->begin(), is_valid->end(), [&transformed_bitmap](const bool is_valid) {
+          transformed_bitmap.push_back(is_valid ? 1 : 0);
+        });
+
+    ARROW_THROW_NOT_OK(typed_builder->AppendIndices(
+        vals.data(), static_cast<int64_t>(vals.size()), transformed_bitmap.data()));
   } else {
-    ARROW_THROW_NOT_OK(typed_builder->APPENDVALUES(vals, entry_count));
+    ARROW_THROW_NOT_OK(
+        typed_builder->AppendIndices(vals.data(), static_cast<int64_t>(vals.size())));
   }
 }
+
+}  // namespace
 
 void ArrowResultSetConverter::append(
     ColumnBuilder& column_builder,
     const ValueArray& values,
     const std::shared_ptr<std::vector<bool>>& is_valid) const {
+  if (column_builder.col_type.is_dict_encoded_string()) {
+    CHECK_EQ(column_builder.physical_type,
+             kINT);  // assume all dicts use none-encoded type for now
+    appendToColumnBuilder<StringDictionary32Builder, int32_t>(
+        column_builder, values, is_valid);
+    return;
+  }
   switch (column_builder.physical_type) {
     case kBOOLEAN:
       appendToColumnBuilder<BooleanBuilder, bool>(column_builder, values, is_valid);
@@ -1032,71 +1083,14 @@ void ArrowResultSetConverter::append(
   }
 }
 
-void ArrowResultSetConverter::append(ColumnBuilder& column_builder,
-                                     int8_t* data,
-                                     size_t entry_count,
-                                     const uint8_t* is_valid) const {
-  switch (column_builder.physical_type) {
-    case kBOOLEAN:
-      appendToColumnBuilder<BooleanBuilder, uint8_t>(
-          column_builder, data, entry_count, is_valid);
-      break;
-    case kTINYINT:
-      appendToColumnBuilder<Int8Builder, int8_t>(
-          column_builder, data, entry_count, is_valid);
-      break;
-    case kSMALLINT:
-      appendToColumnBuilder<Int16Builder, int16_t>(
-          column_builder, data, entry_count, is_valid);
-      break;
-    case kINT:
-      appendToColumnBuilder<Int32Builder, int32_t>(
-          column_builder, data, entry_count, is_valid);
-      break;
-    case kBIGINT:
-      appendToColumnBuilder<Int64Builder, int64_t>(
-          column_builder, data, entry_count, is_valid);
-      break;
-    case kFLOAT:
-      appendToColumnBuilder<FloatBuilder, float>(
-          column_builder, data, entry_count, is_valid);
-      break;
-    case kDOUBLE:
-      appendToColumnBuilder<DoubleBuilder, double>(
-          column_builder, data, entry_count, is_valid);
-      break;
-    case kTIME:
-      appendToColumnBuilder<Time32Builder, int32_t>(
-          column_builder, data, entry_count, is_valid);
-      break;
-    case kTIMESTAMP:
-      appendToColumnBuilder<TimestampBuilder, int64_t>(
-          column_builder, data, entry_count, is_valid);
-      break;
-    case kDATE:
-      device_type_ == ExecutorDeviceType::GPU
-          ? appendToColumnBuilder<Date64Builder, int64_t>(
-                column_builder, data, entry_count, is_valid)
-          : appendToColumnBuilder<Date32Builder, int32_t>(
-                column_builder, data, entry_count, is_valid);
-      break;
-    case kCHAR:
-    case kVARCHAR:
-    case kTEXT:
-    default:
-      // TODO(miyu): support more scalar types.
-      throw std::runtime_error(column_builder.col_type.get_type_name() +
-                               " is not supported in Arrow result sets.");
-  }
-}
-
 // helpers for debugging
 
 #ifdef ENABLE_ARROW_DEBUG
 void print_serialized_schema(const uint8_t* data, const size_t length) {
   io::BufferReader reader(std::make_shared<arrow::Buffer>(data, length));
   std::shared_ptr<Schema> schema;
-  ARROW_THROW_NOT_OK(ipc::ReadSchema(&reader, &schema));
+  arrow::ipc::DictionaryMemo in_memo;
+  ARROW_THROW_NOT_OK(ipc::ReadSchema(&reader, &in_memo, &schema));
 
   std::cout << "Arrow Schema: " << std::endl;
   const PrettyPrintOptions options{0};
@@ -1111,8 +1105,10 @@ void print_serialized_records(const uint8_t* data,
     return;
   }
   std::shared_ptr<RecordBatch> batch;
+  arrow::ipc::DictionaryMemo dictionary_memo;
 
+  arrow::ipc::DictionaryMemo in_memo;
   io::BufferReader buffer_reader(std::make_shared<arrow::Buffer>(data, length));
-  ARROW_THROW_NOT_OK(ipc::ReadRecordBatch(schema, &buffer_reader, &batch));
+  ARROW_THROW_NOT_OK(ipc::ReadRecordBatch(schema, &in_memo, &buffer_reader, &batch));
 }
 #endif
