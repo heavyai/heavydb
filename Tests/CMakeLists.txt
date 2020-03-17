@@ -81,6 +81,14 @@ if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
 endif()
 
 set(EXECUTE_TEST_LIBS gtest mapd_thrift QueryRunner ${MAPD_LIBRARIES} ${CMAKE_DL_LIBS} ${CUDA_LIBRARIES} ${LLVM_LINKER_FLAGS} ${CURSES_LIBRARIES} ${Boost_LIBRARIES} ${PROFILER_LIBS})
+set(MAPD_HANDLER_TEST_LIBRARIES thrift_handler ${EXECUTE_TEST_LIBS})
+
+# Replace Licensing library with TestLicensing library
+if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
+  list(FIND MAPD_HANDLER_TEST_LIBRARIES Licensing LICENSING_INDEX)
+  list(INSERT MAPD_HANDLER_TEST_LIBRARIES ${LICENSING_INDEX} TestLicensing)
+  list(REMOVE_ITEM MAPD_HANDLER_TEST_LIBRARIES Licensing)
+endif()
 
 target_link_libraries(ProfileTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(ResultSetTest ${EXECUTE_TEST_LIBS})
@@ -126,9 +134,9 @@ target_link_libraries(CalciteOptimizeTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(JoinHashTableTest ${EXECUTE_TEST_LIBS})
 target_link_libraries(CommandLineTest gtest Shared ${Boost_LIBRARIES})
 # Requires thrift_handler for MapDHandler test fixture
-target_link_libraries(ForeignServerDdlTest thrift_handler ${EXECUTE_TEST_LIBS})
-target_link_libraries(CatalogMigrationTest thrift_handler ${EXECUTE_TEST_LIBS})
-target_link_libraries(CreateAndDropTableDdlTest thrift_handler ${EXECUTE_TEST_LIBS})
+target_link_libraries(ForeignServerDdlTest ${MAPD_HANDLER_TEST_LIBRARIES})
+target_link_libraries(CatalogMigrationTest ${MAPD_HANDLER_TEST_LIBRARIES})
+target_link_libraries(CreateAndDropTableDdlTest ${MAPD_HANDLER_TEST_LIBRARIES})
 
 if(NOT ${CMAKE_SYSTEM_NAME} STREQUAL "Darwin")
   target_link_libraries(UdfTest gtest ${EXECUTE_TEST_LIBS})
