@@ -564,10 +564,6 @@ void MapDHandler::clone_session(TSessionId& session2, const TSessionId& session1
         session_it->second->get_currentUser();
     std::shared_ptr<Catalog> cat = session_it->second->get_catalog_ptr();
     auto session2_ptr = create_new_session(session2, cat->name(), user_meta, cat);
-    if (leaf_aggregator_.leafCount() > 0) {
-      leaf_aggregator_.clone_session(session1, session2);
-      return;
-    }
   } catch (std::exception& e) {
     THROW_MAPD_EXCEPTION(e.what());
   }
