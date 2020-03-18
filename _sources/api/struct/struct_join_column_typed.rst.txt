@@ -1,0 +1,9 @@
+Struct JoinColumnTyped
+======================
+
+.. doxygenstruct:: JoinColumnTyped
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -1,0 +1,9 @@
+Struct JoinColumnIterator::IndexedElement
+=========================================
+
+.. doxygenstruct:: JoinColumnIterator::IndexedElement
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

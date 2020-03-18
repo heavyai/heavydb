@@ -1,0 +1,9 @@
+Class migrations::MigrationMgr
+==============================
+
+.. doxygenclass:: migrations::MigrationMgr
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:

@@ -40,8 +40,8 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Struct JoinColumnTypeInfo" href="struct_join_column_type_info.html" />
-    <link rel="prev" title="Struct JoinBucketInfo" href="struct_join_bucket_info.html" /> 
+    <link rel="next" title="Struct JoinColumnIterator" href="struct_join_column_iterator.html" />
+    <link rel="prev" title="Struct JoinChunk" href="struct_join_chunk.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev f2169ab
+                5.2.0dev 5c97eb3
               </div>
             
           
@@ -550,7 +550,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_in_subquery.html">Class Parser::InSubquery</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_in_values.html">Class Parser::InValues</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_insert_into_table_as_select_stmt.html">Class Parser::InsertIntoTableAsSelectStmt</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_insert_query_stmt.html">Class Parser::InsertQueryStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_insert_stmt.html">Class Parser::InsertStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_insert_values_stmt.html">Class Parser::InsertValuesStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_1_1_int_literal.html">Class Parser::IntLiteral</a></li>
@@ -597,17 +596,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_parser_wrapper.html">Class ParserWrapper</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_persistent_foreign_storage_interface.html">Class PersistentForeignStorageInterface</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_pki_server.html">Class PkiServer</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/class_planner_1_1_agg_plan.html">Class Planner::AggPlan</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/class_planner_1_1_append.html">Class Planner::Append</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/class_planner_1_1_join.html">Class Planner::Join</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/class_planner_1_1_merge_append.html">Class Planner::MergeAppend</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/class_planner_1_1_optimizer.html">Class Planner::Optimizer</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/class_planner_1_1_plan.html">Class Planner::Plan</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/class_planner_1_1_result.html">Class Planner::Result</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/class_planner_1_1_root_plan.html">Class Planner::RootPlan</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/class_planner_1_1_scan.html">Class Planner::Scan</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/class_planner_1_1_sort.html">Class Planner::Sort</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/class_planner_1_1_values_scan.html">Class Planner::ValuesScan</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_posix_file_archive.html">Class PosixFileArchive</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_proxy_t_http_client.html">Class ProxyTHttpClient</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_query_compilation_descriptor.html">Class QueryCompilationDescriptor</a></li>
@@ -727,7 +715,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classanalyze__benchmark_1_1_bench_analyzer.html">Class analyze_benchmark::BenchAnalyzer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classanalyze__benchmark_1_1_benchmark_loader.html">Class analyze_benchmark::BenchmarkLoader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classanalyze__benchmark_1_1_pretty_print.html">Class analyze_benchmark::PrettyPrint</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/classanonymous__namespace_02_calcite_adapter_8cpp_03_1_1_calcite_adapter.html">Class anonymous_namespace{CalciteAdapter.cpp}::CalciteAdapter</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classanonymous__namespace_02_execute_8cpp_03_1_1_out_vec_owner.html">Class anonymous_namespace{Execute.cpp}::OutVecOwner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classanonymous__namespace_02_expression_rewrite_8cpp_03_1_1_array_element_string_literal_encoding_visitor.html">Class anonymous_namespace{ExpressionRewrite.cpp}::ArrayElementStringLiteralEncodingVisitor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classanonymous__namespace_02_expression_rewrite_8cpp_03_1_1_constant_folding_visitor.html">Class anonymous_namespace{ExpressionRewrite.cpp}::ConstantFoldingVisitor</a></li>
@@ -958,6 +945,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/classlogger_1_1_json_encoder.html">Class logger::JsonEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlogger_1_1_log_options.html">Class logger::LogOptions</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classlogger_1_1_logger.html">Class logger::Logger</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/classmigrations_1_1_migration_mgr.html">Class migrations::MigrationMgr</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classomnisci_1_1_u_u_i_d.html">Class omnisci::UUID</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1prepare_1_1_map_d_planner.html">Class org::apache::calcite::prepare::MapDPlanner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/classorg_1_1apache_1_1calcite_1_1prepare_1_1_map_d_planner_1_1_completion_result.html">Class org::apache::calcite::prepare::MapDPlanner::CompletionResult</a></li>
@@ -1145,8 +1133,16 @@
 <li class="toctree-l2"><a class="reference internal" href="struct_internal_target_value.html">Struct InternalTargetValue</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_interval.html">Struct Interval</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_join_bucket_info.html">Struct JoinBucketInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_join_chunk.html">Struct JoinChunk</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Struct JoinColumn</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_join_column_iterator.html">Struct JoinColumnIterator</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_join_column_iterator_1_1_indexed_element.html">Struct JoinColumnIterator::IndexedElement</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_join_column_tuple.html">Struct JoinColumnTuple</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_join_column_tuple_1_1_slice.html">Struct JoinColumnTuple::Slice</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_join_column_tuple_iterator.html">Struct JoinColumnTupleIterator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_join_column_type_info.html">Struct JoinColumnTypeInfo</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_join_column_typed.html">Struct JoinColumnTyped</a></li>
+<li class="toctree-l2"><a class="reference internal" href="struct_join_column_typed_1_1_slice.html">Struct JoinColumnTyped::Slice</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_join_condition.html">Struct JoinCondition</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_join_hash_table_1_1_join_hash_table_cache_key.html">Struct JoinHashTable::JoinHashTableCacheKey</a></li>
 <li class="toctree-l2"><a class="reference internal" href="struct_join_info.html">Struct JoinInfo</a></li>
@@ -1243,8 +1239,6 @@
 <li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_arrow_importer_8h_03_1_1_arrow_value_base.html">Struct anonymous_namespace{ArrowImporter.h}::ArrowValueBase</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_arrow_importer_8h_03_1_1_data_buffer.html">Struct anonymous_namespace{ArrowImporter.h}::DataBuffer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_arrow_importer_8h_03_1_1_data_buffer_base.html">Struct anonymous_namespace{ArrowImporter.h}::DataBufferBase</a></li>
-<li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_calcite_adapter_8cpp_03_1_1_calcite_adapter_1_1_col_names.html">Struct anonymous_namespace{CalciteAdapter.cpp}::CalciteAdapter::ColNames</a></li>
-<li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_calcite_adapter_8cpp_03_1_1_logical_sort_info.html">Struct anonymous_namespace{CalciteAdapter.cpp}::LogicalSortInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_external_executor_8cpp_03_1_1_decoded_string.html">Struct anonymous_namespace{ExternalExecutor.cpp}::DecodedString</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_cursor.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciCursor</a></li>
 <li class="toctree-l2"><a class="reference internal" href="structanonymous__namespace_02_external_executor_8cpp_03_1_1_omni_sci_vtab.html">Struct anonymous_namespace{ExternalExecutor.cpp}::OmniSciVtab</a></li>
@@ -1409,13 +1403,28 @@
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Members</p>
 <dl class="member">
-<dt id="_CPPv4N10JoinColumn8col_buffE">
-<span id="_CPPv3N10JoinColumn8col_buffE"></span><span id="_CPPv2N10JoinColumn8col_buffE"></span><span id="JoinColumn::col_buff__int8_tCP"></span><span class="target" id="struct_join_column_1a8b2826755561b9dd66b0a8e3159f6f7a"></span><em class="property">const</em> int8_t *<code class="sig-name descname">col_buff</code><a class="headerlink" href="#_CPPv4N10JoinColumn8col_buffE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N10JoinColumn15col_chunks_buffE">
+<span id="_CPPv3N10JoinColumn15col_chunks_buffE"></span><span id="_CPPv2N10JoinColumn15col_chunks_buffE"></span><span id="JoinColumn::col_chunks_buff__int8_tCP"></span><span class="target" id="struct_join_column_1a71d89b63b8c2a4e122fe421d650b7591"></span><em class="property">const</em> int8_t *<code class="sig-name descname">col_chunks_buff</code><a class="headerlink" href="#_CPPv4N10JoinColumn15col_chunks_buffE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N10JoinColumn18col_chunks_buff_szE">
+<span id="_CPPv3N10JoinColumn18col_chunks_buff_szE"></span><span id="_CPPv2N10JoinColumn18col_chunks_buff_szE"></span><span id="JoinColumn::col_chunks_buff_sz__s"></span><span class="target" id="struct_join_column_1ac8da68b9b73914f070b62346d3007c07"></span>size_t <code class="sig-name descname">col_chunks_buff_sz</code><a class="headerlink" href="#_CPPv4N10JoinColumn18col_chunks_buff_szE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N10JoinColumn10num_chunksE">
+<span id="_CPPv3N10JoinColumn10num_chunksE"></span><span id="_CPPv2N10JoinColumn10num_chunksE"></span><span id="JoinColumn::num_chunks__s"></span><span class="target" id="struct_join_column_1a71a89374c2919bf5f058550d61432e83"></span>size_t <code class="sig-name descname">num_chunks</code><a class="headerlink" href="#_CPPv4N10JoinColumn10num_chunksE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
 <dt id="_CPPv4N10JoinColumn9num_elemsE">
-<span id="_CPPv3N10JoinColumn9num_elemsE"></span><span id="_CPPv2N10JoinColumn9num_elemsE"></span><span id="JoinColumn::num_elems__sC"></span><span class="target" id="struct_join_column_1a917fd4d9c76d5bd2317cc7cf1b23fd93"></span><em class="property">const</em> size_t <code class="sig-name descname">num_elems</code><a class="headerlink" href="#_CPPv4N10JoinColumn9num_elemsE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N10JoinColumn9num_elemsE"></span><span id="_CPPv2N10JoinColumn9num_elemsE"></span><span id="JoinColumn::num_elems__s"></span><span class="target" id="struct_join_column_1a209bacad5719fd1066fec85d9b93b098"></span>size_t <code class="sig-name descname">num_elems</code><a class="headerlink" href="#_CPPv4N10JoinColumn9num_elemsE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N10JoinColumn7elem_szE">
+<span id="_CPPv3N10JoinColumn7elem_szE"></span><span id="_CPPv2N10JoinColumn7elem_szE"></span><span id="JoinColumn::elem_sz__s"></span><span class="target" id="struct_join_column_1aa03b58c9df3dca85ac61f985a5b3b4e7"></span>size_t <code class="sig-name descname">elem_sz</code><a class="headerlink" href="#_CPPv4N10JoinColumn7elem_szE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -1431,10 +1440,10 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="struct_join_column_type_info.html" class="btn btn-neutral float-right" title="Struct JoinColumnTypeInfo" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="struct_join_column_iterator.html" class="btn btn-neutral float-right" title="Struct JoinColumnIterator" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="struct_join_bucket_info.html" class="btn btn-neutral float-left" title="Struct JoinBucketInfo" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="struct_join_chunk.html" class="btn btn-neutral float-left" title="Struct JoinChunk" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   

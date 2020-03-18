@@ -1,0 +1,9 @@
+Struct JoinColumnTuple::Slice
+=============================
+
+.. doxygenstruct:: JoinColumnTuple::Slice
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
