@@ -181,6 +181,7 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
                          const bool enable_auto_clear_render_mem,
                          const int render_oom_retry_threshold,
                          const size_t render_mem_bytes,
+                         const size_t max_concurrent_render_sessions,
                          const int num_gpus,
                          const int start_gpu,
                          const size_t reserved_gpu_mem,
@@ -325,8 +326,13 @@ MapDHandler::MapDHandler(const std::vector<LeafHostInfo>& db_leaves,
 
   if (is_rendering_enabled) {
     try {
-      render_handler_.reset(
-          new MapDRenderHandler(this, render_mem_bytes, 0u, false, 0, mapd_parameters_));
+      render_handler_.reset(new MapDRenderHandler(this,
+                                                  render_mem_bytes,
+                                                  max_concurrent_render_sessions,
+                                                  0u,
+                                                  false,
+                                                  0,
+                                                  mapd_parameters_));
     } catch (const std::exception& e) {
       LOG(ERROR) << "Backend rendering disabled: " << e.what();
     }

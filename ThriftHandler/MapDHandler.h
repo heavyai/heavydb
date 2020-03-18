@@ -174,6 +174,7 @@ class MapDHandler : public MapDIf {
               const bool enable_auto_clear_render_mem,
               const int render_oom_retry_threshold,
               const size_t render_mem_bytes,
+              const size_t max_concurrent_render_sessions,
               const int num_gpus,
               const int start_gpu,
               const size_t reserved_gpu_mem,

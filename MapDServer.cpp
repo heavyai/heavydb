@@ -287,6 +287,7 @@ class MapDProgramOptions {
   int render_oom_retry_threshold = 0;  // in milliseconds
   size_t render_mem_bytes = 500000000;
   size_t render_poly_cache_bytes = 300000000;
+  size_t max_concurrent_render_sessions = 500;
 
   bool enable_runtime_udf = false;
 
@@ -1138,6 +1139,7 @@ int startMapdServer(MapDProgramOptions& prog_config_opts, bool start_http_server
                                        prog_config_opts.enable_auto_clear_render_mem,
                                        prog_config_opts.render_oom_retry_threshold,
                                        prog_config_opts.render_mem_bytes,
+                                       prog_config_opts.max_concurrent_render_sessions,
                                        prog_config_opts.num_gpus,
                                        prog_config_opts.start_gpu,
                                        prog_config_opts.reserved_gpu_mem,
