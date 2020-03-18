@@ -321,25 +321,21 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
     ARROW_THROW_NOT_OK(out_stream_result.status());
     auto out_stream = std::move(out_stream_result).ValueOrDie();
     std::shared_ptr<Buffer> serialized_records;
-
-    {
-      auto timer = DEBUG_TIMER("T01 serialize batch");
-      ARROW_THROW_NOT_OK(arrow::ipc::WriteRecordBatchStream(
-          {record_batch}, ipc::IpcOptions::Defaults(), out_stream.get()));
-
-      auto complete_ipc_stream = out_stream->Finish();
-      ARROW_THROW_NOT_OK(complete_ipc_stream.status());
-      serialized_records = std::move(complete_ipc_stream).ValueOrDie();
-    }
-
     std::vector<char> schema_handle_buffer;
-
     std::vector<char> record_handle_buffer(sizeof(key_t), 0);
+
     {
-      auto timer = DEBUG_TIMER("T02 copy serialized records to shm");
-      const auto record_key = arrow::get_and_copy_to_shm(serialized_records);
+      auto timer = DEBUG_TIMER("T01 serialize records to shm");
+      int64_t size = 0;
+      key_t records_shm_key = IPC_PRIVATE;
+      ARROW_THROW_NOT_OK(ipc::GetRecordBatchSize(*record_batch, &size));
+      std::tie(records_shm_key, serialized_records) = get_shm_buffer(size);
+
+      io::FixedSizeBufferWriter stream(serialized_records);
+      ARROW_THROW_NOT_OK(ipc::SerializeRecordBatch(
+          *record_batch, arrow::default_memory_pool(), &stream));
       memcpy(&record_handle_buffer[0],
-             reinterpret_cast<const unsigned char*>(&record_key),
+             reinterpret_cast<const unsigned char*>(&records_shm_key),
              sizeof(key_t));
     }
 
@@ -451,23 +447,23 @@ ArrowResultSetConverter::getSerializedArrowOutput(
   // key_t records_shm_key = IPC_PRIVATE;
 
   {
-    auto timer = DEBUG_TIMER("serialize schema");
+    auto timer = DEBUG_TIMER("T02 serialize schema");
     ARROW_THROW_NOT_OK(arrow::ipc::SerializeSchema(
         *arrow_copy->schema(), memo, arrow::default_memory_pool(), &serialized_schema));
   }
 
   {
-    auto timer = DEBUG_TIMER("collect dicts");
+    auto timer = DEBUG_TIMER("T03 collect dicts");
     ARROW_THROW_NOT_OK(CollectDictionaries(*arrow_copy, memo));
   }
 
   if (arrow_copy->num_rows()) {
     {
-      auto timer = DEBUG_TIMER("validate batch");
+      auto timer = DEBUG_TIMER("T04 validate batch");
       ARROW_THROW_NOT_OK(arrow_copy->Validate());
     }
     {
-      auto timer = DEBUG_TIMER("serialize records");
+      auto timer = DEBUG_TIMER("T05 serialize records");
       ARROW_THROW_NOT_OK(arrow::ipc::SerializeRecordBatch(
           *arrow_copy, arrow::default_memory_pool(), &serialized_records));
       /*
@@ -690,7 +686,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
                                 entry_count == results_->entryCount();
   std::vector<bool> non_lazy_cols;
   if (use_columnar_converter) {
-    auto timer = DEBUG_TIMER("columnar converter");
+    auto timer = DEBUG_TIMER("T06 columnar converter");
     std::vector<size_t> non_lazy_col_pos;
     size_t non_lazy_col_count = 0;
     const auto& lazy_fetch_info = results_->getLazyFetchInfo();
@@ -758,7 +754,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
     row_count = entry_count;
   }
   if (!use_columnar_converter || !non_lazy_cols.empty()) {
-    auto timer = DEBUG_TIMER("row converter");
+    auto timer = DEBUG_TIMER("T07 row converter");
     row_count = 0;
     if (multithreaded) {
       const size_t cpu_count = cpu_threads();
@@ -783,7 +779,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
         row_count += child.get();
       }
       {
-        auto timer = DEBUG_TIMER("append rows to arrow");
+        auto timer = DEBUG_TIMER("T08 append rows to arrow");
         for (int i = 0; i < schema->num_fields(); ++i) {
           if (!non_lazy_cols.empty() && non_lazy_cols[i]) {
             continue;
@@ -801,7 +797,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
       row_count =
           fetch(column_values, null_bitmaps, non_lazy_cols, size_t(0), entry_count);
       {
-        auto timer = DEBUG_TIMER("append rows to arrow");
+        auto timer = DEBUG_TIMER("T09 append rows to arrow");
         for (int i = 0; i < schema->num_fields(); ++i) {
           if (!non_lazy_cols.empty() && non_lazy_cols[i]) {
             continue;
@@ -813,7 +809,7 @@ std::shared_ptr<arrow::RecordBatch> ArrowResultSetConverter::getArrowBatch(
     }
 
     {
-      auto timer = DEBUG_TIMER("finish builders");
+      auto timer = DEBUG_TIMER("T10 finish builders");
       for (size_t i = 0; i < col_count; ++i) {
         if (!non_lazy_cols.empty() && non_lazy_cols[i]) {
           continue;
