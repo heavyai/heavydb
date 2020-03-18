@@ -244,22 +244,23 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   }
 
   std::shared_ptr<arrow::io::ReadableFile> inp;
-  auto r = arrow::io::ReadableFile::Open(info.c_str(), &inp);  // TODO check existence
-  ARROW_THROW_NOT_OK(r);
+  auto file_result = arrow::io::ReadableFile::Open(info.c_str());
+  ARROW_THROW_NOT_OK(file_result.status());
+  inp = file_result.ValueOrDie();
 
-  std::shared_ptr<arrow::csv::TableReader> table_reader;
-  r = arrow::csv::TableReader::Make(memory_pool,
-                                    inp,
-                                    arrow_read_options,
-                                    arrow_parse_options,
-                                    arrow_convert_options,
-                                    &table_reader);
-  ARROW_THROW_NOT_OK(r);
+  auto table_reader_result = arrow::csv::TableReader::Make(
+      memory_pool, inp, arrow_read_options, arrow_parse_options, arrow_convert_options);
+  ARROW_THROW_NOT_OK(table_reader_result.status());
+  auto table_reader = table_reader_result.ValueOrDie();
 
   std::shared_ptr<arrow::Table> arrowTable;
-  auto time = measure<>::execution([&]() { r = table_reader->Read(&arrowTable); });
-  ARROW_THROW_NOT_OK(r);
-  LOG(INFO) << "Arrow read " << info << " in " << time << "ms";
+  auto time = measure<>::execution([&]() {
+    auto arrow_table_result = table_reader->Read();
+    ARROW_THROW_NOT_OK(arrow_table_result.status());
+    arrowTable = arrow_table_result.ValueOrDie();
+  });
+
+  VLOG(1) << "Read Arrow CSV file " << info << " in " << time << "ms";
 
   arrow::Table& table = *arrowTable.get();
   int cln = 0, num_cols = table.num_columns();
@@ -401,8 +402,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   }  // each col and fragment
 
   // wait untill all stats have been updated
-  r = tg->Finish();
-  ARROW_THROW_NOT_OK(r);
+  ARROW_THROW_NOT_OK(tg->Finish());
   VLOG(1) << "Created CSV backed temporary table with " << num_cols << " columns, "
           << arr_frags << " chunks, and " << fragments.size() << " fragments.";
 }
