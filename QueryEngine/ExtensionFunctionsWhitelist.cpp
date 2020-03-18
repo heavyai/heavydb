@@ -263,6 +263,10 @@ std::string ExtensionFunctionsWhitelist::toString(
   return r;
 }
 
+std::string ExtensionFunctionsWhitelist::toString(const ExtArgumentType& sig_type) {
+  return serialize_type(sig_type);
+}
+
 std::string ExtensionFunction::toString() const {
   return getName() + "(" + ExtensionFunctionsWhitelist::toString(getArgs()) + ") -> " +
          serialize_type(getRet());

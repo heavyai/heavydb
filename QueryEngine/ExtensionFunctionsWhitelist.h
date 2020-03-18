@@ -110,6 +110,7 @@ class ExtensionFunctionsWhitelist {
                               std::string tab = "");
   static std::string toString(const std::vector<SQLTypeInfo>& arg_types);
   static std::string toString(const std::vector<ExtArgumentType>& sig_types);
+  static std::string toString(const ExtArgumentType& sig_type);
 
   static std::vector<std::string> getLLVMDeclarations(
       const std::unordered_set<std::string>& udf_decls);

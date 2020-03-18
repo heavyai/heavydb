@@ -203,7 +203,11 @@ static int match_arguments(const SQLTypeInfo& arg_type,
         // array arguments must match exactly
         CHECK(arg_type.is_array());
         const auto stype_ti = ext_arg_type_to_type_info(get_array_arg_elem_type(stype));
-        if (arg_type.get_elem_type().get_type() == stype_ti.get_type()) {
+        if (arg_type.get_elem_type() == kBOOLEAN && stype_ti.get_type() == kTINYINT) {
+          /* Boolean array has the same low-level structure as Int8 array. */
+          penalty_score += 1000;
+          return 1;
+        } else if (arg_type.get_elem_type().get_type() == stype_ti.get_type()) {
           penalty_score += 1000;
           return 1;
         } else {
