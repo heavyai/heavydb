@@ -1341,7 +1341,9 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
 
     // TODO(adb): for a validate query we do not need write locks, though the lock would
     // generally be short lived.
-    const auto [parse_result, locks] =
+    TPlanResult parse_result;
+    lockmgr::LockedTableDescriptors locks;
+    std::tie(parse_result, locks) =
         parse_to_ra(query_state_proxy,
                     query_state_proxy.getQueryState().getQueryStr(),
                     {},
