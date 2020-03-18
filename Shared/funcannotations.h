@@ -48,7 +48,8 @@
     defined(WITH_JIT_DEBUG)
 #define ALWAYS_INLINE
 #elif defined(__EMBEDDED_DATABASE__)
-#define ALWAYS_INLINE __attribute__((always_inline)) __attribute__((__visibility__("hidden")))
+#define ALWAYS_INLINE \
+    __attribute__((always_inline)) __attribute__((__visibility__("hidden")))
 #else
 #define ALWAYS_INLINE __attribute__((always_inline))
 #endif

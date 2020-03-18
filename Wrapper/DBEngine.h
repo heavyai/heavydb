@@ -18,44 +18,44 @@
 #define __DB_ENGINE_H
 
 #include <iostream>
-#include <string>
-#include <vector>
 #include <memory>
+#include <string>
 #include <type_traits>
+#include <vector>
 #include "QueryEngine/TargetValue.h"
 
 namespace EmbeddedDatabase {
 
-    class Row {
-    public:
-        Row();
-        Row(std::vector<TargetValue>& row);
-        int64_t GetInt(size_t col);
-        double GetDouble(size_t col);
-        std::string GetStr(size_t col);
+class Row {
+ public:
+  Row();
+  Row(std::vector<TargetValue>& row);
+  int64_t GetInt(size_t col);
+  double GetDouble(size_t col);
+  std::string GetStr(size_t col);
 
-    private:
-         std::vector<TargetValue> m_row;
-    };
+ private:
+  std::vector<TargetValue> m_row;
+};
 
-    class Cursor {
-    public:
-        size_t GetColCount();
-        size_t GetRowCount();
-        Row GetNextRow();
-        int GetColType(uint32_t nPos);
-    };
+class Cursor {
+ public:
+  size_t GetColCount();
+  size_t GetRowCount();
+  Row GetNextRow();
+  int GetColType(uint32_t nPos);
+};
 
-    class DBEngine {
-    public:
-        void Reset();
-        void ExecuteDDL(std::string sQuery);
-        Cursor* ExecuteDML(std::string sQuery);
-        static DBEngine* Create(std::string sPath);
+class DBEngine {
+ public:
+  void Reset();
+  void ExecuteDDL(std::string sQuery);
+  Cursor* ExecuteDML(std::string sQuery);
+  static DBEngine* Create(std::string sPath);
 
-    protected:
-        DBEngine() {}
-    };
-}
+ protected:
+  DBEngine() {}
+};
+}  // namespace EmbeddedDatabase
 
-#endif // __DB_ENGINE_H
+#endif  // __DB_ENGINE_H
