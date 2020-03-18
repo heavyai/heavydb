@@ -11242,11 +11242,59 @@ TEST(Update, VarlenSmartSwitch) {
   }
 }
 
+TEST(Update, SimpleFilter) {
+  if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
+    return;
+  }
+
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
+
+    run_ddl_statement("DROP TABLE IF EXISTS simple_filter;");
+    run_ddl_statement(build_create_table_statement("x int, y double, z decimal(18,2)",
+                                                   "simple_filter",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+    g_sqlite_comparator.query("DROP TABLE IF EXISTS simple_filter;");
+    g_sqlite_comparator.query(
+        "CREATE TABLE simple_filter (x int, y double, z decimal(18,2))");
+    ScopeGuard reset = [] {
+      run_ddl_statement("DROP TABLE IF EXISTS simple_filter;");
+      g_sqlite_comparator.query("DROP TABLE IF EXISTS simple_filter;");
+    };
+
+    for (size_t i = 1; i <= 5; i++) {
+      std::string insert_stmt{"INSERT INTO simple_filter VALUES (" + std::to_string(i) +
+                              ", " + std::to_string(static_cast<double>(i) * 1.1) + ", " +
+                              std::to_string(static_cast<double>(i) * 1.01) + ");"};
+      run_multiple_agg(insert_stmt, dt);
+      g_sqlite_comparator.query(insert_stmt);
+    }
+
+    c("UPDATE simple_filter SET x = 6 WHERE y > 3;", dt);
+    c("SELECT * FROM simple_filter ORDER BY x;", dt);
+    c("UPDATE simple_filter SET y = 2*x WHERE y > 4;", dt);
+    c("SELECT * FROM simple_filter ORDER BY x;", dt);
+    c("UPDATE simple_filter SET y = 2*x WHERE z > 1.02;", dt);
+    c("SELECT * FROM simple_filter ORDER BY x;", dt);
+    c("UPDATE simple_filter SET z = 2*z WHERE x < 6;", dt);
+    c("SELECT * FROM simple_filter ORDER BY x;", dt);
+    c("SELECT sum(x) FROM simple_filter WHERE x < 6;", dt);  // check metadata
+  }
+}
+
 TEST(Update, Text) {
   if (!std::is_same<CalciteUpdatePathSelector, PreprocessorTrue>::value) {
     return;
   }
-  auto save_watchdog = g_enable_watchdog;
+  const auto save_watchdog = g_enable_watchdog;
+  ScopeGuard reset_watchdog_state = [&save_watchdog] {
+    g_enable_watchdog = save_watchdog;
+  };
   g_enable_watchdog = false;
 
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {

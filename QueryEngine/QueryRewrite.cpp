@@ -293,6 +293,8 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
     }
   }
 
+  auto input_col_descs = ra_exe_unit_in.input_col_descs;
+
   std::shared_ptr<Analyzer::Expr> filter;
   std::vector<std::shared_ptr<Analyzer::Expr>> filter_exprs;
   filter_exprs.insert(filter_exprs.end(),
@@ -324,9 +326,24 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
     auto when_expr = filter;  // only one filter, will be a BinOper if multiple filters
     case_expr_list.emplace_back(std::make_pair(when_expr, new_column_value));
     const auto& then_ti = case_expr_list.front().second->get_type_info();
-    // const auto& case_ti = column_to_update->get_type_info();
     auto case_expr =
         makeExpr<Analyzer::CaseExpr>(then_ti, false, case_expr_list, column_to_update);
+    auto col_to_update_var =
+        std::dynamic_pointer_cast<Analyzer::ColumnVar>(column_to_update);
+    CHECK(col_to_update_var);
+    auto col_to_update_desc =
+        std::make_shared<const InputColDescriptor>(col_to_update_var->get_column_id(),
+                                                   col_to_update_var->get_table_id(),
+                                                   col_to_update_var->get_rte_idx());
+    auto existing_col_desc_it = std::find_if(
+        input_col_descs.begin(),
+        input_col_descs.end(),
+        [&col_to_update_desc](const std::shared_ptr<const InputColDescriptor>& in) {
+          return *in == *col_to_update_desc;
+        });
+    if (existing_col_desc_it == input_col_descs.end()) {
+      input_col_descs.push_back(col_to_update_desc);
+    }
     target_exprs_owned_.emplace_back(case_expr);
   } else {
     // no filters, simply project the update value
@@ -338,7 +355,7 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
   target_exprs.emplace_back(target_exprs_owned_.front().get());
 
   RelAlgExecutionUnit rewritten_exe_unit{ra_exe_unit_in.input_descs,
-                                         ra_exe_unit_in.input_col_descs,
+                                         input_col_descs,
                                          {},
                                          {},
                                          ra_exe_unit_in.join_quals,
