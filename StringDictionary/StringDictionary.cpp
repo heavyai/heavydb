@@ -1123,7 +1123,8 @@ uint32_t StringDictionary::computeBucketFromStorageAndMemory(
     }
     if (!materialize_hashes_ ||
         (input_string_rk_hash == rk_hashes_[candidate_string_id])) {
-      if (candidate_string_id >= storage_high_water_mark) {
+      if (candidate_string_id > 0 &&
+          static_cast<size_t>(candidate_string_id) >= storage_high_water_mark) {
         // The candidate string is not in storage yet but in our string_memory_ids temp
         // buffer
         size_t memory_offset =
@@ -1301,7 +1302,9 @@ size_t StringDictionary::addStorageCapacity(
   memset(CANARY_BUFFER, 0xff, canary_buff_size_to_add);
 
   CHECK_NE(lseek(fd, 0, SEEK_END), -1);
-  CHECK(write(fd, CANARY_BUFFER, canary_buff_size_to_add) == canary_buff_size_to_add);
+  ssize_t write_return = write(fd, CANARY_BUFFER, canary_buff_size_to_add);
+  CHECK(write_return > 0 &&
+        (static_cast<size_t>(write_return) == canary_buff_size_to_add));
   return canary_buff_size_to_add;
 }
 
