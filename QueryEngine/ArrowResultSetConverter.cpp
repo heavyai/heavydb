@@ -317,27 +317,22 @@ ArrowResult ArrowResultSetConverter::getArrowResult() const {
   std::shared_ptr<arrow::RecordBatch> record_batch = convertToArrow();
 
   if (device_type_ == ExecutorDeviceType::CPU) {
-    auto out_stream_result = arrow::io::BufferOutputStream::Create(1024);
-    ARROW_THROW_NOT_OK(out_stream_result.status());
-    auto out_stream = std::move(out_stream_result).ValueOrDie();
+    auto timer = DEBUG_TIMER("T01 serialize records to shm");
     std::shared_ptr<Buffer> serialized_records;
     std::vector<char> schema_handle_buffer;
     std::vector<char> record_handle_buffer(sizeof(key_t), 0);
+    int64_t size = 0;
+    key_t records_shm_key = IPC_PRIVATE;
 
-    {
-      auto timer = DEBUG_TIMER("T01 serialize records to shm");
-      int64_t size = 0;
-      key_t records_shm_key = IPC_PRIVATE;
-      ARROW_THROW_NOT_OK(ipc::GetRecordBatchSize(*record_batch, &size));
-      std::tie(records_shm_key, serialized_records) = get_shm_buffer(size);
+    ARROW_THROW_NOT_OK(ipc::GetRecordBatchSize(*record_batch, &size));
+    std::tie(records_shm_key, serialized_records) = get_shm_buffer(size);
 
-      io::FixedSizeBufferWriter stream(serialized_records);
-      ARROW_THROW_NOT_OK(ipc::SerializeRecordBatch(
-          *record_batch, arrow::default_memory_pool(), &stream));
-      memcpy(&record_handle_buffer[0],
-             reinterpret_cast<const unsigned char*>(&records_shm_key),
-             sizeof(key_t));
-    }
+    io::FixedSizeBufferWriter stream(serialized_records);
+    ARROW_THROW_NOT_OK(
+        ipc::SerializeRecordBatch(*record_batch, arrow::default_memory_pool(), &stream));
+    memcpy(&record_handle_buffer[0],
+           reinterpret_cast<const unsigned char*>(&records_shm_key),
+           sizeof(key_t));
 
     return {schema_handle_buffer,
             0,
