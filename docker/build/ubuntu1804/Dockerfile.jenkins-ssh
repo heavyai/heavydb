@@ -1,0 +1,30 @@
+FROM docker-internal.mapd.com/mapd/core-build-ubuntu1804-cuda10.0
+
+RUN ln -snf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
+RUN echo America/Los_Angeles > /etc/timezone
+
+RUN add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+RUN apt update && \
+    apt install -y openssh-server\
+                   docker-ce \
+                   docker-ce-cli \
+                   containerd.io \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN sshd-keygen
+
+RUN useradd -m jenkins-slave
+WORKDIR /home/jenkins-slave
+RUN  echo 'jenkins-slave ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+
+USER jenkins-slave
+
+RUN mkdir -p .ssh \
+    && chmod 700 .ssh \
+    && curl https://github.com/mapd-bot.keys >> .ssh/authorized_keys \
+    && chmod 600 .ssh/authorized_keys
+
+USER root
+
+EXPOSE 22
+CMD ["/usr/sbin/sshd", "-D"]
