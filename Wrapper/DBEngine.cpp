@@ -15,18 +15,10 @@
  */
 
 #include "DBEngine.h"
-#include <thrift/Thrift.h>
-#include <array>
 #include <boost/filesystem.hpp>
 #include <boost/variant.hpp>
-#include <exception>
 #include <iostream>
-#include <memory>
-#include <string>
-#include <utility>
 #include "Catalog/Catalog.h"
-#include "Import/Importer.h"
-#include "QueryEngine/ArrowResultSet.h"
 #include "QueryEngine/CompilationOptions.h"
 #include "QueryEngine/ResultSet.h"
 #include "QueryRunner/QueryRunner.h"
@@ -36,62 +28,61 @@
 
 namespace EmbeddedDatabase {
 
-enum class ColumnType : uint32_t { eUNK, eINT, eDBL, eFLT, eSTR, eARR };
+enum class ColumnType : uint32_t { Unknown, Integer, Double, Float, String, Array };
 
 /**
  * Cursor internal implementation
  */
 class CursorImpl : public Cursor {
  public:
-  CursorImpl(std::shared_ptr<ResultSet> resultSet,
-             std::shared_ptr<Data_Namespace::DataMgr> dataMgr)
-      : m_resultSet(resultSet), m_DataMgr(dataMgr) {}
+  CursorImpl(std::shared_ptr<ResultSet> result_set,
+             std::shared_ptr<Data_Namespace::DataMgr> data_mgr)
+      : m_result_set(result_set), m_data_mgr(data_mgr) {}
 
-  size_t GetColCount() { return m_resultSet->colCount(); }
+  size_t getColCount() { return m_result_set->colCount(); }
 
-  size_t GetRowCount() { return m_resultSet->rowCount(); }
+  size_t getRowCount() { return m_result_set->rowCount(); }
 
-  Row GetNextRow() {
-    auto row = m_resultSet->getNextRow(true, false);
+  Row getNextRow() {
+    auto row = m_result_set->getNextRow(true, false);
     if (row.empty()) {
-      std::cout << "Cursor::GetNextRow - Empty row" << std::endl;
       return Row();
     }
     return Row(row);
   }
 
-  ColumnType GetColType(uint32_t nPos) {
-    if (nPos < GetColCount()) {
-      SQLTypeInfo typeInfo = m_resultSet->getColType(nPos);
-      switch (typeInfo.get_type()) {
+  ColumnType getColType(uint32_t col_num) {
+    if (col_num < getColCount()) {
+      SQLTypeInfo type_info = m_result_set->getColType(col_num);
+      switch (type_info.get_type()) {
         case kNUMERIC:
         case kDECIMAL:
         case kINT:
         case kSMALLINT:
         case kBIGINT:
-          return ColumnType::eINT;
+          return ColumnType::Integer;
 
         case kDOUBLE:
-          return ColumnType::eDBL;
+          return ColumnType::Double;
 
         case kFLOAT:
-          return ColumnType::eFLT;
+          return ColumnType::Float;
 
         case kCHAR:
         case kVARCHAR:
         case kTEXT:
-          return ColumnType::eSTR;
+          return ColumnType::String;
 
         default:
-          return ColumnType::eUNK;
+          return ColumnType::Unknown;
       }
     }
-    return ColumnType::eUNK;
+    return ColumnType::Unknown;
   }
 
  private:
-  std::shared_ptr<ResultSet> m_resultSet;
-  std::weak_ptr<Data_Namespace::DataMgr> m_DataMgr;
+  std::shared_ptr<ResultSet> m_result_set;
+  std::weak_ptr<Data_Namespace::DataMgr> m_data_mgr;
 };
 
 /**
@@ -99,71 +90,72 @@ class CursorImpl : public Cursor {
  */
 class DBEngineImpl : public DBEngine {
  public:
+  // TODO: Remove all that hardcoded settings
   const int CALCITEPORT = 3279;
   const std::string OMNISCI_DEFAULT_DB = "omnisci";
   const std::string OMNISCI_ROOT_USER = "admin";
   const std::string OMNISCI_DATA_PATH = "//mapd_data";
 
-  void Reset() {
+  void reset() {
     // TODO: Destroy all cursors in the m_Cursors
-    if (m_pQueryRunner != nullptr) {
-      m_pQueryRunner->reset();
+    if (m_query_runner != nullptr) {
+      m_query_runner->reset();
     }
   }
 
-  void ExecuteDDL(const std::string& sQuery) {
-    if (m_pQueryRunner != nullptr) {
-      m_pQueryRunner->runDDLStatement(sQuery);
+  void executeDDL(const std::string& query) {
+    if (m_query_runner != nullptr) {
+      m_query_runner->runDDLStatement(query);
     }
   }
 
-  Cursor* ExecuteDML(const std::string& sQuery) {
-    if (m_pQueryRunner != nullptr) {
-      auto rs = m_pQueryRunner->runSQL(sQuery, ExecutorDeviceType::CPU);
-      m_Cursors.emplace_back(new CursorImpl(rs, m_DataMgr));
-      return m_Cursors.back();
+  Cursor* executeDML(const std::string& query) {
+    if (m_query_runner != nullptr) {
+      auto rs = m_query_runner->runSQL(query, ExecutorDeviceType::CPU);
+      m_cursors.emplace_back(new CursorImpl(rs, m_data_mgr));
+      return m_cursors.back();
     }
     return nullptr;
   }
 
-  DBEngineImpl(const std::string& sBasePath)
-      : m_sBasePath(sBasePath), m_pQueryRunner(nullptr) {
-    if (!boost::filesystem::exists(m_sBasePath)) {
-      std::cerr << "Catalog basepath " + m_sBasePath + " does not exist.\n";
+  DBEngineImpl(const std::string& base_path)
+      : m_base_path(base_path), m_query_runner(nullptr) {
+    if (!boost::filesystem::exists(m_base_path)) {
+      std::cerr << "Catalog basepath " + m_base_path + " does not exist.\n";
       // TODO: Create database if it does not exist
     } else {
-      MapDParameters mapdParms;
-      std::string sDataPath = m_sBasePath + OMNISCI_DATA_PATH;
-      m_DataMgr =
-          std::make_shared<Data_Namespace::DataMgr>(sDataPath, mapdParms, false, 0);
-      auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, m_sBasePath, 1024, 5000);
+      MapDParameters mapd_parms;
+      std::string data_path = m_base_path + OMNISCI_DATA_PATH;
+      m_data_mgr =
+          std::make_shared<Data_Namespace::DataMgr>(data_path, mapd_parms, false, 0);
+      auto calcite = std::make_shared<Calcite>(-1, CALCITEPORT, m_base_path, 1024, 5000);
       auto& sys_cat = Catalog_Namespace::SysCatalog::instance();
-      sys_cat.init(m_sBasePath, m_DataMgr, {}, calcite, false, false, {});
+      sys_cat.init(m_base_path, m_data_mgr, {}, calcite, false, false, {});
       if (!sys_cat.getSqliteConnector()) {
         std::cerr << "SqliteConnector is null " << std::endl;
       } else {
-        sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, m_Database);  // TODO: Check
-        auto catalog = Catalog_Namespace::Catalog::get(m_sBasePath,
-                                                       m_Database,
-                                                       m_DataMgr,
+        sys_cat.getMetadataForDB(OMNISCI_DEFAULT_DB, m_database);  // TODO: Check
+        auto catalog = Catalog_Namespace::Catalog::get(m_base_path,
+                                                       m_database,
+                                                       m_data_mgr,
                                                        std::vector<LeafHostInfo>(),
                                                        calcite,
                                                        false);
-        sys_cat.getMetadataForUser(OMNISCI_ROOT_USER, m_User);
+        sys_cat.getMetadataForUser(OMNISCI_ROOT_USER, m_user);
         auto session = std::make_unique<Catalog_Namespace::SessionInfo>(
-            catalog, m_User, ExecutorDeviceType::CPU, "");
-        m_pQueryRunner = QueryRunner::QueryRunner::init(session);
+            catalog, m_user, ExecutorDeviceType::CPU, "");
+        m_query_runner = QueryRunner::QueryRunner::init(session);
       }
     }
   }
 
  private:
-  std::string m_sBasePath;
-  std::shared_ptr<Data_Namespace::DataMgr> m_DataMgr;
-  Catalog_Namespace::DBMetadata m_Database;
-  Catalog_Namespace::UserMetadata m_User;
-  QueryRunner::QueryRunner* m_pQueryRunner;
-  std::vector<CursorImpl*> m_Cursors;
+  std::string m_base_path;
+  std::shared_ptr<Data_Namespace::DataMgr> m_data_mgr;
+  Catalog_Namespace::DBMetadata m_database;
+  Catalog_Namespace::UserMetadata m_user;
+  QueryRunner::QueryRunner* m_query_runner;
+  std::vector<CursorImpl*> m_cursors;
 };
 
 /********************************************* DBEngine external methods*/
@@ -173,32 +165,32 @@ class DBEngineImpl : public DBEngine {
  *
  * @param sPath Path to the existing database
  */
-DBEngine* DBEngine::Create(std::string sPath) {
-  return new DBEngineImpl(sPath);
+DBEngine* DBEngine::create(std::string path) {
+  return new DBEngineImpl(path);
 }
 
 /** DBEngine downcasting methods */
-inline DBEngineImpl* GetImpl(DBEngine* ptr) {
+inline DBEngineImpl* getImpl(DBEngine* ptr) {
   return (DBEngineImpl*)ptr;
 }
-inline const DBEngineImpl* GetImpl(const DBEngine* ptr) {
+inline const DBEngineImpl* getImpl(const DBEngine* ptr) {
   return (const DBEngineImpl*)ptr;
 }
 
-void DBEngine::Reset() {
+void DBEngine::reset() {
   // TODO: Make sure that dbengine does not released twice
-  DBEngineImpl* pEngine = GetImpl(this);
-  pEngine->Reset();
+  DBEngineImpl* engine = getImpl(this);
+  engine->reset();
 }
 
-void DBEngine::ExecuteDDL(std::string sQuery) {
-  DBEngineImpl* pEngine = GetImpl(this);
-  pEngine->ExecuteDDL(sQuery);
+void DBEngine::executeDDL(std::string query) {
+  DBEngineImpl* engine = getImpl(this);
+  engine->executeDDL(query);
 }
 
-Cursor* DBEngine::ExecuteDML(std::string sQuery) {
-  DBEngineImpl* pEngine = GetImpl(this);
-  return pEngine->ExecuteDML(sQuery);
+Cursor* DBEngine::executeDML(std::string query) {
+  DBEngineImpl* engine = getImpl(this);
+  return engine->executeDML(query);
 }
 
 /********************************************* Row methods */
@@ -207,28 +199,28 @@ Row::Row() {}
 
 Row::Row(std::vector<TargetValue>& row) : m_row(std::move(row)) {}
 
-int64_t Row::GetInt(size_t nCol) {
-  if (nCol < m_row.size()) {
-    const auto scalarValue = boost::get<ScalarTargetValue>(&m_row[nCol]);
-    const auto value = boost::get<int64_t>(scalarValue);
+int64_t Row::getInt(size_t col_num) {
+  if (col_num < m_row.size()) {
+    const auto scalar_value = boost::get<ScalarTargetValue>(&m_row[col_num]);
+    const auto value = boost::get<int64_t>(scalar_value);
     return *value;
   }
   return 0;
 }
 
-double Row::GetDouble(size_t nCol) {
-  if (nCol < m_row.size()) {
-    const auto scalarValue = boost::get<ScalarTargetValue>(&m_row[nCol]);
-    const auto value = boost::get<double>(scalarValue);
+double Row::getDouble(size_t col_num) {
+  if (col_num < m_row.size()) {
+    const auto scalar_value = boost::get<ScalarTargetValue>(&m_row[col_num]);
+    const auto value = boost::get<double>(scalar_value);
     return *value;
   }
   return 0.;
 }
 
-std::string Row::GetStr(size_t nCol) {
-  if (nCol < m_row.size()) {
-    const auto scalarValue = boost::get<ScalarTargetValue>(&m_row[nCol]);
-    auto value = boost::get<NullableString>(scalarValue);
+std::string Row::getStr(size_t col_num) {
+  if (col_num < m_row.size()) {
+    const auto scalar_value = boost::get<ScalarTargetValue>(&m_row[col_num]);
+    auto value = boost::get<NullableString>(scalar_value);
     bool is_null = !value || boost::get<void*>(value);
     if (is_null) {
       return "Empty";
@@ -240,34 +232,33 @@ std::string Row::GetStr(size_t nCol) {
   return "Out of range";
 }
 
-/********************************************* Сursor external methods*/
+/********************************************* Cursor external methods*/
 
 /** Cursor downcasting methods */
-inline CursorImpl* GetImpl(Cursor* ptr) {
+inline CursorImpl* getImpl(Cursor* ptr) {
   return (CursorImpl*)ptr;
 }
-inline const CursorImpl* GetImpl(const Cursor* ptr) {
+inline const CursorImpl* getImpl(const Cursor* ptr) {
   return (const CursorImpl*)ptr;
 }
 
-size_t Cursor::GetColCount() {
-  CursorImpl* pCursor = GetImpl(this);
-  return pCursor->GetColCount();
+size_t Cursor::getColCount() {
+  CursorImpl* cursor = getImpl(this);
+  return cursor->getColCount();
 }
 
-size_t Cursor::GetRowCount() {
-  CursorImpl* pCursor = GetImpl(this);
-  return pCursor->GetRowCount();
+size_t Cursor::getRowCount() {
+  CursorImpl* cursor = getImpl(this);
+  return cursor->getRowCount();
 }
 
-Row Cursor::GetNextRow() {
-  CursorImpl* pCursor = GetImpl(this);
-  return pCursor->GetNextRow();
+Row Cursor::getNextRow() {
+  CursorImpl* cursor = getImpl(this);
+  return cursor->getNextRow();
 }
 
-int Cursor::GetColType(uint32_t nPos) {
-  CursorImpl* pCursor = GetImpl(this);
-  int nColType = (int)pCursor->GetColType(nPos);
-  return nColType;
+int Cursor::getColType(uint32_t col_num) {
+  CursorImpl* cursor = getImpl(this);
+  return (int)cursor->getColType(col_num);
 }
 }  // namespace EmbeddedDatabase

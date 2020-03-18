@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef __DB_ENGINE_H
-#define __DB_ENGINE_H
+#pragma once
 
 #include <iostream>
 #include <memory>
@@ -30,9 +29,9 @@ class Row {
  public:
   Row();
   Row(std::vector<TargetValue>& row);
-  int64_t GetInt(size_t col);
-  double GetDouble(size_t col);
-  std::string GetStr(size_t col);
+  int64_t getInt(size_t col_num);
+  double getDouble(size_t col_num);
+  std::string getStr(size_t col_num);
 
  private:
   std::vector<TargetValue> m_row;
@@ -40,22 +39,20 @@ class Row {
 
 class Cursor {
  public:
-  size_t GetColCount();
-  size_t GetRowCount();
-  Row GetNextRow();
-  int GetColType(uint32_t nPos);
+  size_t getColCount();
+  size_t getRowCount();
+  Row getNextRow();
+  int getColType(uint32_t col_num);
 };
 
 class DBEngine {
  public:
-  void Reset();
-  void ExecuteDDL(std::string sQuery);
-  Cursor* ExecuteDML(std::string sQuery);
-  static DBEngine* Create(std::string sPath);
+  void reset();
+  void executeDDL(std::string query);
+  Cursor* executeDML(std::string query);
+  static DBEngine* create(std::string path);
 
  protected:
   DBEngine() {}
 };
 }  // namespace EmbeddedDatabase
-
-#endif  // __DB_ENGINE_H
