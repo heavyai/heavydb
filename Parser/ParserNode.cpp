@@ -55,6 +55,7 @@
 #include "ReservedKeywords.h"
 #include "Shared/StringTransform.h"
 #include "Shared/TimeGM.h"
+#include "Shared/geo_compression.h"
 #include "Shared/geo_types.h"
 #include "Shared/mapd_glob.h"
 #include "Shared/measure.h"
@@ -72,10 +73,6 @@ using namespace std::string_literals;
 using TableDefFuncPtr = boost::function<void(TableDescriptor&,
                                              const NameValueAssign*,
                                              const std::list<ColumnDescriptor>& columns)>;
-
-namespace Importer_NS {
-std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti);
-}  // namespace Importer_NS
 
 namespace Parser {
 std::shared_ptr<Analyzer::Expr> NullLiteral::analyze(
@@ -1710,7 +1707,7 @@ void InsertValuesStmt::analyze(const Catalog_Namespace::Catalog& catalog,
       CHECK_EQ(cd_coords->columnType.get_subtype(), kTINYINT);
       std::list<std::shared_ptr<Analyzer::Expr>> value_exprs;
       if (!is_null || cd->columnType.get_type() == kPOINT) {
-        auto compressed_coords = Importer_NS::compress_coords(coords, col_ti);
+        auto compressed_coords = geospatial::compress_coords(coords, col_ti);
         for (auto cc : compressed_coords) {
           Datum d;
           d.tinyintval = cc;

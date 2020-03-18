@@ -24,11 +24,11 @@
 #ifndef QUERYENGINE_RESULTSET_GEOSERIALIZATION_H
 #define QUERYENGINE_RESULTSET_GEOSERIALIZATION_H
 
-#include <Shared/geo_compression.h>
-#include <Shared/geo_types.h>
-#include <Shared/sqltypes.h>
-#include "ResultSet.h"
-#include "TargetValue.h"
+#include "QueryEngine/ResultSet.h"
+#include "QueryEngine/TargetValue.h"
+#include "Shared/geo_compression_runtime.h"
+#include "Shared/geo_types.h"
+#include "Shared/sqltypes.h"
 
 using VarlenDatumPtr = std::unique_ptr<VarlenDatum>;
 

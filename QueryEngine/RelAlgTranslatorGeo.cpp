@@ -14,9 +14,14 @@
  * limitations under the License.
  */
 
-#include "../Shared/geo_types.h"
-#include "ExpressionRewrite.h"
-#include "RelAlgTranslator.h"
+#include "QueryEngine/RelAlgTranslator.h"
+
+#include <memory>
+#include <vector>
+
+#include "QueryEngine/ExpressionRewrite.h"
+#include "Shared/geo_compression.h"
+#include "Shared/geo_types.h"
 
 std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColumn(
     const RexInput* rex_input,
@@ -98,12 +103,6 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoColum
   return args;
 }
 
-namespace Importer_NS {
-
-std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti);
-
-}  // namespace Importer_NS
-
 std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiteral(
     const RexLiteral* rex_literal,
     SQLTypeInfo& ti,
@@ -135,7 +134,7 @@ std::vector<std::shared_ptr<Analyzer::Expr>> RelAlgTranslator::translateGeoLiter
 
   std::vector<std::shared_ptr<Analyzer::Expr>> args;
 
-  std::vector<uint8_t> compressed_coords = Importer_NS::compress_coords(coords, ti);
+  std::vector<uint8_t> compressed_coords = geospatial::compress_coords(coords, ti);
   std::list<std::shared_ptr<Analyzer::Expr>> compressed_coords_exprs;
   for (auto cc : compressed_coords) {
     Datum d;

@@ -27,7 +27,6 @@
 #include <gdal.h>
 #include <ogrsf_frmts.h>
 #include <unistd.h>
-
 #include <boost/algorithm/string.hpp>
 #include <boost/dynamic_bitset.hpp>
 #include <boost/filesystem.hpp>
@@ -51,25 +50,26 @@
 #include <utility>
 #include <vector>
 
-#include "../Archive/PosixFileArchive.h"
-#include "../Archive/S3Archive.h"
-#include "../QueryEngine/TypePunning.h"
-#include "../Shared/geo_compression.h"
-#include "../Shared/geo_types.h"
-#include "../Shared/geosupport.h"
-#include "../Shared/import_helpers.h"
-#include "../Shared/mapd_glob.h"
-#include "../Shared/mapdpath.h"
-#include "../Shared/measure.h"
-#include "../Shared/scope.h"
-#include "../Shared/shard_key.h"
-#include "../Shared/thread_count.h"
+#include "Archive/PosixFileArchive.h"
+#include "Archive/S3Archive.h"
 #include "ArrowImporter.h"
 #include "Import/DelimitedParserUtils.h"
+#include "QueryEngine/TypePunning.h"
 #include "QueryRunner/QueryRunner.h"
 #include "Shared/Logger.h"
 #include "Shared/SqlTypesLayout.h"
+#include "Shared/geo_compression.h"
+#include "Shared/geo_types.h"
+#include "Shared/geosupport.h"
+#include "Shared/import_helpers.h"
+#include "Shared/mapd_glob.h"
+#include "Shared/mapdpath.h"
+#include "Shared/measure.h"
+#include "Shared/scope.h"
+#include "Shared/shard_key.h"
+#include "Shared/thread_count.h"
 #include "Utils/ChunkAccessorTable.h"
+
 #include "gen-cpp/MapD.h"
 
 size_t g_archive_read_buf_size = 1 << 20;
@@ -1444,70 +1444,6 @@ bool importGeoFromLonLat(double lon, double lat, std::vector<double>& coords) {
   return true;
 }
 
-uint64_t compress_coord(double coord, const SQLTypeInfo& ti, bool x) {
-  if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
-    return x ? Geo_namespace::compress_longitude_coord_geoint32(coord)
-             : Geo_namespace::compress_lattitude_coord_geoint32(coord);
-  }
-  return *reinterpret_cast<uint64_t*>(may_alias_ptr(&coord));
-}
-
-uint64_t compress_null_point(const SQLTypeInfo& ti, bool x) {
-  if (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32) {
-    return x ? Geo_namespace::compress_null_point_longitude_geoint32()
-             : Geo_namespace::compress_null_point_lattitude_geoint32();
-  }
-  double n = x ? NULL_ARRAY_DOUBLE : NULL_DOUBLE;
-  auto u = *reinterpret_cast<uint64_t*>(may_alias_ptr(&n));
-  return u;
-}
-
-// Compress non-NULL geo coords; and also NULL POINT coords (special case)
-std::vector<uint8_t> compress_coords(std::vector<double>& coords, const SQLTypeInfo& ti) {
-  CHECK(!coords.empty()) << "Coord compression received no data";
-  bool is_null_point = false;
-  if (!ti.get_notnull()) {
-    is_null_point = (ti.get_type() == kPOINT && coords[0] == NULL_ARRAY_DOUBLE);
-  }
-  std::vector<uint8_t> compressed_coords;
-  bool x = true;
-  bool is_geoint32 =
-      (ti.get_compression() == kENCODING_GEOINT && ti.get_comp_param() == 32);
-  size_t coord_data_size = (is_geoint32) ? (ti.get_comp_param() / 8) : sizeof(double);
-  for (auto coord : coords) {
-    uint64_t coord_data;
-    if (is_null_point) {
-      coord_data = compress_null_point(ti, x);
-    } else {
-      if (ti.get_output_srid() == 4326) {
-        if (x) {
-          if (coord < -180.0 || coord > 180.0) {
-            throw std::runtime_error("WGS84 longitude " + std::to_string(coord) +
-                                     " is out of bounds");
-          }
-        } else {
-          if (coord < -90.0 || coord > 90.0) {
-            throw std::runtime_error("WGS84 latitude " + std::to_string(coord) +
-                                     " is out of bounds");
-          }
-        }
-      }
-      if (is_geoint32) {
-        coord_data = compress_coord(coord, ti, x);
-      } else {
-        auto coord_data_ptr = reinterpret_cast<uint64_t*>(&coord);
-        coord_data = *coord_data_ptr;
-      }
-    }
-    for (size_t i = 0; i < coord_data_size; i++) {
-      compressed_coords.push_back(coord_data & 0xFF);
-      coord_data >>= 8;
-    }
-    x = !x;
-  }
-  return compressed_coords;
-}
-
 void Importer::set_geo_physical_import_buffer(
     const Catalog_Namespace::Catalog& catalog,
     const ColumnDescriptor* cd,
@@ -1545,7 +1481,7 @@ void Importer::set_geo_physical_import_buffer(
   // One exception - NULL POINT geo: coords need to be processed to encode nullness
   // in a fixlen array, compressed and uncompressed.
   if (!is_null_geo) {
-    std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
+    std::vector<uint8_t> compressed_coords = geospatial::compress_coords(coords, col_ti);
     for (auto cc : compressed_coords) {
       TDatum td_byte;
       td_byte.val.int_val = cc;
@@ -1657,7 +1593,8 @@ void Importer::set_geo_physical_import_buffer_columnar(
     }
     std::vector<TDatum> td_coords_data;
     if (!is_null_geo) {
-      std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
+      std::vector<uint8_t> compressed_coords =
+          geospatial::compress_coords(coords, col_ti);
       for (auto cc : compressed_coords) {
         TDatum td_byte;
         td_byte.val.int_val = cc;
@@ -2359,7 +2296,8 @@ static ImportStatus import_thread_shapefile(
             auto cd_coords = *cd_it;
             std::vector<TDatum> td_coord_data;
             if (!is_null_geo) {
-              std::vector<uint8_t> compressed_coords = compress_coords(coords, col_ti);
+              std::vector<uint8_t> compressed_coords =
+                  geospatial::compress_coords(coords, col_ti);
               for (auto cc : compressed_coords) {
                 TDatum td_byte;
                 td_byte.val.int_val = cc;

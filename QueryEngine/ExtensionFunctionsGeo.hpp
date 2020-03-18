@@ -7,7 +7,7 @@
 #define TOLERANCE_DEFAULT 0.000000001
 #define TOLERANCE_GEOINT32 0.0000001
 
-#include "../Shared/geo_compression.h"
+#include "../Shared/geo_compression_runtime.h"
 
 // Adjustable tolerance, determined by compression mode.
 // The criteria is to still recognize a compressed+decompressed number.

@@ -3,6 +3,7 @@ set(shared_source_files
     timegm.cpp
     mapd_glob.cpp
     StringTransform.cpp
+    geo_compression.cpp
     geo_types.cpp
     SysInfo.cpp
     File.cpp
