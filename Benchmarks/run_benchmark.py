@@ -318,6 +318,104 @@ def read_query_files(**kwargs):
         return False
 
 
+def read_setup_teardown_query_files(**kwargs):
+    """
+      Get queries to run for setup and teardown from directory
+
+      Kwargs:
+        queries_dir(str): Directory with query files
+        source_table(str): Table to run query against
+        foreign_table_filename(str): File to create foreign table from
+
+      Returns:
+        setup_queries(query_list): List of setup queries
+        teardown_queries(query_list): List of teardown queries
+        False(bool): Unable to find queries dir
+
+    query_list is described by:
+    query_list(dict):::
+        query_group(str): Query group, usually matches table name
+        queries(list)
+            query(dict):::
+                name(str): Name of query
+                mapdql(str): Query syntax to run
+    """
+    setup_teardown_queries_dir = kwargs['queries_dir']
+    source_table = kwargs['source_table']
+    # Read setup/tear-down queries if they exist
+    setup_teardown_query_list = None
+    if setup_teardown_queries_dir is not None:
+        setup_teardown_query_list = read_query_files(
+            queries_dir=setup_teardown_queries_dir,
+            source_table=source_table
+        )
+        if kwargs["foreign_table_filename"] is not None:
+            for query in setup_teardown_query_list['queries']:
+                query['mapdql'] = query['mapdql'].replace(
+                    "##FILE##", kwargs["foreign_table_filename"])
+    # Filter setup queries
+    setup_query_list = None
+    if setup_teardown_query_list is not None:
+        setup_query_list = filter(
+            lambda x: validate_setup_teardown_query_file(
+                query_filename=x['name'], check_which='setup', quiet=True),
+            setup_teardown_query_list['queries'])
+        setup_query_list = list(setup_query_list)
+    # Filter teardown queries
+    teardown_query_list = None
+    if setup_teardown_query_list is not None:
+        teardown_query_list = filter(
+            lambda x: validate_setup_teardown_query_file(
+                query_filename=x['name'], check_which='teardown', quiet=True),
+            setup_teardown_query_list['queries'])
+        teardown_query_list = list(teardown_query_list)
+    return setup_query_list, teardown_query_list
+
+
+def validate_setup_teardown_query_file(**kwargs):
+    """
+      Validates query file. Currently only checks the query file name, and
+      checks for setup or teardown in basename
+
+      Kwargs:
+        query_filename(str): Name of query file
+        check_which(bool): either 'setup' or 'teardown', decide which to
+                           check
+        quiet(bool): optional, if True, no warning is logged
+
+      Returns:
+        True(bool): Query succesfully validated
+        False(bool): Query failed validation
+    """
+    qfilename = kwargs["query_filename"]
+    basename = os.path.basename(qfilename)
+    check_str = False
+    if kwargs["check_which"] == 'setup':
+        check_str = basename.lower().find('setup') > -1
+    elif kwargs["check_which"] == 'teardown':
+        check_str = basename.lower().find('teardown') > -1
+    else:
+        raise TypeError('Unsupported `check_which` parameter.')
+    return_val = True
+    if not qfilename.endswith(".sql"):
+        logging.warning(
+            "Query filename "
+            + qfilename
+            + ' is invalid - does not end in ".sql". Skipping'
+        )
+        return_val = False
+    elif not check_str:
+        quiet = True if 'quiet' in kwargs and kwargs['quiet'] else False
+        if not quiet:
+            logging.warning(
+                "Query filename "
+                + qfilename
+                + ' does not match "setup" or "teardown". Skipping'
+            )
+        return_val = False
+    return return_val
+
+
 def validate_query_file(**kwargs):
     """
       Validates query file. Currently only checks the query file name
@@ -733,6 +831,47 @@ def run_query(**kwargs):
     return query_results
 
 
+def run_setup_teardown_query(**kwargs):
+    """
+        Convenience wrapper around `run_query` to run a setup or 
+        teardown query
+
+      Kwargs:
+        queries(query_list): List of queries to run
+        do_run(bool): If true will run query, otherwise do nothing
+        trim(float): Trim decimal to remove from top and bottom of results
+        con(class 'pymapd.connection.Connection'): Mapd connection
+
+      Returns:
+        See return value for `run_query`
+
+        query_list is described by:
+        queries(list)
+            query(dict):::
+                name(str): Name of query
+                mapdql(str): Query syntax to run
+                [setup : queries(list)]
+                [teardown : queries(list)]
+    """
+    query_results = list()
+    if kwargs['do_run']:
+        for query in kwargs['queries']:
+            result = run_query(
+                query=query, iterations=1,
+                trim=kwargs['trim'],
+                con=kwargs['con']
+            )
+            if not result['query_succeeded']:
+                logging.warning(
+                    "Error setup or teardown query: "
+                    + query["name"]
+                    + ". did not complete."
+                )
+            else:
+                query_results.append(result)
+    return query_results
+
+
 def json_format_handler(x):
     # Function to allow json to deal with datetime and numpy int
     if isinstance(x, datetime.datetime):
@@ -808,29 +947,42 @@ def create_results_dataset(**kwargs):
                 [],
                 [],
             )
-            for noninitial_result in query_results[
-                "noninitial_iteration_results"
-            ]:
-                execution_times.append(noninitial_result["execution_time"])
-                connect_times.append(noninitial_result["connect_time"])
-                results_iter_times.append(
-                    noninitial_result["results_iter_time"]
-                )
-                total_times.append(noninitial_result["total_time"])
-                # Overwrite result count, same for each iteration
-                result_count = noninitial_result["result_count"]
-
-            # If available, getting the last iteration's component-wise timing information as a json structure
             detailed_timing_last_iteration = {}
-            if (
-                query_results["noninitial_iteration_results"][-1]["debug_info"]
-                is not None
-            ):
-                detailed_timing_last_iteration = json.loads(
-                    query_results["noninitial_iteration_results"][-1][
-                        "debug_info"
-                    ]
-                )["timer"]
+            if len(query_results["noninitial_iteration_results"]) == 0:
+                # A single query run (most likely a setup or teardown query)
+                initial_result = query_results["initial_iteration_results"]
+                execution_times.append(initial_result["first_execution_time"])
+                connect_times.append(initial_result["first_connect_time"])
+                results_iter_times.append(
+                    initial_result["first_results_iter_time"]
+                )
+                total_times.append(initial_result["first_total_time"])
+                # Special case
+                result_count = 1
+            else:
+                # More than one query run
+                for noninitial_result in query_results[
+                    "noninitial_iteration_results"
+                ]:
+                    execution_times.append(noninitial_result["execution_time"])
+                    connect_times.append(noninitial_result["connect_time"])
+                    results_iter_times.append(
+                        noninitial_result["results_iter_time"]
+                    )
+                    total_times.append(noninitial_result["total_time"])
+                    # Overwrite result count, same for each iteration
+                    result_count = noninitial_result["result_count"]
+
+                # If available, getting the last iteration's component-wise timing information as a json structure
+                if (
+                    query_results["noninitial_iteration_results"][-1]["debug_info"]
+                    is not None
+                ):
+                    detailed_timing_last_iteration = json.loads(
+                        query_results["noninitial_iteration_results"][-1][
+                            "debug_info"
+                        ]
+                    )["timer"]
             # Calculate query times
             logging.debug(
                 "Calculating times from query " + query_results["query_id"]
@@ -1346,6 +1498,39 @@ def process_arguments(input_arguments):
         help="Jenkins benchmark result tag. "
         + 'Optional, appended to table name in "group" field',
     )
+    optional.add_argument(
+        "--setup-teardown-queries-dir",
+        dest="setup_teardown_queries_dir",
+        type=str,
+        default=None,
+        help='Absolute path to dir with setup & teardown query files. '
+        'Query files with "setup" in the filename will be executed in '
+        'the setup stage, likewise query files with "teardown" in '
+        'the filenname will be executed in the tear-down stage. Queries '
+        'execute in lexical order. [Default: None, meaning this option is '
+        'not used.]',
+    )
+    optional.add_argument(
+        "--run-setup-teardown-per-query",
+        dest="run_setup_teardown_per_query",
+        action="store_true",
+        help='Run setup & teardown steps per query. '
+        'If set, setup-teardown-queries-dir must be specified. '
+        'If not set, but setup-teardown-queries-dir is specified '
+        'setup & tear-down queries will run globally, that is, '
+        'once per script invocation.'
+        ' [Default: False]'
+    )
+    optional.add_argument(
+        "-F",
+        "--foreign-table-filename",
+        dest="foreign_table_filename",
+        default=None,
+        help="Path to file containing template for import query. "
+        "Path must be relative to the FOREIGN SERVER. "
+        "Occurances of \"##FILE##\" within setup/teardown queries will be"
+        " replaced with this. "
+    )
     args = parser.parse_args(args=input_arguments)
     return args
 
@@ -1382,6 +1567,9 @@ def benchmark(input_arguments):
     output_file_json = args.output_file_json
     output_file_jenkins = args.output_file_jenkins
     output_tag_jenkins = args.output_tag_jenkins
+    setup_teardown_queries_dir = args.setup_teardown_queries_dir
+    run_setup_teardown_per_query = args.run_setup_teardown_per_query
+    foreign_table_filename = args.foreign_table_filename
 
     # Hard-coded vars
     trim = 0.15
@@ -1448,14 +1636,41 @@ def benchmark(input_arguments):
     )
     if not query_list:
         exit(1)
-    # Run queries
+    # Read setup/teardown queries if they exist
+    setup_query_list, teardown_query_list =\
+        read_setup_teardown_query_files(queries_dir=setup_teardown_queries_dir,
+                                        source_table=source_table,
+                                        foreign_table_filename=foreign_table_filename)
+    # Check at what granularity we want to run setup or teardown queries at
+    run_global_setup_queries = setup_query_list is not None and not run_setup_teardown_per_query
+    run_per_query_setup_queries = setup_query_list is not None and run_setup_teardown_per_query
+    run_global_teardown_queries = teardown_query_list is not None and not run_setup_teardown_per_query
+    run_per_query_teardown_queries = teardown_query_list is not None and run_setup_teardown_per_query
+    # Run global setup queries if they exist
     queries_results = []
+    st_qr = run_setup_teardown_query(queries=setup_query_list,
+                                     do_run=run_global_setup_queries, trim=trim, con=con)
+    queries_results.extend(st_qr)
+    # Run queries
     for query in query_list["queries"]:
+        # Run setup queries
+        st_qr = run_setup_teardown_query(
+            queries=setup_query_list, do_run=run_per_query_setup_queries, trim=trim, con=con)
+        queries_results.extend(st_qr)
+        # Run benchmark query
         query_result = run_query(
             query=query, iterations=iterations, trim=trim, con=con
         )
         queries_results.append(query_result)
+        # Run tear-down queries
+        st_qr = run_setup_teardown_query(
+            queries=teardown_query_list, do_run=run_per_query_teardown_queries, trim=trim, con=con)
+        queries_results.extend(st_qr)
     logging.info("Completed all queries.")
+    # Run global tear-down queries if they exist
+    st_qr = run_setup_teardown_query(queries=teardown_query_list,
+                                     do_run=run_global_teardown_queries, trim=trim, con=con)
+    queries_results.extend(st_qr)
     logging.debug("Closing source db connection.")
     con.close()
     # Generate results dataset
