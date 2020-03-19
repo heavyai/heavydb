@@ -64,12 +64,12 @@ sudo apt install -y \
     pkg-config \
     swig
 
-# Install gcc 7
+# Install gcc 8
 sudo add-apt-repository ppa:ubuntu-toolchain-r/test -y
 sudo apt update
-sudo apt install -y g++-7
-sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-7 70 \
-                         --slave /usr/bin/g++ g++ /usr/bin/g++-7
+sudo apt install -y g++-8
+sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-8 80 \
+                         --slave /usr/bin/g++ g++ /usr/bin/g++-8
 sudo update-alternatives --config gcc
 
 # Needed to find sqlite3, xmltooling, and xml_security_c
