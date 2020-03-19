@@ -149,7 +149,7 @@ void import_test_geofile_importer(const std::string& file_str,
                                   const bool compression,
                                   const bool create_table,
                                   const bool explode_collections) {
-  Importer_NS::ImportDriver import_driver(QR::get()->getCatalog(),
+  QueryRunner::ImportDriver import_driver(QR::get()->getCatalog(),
                                           QR::get()->getSession()->get_currentUser(),
                                           ExecutorDeviceType::CPU);
 

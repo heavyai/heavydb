@@ -183,6 +183,19 @@ class QueryRunner {
   std::unique_ptr<IRFileWriter> ir_file_writer_;
 };
 
+class ImportDriver : public QueryRunner {
+ public:
+  ImportDriver(std::shared_ptr<Catalog_Namespace::Catalog> cat,
+               const Catalog_Namespace::UserMetadata& user,
+               const ExecutorDeviceType dt = ExecutorDeviceType::GPU);
+
+  void importGeoTable(const std::string& file_path,
+                      const std::string& table_name,
+                      const bool compression,
+                      const bool create_table,
+                      const bool explode_collections);
+};
+
 }  // namespace QueryRunner
 
 #endif  // QUERY_RUNNER_H

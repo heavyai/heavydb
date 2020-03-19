@@ -19,6 +19,7 @@
 #include "Calcite/Calcite.h"
 #include "Catalog/Catalog.h"
 #include "DistributedLoader.h"
+#include "Import/CopyParams.h"
 #include "Parser/ParserWrapper.h"
 #include "Parser/parser.h"
 #include "QueryEngine/CalciteAdapter.h"
@@ -29,6 +30,8 @@
 #include "Shared/Logger.h"
 #include "Shared/MapDParameters.h"
 #include "Shared/StringTransform.h"
+#include "Shared/geosupport.h"
+#include "Shared/import_helpers.h"
 #include "bcrypt.h"
 #include "gen-cpp/CalciteServer.h"
 
@@ -460,6 +463,108 @@ ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
 void QueryRunner::reset() {
   qr_instance_.reset(nullptr);
   calcite_shutdown_handler();
+}
+
+ImportDriver::ImportDriver(std::shared_ptr<Catalog_Namespace::Catalog> cat,
+                           const Catalog_Namespace::UserMetadata& user,
+                           const ExecutorDeviceType dt)
+    : QueryRunner(std::make_unique<Catalog_Namespace::SessionInfo>(cat, user, dt, "")) {}
+
+void ImportDriver::importGeoTable(const std::string& file_path,
+                                  const std::string& table_name,
+                                  const bool compression,
+                                  const bool create_table,
+                                  const bool explode_collections) {
+  using namespace Importer_NS;
+
+  CHECK(session_info_);
+  const std::string geo_column_name(OMNISCI_GEO_PREFIX);
+
+  CopyParams copy_params;
+  if (compression) {
+    copy_params.geo_coords_encoding = EncodingType::kENCODING_GEOINT;
+    copy_params.geo_coords_comp_param = 32;
+  } else {
+    copy_params.geo_coords_encoding = EncodingType::kENCODING_NONE;
+    copy_params.geo_coords_comp_param = 0;
+  }
+  copy_params.geo_assign_render_groups = true;
+  copy_params.geo_explode_collections = explode_collections;
+
+  auto cds = Importer::gdalToColumnDescriptors(file_path, geo_column_name, copy_params);
+  std::map<std::string, std::string> colname_to_src;
+  for (auto& cd : cds) {
+    const auto col_name_sanitized = ImportHelpers::sanitize_name(cd.columnName);
+    const auto ret =
+        colname_to_src.insert(std::make_pair(col_name_sanitized, cd.columnName));
+    CHECK(ret.second);
+    cd.columnName = col_name_sanitized;
+  }
+
+  auto& cat = session_info_->getCatalog();
+
+  if (create_table) {
+    const auto td = cat.getMetadataForTable(table_name);
+    if (td != nullptr) {
+      throw std::runtime_error("Error: Table " + table_name +
+                               " already exists. Possible failure to correctly re-create "
+                               "mapd_data directory.");
+    }
+    if (table_name != ImportHelpers::sanitize_name(table_name)) {
+      throw std::runtime_error("Invalid characters in table name: " + table_name);
+    }
+
+    std::string stmt{"CREATE TABLE " + table_name};
+    std::vector<std::string> col_stmts;
+
+    for (auto& cd : cds) {
+      if (cd.columnType.get_type() == SQLTypes::kINTERVAL_DAY_TIME ||
+          cd.columnType.get_type() == SQLTypes::kINTERVAL_YEAR_MONTH) {
+        throw std::runtime_error(
+            "Unsupported type: INTERVAL_DAY_TIME or INTERVAL_YEAR_MONTH for col " +
+            cd.columnName + " (table: " + table_name + ")");
+      }
+
+      if (cd.columnType.get_type() == SQLTypes::kDECIMAL) {
+        if (cd.columnType.get_precision() == 0 && cd.columnType.get_scale() == 0) {
+          cd.columnType.set_precision(14);
+          cd.columnType.set_scale(7);
+        }
+      }
+
+      std::string col_stmt;
+      col_stmt.append(cd.columnName + " " + cd.columnType.get_type_name() + " ");
+
+      if (cd.columnType.get_compression() != EncodingType::kENCODING_NONE) {
+        col_stmt.append("ENCODING " + cd.columnType.get_compression_name() + " ");
+      } else {
+        if (cd.columnType.is_string()) {
+          col_stmt.append("ENCODING NONE");
+        } else if (cd.columnType.is_geometry()) {
+          if (cd.columnType.get_output_srid() == 4326) {
+            col_stmt.append("ENCODING NONE");
+          }
+        }
+      }
+      col_stmts.push_back(col_stmt);
+    }
+
+    stmt.append(" (" + boost::algorithm::join(col_stmts, ",") + ");");
+    runDDLStatement(stmt);
+
+    LOG(INFO) << "Created table: " << table_name;
+  } else {
+    LOG(INFO) << "Not creating table: " << table_name;
+  }
+
+  const auto td = cat.getMetadataForTable(table_name);
+  if (td == nullptr) {
+    throw std::runtime_error("Error: Failed to create table " + table_name);
+  }
+
+  Importer_NS::Importer importer(cat, td, file_path, copy_params);
+  auto ms = measure<>::execution([&]() { importer.importGDAL(colname_to_src); });
+  LOG(INFO) << "Import Time for " << table_name << ": " << (double)ms / 1000.0 << " s";
 }
 
 }  // namespace QueryRunner

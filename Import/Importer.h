@@ -813,19 +813,6 @@ class Importer : public DataStreamSink {
   static std::mutex init_gdal_mutex;
 };
 
-class ImportDriver : public QueryRunner::QueryRunner {
- public:
-  ImportDriver(std::shared_ptr<Catalog_Namespace::Catalog> cat,
-               const Catalog_Namespace::UserMetadata& user,
-               const ExecutorDeviceType dt = ExecutorDeviceType::GPU);
-
-  void importGeoTable(const std::string& file_path,
-                      const std::string& table_name,
-                      const bool compression,
-                      const bool create_table,
-                      const bool explode_collections);
-};
-
 }  // namespace Importer_NS
 
 #endif  // _IMPORTER_H_

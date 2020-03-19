@@ -1654,12 +1654,6 @@ int64_t insert_one_dict_str(T* col_data,
 
 }  // namespace
 
-namespace Importer_NS {
-
-int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti);
-
-}  // namespace Importer_NS
-
 ExecutionResult RelAlgExecutor::executeModify(const RelModify* modify,
                                               const ExecutionOptions& eo) {
   auto timer = DEBUG_TIMER(__func__);
@@ -1907,7 +1901,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
           for (auto& e : l) {
             auto c = std::dynamic_pointer_cast<Analyzer::Constant>(e);
             CHECK(c);
-            p = Importer_NS::appendDatum(p, c->get_constval(), elem_ti);
+            p = appendDatum(p, c->get_constval(), elem_ti);
           }
           arr_col_buffers[col_ids[col_idx]].push_back(ArrayDatum(len, buf, is_null));
         }

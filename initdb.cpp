@@ -17,15 +17,17 @@
 #include <thrift/Thrift.h>
 #include <array>
 #include <boost/filesystem.hpp>
+#include <boost/program_options.hpp>
 #include <exception>
 #include <iostream>
 #include <memory>
 #include <string>
+
 #include "Catalog/Catalog.h"
 #include "Import/Importer.h"
+#include "QueryRunner/QueryRunner.h"
 #include "Shared/Logger.h"
 #include "Shared/mapdpath.h"
-#include "boost/program_options.hpp"
 
 #define CALCITEPORT 3279
 
@@ -156,7 +158,7 @@ int main(int argc, char* argv[]) {
       Catalog_Namespace::UserMetadata user;
       CHECK(sys_cat.getMetadataForUser(OMNISCI_ROOT_USER, user));
 
-      Importer_NS::ImportDriver import_driver(cat, user);
+      QueryRunner::ImportDriver import_driver(cat, user);
 
       const size_t num_samples = SampleGeoFileNames.size();
       for (size_t i = 0; i < num_samples; i++) {
