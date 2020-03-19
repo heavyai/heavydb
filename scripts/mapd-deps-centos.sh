@@ -134,7 +134,7 @@ download_make_install ${HTTP_DEPS}/bisonpp-1.21-45.tar.gz bison++-1.21
 
 CFLAGS="-fPIC" download_make_install ftp://ftp.gnu.org/gnu/readline/readline-7.0.tar.gz
 
-VERS=1_67_0
+VERS=1_72_0
 # http://downloads.sourceforge.net/project/boost/boost/${VERS//_/.}/boost_$VERS.tar.bz2
 download ${HTTP_DEPS}/boost_$VERS.tar.bz2
 extract boost_$VERS.tar.bz2

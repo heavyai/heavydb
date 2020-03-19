@@ -83,7 +83,7 @@ install_ninja
 # Geo Support
 install_gdal
 
-VERS=1_67_0
+VERS=1_72_0
 # http://downloads.sourceforge.net/project/boost/boost/${VERS//_/.}/boost_$VERS.tar.bz2
 download ${HTTP_DEPS}/boost_$VERS.tar.bz2
 extract boost_$VERS.tar.bz2
