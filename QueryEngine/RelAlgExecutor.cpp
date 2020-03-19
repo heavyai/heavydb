@@ -446,7 +446,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {
     if (compound->isDeleteViaSelect()) {
-      executeDeleteViaCompound(compound, co, eo_work_unit, render_info, queue_time_ms);
+      executeDelete(compound, co, eo_work_unit, queue_time_ms);
     } else if (compound->isUpdateViaSelect()) {
       executeUpdate(compound, co, eo_work_unit, queue_time_ms);
     } else {
@@ -462,7 +462,7 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
   const auto project = dynamic_cast<const RelProject*>(body);
   if (project) {
     if (project->isDeleteViaSelect()) {
-      executeDeleteViaProject(project, co, eo_work_unit, render_info, queue_time_ms);
+      executeDelete(project, co, eo_work_unit, queue_time_ms);
     } else if (project->isUpdateViaSelect()) {
       executeUpdate(project, co, eo_work_unit, queue_time_ms);
     } else {
@@ -1255,94 +1255,73 @@ void RelAlgExecutor::executeUpdate(const RelAlgNode* node,
   }
 }
 
-void RelAlgExecutor::executeDeleteViaCompound(const RelCompound* compound,
-                                              const CompilationOptions& co,
-                                              const ExecutionOptions& eo,
-                                              RenderInfo* render_info,
-                                              const int64_t queue_time_ms) {
+void RelAlgExecutor::executeDelete(const RelAlgNode* node,
+                                   const CompilationOptions& co,
+                                   const ExecutionOptions& eo_in,
+                                   const int64_t queue_time_ms) {
+  CHECK(node);
   auto timer = DEBUG_TIMER(__func__);
-  auto* table_descriptor = compound->getModifiedTableDescriptor();
-  if (!table_descriptor->hasDeletedCol) {
-    throw std::runtime_error(
-        "DELETE only supported on tables with the vacuum attribute set to 'delayed'");
-  }
-  if (table_is_temporary(table_descriptor)) {
-    throw std::runtime_error("DELETE not yet supported on temporary tables.");
-  }
 
-  const auto work_unit =
-      createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
-  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-  CompilationOptions co_project = CompilationOptions::makeCpuOnly(co);
+  DeleteTriggeredCacheInvalidator::invalidateCaches();
 
-  try {
-    DeleteTriggeredCacheInvalidator::invalidateCaches();
-
-    DeleteTransactionParameters delete_params;
-    auto delete_callback = yieldDeleteCallback(delete_params);
-
-    executor_->executeUpdate(work_unit.exe_unit,
-                             table_infos,
-                             co_project,
-                             eo,
-                             cat_,
-                             executor_->row_set_mem_owner_,
-                             delete_callback,
-                             compound->isAggregate());
-    delete_params.finalizeTransaction();
-  } catch (...) {
-    LOG(INFO) << "Delete operation failed.";
-    throw;
-  }
-}
-
-void RelAlgExecutor::executeDeleteViaProject(const RelProject* project,
-                                             const CompilationOptions& co,
-                                             const ExecutionOptions& eo,
-                                             RenderInfo* render_info,
-                                             const int64_t queue_time_ms) {
-  auto timer = DEBUG_TIMER(__func__);
-  auto* table_descriptor = project->getModifiedTableDescriptor();
-  if (!table_descriptor->hasDeletedCol) {
-    throw std::runtime_error(
-        "DELETE only supported on tables with the vacuum attribute set to 'delayed'");
-  }
-  if (table_is_temporary(table_descriptor)) {
-    throw std::runtime_error("DELETE not yet supported on temporary tables.");
-  }
-
-  auto work_unit = createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
-  const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
-  CompilationOptions co_project = CompilationOptions::makeCpuOnly(co);
-
-  if (project->isSimple()) {
-    CHECK_EQ(size_t(1), project->inputCount());
-    const auto input_ra = project->getInput(0);
-    if (dynamic_cast<const RelSort*>(input_ra)) {
-      const auto& input_table =
-          get_temporary_table(&temporary_tables_, -input_ra->getId());
-      CHECK(input_table);
-      work_unit.exe_unit.scan_limit = input_table->rowCount();
+  auto execute_delete_for_node = [this, &co, &eo_in](const auto node,
+                                                     auto& work_unit,
+                                                     const bool is_aggregate) {
+    auto* table_descriptor = node->getModifiedTableDescriptor();
+    CHECK(table_descriptor);
+    if (!table_descriptor->hasDeletedCol) {
+      throw std::runtime_error(
+          "DELETE only supported on tables with the vacuum attribute set to 'delayed'");
     }
-  }
 
-  try {
-    DeleteTriggeredCacheInvalidator::invalidateCaches();
+    const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
-    DeleteTransactionParameters delete_params;
-    auto delete_callback = yieldDeleteCallback(delete_params);
+    auto execute_delete_ra_exe_unit = [this, &table_infos, &eo_in, &co](
+                                          const auto& exe_unit, const bool is_aggregate) {
+      CompilationOptions co_delete = CompilationOptions::makeCpuOnly(co);
 
-    executor_->executeUpdate(work_unit.exe_unit,
-                             table_infos,
-                             co_project,
-                             eo,
-                             cat_,
-                             executor_->row_set_mem_owner_,
-                             delete_callback);
-    delete_params.finalizeTransaction();
-  } catch (...) {
-    LOG(INFO) << "Delete operation failed.";
-    throw;
+      DeleteTransactionParameters delete_params;
+      auto delete_callback = yieldDeleteCallback(delete_params);
+
+      executor_->executeUpdate(exe_unit,
+                               table_infos,
+                               co_delete,
+                               eo_in,
+                               cat_,
+                               executor_->row_set_mem_owner_,
+                               delete_callback,
+                               is_aggregate);
+      delete_params.finalizeTransaction();
+    };
+
+    if (table_is_temporary(table_descriptor)) {
+      auto query_rewrite = std::make_unique<QueryRewriter>(table_infos, executor_);
+      execute_delete_ra_exe_unit(work_unit.exe_unit, is_aggregate);
+    } else {
+      execute_delete_ra_exe_unit(work_unit.exe_unit, is_aggregate);
+    }
+  };
+
+  if (auto compound = dynamic_cast<const RelCompound*>(node)) {
+    const auto work_unit =
+        createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
+    execute_delete_for_node(compound, work_unit, compound->isAggregate());
+  } else if (auto project = dynamic_cast<const RelProject*>(node)) {
+    auto work_unit =
+        createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo_in);
+    if (project->isSimple()) {
+      CHECK_EQ(size_t(1), project->inputCount());
+      const auto input_ra = project->getInput(0);
+      if (dynamic_cast<const RelSort*>(input_ra)) {
+        const auto& input_table =
+            get_temporary_table(&temporary_tables_, -input_ra->getId());
+        CHECK(input_table);
+        work_unit.exe_unit.scan_limit = input_table->rowCount();
+      }
+    }
+    execute_delete_for_node(project, work_unit, false);
+  } else {
+    throw std::runtime_error("Unsupported parent node for delete: " + node->toString());
   }
 }
 

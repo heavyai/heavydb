@@ -169,16 +169,10 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
                      const ExecutionOptions& eo,
                      const int64_t queue_time_ms);
 
-  void executeDeleteViaCompound(const RelCompound* compound,
-                                const CompilationOptions& co,
-                                const ExecutionOptions& eo,
-                                RenderInfo* render_info,
-                                const int64_t queue_time_ms);
-  void executeDeleteViaProject(const RelProject*,
-                               const CompilationOptions&,
-                               const ExecutionOptions&,
-                               RenderInfo*,
-                               const int64_t queue_time_ms);
+  void executeDelete(const RelAlgNode* node,
+                     const CompilationOptions& co,
+                     const ExecutionOptions& eo_in,
+                     const int64_t queue_time_ms);
 
   ExecutionResult executeCompound(const RelCompound*,
                                   const CompilationOptions&,
