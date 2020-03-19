@@ -1690,6 +1690,7 @@ ExecutionResult RelAlgExecutor::executeSimpleInsert(const Analyzer::Query& query
   std::unordered_map<int, std::vector<ArrayDatum>> arr_col_buffers;
 
   const auto table_descriptor = cat_.getMetadataForTable(table_id);
+  CHECK(table_descriptor);
   const auto shard_tables = cat_.getPhysicalTablesDescriptors(table_descriptor);
   const TableDescriptor* shard{nullptr};
 

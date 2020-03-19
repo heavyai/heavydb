@@ -111,6 +111,7 @@ void shuffleByIndexes(const ColumnDescriptor* cd,
 
 template <typename T>
 void sortIndexesImpl(std::vector<size_t>& indexes, const T* buffer) {
+  CHECK(buffer);
   std::sort(indexes.begin(), indexes.end(), [&](const auto a, const auto b) {
     return buffer[a] < buffer[b];
   });

@@ -45,6 +45,7 @@
 #include "Catalog/Catalog.h"
 #include "Catalog/SharedDictionaryValidator.h"
 #include "Fragmenter/InsertOrderFragmenter.h"
+#include "Fragmenter/SortedOrderFragmenter.h"
 #include "Fragmenter/TargetValueConvertersFactories.h"
 #include "Import/Importer.h"
 #include "LockMgr/LockMgr.h"
@@ -2976,7 +2977,15 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       lockmgr::TableSchemaLockContainer<lockmgr::WriteLock>::acquireTableDescriptor(
           catalog, *table, true);
   const auto td = td_with_lock();
+
   check_executable(session, td);
+
+  CHECK(td->fragmenter);
+  if (dynamic_cast<Fragmenter_Namespace::SortedOrderFragmenter*>(td->fragmenter)) {
+    throw std::runtime_error(
+        "Adding columns to a table is not supported when using the \"sort_column\" "
+        "option.");
+  }
 
   // Do not take a data write lock, as the fragmenter may call `deleteFragments` during
   // a cap operation. Note that the schema write lock will prevent concurrent inserts
