@@ -487,6 +487,7 @@ add_subdirectory(Shared)
 add_subdirectory(Utils)
 add_subdirectory(QueryRunner)
 add_subdirectory(SQLFrontend)
+add_subdirectory(TableArchiver)
 add_subdirectory(ThriftHandler)
 
 add_subdirectory(Distributed)
@@ -496,7 +497,7 @@ if(ENABLE_ODBC)
   add_subdirectory(ODBC)
 endif()
 
-set(MAPD_LIBRARIES Shared Catalog SqliteConnector MigrationMgr Parser Analyzer CsvImport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter Chunk)
+set(MAPD_LIBRARIES Shared Catalog SqliteConnector MigrationMgr TableArchiver Parser Analyzer CsvImport QueryRunner QueryEngine QueryState LockMgr DataMgr Fragmenter Chunk)
 
 if("${MAPD_EDITION_LOWER}" STREQUAL "ee")
   list(APPEND MAPD_LIBRARIES Distributed)

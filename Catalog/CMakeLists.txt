@@ -2,7 +2,6 @@ set(catalog_source_files
     Catalog.cpp
     Catalog.h
     DBObject.cpp
-    DumpRestore.cpp
     Grantee.cpp
     Grantee.h
     SessionInfo.cpp

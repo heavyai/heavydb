@@ -60,6 +60,7 @@
 #include "Shared/mapd_glob.h"
 #include "Shared/measure.h"
 #include "Shared/shard_key.h"
+#include "TableArchiver/TableArchiver.h"
 #include "gen-cpp/CalciteServer.h"
 #include "parser.h"
 
@@ -4453,7 +4454,8 @@ void DumpTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
   }
   auto& catalog = session.getCatalog();
   const TableDescriptor* td = catalog.getMetadataForTable(*table);
-  catalog.dumpTable(td, *path, compression);
+  TableArchiver table_archiver(&catalog);
+  table_archiver.dumpTable(td, *path, compression);
 }
 
 void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -4471,7 +4473,8 @@ void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       throw std::runtime_error("Table " + *table +
                                " will not be restored. User has no create privileges.");
     }
-    catalog.restoreTable(session, *table, *path, compression);
+    TableArchiver table_archiver(&catalog);
+    table_archiver.restoreTable(session, *table, *path, compression);
   }
 }
 

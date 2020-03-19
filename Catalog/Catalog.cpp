@@ -56,6 +56,8 @@
 #include "QueryEngine/Execute.h"
 #include "QueryEngine/TableOptimizer.h"
 
+#include "DataMgr/FileMgr/FileMgr.h"
+#include "DataMgr/FileMgr/GlobalFileMgr.h"
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "Fragmenter/Fragmenter.h"
 #include "Fragmenter/SortedOrderFragmenter.h"
@@ -3505,4 +3507,135 @@ void Catalog::setForReload(const int32_t tableId) {
     setTableEpoch(currentDB_.dbId, shard->tableId, tableEpoch);
   }
 }
+
+// get a table's data dirs
+std::vector<std::string> Catalog::getTableDataDirectories(
+    const TableDescriptor* td) const {
+  const auto global_file_mgr = getDataMgr().getGlobalFileMgr();
+  std::vector<std::string> file_paths;
+  for (auto shard : getPhysicalTablesDescriptors(td)) {
+    const auto file_mgr = dynamic_cast<File_Namespace::FileMgr*>(
+        global_file_mgr->getFileMgr(currentDB_.dbId, shard->tableId));
+    boost::filesystem::path file_path(file_mgr->getFileMgrBasePath());
+    file_paths.push_back(file_path.filename().string());
+  }
+  return file_paths;
+}
+
+// get a column's dict dir basename
+std::string Catalog::getColumnDictDirectory(const ColumnDescriptor* cd) const {
+  if ((cd->columnType.is_string() || cd->columnType.is_string_array()) &&
+      cd->columnType.get_compression() == kENCODING_DICT &&
+      cd->columnType.get_comp_param() > 0) {
+    const auto dictId = cd->columnType.get_comp_param();
+    const DictRef dictRef(currentDB_.dbId, dictId);
+    const auto dit = dictDescriptorMapByRef_.find(dictRef);
+    CHECK(dit != dictDescriptorMapByRef_.end());
+    CHECK(dit->second);
+    boost::filesystem::path file_path(dit->second->dictFolderPath);
+    return file_path.filename().string();
+  }
+  return std::string();
+}
+
+// get a table's dict dirs
+std::vector<std::string> Catalog::getTableDictDirectories(
+    const TableDescriptor* td) const {
+  std::vector<std::string> file_paths;
+  for (auto cd : getAllColumnMetadataForTable(td->tableId, false, false, true)) {
+    auto file_base = getColumnDictDirectory(cd);
+    if (!file_base.empty() &&
+        file_paths.end() == std::find(file_paths.begin(), file_paths.end(), file_base)) {
+      file_paths.push_back(file_base);
+    }
+  }
+  return file_paths;
+}
+
+// returns table schema in a string
+std::string Catalog::dumpSchema(const TableDescriptor* td) const {
+  cat_read_lock read_lock(this);
+
+  std::ostringstream os;
+  os << "CREATE TABLE @T (";
+  // gather column defines
+  const auto cds = getAllColumnMetadataForTable(td->tableId, false, false, false);
+  std::string comma;
+  std::vector<std::string> shared_dicts;
+  std::map<const std::string, const ColumnDescriptor*> dict_root_cds;
+  for (const auto cd : cds) {
+    if (!(cd->isSystemCol || cd->isVirtualCol)) {
+      const auto& ti = cd->columnType;
+      os << comma << cd->columnName;
+      // CHAR is perculiar... better dump it as TEXT(32) like \d does
+      if (ti.get_type() == SQLTypes::kCHAR) {
+        os << " "
+           << "TEXT";
+      } else if (ti.get_subtype() == SQLTypes::kCHAR) {
+        os << " "
+           << "TEXT[]";
+      } else {
+        os << " " << ti.get_type_name();
+      }
+      os << (ti.get_notnull() ? " NOT NULL" : "");
+      if (ti.is_string()) {
+        if (ti.get_compression() == kENCODING_DICT) {
+          // if foreign reference, get referenced tab.col
+          const auto dict_id = ti.get_comp_param();
+          const DictRef dict_ref(currentDB_.dbId, dict_id);
+          const auto dict_it = dictDescriptorMapByRef_.find(dict_ref);
+          CHECK(dict_it != dictDescriptorMapByRef_.end());
+          const auto dict_name = dict_it->second->dictName;
+          // when migrating a table, any foreign dict ref will be dropped
+          // and the first cd of a dict will become root of the dict
+          if (dict_root_cds.end() == dict_root_cds.find(dict_name)) {
+            dict_root_cds[dict_name] = cd;
+            os << " ENCODING " << ti.get_compression_name() << "(" << (ti.get_size() * 8)
+               << ")";
+          } else {
+            const auto dict_root_cd = dict_root_cds[dict_name];
+            shared_dicts.push_back("SHARED DICTIONARY (" + cd->columnName +
+                                   ") REFERENCES @T(" + dict_root_cd->columnName + ")");
+            // "... shouldn't specify an encoding, it borrows from the referenced column"
+          }
+        } else {
+          os << " ENCODING NONE";
+        }
+      } else if (ti.get_size() > 0 && ti.get_size() != ti.get_logical_size()) {
+        const auto comp_param = ti.get_comp_param() ? ti.get_comp_param() : 32;
+        os << " ENCODING " << ti.get_compression_name() << "(" << comp_param << ")";
+      }
+      comma = ", ";
+    }
+  }
+  // gather SHARED DICTIONARYs
+  if (shared_dicts.size()) {
+    os << ", " << boost::algorithm::join(shared_dicts, ", ");
+  }
+  // gather WITH options ...
+  std::vector<std::string> with_options;
+  with_options.push_back("FRAGMENT_SIZE=" + std::to_string(td->maxFragRows));
+  with_options.push_back("MAX_CHUNK_SIZE=" + std::to_string(td->maxChunkSize));
+  with_options.push_back("PAGE_SIZE=" + std::to_string(td->fragPageSize));
+  with_options.push_back("MAX_ROWS=" + std::to_string(td->maxRows));
+  with_options.emplace_back(td->hasDeletedCol ? "VACUUM='DELAYED'"
+                                              : "VACUUM='IMMEDIATE'");
+  if (!td->partitions.empty()) {
+    with_options.push_back("PARTITIONS='" + td->partitions + "'");
+  }
+  if (td->nShards > 0) {
+    const auto shard_cd = getMetadataForColumn(td->tableId, td->shardedColumnId);
+    CHECK(shard_cd);
+    os << ", SHARD KEY(" << shard_cd->columnName << ")";
+    with_options.push_back("SHARD_COUNT=" + std::to_string(td->nShards));
+  }
+  if (td->sortedColumnId > 0) {
+    const auto sort_cd = getMetadataForColumn(td->tableId, td->sortedColumnId);
+    CHECK(sort_cd);
+    with_options.push_back("SORT_COLUMN='" + sort_cd->columnName + "'");
+  }
+  os << ") WITH (" + boost::algorithm::join(with_options, ", ") + ");";
+  return os.str();
+}
+
 }  // namespace Catalog_Namespace

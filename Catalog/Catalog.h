@@ -64,6 +64,8 @@ class SharedDictionaryDef;
 
 }  // namespace Parser
 
+class TableArchiver;
+
 // SPI means Sequential Positional Index which is equivalent to the input index in a
 // RexInput node
 #define SPIMAP_MAGIC1 (std::numeric_limits<unsigned>::max() / 4)
@@ -224,18 +226,7 @@ class Catalog final {
   void vacuumDeletedRows(const TableDescriptor* td) const;
   void vacuumDeletedRows(const int logicalTableId) const;
   void setForReload(const int32_t tableId);
-  // dump & restore
-  void dumpTable(const TableDescriptor* td,
-                 const std::string& path,
-                 const std::string& compression) const;
-  void restoreTable(const SessionInfo& session,
-                    const TableDescriptor* td,
-                    const std::string& file_path,
-                    const std::string& compression);
-  void restoreTable(const SessionInfo& session,
-                    const std::string& table_name,
-                    const std::string& file_path,
-                    const std::string& compression);
+
   std::vector<std::string> getTableDataDirectories(const TableDescriptor* td) const;
   std::vector<std::string> getTableDictDirectories(const TableDescriptor* td) const;
   std::string getColumnDictDirectory(const ColumnDescriptor* cd) const;
