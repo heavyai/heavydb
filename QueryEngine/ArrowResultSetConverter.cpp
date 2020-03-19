@@ -32,7 +32,7 @@
 #include "arrow/io/memory.h"
 #include "arrow/ipc/api.h"
 
-#include "ArrowUtil.h"
+#include "Shared/ArrowUtil.h"
 
 #ifdef HAVE_CUDA
 #include <arrow/gpu/cuda_api.h>

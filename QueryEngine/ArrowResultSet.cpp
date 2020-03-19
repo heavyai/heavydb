@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 
-#include "ArrowResultSet.h"
-#include "ArrowUtil.h"
-#include "Descriptors/RelAlgExecutionDescriptor.h"
+#include "QueryEngine/ArrowResultSet.h"
 
 #include <arrow/api.h>
 #include <arrow/io/memory.h>
 #include <arrow/ipc/api.h>
+
+#include "QueryEngine/Descriptors/RelAlgExecutionDescriptor.h"
+#include "Shared/ArrowUtil.h"
 
 namespace {
 

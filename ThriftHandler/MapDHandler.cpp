@@ -100,7 +100,7 @@
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
 
-#include "QueryEngine/ArrowUtil.h"
+#include "Shared/ArrowUtil.h"
 
 #define ENABLE_GEO_IMPORT_COLUMN_MATCHING 0
 

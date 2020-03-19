@@ -357,6 +357,11 @@ if(ENABLE_AWS_S3)
   endif()
 endif()
 
+find_package(CURL REQUIRED QUIET)
+if(CURL_FOUND)
+  set(CURL_LIBRARIES ${LibAwsS3_SUPPORT_LIBRARIES})
+endif()
+
 # bcrypt
 include_directories(ThirdParty/bcrypt)
 add_subdirectory(ThirdParty/bcrypt)

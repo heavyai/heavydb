@@ -27,7 +27,7 @@
 #include "DataMgr/ForeignStorage/ForeignStorageInterface.h"
 #include "DataMgr/StringNoneEncoder.h"
 #include "QueryEngine/ArrowResultSet.h"
-#include "QueryEngine/ArrowUtil.h"
+#include "Shared/ArrowUtil.h"
 #include "Shared/Logger.h"
 #include "Shared/measure.h"
 

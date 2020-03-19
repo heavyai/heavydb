@@ -11,7 +11,6 @@ set(query_engine_source_files
     ArrayOps.cpp
     ArrowResultSetConverter.cpp
     ArrowResultSet.cpp
-    ArrowUtil.cpp
     BaselineJoinHashTable.cpp
     CalciteAdapter.cpp
     CalciteDeserializerUtils.cpp
@@ -228,6 +227,7 @@ endif()
 
 target_link_libraries(
   QueryEngine
+  Chunk
   Analyzer
   StringDictionary
   Utils

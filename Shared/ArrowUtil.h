@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
-#include "ArrowUtil.h"
-#include "DataMgr/BufferMgr/BufferMgr.h"  // for OutOfMemory
-
-#include <string>
+#ifndef QUERYENGINE_ARROW_UTIL_H
+#define QUERYENGINE_ARROW_UTIL_H
 
 #include "arrow/status.h"
+#include "arrow/util/macros.h"
 
-void arrow_status_throw(const ::arrow::Status& s) {
+#include "Shared/likely.h"
+
+#include "DataMgr/BufferMgr/BufferMgr.h"
+
+inline void arrow_status_throw(const ::arrow::Status& s) {
   std::string message = s.ToString();
   switch (s.code()) {
     case ::arrow::StatusCode::OutOfMemory:
@@ -30,3 +33,13 @@ void arrow_status_throw(const ::arrow::Status& s) {
       throw std::runtime_error(message);
   }
 }
+
+#define ARROW_THROW_NOT_OK(s) \
+  do {                        \
+    ::arrow::Status _s = (s); \
+    if (UNLIKELY(!_s.ok())) { \
+      arrow_status_throw(_s); \
+    }                         \
+  } while (0)
+
+#endif  // QUERYENGINE_ARROW_UTIL_H
