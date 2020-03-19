@@ -19,8 +19,6 @@ sudo apt install -y \
     build-essential \
     libtool \
     ccache \
-    cmake \
-    cmake-curses-gui \
     git \
     wget \
     curl \
@@ -79,6 +77,8 @@ export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG
 export PATH=$PREFIX/bin:$PATH
 
 install_ninja
+
+install_cmake
 
 # Geo Support
 install_gdal

@@ -57,6 +57,12 @@ function download_make_install() {
     popd
 }
 
+CMAKE_VERSION=3.16.5
+
+function install_cmake() {
+  CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-${CMAKE_VERSION}.tar.gz
+}
+
 ARROW_VERSION=apache-arrow-0.16.0
 
 function install_arrow() {

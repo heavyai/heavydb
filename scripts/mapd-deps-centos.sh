@@ -104,6 +104,8 @@ export CXX=$PREFIX/bin/g++
 
 install_ninja
 
+install_cmake
+
 download_make_install ftp://ftp.gnu.org/gnu/libtool/libtool-2.4.6.tar.gz
 
 # http://zlib.net/zlib-1.2.8.tar.xz
@@ -142,9 +144,6 @@ pushd boost_$VERS
 ./bootstrap.sh --prefix=$PREFIX
 ./b2 cxxflags=-fPIC install --prefix=$PREFIX || true
 popd
-
-# https://github.com/Kitware/CMake/releases/download/v3.14.5/cmake-3.14.5.tar.gz
-CXXFLAGS="-pthread" CFLAGS="-pthread" download_make_install ${HTTP_DEPS}/cmake-3.14.5.tar.gz
 
 VERS=3.1.5
 download https://github.com/google/double-conversion/archive/v$VERS.tar.gz

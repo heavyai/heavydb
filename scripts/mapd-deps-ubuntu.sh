@@ -51,8 +51,6 @@ sudo apt install -y \
     software-properties-common \
     build-essential \
     ccache \
-    cmake \
-    cmake-curses-gui \
     git \
     wget \
     curl \
@@ -108,6 +106,8 @@ export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig:$PREFIX/lib64/pkgconfig:$PKG_CONFIG
 export PATH=$PREFIX/bin:$PATH
 
 install_ninja
+
+install_cmake
 
 # llvm
 # (see common-functions.sh)
