@@ -3344,7 +3344,11 @@ inline auto open_parquet_table(const std::string& file_path,
   using namespace parquet::arrow;
   using ReadableFile = arrow::io::ReadableFile;
   auto mempool = arrow::default_memory_pool();
-  PARQUET_THROW_NOT_OK(ReadableFile::Open(file_path, mempool, &infile));
+
+  auto res_file = ReadableFile::Open(file_path, mempool);
+  PARQUET_THROW_NOT_OK(res_file.status());
+  infile = res_file.ValueOrDie();
+
   PARQUET_THROW_NOT_OK(OpenFile(infile, mempool, &reader));
   PARQUET_THROW_NOT_OK(reader->ReadTable(&table));
   const auto num_row_groups = reader->num_row_groups();

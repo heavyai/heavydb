@@ -243,22 +243,20 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
                                                getArrowImportType(c.columnType));
   }
 
-  std::shared_ptr<arrow::io::ReadableFile> inp;
-  auto r = arrow::io::ReadableFile::Open(info.c_str(), &inp);  // TODO check existence
-  ARROW_THROW_NOT_OK(r);
+  auto res_file = arrow::io::ReadableFile::Open(info.c_str());
+  ARROW_THROW_NOT_OK(res_file.status());
+  std::shared_ptr<arrow::io::ReadableFile> inp = res_file.ValueOrDie();
 
-  std::shared_ptr<arrow::csv::TableReader> table_reader;
-  r = arrow::csv::TableReader::Make(memory_pool,
-                                    inp,
-                                    arrow_read_options,
-                                    arrow_parse_options,
-                                    arrow_convert_options,
-                                    &table_reader);
-  ARROW_THROW_NOT_OK(r);
+  auto res_reader = arrow::csv::TableReader::Make(
+      memory_pool, inp, arrow_read_options, arrow_parse_options, arrow_convert_options);
+  ARROW_THROW_NOT_OK(res_reader.status());
+  std::shared_ptr<arrow::csv::TableReader> table_reader = res_reader.ValueOrDie();
 
-  std::shared_ptr<arrow::Table> arrowTable;
-  auto time = measure<>::execution([&]() { r = table_reader->Read(&arrowTable); });
-  ARROW_THROW_NOT_OK(r);
+  arrow::Result<std::shared_ptr<arrow::Table>> res_table;
+  auto time = measure<>::execution([&]() { res_table = table_reader->Read(); });
+  ARROW_THROW_NOT_OK(res_table.status());
+  std::shared_ptr<arrow::Table> arrowTable = res_table.ValueOrDie();
+
   LOG(INFO) << "Arrow read " << info << " in " << time << "ms";
 
   arrow::Table& table = *arrowTable.get();
@@ -401,7 +399,7 @@ void ArrowCsvForeignStorage::registerTable(Catalog_Namespace::Catalog* catalog,
   }  // each col and fragment
 
   // wait untill all stats have been updated
-  r = tg->Finish();
+  auto r = tg->Finish();
   ARROW_THROW_NOT_OK(r);
   VLOG(1) << "Created CSV backed temporary table with " << num_cols << " columns, "
           << arr_frags << " chunks, and " << fragments.size() << " fragments.";
