@@ -483,6 +483,20 @@ void InsertOrderFragmenter::dropColumns(const std::vector<int>& columnIds) {
   }
 }
 
+bool InsertOrderFragmenter::hasDeletedRows(const int delete_column_id) {
+  mapd_shared_lock<mapd_shared_mutex> read_lock(fragmentInfoMutex_);
+
+  for (auto const& fragment : fragmentInfoVec_) {
+    auto chunk_meta_it = fragment->getChunkMetadataMapPhysical().find(delete_column_id);
+    CHECK(chunk_meta_it != fragment->getChunkMetadataMapPhysical().end());
+    const auto& chunk_stats = chunk_meta_it->second.chunkStats;
+    if (chunk_stats.max.tinyintval == 1) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void InsertOrderFragmenter::insertDataImpl(InsertData& insertDataStruct) {
   // populate deleted system column if it should exists, as it will not come from client
   // Do not add this magical column in the replicate ALTER TABLE ADD route as

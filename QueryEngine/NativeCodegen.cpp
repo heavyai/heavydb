@@ -1805,6 +1805,9 @@ Executor::compileWorkUnit(const std::vector<InputTableInfo>& query_infos,
 llvm::BasicBlock* Executor::codegenSkipDeletedOuterTableRow(
     const RelAlgExecutionUnit& ra_exe_unit,
     const CompilationOptions& co) {
+  if (!co.add_delete_column) {
+    return nullptr;
+  }
   CHECK(!ra_exe_unit.input_descs.empty());
   const auto& outer_input_desc = ra_exe_unit.input_descs[0];
   if (outer_input_desc.getSourceType() != InputSourceType::TABLE) {

@@ -1276,27 +1276,40 @@ void RelAlgExecutor::executeDelete(const RelAlgNode* node,
 
     const auto table_infos = get_table_infos(work_unit.exe_unit, executor_);
 
-    auto execute_delete_ra_exe_unit = [this, &table_infos, &eo_in, &co](
-                                          const auto& exe_unit, const bool is_aggregate) {
-      CompilationOptions co_delete = CompilationOptions::makeCpuOnly(co);
+    auto execute_delete_ra_exe_unit =
+        [this, &table_infos, &table_descriptor, &eo_in, &co](const auto& exe_unit,
+                                                             const bool is_aggregate) {
+          DeleteTransactionParameters delete_params(table_is_temporary(table_descriptor));
+          auto delete_callback = yieldDeleteCallback(delete_params);
+          CompilationOptions co_delete = CompilationOptions::makeCpuOnly(co);
 
-      DeleteTransactionParameters delete_params;
-      auto delete_callback = yieldDeleteCallback(delete_params);
+          auto eo = eo_in;
+          if (delete_params.tableIsTemporary()) {
+            eo.output_columnar_hint = true;
+            co_delete.add_delete_column =
+                false;  // project the entire delete column for columnar update
+          }
 
-      executor_->executeUpdate(exe_unit,
-                               table_infos,
-                               co_delete,
-                               eo_in,
-                               cat_,
-                               executor_->row_set_mem_owner_,
-                               delete_callback,
-                               is_aggregate);
-      delete_params.finalizeTransaction();
-    };
+          executor_->executeUpdate(exe_unit,
+                                   table_infos,
+                                   co_delete,
+                                   eo,
+                                   cat_,
+                                   executor_->row_set_mem_owner_,
+                                   delete_callback,
+                                   is_aggregate);
+          delete_params.finalizeTransaction();
+        };
 
     if (table_is_temporary(table_descriptor)) {
       auto query_rewrite = std::make_unique<QueryRewriter>(table_infos, executor_);
-      execute_delete_ra_exe_unit(work_unit.exe_unit, is_aggregate);
+      auto cd = cat_.getDeletedColumn(table_descriptor);
+      CHECK(cd);
+      auto delete_column_expr = makeExpr<Analyzer::ColumnVar>(
+          cd->columnType, table_descriptor->tableId, cd->columnId, 0);
+      const auto rewritten_exe_unit =
+          query_rewrite->rewriteColumnarDelete(work_unit.exe_unit, delete_column_expr);
+      execute_delete_ra_exe_unit(rewritten_exe_unit, is_aggregate);
     } else {
       execute_delete_ra_exe_unit(work_unit.exe_unit, is_aggregate);
     }

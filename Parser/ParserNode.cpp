@@ -946,8 +946,11 @@ std::shared_ptr<Analyzer::Expr> CaseExpr::normalize(
         ti = Analyzer::BinOper::common_numeric_type(ti, else_e->get_type_info());
       } else if (ti.is_boolean() && else_e->get_type_info().is_boolean()) {
         ti = Analyzer::BinOper::common_numeric_type(ti, else_e->get_type_info());
-      } else {
+      } else if (get_logical_type_info(ti) !=
+                 get_logical_type_info(else_e->get_type_info())) {
         throw std::runtime_error(
+            // types differing by encoding will be resolved at decode
+
             "expressions in ELSE clause must be of the same or compatible types as those "
             "in the THEN clauses.");
       }

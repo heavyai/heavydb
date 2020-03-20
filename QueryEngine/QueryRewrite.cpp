@@ -22,6 +22,7 @@
 
 #include "ExpressionRange.h"
 #include "ExpressionRewrite.h"
+#include "Parser/ParserNode.h"
 #include "Shared/Logger.h"
 
 RelAlgExecutionUnit QueryRewriter::rewrite(
@@ -325,9 +326,8 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
     }
     auto when_expr = filter;  // only one filter, will be a BinOper if multiple filters
     case_expr_list.emplace_back(std::make_pair(when_expr, new_column_value));
-    const auto& then_ti = case_expr_list.front().second->get_type_info();
-    auto case_expr =
-        makeExpr<Analyzer::CaseExpr>(then_ti, false, case_expr_list, column_to_update);
+    auto case_expr = Parser::CaseExpr::normalize(case_expr_list, column_to_update);
+
     auto col_to_update_var =
         std::dynamic_pointer_cast<Analyzer::ColumnVar>(column_to_update);
     CHECK(col_to_update_var);
@@ -348,6 +348,105 @@ RelAlgExecutionUnit QueryRewriter::rewriteColumnarUpdate(
   } else {
     // no filters, simply project the update value
     target_exprs_owned_.emplace_back(new_column_value);
+  }
+
+  std::vector<Analyzer::Expr*> target_exprs;
+  CHECK_EQ(target_exprs_owned_.size(), size_t(1));
+  target_exprs.emplace_back(target_exprs_owned_.front().get());
+
+  RelAlgExecutionUnit rewritten_exe_unit{ra_exe_unit_in.input_descs,
+                                         input_col_descs,
+                                         {},
+                                         {},
+                                         ra_exe_unit_in.join_quals,
+                                         ra_exe_unit_in.groupby_exprs,
+                                         target_exprs,
+                                         ra_exe_unit_in.estimator,
+                                         ra_exe_unit_in.sort_info,
+                                         ra_exe_unit_in.scan_limit,
+                                         ra_exe_unit_in.query_features,
+                                         ra_exe_unit_in.use_bump_allocator,
+                                         ra_exe_unit_in.query_state};
+  return rewritten_exe_unit;
+}
+
+/* Rewrites a delete query of the form `SELECT OFFSET_IN_FRAGMENT() FROM t
+ * WHERE <delete_filter_condition>` to `SELECT CASE WHEN <delete_filter_condition> THEN
+ * true ELSE existing value END FROM t`
+ */
+RelAlgExecutionUnit QueryRewriter::rewriteColumnarDelete(
+    const RelAlgExecutionUnit& ra_exe_unit_in,
+    std::shared_ptr<Analyzer::ColumnVar> delete_column) const {
+  CHECK_EQ(ra_exe_unit_in.target_exprs.size(), size_t(2));
+  CHECK(ra_exe_unit_in.groupby_exprs.size() == 1 &&
+        !ra_exe_unit_in.groupby_exprs.front());
+
+  // TODO(adb): is this possible?
+  if (ra_exe_unit_in.join_quals.size() > 0) {
+    throw std::runtime_error("Delete via join not yet supported for temporary tables.");
+  }
+
+  const auto true_datum = Datum{.boolval = true};
+  const auto deleted_constant =
+      makeExpr<Analyzer::Constant>(delete_column->get_type_info(), false, true_datum);
+
+  auto input_col_descs = ra_exe_unit_in.input_col_descs;
+
+  std::shared_ptr<Analyzer::Expr> filter;
+  std::vector<std::shared_ptr<Analyzer::Expr>> filter_exprs;
+  filter_exprs.insert(filter_exprs.end(),
+                      ra_exe_unit_in.simple_quals.begin(),
+                      ra_exe_unit_in.simple_quals.end());
+  filter_exprs.insert(
+      filter_exprs.end(), ra_exe_unit_in.quals.begin(), ra_exe_unit_in.quals.end());
+
+  if (filter_exprs.size() > 0) {
+    std::list<std::pair<std::shared_ptr<Analyzer::Expr>, std::shared_ptr<Analyzer::Expr>>>
+        case_expr_list;
+    if (filter_exprs.size() == 1) {
+      filter = filter_exprs.front();
+    } else {
+      filter = std::accumulate(
+          std::next(filter_exprs.begin()),
+          filter_exprs.end(),
+          filter_exprs.front(),
+          [](const std::shared_ptr<Analyzer::Expr> a,
+             const std::shared_ptr<Analyzer::Expr> b) {
+            CHECK_EQ(a->get_type_info().get_type(), b->get_type_info().get_type());
+            return makeExpr<Analyzer::BinOper>(a->get_type_info().get_type(),
+                                               SQLOps::kAND,
+                                               SQLQualifier::kONE,
+                                               a->deep_copy(),
+                                               b->deep_copy());
+          });
+    }
+    std::shared_ptr<Analyzer::Expr> column_to_update{nullptr};
+    auto when_expr = filter;  // only one filter, will be a BinOper if multiple filters
+    case_expr_list.emplace_back(std::make_pair(when_expr, deleted_constant));
+    auto case_expr = Parser::CaseExpr::normalize(case_expr_list, delete_column);
+
+    // the delete column should not be projected, but check anyway
+    auto delete_col_desc_it = std::find_if(
+        input_col_descs.begin(),
+        input_col_descs.end(),
+        [&delete_column](const std::shared_ptr<const InputColDescriptor>& in) {
+          return in->getColId() == delete_column->get_column_id();
+        });
+    CHECK(delete_col_desc_it == input_col_descs.end());
+    auto delete_col_desc =
+        std::make_shared<const InputColDescriptor>(delete_column->get_column_id(),
+                                                   delete_column->get_table_id(),
+                                                   delete_column->get_rte_idx());
+    input_col_descs.push_back(delete_col_desc);
+    target_exprs_owned_.emplace_back(case_expr);
+  } else {
+    // no filters, simply project the deleted=true column value for all rows
+    auto delete_col_desc =
+        std::make_shared<const InputColDescriptor>(delete_column->get_column_id(),
+                                                   delete_column->get_table_id(),
+                                                   delete_column->get_rte_idx());
+    input_col_descs.push_back(delete_col_desc);
+    target_exprs_owned_.emplace_back(deleted_constant);
   }
 
   std::vector<Analyzer::Expr*> target_exprs;

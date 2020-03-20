@@ -119,6 +119,8 @@ std::string build_create_table_statement(
 
   if (delete_support) {
     with_statement_assembly << ", vacuum='delayed'";
+  } else {
+    with_statement_assembly << ", vacuum='immediate'";
   }
 
   const std::string replicated_def{
@@ -11879,13 +11881,20 @@ TEST(Delete, WithoutVacuumAttribute) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists no_deletes;");
-    run_ddl_statement("create table no_deletes (x integer) with (vacuum='immediate');");
+    run_ddl_statement(build_create_table_statement("x integer",
+                                                   "no_deletes",
+                                                   {"", 0},
+                                                   {},
+                                                   10,
+                                                   g_use_temporary_tables,
+                                                   false,
+                                                   false));
+    ScopeGuard drop_table = [] { run_ddl_statement("DROP TABLE IF EXISTS no_deletes;"); };
     run_multiple_agg("insert into no_deletes values (10);", dt);
     run_multiple_agg("insert into no_deletes values (11);", dt);
     EXPECT_THROW(run_multiple_agg("delete from no_deletes where x > 10;", dt),
                  std::runtime_error);
     EXPECT_THROW(run_multiple_agg("delete from no_deletes;", dt), std::runtime_error);
-    run_ddl_statement("drop table no_deletes;");
   }
 }
 
@@ -12916,10 +12925,16 @@ TEST(Delete, ShardedTableDeleteTest) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    run_ddl_statement("drop table if exists shardkey;");
-    run_ddl_statement(
-        "create table shardkey ( x integer, y integer, shard key (x) ) with "
-        "(vacuum='delayed', shard_count=4);");
+    run_ddl_statement("DROP TABLE IF EXISTS shardkey;");
+    run_ddl_statement(build_create_table_statement("x integer, y integer",
+                                                   "shardkey",
+                                                   {"x", 4},
+                                                   {},
+                                                   20,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+    ScopeGuard drop_table = [] { run_ddl_statement("DROP TABLE IF EXISTS shard_key;"); };
 
     run_multiple_agg("insert into shardkey values (1,2);", dt);
     run_multiple_agg("insert into shardkey values (3,4);", dt);
@@ -12937,8 +12952,6 @@ TEST(Delete, ShardedTableDeleteTest) {
 
     ASSERT_EQ(int64_t(11 + 13 + 15 + 17),
               v<int64_t>(run_simple_agg("select sum(x) from shardkey;", dt)));
-
-    run_ddl_statement("drop table shardkey;");
   }
 }
 
@@ -12994,10 +13007,11 @@ TEST(Delete, ScanLimitOptimization) {
     SKIP_NO_GPU();
 
     run_ddl_statement("DROP TABLE IF EXISTS test_scan_limit;");
-    run_ddl_statement(
-        "CREATE TABLE test_scan_limit ( i int ) WITH (vacuum='delayed', "
-        "fragment_size=2)");
-    ScopeGuard drop_table = [] { run_ddl_statement("DROP TABLE test_scan_limit;"); };
+    run_ddl_statement(build_create_table_statement(
+        "i int", "test_scan_limit", {"", 0}, {}, 2, g_use_temporary_tables, true, false));
+    ScopeGuard drop_table = [] {
+      run_ddl_statement("DROP TABLE IF EXISTS test_scan_limit;");
+    };
 
     run_multiple_agg("INSERT INTO test_scan_limit VALUES (0);", ExecutorDeviceType::CPU);
     run_multiple_agg("INSERT INTO test_scan_limit VALUES (1);", ExecutorDeviceType::CPU);
@@ -13035,8 +13049,18 @@ TEST(Delete, IntraFragment) {
     SKIP_NO_GPU();
 
     run_ddl_statement("drop table if exists vacuum_test;");
-    run_ddl_statement(
-        "create table vacuum_test (i1 integer, t1 text) with (vacuum='delayed');");
+    run_ddl_statement(build_create_table_statement("i1 integer, t1 text",
+                                                   "vacuum_test",
+                                                   {"", 0},
+                                                   {},
+                                                   10,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+    ScopeGuard drop_table = [] {
+      run_ddl_statement("DROP TABLE IF EXISTS vacuum_test;");
+    };
+
     run_multiple_agg("insert into vacuum_test values(1, '1');", dt);
     run_multiple_agg("insert into vacuum_test values(2, '2');", dt);
     run_multiple_agg("insert into vacuum_test values(3, '3');", dt);
@@ -13045,8 +13069,6 @@ TEST(Delete, IntraFragment) {
 
     ASSERT_EQ(int64_t(0),
               v<int64_t>(run_simple_agg("SELECT COUNT(i1) FROM vacuum_test;", dt)));
-
-    run_ddl_statement("drop table vacuum_test;");
   }
 }
 
@@ -13617,10 +13639,19 @@ TEST(Delete, ExtraFragment) {
   for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
     SKIP_NO_GPU();
 
-    run_ddl_statement("drop table if exists vacuum_test;");
-    run_ddl_statement(
-        "create table vacuum_test (i1 integer, t1 text) with (vacuum='delayed', "
-        "fragment_size=10);");
+    run_ddl_statement("DROP TABLE IF EXISTS vacuum_test;");
+    run_ddl_statement(build_create_table_statement("i1 integer, t1 text",
+                                                   "vacuum_test",
+                                                   {"", 0},
+                                                   {},
+                                                   10,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+    ScopeGuard drop_table = [] {
+      run_ddl_statement("DROP TABLE IF EXISTS vacuum_test;");
+    };
+
     for (int i = 1; i <= 100; i++) {
       run_multiple_agg(insert_op(i), dt);
     }
@@ -13631,9 +13662,56 @@ TEST(Delete, ExtraFragment) {
   }
 }
 
-TEST(Delete, Joins_ImplicitJoins) {
-  SKIP_WITH_TEMP_TABLES();
+TEST(Delete, MultiDelete) {
+  if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
+    return;
+  }
+  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
+    SKIP_NO_GPU();
 
+    run_ddl_statement("DROP TABLE IF EXISTS multi_delete;");
+    run_ddl_statement(build_create_table_statement("x int, str text",
+                                                   "multi_delete",
+                                                   {"", 0},
+                                                   {},
+                                                   2,
+                                                   g_use_temporary_tables,
+                                                   true,
+                                                   false));
+    ScopeGuard drop_table = [] {
+      run_ddl_statement("DROP TABLE IF EXISTS multi_delete;");
+    };
+
+    run_multiple_agg("INSERT INTO multi_delete VALUES (1, 'foo');",
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO multi_delete VALUES (2, 'bar');",
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO multi_delete VALUES (3, 'baz');",
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO multi_delete VALUES (4, 'hello');",
+                     ExecutorDeviceType::CPU);
+    run_multiple_agg("INSERT INTO multi_delete VALUES (5, 'world');",
+                     ExecutorDeviceType::CPU);
+
+    EXPECT_EQ(15, v<int64_t>(run_simple_agg("SELECT SUM(x) FROM multi_delete", dt)));
+
+    run_multiple_agg("DELETE FROM multi_delete WHERE x <= 3;", dt);
+
+    EXPECT_EQ(9, v<int64_t>(run_simple_agg("SELECT SUM(x) FROM multi_delete", dt)));
+
+    run_multiple_agg("INSERT INTO multi_delete VALUES (1, 'test');", dt);
+
+    EXPECT_EQ("test",
+              boost::get<std::string>(v<NullableString>(
+                  run_simple_agg("SELECT str FROM multi_delete WHERE x = 1;", dt))));
+
+    run_multiple_agg("DELETE FROM multi_delete WHERE x = 1;", dt);
+
+    EXPECT_EQ(9, v<int64_t>(run_simple_agg("SELECT SUM(x) FROM multi_delete", dt)));
+  }
+}
+
+TEST(Delete, Joins_ImplicitJoins) {
   if (std::is_same<CalciteDeletePathSelector, PreprocessorFalse>::value) {
     return;
   }
@@ -16763,21 +16841,13 @@ TEST(TemporaryTables, Unsupported) {
     return;
   }
 
-  for (auto dt : {ExecutorDeviceType::CPU, ExecutorDeviceType::GPU}) {
-    SKIP_NO_GPU();
-
-    EXPECT_ANY_THROW(c("DELETE FROM test WHERE x = 7;", dt));
-  }
-
-  {
-    // ensure a newly created table cannot share a dictionary with a temporary table
-    ScopeGuard reset = [] {
-      run_ddl_statement("DROP TABLE IF EXISTS sharing_temp_table_dict;");
-    };
-    EXPECT_ANY_THROW(
-        run_ddl_statement("CREATE TABLE sharing_temp_table_dict (x INT, str TEXT, SHARED "
-                          "DICTIONARY(str) REFERENCES test(null_str));"));
-  }
+  // ensure a newly created table cannot share a dictionary with a temporary table
+  ScopeGuard reset = [] {
+    run_ddl_statement("DROP TABLE IF EXISTS sharing_temp_table_dict;");
+  };
+  EXPECT_ANY_THROW(
+      run_ddl_statement("CREATE TABLE sharing_temp_table_dict (x INT, str TEXT, SHARED "
+                        "DICTIONARY(str) REFERENCES test(null_str));"));
 }
 
 TEST(Select, Interop) {

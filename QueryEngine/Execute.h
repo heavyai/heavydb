@@ -550,7 +550,7 @@ class Executor {
                      const Catalog_Namespace::Catalog& cat,
                      std::shared_ptr<RowSetMemoryOwner> row_set_mem_owner,
                      const UpdateLogForFragment::Callback& cb,
-                     const bool is_agg = false);
+                     const bool is_agg);
 
   using PerFragmentCallBack =
       std::function<void(ResultSetPtr, const Fragmenter_Namespace::FragmentInfo&)>;
@@ -852,7 +852,8 @@ class Executor {
   llvm::Value* castToFP(llvm::Value* val);
   llvm::Value* castToIntPtrTyIn(llvm::Value* val, const size_t bit_width);
 
-  RelAlgExecutionUnit addDeletedColumn(const RelAlgExecutionUnit& ra_exe_unit);
+  RelAlgExecutionUnit addDeletedColumn(const RelAlgExecutionUnit& ra_exe_unit,
+                                       const CompilationOptions& co);
 
   std::pair<bool, int64_t> skipFragment(
       const InputDescriptor& table_desc,

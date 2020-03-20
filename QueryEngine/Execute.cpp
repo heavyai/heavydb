@@ -1171,7 +1171,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
     const bool has_cardinality_estimation,
     ColumnCacheMap& column_cache) {
   INJECT_TIMER(Exec_executeWorkUnit);
-  const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
+  const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in, co);
   const auto device_type = getDeviceTypeForTargets(ra_exe_unit, co.device_type);
   CHECK(!query_infos.empty());
   if (!max_groups_buffer_entry_guess) {
@@ -1200,6 +1200,7 @@ ResultSetPtr Executor::executeWorkUnitImpl(
                                         co.opt_level,
                                         co.with_dynamic_watchdog,
                                         co.allow_lazy_fetch,
+                                        co.add_delete_column,
                                         co.explain_type,
                                         co.register_intel_jit_listener},
                                        eo,
@@ -1326,7 +1327,7 @@ void Executor::executeWorkUnitPerFragment(const RelAlgExecutionUnit& ra_exe_unit
                                           const ExecutionOptions& eo,
                                           const Catalog_Namespace::Catalog& cat,
                                           PerFragmentCallBack& cb) {
-  const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in);
+  const auto ra_exe_unit = addDeletedColumn(ra_exe_unit_in, co);
   ColumnCacheMap column_cache;
 
   std::vector<InputTableInfo> table_infos{table_info};
@@ -2661,7 +2662,7 @@ llvm::Value* Executor::castToFP(llvm::Value* val) {
       dest_ty = llvm::Type::getDoubleTy(cgen_state_->context_);
       break;
     default:
-      CHECK(false);
+      LOG(FATAL) << "Unsupported FP width: " << std::to_string(val_width);
   }
   return cgen_state_->ir_builder_.CreateSIToFP(val, dest_ty);
 }
@@ -2696,7 +2697,11 @@ llvm::Value* Executor::castToIntPtrTyIn(llvm::Value* val, const size_t bitWidth)
 #include "StringFunctions.cpp"
 #undef EXECUTE_INCLUDE
 
-RelAlgExecutionUnit Executor::addDeletedColumn(const RelAlgExecutionUnit& ra_exe_unit) {
+RelAlgExecutionUnit Executor::addDeletedColumn(const RelAlgExecutionUnit& ra_exe_unit,
+                                               const CompilationOptions& co) {
+  if (!co.add_delete_column) {
+    return ra_exe_unit;
+  }
   auto ra_exe_unit_with_deleted = ra_exe_unit;
   for (const auto& input_table : ra_exe_unit_with_deleted.input_descs) {
     if (input_table.getSourceType() != InputSourceType::TABLE) {

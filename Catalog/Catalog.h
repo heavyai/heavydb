@@ -212,7 +212,7 @@ class Catalog final {
                                       bool is_new_db);
   static void remove(const std::string& dbName);
 
-  const bool checkMetadataForDeletedRecs(int dbId, int tableId, int columnId) const;
+  const bool checkMetadataForDeletedRecs(const TableDescriptor* td, int column_id) const;
   const ColumnDescriptor* getDeletedColumn(const TableDescriptor* td) const;
   const ColumnDescriptor* getDeletedColumnIfRowsDeleted(const TableDescriptor* td) const;
 

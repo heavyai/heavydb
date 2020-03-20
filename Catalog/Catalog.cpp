@@ -2538,23 +2538,30 @@ const ColumnDescriptor* Catalog::getDeletedColumn(const TableDescriptor* td) con
   return it != deletedColumnPerTable_.end() ? it->second : nullptr;
 }
 
-const bool Catalog::checkMetadataForDeletedRecs(int dbId,
-                                                int tableId,
-                                                int columnId) const {
-  // check if there are rows deleted by examining metadata for the deletedColumn metadata
-  ChunkKey chunkKeyPrefix = {dbId, tableId, columnId};
-  std::vector<std::pair<ChunkKey, ChunkMetadata>> chunkMetadataVec;
-  dataMgr_->getChunkMetadataVecForKeyPrefix(chunkMetadataVec, chunkKeyPrefix);
-  int64_t chunk_max{0};
+const bool Catalog::checkMetadataForDeletedRecs(const TableDescriptor* td,
+                                                int delete_column_id) const {
+  // check if there are rows deleted by examining the deletedColumn metadata
+  CHECK(td);
 
-  for (auto cm : chunkMetadataVec) {
-    chunk_max = cm.second.chunkStats.max.tinyintval;
-    // delete has occured
-    if (chunk_max == 1) {
-      return true;
+  if (table_is_temporary(td)) {
+    auto fragmenter = td->fragmenter;
+    CHECK(fragmenter);
+    return fragmenter->hasDeletedRows(delete_column_id);
+  } else {
+    ChunkKey chunk_key_prefix = {currentDB_.dbId, td->tableId, delete_column_id};
+    std::vector<std::pair<ChunkKey, ChunkMetadata>> chunk_metadata_vec;
+    dataMgr_->getChunkMetadataVecForKeyPrefix(chunk_metadata_vec, chunk_key_prefix);
+    int64_t chunk_max{0};
+
+    for (auto chunk_metadata : chunk_metadata_vec) {
+      chunk_max = chunk_metadata.second.chunkStats.max.tinyintval;
+      // delete has occured
+      if (chunk_max == 1) {
+        return true;
+      }
     }
+    return false;
   }
-  return false;
 }
 
 const ColumnDescriptor* Catalog::getDeletedColumnIfRowsDeleted(
@@ -2578,12 +2585,12 @@ const ColumnDescriptor* Catalog::getDeletedColumnIfRowsDeleted(
       int32_t physical_tb_id = physicalTables[i];
       const TableDescriptor* phys_td = getMetadataForTable(physical_tb_id);
       CHECK(phys_td);
-      if (checkMetadataForDeletedRecs(currentDB_.dbId, phys_td->tableId, cd->columnId)) {
+      if (checkMetadataForDeletedRecs(phys_td, cd->columnId)) {
         return cd;
       }
     }
   } else {
-    if (checkMetadataForDeletedRecs(currentDB_.dbId, td->tableId, cd->columnId)) {
+    if (checkMetadataForDeletedRecs(td, cd->columnId)) {
       return cd;
     }
   }

@@ -4622,10 +4622,11 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
   const auto& cat = query_state_proxy.getQueryState().getConstSessionInfo()->getCatalog();
   CompilationOptions co = {executor_device_type,
-                           true,
+                           /*hoist_literals=*/true,
                            ExecutorOptLevel::Default,
                            g_enable_dynamic_watchdog,
-                           true,
+                           /*allow_lazy_fetch=*/true,
+                           /*add_delete_column=*/true,
                            explain_optimized_ir ? ExecutorExplainType::Optimized
                                                 : ExecutorExplainType::Default,
                            intel_jit_profile_};
@@ -4688,10 +4689,11 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
   CHECK(device_type == ExecutorDeviceType::CPU ||
         session_info.get_executor_device_type() == ExecutorDeviceType::GPU);
   CompilationOptions co = {session_info.get_executor_device_type(),
-                           true,
+                           /*hoist_literals=*/true,
                            ExecutorOptLevel::Default,
                            g_enable_dynamic_watchdog,
-                           true,
+                           /*allow_lazy_fetch=*/true,
+                           /*add_delete_column=*/true,
                            ExecutorExplainType::Default,
                            intel_jit_profile_};
   ExecutionOptions eo = {false,

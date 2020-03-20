@@ -28,6 +28,10 @@ class QueryRewriter {
       const RelAlgExecutionUnit& ra_exe_unit_in,
       std::shared_ptr<Analyzer::Expr> column_to_update) const;
 
+  RelAlgExecutionUnit rewriteColumnarDelete(
+      const RelAlgExecutionUnit& ra_exe_unit_in,
+      std::shared_ptr<Analyzer::ColumnVar> delete_column) const;
+
  private:
   RelAlgExecutionUnit rewriteOverlapsJoin(
       const RelAlgExecutionUnit& ra_exe_unit_in) const;
