@@ -220,7 +220,8 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   CHECK_GE(group_buffer_size, size_t(0));
 
   std::unique_ptr<int64_t, CheckedAllocDeleter> group_by_buffer_template;
-  if (!query_mem_desc.lazyInitGroups(device_type)) {
+  if (!query_mem_desc.lazyInitGroups(device_type) &&
+      query_mem_desc.getQueryDescriptionType() != QueryDescriptionType::Projection) {
     group_by_buffer_template.reset(
         static_cast<int64_t*>(checked_malloc(group_buffer_size)));
 
@@ -273,7 +274,8 @@ QueryMemoryInitializer::QueryMemoryInitializer(
   for (size_t i = 0; i < group_buffers_count; i += step) {
     auto group_by_buffer =
         alloc_group_by_buffer(actual_group_buffer_size, render_allocator_map);
-    if (!query_mem_desc.lazyInitGroups(device_type)) {
+    if (!query_mem_desc.lazyInitGroups(device_type) &&
+        query_mem_desc.getQueryDescriptionType() != QueryDescriptionType::Projection) {
       CHECK(group_by_buffer_template);
       memcpy(group_by_buffer + index_buffer_qw,
              group_by_buffer_template.get(),
