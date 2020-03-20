@@ -1,14 +1,12 @@
-class ApacheArrow < Formula
+class ApacheArrowOmnisci < Formula
   desc "Columnar in-memory analytics layer designed to accelerate big data"
   homepage "https://arrow.apache.org/"
-  url "https://github.com/apache/arrow/archive/apache-arrow-0.13.0.tar.gz"
+  url "https://github.com/apache/arrow/archive/apache-arrow-0.16.0.tar.gz"
   head "https://github.com/apache/arrow.git"
-  sha256 "380fcc51f0bf98e13148300c87833e734cbcd7b74dddc4bce93829e7f7e4208b"
+  sha256 "d7b3838758a365c8c47d55ab0df1006a70db951c6964440ba354f81f518b8d8d"
 
   depends_on "cmake" => :build
   depends_on "boost"
-  depends_on "python" => :optional
-  depends_on "python@2" => :optional
 
   def install
     ENV.cxx11
@@ -20,22 +18,19 @@ class ApacheArrow < Formula
       "-DARROW_BUILD_TESTS=OFF",
       "-DARROW_BUILD_BENCHMARKS=OFF",
       "-DARROW_WITH_BROTLI=OFF",
-      "-DARROW_WITH_ZLIB=OFF",
+      "-DARROW_WITH_ZLIB=ON",
+      "-DARROW_USE_GLOG=OFF",
+      "-DARROW_GFLAGS_USE_SHARED=OFF",
       "-DARROW_WITH_LZ4=OFF",
       "-DARROW_WITH_SNAPPY=ON",
-      "-DARROW_WITH_ZSTD=OFF",
+      "-DARROW_WITH_ZSTD=ON",
+      "-DARROW_CSV=ON",
+      "-DARROW_JSON=ON",
       "-DARROW_BOOST_USE_SHARED=ON",
       "-DARROW_PARQUET=ON",
       "-DARROW_JEMALLOC=OFF",
       "-DTHRIFT_HOME=#{Formula["thrift"].opt_prefix}"
     ]
-
-    if build.with?("python") && build.with?("python@2")
-      odie "Cannot provide both --with-python and --with-python@2"
-    end
-    Language::Python.each_python(build) do |python, _version|
-      args << "-DARROW_PYTHON=1" << "-DPYTHON_EXECUTABLE=#{which python}"
-    end
 
     cd "cpp" do
       system "cmake", ".", *std_cmake_args, *args
