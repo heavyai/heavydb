@@ -287,5 +287,5 @@ if [ "$COMPRESS" = "true" ] ; then
     elif [ "$TSAN" = "false" ]; then
       TARBALL_TSAN="tsan-"
     fi
-    tar acvf mapd-deps-ubuntu-${VERSION_ID}-${TARBALL_TSAN}${SUFFIX}.tar.xz -C $(dirname $PREFIX) $SUFFIX
+    tar acvf mapd-deps-ubuntu-${VERSION_ID}-${TARBALL_TSAN}${SUFFIX}.tar.xz -C $(dirname $PREFIX) mapd-deps
 fi
