@@ -17,6 +17,10 @@ OmniSciDB uses `CMake <https://cmake.org/>`_ for its build system. The following
     cmake -DCMAKE_BUILD_TYPE=debug ..
     make -j 4
 
+.. note::
+
+    macOS builds must be static linked, eg ``cmake -DCMAKE_BUILD_TYPE=debug -DPREFER_STATIC_LIBS=on ..``.
+
 The following ``cmake``/``ccmake`` options can enable/disable different features:
 
 * ``-DCMAKE_BUILD_TYPE=release`` - Build type and compiler options to use.

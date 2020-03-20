@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 7dc4ec4
+                5.2.0dev e63aa7e
               </div>
             
           
@@ -457,7 +457,6 @@
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_data_stream_sink.html">Class Importer_NS::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_delimited_parser_utils.html">Class Importer_NS::DelimitedParserUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_detector.html">Class Importer_NS::Detector</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_import_driver.html">Class Importer_NS::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_importer.html">Class Importer_NS::Importer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_importer_utils.html">Class Importer_NS::ImporterUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_loader.html">Class Importer_NS::Loader</a></li>
@@ -608,6 +607,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_query_must_run_on_cpu.html">Class QueryMustRunOnCpu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_not_supported.html">Class QueryNotSupported</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_rewriter.html">Class QueryRewriter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_query_runner_1_1_import_driver.html">Class QueryRunner::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_runner_1_1_query_runner.html">Class QueryRunner::QueryRunner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ra_execution_desc.html">Class RaExecutionDesc</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ra_execution_sequence.html">Class RaExecutionSequence</a></li>
@@ -688,6 +688,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sub_condition_remover.html">Class SubConditionRemover</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_table_archiver.html">Class TableArchiver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_compilation_context.html">Class TableFunctionCompilationContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_execution_context.html">Class TableFunctionExecutionContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_generations.html">Class TableGenerations</a></li>
@@ -1858,8 +1859,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4IEN11MapDHandler21get_session_it_unsafeEN10SessionMap8iteratorERK10TSessionIdR15mapd_lock_guardI17mapd_shared_mutexE">
-<span id="_CPPv3IEN11MapDHandler21get_session_it_unsafeERK10TSessionIdR15mapd_lock_guardI17mapd_shared_mutexE"></span><span id="_CPPv2IEN11MapDHandler21get_session_it_unsafeERK10TSessionIdR15mapd_lock_guardI17mapd_shared_mutexE"></span><span class="target" id="class_map_d_handler_1a96cacdc94154febade8c911c660cb104"></span>template&lt;&gt;<br />SessionMap::iterator <code class="sig-name descname">get_session_it_unsafe</code><span class="sig-paren">(</span><em class="property">const</em> TSessionId &amp;<em>session</em>, mapd_lock_guard&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4IEN11MapDHandler21get_session_it_unsafeEN10SessionMap8iteratorERK10TSessionIdR15mapd_lock_guardI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4IEN11MapDHandler21get_session_it_unsafeEN10SessionMap8iteratorERK10TSessionIdR16mapd_unique_lockI17mapd_shared_mutexE">
+<span id="_CPPv3IEN11MapDHandler21get_session_it_unsafeERK10TSessionIdR16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2IEN11MapDHandler21get_session_it_unsafeERK10TSessionIdR16mapd_unique_lockI17mapd_shared_mutexE"></span><span class="target" id="class_map_d_handler_1a250dbe94ee1c3dc5bd5b3e98c543a2e4"></span>template&lt;&gt;<br />SessionMap::iterator <code class="sig-name descname">get_session_it_unsafe</code><span class="sig-paren">(</span><em class="property">const</em> TSessionId &amp;<em>session</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4IEN11MapDHandler21get_session_it_unsafeEN10SessionMap8iteratorERK10TSessionIdR16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -2007,8 +2008,8 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N11MapDHandler15disconnect_implERKN10SessionMap8iteratorE">
-<span id="_CPPv3N11MapDHandler15disconnect_implERKN10SessionMap8iteratorE"></span><span id="_CPPv2N11MapDHandler15disconnect_implERKN10SessionMap8iteratorE"></span><span id="MapDHandler::disconnect_impl__SessionMap::iteratorCR"></span><span class="target" id="class_map_d_handler_1a9a368cc27e5380b765d958d1d0a097bb"></span>void <code class="sig-name descname">disconnect_impl</code><span class="sig-paren">(</span><em class="property">const</em> SessionMap::iterator &amp;<em>session_it</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11MapDHandler15disconnect_implERKN10SessionMap8iteratorE" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N11MapDHandler15disconnect_implERKN10SessionMap8iteratorER16mapd_unique_lockI17mapd_shared_mutexE">
+<span id="_CPPv3N11MapDHandler15disconnect_implERKN10SessionMap8iteratorER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="_CPPv2N11MapDHandler15disconnect_implERKN10SessionMap8iteratorER16mapd_unique_lockI17mapd_shared_mutexE"></span><span id="MapDHandler::disconnect_impl__SessionMap::iteratorCR.mapd_unique_lock:mapd_shared_mutex:R"></span><span class="target" id="class_map_d_handler_1a2c10d1b7ae5f090c9f1880f8a6af667b"></span>void <code class="sig-name descname">disconnect_impl</code><span class="sig-paren">(</span><em class="property">const</em> SessionMap::iterator &amp;<em>session_it</em>, mapd_unique_lock&lt;mapd_shared_mutex&gt; &amp;<em>write_lock</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N11MapDHandler15disconnect_implERKN10SessionMap8iteratorER16mapd_unique_lockI17mapd_shared_mutexE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 7dc4ec4
+                5.2.0dev e63aa7e
               </div>
             
           
@@ -457,7 +457,6 @@
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_data_stream_sink.html">Class Importer_NS::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_delimited_parser_utils.html">Class Importer_NS::DelimitedParserUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_detector.html">Class Importer_NS::Detector</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_import_driver.html">Class Importer_NS::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_importer.html">Class Importer_NS::Importer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_importer_utils.html">Class Importer_NS::ImporterUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_loader.html">Class Importer_NS::Loader</a></li>
@@ -608,6 +607,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_query_must_run_on_cpu.html">Class QueryMustRunOnCpu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_not_supported.html">Class QueryNotSupported</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_rewriter.html">Class QueryRewriter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_query_runner_1_1_import_driver.html">Class QueryRunner::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_runner_1_1_query_runner.html">Class QueryRunner::QueryRunner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ra_execution_desc.html">Class RaExecutionDesc</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ra_execution_sequence.html">Class RaExecutionSequence</a></li>
@@ -688,6 +688,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sub_condition_remover.html">Class SubConditionRemover</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_table_archiver.html">Class TableArchiver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_compilation_context.html">Class TableFunctionCompilationContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_execution_context.html">Class TableFunctionExecutionContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_generations.html">Class TableGenerations</a></li>
@@ -1481,11 +1482,6 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N17StorageIOFacility20yieldColumnValidatorEPK19TableDescriptorType">
-<span id="_CPPv3N17StorageIOFacility20yieldColumnValidatorEPK19TableDescriptorType"></span><span id="_CPPv2N17StorageIOFacility20yieldColumnValidatorEPK19TableDescriptorType"></span><span id="StorageIOFacility::yieldColumnValidator__TableDescriptorTypeCP"></span><span class="target" id="class_storage_i_o_facility_1abed74c684647bdff3082fd49f3bc4f85"></span>ColumnValidationFunction <code class="sig-name descname">yieldColumnValidator</code><span class="sig-paren">(</span>TableDescriptorType <em class="property">const</em> *<em>table_descriptor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17StorageIOFacility20yieldColumnValidatorEPK19TableDescriptorType" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
 <dt id="_CPPv4N17StorageIOFacility19yieldUpdateCallbackER27UpdateTransactionParameters">
 <span id="_CPPv3N17StorageIOFacility19yieldUpdateCallbackER27UpdateTransactionParameters"></span><span id="_CPPv2N17StorageIOFacility19yieldUpdateCallbackER27UpdateTransactionParameters"></span><span id="StorageIOFacility::yieldUpdateCallback__UpdateTransactionParametersR"></span><span class="target" id="class_storage_i_o_facility_1a2eca6d7922fd86a6682fc33602cdc245"></span>StorageIOFacility&lt;EXECUTOR_TRAITS, IO_FACET, FRAGMENT_UPDATER&gt;::UpdateCallback <code class="sig-name descname">yieldUpdateCallback</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4N17StorageIOFacility27UpdateTransactionParametersE" title="StorageIOFacility::UpdateTransactionParameters">UpdateTransactionParameters</a> &amp;<em>update_parameters</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17StorageIOFacility19yieldUpdateCallbackER27UpdateTransactionParameters" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1628,6 +1624,11 @@
 <span id="_CPPv3IENK17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters22isVarlenUpdateRequiredEv"></span><span id="_CPPv2IENK17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters22isVarlenUpdateRequiredEv"></span><span class="target" id="class_storage_i_o_facility_1_1_update_transaction_parameters_1a219c365656cdba7d4e5bcc0d97fd73ef"></span>template&lt;&gt;<br />auto <code class="sig-name descname">isVarlenUpdateRequired</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4IENK17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters22isVarlenUpdateRequiredEDav" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
+<dl class="function">
+<dt id="_CPPv4IENK17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters16tableIsTemporaryEDav">
+<span id="_CPPv3IENK17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters16tableIsTemporaryEv"></span><span id="_CPPv2IENK17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters16tableIsTemporaryEv"></span><span class="target" id="class_storage_i_o_facility_1_1_update_transaction_parameters_1a2098b57662829738b213b0cca7c41b66"></span>template&lt;&gt;<br />auto <code class="sig-name descname">tableIsTemporary</code><span class="sig-paren">(</span><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4IENK17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters16tableIsTemporaryEDav" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
 </div>
 <div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Private Functions</p>
@@ -1662,6 +1663,11 @@
 <dl class="member">
 <dt id="_CPPv4IEN17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters23varlen_update_required_E">
 <span id="_CPPv3IEN17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters23varlen_update_required_E"></span><span id="_CPPv2IEN17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters23varlen_update_required_E"></span>template&lt;&gt;<br /><span class="target" id="class_storage_i_o_facility_1_1_update_transaction_parameters_1a4576635ee63aa2122f2d1d1cceb7aee5"></span>bool <code class="sig-name descname">varlen_update_required_</code> = false<a class="headerlink" href="#_CPPv4IEN17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters23varlen_update_required_E" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4IEN17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters19table_is_temporary_E">
+<span id="_CPPv3IEN17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters19table_is_temporary_E"></span><span id="_CPPv2IEN17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters19table_is_temporary_E"></span>template&lt;&gt;<br /><span class="target" id="class_storage_i_o_facility_1_1_update_transaction_parameters_1abd68637073038263dbc32b7df038856e"></span>bool <code class="sig-name descname">table_is_temporary_</code><a class="headerlink" href="#_CPPv4IEN17StorageIOFacilityI15EXECUTOR_TRAITS8IO_FACET16FRAGMENT_UPDATERE27UpdateTransactionParameters19table_is_temporary_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

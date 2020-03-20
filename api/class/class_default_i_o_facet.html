@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 7dc4ec4
+                5.2.0dev e63aa7e
               </div>
             
           
@@ -457,7 +457,6 @@
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_data_stream_sink.html">Class Importer_NS::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_delimited_parser_utils.html">Class Importer_NS::DelimitedParserUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_detector.html">Class Importer_NS::Detector</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_import_driver.html">Class Importer_NS::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_importer.html">Class Importer_NS::Importer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_importer_utils.html">Class Importer_NS::ImporterUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_loader.html">Class Importer_NS::Loader</a></li>
@@ -608,6 +607,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_query_must_run_on_cpu.html">Class QueryMustRunOnCpu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_not_supported.html">Class QueryNotSupported</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_rewriter.html">Class QueryRewriter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_query_runner_1_1_import_driver.html">Class QueryRunner::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_runner_1_1_query_runner.html">Class QueryRunner::QueryRunner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ra_execution_desc.html">Class RaExecutionDesc</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ra_execution_sequence.html">Class RaExecutionSequence</a></li>
@@ -688,6 +688,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sub_condition_remover.html">Class SubConditionRemover</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_table_archiver.html">Class TableArchiver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_compilation_context.html">Class TableFunctionCompilationContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_execution_context.html">Class TableFunctionExecutionContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_generations.html">Class TableGenerations</a></li>
@@ -1453,11 +1454,6 @@
 <dl class="function">
 <dt id="_CPPv4I00000EN14DefaultIOFacet13deleteColumnsEvRK12CATALOG_TYPERRK13TABLE_ID_TYPEK16FRAGMENT_ID_TYPER18VICTIM_OFFSET_LISTRK16COLUMN_TYPE_INFOR14TransactionLog">
 <span id="_CPPv3I00000EN14DefaultIOFacet13deleteColumnsERK12CATALOG_TYPERRK13TABLE_ID_TYPEK16FRAGMENT_ID_TYPER18VICTIM_OFFSET_LISTRK16COLUMN_TYPE_INFOR14TransactionLog"></span><span id="_CPPv2I00000EN14DefaultIOFacet13deleteColumnsERK12CATALOG_TYPERRK13TABLE_ID_TYPEK16FRAGMENT_ID_TYPER18VICTIM_OFFSET_LISTRK16COLUMN_TYPE_INFOR14TransactionLog"></span><span class="target" id="class_default_i_o_facet_1aa33bf2fa7ab9662564915bd737a5c7e0"></span>template&lt;typename <code class="sig-name descname">CATALOG_TYPE</code>, typename <code class="sig-name descname">TABLE_ID_TYPE</code>, typename <code class="sig-name descname">FRAGMENT_ID_TYPE</code>, typename <code class="sig-name descname">VICTIM_OFFSET_LIST</code>, typename <code class="sig-name descname">COLUMN_TYPE_INFO</code>&gt;<br /><em class="property">static</em> void <code class="sig-name descname">deleteColumns</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4I00000EN14DefaultIOFacet13deleteColumnsEvRK12CATALOG_TYPERRK13TABLE_ID_TYPEK16FRAGMENT_ID_TYPER18VICTIM_OFFSET_LISTRK16COLUMN_TYPE_INFOR14TransactionLog" title="DefaultIOFacet::deleteColumns::CATALOG_TYPE">CATALOG_TYPE</a> <em class="property">const</em> &amp;<em>cat</em>, <a class="reference internal" href="#_CPPv4I00000EN14DefaultIOFacet13deleteColumnsEvRK12CATALOG_TYPERRK13TABLE_ID_TYPEK16FRAGMENT_ID_TYPER18VICTIM_OFFSET_LISTRK16COLUMN_TYPE_INFOR14TransactionLog" title="DefaultIOFacet::deleteColumns::TABLE_ID_TYPE">TABLE_ID_TYPE</a> <em class="property">const</em> &amp;&amp;<em>table_id</em>, <a class="reference internal" href="#_CPPv4I00000EN14DefaultIOFacet13deleteColumnsEvRK12CATALOG_TYPERRK13TABLE_ID_TYPEK16FRAGMENT_ID_TYPER18VICTIM_OFFSET_LISTRK16COLUMN_TYPE_INFOR14TransactionLog" title="DefaultIOFacet::deleteColumns::FRAGMENT_ID_TYPE">FRAGMENT_ID_TYPE</a> <em class="property">const</em> <em>frag_id</em>, <a class="reference internal" href="#_CPPv4I00000EN14DefaultIOFacet13deleteColumnsEvRK12CATALOG_TYPERRK13TABLE_ID_TYPEK16FRAGMENT_ID_TYPER18VICTIM_OFFSET_LISTRK16COLUMN_TYPE_INFOR14TransactionLog" title="DefaultIOFacet::deleteColumns::VICTIM_OFFSET_LIST">VICTIM_OFFSET_LIST</a> &amp;<em>victims</em>, <a class="reference internal" href="#_CPPv4I00000EN14DefaultIOFacet13deleteColumnsEvRK12CATALOG_TYPERRK13TABLE_ID_TYPEK16FRAGMENT_ID_TYPER18VICTIM_OFFSET_LISTRK16COLUMN_TYPE_INFOR14TransactionLog" title="DefaultIOFacet::deleteColumns::COLUMN_TYPE_INFO">COLUMN_TYPE_INFO</a> <em class="property">const</em> &amp;<em>col_type_info</em>, TransactionLog &amp;<em>transaction_tracker</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I00000EN14DefaultIOFacet13deleteColumnsEvRK12CATALOG_TYPERRK13TABLE_ID_TYPEK16FRAGMENT_ID_TYPER18VICTIM_OFFSET_LISTRK16COLUMN_TYPE_INFOR14TransactionLog" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4I00EN14DefaultIOFacet20yieldColumnValidatorENSt8functionIFbRKNSt6stringEEEERK12CATALOG_TYPEPK21TABLE_DESCRIPTOR_TYPE">
-<span id="_CPPv3I00EN14DefaultIOFacet20yieldColumnValidatorERK12CATALOG_TYPEPK21TABLE_DESCRIPTOR_TYPE"></span><span id="_CPPv2I00EN14DefaultIOFacet20yieldColumnValidatorERK12CATALOG_TYPEPK21TABLE_DESCRIPTOR_TYPE"></span><span class="target" id="class_default_i_o_facet_1aad09a99367043e0e583fd2f954c6c785"></span>template&lt;typename <code class="sig-name descname">CATALOG_TYPE</code>, typename <code class="sig-name descname">TABLE_DESCRIPTOR_TYPE</code>&gt;<br /><em class="property">static</em> std::function&lt;bool<span class="sig-paren">(</span>std::string <em class="property">const</em>&amp;<span class="sig-paren">)</span>&gt; <code class="sig-name descname">yieldColumnValidator</code><span class="sig-paren">(</span><a class="reference internal" href="#_CPPv4I00EN14DefaultIOFacet20yieldColumnValidatorENSt8functionIFbRKNSt6stringEEEERK12CATALOG_TYPEPK21TABLE_DESCRIPTOR_TYPE" title="DefaultIOFacet::yieldColumnValidator::CATALOG_TYPE">CATALOG_TYPE</a> <em class="property">const</em> &amp;<em>cat</em>, <a class="reference internal" href="#_CPPv4I00EN14DefaultIOFacet20yieldColumnValidatorENSt8functionIFbRKNSt6stringEEEERK12CATALOG_TYPEPK21TABLE_DESCRIPTOR_TYPE" title="DefaultIOFacet::yieldColumnValidator::TABLE_DESCRIPTOR_TYPE">TABLE_DESCRIPTOR_TYPE</a> <em class="property">const</em> *<em>table_descriptor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4I00EN14DefaultIOFacet20yieldColumnValidatorENSt8functionIFbRKNSt6stringEEEERK12CATALOG_TYPEPK21TABLE_DESCRIPTOR_TYPE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>

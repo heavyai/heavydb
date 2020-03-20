@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 7dc4ec4
+                5.2.0dev e63aa7e
               </div>
             
           
@@ -457,7 +457,6 @@
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_data_stream_sink.html">Class Importer_NS::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_delimited_parser_utils.html">Class Importer_NS::DelimitedParserUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_detector.html">Class Importer_NS::Detector</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_import_driver.html">Class Importer_NS::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_importer.html">Class Importer_NS::Importer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_importer_utils.html">Class Importer_NS::ImporterUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_loader.html">Class Importer_NS::Loader</a></li>
@@ -608,6 +607,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_query_must_run_on_cpu.html">Class QueryMustRunOnCpu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_not_supported.html">Class QueryNotSupported</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_rewriter.html">Class QueryRewriter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_query_runner_1_1_import_driver.html">Class QueryRunner::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_runner_1_1_query_runner.html">Class QueryRunner::QueryRunner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ra_execution_desc.html">Class RaExecutionDesc</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ra_execution_sequence.html">Class RaExecutionSequence</a></li>
@@ -688,6 +688,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sub_condition_remover.html">Class SubConditionRemover</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_table_archiver.html">Class TableArchiver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_compilation_context.html">Class TableFunctionCompilationContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_execution_context.html">Class TableFunctionExecutionContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_generations.html">Class TableGenerations</a></li>
@@ -1728,21 +1729,6 @@
 <dl class="function">
 <dt id="_CPPv4N17Catalog_Namespace7Catalog12setForReloadEK7int32_t">
 <span id="_CPPv3N17Catalog_Namespace7Catalog12setForReloadEK7int32_t"></span><span id="_CPPv2N17Catalog_Namespace7Catalog12setForReloadEK7int32_t"></span><span id="Catalog_Namespace::Catalog::setForReload__int32_tC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1adc252b8ad21abb266de3797245ab5def"></span>void <code class="sig-name descname">setForReload</code><span class="sig-paren">(</span><em class="property">const</em> int32_t <em>tableId</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog12setForReloadEK7int32_t" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4NK17Catalog_Namespace7Catalog9dumpTableEPK15TableDescriptorRKNSt6stringERKNSt6stringE">
-<span id="_CPPv3NK17Catalog_Namespace7Catalog9dumpTableEPK15TableDescriptorRKNSt6stringERKNSt6stringE"></span><span id="_CPPv2NK17Catalog_Namespace7Catalog9dumpTableEPK15TableDescriptorRKNSt6stringERKNSt6stringE"></span><span id="Catalog_Namespace::Catalog::dumpTable__TableDescriptorCP.ssCR.ssCRC"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a0d6ae644749be1d72a36f6001c596695"></span>void <code class="sig-name descname">dumpTable</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *<em>td</em>, <em class="property">const</em> std::string &amp;<em>path</em>, <em class="property">const</em> std::string &amp;<em>compression</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK17Catalog_Namespace7Catalog9dumpTableEPK15TableDescriptorRKNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace7Catalog12restoreTableERK11SessionInfoPK15TableDescriptorRKNSt6stringERKNSt6stringE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog12restoreTableERK11SessionInfoPK15TableDescriptorRKNSt6stringERKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog12restoreTableERK11SessionInfoPK15TableDescriptorRKNSt6stringERKNSt6stringE"></span><span id="Catalog_Namespace::Catalog::restoreTable__SessionInfoCR.TableDescriptorCP.ssCR.ssCR"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1aabd60ea73d53397ed1dfdd469c40e622"></span>void <code class="sig-name descname">restoreTable</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a> &amp;<em>session</em>, <em class="property">const</em> <a class="reference internal" href="../struct/struct_table_descriptor.html#_CPPv415TableDescriptor" title="TableDescriptor">TableDescriptor</a> *<em>td</em>, <em class="property">const</em> std::string &amp;<em>file_path</em>, <em class="property">const</em> std::string &amp;<em>compression</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog12restoreTableERK11SessionInfoPK15TableDescriptorRKNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="function">
-<dt id="_CPPv4N17Catalog_Namespace7Catalog12restoreTableERK11SessionInfoRKNSt6stringERKNSt6stringERKNSt6stringE">
-<span id="_CPPv3N17Catalog_Namespace7Catalog12restoreTableERK11SessionInfoRKNSt6stringERKNSt6stringERKNSt6stringE"></span><span id="_CPPv2N17Catalog_Namespace7Catalog12restoreTableERK11SessionInfoRKNSt6stringERKNSt6stringERKNSt6stringE"></span><span id="Catalog_Namespace::Catalog::restoreTable__SessionInfoCR.ssCR.ssCR.ssCR"></span><span class="target" id="class_catalog___namespace_1_1_catalog_1a6aa05b3ebab4a18ab2aa70c436e2a3ec"></span>void <code class="sig-name descname">restoreTable</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="class_catalog___namespace_1_1_session_info.html#_CPPv4N17Catalog_Namespace11SessionInfoE" title="Catalog_Namespace::SessionInfo">SessionInfo</a> &amp;<em>session</em>, <em class="property">const</em> std::string &amp;<em>table_name</em>, <em class="property">const</em> std::string &amp;<em>file_path</em>, <em class="property">const</em> std::string &amp;<em>compression</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N17Catalog_Namespace7Catalog12restoreTableERK11SessionInfoRKNSt6stringERKNSt6stringERKNSt6stringE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">

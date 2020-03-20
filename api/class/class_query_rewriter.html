@@ -40,7 +40,7 @@
   <link rel="stylesheet" href="../../_static/theme_overrides.css" type="text/css" />
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
-    <link rel="next" title="Class QueryRunner::QueryRunner" href="class_query_runner_1_1_query_runner.html" />
+    <link rel="next" title="Class QueryRunner::ImportDriver" href="class_query_runner_1_1_import_driver.html" />
     <link rel="prev" title="Class QueryNotSupported" href="class_query_not_supported.html" /> 
 </head>
 
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 7dc4ec4
+                5.2.0dev e63aa7e
               </div>
             
           
@@ -457,7 +457,6 @@
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_data_stream_sink.html">Class Importer_NS::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_delimited_parser_utils.html">Class Importer_NS::DelimitedParserUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_detector.html">Class Importer_NS::Detector</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_import_driver.html">Class Importer_NS::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_importer.html">Class Importer_NS::Importer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_importer_utils.html">Class Importer_NS::ImporterUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_loader.html">Class Importer_NS::Loader</a></li>
@@ -608,6 +607,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_query_must_run_on_cpu.html">Class QueryMustRunOnCpu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_not_supported.html">Class QueryNotSupported</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class QueryRewriter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_query_runner_1_1_import_driver.html">Class QueryRunner::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_runner_1_1_query_runner.html">Class QueryRunner::QueryRunner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ra_execution_desc.html">Class RaExecutionDesc</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ra_execution_sequence.html">Class RaExecutionSequence</a></li>
@@ -688,6 +688,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sub_condition_remover.html">Class SubConditionRemover</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_table_archiver.html">Class TableArchiver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_compilation_context.html">Class TableFunctionCompilationContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_execution_context.html">Class TableFunctionExecutionContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_generations.html">Class TableGenerations</a></li>
@@ -1403,13 +1404,18 @@
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
-<dt id="_CPPv4N13QueryRewriter13QueryRewriterERKNSt6vectorI14InputTableInfoEEPK8Executor">
-<span id="_CPPv3N13QueryRewriter13QueryRewriterERKNSt6vectorI14InputTableInfoEEPK8Executor"></span><span id="_CPPv2N13QueryRewriter13QueryRewriterERKNSt6vectorI14InputTableInfoEEPK8Executor"></span><span id="QueryRewriter::QueryRewriter__std::vector:InputTableInfo:CR.ExecutorCP"></span><span class="target" id="class_query_rewriter_1a7f3696230ede8dac4041a8367f5c6935"></span><code class="sig-name descname">QueryRewriter</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>query_infos</em>, <em class="property">const</em> <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13QueryRewriter13QueryRewriterERKNSt6vectorI14InputTableInfoEEPK8Executor" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N13QueryRewriter13QueryRewriterERKNSt6vectorI14InputTableInfoEEP8Executor">
+<span id="_CPPv3N13QueryRewriter13QueryRewriterERKNSt6vectorI14InputTableInfoEEP8Executor"></span><span id="_CPPv2N13QueryRewriter13QueryRewriterERKNSt6vectorI14InputTableInfoEEP8Executor"></span><span id="QueryRewriter::QueryRewriter__std::vector:InputTableInfo:CR.ExecutorP"></span><span class="target" id="class_query_rewriter_1ae148d69441c7181fddd3683cc03fbdab"></span><code class="sig-name descname">QueryRewriter</code><span class="sig-paren">(</span><em class="property">const</em> std::vector&lt;<a class="reference internal" href="../struct/struct_input_table_info.html#_CPPv414InputTableInfo" title="InputTableInfo">InputTableInfo</a>&gt; &amp;<em>query_infos</em>, <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<em>executor</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N13QueryRewriter13QueryRewriterERKNSt6vectorI14InputTableInfoEEP8Executor" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4NK13QueryRewriter7rewriteERK19RelAlgExecutionUnit">
 <span id="_CPPv3NK13QueryRewriter7rewriteERK19RelAlgExecutionUnit"></span><span id="_CPPv2NK13QueryRewriter7rewriteERK19RelAlgExecutionUnit"></span><span id="QueryRewriter::rewrite__RelAlgExecutionUnitCRC"></span><span class="target" id="class_query_rewriter_1a27a446bab4047337468efb278e8c3f11"></span><a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html#_CPPv419RelAlgExecutionUnit" title="RelAlgExecutionUnit">RelAlgExecutionUnit</a> <code class="sig-name descname">rewrite</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html#_CPPv419RelAlgExecutionUnit" title="RelAlgExecutionUnit">RelAlgExecutionUnit</a> &amp;<em>ra_exe_unit_in</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13QueryRewriter7rewriteERK19RelAlgExecutionUnit" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4NK13QueryRewriter21rewriteColumnarUpdateERK19RelAlgExecutionUnitNSt10shared_ptrIN8Analyzer4ExprEEE">
+<span id="_CPPv3NK13QueryRewriter21rewriteColumnarUpdateERK19RelAlgExecutionUnitNSt10shared_ptrIN8Analyzer4ExprEEE"></span><span id="_CPPv2NK13QueryRewriter21rewriteColumnarUpdateERK19RelAlgExecutionUnitNSt10shared_ptrIN8Analyzer4ExprEEE"></span><span id="QueryRewriter::rewriteColumnarUpdate__RelAlgExecutionUnitCR.std::shared_ptr:Analyzer::Expr:C"></span><span class="target" id="class_query_rewriter_1a3226e553ec9442d0fb35134f16ddfb79"></span><a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html#_CPPv419RelAlgExecutionUnit" title="RelAlgExecutionUnit">RelAlgExecutionUnit</a> <code class="sig-name descname">rewriteColumnarUpdate</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="../struct/struct_rel_alg_execution_unit.html#_CPPv419RelAlgExecutionUnit" title="RelAlgExecutionUnit">RelAlgExecutionUnit</a> &amp;<em>ra_exe_unit_in</em>, std::shared_ptr&lt;Analyzer::<a class="reference internal" href="class_analyzer_1_1_expr.html#_CPPv4N8Analyzer4ExprE" title="Analyzer::Expr">Expr</a>&gt; <em>column_to_update</em><span class="sig-paren">)</span> <em class="property">const</em><a class="headerlink" href="#_CPPv4NK13QueryRewriter21rewriteColumnarUpdateERK19RelAlgExecutionUnitNSt10shared_ptrIN8Analyzer4ExprEEE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
@@ -1440,7 +1446,7 @@
 
 <dl class="member">
 <dt id="_CPPv4N13QueryRewriter9executor_E">
-<span id="_CPPv3N13QueryRewriter9executor_E"></span><span id="_CPPv2N13QueryRewriter9executor_E"></span><span id="QueryRewriter::executor___ExecutorCP"></span><span class="target" id="class_query_rewriter_1afea344ca102add8f04e94e70836e28ed"></span><em class="property">const</em> <a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<code class="sig-name descname">executor_</code><a class="headerlink" href="#_CPPv4N13QueryRewriter9executor_E" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N13QueryRewriter9executor_E"></span><span id="_CPPv2N13QueryRewriter9executor_E"></span><span id="QueryRewriter::executor___ExecutorP"></span><span class="target" id="class_query_rewriter_1ae21afe3efce8875e4fde659f51831765"></span><a class="reference internal" href="class_executor.html#_CPPv48Executor" title="Executor">Executor</a> *<code class="sig-name descname">executor_</code><a class="headerlink" href="#_CPPv4N13QueryRewriter9executor_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
@@ -1469,7 +1475,7 @@
   
     <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
       
-        <a href="class_query_runner_1_1_query_runner.html" class="btn btn-neutral float-right" title="Class QueryRunner::QueryRunner" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+        <a href="class_query_runner_1_1_import_driver.html" class="btn btn-neutral float-right" title="Class QueryRunner::ImportDriver" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
         <a href="class_query_not_supported.html" class="btn btn-neutral float-left" title="Class QueryNotSupported" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>

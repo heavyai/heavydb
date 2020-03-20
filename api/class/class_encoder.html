@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 7dc4ec4
+                5.2.0dev e63aa7e
               </div>
             
           
@@ -457,7 +457,6 @@
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_data_stream_sink.html">Class Importer_NS::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_delimited_parser_utils.html">Class Importer_NS::DelimitedParserUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_detector.html">Class Importer_NS::Detector</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_import_driver.html">Class Importer_NS::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_importer.html">Class Importer_NS::Importer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_importer_utils.html">Class Importer_NS::ImporterUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_importer___n_s_1_1_loader.html">Class Importer_NS::Loader</a></li>
@@ -608,6 +607,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_query_must_run_on_cpu.html">Class QueryMustRunOnCpu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_not_supported.html">Class QueryNotSupported</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_rewriter.html">Class QueryRewriter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_query_runner_1_1_import_driver.html">Class QueryRunner::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_query_runner_1_1_query_runner.html">Class QueryRunner::QueryRunner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ra_execution_desc.html">Class RaExecutionDesc</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_ra_execution_sequence.html">Class RaExecutionSequence</a></li>
@@ -688,6 +688,7 @@
 <li class="toctree-l2"><a class="reference internal" href="class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_sub_condition_remover.html">Class SubConditionRemover</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_table_archiver.html">Class TableArchiver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_compilation_context.html">Class TableFunctionCompilationContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_function_execution_context.html">Class TableFunctionExecutionContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_table_generations.html">Class TableGenerations</a></li>
@@ -1414,9 +1415,20 @@
 <dd></dd></dl>
 
 <dl class="function">
-<dt id="_CPPv4N7Encoder10appendDataERP6int8_tK6size_tRK11SQLTypeInfoKb">
-<span id="_CPPv3N7Encoder10appendDataERP6int8_tK6size_tRK11SQLTypeInfoKb"></span><span id="_CPPv2N7Encoder10appendDataERP6int8_tK6size_tRK11SQLTypeInfoKb"></span><span id="Encoder::appendData__int8_tPR.sC.SQLTypeInfoCR.bC"></span><span class="target" id="class_encoder_1a7b120298cab1ddcd8adbb7012e23c9d9"></span><em class="property">virtual</em> <a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a> <code class="sig-name descname">appendData</code><span class="sig-paren">(</span>int8_t *&amp;<em>srcData</em>, <em class="property">const</em> size_t <em>numAppendElems</em>, <em class="property">const</em> SQLTypeInfo&amp;, <em class="property">const</em> bool <em>replicating</em> = false<span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N7Encoder10appendDataERP6int8_tK6size_tRK11SQLTypeInfoKb" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
+<dt id="_CPPv4N7Encoder10appendDataERP6int8_tK6size_tRK11SQLTypeInfoKbK7int64_t">
+<span id="_CPPv3N7Encoder10appendDataERP6int8_tK6size_tRK11SQLTypeInfoKbK7int64_t"></span><span id="_CPPv2N7Encoder10appendDataERP6int8_tK6size_tRK11SQLTypeInfoKbK7int64_t"></span><span id="Encoder::appendData__int8_tPR.sC.SQLTypeInfoCR.bC.int64_tC"></span><span class="target" id="class_encoder_1ac1e9eb044d1f3ffba16f4f50165a66dd"></span><em class="property">virtual</em> <a class="reference internal" href="../struct/struct_chunk_metadata.html#_CPPv413ChunkMetadata" title="ChunkMetadata">ChunkMetadata</a> <code class="sig-name descname">appendData</code><span class="sig-paren">(</span>int8_t *&amp;<em>src_data</em>, <em class="property">const</em> size_t <em>num_elems_to_append</em>, <em class="property">const</em> SQLTypeInfo &amp;<em>ti</em>, <em class="property">const</em> bool <em>replicating</em> = false, <em class="property">const</em> int64_t <em>offset</em> = -1<span class="sig-paren">)</span> = 0<a class="headerlink" href="#_CPPv4N7Encoder10appendDataERP6int8_tK6size_tRK11SQLTypeInfoKbK7int64_t" title="Permalink to this definition">¶</a><br /></dt>
+<dd><p>Append data to the chunk buffer backing this encoder. <dl class="simple">
+<dt><strong>Parameters</strong></dt><dd><ul class="breatheparameterlist simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">src_data</span></code>: Source data for the append </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_elems_to_append</span></code>: Number of elements to append </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">ti</span></code>: SQL Type Info for the column TODO(adb): used? </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">replicating</span></code>: Pass one value and fill the chunk with it </p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">offset</span></code>: Write data starting at a given offset. Default is -1 which indicates an append, an offset of 0 rewrites the chunk up to <code class="docutils literal notranslate"><span class="pre">num_elems_to_append</span></code>. </p></li>
+</ul>
+</dd>
+</dl>
+</p>
+</dd></dl>
 
 <dl class="function">
 <dt id="_CPPv4N7Encoder11getMetadataER13ChunkMetadata">

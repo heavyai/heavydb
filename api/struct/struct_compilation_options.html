@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 7dc4ec4
+                5.2.0dev e63aa7e
               </div>
             
           
@@ -457,7 +457,6 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_importer___n_s_1_1_data_stream_sink.html">Class Importer_NS::DataStreamSink</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_importer___n_s_1_1_delimited_parser_utils.html">Class Importer_NS::DelimitedParserUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_importer___n_s_1_1_detector.html">Class Importer_NS::Detector</a></li>
-<li class="toctree-l2"><a class="reference internal" href="../class/class_importer___n_s_1_1_import_driver.html">Class Importer_NS::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_importer___n_s_1_1_importer.html">Class Importer_NS::Importer</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_importer___n_s_1_1_importer_utils.html">Class Importer_NS::ImporterUtils</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_importer___n_s_1_1_loader.html">Class Importer_NS::Loader</a></li>
@@ -608,6 +607,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_query_must_run_on_cpu.html">Class QueryMustRunOnCpu</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_query_not_supported.html">Class QueryNotSupported</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_query_rewriter.html">Class QueryRewriter</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_query_runner_1_1_import_driver.html">Class QueryRunner::ImportDriver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_query_runner_1_1_query_runner.html">Class QueryRunner::QueryRunner</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_ra_execution_desc.html">Class RaExecutionDesc</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_ra_execution_sequence.html">Class RaExecutionSequence</a></li>
@@ -688,6 +688,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../class/class_string_none_encoder.html">Class StringNoneEncoder</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_stub_generator.html">Class StubGenerator</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_sub_condition_remover.html">Class SubConditionRemover</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../class/class_table_archiver.html">Class TableArchiver</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_table_function_compilation_context.html">Class TableFunctionCompilationContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_table_function_execution_context.html">Class TableFunctionExecutionContext</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../class/class_table_generations.html">Class TableGenerations</a></li>
@@ -1403,33 +1404,51 @@
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Members</p>
 <dl class="member">
-<dt id="_CPPv4N18CompilationOptions12device_type_E">
-<span id="_CPPv3N18CompilationOptions12device_type_E"></span><span id="_CPPv2N18CompilationOptions12device_type_E"></span><span id="CompilationOptions::device_type___ExecutorDeviceType"></span><span class="target" id="struct_compilation_options_1a61fa3db064a9a92e0ddf250eb1b2fae2"></span>ExecutorDeviceType <code class="sig-name descname">device_type_</code><a class="headerlink" href="#_CPPv4N18CompilationOptions12device_type_E" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N18CompilationOptions11device_typeE">
+<span id="_CPPv3N18CompilationOptions11device_typeE"></span><span id="_CPPv2N18CompilationOptions11device_typeE"></span><span id="CompilationOptions::device_type__ExecutorDeviceType"></span><span class="target" id="struct_compilation_options_1a0862659606d015f7b3b939ae23a532c1"></span>ExecutorDeviceType <code class="sig-name descname">device_type</code><a class="headerlink" href="#_CPPv4N18CompilationOptions11device_typeE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N18CompilationOptions15hoist_literals_E">
-<span id="_CPPv3N18CompilationOptions15hoist_literals_E"></span><span id="_CPPv2N18CompilationOptions15hoist_literals_E"></span><span id="CompilationOptions::hoist_literals___bC"></span><span class="target" id="struct_compilation_options_1a7b61b663f7cd08350ab70f3818015f87"></span><em class="property">const</em> bool <code class="sig-name descname">hoist_literals_</code><a class="headerlink" href="#_CPPv4N18CompilationOptions15hoist_literals_E" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N18CompilationOptions14hoist_literalsE">
+<span id="_CPPv3N18CompilationOptions14hoist_literalsE"></span><span id="_CPPv2N18CompilationOptions14hoist_literalsE"></span><span id="CompilationOptions::hoist_literals__b"></span><span class="target" id="struct_compilation_options_1a0d44a3c6b11f1e1b38b79829ea871639"></span>bool <code class="sig-name descname">hoist_literals</code><a class="headerlink" href="#_CPPv4N18CompilationOptions14hoist_literalsE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N18CompilationOptions10opt_level_E">
-<span id="_CPPv3N18CompilationOptions10opt_level_E"></span><span id="_CPPv2N18CompilationOptions10opt_level_E"></span><span id="CompilationOptions::opt_level___ExecutorOptLevelC"></span><span class="target" id="struct_compilation_options_1a99a60b542810824229fd1d3a5bd72729"></span><em class="property">const</em> ExecutorOptLevel <code class="sig-name descname">opt_level_</code><a class="headerlink" href="#_CPPv4N18CompilationOptions10opt_level_E" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N18CompilationOptions9opt_levelE">
+<span id="_CPPv3N18CompilationOptions9opt_levelE"></span><span id="_CPPv2N18CompilationOptions9opt_levelE"></span><span id="CompilationOptions::opt_level__ExecutorOptLevel"></span><span class="target" id="struct_compilation_options_1aff66dbeee0d10311d1c16d18db732c44"></span>ExecutorOptLevel <code class="sig-name descname">opt_level</code><a class="headerlink" href="#_CPPv4N18CompilationOptions9opt_levelE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N18CompilationOptions22with_dynamic_watchdog_E">
-<span id="_CPPv3N18CompilationOptions22with_dynamic_watchdog_E"></span><span id="_CPPv2N18CompilationOptions22with_dynamic_watchdog_E"></span><span id="CompilationOptions::with_dynamic_watchdog___bC"></span><span class="target" id="struct_compilation_options_1a3c741da2eee349d5b4bad93eb4ebe4b8"></span><em class="property">const</em> bool <code class="sig-name descname">with_dynamic_watchdog_</code><a class="headerlink" href="#_CPPv4N18CompilationOptions22with_dynamic_watchdog_E" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N18CompilationOptions21with_dynamic_watchdogE">
+<span id="_CPPv3N18CompilationOptions21with_dynamic_watchdogE"></span><span id="_CPPv2N18CompilationOptions21with_dynamic_watchdogE"></span><span id="CompilationOptions::with_dynamic_watchdog__b"></span><span class="target" id="struct_compilation_options_1a684ed7ab65039a3e1df6e2ee41813324"></span>bool <code class="sig-name descname">with_dynamic_watchdog</code><a class="headerlink" href="#_CPPv4N18CompilationOptions21with_dynamic_watchdogE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N18CompilationOptions13explain_type_E">
-<span id="_CPPv3N18CompilationOptions13explain_type_E"></span><span id="_CPPv2N18CompilationOptions13explain_type_E"></span><span id="CompilationOptions::explain_type___ExecutorExplainTypeC"></span><span class="target" id="struct_compilation_options_1a2934eb4e074d7f22084eb0404476dbd8"></span><em class="property">const</em> ExecutorExplainType <code class="sig-name descname">explain_type_</code> = {ExecutorExplainType::Default}<a class="headerlink" href="#_CPPv4N18CompilationOptions13explain_type_E" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N18CompilationOptions16allow_lazy_fetchE">
+<span id="_CPPv3N18CompilationOptions16allow_lazy_fetchE"></span><span id="_CPPv2N18CompilationOptions16allow_lazy_fetchE"></span><span id="CompilationOptions::allow_lazy_fetch__b"></span><span class="target" id="struct_compilation_options_1acc15d4ad4a6e27378c312f34e7cd0b90"></span>bool <code class="sig-name descname">allow_lazy_fetch</code><a class="headerlink" href="#_CPPv4N18CompilationOptions16allow_lazy_fetchE" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N18CompilationOptions28register_intel_jit_listener_E">
-<span id="_CPPv3N18CompilationOptions28register_intel_jit_listener_E"></span><span id="_CPPv2N18CompilationOptions28register_intel_jit_listener_E"></span><span id="CompilationOptions::register_intel_jit_listener___bC"></span><span class="target" id="struct_compilation_options_1a2d5116a644658cfa4295d9329c806ce2"></span><em class="property">const</em> bool <code class="sig-name descname">register_intel_jit_listener_</code> = {false}<a class="headerlink" href="#_CPPv4N18CompilationOptions28register_intel_jit_listener_E" title="Permalink to this definition">¶</a><br /></dt>
+<dt id="_CPPv4N18CompilationOptions12explain_typeE">
+<span id="_CPPv3N18CompilationOptions12explain_typeE"></span><span id="_CPPv2N18CompilationOptions12explain_typeE"></span><span id="CompilationOptions::explain_type__ExecutorExplainType"></span><span class="target" id="struct_compilation_options_1ad723a7117b93a64d540067f556af30d8"></span>ExecutorExplainType <code class="sig-name descname">explain_type</code> = {ExecutorExplainType::Default}<a class="headerlink" href="#_CPPv4N18CompilationOptions12explain_typeE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="member">
+<dt id="_CPPv4N18CompilationOptions27register_intel_jit_listenerE">
+<span id="_CPPv3N18CompilationOptions27register_intel_jit_listenerE"></span><span id="_CPPv2N18CompilationOptions27register_intel_jit_listenerE"></span><span id="CompilationOptions::register_intel_jit_listener__b"></span><span class="target" id="struct_compilation_options_1a309f7c58465822a72c85bf29a9c331dd"></span>bool <code class="sig-name descname">register_intel_jit_listener</code> = {false}<a class="headerlink" href="#_CPPv4N18CompilationOptions27register_intel_jit_listenerE" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+</div>
+<div class="breathe-sectiondef docutils container">
+<p class="breathe-sectiondef-title rubric">Public Static Functions</p>
+<dl class="function">
+<dt id="_CPPv4N18CompilationOptions11makeCpuOnlyERK18CompilationOptions">
+<span id="_CPPv3N18CompilationOptions11makeCpuOnlyERK18CompilationOptions"></span><span id="_CPPv2N18CompilationOptions11makeCpuOnlyERK18CompilationOptions"></span><span id="CompilationOptions::makeCpuOnly__CompilationOptionsCR"></span><span class="target" id="struct_compilation_options_1a49bad63c2852c573e8df6c501fef9e4b"></span><em class="property">static</em> <a class="reference internal" href="#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> <code class="sig-name descname">makeCpuOnly</code><span class="sig-paren">(</span><em class="property">const</em> <a class="reference internal" href="#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> &amp;<em>in</em><span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N18CompilationOptions11makeCpuOnlyERK18CompilationOptions" title="Permalink to this definition">¶</a><br /></dt>
+<dd></dd></dl>
+
+<dl class="function">
+<dt id="_CPPv4N18CompilationOptions8defaultsEK18ExecutorDeviceType">
+<span id="_CPPv3N18CompilationOptions8defaultsEK18ExecutorDeviceType"></span><span id="_CPPv2N18CompilationOptions8defaultsEK18ExecutorDeviceType"></span><span id="CompilationOptions::defaults__ExecutorDeviceTypeC"></span><span class="target" id="struct_compilation_options_1a10d562fb72350711566bf9e4c0c199aa"></span><em class="property">static</em> <a class="reference internal" href="#_CPPv418CompilationOptions" title="CompilationOptions">CompilationOptions</a> <code class="sig-name descname">defaults</code><span class="sig-paren">(</span><em class="property">const</em> ExecutorDeviceType <em>device_type</em> = ExecutorDeviceType::GPU<span class="sig-paren">)</span><a class="headerlink" href="#_CPPv4N18CompilationOptions8defaultsEK18ExecutorDeviceType" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
 
 </div>
