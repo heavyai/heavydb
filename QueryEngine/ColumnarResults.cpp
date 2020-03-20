@@ -360,23 +360,33 @@ void ColumnarResults::copyAllNonLazyColumns(
     }
   };
 
-  // parallelized by assigning each column to a thread
-  std::vector<std::future<void>> direct_copy_threads;
-  for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
-    if (is_column_non_lazily_fetched(col_idx)) {
-      direct_copy_threads.push_back(std::async(
-          std::launch::async,
-          [&rows, this](const size_t column_index) {
-            const size_t column_size = num_rows_ * target_types_[column_index].get_size();
-            rows.copyColumnIntoBuffer(
-                column_index, column_buffers_[column_index], column_size);
-          },
-          col_idx));
+  if (num_rows_ > 1000000) {
+    // parallelized by assigning each column to a thread
+    std::vector<std::future<void>> direct_copy_threads;
+    for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+      if (is_column_non_lazily_fetched(col_idx)) {
+        direct_copy_threads.push_back(std::async(
+            std::launch::async,
+            [&rows, this](const size_t column_index) {
+              const size_t column_size =
+                  num_rows_ * target_types_[column_index].get_size();
+              rows.copyColumnIntoBuffer(
+                  column_index, column_buffers_[column_index], column_size);
+            },
+            col_idx));
+      }
     }
-  }
 
-  for (auto& child : direct_copy_threads) {
-    child.wait();
+    for (auto& child : direct_copy_threads) {
+      child.wait();
+    }
+  } else {
+    for (size_t col_idx = 0; col_idx < num_columns; col_idx++) {
+      if (is_column_non_lazily_fetched(col_idx)) {
+        const size_t column_size = num_rows_ * target_types_[col_idx].get_size();
+        rows.copyColumnIntoBuffer(col_idx, column_buffers_[col_idx], column_size);
+      }
+    }
   }
 }
 

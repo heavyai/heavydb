@@ -63,25 +63,36 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
   } else {
     const ColumnarResults* col_frag{nullptr};
     {
-      std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex);
       const auto table_id = hash_col.get_table_id();
       const auto frag_id = fragment.fragmentId;
-      if (column_cache.empty() || !column_cache.count(table_id)) {
-        column_cache.insert(std::make_pair(
-            table_id, std::unordered_map<int, std::shared_ptr<const ColumnarResults>>()));
+      ColumnCacheMap::iterator it;
+      {
+        std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex);
+        it = column_cache.find(table_id);
+        if (it == column_cache.end()) {
+          size_t fragment_count =
+              get_temporary_table(executor->temporary_tables_, table_id).getFragCount();
+          it = column_cache
+                   .insert(
+                       std::make_pair(table_id,
+                                      std::vector<std::shared_ptr<const ColumnarResults>>(
+                                          fragment_count)))
+                   .first;
+        }
       }
-      auto& frag_id_to_result = column_cache[table_id];
-      if (frag_id_to_result.empty() || !frag_id_to_result.count(frag_id)) {
+
+      auto res = std::atomic_load(&it->second[frag_id]);
+      if (!res) {
+        auto expected = res;
         auto& tmp_table =
-            get_temporary_table(executor->temporary_tables_, hash_col.get_table_id());
-        frag_id_to_result.insert(
-            std::make_pair(frag_id,
-                           std::shared_ptr<const ColumnarResults>(
-                               columnarize_result(executor->row_set_mem_owner_,
-                                                  tmp_table.getResultSet(frag_id),
-                                                  frag_id))));
+            get_temporary_table(executor->temporary_tables_, table_id);
+        res = std::shared_ptr<const ColumnarResults>(
+            columnarize_result(executor->row_set_mem_owner_, tmp_table.getResultSet(frag_id), frag_id));
+        if (!atomic_compare_exchange_strong(&it->second[frag_id], &expected, res)) {
+          res = expected;
+        }
       }
-      col_frag = column_cache[table_id][frag_id].get();
+      col_frag = res.get();
     }
     col_buff = transferColumnIfNeeded(
         col_frag,
@@ -319,22 +330,31 @@ const int8_t* ColumnFetcher::getResultSetColumn(
     const Data_Namespace::MemoryLevel memory_level,
     const int device_id) const {
   const ColumnarResults* result{nullptr};
+  ColumnCacheMap::iterator it;
   {
     std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex_);
-    if (columnarized_table_cache_.empty() || !columnarized_table_cache_.count(table_id)) {
-      columnarized_table_cache_.insert(std::make_pair(
-          table_id, std::unordered_map<int, std::shared_ptr<const ColumnarResults>>()));
+    it = columnarized_table_cache_.find(table_id);
+    if (it == columnarized_table_cache_.end()) {
+      size_t fragment_count =
+          get_temporary_table(executor_->temporary_tables_, table_id).getFragCount();
+      it = columnarized_table_cache_
+               .insert(std::make_pair(
+                   table_id,
+                   std::vector<std::shared_ptr<const ColumnarResults>>(fragment_count)))
+               .first;
     }
-    auto& frag_id_to_result = columnarized_table_cache_[table_id];
-    if (frag_id_to_result.empty() || !frag_id_to_result.count(frag_id)) {
-      frag_id_to_result.insert(
-          std::make_pair(frag_id,
-                         std::shared_ptr<const ColumnarResults>(columnarize_result(
-                             executor_->row_set_mem_owner_, buffer, frag_id))));
-    }
-    CHECK_NE(size_t(0), columnarized_table_cache_.count(table_id));
-    result = columnarized_table_cache_[table_id][frag_id].get();
   }
+  auto res = std::atomic_load(&it->second[frag_id]);
+  if (!res) {
+    auto expected = res;
+    res = std::shared_ptr<const ColumnarResults>(
+        columnarize_result(executor_->row_set_mem_owner_, buffer, frag_id));
+    if (!atomic_compare_exchange_strong(&it->second[frag_id], &expected, res)) {
+      res = expected;
+    }
+  }
+  result = res.get();
+
   CHECK_GE(col_id, 0);
   return transferColumnIfNeeded(
       result, col_id, &executor_->getCatalog()->getDataMgr(), memory_level, device_id);
