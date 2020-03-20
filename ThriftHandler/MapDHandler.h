@@ -538,7 +538,8 @@ class MapDHandler : public MapDIf {
                     const Catalog_Namespace::UserMetadata& user_meta,
                     std::shared_ptr<Catalog_Namespace::Catalog> cat,
                     query_state::StdLog& stdlog);
-  void disconnect_impl(const SessionMap::iterator& session_it);
+  void disconnect_impl(const SessionMap::iterator& session_it,
+                       mapd_unique_lock<mapd_shared_mutex>& write_lock);
   void check_table_load_privileges(const TSessionId& session,
                                    const std::string& table_name);
   void check_table_load_privileges(const Catalog_Namespace::SessionInfo& session_info,

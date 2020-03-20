@@ -146,9 +146,9 @@ SessionMap::iterator MapDHandler::get_session_it_unsafe(
     check_session_exp_unsafe(session_it);
   } catch (const ForceDisconnect& e) {
     read_lock.unlock();
-    mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+    mapd_unique_lock<mapd_shared_mutex> write_lock(sessions_mutex_);
     auto session_it2 = get_session_from_map(session, sessions_);
-    disconnect_impl(session_it2);
+    disconnect_impl(session_it2, write_lock);
     THROW_MAPD_EXCEPTION(e.what());
   }
   return session_it;
@@ -157,12 +157,12 @@ SessionMap::iterator MapDHandler::get_session_it_unsafe(
 template <>
 SessionMap::iterator MapDHandler::get_session_it_unsafe(
     const TSessionId& session,
-    mapd_lock_guard<mapd_shared_mutex>& write_lock) {
+    mapd_unique_lock<mapd_shared_mutex>& write_lock) {
   auto session_it = get_session_from_map(session, sessions_);
   try {
     check_session_exp_unsafe(session_it);
   } catch (const ForceDisconnect& e) {
-    disconnect_impl(session_it);
+    disconnect_impl(session_it, write_lock);
     THROW_MAPD_EXCEPTION(e.what());
   }
   return session_it;
@@ -519,32 +519,36 @@ void MapDHandler::connect_impl(TSessionId& session,
 void MapDHandler::disconnect(const TSessionId& session) {
   auto stdlog = STDLOG();
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+
+  mapd_unique_lock<mapd_shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it_unsafe(session, write_lock);
   stdlog.setSessionInfo(session_it->second);
   const auto dbname = session_it->second->getCatalog().getCurrentDB().dbName;
   LOG(INFO) << "User " << session_it->second->get_currentUser().userName
             << " disconnected from database " << dbname << std::endl;
-  disconnect_impl(session_it);
+  disconnect_impl(session_it, write_lock);
 }
 
-void MapDHandler::disconnect_impl(const SessionMap::iterator& session_it) {
+void MapDHandler::disconnect_impl(const SessionMap::iterator& session_it,
+                                  mapd_unique_lock<mapd_shared_mutex>& write_lock) {
   // session_it existence should already have been checked (i.e. called via
   // get_session_it_unsafe(...))
   const auto session_id = session_it->second->get_session_id();
   if (leaf_aggregator_.leafCount() > 0) {
     leaf_aggregator_.disconnect(session_id);
   }
+  sessions_.erase(session_it);
+  write_lock.unlock();
+
   if (render_handler_) {
     render_handler_->disconnect(session_id);
   }
-  sessions_.erase(session_it);
 }
 
 void MapDHandler::switch_database(const TSessionId& session, const std::string& dbname) {
   auto stdlog = STDLOG(get_session_ptr(session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+  mapd_unique_lock<mapd_shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it_unsafe(session, write_lock);
 
   std::string dbname2 = dbname;  // switchDatabase() may reset dbname given as argument
@@ -561,7 +565,7 @@ void MapDHandler::switch_database(const TSessionId& session, const std::string& 
 void MapDHandler::clone_session(TSessionId& session2, const TSessionId& session1) {
   auto stdlog = STDLOG(get_session_ptr(session1));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+  mapd_unique_lock<mapd_shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it_unsafe(session1, write_lock);
 
   try {
@@ -2280,7 +2284,7 @@ void MapDHandler::set_execution_mode(const TSessionId& session,
                                      const TExecuteMode::type mode) {
   auto stdlog = STDLOG(get_session_ptr(session));
   stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  mapd_lock_guard<mapd_shared_mutex> write_lock(sessions_mutex_);
+  mapd_unique_lock<mapd_shared_mutex> write_lock(sessions_mutex_);
   auto session_it = get_session_it_unsafe(session, write_lock);
   if (leaf_aggregator_.leafCount() > 0) {
     leaf_aggregator_.set_execution_mode(session, mode);
