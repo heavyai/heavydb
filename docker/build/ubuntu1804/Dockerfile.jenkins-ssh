@@ -3,6 +3,7 @@ FROM docker-internal.mapd.com/mapd/core-build-ubuntu1804-cuda10.0
 RUN ln -snf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime
 RUN echo America/Los_Angeles > /etc/timezone
 
+RUN curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
 RUN add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
 RUN apt update && \
     apt install -y openssh-server\
@@ -11,7 +12,7 @@ RUN apt update && \
                    containerd.io \
     && rm -rf /var/lib/apt/lists/*
 
-RUN sshd-keygen
+RUN mkdir /var/run/sshd
 
 RUN useradd -m jenkins-slave
 WORKDIR /home/jenkins-slave
