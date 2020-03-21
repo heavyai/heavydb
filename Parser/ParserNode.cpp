@@ -2169,7 +2169,8 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                                         const std::string select_stmt,
                                         std::vector<TargetMetaInfo>& targets,
-                                        bool validate_only = false) {
+                                        bool validate_only = false,
+                                        std::vector<size_t> outer_fragment_indices = {}) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   auto& catalog = session->getCatalog();
 
@@ -2202,7 +2203,9 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                          10000,
                          false,
                          false,
-                         0.9};
+                         0.9,
+                         ExecutorType::Native,
+                         outer_fragment_indices};
   RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
   ExecutionResult result{std::make_shared<ResultSet>(std::vector<TargetInfo>{},
                                                      ExecutorDeviceType::CPU,
@@ -2216,31 +2219,65 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
   return result.getRows();
 }
 
-AggregatedResult InsertIntoTableAsSelectStmt::LocalConnector::query(
-    QueryStateProxy query_state_proxy,
-    std::string& sql_query_string,
-    bool validate_only) {
+size_t LocalConnector::getOuterFragmentCount(QueryStateProxy query_state_proxy,
+                                             std::string& sql_query_string) {
+  auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
+  auto& catalog = session->getCatalog();
+
+  auto executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
+#ifdef HAVE_CUDA
+  const auto device_type = session->get_executor_device_type();
+#else
+  const auto device_type = ExecutorDeviceType::CPU;
+#endif  // HAVE_CUDA
+  auto calcite_mgr = catalog.getCalciteMgr();
+
+  // TODO MAT this should actually get the global or the session parameter for
+  // view optimization
+  const auto query_ra =
+      calcite_mgr
+          ->process(
+              query_state_proxy, pg_shim(sql_query_string), {}, true, false, false, true)
+          .plan_result;
+  CompilationOptions co = {
+      device_type, true, ExecutorOptLevel::LoopStrengthReduction, false};
+  // TODO(adb): Need a better method of dropping constants into this ExecutionOptions
+  // struct
+  ExecutionOptions eo = {
+      false, true, false, true, false, false, false, false, 10000, false, false, 0.9};
+  RelAlgExecutor ra_executor(executor.get(), catalog, query_ra);
+  return ra_executor.getOuterFragmentCount(co, eo);
+}
+
+AggregatedResult LocalConnector::query(QueryStateProxy query_state_proxy,
+                                       std::string& sql_query_string,
+                                       std::vector<size_t> outer_frag_indices,
+                                       bool validate_only) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   // TODO(PS): Should we be using the shimmed query in getResultSet?
   std::string pg_shimmed_select_query = pg_shim(sql_query_string);
 
   std::vector<TargetMetaInfo> target_metainfos;
-  auto result_rows =
-      getResultSet(query_state_proxy, sql_query_string, target_metainfos, validate_only);
+  auto result_rows = getResultSet(query_state_proxy,
+                                  sql_query_string,
+                                  target_metainfos,
+                                  validate_only,
+                                  outer_frag_indices);
   AggregatedResult res = {result_rows, target_metainfos};
   return res;
 }
 
-AggregatedResult InsertIntoTableAsSelectStmt::LocalConnector::query(
+std::vector<AggregatedResult> LocalConnector::query(
     QueryStateProxy query_state_proxy,
-    std::string& sql_query_string) {
-  return query(query_state_proxy, sql_query_string, false);
+    std::string& sql_query_string,
+    std::vector<size_t> outer_frag_indices) {
+  auto res = query(query_state_proxy, sql_query_string, outer_frag_indices, false);
+  return {res};
 }
 
-void InsertIntoTableAsSelectStmt::LocalConnector::insertDataToLeaf(
-    const Catalog_Namespace::SessionInfo& session,
-    const size_t leaf_idx,
-    Fragmenter_Namespace::InsertData& insert_data) {
+void LocalConnector::insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
+                                      const size_t leaf_idx,
+                                      Fragmenter_Namespace::InsertData& insert_data) {
   CHECK(leaf_idx == 0);
   auto& catalog = session.getCatalog();
   auto created_td = catalog.getMetadataForTable(insert_data.tableId);
@@ -2250,26 +2287,22 @@ void InsertIntoTableAsSelectStmt::LocalConnector::insertDataToLeaf(
   created_td->fragmenter->insertDataNoCheckpoint(insert_data);
 }
 
-void InsertIntoTableAsSelectStmt::LocalConnector::checkpoint(
-    const Catalog_Namespace::SessionInfo& session,
-    int tableId) {
+void LocalConnector::checkpoint(const Catalog_Namespace::SessionInfo& session,
+                                int tableId) {
   auto& catalog = session.getCatalog();
   auto dbId = catalog.getCurrentDB().dbId;
   catalog.getDataMgr().checkpoint(dbId, tableId);
 }
 
-void InsertIntoTableAsSelectStmt::LocalConnector::rollback(
-    const Catalog_Namespace::SessionInfo& session,
-    int tableId) {
+void LocalConnector::rollback(const Catalog_Namespace::SessionInfo& session,
+                              int tableId) {
   auto& catalog = session.getCatalog();
   auto dbId = catalog.getCurrentDB().dbId;
   catalog.getDataMgr().checkpoint(dbId, tableId);
 }
 
-std::list<ColumnDescriptor>
-InsertIntoTableAsSelectStmt::LocalConnector::getColumnDescriptors(
-    AggregatedResult& result,
-    bool for_create) {
+std::list<ColumnDescriptor> LocalConnector::getColumnDescriptors(AggregatedResult& result,
+                                                                 bool for_create) {
   std::list<ColumnDescriptor> column_descriptors;
   std::list<ColumnDescriptor> column_descriptors_for_create;
 
@@ -2368,7 +2401,7 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
 
     // only validate the select query so we get the target types
     // correctly, but do not populate the result set
-    auto result = local_connector.query(query_state_proxy, select_query_, true);
+    auto result = local_connector.query(query_state_proxy, select_query_, {}, true);
     auto source_column_descriptors = local_connector.getColumnDescriptors(result, false);
 
     std::vector<const ColumnDescriptor*> target_column_descriptors =
@@ -2463,207 +2496,228 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
   }
 
   Fragmenter_Namespace::InsertDataLoader insertDataLoader(*leafs_connector_);
-  AggregatedResult res = leafs_connector_->query(query_state_proxy, select_query_);
   auto target_column_descriptors = get_target_column_descriptors(td);
-  auto result_rows = res.rs;
-  result_rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
-  const auto num_rows = result_rows->rowCount();
 
-  if (0 == num_rows) {
-    return;
-  }
+  auto outer_frag_count =
+      leafs_connector_->getOuterFragmentCount(query_state_proxy, select_query_);
 
-  size_t leaf_count = leafs_connector_->leafCount();
+  size_t outer_frag_end = outer_frag_count == 0 ? 1 : outer_frag_count;
 
-  size_t max_number_of_rows_per_package = std::min(num_rows / leaf_count, 64UL * 1024UL);
+  for (size_t outer_frag_idx = 0; outer_frag_idx < outer_frag_end; outer_frag_idx++) {
+    std::vector<size_t> allowed_outer_fragment_indices;
 
-  size_t start_row = 0;
-  size_t num_rows_to_process = std::min(num_rows, max_number_of_rows_per_package);
+    if (outer_frag_count) {
+      allowed_outer_fragment_indices.push_back(outer_frag_idx);
+    }
 
-  // ensure that at least one row is being processed
-  num_rows_to_process = std::max(num_rows_to_process, 1UL);
+    std::vector<AggregatedResult> query_results = leafs_connector_->query(
+        query_state_proxy, select_query_, allowed_outer_fragment_indices);
 
-  std::vector<std::unique_ptr<TargetValueConverter>> value_converters;
+    for (auto& res : query_results) {
+      auto result_rows = res.rs;
+      result_rows->setGeoReturnType(ResultSet::GeoReturnType::GeoTargetValue);
+      const auto num_rows = result_rows->rowCount();
 
-  TargetValueConverterFactory factory;
+      if (0 == num_rows) {
+        continue;
+      }
 
-  const int num_worker_threads = std::thread::hardware_concurrency();
+      size_t leaf_count = leafs_connector_->leafCount();
 
-  std::vector<size_t> thread_start_idx(num_worker_threads),
-      thread_end_idx(num_worker_threads);
-  bool can_go_parallel = !result_rows->isTruncated() && num_rows_to_process > 20000;
+      size_t max_number_of_rows_per_package =
+          std::min(num_rows / leaf_count, 64UL * 1024UL);
 
-  std::atomic<size_t> row_idx{0};
+      size_t start_row = 0;
+      size_t num_rows_to_process = std::min(num_rows, max_number_of_rows_per_package);
 
-  auto convert_function = [&result_rows,
-                           &value_converters,
-                           &row_idx,
-                           &num_rows_to_process,
-                           &thread_start_idx,
-                           &thread_end_idx](const int thread_id) {
-    const int num_cols = value_converters.size();
-    const size_t start = thread_start_idx[thread_id];
-    const size_t end = thread_end_idx[thread_id];
-    size_t idx = 0;
-    for (idx = start; idx < end; ++idx) {
-      const auto result_row = result_rows->getRowAtNoTranslations(idx);
-      if (!result_row.empty()) {
-        size_t target_row = row_idx.fetch_add(1);
+      // ensure that at least one row is being processed
+      num_rows_to_process = std::max(num_rows_to_process, 1UL);
 
-        if (target_row >= num_rows_to_process) {
-          break;
+      std::vector<std::unique_ptr<TargetValueConverter>> value_converters;
+
+      TargetValueConverterFactory factory;
+
+      const int num_worker_threads = std::thread::hardware_concurrency();
+
+      std::vector<size_t> thread_start_idx(num_worker_threads),
+          thread_end_idx(num_worker_threads);
+      bool can_go_parallel = !result_rows->isTruncated() && num_rows_to_process > 20000;
+
+      std::atomic<size_t> row_idx{0};
+
+      auto convert_function = [&result_rows,
+                               &value_converters,
+                               &row_idx,
+                               &num_rows_to_process,
+                               &thread_start_idx,
+                               &thread_end_idx](const int thread_id) {
+        const int num_cols = value_converters.size();
+        const size_t start = thread_start_idx[thread_id];
+        const size_t end = thread_end_idx[thread_id];
+        size_t idx = 0;
+        for (idx = start; idx < end; ++idx) {
+          const auto result_row = result_rows->getRowAtNoTranslations(idx);
+          if (!result_row.empty()) {
+            size_t target_row = row_idx.fetch_add(1);
+
+            if (target_row >= num_rows_to_process) {
+              break;
+            }
+
+            for (unsigned int col = 0; col < num_cols; col++) {
+              const auto& mapd_variant = result_row[col];
+              value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
+            }
+          }
         }
 
-        for (unsigned int col = 0; col < num_cols; col++) {
-          const auto& mapd_variant = result_row[col];
-          value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
+        thread_start_idx[thread_id] = idx;
+      };
+
+      auto single_threaded_convert_function = [&result_rows,
+                                               &value_converters,
+                                               &row_idx,
+                                               &num_rows_to_process,
+                                               &thread_start_idx,
+                                               &thread_end_idx](const int thread_id) {
+        const int num_cols = value_converters.size();
+        const size_t start = thread_start_idx[thread_id];
+        const size_t end = thread_end_idx[thread_id];
+        size_t idx = 0;
+        for (idx = start; idx < end; ++idx) {
+          size_t target_row = row_idx.fetch_add(1);
+
+          if (target_row >= num_rows_to_process) {
+            break;
+          }
+          const auto result_row = result_rows->getNextRow(false, false);
+          CHECK(!result_row.empty());
+          for (unsigned int col = 0; col < num_cols; col++) {
+            const auto& mapd_variant = result_row[col];
+            value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
+          }
         }
-      }
-    }
 
-    thread_start_idx[thread_id] = idx;
-  };
-
-  auto single_threaded_convert_function = [&result_rows,
-                                           &value_converters,
-                                           &row_idx,
-                                           &num_rows_to_process,
-                                           &thread_start_idx,
-                                           &thread_end_idx](const int thread_id) {
-    const int num_cols = value_converters.size();
-    const size_t start = thread_start_idx[thread_id];
-    const size_t end = thread_end_idx[thread_id];
-    size_t idx = 0;
-    for (idx = start; idx < end; ++idx) {
-      size_t target_row = row_idx.fetch_add(1);
-
-      if (target_row >= num_rows_to_process) {
-        break;
-      }
-      const auto result_row = result_rows->getNextRow(false, false);
-      CHECK(!result_row.empty());
-      for (unsigned int col = 0; col < num_cols; col++) {
-        const auto& mapd_variant = result_row[col];
-        value_converters[col]->convertToColumnarFormat(target_row, &mapd_variant);
-      }
-    }
-
-    thread_start_idx[thread_id] = idx;
-  };
-
-  if (can_go_parallel) {
-    const size_t entryCount = result_rows->entryCount();
-    for (size_t i = 0,
-                start_entry = 0,
-                stride = (entryCount + num_worker_threads - 1) / num_worker_threads;
-         i < num_worker_threads && start_entry < entryCount;
-         ++i, start_entry += stride) {
-      const auto end_entry = std::min(start_entry + stride, entryCount);
-      thread_start_idx[i] = start_entry;
-      thread_end_idx[i] = end_entry;
-    }
-
-  } else {
-    thread_start_idx[0] = 0;
-    thread_end_idx[0] = result_rows->entryCount();
-  }
-
-  std::shared_ptr<Executor> executor;
-
-  if (g_enable_experimental_string_functions) {
-    executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
-  }
-
-  while (start_row < num_rows) {
-    try {
-      value_converters.clear();
-      row_idx = 0;
-      int colNum = 0;
-      for (const auto targetDescriptor : target_column_descriptors) {
-        auto sourceDataMetaInfo = res.targets_meta[colNum++];
-
-        ConverterCreateParameter param{
-            num_rows_to_process,
-            catalog,
-            sourceDataMetaInfo,
-            targetDescriptor,
-            targetDescriptor->columnType,
-            !targetDescriptor->columnType.get_notnull(),
-            result_rows->getRowSetMemOwner()->getLiteralStringDictProxy(),
-            g_enable_experimental_string_functions
-                ? executor->getStringDictionaryProxy(
-                      sourceDataMetaInfo.get_type_info().get_comp_param(),
-                      result_rows->getRowSetMemOwner(),
-                      true)
-                : nullptr};
-        auto converter = factory.create(param);
-        value_converters.push_back(std::move(converter));
-      }
+        thread_start_idx[thread_id] = idx;
+      };
 
       if (can_go_parallel) {
-        std::vector<std::future<void>> worker_threads;
-        for (int i = 0; i < num_worker_threads; ++i) {
-          worker_threads.push_back(std::async(std::launch::async, convert_function, i));
-        }
-
-        for (auto& child : worker_threads) {
-          child.wait();
-        }
-        for (auto& child : worker_threads) {
-          child.get();
+        const size_t entryCount = result_rows->entryCount();
+        for (size_t i = 0,
+                    start_entry = 0,
+                    stride = (entryCount + num_worker_threads - 1) / num_worker_threads;
+             i < num_worker_threads && start_entry < entryCount;
+             ++i, start_entry += stride) {
+          const auto end_entry = std::min(start_entry + stride, entryCount);
+          thread_start_idx[i] = start_entry;
+          thread_end_idx[i] = end_entry;
         }
 
       } else {
-        single_threaded_convert_function(0);
+        thread_start_idx[0] = 0;
+        thread_end_idx[0] = result_rows->entryCount();
       }
 
-      // finalize the insert data
-      {
-        auto finalizer_func =
-            [](std::unique_ptr<TargetValueConverter>::pointer targetValueConverter) {
-              targetValueConverter->finalizeDataBlocksForInsertData();
-            };
-        std::vector<std::future<void>> worker_threads;
-        for (auto& converterPtr : value_converters) {
-          worker_threads.push_back(
-              std::async(std::launch::async, finalizer_func, converterPtr.get()));
-        }
+      std::shared_ptr<Executor> executor;
 
-        for (auto& child : worker_threads) {
-          child.wait();
-        }
-        for (auto& child : worker_threads) {
-          child.get();
-        }
+      if (g_enable_experimental_string_functions) {
+        executor = Executor::getExecutor(catalog.getCurrentDB().dbId);
       }
 
-      Fragmenter_Namespace::InsertData insert_data;
-      insert_data.databaseId = catalog.getCurrentDB().dbId;
-      CHECK(td);
-      insert_data.tableId = td->tableId;
-      insert_data.numRows = num_rows_to_process;
+      while (start_row < num_rows) {
+        try {
+          value_converters.clear();
+          row_idx = 0;
+          int colNum = 0;
+          for (const auto targetDescriptor : target_column_descriptors) {
+            auto sourceDataMetaInfo = res.targets_meta[colNum++];
 
-      for (int col_idx = 0; col_idx < target_column_descriptors.size(); col_idx++) {
-        value_converters[col_idx]->addDataBlocksToInsertData(insert_data);
-      }
-
-      insertDataLoader.insertData(*session, insert_data);
-    } catch (...) {
-      try {
-        if (td->nShards) {
-          const auto shard_tables = catalog.getPhysicalTablesDescriptors(td);
-          for (const auto ptd : shard_tables) {
-            leafs_connector_->rollback(*session, ptd->tableId);
+            ConverterCreateParameter param{
+                num_rows_to_process,
+                catalog,
+                sourceDataMetaInfo,
+                targetDescriptor,
+                targetDescriptor->columnType,
+                !targetDescriptor->columnType.get_notnull(),
+                result_rows->getRowSetMemOwner()->getLiteralStringDictProxy(),
+                g_enable_experimental_string_functions
+                    ? executor->getStringDictionaryProxy(
+                          sourceDataMetaInfo.get_type_info().get_comp_param(),
+                          result_rows->getRowSetMemOwner(),
+                          true)
+                    : nullptr};
+            auto converter = factory.create(param);
+            value_converters.push_back(std::move(converter));
           }
+
+          if (can_go_parallel) {
+            std::vector<std::future<void>> worker_threads;
+            for (int i = 0; i < num_worker_threads; ++i) {
+              worker_threads.push_back(
+                  std::async(std::launch::async, convert_function, i));
+            }
+
+            for (auto& child : worker_threads) {
+              child.wait();
+            }
+            for (auto& child : worker_threads) {
+              child.get();
+            }
+
+          } else {
+            single_threaded_convert_function(0);
+          }
+
+          // finalize the insert data
+          {
+            auto finalizer_func =
+                [](std::unique_ptr<TargetValueConverter>::pointer targetValueConverter) {
+                  targetValueConverter->finalizeDataBlocksForInsertData();
+                };
+            std::vector<std::future<void>> worker_threads;
+            for (auto& converterPtr : value_converters) {
+              worker_threads.push_back(
+                  std::async(std::launch::async, finalizer_func, converterPtr.get()));
+            }
+
+            for (auto& child : worker_threads) {
+              child.wait();
+            }
+            for (auto& child : worker_threads) {
+              child.get();
+            }
+          }
+
+          Fragmenter_Namespace::InsertData insert_data;
+          insert_data.databaseId = catalog.getCurrentDB().dbId;
+          CHECK(td);
+          insert_data.tableId = td->tableId;
+          insert_data.numRows = num_rows_to_process;
+
+          for (int col_idx = 0; col_idx < target_column_descriptors.size(); col_idx++) {
+            value_converters[col_idx]->addDataBlocksToInsertData(insert_data);
+          }
+
+          insertDataLoader.insertData(*session, insert_data);
+        } catch (...) {
+          try {
+            if (td->nShards) {
+              const auto shard_tables = catalog.getPhysicalTablesDescriptors(td);
+              for (const auto ptd : shard_tables) {
+                leafs_connector_->rollback(*session, ptd->tableId);
+              }
+            }
+            leafs_connector_->rollback(*session, td->tableId);
+          } catch (...) {
+            // eat it
+          }
+          throw;
         }
-        leafs_connector_->rollback(*session, td->tableId);
-      } catch (...) {
-        // eat it
+        start_row += num_rows_to_process;
+        num_rows_to_process =
+            std::min(num_rows - start_row, max_number_of_rows_per_package);
       }
-      throw;
     }
-    start_row += num_rows_to_process;
-    num_rows_to_process = std::min(num_rows - start_row, max_number_of_rows_per_package);
   }
 
   if (!is_temporary) {
@@ -2715,8 +2769,8 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
 
     // only validate the select query so we get the target types
     // correctly, but do not populate the result set
-    auto result =
-        local_connector.query(query_state->createQueryStateProxy(), select_query_, true);
+    auto result = local_connector.query(
+        query_state->createQueryStateProxy(), select_query_, {}, true);
     const auto column_descriptors_for_create =
         local_connector.getColumnDescriptors(result, true);
 
@@ -3956,11 +4010,16 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       &session_copy, boost::null_deleter());
   auto query_state = query_state::QueryState::create(session_ptr, *select_stmt);
   auto stdlog = STDLOG(query_state);
-  if (SysCatalog::instance().isAggregator()) {
-    // allow copy to statement for stand alone leafs
-    throw std::runtime_error("Distributed export not supported yet");
-  }
+  auto query_state_proxy = query_state->createQueryStateProxy();
+
   auto& catalog = session.getCatalog();
+
+  LocalConnector local_connector;
+
+  if (!leafs_connector_) {
+    leafs_connector_ = &local_connector;
+  }
+
   Importer_NS::CopyParams copy_params;
   if (!options.empty()) {
     for (auto& p : options) {
@@ -4028,10 +4087,6 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
       }
     }
   }
-  std::vector<TargetMetaInfo> targets;
-  const auto results =
-      getResultSet(query_state->createQueryStateProxy(), *select_stmt, targets);
-  TargetMetaInfo* td = targets.data();
 
   std::ofstream outfile;
   if (file_path->empty() || !boost::filesystem::path(*file_path).is_absolute()) {
@@ -4054,9 +4109,11 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     throw std::runtime_error("Cannot open file: " + *file_path);
   }
   if (copy_params.has_header == Importer_NS::ImportHeaderRow::HAS_HEADER) {
+    auto result = local_connector.query(query_state_proxy, *select_stmt, {}, true);
+
     bool not_first = false;
     size_t i = 0;
-    for (const auto& target : targets) {
+    for (const auto& target : result.targets_meta) {
       std::string col_name = target.get_resname();
       if (col_name.empty()) {
         col_name = "result_" + std::to_string(i + 1);
@@ -4071,124 +4128,148 @@ void ExportQueryStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
     outfile << copy_params.line_delim;
   }
-  while (true) {
-    const auto crt_row = results->getNextRow(true, true);
-    if (crt_row.empty()) {
-      break;
+
+  auto outer_frag_count =
+      leafs_connector_->getOuterFragmentCount(query_state_proxy, *select_stmt);
+
+  size_t outer_frag_end = outer_frag_count == 0 ? 1 : outer_frag_count;
+
+  for (size_t outer_frag_idx = 0; outer_frag_idx < outer_frag_end; outer_frag_idx++) {
+    std::vector<size_t> allowed_outer_fragment_indices;
+
+    if (outer_frag_count) {
+      allowed_outer_fragment_indices.push_back(outer_frag_idx);
     }
-    bool not_first = false;
-    for (size_t i = 0; i < results->colCount(); ++i) {
-      bool is_null;
-      const auto tv = crt_row[i];
-      const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
-      if (not_first) {
-        outfile << copy_params.delimiter;
-      } else {
-        not_first = true;
-      }
-      if (copy_params.quoted) {
-        outfile << copy_params.quote;
-      }
-      const auto& ti = td[i].get_type_info();
-      if (!scalar_tv) {
-        outfile << datum_to_string(crt_row[i], ti, " | ");
-        if (copy_params.quoted) {
-          outfile << copy_params.quote;
+
+    std::vector<AggregatedResult> query_results = leafs_connector_->query(
+        query_state_proxy, *select_stmt, allowed_outer_fragment_indices);
+
+    for (auto& res : query_results) {
+      auto results = res.rs;
+
+      const std::vector<TargetMetaInfo>& targets = res.targets_meta;
+      const TargetMetaInfo* td = targets.data();
+
+      while (true) {
+        const auto crt_row = results->getNextRow(true, true);
+        if (crt_row.empty()) {
+          break;
         }
-        continue;
-      }
-      if (boost::get<int64_t>(scalar_tv)) {
-        auto int_val = *(boost::get<int64_t>(scalar_tv));
-        switch (ti.get_type()) {
-          case kBOOLEAN:
-            is_null = (int_val == NULL_BOOLEAN);
-            break;
-          case kTINYINT:
-            is_null = (int_val == NULL_TINYINT);
-            break;
-          case kSMALLINT:
-            is_null = (int_val == NULL_SMALLINT);
-            break;
-          case kINT:
-            is_null = (int_val == NULL_INT);
-            break;
-          case kBIGINT:
-            is_null = (int_val == NULL_BIGINT);
-            break;
-          case kTIME:
-          case kTIMESTAMP:
-          case kDATE:
-            is_null = (int_val == NULL_BIGINT);
-            break;
-          default:
-            is_null = false;
-        }
-        if (is_null) {
-          outfile << copy_params.null_str;
-        } else if (ti.get_type() == kTIME) {
-          const auto t = static_cast<time_t>(int_val);
-          std::tm tm_struct;
-          gmtime_r(&t, &tm_struct);
-          char buf[9];
-          strftime(buf, 9, "%T", &tm_struct);
-          outfile << buf;
-        } else {
-          outfile << int_val;
-        }
-      } else if (boost::get<double>(scalar_tv)) {
-        auto real_val = *(boost::get<double>(scalar_tv));
-        if (ti.get_type() == kFLOAT) {
-          is_null = (real_val == NULL_FLOAT);
-        } else {
-          is_null = (real_val == NULL_DOUBLE);
-        }
-        if (is_null) {
-          outfile << copy_params.null_str;
-        } else if (ti.get_type() == kNUMERIC) {
-          outfile << std::setprecision(ti.get_precision()) << real_val;
-        } else {
-          outfile << std::setprecision(std::numeric_limits<double>::digits10 + 1)
-                  << real_val;
-        }
-      } else if (boost::get<float>(scalar_tv)) {
-        CHECK_EQ(kFLOAT, ti.get_type());
-        auto real_val = *(boost::get<float>(scalar_tv));
-        if (real_val == NULL_FLOAT) {
-          outfile << copy_params.null_str;
-        } else {
-          outfile << std::setprecision(std::numeric_limits<float>::digits10 + 1)
-                  << real_val;
-        }
-      } else {
-        auto s = boost::get<NullableString>(scalar_tv);
-        is_null = !s || boost::get<void*>(s);
-        if (is_null) {
-          outfile << copy_params.null_str;
-        } else {
-          auto s_notnull = boost::get<std::string>(s);
-          CHECK(s_notnull);
-          if (!copy_params.quoted) {
-            outfile << *s_notnull;
+        bool not_first = false;
+        for (size_t i = 0; i < results->colCount(); ++i) {
+          bool is_null;
+          const auto tv = crt_row[i];
+          const auto scalar_tv = boost::get<ScalarTargetValue>(&tv);
+          if (not_first) {
+            outfile << copy_params.delimiter;
           } else {
-            size_t q = s_notnull->find(copy_params.quote);
-            if (q == std::string::npos) {
-              outfile << *s_notnull;
+            not_first = true;
+          }
+          if (copy_params.quoted) {
+            outfile << copy_params.quote;
+          }
+          const auto& ti = td[i].get_type_info();
+          if (!scalar_tv) {
+            outfile << datum_to_string(crt_row[i], ti, " | ");
+            if (copy_params.quoted) {
+              outfile << copy_params.quote;
+            }
+            continue;
+          }
+          if (boost::get<int64_t>(scalar_tv)) {
+            auto int_val = *(boost::get<int64_t>(scalar_tv));
+            switch (ti.get_type()) {
+              case kBOOLEAN:
+                is_null = (int_val == NULL_BOOLEAN);
+                break;
+              case kTINYINT:
+                is_null = (int_val == NULL_TINYINT);
+                break;
+              case kSMALLINT:
+                is_null = (int_val == NULL_SMALLINT);
+                break;
+              case kINT:
+                is_null = (int_val == NULL_INT);
+                break;
+              case kBIGINT:
+                is_null = (int_val == NULL_BIGINT);
+                break;
+              case kTIME:
+              case kTIMESTAMP:
+              case kDATE:
+                is_null = (int_val == NULL_BIGINT);
+                break;
+              default:
+                is_null = false;
+            }
+            if (is_null) {
+              outfile << copy_params.null_str;
+            } else if (ti.get_type() == kTIME) {
+              const auto t = static_cast<time_t>(int_val);
+              std::tm tm_struct;
+              gmtime_r(&t, &tm_struct);
+              char buf[9];
+              strftime(buf, 9, "%T", &tm_struct);
+              outfile << buf;
             } else {
-              std::string str(*s_notnull);
-              while (q != std::string::npos) {
-                str.insert(q, 1, copy_params.escape);
-                q = str.find(copy_params.quote, q + 2);
+              outfile << int_val;
+            }
+          } else if (boost::get<double>(scalar_tv)) {
+            auto real_val = *(boost::get<double>(scalar_tv));
+            if (ti.get_type() == kFLOAT) {
+              is_null = (real_val == NULL_FLOAT);
+            } else {
+              is_null = (real_val == NULL_DOUBLE);
+            }
+            if (is_null) {
+              outfile << copy_params.null_str;
+            } else if (ti.get_type() == kNUMERIC) {
+              outfile << std::setprecision(ti.get_precision()) << real_val;
+            } else {
+              outfile << std::setprecision(std::numeric_limits<double>::digits10 + 1)
+                      << real_val;
+            }
+          } else if (boost::get<float>(scalar_tv)) {
+            CHECK_EQ(kFLOAT, ti.get_type());
+            auto real_val = *(boost::get<float>(scalar_tv));
+            if (real_val == NULL_FLOAT) {
+              outfile << copy_params.null_str;
+            } else {
+              outfile << std::setprecision(std::numeric_limits<float>::digits10 + 1)
+                      << real_val;
+            }
+          } else {
+            auto s = boost::get<NullableString>(scalar_tv);
+            is_null = !s || boost::get<void*>(s);
+            if (is_null) {
+              outfile << copy_params.null_str;
+            } else {
+              auto s_notnull = boost::get<std::string>(s);
+              CHECK(s_notnull);
+              if (!copy_params.quoted) {
+                outfile << *s_notnull;
+              } else {
+                size_t q = s_notnull->find(copy_params.quote);
+                if (q == std::string::npos) {
+                  outfile << *s_notnull;
+                } else {
+                  std::string str(*s_notnull);
+                  while (q != std::string::npos) {
+                    str.insert(q, 1, copy_params.escape);
+                    q = str.find(copy_params.quote, q + 2);
+                  }
+                  outfile << str;
+                }
               }
-              outfile << str;
             }
           }
+          if (copy_params.quoted) {
+            outfile << copy_params.quote;
+          }
         }
-      }
-      if (copy_params.quoted) {
-        outfile << copy_params.quote;
+        outfile << copy_params.line_delim;
       }
     }
-    outfile << copy_params.line_delim;
   }
   outfile.close();
 }

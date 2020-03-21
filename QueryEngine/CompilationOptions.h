@@ -17,6 +17,8 @@
 #ifndef QUERYENGINE_COMPILATIONOPTIONS_H
 #define QUERYENGINE_COMPILATIONOPTIONS_H
 
+#include <vector>
+
 enum class ExecutorDeviceType { CPU, GPU };
 
 enum class ExecutorOptLevel { Default, LoopStrengthReduction, ReductionJIT };
@@ -73,6 +75,7 @@ struct ExecutionOptions {
   const bool just_calcite_explain;
   const double gpu_input_mem_limit_percent;  // punt to CPU if input memory exceeds this
   ExecutorType executor_type = ExecutorType::Native;
+  const std::vector<size_t> outer_fragment_indices{};
 };
 
 #endif  // QUERYENGINE_COMPILATIONOPTIONS_H

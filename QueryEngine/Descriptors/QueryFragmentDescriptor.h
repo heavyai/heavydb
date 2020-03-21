@@ -66,7 +66,8 @@ class QueryFragmentDescriptor {
   QueryFragmentDescriptor(const RelAlgExecutionUnit& ra_exe_unit,
                           const std::vector<InputTableInfo>& query_infos,
                           const std::vector<Data_Namespace::MemoryInfo>& gpu_mem_infos,
-                          const double gpu_input_mem_limit_percent);
+                          const double gpu_input_mem_limit_percent,
+                          const std::vector<size_t> allowed_outer_fragment_indices);
 
   static void computeAllTablesFragments(
       std::map<int, const TableFragments*>& all_tables_fragments,
@@ -140,6 +141,7 @@ class QueryFragmentDescriptor {
   }
 
  protected:
+  std::vector<size_t> allowed_outer_fragment_indices_;
   size_t outer_fragments_size_ = 0;
   int64_t rowid_lookup_key_ = -1;
 

@@ -89,6 +89,8 @@ class RelAlgExecutor : private StorageIOFacility<RelAlgExecutorTraits> {
       , now_(0)
       , queue_time_ms_(0) {}
 
+  size_t getOuterFragmentCount(const CompilationOptions& co, const ExecutionOptions& eo);
+
   ExecutionResult executeRelAlgQuery(const CompilationOptions& co,
                                      const ExecutionOptions& eo,
                                      RenderInfo* render_info);

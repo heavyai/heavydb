@@ -1258,7 +1258,8 @@ ResultSetPtr Executor::executeWorkUnitImpl(
         query_comp_desc_owned->getDeviceType() == ExecutorDeviceType::GPU
             ? cat.getDataMgr().getMemoryInfo(Data_Namespace::MemoryLevel::GPU_LEVEL)
             : std::vector<Data_Namespace::MemoryInfo>{},
-        eo.gpu_input_mem_limit_percent);
+        eo.gpu_input_mem_limit_percent,
+        eo.outer_fragment_indices);
 
     if (!eo.just_validate) {
       int available_cpus = cpu_threads();

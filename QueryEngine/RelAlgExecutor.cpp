@@ -68,6 +68,85 @@ std::unordered_set<PhysicalInput> get_physical_inputs(
 
 }  // namespace
 
+size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
+                                             const ExecutionOptions& eo) {
+  if (eo.find_push_down_candidates) {
+    return 0;
+  }
+
+  if (eo.just_explain) {
+    return 0;
+  }
+
+  CHECK(query_dag_);
+
+  query_dag_->resetQueryExecutionState();
+  const auto& ra = query_dag_->getRootNode();
+
+  std::lock_guard<std::mutex> lock(executor_->execute_mutex_);
+  ScopeGuard row_set_holder = [this] { cleanupPostExecution(); };
+  const auto phys_inputs = get_physical_inputs(cat_, &ra);
+  const auto phys_table_ids = get_physical_table_inputs(&ra);
+  executor_->setCatalog(&cat_);
+  executor_->setupCaching(phys_inputs, phys_table_ids);
+
+  ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
+  auto ed_seq = RaExecutionSequence(&ra);
+
+  if (!getSubqueries().empty()) {
+    return 0;
+  }
+
+  CHECK(!ed_seq.empty());
+  if (ed_seq.size() > 1) {
+    return 0;
+  }
+
+  decltype(temporary_tables_)().swap(temporary_tables_);
+  decltype(target_exprs_owned_)().swap(target_exprs_owned_);
+  executor_->catalog_ = &cat_;
+  executor_->temporary_tables_ = &temporary_tables_;
+
+  WindowProjectNodeContext::reset();
+  auto exec_desc_ptr = ed_seq.getDescriptor(0);
+  CHECK(exec_desc_ptr);
+  auto& exec_desc = *exec_desc_ptr;
+  const auto body = exec_desc.getBody();
+  if (body->isNop()) {
+    return 0;
+  }
+
+  const auto project = dynamic_cast<const RelProject*>(body);
+  if (project) {
+    auto work_unit =
+        createProjectWorkUnit(project, {{}, SortAlgorithm::Default, 0, 0}, eo);
+
+    return get_frag_count_of_table(work_unit.exe_unit.input_descs[0].getTableId(),
+                                   executor_);
+  }
+
+  const auto compound = dynamic_cast<const RelCompound*>(body);
+  if (compound) {
+    if (compound->isDeleteViaSelect()) {
+      return 0;
+    } else if (compound->isUpdateViaSelect()) {
+      return 0;
+    } else {
+      if (compound->isAggregate()) {
+        return 0;
+      }
+
+      const auto work_unit =
+          createCompoundWorkUnit(compound, {{}, SortAlgorithm::Default, 0, 0}, eo);
+
+      return get_frag_count_of_table(work_unit.exe_unit.input_descs[0].getTableId(),
+                                     executor_);
+    }
+  }
+
+  return 0;
+}
+
 ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
                                                    const ExecutionOptions& eo,
                                                    RenderInfo* render_info) {
@@ -361,7 +440,8 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       eo.find_push_down_candidates,
       eo.just_calcite_explain,
       eo.gpu_input_mem_limit_percent,
-      eo.executor_type};
+      eo.executor_type,
+      step_idx == 0 ? eo.outer_fragment_indices : std::vector<size_t>()};
 
   const auto compound = dynamic_cast<const RelCompound*>(body);
   if (compound) {

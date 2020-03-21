@@ -23,8 +23,10 @@ QueryFragmentDescriptor::QueryFragmentDescriptor(
     const RelAlgExecutionUnit& ra_exe_unit,
     const std::vector<InputTableInfo>& query_infos,
     const std::vector<Data_Namespace::MemoryInfo>& gpu_mem_infos,
-    const double gpu_input_mem_limit_percent)
-    : gpu_input_mem_limit_percent_(gpu_input_mem_limit_percent) {
+    const double gpu_input_mem_limit_percent,
+    std::vector<size_t> allowed_outer_fragment_indices)
+    : allowed_outer_fragment_indices_(allowed_outer_fragment_indices)
+    , gpu_input_mem_limit_percent_(gpu_input_mem_limit_percent) {
   const size_t input_desc_count{ra_exe_unit.input_descs.size()};
   CHECK_EQ(query_infos.size(), input_desc_count);
   for (size_t table_idx = 0; table_idx < input_desc_count; ++table_idx) {
@@ -116,6 +118,14 @@ void QueryFragmentDescriptor::buildFragmentPerKernelMap(
   }
 
   for (size_t i = 0; i < outer_fragments->size(); ++i) {
+    if (!allowed_outer_fragment_indices_.empty()) {
+      if (std::find(allowed_outer_fragment_indices_.begin(),
+                    allowed_outer_fragment_indices_.end(),
+                    i) == allowed_outer_fragment_indices_.end()) {
+        continue;
+      }
+    }
+
     const auto& fragment = (*outer_fragments)[i];
     const auto skip_frag = executor->skipFragment(
         outer_table_desc, fragment, ra_exe_unit.simple_quals, frag_offsets, i);
@@ -189,6 +199,14 @@ void QueryFragmentDescriptor::buildMultifragKernelMap(
 
   for (size_t outer_frag_id = 0; outer_frag_id < outer_fragments->size();
        ++outer_frag_id) {
+    if (!allowed_outer_fragment_indices_.empty()) {
+      if (std::find(allowed_outer_fragment_indices_.begin(),
+                    allowed_outer_fragment_indices_.end(),
+                    outer_frag_id) == allowed_outer_fragment_indices_.end()) {
+        continue;
+      }
+    }
+
     const auto& fragment = (*outer_fragments)[outer_frag_id];
     auto skip_frag = executor->skipFragment(outer_table_desc,
                                             fragment,

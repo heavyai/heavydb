@@ -981,6 +981,43 @@ class CreateTableStmt : public DDLStmt {
   std::list<std::unique_ptr<NameValueAssign>> storage_options_;
 };
 
+struct DistributedConnector
+    : public Fragmenter_Namespace::InsertDataLoader::DistributedConnector {
+  virtual ~DistributedConnector() {}
+
+  virtual size_t getOuterFragmentCount(QueryStateProxy,
+                                       std::string& sql_query_string) = 0;
+  virtual std::vector<AggregatedResult> query(QueryStateProxy,
+                                              std::string& sql_query_string,
+                                              std::vector<size_t> outer_frag_indices) = 0;
+  virtual void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
+                          int tableId) = 0;
+  virtual void rollback(const Catalog_Namespace::SessionInfo& parent_session_info,
+                        int tableId) = 0;
+};
+
+struct LocalConnector : public DistributedConnector {
+  virtual ~LocalConnector() {}
+
+  size_t getOuterFragmentCount(QueryStateProxy, std::string& sql_query_string) override;
+
+  AggregatedResult query(QueryStateProxy,
+                         std::string& sql_query_string,
+                         std::vector<size_t> outer_frag_indices,
+                         bool validate_only);
+  std::vector<AggregatedResult> query(QueryStateProxy,
+                                      std::string& sql_query_string,
+                                      std::vector<size_t> outer_frag_indices) override;
+  size_t leafCount() override { return 1; };
+  void insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
+                        const size_t leaf_idx,
+                        Fragmenter_Namespace::InsertData& insert_data) override;
+  void checkpoint(const Catalog_Namespace::SessionInfo& session, int tableId) override;
+  void rollback(const Catalog_Namespace::SessionInfo& session, int tableId) override;
+  std::list<ColumnDescriptor> getColumnDescriptors(AggregatedResult& result,
+                                                   bool for_create);
+};
+
 /*
  * @type InsertIntoTableAsSelectStmt
  * @brief INSERT INTO TABLE SELECT statement
@@ -1009,31 +1046,6 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
   std::string& get_table() { return table_name_; }
 
   std::string& get_select_query() { return select_query_; }
-
-  struct DistributedConnector
-      : public Fragmenter_Namespace::InsertDataLoader::DistributedConnector {
-    virtual AggregatedResult query(QueryStateProxy, std::string& sql_query_string) = 0;
-    virtual void checkpoint(const Catalog_Namespace::SessionInfo& parent_session_info,
-                            int tableId) = 0;
-    virtual void rollback(const Catalog_Namespace::SessionInfo& parent_session_info,
-                          int tableId) = 0;
-  };
-
-  struct LocalConnector : public DistributedConnector {
-    virtual ~LocalConnector() {}
-    AggregatedResult query(QueryStateProxy,
-                           std::string& sql_query_string,
-                           bool validate_only);
-    AggregatedResult query(QueryStateProxy, std::string& sql_query_string) override;
-    size_t leafCount() override { return 1; };
-    void insertDataToLeaf(const Catalog_Namespace::SessionInfo& session,
-                          const size_t leaf_idx,
-                          Fragmenter_Namespace::InsertData& insert_data) override;
-    void checkpoint(const Catalog_Namespace::SessionInfo& session, int tableId) override;
-    void rollback(const Catalog_Namespace::SessionInfo& session, int tableId) override;
-    std::list<ColumnDescriptor> getColumnDescriptors(AggregatedResult& result,
-                                                     bool for_create);
-  };
 
   DistributedConnector* leafs_connector_ = nullptr;
 
@@ -1753,6 +1765,8 @@ class ExportQueryStmt : public DDLStmt {
   }
   void execute(const Catalog_Namespace::SessionInfo& session) override;
   const std::string get_select_stmt() const { return *select_stmt; }
+
+  DistributedConnector* leafs_connector_ = nullptr;
 
  private:
   std::unique_ptr<std::string> select_stmt;

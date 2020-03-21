@@ -219,15 +219,33 @@ void QueryRunner::clearCpuMemory() const {
   Executor::clearMemory(Data_Namespace::MemoryLevel::CPU_LEVEL);
 }
 
+std::string apply_copy_to_shim(const std::string& query_str) {
+  auto result = query_str;
+  {
+    boost::regex copy_to{R"(COPY\s*\(([^#])(.+)\)\s+TO\s)",
+                         boost::regex::extended | boost::regex::icase};
+    apply_shim(result, copy_to, [](std::string& result, const boost::smatch& what) {
+      result.replace(
+          what.position(), what.length(), "COPY (#~#" + what[1] + what[2] + "#~#) TO  ");
+    });
+  }
+  return result;
+}
+
 void QueryRunner::runDDLStatement(const std::string& stmt_str_in) {
   CHECK(session_info_);
   CHECK(!Catalog_Namespace::SysCatalog::instance().isAggregator());
 
-  auto stmt_str = stmt_str_in;
+  std::string stmt_str = stmt_str_in;
   // First remove special chars
   boost::algorithm::trim_left_if(stmt_str, boost::algorithm::is_any_of("\n"));
   // Then remove spaces
   boost::algorithm::trim_left(stmt_str);
+
+  ParserWrapper pw{stmt_str};
+  if (pw.is_copy_to) {
+    stmt_str = apply_copy_to_shim(stmt_str_in);
+  }
 
   auto query_state = create_query_state(session_info_, stmt_str);
   auto stdlog = STDLOG(query_state);
