@@ -11276,13 +11276,13 @@ TEST(Update, SimpleFilter) {
     }
 
     c("UPDATE simple_filter SET x = 6 WHERE y > 3;", dt);
-    c("SELECT * FROM simple_filter ORDER BY x;", dt);
+    c("SELECT * FROM simple_filter ORDER BY x, y, z;", dt);
     c("UPDATE simple_filter SET y = 2*x WHERE y > 4;", dt);
-    c("SELECT * FROM simple_filter ORDER BY x;", dt);
+    c("SELECT * FROM simple_filter ORDER BY x, y, z;", dt);
     c("UPDATE simple_filter SET y = 2*x WHERE z > 1.02;", dt);
-    c("SELECT * FROM simple_filter ORDER BY x;", dt);
+    c("SELECT * FROM simple_filter ORDER BY x, y, z;", dt);
     c("UPDATE simple_filter SET z = 2*z WHERE x < 6;", dt);
-    c("SELECT * FROM simple_filter ORDER BY x;", dt);
+    c("SELECT * FROM simple_filter ORDER BY x, y, z;", dt);
     c("SELECT sum(x) FROM simple_filter WHERE x < 6;", dt);  // check metadata
   }
 }
