@@ -344,7 +344,7 @@ std::vector<int64_t*> QueryExecutionContext::launchGpuCode(
     }
 
     if (!render_allocator) {
-      if (use_streaming_top_n(ra_exe_unit, query_mem_desc_.didOutputColumnar())) {
+      if (query_mem_desc_.useStreamingTopN()) {
         query_buffers_->applyStreamingTopNOffsetGpu(data_mgr,
                                                     query_mem_desc_,
                                                     gpu_group_by_buffers,
@@ -699,7 +699,7 @@ std::vector<int64_t*> QueryExecutionContext::launchCpuCode(
     *error_code = 0;
   }
 
-  if (use_streaming_top_n(ra_exe_unit, query_mem_desc_.didOutputColumnar())) {
+  if (query_mem_desc_.useStreamingTopN()) {
     query_buffers_->applyStreamingTopNOffsetCpu(query_mem_desc_, ra_exe_unit);
   }
 

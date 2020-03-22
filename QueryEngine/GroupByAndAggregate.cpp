@@ -928,7 +928,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
 
     if (is_group_by) {
       if (query_mem_desc.getQueryDescriptionType() == QueryDescriptionType::Projection &&
-          !use_streaming_top_n(ra_exe_unit_, query_mem_desc.didOutputColumnar())) {
+          !query_mem_desc.useStreamingTopN()) {
         const auto crt_matched = get_arg_by_name(ROW_FUNC, "crt_matched");
         LL_BUILDER.CreateStore(LL_INT(int32_t(1)), crt_matched);
         auto total_matched_ptr = get_arg_by_name(ROW_FUNC, "total_matched");
@@ -979,7 +979,7 @@ bool GroupByAndAggregate::codegen(llvm::Value* filter_result,
         can_return_error = true;
         if (query_mem_desc.getQueryDescriptionType() ==
                 QueryDescriptionType::Projection &&
-            use_streaming_top_n(ra_exe_unit_, query_mem_desc.didOutputColumnar())) {
+            query_mem_desc.useStreamingTopN()) {
           // Ignore rejection on pushing current row to top-K heap.
           LL_BUILDER.CreateRet(LL_INT(int32_t(0)));
         } else {
@@ -1037,7 +1037,7 @@ llvm::Value* GroupByAndAggregate::codegenOutputSlot(
                                     ? 0
                                     : query_mem_desc.getRowSize() / sizeof(int64_t);
   CodeGenerator code_generator(executor_);
-  if (use_streaming_top_n(ra_exe_unit_, query_mem_desc.didOutputColumnar())) {
+  if (query_mem_desc.useStreamingTopN()) {
     const auto& only_order_entry = ra_exe_unit_.sort_info.order_entries.front();
     CHECK_GE(only_order_entry.tle_no, int(1));
     const size_t target_idx = only_order_entry.tle_no - 1;

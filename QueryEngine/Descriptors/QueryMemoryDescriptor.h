@@ -87,7 +87,8 @@ class QueryMemoryDescriptor {
                         const bool sort_on_gpu_hint,
                         const bool output_columnar,
                         const bool render_output,
-                        const bool must_use_baseline_sort);
+                        const bool must_use_baseline_sort,
+                        const bool use_streaming_top_n);
 
   QueryMemoryDescriptor(const Executor* executor,
                         const size_t entry_count,
@@ -263,6 +264,8 @@ class QueryMemoryDescriptor {
   bool didOutputColumnar() const { return output_columnar_; }
   void setOutputColumnar(const bool val);
 
+  bool useStreamingTopN() const { return use_streaming_top_n_; }
+
   bool isLogicalSizedColumnsAllowed() const;
 
   bool mustUseBaselineSort() const { return must_use_baseline_sort_; }
@@ -353,6 +356,7 @@ class QueryMemoryDescriptor {
   bool render_output_;
   bool must_use_baseline_sort_;
   bool is_table_function_;
+  bool use_streaming_top_n_;
 
   bool force_4byte_float_;
 

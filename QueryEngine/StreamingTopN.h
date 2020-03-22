@@ -43,8 +43,6 @@ std::vector<int8_t> get_rows_copy_from_heaps(const int64_t* heaps,
 }  // namespace streaming_top_n
 
 struct RelAlgExecutionUnit;
-bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
-                         const bool output_columnar);
 
 namespace Analyzer {
 class Expr;

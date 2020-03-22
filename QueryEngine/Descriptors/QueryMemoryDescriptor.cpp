@@ -140,6 +140,41 @@ int8_t pick_baseline_key_width(const RelAlgExecutionUnit& ra_exe_unit,
   return compact_width;
 }
 
+bool use_streaming_top_n(const RelAlgExecutionUnit& ra_exe_unit,
+                         const bool output_columnar) {
+  if (g_cluster) {
+    return false;  // TODO(miyu)
+  }
+
+  for (const auto target_expr : ra_exe_unit.target_exprs) {
+    if (dynamic_cast<const Analyzer::AggExpr*>(target_expr)) {
+      return false;
+    }
+    if (dynamic_cast<const Analyzer::WindowFunction*>(target_expr)) {
+      return false;
+    }
+  }
+
+  // TODO: Allow streaming top n for columnar output
+  if (!output_columnar && ra_exe_unit.sort_info.order_entries.size() == 1 &&
+      ra_exe_unit.sort_info.limit &&
+      ra_exe_unit.sort_info.algorithm == SortAlgorithm::StreamingTopN) {
+    const auto only_order_entry = ra_exe_unit.sort_info.order_entries.front();
+    CHECK_GT(only_order_entry.tle_no, int(0));
+    CHECK_LE(static_cast<size_t>(only_order_entry.tle_no),
+             ra_exe_unit.target_exprs.size());
+    const auto order_entry_expr = ra_exe_unit.target_exprs[only_order_entry.tle_no - 1];
+    const auto n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
+    if ((order_entry_expr->get_type_info().is_number() ||
+         order_entry_expr->get_type_info().is_time()) &&
+        n <= 100000) {  // TODO(miyu): relax?
+      return true;
+    }
+  }
+
+  return false;
+}
+
 }  // namespace
 
 std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
@@ -188,16 +223,17 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
                      false},
         col_slot_context,
         std::vector<int8_t>{},
-        /*group_col_compact_width*/ 0,
+        /*group_col_compact_width=*/0,
         std::vector<ssize_t>{},
-        /*entry_count*/ 1,
+        /*entry_count=*/1,
         GroupByMemSharing::Shared,
         false,
         count_distinct_descriptors,
         false,
         output_columnar_hint,
         render_info && render_info->isPotentialInSituRender(),
-        must_use_baseline_sort);
+        must_use_baseline_sort,
+        /*use_streaming_top_n=*/false);
   }
 
   size_t entry_count = 1;
@@ -206,6 +242,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
   bool interleaved_bins_on_gpu = false;
   bool keyless_hash = false;
   bool shared_mem_for_group_by = false;
+  bool streaming_top_n = false;
   int8_t group_col_compact_width = 0;
   int32_t idx_target_as_key = -1;
   auto output_columnar = output_columnar_hint;
@@ -322,6 +359,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       CHECK(!must_use_baseline_sort);
 
       if (use_streaming_top_n(ra_exe_unit, output_columnar)) {
+        streaming_top_n = true;
         entry_count = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
       } else {
         if (ra_exe_unit.use_bump_allocator) {
@@ -367,7 +405,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
       sort_on_gpu_hint,
       output_columnar,
       render_info && render_info->isPotentialInSituRender(),
-      must_use_baseline_sort);
+      must_use_baseline_sort,
+      streaming_top_n);
 }
 
 QueryMemoryDescriptor::QueryMemoryDescriptor(
@@ -390,7 +429,8 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     const bool sort_on_gpu_hint,
     const bool output_columnar_hint,
     const bool render_output,
-    const bool must_use_baseline_sort)
+    const bool must_use_baseline_sort,
+    const bool use_streaming_top_n)
     : executor_(executor)
     , allow_multifrag_(allow_multifrag)
     , query_desc_type_(col_range_info.hash_type_)
@@ -411,6 +451,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     , render_output_(render_output)
     , must_use_baseline_sort_(must_use_baseline_sort)
     , is_table_function_(false)
+    , use_streaming_top_n_(use_streaming_top_n)
     , force_4byte_float_(false)
     , col_slot_context_(col_slot_context) {
   col_slot_context_.setAllUnsetSlotsPaddedSize(8);
@@ -488,6 +529,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor()
     , render_output_(false)
     , must_use_baseline_sort_(false)
     , is_table_function_(false)
+    , use_streaming_top_n_(false)
     , force_4byte_float_(false) {}
 
 QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
@@ -512,6 +554,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const Executor* executor,
     , render_output_(false)
     , must_use_baseline_sort_(false)
     , is_table_function_(is_table_function)
+    , use_streaming_top_n_(false)
     , force_4byte_float_(false) {}
 
 QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_desc_type,
@@ -538,6 +581,7 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(const QueryDescriptionType query_de
     , render_output_(false)
     , must_use_baseline_sort_(false)
     , is_table_function_(false)
+    , use_streaming_top_n_(false)
     , force_4byte_float_(false) {}
 
 bool QueryMemoryDescriptor::operator==(const QueryMemoryDescriptor& other) const {
@@ -909,7 +953,7 @@ size_t QueryMemoryDescriptor::getBufferSizeBytes(
     const RelAlgExecutionUnit& ra_exe_unit,
     const unsigned thread_count,
     const ExecutorDeviceType device_type) const {
-  if (use_streaming_top_n(ra_exe_unit, output_columnar_)) {
+  if (use_streaming_top_n_) {
     const size_t n = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
     return streaming_top_n::get_heap_size(getRowSize(), n, thread_count);
   }
