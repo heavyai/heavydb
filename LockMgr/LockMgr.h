@@ -119,7 +119,7 @@ class TableSchemaLockContainer<ReadLock>
                                      const int table_id) {
     const auto td = cat.getMetadataForTable(table_id);
     if (!td) {
-      throw std::runtime_error("Table ID " + std::to_string(table_id) +
+      throw std::runtime_error("Table/View ID " + std::to_string(table_id) +
                                " does not exist.");
     }
     return TableSchemaLockContainer<ReadLock>(
@@ -149,7 +149,7 @@ class TableSchemaLockContainer<WriteLock>
                                      const int table_id) {
     const auto td = cat.getMetadataForTable(table_id);
     if (!td) {
-      throw std::runtime_error("Table ID " + std::to_string(table_id) +
+      throw std::runtime_error("Table/View ID " + std::to_string(table_id) +
                                " does not exist.");
     }
     return TableSchemaLockContainer<WriteLock>(
