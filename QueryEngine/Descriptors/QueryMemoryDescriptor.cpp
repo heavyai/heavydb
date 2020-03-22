@@ -192,7 +192,8 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     RenderInfo* render_info,
     const CountDistinctDescriptors count_distinct_descriptors,
     const bool must_use_baseline_sort,
-    const bool output_columnar_hint) {
+    const bool output_columnar_hint,
+    const bool streaming_top_n_hint) {
   auto group_col_widths = get_col_byte_widths(ra_exe_unit.groupby_exprs, {});
   const bool is_group_by{!group_col_widths.empty()};
 
@@ -358,7 +359,7 @@ std::unique_ptr<QueryMemoryDescriptor> QueryMemoryDescriptor::init(
     case QueryDescriptionType::Projection: {
       CHECK(!must_use_baseline_sort);
 
-      if (use_streaming_top_n(ra_exe_unit, output_columnar)) {
+      if (streaming_top_n_hint && use_streaming_top_n(ra_exe_unit, output_columnar)) {
         streaming_top_n = true;
         entry_count = ra_exe_unit.sort_info.offset + ra_exe_unit.sort_info.limit;
       } else {
@@ -508,6 +509,18 @@ QueryMemoryDescriptor::QueryMemoryDescriptor(
     col_slot_context_.setAllSlotsPaddedSizeToLogicalSize();
     col_slot_context_.validate();
   }
+
+#ifdef HAVE_CUDA
+  // Check Streaming Top N heap usage, bail if > 2GB (max slab size, CUDA only)
+  if (use_streaming_top_n_) {
+    const auto thread_count = executor->blockSize() * executor->gridSize();
+    const auto total_buff_size =
+        streaming_top_n::get_heap_size(getRowSize(), getEntryCount(), thread_count);
+    if (total_buff_size > static_cast<size_t>(1L << 31)) {
+      throw StreamingTopNOOM(total_buff_size);
+    }
+  }
+#endif
 }
 
 QueryMemoryDescriptor::QueryMemoryDescriptor()
@@ -1192,6 +1205,7 @@ std::string QueryMemoryDescriptor::toString() const {
   str += "\tMax Val (perfect hash only): " + std::to_string(max_val_) + "\n";
   str += "\tBucket Val (perfect hash only): " + std::to_string(bucket_) + "\n";
   str += "\tSort on GPU: " + boolToString(sort_on_gpu_) + "\n";
+  str += "\tUse Streaming Top N: " + boolToString(use_streaming_top_n_) + "\n";
   str += "\tOutput Columnar: " + boolToString(output_columnar_) + "\n";
   str += "\tRender Output: " + boolToString(render_output_) + "\n";
   str += "\tUse Baseline Sort: " + boolToString(must_use_baseline_sort_) + "\n";
@@ -1216,7 +1230,7 @@ std::string QueryMemoryDescriptor::reductionKey() const {
       group_indices_strings.push_back(std::to_string(getTargetGroupbyIndex(target_idx)));
     }
     str += "\tTarget group by indices: " +
-           boost::algorithm::join(group_indices_strings, ",");
+           boost::algorithm::join(group_indices_strings, ",") + "\n";
   }
   str += "\t" + col_slot_context_.toString();
   return str;

@@ -391,21 +391,42 @@ std::unique_ptr<QueryMemoryDescriptor> GroupByAndAggregate::initQueryMemoryDescr
             130000000))) {
     throw WatchdogException("Query would use too much memory");
   }
-  return QueryMemoryDescriptor::init(executor_,
-                                     ra_exe_unit_,
-                                     query_infos_,
-                                     col_range_info,
-                                     keyless_info,
-                                     allow_multifrag,
-                                     device_type_,
-                                     crt_min_byte_width,
-                                     sort_on_gpu_hint,
-                                     shard_count,
-                                     max_groups_buffer_entry_count,
-                                     render_info,
-                                     count_distinct_descriptors,
-                                     must_use_baseline_sort,
-                                     output_columnar_hint);
+  try {
+    return QueryMemoryDescriptor::init(executor_,
+                                       ra_exe_unit_,
+                                       query_infos_,
+                                       col_range_info,
+                                       keyless_info,
+                                       allow_multifrag,
+                                       device_type_,
+                                       crt_min_byte_width,
+                                       sort_on_gpu_hint,
+                                       shard_count,
+                                       max_groups_buffer_entry_count,
+                                       render_info,
+                                       count_distinct_descriptors,
+                                       must_use_baseline_sort,
+                                       output_columnar_hint,
+                                       /*streaming_top_n_hint=*/true);
+  } catch (const StreamingTopNOOM& e) {
+    LOG(WARNING) << e.what() << " Disabling Streaming Top N.";
+    return QueryMemoryDescriptor::init(executor_,
+                                       ra_exe_unit_,
+                                       query_infos_,
+                                       col_range_info,
+                                       keyless_info,
+                                       allow_multifrag,
+                                       device_type_,
+                                       crt_min_byte_width,
+                                       sort_on_gpu_hint,
+                                       shard_count,
+                                       max_groups_buffer_entry_count,
+                                       render_info,
+                                       count_distinct_descriptors,
+                                       must_use_baseline_sort,
+                                       output_columnar_hint,
+                                       /*streaming_top_n_hint=*/false);
+  }
 }
 
 void GroupByAndAggregate::addTransientStringLiterals() {
