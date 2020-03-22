@@ -1874,63 +1874,66 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
                                          const std::string& table_name,
                                          const bool get_system,
                                          const bool get_physical) {
-  auto session_info = stdlog.getSessionInfo();
-  auto& cat = session_info->getCatalog();
-  const auto td_with_lock =
-      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-          cat, table_name, false);
-  const auto td = td_with_lock();
-  if (!td) {
-    THROW_MAPD_EXCEPTION("Table " + table_name + " doesn't exist");
-  }
-  bool have_privileges_on_view_sources = true;
-  if (td->isView) {
-    auto query_state = create_query_state(session_info, td->viewSQL);
-    stdlog.setQueryState(query_state);
-    try {
-      if (hasTableAccessPrivileges(td, *session_info)) {
-        // TODO(adb): we should take schema read locks on all tables making up the view,
-        // at minimum
-        const auto query_ra = parse_to_ra(query_state->createQueryStateProxy(),
-                                          query_state->getQueryStr(),
-                                          {},
-                                          false,
-                                          mapd_parameters_,
-                                          nullptr,
-                                          false);
-        try {
-          calcite_->checkAccessedObjectsPrivileges(query_state->createQueryStateProxy(),
-                                                   query_ra.first);
-        } catch (const std::runtime_error&) {
-          have_privileges_on_view_sources = false;
-        }
+  try {
+    auto session_info = stdlog.getSessionInfo();
+    auto& cat = session_info->getCatalog();
+    const auto td_with_lock =
+        lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+            cat, table_name, false);
+    const auto td = td_with_lock();
+    CHECK(td);
 
-        TQueryResult result;
-        execute_rel_alg(result,
-                        query_state->createQueryStateProxy(),
-                        query_ra.first.plan_result,
-                        true,
-                        ExecutorDeviceType::CPU,
-                        -1,
-                        -1,
-                        false,
-                        true,
-                        false,
-                        false,
-                        false);
-        _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
-      } else {
-        THROW_MAPD_EXCEPTION("User has no access privileges to view " + table_name);
+    bool have_privileges_on_view_sources = true;
+    if (td->isView) {
+      auto query_state = create_query_state(session_info, td->viewSQL);
+      stdlog.setQueryState(query_state);
+      try {
+        if (hasTableAccessPrivileges(td, *session_info)) {
+          // TODO(adb): we should take schema read locks on all tables making up the view,
+          // at minimum
+          const auto query_ra = parse_to_ra(query_state->createQueryStateProxy(),
+                                            query_state->getQueryStr(),
+                                            {},
+                                            false,
+                                            mapd_parameters_,
+                                            nullptr,
+                                            false);
+          try {
+            calcite_->checkAccessedObjectsPrivileges(query_state->createQueryStateProxy(),
+                                                     query_ra.first);
+          } catch (const std::runtime_error&) {
+            have_privileges_on_view_sources = false;
+          }
+
+          TQueryResult result;
+          execute_rel_alg(result,
+                          query_state->createQueryStateProxy(),
+                          query_ra.first.plan_result,
+                          true,
+                          ExecutorDeviceType::CPU,
+                          -1,
+                          -1,
+                          false,
+                          true,
+                          false,
+                          false,
+                          false);
+          _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
+        } else {
+          throw std::runtime_error(
+              "Unable to access view " + table_name +
+              ". The view may not exist, or the logged in user may not "
+              "have permission to access the view.");
+        }
+      } catch (const std::exception& e) {
+        throw std::runtime_error("View '" + table_name +
+                                 "' query has failed with an error: '" +
+                                 std::string(e.what()) +
+                                 "'.\nThe view must be dropped and re-created to "
+                                 "resolve the error. \nQuery:\n" +
+                                 query_state->getQueryStr());
       }
-    } catch (const std::exception& e) {
-      THROW_MAPD_EXCEPTION("View '" + table_name + "' query has failed with an error: '" +
-                           std::string(e.what()) +
-                           "'.\nThe view must be dropped and re-created to "
-                           "resolve the error. \nQuery:\n" +
-                           query_state->getQueryStr());
-    }
-  } else {
-    try {
+    } else {
       if (hasTableAccessPrivileges(td, *session_info)) {
         const auto col_descriptors =
             cat.getAllColumnMetadataForTable(td->tableId, get_system, true, get_physical);
@@ -1942,28 +1945,31 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
           _return.row_desc.push_back(populateThriftColumnType(&cat, cd));
         }
       } else {
-        THROW_MAPD_EXCEPTION("User has no access privileges to table " + table_name);
+        throw std::runtime_error(
+            "Unable to access table " + table_name +
+            ". The table may not exist, or the logged in user may not "
+            "have permission to access the table.");
       }
-    } catch (const std::runtime_error& e) {
-      THROW_MAPD_EXCEPTION(e.what());
     }
+    _return.fragment_size = td->maxFragRows;
+    _return.page_size = td->fragPageSize;
+    _return.max_rows = td->maxRows;
+    _return.view_sql =
+        (have_privileges_on_view_sources ? td->viewSQL
+                                         : "[Not enough privileges to see the view SQL]");
+    _return.shard_count = td->nShards;
+    _return.key_metainfo = td->keyMetainfo;
+    _return.is_temporary = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
+    _return.partition_detail =
+        td->partitions.empty()
+            ? TPartitionDetail::DEFAULT
+            : (table_is_replicated(td)
+                   ? TPartitionDetail::REPLICATED
+                   : (td->partitions == "SHARDED" ? TPartitionDetail::SHARDED
+                                                  : TPartitionDetail::OTHER));
+  } catch (const std::runtime_error& e) {
+    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
   }
-  _return.fragment_size = td->maxFragRows;
-  _return.page_size = td->fragPageSize;
-  _return.max_rows = td->maxRows;
-  _return.view_sql =
-      (have_privileges_on_view_sources ? td->viewSQL
-                                       : "[Not enough privileges to see the view SQL]");
-  _return.shard_count = td->nShards;
-  _return.key_metainfo = td->keyMetainfo;
-  _return.is_temporary = td->persistenceLevel == Data_Namespace::MemoryLevel::CPU_LEVEL;
-  _return.partition_detail =
-      td->partitions.empty()
-          ? TPartitionDetail::DEFAULT
-          : (table_is_replicated(td)
-                 ? TPartitionDetail::REPLICATED
-                 : (td->partitions == "SHARDED" ? TPartitionDetail::SHARDED
-                                                : TPartitionDetail::OTHER));
 }
 
 void MapDHandler::get_link_view(TFrontendView& _return,
@@ -2311,64 +2317,66 @@ void check_table_not_sharded(const TableDescriptor* td) {
 void MapDHandler::load_table_binary(const TSessionId& session,
                                     const std::string& table_name,
                                     const std::vector<TRow>& rows) {
-  auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
-  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  auto session_ptr = stdlog.getConstSessionInfo();
-  check_read_only("load_table_binary");
-  auto& cat = session_ptr->getCatalog();
-  const auto td_with_lock =
-      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-          cat, table_name, true);
-  const auto td = td_with_lock();
-  if (!td) {
-    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
-  }
-  if (g_cluster && !leaf_aggregator_.leafCount()) {
-    // Sharded table rows need to be routed to the leaf by an aggregator.
-    check_table_not_sharded(td);
-  }
-  check_table_load_privileges(*session_ptr, table_name);
-  if (rows.empty()) {
-    return;
-  }
-  std::unique_ptr<Importer_NS::Loader> loader;
-  if (leaf_aggregator_.leafCount() > 0) {
-    loader.reset(new DistributedLoader(*session_ptr, td, &leaf_aggregator_));
-  } else {
-    loader.reset(new Importer_NS::Loader(cat, td));
-  }
-  // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
-  //               Subtracting 1 (rowid) until TableDescriptor is updated.
-  if (rows.front().cols.size() !=
-      static_cast<size_t>(td->nColumns) - (td->hasDeletedCol ? 2 : 1)) {
-    THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name);
-  }
-  auto col_descs = loader->get_column_descs();
-  std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
-  for (auto cd : col_descs) {
-    import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, loader->getStringDict(cd))));
-  }
-  for (auto const& row : rows) {
-    size_t col_idx = 0;
-    try {
-      for (auto cd : col_descs) {
-        import_buffers[col_idx]->add_value(
-            cd, row.cols[col_idx], row.cols[col_idx].is_null);
-        col_idx++;
-      }
-    } catch (const std::exception& e) {
-      for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
-        import_buffers[col_idx_to_pop]->pop_value();
-      }
-      LOG(ERROR) << "Input exception thrown: " << e.what()
-                 << ". Row discarded, issue at column : " << (col_idx + 1)
-                 << " data :" << row;
+  try {
+    auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
+    stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+    auto session_ptr = stdlog.getConstSessionInfo();
+    check_read_only("load_table_binary");
+    auto& cat = session_ptr->getCatalog();
+    const auto td_with_lock =
+        lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+            cat, table_name, true);
+    const auto td = td_with_lock();
+    CHECK(td);
+    if (g_cluster && !leaf_aggregator_.leafCount()) {
+      // Sharded table rows need to be routed to the leaf by an aggregator.
+      check_table_not_sharded(td);
     }
+    check_table_load_privileges(*session_ptr, table_name);
+    if (rows.empty()) {
+      return;
+    }
+    std::unique_ptr<Importer_NS::Loader> loader;
+    if (leaf_aggregator_.leafCount() > 0) {
+      loader.reset(new DistributedLoader(*session_ptr, td, &leaf_aggregator_));
+    } else {
+      loader.reset(new Importer_NS::Loader(cat, td));
+    }
+    // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
+    //               Subtracting 1 (rowid) until TableDescriptor is updated.
+    if (rows.front().cols.size() !=
+        static_cast<size_t>(td->nColumns) - (td->hasDeletedCol ? 2 : 1)) {
+      THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name);
+    }
+    auto col_descs = loader->get_column_descs();
+    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+    for (auto cd : col_descs) {
+      import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
+          new Importer_NS::TypedImportBuffer(cd, loader->getStringDict(cd))));
+    }
+    for (auto const& row : rows) {
+      size_t col_idx = 0;
+      try {
+        for (auto cd : col_descs) {
+          import_buffers[col_idx]->add_value(
+              cd, row.cols[col_idx], row.cols[col_idx].is_null);
+          col_idx++;
+        }
+      } catch (const std::exception& e) {
+        for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
+          import_buffers[col_idx_to_pop]->pop_value();
+        }
+        LOG(ERROR) << "Input exception thrown: " << e.what()
+                   << ". Row discarded, issue at column : " << (col_idx + 1)
+                   << " data :" << row;
+      }
+    }
+    auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
+        session_ptr->getCatalog(), table_name);
+    loader->load(import_buffers, rows.size());
+  } catch (const std::exception& e) {
+    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
   }
-  auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
-      session_ptr->getCatalog(), table_name);
-  loader->load(import_buffers, rows.size());
 }
 
 std::unique_ptr<lockmgr::AbstractLockContainer<const TableDescriptor*>>
@@ -2384,9 +2392,7 @@ MapDHandler::prepare_columnar_loader(
           lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
               cat, table_name, true));
   const auto td = (*td_with_lock)();
-  if (!td) {
-    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
-  }
+  CHECK(td);
   if (g_cluster && !leaf_aggregator_.leafCount()) {
     // Sharded table rows need to be routed to the leaf by an aggregator.
     check_table_not_sharded(td);
@@ -2595,114 +2601,120 @@ void MapDHandler::load_table_binary_arrow(const TSessionId& session,
 void MapDHandler::load_table(const TSessionId& session,
                              const std::string& table_name,
                              const std::vector<TStringRow>& rows) {
-  auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
-  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  auto session_ptr = stdlog.getConstSessionInfo();
-  check_read_only("load_table");
-  auto& cat = session_ptr->getCatalog();
-  const auto td_with_lock =
-      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-          cat, table_name, true);
-  const auto td = td_with_lock();
-  if (!td) {
-    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
-  }
-  if (g_cluster && !leaf_aggregator_.leafCount()) {
-    // Sharded table rows need to be routed to the leaf by an aggregator.
-    check_table_not_sharded(td);
-  }
-  check_table_load_privileges(*session_ptr, table_name);
-  if (rows.empty()) {
-    return;
-  }
-  std::unique_ptr<Importer_NS::Loader> loader;
-  if (leaf_aggregator_.leafCount() > 0) {
-    loader.reset(new DistributedLoader(*session_ptr, td, &leaf_aggregator_));
-  } else {
-    loader.reset(new Importer_NS::Loader(cat, td));
-  }
-  auto col_descs = loader->get_column_descs();
-  auto geo_physical_cols = std::count_if(
-      col_descs.begin(), col_descs.end(), [](auto cd) { return cd->isGeoPhyCol; });
-  // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
-  //               Subtracting 1 (rowid) until TableDescriptor is updated.
-  if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) - geo_physical_cols -
-                                      (td->hasDeletedCol ? 2 : 1)) {
-    THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name +
-                         " (" + std::to_string(rows.front().cols.size()) + " vs " +
-                         std::to_string(td->nColumns - geo_physical_cols - 1) + ")");
-  }
-  std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
-  for (auto cd : col_descs) {
-    import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, loader->getStringDict(cd))));
-  }
-  Importer_NS::CopyParams copy_params;
-  size_t rows_completed = 0;
-  for (auto const& row : rows) {
-    size_t import_idx = 0;  // index into the TStringRow being loaded
-    size_t col_idx = 0;     // index into column description vector
-    try {
-      size_t skip_physical_cols = 0;
-      for (auto cd : col_descs) {
-        if (skip_physical_cols > 0) {
-          if (!cd->isGeoPhyCol) {
-            throw std::runtime_error("Unexpected physical column");
-          }
-          skip_physical_cols--;
-          continue;
-        }
-        import_buffers[col_idx]->add_value(
-            cd, row.cols[import_idx].str_val, row.cols[import_idx].is_null, copy_params);
-        // Advance to the next column within the table
-        col_idx++;
+  try {
+    auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
+    stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+    auto session_ptr = stdlog.getConstSessionInfo();
+    check_read_only("load_table");
+    auto& cat = session_ptr->getCatalog();
+    const auto td_with_lock =
+        lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+            cat, table_name, true);
+    const auto td = td_with_lock();
+    CHECK(td);
 
-        if (cd->columnType.is_geometry()) {
-          // Populate physical columns
-          std::vector<double> coords, bounds;
-          std::vector<int> ring_sizes, poly_rings;
-          int render_group = 0;
-          SQLTypeInfo ti;
-          if (row.cols[import_idx].is_null ||
-              !Geo_namespace::GeoTypesFactory::getGeoColumns(row.cols[import_idx].str_val,
-                                                             ti,
-                                                             coords,
-                                                             bounds,
-                                                             ring_sizes,
-                                                             poly_rings,
-                                                             false)) {
-            throw std::runtime_error("Invalid geometry");
-          }
-          if (cd->columnType.get_type() != ti.get_type()) {
-            throw std::runtime_error("Geometry type mismatch");
-          }
-          Importer_NS::Importer::set_geo_physical_import_buffer(cat,
-                                                                cd,
-                                                                import_buffers,
-                                                                col_idx,
-                                                                coords,
-                                                                bounds,
-                                                                ring_sizes,
-                                                                poly_rings,
-                                                                render_group);
-          skip_physical_cols = cd->columnType.get_physical_cols();
-        }
-        // Advance to the next field within the row
-        import_idx++;
-      }
-      rows_completed++;
-    } catch (const std::exception& e) {
-      for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
-        import_buffers[col_idx_to_pop]->pop_value();
-      }
-      LOG(ERROR) << "Input exception thrown: " << e.what()
-                 << ". Row discarded, issue at column : " << (col_idx + 1)
-                 << " data :" << row;
+    if (g_cluster && !leaf_aggregator_.leafCount()) {
+      // Sharded table rows need to be routed to the leaf by an aggregator.
+      check_table_not_sharded(td);
     }
+    check_table_load_privileges(*session_ptr, table_name);
+    if (rows.empty()) {
+      return;
+    }
+    std::unique_ptr<Importer_NS::Loader> loader;
+    if (leaf_aggregator_.leafCount() > 0) {
+      loader.reset(new DistributedLoader(*session_ptr, td, &leaf_aggregator_));
+    } else {
+      loader.reset(new Importer_NS::Loader(cat, td));
+    }
+    auto col_descs = loader->get_column_descs();
+    auto geo_physical_cols = std::count_if(
+        col_descs.begin(), col_descs.end(), [](auto cd) { return cd->isGeoPhyCol; });
+    // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
+    //               Subtracting 1 (rowid) until TableDescriptor is updated.
+    if (rows.front().cols.size() != static_cast<size_t>(td->nColumns) -
+                                        geo_physical_cols - (td->hasDeletedCol ? 2 : 1)) {
+      THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name +
+                           " (" + std::to_string(rows.front().cols.size()) + " vs " +
+                           std::to_string(td->nColumns - geo_physical_cols - 1) + ")");
+    }
+    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
+    for (auto cd : col_descs) {
+      import_buffers.push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
+          new Importer_NS::TypedImportBuffer(cd, loader->getStringDict(cd))));
+    }
+    Importer_NS::CopyParams copy_params;
+    size_t rows_completed = 0;
+    for (auto const& row : rows) {
+      size_t import_idx = 0;  // index into the TStringRow being loaded
+      size_t col_idx = 0;     // index into column description vector
+      try {
+        size_t skip_physical_cols = 0;
+        for (auto cd : col_descs) {
+          if (skip_physical_cols > 0) {
+            if (!cd->isGeoPhyCol) {
+              throw std::runtime_error("Unexpected physical column");
+            }
+            skip_physical_cols--;
+            continue;
+          }
+          import_buffers[col_idx]->add_value(cd,
+                                             row.cols[import_idx].str_val,
+                                             row.cols[import_idx].is_null,
+                                             copy_params);
+          // Advance to the next column within the table
+          col_idx++;
+
+          if (cd->columnType.is_geometry()) {
+            // Populate physical columns
+            std::vector<double> coords, bounds;
+            std::vector<int> ring_sizes, poly_rings;
+            int render_group = 0;
+            SQLTypeInfo ti;
+            if (row.cols[import_idx].is_null ||
+                !Geo_namespace::GeoTypesFactory::getGeoColumns(
+                    row.cols[import_idx].str_val,
+                    ti,
+                    coords,
+                    bounds,
+                    ring_sizes,
+                    poly_rings,
+                    false)) {
+              throw std::runtime_error("Invalid geometry");
+            }
+            if (cd->columnType.get_type() != ti.get_type()) {
+              throw std::runtime_error("Geometry type mismatch");
+            }
+            Importer_NS::Importer::set_geo_physical_import_buffer(cat,
+                                                                  cd,
+                                                                  import_buffers,
+                                                                  col_idx,
+                                                                  coords,
+                                                                  bounds,
+                                                                  ring_sizes,
+                                                                  poly_rings,
+                                                                  render_group);
+            skip_physical_cols = cd->columnType.get_physical_cols();
+          }
+          // Advance to the next field within the row
+          import_idx++;
+        }
+        rows_completed++;
+      } catch (const std::exception& e) {
+        for (size_t col_idx_to_pop = 0; col_idx_to_pop < col_idx; ++col_idx_to_pop) {
+          import_buffers[col_idx_to_pop]->pop_value();
+        }
+        LOG(ERROR) << "Input exception thrown: " << e.what()
+                   << ". Row discarded, issue at column : " << (col_idx + 1)
+                   << " data :" << row;
+      }
+    }
+    auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
+        session_ptr->getCatalog(), table_name);
+    loader->load(import_buffers, rows_completed);
+  } catch (const std::exception& e) {
+    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
   }
-  auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
-      session_ptr->getCatalog(), table_name);
-  loader->load(import_buffers, rows_completed);
 }
 
 char MapDHandler::unescape_char(std::string str) {
@@ -3743,46 +3755,44 @@ void MapDHandler::import_table(const TSessionId& session,
                                const std::string& table_name,
                                const std::string& file_name_in,
                                const TCopyParams& cp) {
-  auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
-  stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
-  auto session_ptr = stdlog.getConstSessionInfo();
-  check_read_only("import_table");
-  LOG(INFO) << "import_table " << table_name << " from " << file_name_in;
-  auto& cat = session_ptr->getCatalog();
-  const auto td_with_lock =
-      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-          cat, table_name);
-  const auto td = td_with_lock();
-  if (!td) {
-    THROW_MAPD_EXCEPTION("Table " + table_name + " does not exist.");
-  }
-  check_table_load_privileges(*session_ptr, table_name);
-
-  std::string file_name{file_name_in};
-  auto file_path = boost::filesystem::path(file_name);
-  Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
-  if (!boost::istarts_with(file_name, "s3://")) {
-    if (!boost::filesystem::path(file_name).is_absolute()) {
-      file_path = import_path_ / picosha2::hash256_hex_string(session) /
-                  boost::filesystem::path(file_name).filename();
-      file_name = file_path.string();
-    }
-    if (!boost::filesystem::exists(file_path)) {
-      THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
-    }
-  }
-
-  // TODO(andrew): add delimiter detection to Importer
-  if (copy_params.delimiter == '\0') {
-    copy_params.delimiter = ',';
-    if (boost::filesystem::extension(file_path) == ".tsv") {
-      copy_params.delimiter = '\t';
-    }
-  }
-
-  const auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
-      session_ptr->getCatalog(), table_name);
   try {
+    auto stdlog = STDLOG(get_session_ptr(session), "table_name", table_name);
+    stdlog.appendNameValuePairs("client", getConnectionInfo().toString());
+    auto session_ptr = stdlog.getConstSessionInfo();
+    check_read_only("import_table");
+    LOG(INFO) << "import_table " << table_name << " from " << file_name_in;
+    auto& cat = session_ptr->getCatalog();
+    const auto td_with_lock =
+        lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+            cat, table_name);
+    const auto td = td_with_lock();
+    CHECK(td);
+    check_table_load_privileges(*session_ptr, table_name);
+
+    std::string file_name{file_name_in};
+    auto file_path = boost::filesystem::path(file_name);
+    Importer_NS::CopyParams copy_params = thrift_to_copyparams(cp);
+    if (!boost::istarts_with(file_name, "s3://")) {
+      if (!boost::filesystem::path(file_name).is_absolute()) {
+        file_path = import_path_ / picosha2::hash256_hex_string(session) /
+                    boost::filesystem::path(file_name).filename();
+        file_name = file_path.string();
+      }
+      if (!boost::filesystem::exists(file_path)) {
+        THROW_MAPD_EXCEPTION("File does not exist: " + file_path.string());
+      }
+    }
+
+    // TODO(andrew): add delimiter detection to Importer
+    if (copy_params.delimiter == '\0') {
+      copy_params.delimiter = ',';
+      if (boost::filesystem::extension(file_path) == ".tsv") {
+        copy_params.delimiter = '\t';
+      }
+    }
+
+    const auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(
+        session_ptr->getCatalog(), table_name);
     std::unique_ptr<Importer_NS::Importer> importer;
     if (leaf_aggregator_.leafCount() > 0) {
       importer.reset(new Importer_NS::Importer(
@@ -5508,29 +5518,40 @@ void MapDHandler::broadcast_serialized_rows(const TSerializedRows& serialized_ro
 
 void MapDHandler::insert_data(const TSessionId& session,
                               const TInsertData& thrift_insert_data) {
-  auto stdlog = STDLOG(get_session_ptr(session));
-  auto session_ptr = stdlog.getConstSessionInfo();
-  CHECK_EQ(thrift_insert_data.column_ids.size(), thrift_insert_data.data.size());
-  auto const& cat = session_ptr->getCatalog();
-  Fragmenter_Namespace::InsertData insert_data;
-  insert_data.databaseId = thrift_insert_data.db_id;
-  insert_data.tableId = thrift_insert_data.table_id;
-  insert_data.columnIds = thrift_insert_data.column_ids;
-  std::vector<std::unique_ptr<std::vector<std::string>>> none_encoded_string_columns;
-  std::vector<std::unique_ptr<std::vector<ArrayDatum>>> array_columns;
-  for (size_t col_idx = 0; col_idx < insert_data.columnIds.size(); ++col_idx) {
-    const int column_id = insert_data.columnIds[col_idx];
-    DataBlockPtr p;
-    const auto cd = cat.getMetadataForColumn(insert_data.tableId, column_id);
-    CHECK(cd);
-    const auto& ti = cd->columnType;
-    if (ti.is_number() || ti.is_time() || ti.is_boolean()) {
-      p.numbersPtr = (int8_t*)thrift_insert_data.data[col_idx].fixed_len_data.data();
-    } else if (ti.is_string()) {
-      if (ti.get_compression() == kENCODING_DICT) {
+  try {
+    auto stdlog = STDLOG(get_session_ptr(session));
+    auto session_ptr = stdlog.getConstSessionInfo();
+    CHECK_EQ(thrift_insert_data.column_ids.size(), thrift_insert_data.data.size());
+    auto const& cat = session_ptr->getCatalog();
+    Fragmenter_Namespace::InsertData insert_data;
+    insert_data.databaseId = thrift_insert_data.db_id;
+    insert_data.tableId = thrift_insert_data.table_id;
+    insert_data.columnIds = thrift_insert_data.column_ids;
+    std::vector<std::unique_ptr<std::vector<std::string>>> none_encoded_string_columns;
+    std::vector<std::unique_ptr<std::vector<ArrayDatum>>> array_columns;
+    for (size_t col_idx = 0; col_idx < insert_data.columnIds.size(); ++col_idx) {
+      const int column_id = insert_data.columnIds[col_idx];
+      DataBlockPtr p;
+      const auto cd = cat.getMetadataForColumn(insert_data.tableId, column_id);
+      CHECK(cd);
+      const auto& ti = cd->columnType;
+      if (ti.is_number() || ti.is_time() || ti.is_boolean()) {
         p.numbersPtr = (int8_t*)thrift_insert_data.data[col_idx].fixed_len_data.data();
-      } else {
-        CHECK_EQ(kENCODING_NONE, ti.get_compression());
+      } else if (ti.is_string()) {
+        if (ti.get_compression() == kENCODING_DICT) {
+          p.numbersPtr = (int8_t*)thrift_insert_data.data[col_idx].fixed_len_data.data();
+        } else {
+          CHECK_EQ(kENCODING_NONE, ti.get_compression());
+          none_encoded_string_columns.emplace_back(new std::vector<std::string>());
+          auto& none_encoded_strings = none_encoded_string_columns.back();
+          CHECK_EQ(static_cast<size_t>(thrift_insert_data.num_rows),
+                   thrift_insert_data.data[col_idx].var_len_data.size());
+          for (const auto& varlen_str : thrift_insert_data.data[col_idx].var_len_data) {
+            none_encoded_strings->push_back(varlen_str.payload);
+          }
+          p.stringsPtr = none_encoded_strings.get();
+        }
+      } else if (ti.is_geometry()) {
         none_encoded_string_columns.emplace_back(new std::vector<std::string>());
         auto& none_encoded_strings = none_encoded_string_columns.back();
         CHECK_EQ(static_cast<size_t>(thrift_insert_data.num_rows),
@@ -5539,57 +5560,48 @@ void MapDHandler::insert_data(const TSessionId& session,
           none_encoded_strings->push_back(varlen_str.payload);
         }
         p.stringsPtr = none_encoded_strings.get();
-      }
-    } else if (ti.is_geometry()) {
-      none_encoded_string_columns.emplace_back(new std::vector<std::string>());
-      auto& none_encoded_strings = none_encoded_string_columns.back();
-      CHECK_EQ(static_cast<size_t>(thrift_insert_data.num_rows),
-               thrift_insert_data.data[col_idx].var_len_data.size());
-      for (const auto& varlen_str : thrift_insert_data.data[col_idx].var_len_data) {
-        none_encoded_strings->push_back(varlen_str.payload);
-      }
-      p.stringsPtr = none_encoded_strings.get();
-    } else {
-      CHECK(ti.is_array());
-      array_columns.emplace_back(new std::vector<ArrayDatum>());
-      auto& array_column = array_columns.back();
-      CHECK_EQ(static_cast<size_t>(thrift_insert_data.num_rows),
-               thrift_insert_data.data[col_idx].var_len_data.size());
-      for (const auto& t_arr_datum : thrift_insert_data.data[col_idx].var_len_data) {
-        if (t_arr_datum.is_null) {
-          if (ti.get_size() > 0 && !ti.get_elem_type().is_string()) {
-            array_column->push_back(Importer_NS::ImporterUtils::composeNullArray(ti));
+      } else {
+        CHECK(ti.is_array());
+        array_columns.emplace_back(new std::vector<ArrayDatum>());
+        auto& array_column = array_columns.back();
+        CHECK_EQ(static_cast<size_t>(thrift_insert_data.num_rows),
+                 thrift_insert_data.data[col_idx].var_len_data.size());
+        for (const auto& t_arr_datum : thrift_insert_data.data[col_idx].var_len_data) {
+          if (t_arr_datum.is_null) {
+            if (ti.get_size() > 0 && !ti.get_elem_type().is_string()) {
+              array_column->push_back(Importer_NS::ImporterUtils::composeNullArray(ti));
+            } else {
+              array_column->emplace_back(0, nullptr, true);
+            }
           } else {
-            array_column->emplace_back(0, nullptr, true);
+            ArrayDatum arr_datum;
+            arr_datum.length = t_arr_datum.payload.size();
+            int8_t* ptr = (int8_t*)(t_arr_datum.payload.data());
+            arr_datum.pointer = ptr;
+            // In this special case, ArrayDatum does not handle freeing the underlying
+            // memory
+            arr_datum.data_ptr = std::shared_ptr<int8_t>(ptr, [](auto p) {});
+            arr_datum.is_null = false;
+            array_column->push_back(arr_datum);
           }
-        } else {
-          ArrayDatum arr_datum;
-          arr_datum.length = t_arr_datum.payload.size();
-          int8_t* ptr = (int8_t*)(t_arr_datum.payload.data());
-          arr_datum.pointer = ptr;
-          // In this special case, ArrayDatum does not handle freeing the underlying
-          // memory
-          arr_datum.data_ptr = std::shared_ptr<int8_t>(ptr, [](auto p) {});
-          arr_datum.is_null = false;
-          array_column->push_back(arr_datum);
         }
+        p.arraysPtr = array_column.get();
       }
-      p.arraysPtr = array_column.get();
+      insert_data.data.push_back(p);
     }
-    insert_data.data.push_back(p);
-  }
-  insert_data.numRows = thrift_insert_data.num_rows;
-  const auto td_with_lock =
-      lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
-          cat, insert_data.tableId);
-  const auto td = td_with_lock();
-  try {
+    insert_data.numRows = thrift_insert_data.num_rows;
+    const auto td_with_lock =
+        lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
+            cat, insert_data.tableId);
+    const auto td = td_with_lock();
+    CHECK(td);
+
     // this should have the same lock seq as COPY FROM
     ChunkKey chunkKey = {insert_data.databaseId, insert_data.tableId};
     auto insert_data_lock = lockmgr::InsertDataLockMgr::getWriteLockForTable(chunkKey);
     td->fragmenter->insertDataNoCheckpoint(insert_data);
   } catch (const std::exception& e) {
-    THROW_MAPD_EXCEPTION(std::string("Exception: ") + e.what());
+    THROW_MAPD_EXCEPTION("Exception: " + std::string(e.what()));
   }
 }
 
