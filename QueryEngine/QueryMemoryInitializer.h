@@ -121,6 +121,13 @@ class QueryMemoryInitializer {
                                  const bool prepend_index_buffer) const;
 
  private:
+  void initGroupByBuffer(int64_t* buffer,
+                         const RelAlgExecutionUnit& ra_exe_unit,
+                         const QueryMemoryDescriptor& query_mem_desc,
+                         const ExecutorDeviceType device_type,
+                         const bool output_columnar,
+                         const Executor* executor);
+
   void initGroups(const QueryMemoryDescriptor& query_mem_desc,
                   int64_t* groups_buffer,
                   const std::vector<int64_t>& init_vals,
