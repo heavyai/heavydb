@@ -1,0 +1,9 @@
+Struct Parser::DistributedConnector
+===================================
+
+.. doxygenstruct:: Parser::DistributedConnector
+   :project: OmniSciDB
+   :members:
+   :protected-members:
+   :private-members:
+   :undoc-members:
