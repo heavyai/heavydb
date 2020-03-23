@@ -2070,9 +2070,25 @@ void get_table_definitions(TableDescriptor& td,
                            const std::list<ColumnDescriptor>& columns) {
   const auto it = tableDefFuncMap.find(boost::to_lower_copy<std::string>(*p->get_name()));
   if (it == tableDefFuncMap.end()) {
-    throw std::runtime_error("Invalid CREATE TABLE option " + *p->get_name() +
-                             ". Should be FRAGMENT_SIZE, PAGE_SIZE, MAX_ROWS, "
-                             "PARTITIONS, VACUUM, SORT_COLUMN or SHARD_COUNT.");
+    throw std::runtime_error(
+        "Invalid CREATE TABLE option " + *p->get_name() +
+        ". Should be FRAGMENT_SIZE, MAX_CHUNK_SIZE, PAGE_SIZE, MAX_ROWS, "
+        "PARTITIONS, SHARD_COUNT, VACUUM, SORT_COLUMN, or STORAGE_TYPE.");
+  }
+  return it->second(td, p.get(), columns);
+}
+
+static const std::map<const std::string, const TableDefFuncPtr> dataframeDefFuncMap = {
+    {"fragment_size"s, get_frag_size_def},
+    {"max_chunk_size"s, get_max_chunk_size_def}};
+
+void get_dataframe_definitions(TableDescriptor& td,
+                               const std::unique_ptr<NameValueAssign>& p,
+                               const std::list<ColumnDescriptor>& columns) {
+  const auto it = tableDefFuncMap.find(boost::to_lower_copy<std::string>(*p->get_name()));
+  if (it == tableDefFuncMap.end()) {
+    throw std::runtime_error("Invalid CREATE DATAFRAME option " + *p->get_name() +
+                             ". Should be FRAGMENT_SIZE or MAX_CHUNK_SIZE.");
   }
   return it->second(td, p.get(), columns);
 }
@@ -2161,6 +2177,78 @@ void CreateTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 
   executeDryRun(session, td, columns, shared_dict_defs);
   td.userId = session.get_currentUser().userId;
+
+  catalog.createShardedTable(td, columns, shared_dict_defs);
+  // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o
+  // privileges
+  SysCatalog::instance().createDBObject(
+      session.get_currentUser(), td.tableName, TableDBObjectType, catalog);
+}
+
+void CreateDataframeStmt::execute(const Catalog_Namespace::SessionInfo& session) {
+  auto& catalog = session.getCatalog();
+
+  const auto execute_write_lock = mapd_unique_lock<mapd_shared_mutex>(
+      *legacylockmgr::LockMgr<mapd_shared_mutex, bool>::getMutex(
+          legacylockmgr::ExecutorOuterLock, true));
+
+  // check access privileges
+  if (!session.checkDBAccessPrivileges(DBObjectType::TableDBObjectType,
+                                       AccessPrivileges::CREATE_TABLE)) {
+    throw std::runtime_error("Table " + *table_ +
+                             " will not be created. User has no create privileges.");
+  }
+
+  if (catalog.getMetadataForTable(*table_) != nullptr) {
+    throw std::runtime_error("Table " + *table_ + " already exists.");
+  }
+  TableDescriptor td;
+  std::list<ColumnDescriptor> columns;
+  std::vector<SharedDictionaryDef> shared_dict_defs;
+
+  std::unordered_set<std::string> uc_col_names;
+  for (auto& e : table_element_list_) {
+    if (dynamic_cast<SharedDictionaryDef*>(e.get())) {
+      auto shared_dict_def = static_cast<SharedDictionaryDef*>(e.get());
+      validate_shared_dictionary(
+          this, shared_dict_def, columns, shared_dict_defs, catalog);
+      shared_dict_defs.push_back(*shared_dict_def);
+      continue;
+    }
+    if (!dynamic_cast<ColumnDef*>(e.get())) {
+      throw std::runtime_error("Table constraints are not supported yet.");
+    }
+    ColumnDef* coldef = static_cast<ColumnDef*>(e.get());
+    ColumnDescriptor cd;
+    cd.columnName = *coldef->get_column_name();
+    const auto uc_col_name = boost::to_upper_copy<std::string>(cd.columnName);
+    const auto it_ok = uc_col_names.insert(uc_col_name);
+    if (!it_ok.second) {
+      throw std::runtime_error("Column '" + cd.columnName + "' defined more than once");
+    }
+
+    setColumnDescriptor(cd, coldef);
+    columns.push_back(cd);
+  }
+
+  td.tableName = *table_;
+  td.nColumns = columns.size();
+  td.isView = false;
+  td.fragmenter = nullptr;
+  td.fragType = Fragmenter_Namespace::FragmenterType::INSERT_ORDER;
+  td.maxFragRows = DEFAULT_FRAGMENT_ROWS;
+  td.maxChunkSize = DEFAULT_MAX_CHUNK_SIZE;
+  td.fragPageSize = DEFAULT_PAGE_SIZE;
+  td.maxRows = DEFAULT_MAX_ROWS;
+  td.persistenceLevel = Data_Namespace::MemoryLevel::CPU_LEVEL;
+  if (!storage_options_.empty()) {
+    for (auto& p : storage_options_) {
+      get_dataframe_definitions(td, p, columns);
+    }
+  }
+  td.keyMetainfo = serialize_key_metainfo(nullptr, shared_dict_defs);
+  td.userId = session.get_currentUser().userId;
+  td.storageType = *filename_;
 
   catalog.createShardedTable(td, columns, shared_dict_defs);
   // TODO (max): It's transactionally unsafe, should be fixed: we may create object w/o

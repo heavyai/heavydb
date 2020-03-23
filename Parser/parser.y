@@ -120,7 +120,7 @@ using namespace Parser;
 
 %token ADD ALL ALTER AMMSC ANY ARCHIVE ARRAY AS ASC AUTHORIZATION BETWEEN BIGINT BOOLEAN BY
 %token CASE CAST CHAR_LENGTH CHARACTER CHECK CLOSE CLUSTER COLUMN COMMIT CONTINUE COPY CREATE CURRENT
-%token CURSOR DATABASE DATE DATETIME DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DICTIONARY DISTINCT DOUBLE DROP
+%token CURSOR DATABASE DATAFRAME DATE DATETIME DATE_TRUNC DECIMAL DECLARE DEFAULT DELETE DESC DICTIONARY DISTINCT DOUBLE DROP
 %token DUMP ELSE END EXISTS EXTRACT FETCH FIRST FLOAT FOR FOREIGN FOUND FROM
 %token GEOGRAPHY GEOMETRY GRANT GROUP HAVING IF ILIKE IN INSERT INTEGER INTO
 %token IS LANGUAGE LAST LENGTH LIKE LIMIT LINESTRING MOD MULTIPOLYGON NOW NULLX NUMERIC OF OFFSET ON OPEN OPTIMIZE
@@ -146,6 +146,7 @@ sql_list:
 sql:		/* schema {	$<nodeval>$ = $<nodeval>1; } */
   create_table_as_statement { $<nodeval>$ = $<nodeval>1; }
 	| create_table_statement { $<nodeval>$ = $<nodeval>1; }
+	| create_dataframe_statement { $<nodeval>$ = $<nodeval>1; }
 	| show_table_schema { $<nodeval>$ = $<nodeval>1; }
 	/* | prvililege_def { $<nodeval>$ = $<nodeval>1; } */
 	| drop_view_statement { $<nodeval>$ = $<nodeval>1; }
@@ -283,6 +284,13 @@ create_table_statement:
 		| CREATE NAME TABLE opt_if_not_exists table '(' base_table_element_commalist ')' opt_with_option_list
 		{
 		  $<nodeval>$ = new CreateTableStmt($<stringval>5, $<stringval>2, reinterpret_cast<std::list<TableElement*>*>($<listval>7), false,  $<boolval>4, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>9));
+		}
+	;
+
+create_dataframe_statement:
+		CREATE DATAFRAME table '(' base_table_element_commalist ')' FROM STRING opt_with_option_list
+		{
+		  $<nodeval>$ = new CreateDataframeStmt($<stringval>3, reinterpret_cast<std::list<TableElement*>*>($<listval>5), $<stringval>8, reinterpret_cast<std::list<NameValueAssign*>*>($<listval>9));
 		}
 	;
 

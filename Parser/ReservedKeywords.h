@@ -33,6 +33,7 @@ static std::set<std::string> reserved_keywords{
     "COPY",
     "DASHBOARD",
     "DATABASE",
+    "DATAFRAME",
     "DATETIME",
     "DATE_TRUNC",
     "DESC",

@@ -934,10 +934,20 @@ class NameValueAssign : public Node {
 };
 
 /*
+ * @type CreateTableBaseStmt
+ */
+class CreateTableBaseStmt : public DDLStmt {
+ public:
+  virtual const std::string* get_table() const = 0;
+  virtual const std::list<std::unique_ptr<TableElement>>& get_table_element_list()
+      const = 0;
+};
+
+/*
  * @type CreateTableStmt
  * @brief CREATE TABLE statement
  */
-class CreateTableStmt : public DDLStmt {
+class CreateTableStmt : public CreateTableBaseStmt {
  public:
   CreateTableStmt(std::string* tab,
                   const std::string* storage,
@@ -945,10 +955,7 @@ class CreateTableStmt : public DDLStmt {
                   bool is_temporary,
                   bool if_not_exists,
                   std::list<NameValueAssign*>* s)
-      : table_(tab)
-      , storage_type_(storage)
-      , is_temporary_(is_temporary)
-      , if_not_exists_(if_not_exists) {
+      : table_(tab), is_temporary_(is_temporary), if_not_exists_(if_not_exists) {
     CHECK(table_elems);
     for (const auto e : *table_elems) {
       table_element_list_.emplace_back(e);
@@ -975,7 +982,6 @@ class CreateTableStmt : public DDLStmt {
  private:
   std::unique_ptr<std::string> table_;
   std::list<std::unique_ptr<TableElement>> table_element_list_;
-  std::unique_ptr<const std::string> storage_type_;
   bool is_temporary_;
   bool if_not_exists_;
   std::list<std::unique_ptr<NameValueAssign>> storage_options_;
@@ -1016,6 +1022,43 @@ struct LocalConnector : public DistributedConnector {
   void rollback(const Catalog_Namespace::SessionInfo& session, int tableId) override;
   std::list<ColumnDescriptor> getColumnDescriptors(AggregatedResult& result,
                                                    bool for_create);
+};
+
+/*
+ * @type CreateDataframeStmt
+ * @brief CREATE DATAFRAME statement
+ */
+class CreateDataframeStmt : public CreateTableBaseStmt {
+ public:
+  CreateDataframeStmt(std::string* tab,
+                      std::list<TableElement*>* table_elems,
+                      std::string* filename,
+                      std::list<NameValueAssign*>* s)
+      : table_(tab), filename_(filename) {
+    CHECK(table_elems);
+    for (const auto e : *table_elems) {
+      table_element_list_.emplace_back(e);
+    }
+    delete table_elems;
+    if (s) {
+      for (const auto e : *s) {
+        storage_options_.emplace_back(e);
+      }
+      delete s;
+    }
+  }
+  const std::string* get_table() const { return table_.get(); }
+  const std::list<std::unique_ptr<TableElement>>& get_table_element_list() const {
+    return table_element_list_;
+  }
+
+  void execute(const Catalog_Namespace::SessionInfo& session) override;
+
+ private:
+  std::unique_ptr<std::string> table_;
+  std::list<std::unique_ptr<TableElement>> table_element_list_;
+  std::unique_ptr<std::string> filename_;
+  std::list<std::unique_ptr<NameValueAssign>> storage_options_;
 };
 
 /*
