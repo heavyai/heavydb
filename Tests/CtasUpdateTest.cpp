@@ -1153,12 +1153,14 @@ TEST(Itas, DifferentColumnNames) {
 
 void itasTestBody(std::vector<std::shared_ptr<TestColumnDescriptor>>& columnDescriptors,
                   std::string sourcePartitionScheme = ")",
-                  std::string targetPartitionScheme = ")") {
+                  std::string targetPartitionScheme = ")",
+                  std::string targetTempTable = "") {
   run_ddl_statement("DROP TABLE IF EXISTS ITAS_SOURCE;");
   run_ddl_statement("DROP TABLE IF EXISTS ITAS_TARGET;");
 
   std::string create_source_sql = "CREATE TABLE ITAS_SOURCE (id int";
-  std::string create_target_sql = "CREATE TABLE ITAS_TARGET (id int";
+  std::string create_target_sql =
+      "CREATE " + targetTempTable + " TABLE ITAS_TARGET (id int";
   for (unsigned int col = 0; col < columnDescriptors.size(); col++) {
     auto tcd = columnDescriptors[col];
     if (tcd->skip_test("CreateTableAsSelect")) {
@@ -1850,6 +1852,23 @@ INSTANTIATE_TEST_SUITE_P(
         TIMESTAMP_FIXED_LEN_ARRAY
 
     }));
+
+TEST(Itas, InsertIntoTempTableFromSelect) {
+  std::vector<std::shared_ptr<TestColumnDescriptor>> columnDescriptors = {
+      BOOLEAN,
+      TINYINT,
+      SMALLINT,
+      INTEGER,
+      BIGINT,
+      NUMERIC,
+      TEXT,
+      TIME,
+      DATE,
+      TIMESTAMP,
+  };
+
+  itasTestBody(columnDescriptors, ")", ")", "TEMPORARY");
+}
 
 int main(int argc, char* argv[]) {
   testing::InitGoogleTest(&argc, argv);

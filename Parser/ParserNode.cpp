@@ -2430,7 +2430,6 @@ std::list<ColumnDescriptor> LocalConnector::getColumnDescriptors(AggregatedResul
 }
 
 void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy,
-                                               bool is_temporary,
                                                bool validate_table) {
   auto const session = query_state_proxy.getQueryState().getConstSessionInfo();
   LocalConnector local_connector;
@@ -2470,6 +2469,8 @@ void InsertIntoTableAsSelectStmt::populateData(QueryStateProxy query_state_proxy
       lockmgr::TableSchemaLockContainer<lockmgr::ReadLock>::acquireTableDescriptor(
           catalog, table_name_);
   const auto td = td_with_lock();
+
+  bool is_temporary = table_is_temporary(td);
 
   // Don't allow simultaneous inserts
   const auto insert_data_lock =
@@ -2828,7 +2829,7 @@ void InsertIntoTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& 
       &session_copy, boost::null_deleter());
   auto query_state = query_state::QueryState::create(session_ptr, select_query_);
   auto stdlog = STDLOG(query_state);
-  populateData(query_state->createQueryStateProxy(), false, true);
+  populateData(query_state->createQueryStateProxy(), true);
 }
 
 void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& session) {
@@ -2904,7 +2905,7 @@ void CreateTableAsSelectStmt::execute(const Catalog_Namespace::SessionInfo& sess
   }
 
   try {
-    populateData(query_state->createQueryStateProxy(), is_temporary_, false);
+    populateData(query_state->createQueryStateProxy(), false);
   } catch (...) {
     if (!g_cluster) {
       const TableDescriptor* created_td = catalog.getMetadataForTable(table_name_);

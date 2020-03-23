@@ -1083,7 +1083,7 @@ class InsertIntoTableAsSelectStmt : public DDLStmt {
     delete select_query;
   }
 
-  void populateData(QueryStateProxy, bool is_temporary, bool validate_table);
+  void populateData(QueryStateProxy, bool validate_table);
   void execute(const Catalog_Namespace::SessionInfo& session) override;
 
   std::string& get_table() { return table_name_; }
