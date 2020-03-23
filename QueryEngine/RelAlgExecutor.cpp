@@ -2399,10 +2399,6 @@ ExecutionResult RelAlgExecutor::executeWorkUnit(
   auto co = co_in;
   ColumnCacheMap column_cache;
   if (is_window_execution_unit(work_unit.exe_unit)) {
-    if (g_cluster) {
-      throw std::runtime_error(
-          "Window functions support not supported in distributed mode");
-    }
     if (!g_enable_window_functions) {
       throw std::runtime_error("Window functions support is disabled");
     }

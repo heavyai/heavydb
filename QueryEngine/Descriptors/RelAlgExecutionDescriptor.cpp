@@ -307,6 +307,12 @@ size_t RaExecutionSequence::stepsToNextReduction() const {
       ++steps_to_next_reduction;
       continue;
     }
+    if (auto project = dynamic_cast<const RelProject*>(node)) {
+      if (project->hasWindowFunctionExpr()) {
+        ++steps_to_next_reduction;
+        continue;
+      }
+    }
     for (size_t input_idx = 0; input_idx < node->inputCount(); input_idx++) {
       if (dynamic_cast<const RelScan*>(node->getInput(input_idx))) {
         return steps_to_next_reduction;

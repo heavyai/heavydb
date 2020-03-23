@@ -33,6 +33,8 @@
 #include <string>
 #include <unordered_set>
 
+extern bool g_cluster;
+
 namespace {
 
 const unsigned FIRST_RA_NODE_ID = 1;
@@ -62,8 +64,13 @@ namespace {
 
 class RexRebindInputsVisitor : public RexVisitor<void*> {
  public:
-  RexRebindInputsVisitor(const RelAlgNode* old_input, const RelAlgNode* new_input)
-      : old_input_(old_input), new_input_(new_input) {}
+  RexRebindInputsVisitor(const RelAlgNode* old_input,
+                         const RelAlgNode* new_input,
+                         std::optional<std::unordered_map<unsigned, unsigned>>
+                             old_to_new_index_map = std::nullopt)
+      : old_input_(old_input)
+      , new_input_(new_input)
+      , old_to_new_index_map_(old_to_new_index_map) {}
 
   void* visitInput(const RexInput* rex_input) const override {
     const auto old_source = rex_input->getSourceNode();
@@ -74,6 +81,12 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
         return nullptr;
       }
       rex_input->setSourceNode(new_input_);
+      if (old_to_new_index_map_) {
+        auto mapping = *old_to_new_index_map_;
+        auto mapping_itr = mapping.find(rex_input->getIndex());
+        CHECK(mapping_itr != mapping.end());
+        rex_input->setIndex(mapping_itr->second);
+      }
     }
     return nullptr;
   };
@@ -81,6 +94,7 @@ class RexRebindInputsVisitor : public RexVisitor<void*> {
  private:
   const RelAlgNode* old_input_;
   const RelAlgNode* new_input_;
+  const std::optional<std::unordered_map<unsigned, unsigned>> old_to_new_index_map_;
 };
 
 // Creates an output with n columns.
@@ -94,10 +108,13 @@ std::vector<RexInput> n_outputs(const RelAlgNode* node, const size_t n) {
 
 }  // namespace
 
-void RelProject::replaceInput(std::shared_ptr<const RelAlgNode> old_input,
-                              std::shared_ptr<const RelAlgNode> input) {
+void RelProject::replaceInput(
+    std::shared_ptr<const RelAlgNode> old_input,
+    std::shared_ptr<const RelAlgNode> input,
+    std::optional<std::unordered_map<unsigned, unsigned>> old_to_new_index_map) {
   RelAlgNode::replaceInput(old_input, input);
-  RexRebindInputsVisitor rebind_inputs(old_input.get(), input.get());
+  RexRebindInputsVisitor rebind_inputs(
+      old_input.get(), input.get(), old_to_new_index_map);
   for (const auto& scalar_expr : scalar_exprs_) {
     rebind_inputs.visit(scalar_expr.get());
   }
@@ -1382,15 +1399,6 @@ bool is_window_function_operator(const RexScalar* rex) {
   return false;
 }
 
-inline bool project_has_window_function_input(const RelProject* ra_project) {
-  for (size_t i = 0; i < ra_project->size(); i++) {
-    if (is_window_function_operator(ra_project->getProjectAt(i))) {
-      return true;
-    }
-  }
-  return false;
-}
-
 }  // namespace
 
 void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
@@ -1425,7 +1433,7 @@ void coalesce_nodes(std::vector<std::shared_ptr<RelAlgNode>>& nodes,
       }
       case CoalesceState::Filter: {
         if (auto project_node = std::dynamic_pointer_cast<const RelProject>(ra_node)) {
-          if (project_has_window_function_input(project_node.get())) {
+          if (project_node->hasWindowFunctionExpr()) {
             reset_state();
             break;
           }
@@ -1788,6 +1796,88 @@ void separate_window_function_expressions(
   nodes.assign(node_list.begin(), node_list.end());
 }
 
+using RexInputSet = std::unordered_set<RexInput>;
+
+class RexInputCollector : public RexVisitor<RexInputSet> {
+ public:
+  RexInputSet visitInput(const RexInput* input) const override {
+    return RexInputSet{*input};
+  }
+
+ protected:
+  RexInputSet aggregateResult(const RexInputSet& aggregate,
+                              const RexInputSet& next_result) const override {
+    auto result = aggregate;
+    result.insert(next_result.begin(), next_result.end());
+    return result;
+  }
+};
+
+/**
+ * Inserts a simple project before any project containing a window function node. Forces
+ * all window function inputs into a single contiguous buffer for centralized processing
+ * (e.g. in distributed mode). Once the new project has been created, the inputs in the
+ * window function project must be rewritten to read from the new project, and to index
+ * off the projected exprs in the new project.
+ */
+void add_window_function_pre_project(std::vector<std::shared_ptr<RelAlgNode>>& nodes) {
+  std::list<std::shared_ptr<RelAlgNode>> node_list(nodes.begin(), nodes.end());
+
+  WindowFunctionDetectionVisitor visitor;
+  for (auto node_itr = node_list.begin(); node_itr != node_list.end(); ++node_itr) {
+    const auto node = *node_itr;
+    auto window_func_project_node = std::dynamic_pointer_cast<RelProject>(node);
+    if (!window_func_project_node) {
+      continue;
+    }
+    if (!window_func_project_node->hasWindowFunctionExpr()) {
+      // the first projection node in the query plan does not have a window function
+      // expression -- this step is not requierd.
+      return;
+    }
+
+    const auto prev_node_itr = std::prev(node_itr);
+    const auto prev_node = *prev_node_itr;
+    CHECK(prev_node);
+
+    RexInputSet inputs;
+    RexInputCollector input_collector;
+    for (size_t i = 0; i < window_func_project_node->size(); i++) {
+      auto new_inputs =
+          std::move(input_collector.visit(window_func_project_node->getProjectAt(i)));
+      inputs.insert(new_inputs.begin(), new_inputs.end());
+    }
+
+    // Note: Technically not required since we are mapping old inputs to new input
+    // indices, but makes the re-mapping of inputs easier to follow.
+    std::vector<RexInput> sorted_inputs(inputs.begin(), inputs.end());
+    std::sort(sorted_inputs.begin(),
+              sorted_inputs.end(),
+              [](const auto& a, const auto& b) { return a.getIndex() < b.getIndex(); });
+
+    std::vector<std::unique_ptr<const RexScalar>> scalar_exprs;
+    std::vector<std::string> fields;
+    std::unordered_map<unsigned, unsigned> old_index_to_new_index;
+    for (auto& input : sorted_inputs) {
+      CHECK_EQ(input.getSourceNode(), prev_node.get());
+      CHECK(old_index_to_new_index
+                .insert(std::make_pair(input.getIndex(), scalar_exprs.size()))
+                .second);
+      scalar_exprs.emplace_back(input.deepCopy());
+      fields.emplace_back("");
+    }
+
+    auto new_project = std::make_shared<RelProject>(scalar_exprs, fields, prev_node);
+    node_list.insert(node_itr, new_project);
+    window_func_project_node->replaceInput(
+        prev_node, new_project, old_index_to_new_index);
+
+    break;
+  }
+
+  nodes.assign(node_list.begin(), node_list.end());
+}
+
 int64_t get_int_literal_field(const rapidjson::Value& obj,
                               const char field[],
                               const int64_t default_val) noexcept {
@@ -1824,6 +1914,14 @@ std::vector<std::string> getFieldNamesFromScanNode(const rapidjson::Value& scan_
 
 }  // namespace
 
+bool RelProject::hasWindowFunctionExpr() const {
+  for (const auto& expr : scalar_exprs_) {
+    if (is_window_function_operator(expr.get())) {
+      return true;
+    }
+  }
+  return false;
+}
 namespace details {
 
 class RelAlgDispatcher {
@@ -2219,6 +2317,9 @@ void RelAlgDagBuilder::build(const rapidjson::Value& query_ast,
   }
   eliminate_dead_columns(nodes_);
   separate_window_function_expressions(nodes_);
+  if (g_cluster) {
+    add_window_function_pre_project(nodes_);
+  }
   coalesce_nodes(nodes_, left_deep_joins);
   CHECK(nodes_.back().unique());
   create_left_deep_join(nodes_);

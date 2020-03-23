@@ -60,6 +60,7 @@ extern bool g_enable_bump_allocator;
 extern bool g_enable_interop;
 
 extern size_t g_leaf_count;
+extern bool g_cluster;
 
 using QR = QueryRunner::QueryRunner;
 
@@ -16458,7 +16459,6 @@ TEST(Select, DatesDaysEncodingTest) {
 }
 
 TEST(Select, WindowFunctionRank) {
-  SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   std::string part1 =
       "SELECT x, y, ROW_NUMBER() OVER (PARTITION BY y ORDER BY x ASC) r1, RANK() OVER "
@@ -16469,7 +16469,6 @@ TEST(Select, WindowFunctionRank) {
 }
 
 TEST(Select, WindowFunctionOneRowPartitions) {
-  SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   std::string part1 = "SELECT y, RANK() OVER (PARTITION BY y ORDER BY n ASC";
   std::string part2 =
@@ -16478,7 +16477,6 @@ TEST(Select, WindowFunctionOneRowPartitions) {
 }
 
 TEST(Select, WindowFunctionEmptyPartitions) {
-  SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   EXPECT_THROW(
       run_simple_agg("SELECT x, ROW_NUMBER() OVER () FROM test_window_func;", dt),
@@ -16486,7 +16484,6 @@ TEST(Select, WindowFunctionEmptyPartitions) {
 }
 
 TEST(Select, WindowFunctionPercentRank) {
-  SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   std::string part1 =
       "SELECT x, y, PERCENT_RANK() OVER (PARTITION BY y ORDER BY x ASC) p FROM "
@@ -16496,7 +16493,6 @@ TEST(Select, WindowFunctionPercentRank) {
 }
 
 TEST(Select, WindowFunctionTile) {
-  SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   std::string part1 =
       "SELECT x, y, NTILE(2) OVER (PARTITION BY y ORDER BY x ASC) n FROM "
@@ -16506,7 +16502,6 @@ TEST(Select, WindowFunctionTile) {
 }
 
 TEST(Select, WindowFunctionCumeDist) {
-  SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   std::string part1 =
       "SELECT x, y, CUME_DIST() OVER (PARTITION BY y ORDER BY x ASC) c FROM "
@@ -16516,7 +16511,6 @@ TEST(Select, WindowFunctionCumeDist) {
 }
 
 TEST(Select, WindowFunctionLag) {
-  SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   for (int lag = -5; lag <= 5; ++lag) {
     {
@@ -16537,7 +16531,6 @@ TEST(Select, WindowFunctionLag) {
 }
 
 TEST(Select, WindowFunctionFirst) {
-  SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   {
     std::string part1 =
@@ -16556,7 +16549,6 @@ TEST(Select, WindowFunctionFirst) {
 }
 
 TEST(Select, WindowFunctionLead) {
-  SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   for (int lead = -5; lead <= 5; ++lead) {
     {
@@ -16577,7 +16569,6 @@ TEST(Select, WindowFunctionLead) {
 }
 
 TEST(Select, WindowFunctionLast) {
-  SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   {
     std::string part1 =
@@ -16598,7 +16589,6 @@ TEST(Select, WindowFunctionLast) {
 }
 
 TEST(Select, WindowFunctionAggregate) {
-  SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   {
     std::string part1 =
@@ -16734,7 +16724,6 @@ TEST(Select, WindowFunctionAggregate) {
 }
 
 TEST(Select, WindowFunctionAggregateNoOrder) {
-  SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   {
     std::string part1 =
@@ -16822,7 +16811,6 @@ TEST(Select, WindowFunctionAggregateNoOrder) {
 }
 
 TEST(Select, WindowFunctionSum) {
-  SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   c("SELECT total FROM (SELECT SUM(n) OVER (PARTITION BY y) AS total FROM (SELECT y, "
     "COUNT(*) AS n FROM test_window_func GROUP BY y)) ORDER BY total ASC;",
@@ -16834,7 +16822,6 @@ TEST(Select, WindowFunctionSum) {
 }
 
 TEST(Select, WindowFunctionComplexExpressions) {
-  SKIP_ALL_ON_AGGREGATOR();
   const ExecutorDeviceType dt = ExecutorDeviceType::CPU;
   {
     std::string part1 =
