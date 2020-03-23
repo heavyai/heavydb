@@ -200,6 +200,8 @@ class ResultSetStorage {
 
   int64_t mappedPtr(const int64_t) const;
 
+  size_t binSearchRowCount() const;
+
   const std::vector<TargetInfo> targets_;
   QueryMemoryDescriptor query_mem_desc_;
   int8_t* buff_;
@@ -570,6 +572,8 @@ class ResultSet {
   ENTRY_TYPE getColumnarBaselineEntryAt(const size_t row_idx,
                                         const size_t target_idx,
                                         const size_t slot_idx) const;
+
+  size_t binSearchRowCount() const;
 
   size_t parallelRowCount() const;
 
