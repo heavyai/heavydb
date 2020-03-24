@@ -64,7 +64,7 @@
             
             
               <div class="version">
-                5.2.0dev 3556d51
+                5.2.0dev 256d6df
               </div>
             
           
@@ -340,7 +340,6 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_cast.html">Class Cast</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_catalog___namespace_1_1_catalog.html">Class Catalog_Namespace::Catalog</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_catalog___namespace_1_1_common_file_operations.html">Class Catalog_Namespace::CommonFileOperations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="api/class/class_catalog___namespace_1_1_map_d_handler.html">Class Catalog_Namespace::MapDHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_catalog___namespace_1_1_session_info.html">Class Catalog_Namespace::SessionInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_catalog___namespace_1_1_sys_catalog.html">Class Catalog_Namespace::SysCatalog</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_catalog___namespace_1_1read__lock.html">Class Catalog_Namespace::read_lock</a></li>
@@ -517,8 +516,10 @@
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_compress_def.html">Class Parser::CompressDef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_copy_table_stmt.html">Class Parser::CopyTableStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_create_d_b_stmt.html">Class Parser::CreateDBStmt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_create_dataframe_stmt.html">Class Parser::CreateDataframeStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_create_role_stmt.html">Class Parser::CreateRoleStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_create_table_as_select_stmt.html">Class Parser::CreateTableAsSelectStmt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_create_table_base_stmt.html">Class Parser::CreateTableBaseStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_create_table_stmt.html">Class Parser::CreateTableStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_create_user_stmt.html">Class Parser::CreateUserStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="api/class/class_parser_1_1_create_view_stmt.html">Class Parser::CreateViewStmt</a></li>
@@ -3997,10 +3998,6 @@
 </li>
       <li><a href="api/struct/struct_catalog___namespace_1_1_d_b_summary.html#_CPPv4N17Catalog_Namespace9DBSummary11dbOwnerNameE">Catalog_Namespace::DBSummary::dbOwnerName (C++ member)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_map_d_handler.html#_CPPv4N17Catalog_Namespace11MapDHandlerE">Catalog_Namespace::MapDHandler (C++ class)</a>
-</li>
-      <li><a href="api/class/class_catalog___namespace_1_1_map_d_handler.html#_CPPv4N17Catalog_Namespace11MapDHandlerD0Ev">Catalog_Namespace::MapDHandler::~MapDHandler (C++ function)</a>
-</li>
       <li><a href="api/class/class_catalog___namespace_1_1read__lock.html#_CPPv4I0EN17Catalog_Namespace9read_lockE">Catalog_Namespace::read_lock (C++ class)</a>
 </li>
       <li><a href="api/class/class_catalog___namespace_1_1read__lock.html#_CPPv4N17Catalog_Namespace9read_lock7catalogE">Catalog_Namespace::read_lock::catalog (C++ member)</a>
@@ -4539,10 +4536,10 @@
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator15ArgNullcheckBBs15args_notnull_bbE">CodeGenerator::ArgNullcheckBBs::args_notnull_bb (C++ member)</a>, <a href="api/struct/struct_code_generator_1_1_arg_nullcheck_b_bs.html#_CPPv4N13CodeGenerator15ArgNullcheckBBs15args_notnull_bbE">[1]</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator15ArgNullcheckBBs12args_null_bbE">CodeGenerator::ArgNullcheckBBs::args_null_bb (C++ member)</a>, <a href="api/struct/struct_code_generator_1_1_arg_nullcheck_b_bs.html#_CPPv4N13CodeGenerator15ArgNullcheckBBs12args_null_bbE">[1]</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator15ArgNullcheckBBs7orig_bbE">CodeGenerator::ArgNullcheckBBs::orig_bb (C++ member)</a>, <a href="api/struct/struct_code_generator_1_1_arg_nullcheck_b_bs.html#_CPPv4N13CodeGenerator15ArgNullcheckBBs7orig_bbE">[1]</a>
 </li>
       <li><a href="api/class/class_code_generator.html#_CPPv4N13CodeGenerator18beginArgsNullcheckEPKN8Analyzer12FunctionOperERKNSt6vectorIPN4llvm5ValueEEE">CodeGenerator::beginArgsNullcheck (C++ function)</a>
@@ -10913,7 +10910,7 @@
 </li>
       <li><a href="api/class/class_map_d_handler.html#_CPPv4N11MapDHandler24populateThriftColumnTypeEPKN17Catalog_Namespace7CatalogEPK16ColumnDescriptor">MapDHandler::populateThriftColumnType (C++ function)</a>
 </li>
-      <li><a href="api/class/class_catalog___namespace_1_1_map_d_handler.html#_CPPv4N11MapDHandler23prepare_columnar_loaderERKNSt6stringERKNSt6stringE6size_tPNSt10unique_ptrIN11Importer_NS6LoaderEEEPNSt6vectorINSt10unique_ptrIN11Importer_NS17TypedImportBufferEEEEE">MapDHandler::prepare_columnar_loader (C++ function)</a>, <a href="api/class/class_map_d_handler.html#_CPPv4N11MapDHandler23prepare_columnar_loaderERKN17Catalog_Namespace11SessionInfoERKNSt6stringE6size_tPNSt10unique_ptrIN11Importer_NS6LoaderEEEPNSt6vectorINSt10unique_ptrIN11Importer_NS17TypedImportBufferEEEEE">[1]</a>
+      <li><a href="api/class/class_map_d_handler.html#_CPPv4N11MapDHandler23prepare_columnar_loaderERKN17Catalog_Namespace11SessionInfoERKNSt6stringE6size_tPNSt10unique_ptrIN11Importer_NS6LoaderEEEPNSt6vectorINSt10unique_ptrIN11Importer_NS17TypedImportBufferEEEEE">MapDHandler::prepare_columnar_loader (C++ function)</a>
 </li>
       <li><a href="api/class/class_map_d_handler.html#_CPPv4N11MapDHandler13query_states_E">MapDHandler::query_states_ (C++ member)</a>
 </li>
@@ -11857,6 +11854,24 @@
 </li>
       <li><a href="api/class/class_parser_1_1_copy_table_stmt.html#_CPPv4NK6Parser13CopyTableStmt17was_geo_copy_fromEv">Parser::CopyTableStmt::was_geo_copy_from (C++ function)</a>
 </li>
+      <li><a href="api/class/class_parser_1_1_create_dataframe_stmt.html#_CPPv4N6Parser19CreateDataframeStmtE">Parser::CreateDataframeStmt (C++ class)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_create_dataframe_stmt.html#_CPPv4N6Parser19CreateDataframeStmt19CreateDataframeStmtEPNSt6stringEPNSt4listIP12TableElementEEPNSt6stringEPNSt4listIP15NameValueAssignEE">Parser::CreateDataframeStmt::CreateDataframeStmt (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_create_dataframe_stmt.html#_CPPv4N6Parser19CreateDataframeStmt7executeERKN17Catalog_Namespace11SessionInfoE">Parser::CreateDataframeStmt::execute (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_create_dataframe_stmt.html#_CPPv4N6Parser19CreateDataframeStmt9filename_E">Parser::CreateDataframeStmt::filename_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_create_dataframe_stmt.html#_CPPv4NK6Parser19CreateDataframeStmt9get_tableEv">Parser::CreateDataframeStmt::get_table (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_create_dataframe_stmt.html#_CPPv4NK6Parser19CreateDataframeStmt22get_table_element_listEv">Parser::CreateDataframeStmt::get_table_element_list (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_create_dataframe_stmt.html#_CPPv4N6Parser19CreateDataframeStmt16storage_options_E">Parser::CreateDataframeStmt::storage_options_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_create_dataframe_stmt.html#_CPPv4N6Parser19CreateDataframeStmt6table_E">Parser::CreateDataframeStmt::table_ (C++ member)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_create_dataframe_stmt.html#_CPPv4N6Parser19CreateDataframeStmt19table_element_list_E">Parser::CreateDataframeStmt::table_element_list_ (C++ member)</a>
+</li>
       <li><a href="api/class/class_parser_1_1_create_d_b_stmt.html#_CPPv4N6Parser12CreateDBStmtE">Parser::CreateDBStmt (C++ class)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_create_d_b_stmt.html#_CPPv4N6Parser12CreateDBStmt12CreateDBStmtEPNSt6stringEPNSt4listIP15NameValueAssignEEKb">Parser::CreateDBStmt::CreateDBStmt (C++ function)</a>
@@ -11891,6 +11906,12 @@
 </li>
       <li><a href="api/class/class_parser_1_1_create_table_as_select_stmt.html#_CPPv4N6Parser23CreateTableAsSelectStmt16storage_options_E">Parser::CreateTableAsSelectStmt::storage_options_ (C++ member)</a>
 </li>
+      <li><a href="api/class/class_parser_1_1_create_table_base_stmt.html#_CPPv4N6Parser19CreateTableBaseStmtE">Parser::CreateTableBaseStmt (C++ class)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_create_table_base_stmt.html#_CPPv4NK6Parser19CreateTableBaseStmt9get_tableEv">Parser::CreateTableBaseStmt::get_table (C++ function)</a>
+</li>
+      <li><a href="api/class/class_parser_1_1_create_table_base_stmt.html#_CPPv4NK6Parser19CreateTableBaseStmt22get_table_element_listEv">Parser::CreateTableBaseStmt::get_table_element_list (C++ function)</a>
+</li>
       <li><a href="api/class/class_parser_1_1_create_table_stmt.html#_CPPv4N6Parser15CreateTableStmtE">Parser::CreateTableStmt (C++ class)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_create_table_stmt.html#_CPPv4N6Parser15CreateTableStmt15CreateTableStmtEPNSt6stringEPKNSt6stringEPNSt4listIP12TableElementEEbbPNSt4listIP15NameValueAssignEE">Parser::CreateTableStmt::CreateTableStmt (C++ function)</a>
@@ -11908,8 +11929,6 @@
       <li><a href="api/class/class_parser_1_1_create_table_stmt.html#_CPPv4N6Parser15CreateTableStmt13is_temporary_E">Parser::CreateTableStmt::is_temporary_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_create_table_stmt.html#_CPPv4N6Parser15CreateTableStmt16storage_options_E">Parser::CreateTableStmt::storage_options_ (C++ member)</a>
-</li>
-      <li><a href="api/class/class_parser_1_1_create_table_stmt.html#_CPPv4N6Parser15CreateTableStmt13storage_type_E">Parser::CreateTableStmt::storage_type_ (C++ member)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_create_table_stmt.html#_CPPv4N6Parser15CreateTableStmt6table_E">Parser::CreateTableStmt::table_ (C++ member)</a>
 </li>
@@ -12269,7 +12288,7 @@
 </li>
       <li><a href="api/class/class_parser_1_1_insert_into_table_as_select_stmt.html#_CPPv4N6Parser27InsertIntoTableAsSelectStmt16leafs_connector_E">Parser::InsertIntoTableAsSelectStmt::leafs_connector_ (C++ member)</a>
 </li>
-      <li><a href="api/class/class_parser_1_1_insert_into_table_as_select_stmt.html#_CPPv4N6Parser27InsertIntoTableAsSelectStmt12populateDataE15QueryStateProxybb">Parser::InsertIntoTableAsSelectStmt::populateData (C++ function)</a>
+      <li><a href="api/class/class_parser_1_1_insert_into_table_as_select_stmt.html#_CPPv4N6Parser27InsertIntoTableAsSelectStmt12populateDataE15QueryStateProxyb">Parser::InsertIntoTableAsSelectStmt::populateData (C++ function)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_insert_into_table_as_select_stmt.html#_CPPv4N6Parser27InsertIntoTableAsSelectStmt13select_query_E">Parser::InsertIntoTableAsSelectStmt::select_query_ (C++ member)</a>
 </li>
@@ -12363,6 +12382,8 @@
 </li>
       <li><a href="api/class/class_parser_1_1_like_expr.html#_CPPv4N6Parser8LikeExpr15check_like_exprERKNSt6stringEc">Parser::LikeExpr::check_like_expr (C++ function)</a>
 </li>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_parser_1_1_like_expr.html#_CPPv4N6Parser8LikeExpr16erase_cntl_charsERNSt6stringEc">Parser::LikeExpr::erase_cntl_chars (C++ function)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_like_expr.html#_CPPv4N6Parser8LikeExpr13escape_stringE">Parser::LikeExpr::escape_string (C++ member)</a>
@@ -12373,8 +12394,6 @@
 </li>
       <li><a href="api/class/class_parser_1_1_like_expr.html#_CPPv4NK6Parser8LikeExpr17get_escape_stringEv">Parser::LikeExpr::get_escape_string (C++ function)</a>
 </li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api/class/class_parser_1_1_like_expr.html#_CPPv4NK6Parser8LikeExpr10get_is_notEv">Parser::LikeExpr::get_is_not (C++ function)</a>
 </li>
       <li><a href="api/class/class_parser_1_1_like_expr.html#_CPPv4NK6Parser8LikeExpr15get_like_stringEv">Parser::LikeExpr::get_like_string (C++ function)</a>

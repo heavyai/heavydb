@@ -41,7 +41,7 @@
     <link rel="index" title="Index" href="../../genindex.html" />
     <link rel="search" title="Search" href="../../search.html" />
     <link rel="next" title="Class Parser::CreateUserStmt" href="class_parser_1_1_create_user_stmt.html" />
-    <link rel="prev" title="Class Parser::CreateTableAsSelectStmt" href="class_parser_1_1_create_table_as_select_stmt.html" /> 
+    <link rel="prev" title="Class Parser::CreateTableBaseStmt" href="class_parser_1_1_create_table_base_stmt.html" /> 
 </head>
 
 <body class="wy-body-for-nav">
@@ -65,7 +65,7 @@
             
             
               <div class="version">
-                5.2.0dev 3556d51
+                5.2.0dev 256d6df
               </div>
             
           
@@ -341,7 +341,6 @@
 <li class="toctree-l2"><a class="reference internal" href="class_cast.html">Class Cast</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_catalog___namespace_1_1_catalog.html">Class Catalog_Namespace::Catalog</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_catalog___namespace_1_1_common_file_operations.html">Class Catalog_Namespace::CommonFileOperations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="class_catalog___namespace_1_1_map_d_handler.html">Class Catalog_Namespace::MapDHandler</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_catalog___namespace_1_1_session_info.html">Class Catalog_Namespace::SessionInfo</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_catalog___namespace_1_1_sys_catalog.html">Class Catalog_Namespace::SysCatalog</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_catalog___namespace_1_1read__lock.html">Class Catalog_Namespace::read_lock</a></li>
@@ -518,8 +517,10 @@
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_compress_def.html">Class Parser::CompressDef</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_copy_table_stmt.html">Class Parser::CopyTableStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_create_d_b_stmt.html">Class Parser::CreateDBStmt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_create_dataframe_stmt.html">Class Parser::CreateDataframeStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_create_role_stmt.html">Class Parser::CreateRoleStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_create_table_as_select_stmt.html">Class Parser::CreateTableAsSelectStmt</a></li>
+<li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_create_table_base_stmt.html">Class Parser::CreateTableBaseStmt</a></li>
 <li class="toctree-l2 current"><a class="current reference internal" href="#">Class Parser::CreateTableStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_create_user_stmt.html">Class Parser::CreateUserStmt</a></li>
 <li class="toctree-l2"><a class="reference internal" href="class_parser_1_1_create_view_stmt.html">Class Parser::CreateViewStmt</a></li>
@@ -1400,7 +1401,7 @@
 <h1>Class Parser::CreateTableStmt<a class="headerlink" href="#class-parser-createtablestmt" title="Permalink to this headline">¶</a></h1>
 <dl class="class">
 <dt id="_CPPv4N6Parser15CreateTableStmtE">
-<span id="_CPPv3N6Parser15CreateTableStmtE"></span><span id="_CPPv2N6Parser15CreateTableStmtE"></span><span id="Parser::CreateTableStmt"></span><span class="target" id="class_parser_1_1_create_table_stmt"></span><em class="property">class </em><code class="sig-name descname">CreateTableStmt</code> : <em class="property">public</em> Parser::<a class="reference internal" href="class_parser_1_1_d_d_l_stmt.html#_CPPv4N6Parser7DDLStmtE" title="Parser::DDLStmt">DDLStmt</a><a class="headerlink" href="#_CPPv4N6Parser15CreateTableStmtE" title="Permalink to this definition">¶</a><br /></dt>
+<span id="_CPPv3N6Parser15CreateTableStmtE"></span><span id="_CPPv2N6Parser15CreateTableStmtE"></span><span id="Parser::CreateTableStmt"></span><span class="target" id="class_parser_1_1_create_table_stmt"></span><em class="property">class </em><code class="sig-name descname">CreateTableStmt</code> : <em class="property">public</em> Parser::<a class="reference internal" href="class_parser_1_1_create_table_base_stmt.html#_CPPv4N6Parser19CreateTableBaseStmtE" title="Parser::CreateTableBaseStmt">CreateTableBaseStmt</a><a class="headerlink" href="#_CPPv4N6Parser15CreateTableStmtE" title="Permalink to this definition">¶</a><br /></dt>
 <dd><div class="breathe-sectiondef docutils container">
 <p class="breathe-sectiondef-title rubric">Public Functions</p>
 <dl class="function">
@@ -1442,11 +1443,6 @@
 <dd></dd></dl>
 
 <dl class="member">
-<dt id="_CPPv4N6Parser15CreateTableStmt13storage_type_E">
-<span id="_CPPv3N6Parser15CreateTableStmt13storage_type_E"></span><span id="_CPPv2N6Parser15CreateTableStmt13storage_type_E"></span><span id="Parser::CreateTableStmt::storage_type___std::unique_ptr:ssC:"></span><span class="target" id="class_parser_1_1_create_table_stmt_1a941f7f663c632e515204d0fa7f97c129"></span>std::unique_ptr&lt;<em class="property">const</em> std::string&gt; <code class="sig-name descname">storage_type_</code><a class="headerlink" href="#_CPPv4N6Parser15CreateTableStmt13storage_type_E" title="Permalink to this definition">¶</a><br /></dt>
-<dd></dd></dl>
-
-<dl class="member">
 <dt id="_CPPv4N6Parser15CreateTableStmt13is_temporary_E">
 <span id="_CPPv3N6Parser15CreateTableStmt13is_temporary_E"></span><span id="_CPPv2N6Parser15CreateTableStmt13is_temporary_E"></span><span id="Parser::CreateTableStmt::is_temporary___b"></span><span class="target" id="class_parser_1_1_create_table_stmt_1ad6d8284512f94e6f93505b48ea24a803"></span>bool <code class="sig-name descname">is_temporary_</code><a class="headerlink" href="#_CPPv4N6Parser15CreateTableStmt13is_temporary_E" title="Permalink to this definition">¶</a><br /></dt>
 <dd></dd></dl>
@@ -1477,7 +1473,7 @@
         <a href="class_parser_1_1_create_user_stmt.html" class="btn btn-neutral float-right" title="Class Parser::CreateUserStmt" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
       
       
-        <a href="class_parser_1_1_create_table_as_select_stmt.html" class="btn btn-neutral float-left" title="Class Parser::CreateTableAsSelectStmt" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+        <a href="class_parser_1_1_create_table_base_stmt.html" class="btn btn-neutral float-left" title="Class Parser::CreateTableBaseStmt" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
       
     </div>
   
