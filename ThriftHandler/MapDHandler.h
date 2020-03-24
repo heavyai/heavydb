@@ -608,11 +608,9 @@ class MapDHandler : public MapDIf {
       const ExecutorDeviceType executor_device_type,
       const int32_t first_n,
       const int32_t at_most_n,
-      const bool just_explain,
       const bool just_validate,
       const bool find_push_down_candidates,
-      const bool just_calcite_explain,
-      const bool explain_optimized_ir) const;
+      const ExplainInfo& explain_info) const;
 
   void execute_rel_alg_with_filter_push_down(
       TQueryResult& _return,

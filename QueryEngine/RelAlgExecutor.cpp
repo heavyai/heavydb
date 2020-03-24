@@ -17,6 +17,7 @@
 #include "RelAlgExecutor.h"
 
 #include <algorithm>
+#include <boost/range/adaptor/reversed.hpp>
 #include <numeric>
 
 #include "Parser/ParserNode.h"
@@ -149,12 +150,13 @@ size_t RelAlgExecutor::getOuterFragmentCount(const CompilationOptions& co,
 
 ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
                                                    const ExecutionOptions& eo,
+                                                   const bool just_explain_plan,
                                                    RenderInfo* render_info) {
   CHECK(query_dag_);
   auto timer = DEBUG_TIMER(__func__);
   INJECT_TIMER(executeRelAlgQuery);
   try {
-    return executeRelAlgQueryNoRetry(co, eo, render_info);
+    return executeRelAlgQueryNoRetry(co, eo, just_explain_plan, render_info);
   } catch (const QueryMustRunOnCpu&) {
     if (!g_allow_cpu_retry) {
       throw;
@@ -166,11 +168,12 @@ ExecutionResult RelAlgExecutor::executeRelAlgQuery(const CompilationOptions& co,
   if (render_info) {
     render_info->setForceNonInSituData();
   }
-  return executeRelAlgQueryNoRetry(co_cpu, eo, render_info);
+  return executeRelAlgQueryNoRetry(co_cpu, eo, just_explain_plan, render_info);
 }
 
 ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptions& co,
                                                           const ExecutionOptions& eo,
+                                                          const bool just_explain_plan,
                                                           RenderInfo* render_info) {
   INJECT_TIMER(executeRelAlgQueryNoRetry);
   auto timer = DEBUG_TIMER(__func__);
@@ -194,6 +197,27 @@ ExecutionResult RelAlgExecutor::executeRelAlgQueryNoRetry(const CompilationOptio
 
   ScopeGuard restore_metainfo_cache = [this] { executor_->clearMetaInfoCache(); };
   auto ed_seq = RaExecutionSequence(&ra);
+
+  if (just_explain_plan) {
+    std::stringstream ss;
+    std::vector<const RelAlgNode*> nodes;
+    for (size_t i = 0; i < ed_seq.size(); i++) {
+      nodes.emplace_back(ed_seq.getDescriptor(i)->getBody());
+    }
+    size_t ctr = nodes.size();
+    size_t tab_ctr = 0;
+    for (auto& body : boost::adaptors::reverse(nodes)) {
+      const auto index = ctr--;
+      const auto tabs = std::string(tab_ctr++, '\t');
+      CHECK(body);
+      ss << tabs << std::to_string(index) << " : " << body->toString() << "\n";
+      if (auto sort = dynamic_cast<const RelSort*>(body)) {
+        ss << tabs << "  : " << sort->getInput(0)->toString() << "\n";
+      }
+    }
+    auto rs = std::make_shared<ResultSet>(ss.str());
+    return {rs, {}};
+  }
 
   if (render_info) {
     // set render to be non-insitu in certain situations.

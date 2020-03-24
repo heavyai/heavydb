@@ -2304,7 +2304,7 @@ std::shared_ptr<ResultSet> getResultSet(QueryStateProxy query_state_proxy,
                                                      nullptr,
                                                      nullptr),
                          {}};
-  result = ra_executor.executeRelAlgQuery(co, eo, nullptr);
+  result = ra_executor.executeRelAlgQuery(co, eo, false, nullptr);
   targets = result.getTargetsMeta();
 
   return result.getRows();

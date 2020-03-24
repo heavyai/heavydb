@@ -51,6 +51,7 @@ const std::vector<std::string> ParserWrapper::update_dml_cmd = {
 const std::string ParserWrapper::explain_str = {"explain"};
 const std::string ParserWrapper::calcite_explain_str = {"explain calcite"};
 const std::string ParserWrapper::optimized_explain_str = {"explain optimized"};
+const std::string ParserWrapper::plan_explain_str = {"explain plan"};
 const std::string ParserWrapper::optimize_str = {"optimize"};
 const std::string ParserWrapper::validate_str = {"validate"};
 
@@ -77,6 +78,18 @@ ParserWrapper::ParserWrapper(std::string query_string) {
       return;
     } else {
       explain_type_ = ExplainType::OptimizedIR;
+      return;
+    }
+  }
+
+  if (boost::istarts_with(query_string, plan_explain_str)) {
+    actual_query = boost::trim_copy(query_string.substr(plan_explain_str.size()));
+    ParserWrapper inner{actual_query};
+    if (inner.is_ddl || inner.is_update_dml) {
+      explain_type_ = ExplainType::Other;
+      return;
+    } else {
+      explain_type_ = ExplainType::ExecutionPlan;
       return;
     }
   }
@@ -158,3 +171,10 @@ ParserWrapper::ParserWrapper(std::string query_string) {
 }
 
 ParserWrapper::~ParserWrapper() {}
+
+ExplainInfo ParserWrapper::getExplainInfo() const {
+  return {explain_type_ == ExplainType::IR,
+          explain_type_ == ExplainType::OptimizedIR,
+          explain_type_ == ExplainType::ExecutionPlan,
+          explain_type_ == ExplainType::Calcite};
+}

@@ -48,12 +48,25 @@ constexpr inline CalciteDMLPathSelection yield_dml_path_selector() {
   return static_cast<CalciteDMLPathSelection>(selector);
 }
 
+struct ExplainInfo {
+  bool explain;
+  bool explain_optimized;
+  bool explain_plan;
+  bool calcite_explain;
+
+  static ExplainInfo defaults() { return ExplainInfo{false, false, false, false}; }
+
+  bool justExplain() const { return explain || explain_plan || explain_optimized; }
+
+  bool justCalciteExplain() const { return calcite_explain; }
+};
+
 class ParserWrapper {
  public:
   // HACK:  This needs to go away as calcite takes over parsing
   enum class DMLType : int { Insert = 0, Delete, Update, Upsert, NotDML };
 
-  enum class ExplainType { None, IR, OptimizedIR, Calcite, Other };
+  enum class ExplainType { None, IR, OptimizedIR, Calcite, ExecutionPlan, Other };
 
   ParserWrapper(std::string query_string);
   std::string process(std::string user,
@@ -75,13 +88,16 @@ class ParserWrapper {
 
   DMLType getDMLType() const { return dml_type_; }
 
+  ExplainInfo getExplainInfo() const;
+
   ExplainType getExplainType() const { return explain_type_; }
 
   bool isCalciteExplain() const { return explain_type_ == ExplainType::Calcite; }
 
   bool isSelectExplain() const {
     return explain_type_ == ExplainType::Calcite || explain_type_ == ExplainType::IR ||
-           explain_type_ == ExplainType::OptimizedIR;
+           explain_type_ == ExplainType::OptimizedIR ||
+           explain_type_ == ExplainType::ExecutionPlan;
   }
 
   bool isIRExplain() const {
@@ -127,6 +143,7 @@ class ParserWrapper {
   static const std::string explain_str;
   static const std::string calcite_explain_str;
   static const std::string optimized_explain_str;
+  static const std::string plan_explain_str;
   static const std::string optimize_str;
   static const std::string validate_str;
 

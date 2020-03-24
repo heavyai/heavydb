@@ -1363,11 +1363,9 @@ void MapDHandler::validate_rel_alg(TTableDescriptor& _return,
                                  ExecutorDeviceType::CPU,
                                  -1,
                                  -1,
-                                 false,
-                                 true,
-                                 false,
-                                 false,
-                                 false);
+                                 /*just_validate=*/true,
+                                 /*find_filter_push_down_candidates=*/false,
+                                 ExplainInfo::defaults());
     const auto& row_desc = fixup_row_descriptor(
         result.row_set.row_desc,
         query_state_proxy.getQueryState().getConstSessionInfo()->getCatalog());
@@ -1913,11 +1911,9 @@ void MapDHandler::get_table_details_impl(TTableDetails& _return,
                           ExecutorDeviceType::CPU,
                           -1,
                           -1,
-                          false,
-                          true,
-                          false,
-                          false,
-                          false);
+                          /*just_validate=*/true,
+                          /*find_filter_push_down_candidates=*/false,
+                          ExplainInfo::defaults());
           _return.row_desc = fixup_row_descriptor(result.row_set.row_desc, cat);
         } else {
           throw std::runtime_error(
@@ -2110,11 +2106,9 @@ void MapDHandler::get_tables_meta(std::vector<TTableMeta>& _return,
                         ExecutorDeviceType::CPU,
                         -1,
                         -1,
-                        false,
-                        true,
-                        false,
-                        false,
-                        false);
+                        /*just_validate=*/true,
+                        /*find_push_down_candidates=*/false,
+                        ExplainInfo::defaults());
         num_cols = result.row_set.row_desc.size();
         for (const auto col : result.row_set.row_desc) {
           if (col.is_physical) {
@@ -4616,11 +4610,9 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
     const ExecutorDeviceType executor_device_type,
     const int32_t first_n,
     const int32_t at_most_n,
-    const bool just_explain,
     const bool just_validate,
     const bool find_push_down_candidates,
-    const bool just_calcite_explain,
-    const bool explain_optimized_ir) const {
+    const ExplainInfo& explain_info) const {
   query_state::Timer timer = query_state_proxy.createTimer(__func__);
   const auto& cat = query_state_proxy.getQueryState().getConstSessionInfo()->getCatalog();
   CompilationOptions co = {executor_device_type,
@@ -4629,12 +4621,12 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                            g_enable_dynamic_watchdog,
                            /*allow_lazy_fetch=*/true,
                            /*add_delete_column=*/true,
-                           explain_optimized_ir ? ExecutorExplainType::Optimized
-                                                : ExecutorExplainType::Default,
+                           explain_info.explain_optimized ? ExecutorExplainType::Optimized
+                                                          : ExecutorExplainType::Default,
                            intel_jit_profile_};
   ExecutionOptions eo = {g_enable_columnar_output,
                          allow_multifrag_,
-                         just_explain,
+                         explain_info.justExplain(),
                          allow_loop_joins_ || just_validate,
                          g_enable_watchdog,
                          jit_debug_,
@@ -4642,7 +4634,7 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                          g_enable_dynamic_watchdog,
                          g_dynamic_watchdog_time_limit,
                          find_push_down_candidates,
-                         just_calcite_explain,
+                         explain_info.justCalciteExplain(),
                          mapd_parameters_.gpu_input_mem_limit};
   auto executor = Executor::getExecutor(cat.getCurrentDB().dbId,
                                         jit_debug_ ? "/tmp" : "",
@@ -4658,17 +4650,18 @@ std::vector<PushedDownFilterInfo> MapDHandler::execute_rel_alg(
                                                      nullptr,
                                                      nullptr),
                          {}};
-  _return.execution_time_ms += measure<>::execution(
-      [&]() { result = ra_executor.executeRelAlgQuery(co, eo, nullptr); });
+  _return.execution_time_ms += measure<>::execution([&]() {
+    result = ra_executor.executeRelAlgQuery(co, eo, explain_info.explain_plan, nullptr);
+  });
   // reduce execution time by the time spent during queue waiting
   _return.execution_time_ms -= result.getRows()->getQueueTime();
   const auto& filter_push_down_info = result.getPushedDownFilterInfo();
   if (!filter_push_down_info.empty()) {
     return filter_push_down_info;
   }
-  if (just_explain) {
+  if (explain_info.justExplain()) {
     convert_explain(_return, *result.getRows(), column_format);
-  } else if (!just_calcite_explain) {
+  } else if (!explain_info.justCalciteExplain()) {
     convert_rows(_return,
                  timer.createQueryStateProxy(),
                  result.getTargetsMeta(),
@@ -4725,7 +4718,7 @@ void MapDHandler::execute_rel_alg_df(TDataFrame& _return,
                                                      nullptr),
                          {}};
   _return.execution_time_ms += measure<>::execution(
-      [&]() { result = ra_executor.executeRelAlgQuery(co, eo, nullptr); });
+      [&]() { result = ra_executor.executeRelAlgQuery(co, eo, false, nullptr); });
   _return.execution_time_ms -= result.getRows()->getQueueTime();
   const auto rs = result.getRows();
   const auto converter =
@@ -5050,21 +5043,19 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         DdlCommandExecutor{query_ra, session_ptr}.execute(_return);
         return;
       }
-
-      const auto filter_push_down_requests =
-          execute_rel_alg(_return,
-                          query_state_proxy,
-                          pw.isCalciteExplain() ? query_ra_calcite_explain : query_ra,
-                          column_format,
-                          executor_device_type,
-                          first_n,
-                          at_most_n,
-                          pw.isIRExplain(),
-                          false,
-                          g_enable_filter_push_down && !g_cluster,
-                          pw.isCalciteExplain(),
-                          pw.getExplainType() == ParserWrapper::ExplainType::OptimizedIR);
-      if (pw.isCalciteExplain() && filter_push_down_requests.empty()) {
+      const auto explain_info = pw.getExplainInfo();
+      const auto filter_push_down_requests = execute_rel_alg(
+          _return,
+          query_state_proxy,
+          explain_info.justCalciteExplain() ? query_ra_calcite_explain : query_ra,
+          column_format,
+          executor_device_type,
+          first_n,
+          at_most_n,
+          /*just_validate=*/false,
+          g_enable_filter_push_down && !g_cluster,
+          explain_info);
+      if (explain_info.justCalciteExplain() && filter_push_down_requests.empty()) {
         // we only reach here if filter push down was enabled, but no filter
         // push down candidate was found
         convert_explain(_return, ResultSet(query_ra), true);
@@ -5078,10 +5069,10 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
                                               executor_device_type,
                                               first_n,
                                               at_most_n,
-                                              pw.isIRExplain(),
-                                              pw.isCalciteExplain(),
+                                              explain_info.justExplain(),
+                                              explain_info.justCalciteExplain(),
                                               filter_push_down_requests);
-      } else if (pw.isCalciteExplain() && filter_push_down_requests.empty()) {
+      } else if (explain_info.justCalciteExplain() && filter_push_down_requests.empty()) {
         // return the ra as the result:
         // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
         // no filter push down so we continue with the initial (unchanged) query's calcite
@@ -5091,12 +5082,12 @@ void MapDHandler::sql_execute_impl(TQueryResult& _return,
         convert_explain(_return, ResultSet(query_ra), true);
         return;
       }
-      if (pw.isCalciteExplain()) {
+      if (explain_info.justCalciteExplain()) {
         // If we reach here, the filter push down candidates has been selected and
         // proper output result has been already created.
         return;
       }
-      if (pw.isCalciteExplain()) {
+      if (explain_info.justCalciteExplain()) {
         // return the ra as the result:
         // If we reach here, the 'filter_push_down_request' turned out to be empty, i.e.,
         // no filter push down so we continue with the initial (unchanged) query's calcite
@@ -5326,6 +5317,8 @@ void MapDHandler::execute_rel_alg_with_filter_push_down(
   }
 
   // execute the new relational algebra plan:
+  auto explain_info = ExplainInfo::defaults();
+  explain_info.explain = just_explain;
   execute_rel_alg(_return,
                   query_state_proxy,
                   query_ra,
@@ -5333,11 +5326,9 @@ void MapDHandler::execute_rel_alg_with_filter_push_down(
                   executor_device_type,
                   first_n,
                   at_most_n,
-                  just_explain,
-                  /*just_validate = */ false,
-                  /*find_push_down_candidates = */ false,
-                  /*just_calcite_explain = */ false,
-                  /*TODO: explain optimized*/ false);
+                  /*just_validate=*/false,
+                  /*find_push_down_candidates=*/false,
+                  explain_info);
 }
 
 void MapDHandler::execute_distributed_copy_statement(

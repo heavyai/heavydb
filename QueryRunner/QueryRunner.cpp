@@ -389,8 +389,8 @@ ExecutionResult run_select_query_with_filter_push_down(
                                       false,
                                       true)
                             .plan_result;
-  auto result =
-      RelAlgExecutor(executor.get(), cat, query_ra).executeRelAlgQuery(co, eo, nullptr);
+  auto result = RelAlgExecutor(executor.get(), cat, query_ra)
+                    .executeRelAlgQuery(co, eo, false, nullptr);
   const auto& filter_push_down_requests = result.getPushedDownFilterInfo();
   if (!filter_push_down_requests.empty()) {
     std::vector<TFilterPushDownInfo> filter_push_down_info;
@@ -423,7 +423,7 @@ ExecutionResult run_select_query_with_filter_push_down(
                                        /*just_calcite_explain=*/false,
                                        eo.gpu_input_mem_limit_percent};
     return RelAlgExecutor(executor.get(), cat, new_query_ra)
-        .executeRelAlgQuery(co, eo_modified, nullptr);
+        .executeRelAlgQuery(co, eo_modified, false, nullptr);
   } else {
     return result;
   }
@@ -477,7 +477,7 @@ ExecutionResult QueryRunner::runSelectQuery(const std::string& query_str,
                                       true)
                             .plan_result;
   return RelAlgExecutor(executor.get(), cat, query_ra)
-      .executeRelAlgQuery(co, eo, nullptr);
+      .executeRelAlgQuery(co, eo, false, nullptr);
 }
 
 void QueryRunner::reset() {
