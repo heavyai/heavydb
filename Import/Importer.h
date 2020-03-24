@@ -22,9 +22,6 @@
 #ifndef _IMPORTER_H_
 #define _IMPORTER_H_
 
-#include "Shared/Logger.h"
-#include "Shared/fixautotools.h"
-
 #include <gdal.h>
 #include <ogrsf_frmts.h>
 
@@ -44,15 +41,15 @@
 #include <string>
 #include <utility>
 
-#include "../Catalog/Catalog.h"
-#include "../Catalog/TableDescriptor.h"
-#include "../Chunk/Chunk.h"
-#include "../Fragmenter/Fragmenter.h"
-#include "../Shared/ThreadController.h"
-#include "../Shared/checked_alloc.h"
-#include "CopyParams.h"
-
-#include "QueryRunner/QueryRunner.h"
+#include "Catalog/Catalog.h"
+#include "Catalog/TableDescriptor.h"
+#include "Chunk/Chunk.h"
+#include "Fragmenter/Fragmenter.h"
+#include "Import/CopyParams.h"
+#include "Shared/Logger.h"
+#include "Shared/ThreadController.h"
+#include "Shared/checked_alloc.h"
+#include "Shared/fixautotools.h"
 
 // Some builds of boost::geometry require iostream, but don't explicitly include it.
 // Placing in own section to ensure it's included after iostream.
@@ -812,6 +809,10 @@ class Importer : public DataStreamSink {
   std::unique_ptr<bool[]> is_array_a;
   static std::mutex init_gdal_mutex;
 };
+
+std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
+    const TableDescriptor* td,
+    Loader* loader);
 
 }  // namespace Importer_NS
 

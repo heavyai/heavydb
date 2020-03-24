@@ -5095,4 +5095,19 @@ int RenderGroupAnalyzer::insertBoundsAndReturnRenderGroup(
   return firstAvailableRenderGroup;
 }
 
+std::vector<std::unique_ptr<TypedImportBuffer>> setup_column_loaders(
+    const TableDescriptor* td,
+    Loader* loader) {
+  CHECK(td);
+  auto col_descs = loader->get_column_descs();
+
+  std::vector<std::unique_ptr<TypedImportBuffer>> import_buffers;
+  for (auto cd : col_descs) {
+    import_buffers.emplace_back(
+        std::make_unique<TypedImportBuffer>(cd, loader->getStringDict(cd)));
+  }
+
+  return import_buffers;
+}
+
 }  // namespace Importer_NS

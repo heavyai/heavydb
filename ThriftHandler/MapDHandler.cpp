@@ -2398,25 +2398,27 @@ MapDHandler::prepare_columnar_loader(
     check_table_not_sharded(td);
   }
   check_table_load_privileges(session_info, table_name);
+
   if (leaf_aggregator_.leafCount() > 0) {
     loader->reset(new DistributedLoader(session_info, td, &leaf_aggregator_));
   } else {
     loader->reset(new Importer_NS::Loader(cat, td));
   }
-  auto col_descs = (*loader)->get_column_descs();
-  auto geo_physical_cols = std::count_if(
-      col_descs.begin(), col_descs.end(), [](auto cd) { return cd->isGeoPhyCol; });
+
   // TODO(andrew): nColumns should be number of non-virtual/non-system columns.
   //               Subtracting 1 (rowid) until TableDescriptor is updated.
-  if (num_cols != static_cast<size_t>(td->nColumns) - geo_physical_cols -
-                      (td->hasDeletedCol ? 2 : 1) ||
-      num_cols < 1) {
-    THROW_MAPD_EXCEPTION("Wrong number of columns to load into Table " + table_name);
+  auto col_descs = (*loader)->get_column_descs();
+  const auto geo_physical_cols = std::count_if(
+      col_descs.begin(), col_descs.end(), [](auto cd) { return cd->isGeoPhyCol; });
+  const auto num_table_cols =
+      static_cast<size_t>(td->nColumns) - geo_physical_cols - (td->hasDeletedCol ? 2 : 1);
+  if (num_cols != num_table_cols) {
+    throw std::runtime_error("Number of columns to load (" + std::to_string(num_cols) +
+                             ") does not match number of columns in table " +
+                             td->tableName + " (" + std::to_string(num_table_cols) + ")");
   }
-  for (auto cd : col_descs) {
-    import_buffers->push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, (*loader)->getStringDict(cd))));
-  }
+
+  *import_buffers = Importer_NS::setup_column_loaders(td, loader->get());
   return std::move(td_with_lock);
 }
 

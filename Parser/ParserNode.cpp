@@ -3161,14 +3161,7 @@ void AddColumnStmt::execute(const Catalog_Namespace::SessionInfo& session) {
     }
 
     std::unique_ptr<Importer_NS::Loader> loader(new Importer_NS::Loader(catalog, td));
-    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>> import_buffers;
-
-    // a call of Catalog_Namespace::MapDHandler::prepare_columnar_loader
-    session.get_mapdHandler()->prepare_columnar_loader(session.get_session_id(),
-                                                       td->tableName,
-                                                       td->nColumns - 1,
-                                                       &loader,
-                                                       &import_buffers);
+    auto import_buffers = Importer_NS::setup_column_loaders(td, loader.get());
     loader->setReplicating(true);
 
     // set_geo_physical_import_buffer below needs a sorted import_buffers
@@ -4669,18 +4662,3 @@ void RestoreTableStmt::execute(const Catalog_Namespace::SessionInfo& session) {
 }
 
 }  // namespace Parser
-
-// this is a non-clustered version of MapDHandler::prepare_columnar_loader,
-// exists for non-thrift builds, specifically for test cases and bin/initdb.
-void Catalog_Namespace::MapDHandler::prepare_columnar_loader(
-    const std::string& session,
-    const std::string& table_name,
-    size_t num_cols,
-    std::unique_ptr<Importer_NS::Loader>* loader,
-    std::vector<std::unique_ptr<Importer_NS::TypedImportBuffer>>* import_buffers) {
-  auto col_descs = (*loader)->get_column_descs();
-  for (auto cd : col_descs) {
-    import_buffers->push_back(std::unique_ptr<Importer_NS::TypedImportBuffer>(
-        new Importer_NS::TypedImportBuffer(cd, (*loader)->getStringDict(cd))));
-  }
-}
