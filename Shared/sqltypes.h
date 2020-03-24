@@ -1,5 +1,5 @@
 /*
- * Copyright 2017 MapD Technologies, Inc.
+ * Copyright 2020 OmniSci, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,12 +17,10 @@
 /**
  * @file		sqltypes.h
  * @author	Wei Hong <wei@map-d.com>
- * @brief		Constants for Builtin SQL Types supported by MapD
- *
- * Copyright (c) 2014 MapD Technologies, Inc.  All rights reserved.
+ * @brief		Constants for Builtin SQL Types supported by OmniSci
  **/
-#ifndef SQLTYPES_H
-#define SQLTYPES_H
+
+#pragma once
 
 #include "ConfigResolve.h"
 #include "StringTransform.h"
@@ -75,7 +73,7 @@ struct VarlenDatum {
   int8_t* pointer;
   bool is_null;
 
-  DEVICE VarlenDatum() : length(0), pointer(NULL), is_null(true) {}
+  DEVICE VarlenDatum() : length(0), pointer(nullptr), is_null(true) {}
   DEVICE virtual ~VarlenDatum() {}
 
   VarlenDatum(const size_t l, int8_t* p, const bool n)
@@ -958,9 +956,6 @@ inline int8_t* appendDatum(int8_t* buf, Datum d, const SQLTypeInfo& ti) {
       *reinterpret_cast<int64_t*>(buf) = d.bigintval;
       return buf + sizeof(int64_t);
     default:
-      return NULL;
+      return nullptr;
   }
-  return NULL;
 }
-
-#endif  // SQLTYPES_H
