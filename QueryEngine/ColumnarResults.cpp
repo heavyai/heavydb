@@ -88,7 +88,6 @@ ColumnarResults::ColumnarResults(
     , target_types_{target_type}
     , parallel_conversion_(false)
     , direct_columnar_conversion_(false) {
-  auto timer = DEBUG_TIMER(__func__);
   const bool is_varlen =
       target_type.is_array() ||
       (target_type.is_string() && target_type.get_compression() == kENCODING_NONE) ||
