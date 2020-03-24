@@ -84,10 +84,9 @@ std::pair<const int8_t*, size_t> ColumnFetcher::getOneColumnFragment(
       auto res = std::atomic_load(&it->second[frag_id]);
       if (!res) {
         auto expected = res;
-        auto& tmp_table =
-            get_temporary_table(executor->temporary_tables_, table_id);
-        res = std::shared_ptr<const ColumnarResults>(
-            columnarize_result(executor->row_set_mem_owner_, tmp_table.getResultSet(frag_id), frag_id));
+        auto& tmp_table = get_temporary_table(executor->temporary_tables_, table_id);
+        res = std::shared_ptr<const ColumnarResults>(columnarize_result(
+            executor->row_set_mem_owner_, tmp_table.getResultSet(frag_id), frag_id));
         if (!atomic_compare_exchange_strong(&it->second[frag_id], &expected, res)) {
           res = expected;
         }
@@ -242,9 +241,9 @@ const int8_t* ColumnFetcher::getAllTableColumnFragments(
   std::vector<std::unique_ptr<ColumnarResults>> column_frags;
   const ColumnarResults* table_column = nullptr;
   const InputColDescriptor col_desc(col_id, table_id, int(0));
-  CHECK(col_desc.getScanDesc().getSourceType() == InputSourceType::TABLE);
   {
-    std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex_);
+    std::lock_guard<std::mutex> columnar_conversion_guard(
+        columnarized_scan_table_cache_mutex_);
     auto column_it = columnarized_scan_table_cache_.find(col_desc);
     if (column_it == columnarized_scan_table_cache_.end()) {
       for (size_t frag_id = 0; frag_id < frag_count; ++frag_id) {
@@ -332,7 +331,8 @@ const int8_t* ColumnFetcher::getResultSetColumn(
   const ColumnarResults* result{nullptr};
   ColumnCacheMap::iterator it;
   {
-    std::lock_guard<std::mutex> columnar_conversion_guard(columnar_conversion_mutex_);
+    std::lock_guard<std::mutex> columnar_conversion_guard(
+        columnarized_table_cache_mutex_);
     it = columnarized_table_cache_.find(table_id);
     if (it == columnarized_table_cache_.end()) {
       size_t fragment_count =

@@ -78,7 +78,8 @@ class ColumnFetcher {
 
   Executor* executor_;
   using CacheKey = std::vector<int>;
-  mutable std::mutex columnar_conversion_mutex_;
+  mutable std::mutex columnarized_scan_table_cache_mutex_;
+  mutable std::mutex columnarized_table_cache_mutex_;
   mutable ColumnCacheMap columnarized_table_cache_;
   mutable std::unordered_map<
       InputColDescriptor,
