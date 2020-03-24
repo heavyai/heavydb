@@ -94,6 +94,8 @@ class ParserWrapper {
 
   bool isCalciteExplain() const { return explain_type_ == ExplainType::Calcite; }
 
+  bool isPlanExplain() const { return explain_type_ == ExplainType::ExecutionPlan; }
+
   bool isSelectExplain() const {
     return explain_type_ == ExplainType::Calcite || explain_type_ == ExplainType::IR ||
            explain_type_ == ExplainType::OptimizedIR ||

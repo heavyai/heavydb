@@ -80,6 +80,11 @@ struct ExecutionOptions {
   const double gpu_input_mem_limit_percent;  // punt to CPU if input memory exceeds this
   ExecutorType executor_type = ExecutorType::Native;
   const std::vector<size_t> outer_fragment_indices{};
+
+  static ExecutionOptions defaults() {
+    return ExecutionOptions{
+        false, true, false, false, true, false, false, false, 0, false, false, 1.0};
+  }
 };
 
 #endif  // QUERYENGINE_COMPILATIONOPTIONS_H
