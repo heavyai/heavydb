@@ -55,8 +55,7 @@ public class OmniSciStatement implements java.sql.Statement {
   @Override
   public ResultSet executeQuery(String sql)
           throws SQLException { // logger.debug("Entered");
-
-    if (maxRows > 0) {
+    if (maxRows >= 0) {
       // add limit to sql call if it doesn't already have one and is a select
       String[] tokens = sql.toLowerCase().split(" ", 3);
       if (tokens[0].equals("select")) {
