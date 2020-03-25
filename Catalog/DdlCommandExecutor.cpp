@@ -19,6 +19,7 @@
 #include <boost/algorithm/string/predicate.hpp>
 
 #include "Catalog/Catalog.h"
+#include "Catalog/SysCatalog.h"
 #include "LockMgr/LockMgr.h"
 #include "Parser/ParserNode.h"
 #include "Shared/StringTransform.h"
@@ -69,20 +70,39 @@ CreateForeignServerCommand::CreateForeignServerCommand(
 }
 
 void CreateForeignServerCommand::execute(TQueryResult& _return) {
-  std::string_view server_name = ddl_payload["serverName"].GetString();
+  std::string server_name = ddl_payload["serverName"].GetString();
   if (boost::iequals(server_name.substr(0, 7), "omnisci")) {
     throw std::runtime_error{"Server names cannot start with \"omnisci\"."};
   }
+  bool if_not_exists = ddl_payload["ifNotExists"].GetBool();
+  if (session_ptr->getCatalog().getForeignServer(server_name)) {
+    if (if_not_exists) {
+      return;
+    } else {
+      throw std::runtime_error{"A foreign server with name \"" + server_name +
+                               "\" already exists."};
+    }
+  }
+  // check access privileges
+  if (!session_ptr->checkDBAccessPrivileges(DBObjectType::ServerDBObjectType,
+                                            AccessPrivileges::CREATE_SERVER)) {
+    throw std::runtime_error("Server " + std::string(server_name) +
+                             " will not be created. User has no create privileges.");
+  }
 
-  // TODO: add permissions check and ownership
+  auto& current_user = session_ptr->get_currentUser();
   auto foreign_server = std::make_unique<foreign_storage::ForeignServer>(
       foreign_storage::DataWrapper{ddl_payload["dataWrapper"].GetString()});
   foreign_server->name = server_name;
+  foreign_server->user_id = current_user.userId;
   foreign_server->populateOptionsMap(ddl_payload["options"]);
   foreign_server->validate();
 
-  session_ptr->getCatalog().createForeignServer(std::move(foreign_server),
-                                                ddl_payload["ifNotExists"].GetBool());
+  auto& catalog = session_ptr->getCatalog();
+  catalog.createForeignServer(std::move(foreign_server),
+                              ddl_payload["ifNotExists"].GetBool());
+  Catalog_Namespace::SysCatalog::instance().createDBObject(
+      current_user, server_name, ServerDBObjectType, catalog);
 }
 
 DropForeignServerCommand::DropForeignServerCommand(
@@ -96,14 +116,27 @@ DropForeignServerCommand::DropForeignServerCommand(
 }
 
 void DropForeignServerCommand::execute(TQueryResult& _return) {
-  std::string_view server_name = ddl_payload["serverName"].GetString();
+  std::string server_name = ddl_payload["serverName"].GetString();
   if (boost::iequals(server_name.substr(0, 7), "omnisci")) {
     throw std::runtime_error{"OmniSci default servers cannot be dropped."};
   }
-
-  // TODO: add permissions check
-  session_ptr->getCatalog().dropForeignServer(ddl_payload["serverName"].GetString(),
-                                              ddl_payload["ifExists"].GetBool());
+  bool if_exists = ddl_payload["ifExists"].GetBool();
+  if (!session_ptr->getCatalog().getForeignServer(server_name)) {
+    if (if_exists) {
+      return;
+    } else {
+      throw std::runtime_error{"Foreign server with name \"" + server_name +
+                               "\" does not exist."};
+    }
+  }
+  // check access privileges
+  if (!session_ptr->checkDBAccessPrivileges(DBObjectType::ServerDBObjectType,
+                                            AccessPrivileges::DROP_SERVER,
+                                            server_name.data())) {
+    throw std::runtime_error("Server " + server_name +
+                             " will not be dropped. User has no DROP SERVER privileges.");
+  }
+  session_ptr->getCatalog().dropForeignServer(ddl_payload["serverName"].GetString());
 }
 
 SQLTypes JsonColumnSqlType::getSqlType(const rapidjson::Value& data_type) {

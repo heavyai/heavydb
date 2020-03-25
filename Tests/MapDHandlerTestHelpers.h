@@ -49,7 +49,7 @@ class MapDHandlerTestFixture : public testing::Test {
       const int max_session_duration{43200};
       const bool enable_runtime_udf_registration{false};
       mapd_parameters.omnisci_server_port = -1;
-      mapd_parameters.calcite_port = 3279;
+      mapd_parameters.calcite_port = 3280;
 
       mapd_handler = std::make_unique<MapDHandler>(db_leaves,
                                                    string_leaves,
@@ -90,6 +90,10 @@ class MapDHandlerTestFixture : public testing::Test {
 
   void sql(TQueryResult& result, const std::string& query) {
     mapd_handler->sql_execute(result, session_id, query, true, "", -1, -1);
+  }
+
+  Catalog_Namespace::UserMetadata getCurrentUser() {
+    return mapd_handler->get_session_copy_ptr(session_id)->get_currentUser();
   }
 
   Catalog_Namespace::Catalog& getCatalog() {

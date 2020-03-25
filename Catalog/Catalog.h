@@ -248,25 +248,29 @@ class Catalog final {
    * Gets a pointer to a struct containing foreign server details.
    *
    * @param server_name - Name of foreign server whose details will be fetched
-   * @param skip_cache - flag indicating whether or not to skip in-memory cache of foreign
-   * server struct when attempting to fetch foreign server details. This flag is mainly
-   * used for testing
    * @return pointer to a struct containing foreign server details. nullptr is returned if
    * no foreign server exists with the given name
    */
-  foreign_storage::ForeignServer* getForeignServer(const std::string& server_name,
-                                                   const bool skip_cache = false);
+  foreign_storage::ForeignServer* getForeignServer(const std::string& server_name) const;
+
+  /**
+   * Gets a pointer to a struct containing foreign server details.
+   * Skip in-memory cache of foreign server struct when attempting to fetch foreign server
+   * details. This is mainly used for testing.
+   *
+   * @param server_name - Name of foreign server whose details will be fetched
+   * @return pointer to a struct containing foreign server details. nullptr is returned if
+   * no foreign server exists with the given name
+   */
+  foreign_storage::ForeignServer* getForeignServerSkipCache(
+      const std::string& server_name);
 
   /**
    * Drops/deletes a foreign server DB object.
    *
    * @param server_name - Name of foreign server that will be deleted
-   * @param if_exists - flag indicating whether or not an attempt to delete a foreign
-   * server should occur if a server with the same name does not exists. An exception is
-   * thrown if this flag is set to "false" and an attempt is made to delete a nonexistent
-   * foreign server
    */
-  void dropForeignServer(const std::string& server_name, bool if_exists);
+  void dropForeignServer(const std::string& server_name);
 
   /**
    * Creates default local file servers (if they don't already exist).
