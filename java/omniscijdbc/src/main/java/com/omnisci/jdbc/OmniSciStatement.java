@@ -26,6 +26,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.SQLWarning;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -48,26 +49,45 @@ public class OmniSciStatement implements java.sql.Statement {
     client = tclient;
   }
 
+  static Pattern top_pattern =
+          Pattern.compile("select top\\s+([0-9]+)\\s+", Pattern.CASE_INSENSITIVE);
+
   @Override
   public ResultSet executeQuery(String sql)
           throws SQLException { // logger.debug("Entered");
+
     if (maxRows > 0) {
       // add limit to sql call if it doesn't already have one and is a select
       String[] tokens = sql.toLowerCase().split(" ", 3);
       if (tokens[0].equals("select")) {
         if (sql.toLowerCase().contains("limit")) {
-          // do nothing
+          // do nothing -
         } else {
+          // Some applications add TOP <number> to limit the
+          // select statement rather than limit.  Remove TOP and keep
+          // the number it used as the limit.
+          Matcher matcher = top_pattern.matcher(sql);
+          // Take "select TOP nnnn <rest ot sql>" and translate to select <reset of sql:
+          // limit nnnn
+          if (matcher.find()) {
+            maxRows = Integer.parseInt(matcher.group(1));
+            sql = top_pattern.matcher(sql).replaceAll("select ");
+          }
+
           sql = sql + " LIMIT " + maxRows;
           logger.debug("Added LIMIT of " + maxRows);
         }
       }
     }
-    logger.debug("sql is :'" + sql + "'");
-    String afterFnSQL = fnReplace(sql);
-    logger.debug("afterFnSQL is :'" + afterFnSQL + "'");
+
+    logger.debug("Before OmniSciEscapeParser [" + sql + "]");
+    // The order of these to SQL re-writes is important.
+    // EscapeParse needs to come first.
+    String afterEscapeParseSQL = OmniSciEscapeParser.parse(sql);
+    String afterSimpleParse = simplisticDateTransform(afterEscapeParseSQL);
+    logger.debug("After OmniSciEscapeParser [" + afterSimpleParse + "]");
     try {
-      sqlResult = client.sql_execute(session, afterFnSQL + ";", true, null, -1, -1);
+      sqlResult = client.sql_execute(session, afterSimpleParse + ";", true, null, -1, -1);
     } catch (TMapDException ex) {
       throw new SQLException("Query failed : " + ex.getError_msg());
     } catch (TException ex) {
@@ -185,6 +205,7 @@ public class OmniSciStatement implements java.sql.Statement {
 
   @Override
   public boolean execute(String sql) throws SQLException { // logger.debug("Entered");
+
     ResultSet rs = executeQuery(sql);
     if (rs != null) {
       return true;
@@ -439,39 +460,13 @@ public class OmniSciStatement implements java.sql.Statement {
           "\\sDAYOFWEEK\\(([^\\{]*?)", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
   private static final Pattern WEEK = Pattern.compile(
           "\\sWEEK\\(([^\\{]*?)", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-  private static final Pattern QUARTER_TRUNC = Pattern.compile(
-          "\\(\\(\\(CAST\\(([^\\(]*?) AS DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DAY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(MONTH FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' MONTH\\) \\+  FLOOR\\(\\(3 \\* \\( FLOOR\\( EXTRACT\\(QUARTER FROM .*?\\)\\) - 1\\)\\)\\) \\* INTERVAL '1' MONTH\\)",
-          Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-  private static final Pattern MONTH_TRUNC = Pattern.compile(
-          "\\(CAST\\(([^\\(]*?) AS DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DAY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\)",
-          Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-  private static final Pattern YEAR_TRUNC = Pattern.compile(
-          "\\(\\(CAST\\(([^\\(]*?) AS DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DAY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\) \\+  FLOOR\\(\\(\\-1\\ \\* \\( EXTRACT\\(MONTH FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' MONTH\\)",
-          Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
-  private static final Pattern MINUTE_TRUNC = Pattern.compile(
-          "\\(\\(CAST\\(([^\\(]*?) AS DATE\\) \\+  EXTRACT\\(HOUR FROM .*?\\) \\* INTERVAL '1' HOUR\\) \\+  EXTRACT\\(MINUTE FROM .*?\\) \\* INTERVAL '1' MINUTE\\)",
-          Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-  private static final Pattern SECOND_TRUNC = Pattern.compile(
-          "\\(\\(\\(CAST\\(([^\\(]*?) AS DATE\\) \\+  EXTRACT\\(HOUR FROM .*?\\) \\* INTERVAL '1' HOUR\\) \\+  EXTRACT\\(MINUTE FROM .*?\\) \\* INTERVAL '1' MINUTE\\) \\+  EXTRACT\\(SECOND FROM .*?\\) \\* INTERVAL '1' SECOND\\)",
-          Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-
-  private static final Pattern YEAR1_TRUNC = Pattern.compile(
-          "\\(CAST\\(([^\\(]*?) AS DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DOY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\)",
-          Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-
-  private static final Pattern QUARTER1_TRUNC = Pattern.compile(
-          "\\(\\(CAST\\(([^\\(]*?) AS DATE\\) \\+  FLOOR\\(\\(\\-1 \\* \\( EXTRACT\\(DOY FROM .*?\\) \\- 1\\)\\)\\) \\* INTERVAL '1' DAY\\) \\+  FLOOR\\(\\(3 \\* \\( FLOOR\\( EXTRACT\\(QUARTER FROM .*?\\)\\) \\- 1\\)\\)\\) \\* INTERVAL '1' MONTH\\)",
-          Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-
-  private static final Pattern WEEK_TRUNC = Pattern.compile(
-          "\\(CAST\\(([^\\(]*?) AS DATE\\) \\+ \\(\\-1 \\* \\( EXTRACT\\(ISODOW FROM .*?\\) \\- 1\\)\\) \\* INTERVAL '1' DAY\\)",
-          Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-
-  public static String fnReplace(String sql) {
+  public static String simplisticDateTransform(String sql) {
     // need to iterate as each reduction of string opens up a anew match
     String start;
     do {
+      // Example transform - select quarter(val) from table;
+      // will become select extract(quarter from val) from table;
       start = sql;
       sql = QUARTER.matcher(sql).replaceAll(" EXTRACT(QUARTER FROM $1");
     } while (!sql.equals(start));
@@ -490,37 +485,6 @@ public class OmniSciStatement implements java.sql.Statement {
       start = sql;
       sql = WEEK.matcher(sql).replaceAll(" EXTRACT(WEEK FROM $1");
     } while (!sql.equals(start));
-
-    // Order is important here, do not shuffle without checking
-    sql = QUARTER_TRUNC.matcher(sql).replaceAll(" DATE_TRUNC(QUARTER, $1)");
-    sql = YEAR_TRUNC.matcher(sql).replaceAll(" DATE_TRUNC(YEAR, $1)");
-    sql = SECOND_TRUNC.matcher(sql).replaceAll(" DATE_TRUNC(SECOND, $1)");
-    sql = QUARTER1_TRUNC.matcher(sql).replaceAll(" DATE_TRUNC(QUARTER, $1)");
-    sql = MONTH_TRUNC.matcher(sql).replaceAll(" DATE_TRUNC(MONTH, $1)");
-    sql = MINUTE_TRUNC.matcher(sql).replaceAll(" DATE_TRUNC(MINUTE, $1)");
-    sql = YEAR1_TRUNC.matcher(sql).replaceAll(" DATE_TRUNC(YEAR, $1)");
-    sql = WEEK_TRUNC.matcher(sql).replaceAll(" DATE_TRUNC(WEEK, $1)");
-
-    do {
-      start = sql;
-      sql = QUARTER.matcher(sql).replaceAll(" EXTRACT(QUARTER FROM $1");
-    } while (!sql.equals(start));
-
-    do {
-      start = sql;
-      sql = DAYOFYEAR.matcher(sql).replaceAll(" EXTRACT(DOY FROM $1");
-    } while (!sql.equals(start));
-
-    do {
-      start = sql;
-      sql = DAYOFWEEK.matcher(sql).replaceAll(" EXTRACT(ISODOW FROM $1");
-    } while (!sql.equals(start));
-
-    do {
-      start = sql;
-      sql = WEEK.matcher(sql).replaceAll(" EXTRACT(WEEK FROM $1");
-    } while (!sql.equals(start));
-
     return sql;
   }
 }
