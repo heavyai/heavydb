@@ -214,7 +214,6 @@ class ArrowResultSetConverter {
   struct SerializedArrowOutput {
     std::shared_ptr<arrow::Buffer> schema;
     std::shared_ptr<arrow::Buffer> records;
-    key_t records_shm_key = IPC_PRIVATE;
   };
   SerializedArrowOutput getSerializedArrowOutput(arrow::ipc::DictionaryMemo* memo) const;
 
