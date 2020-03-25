@@ -326,6 +326,11 @@ if(ENABLE_IMPORT_PARQUET AND NOT PREFER_STATIC_LIBS)
   endif()
 endif()
 
+list(APPEND Arrow_LIBRARIES ${Snappy_LIBRARIES})
+if (ENABLE_CUDA)
+  list(INSERT Arrow_LIBRARIES 0 ${Arrow_GPU_CUDA_LIBRARIES})
+endif()
+
 # RapidJSON
 include_directories(ThirdParty/rapidjson)
 add_definitions(-DRAPIDJSON_HAS_STDSTRING)
@@ -518,10 +523,6 @@ if(ENABLE_RENDERING)
   list(APPEND MAPD_LIBRARIES "${MAPD_RENDERING_LIBRARIES}")
 endif()
 
-list(APPEND Arrow_LIBRARIES ${Snappy_LIBRARIES})
-if (ENABLE_CUDA) 
-  list(APPEND Arrow_LIBRARIES ${Arrow_GPU_CUDA_LIBRARIES})
-endif()
 list(APPEND MAPD_LIBRARIES ${Arrow_LIBRARIES})
 
 if(ENABLE_FOLLY)
