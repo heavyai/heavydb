@@ -147,6 +147,8 @@ class RaExecutionSequence {
 
   size_t totalDescriptorsCount() const;
 
+  bool hasTableFunctions() const { return table_functions_ > 0; }
+
  private:
   DAG graph_;
 
@@ -154,6 +156,7 @@ class RaExecutionSequence {
   std::vector<Vertex> ordering_;  // reverse order topological sort of graph_
   size_t current_vertex_ = 0;
   size_t scan_count_ = 0;
+  size_t table_functions_ = 0;
 
   /**
    * Starting from the current vertex, iterate the graph counting the number of execution

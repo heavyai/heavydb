@@ -407,7 +407,8 @@ void RelAlgExecutor::executeRelAlgStep(const RaExecutionSequence& seq,
       }
       // For intermediate results we want to keep the result fragmented
       // to have higher parallelism on next steps.
-      bool multifrag_result = g_enable_multifrag_rs && (step_idx != seq.size() - 1);
+      bool multifrag_result = g_enable_multifrag_rs && (step_idx != seq.size() - 1) &&
+                              !seq.hasTableFunctions();
       exec_desc.setResult(
           executeProject(project,
                          co,

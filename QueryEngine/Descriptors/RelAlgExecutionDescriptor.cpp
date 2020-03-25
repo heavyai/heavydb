@@ -226,6 +226,9 @@ RaExecutionDesc* RaExecutionSequence::next() {
       scan_count_++;
       continue;
     }
+    if (dynamic_cast<const RelTableFunction*>(node)) {
+      table_functions_++;
+    }
     descs_.emplace_back(std::make_unique<RaExecutionDesc>(node));
     return descs_.back().get();
   }
