@@ -59,7 +59,8 @@ sudo yum install -y \
     curl \
     openldap-devel
 sudo yum install -y \
-    jq
+    jq \
+    pxz
 
 # gmp, mpc, mpfr, autoconf, automake
 # note: if gmp fails on POWER8:
@@ -354,5 +355,5 @@ if [ "$COMPRESS" = "true" ] ; then
     elif [ "$TSAN" = "false" ]; then
       TARBALL_TSAN="tsan-"
     fi
-    tar acvf mapd-deps-${TARBALL_TSAN}${SUFFIX}.tar.xz -C $(dirname $PREFIX) $SUFFIX
+    tar --use-compress-program=pxz -acvf mapd-deps-${TARBALL_TSAN}${SUFFIX}.tar.xz -C $(dirname $PREFIX) $SUFFIX
 fi
